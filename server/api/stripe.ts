@@ -131,6 +131,24 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
             if (!activeMembership) {
               // Create active membership enrollment from Stripe subscription
               const subData = existingSubscription as any;
+              
+              // Safely parse Stripe timestamps to dates
+              const safeStripeDate = (timestamp: number | undefined): Date => {
+                if (!timestamp || typeof timestamp !== 'number') {
+                  console.warn('⚠️ Invalid Stripe timestamp, using current date');
+                  return new Date();
+                }
+                const date = new Date(timestamp * 1000);
+                if (isNaN(date.getTime())) {
+                  console.warn('⚠️ Stripe timestamp resulted in invalid date:', timestamp);
+                  return new Date();
+                }
+                return date;
+              };
+              
+              const startDate = safeStripeDate(subData.current_period_start);
+              const endDate = safeStripeDate(subData.current_period_end);
+              
               await storage.createMembershipEnrollment({
                 schoolId: parent.schoolId,
                 parentUserId: parent.id,
@@ -142,12 +160,12 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
                 status: 'enrolled',
                 stripeSubscriptionId: existingSubscription.id,
                 stripeCustomerId: customer.id,
-                startDate: new Date(subData.current_period_start * 1000),
-                renewalDate: new Date(subData.current_period_end * 1000),
+                startDate,
+                renewalDate: endDate,
                 notes: 'Auto-synced from Stripe subscription',
                 paymentMethod: 'other',
-                dueDate: new Date(subData.current_period_start * 1000),
-                expirationDate: new Date(subData.current_period_end * 1000),
+                dueDate: startDate,
+                expirationDate: endDate,
                 gracePeriodEnd: null
               });
               console.log('✅ Created active membership enrollment from Stripe subscription');
@@ -311,7 +329,16 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
         subscriptionInfo: existingSubscription ? {
           id: existingSubscription.id,
           status: existingSubscription.status,
-          currentPeriodEnd: new Date(existingSubscription.current_period_end * 1000).toISOString()
+          currentPeriodEnd: (() => {
+            try {
+              const ts = existingSubscription.current_period_end;
+              if (!ts || typeof ts !== 'number') return null;
+              const date = new Date(ts * 1000);
+              return isNaN(date.getTime()) ? null : date.toISOString();
+            } catch {
+              return null;
+            }
+          })()
         } : null
       });
 
@@ -662,6 +689,24 @@ router.post('/admin/sync-stripe-subscription', supabaseAuth, requireSchoolContex
       // Create active membership enrollment from Stripe subscription
       // Use adminSchoolId directly to ensure school ownership (already verified above)
       const subData = subscription as any;
+      
+      // Safely parse Stripe timestamps to dates
+      const safeStripeDate = (timestamp: number | undefined): Date => {
+        if (!timestamp || typeof timestamp !== 'number') {
+          console.warn('⚠️ Invalid Stripe timestamp, using current date');
+          return new Date();
+        }
+        const date = new Date(timestamp * 1000);
+        if (isNaN(date.getTime())) {
+          console.warn('⚠️ Stripe timestamp resulted in invalid date:', timestamp);
+          return new Date();
+        }
+        return date;
+      };
+      
+      const startDate = safeStripeDate(subData.current_period_start);
+      const endDate = safeStripeDate(subData.current_period_end);
+      
       await storage.createMembershipEnrollment({
         schoolId: Number(adminSchoolId),
         parentUserId: user.id,
@@ -673,12 +718,12 @@ router.post('/admin/sync-stripe-subscription', supabaseAuth, requireSchoolContex
         status: 'enrolled',
         stripeSubscriptionId: subscription.id,
         stripeCustomerId: customer.id,
-        startDate: new Date(subData.current_period_start * 1000),
-        renewalDate: new Date(subData.current_period_end * 1000),
+        startDate,
+        renewalDate: endDate,
         notes: 'Admin-synced from Stripe subscription',
         paymentMethod: 'other',
-        dueDate: new Date(subData.current_period_start * 1000),
-        expirationDate: new Date(subData.current_period_end * 1000),
+        dueDate: startDate,
+        expirationDate: endDate,
         gracePeriodEnd: null
       });
       console.log('✅ Created active membership enrollment from Stripe subscription');
@@ -694,7 +739,16 @@ router.post('/admin/sync-stripe-subscription', supabaseAuth, requireSchoolContex
         customerId: customer.id,
         subscriptionId: subscription.id,
         subscriptionStatus: subscription.status,
-        currentPeriodEnd: new Date(subData.current_period_end * 1000).toISOString()
+        currentPeriodEnd: (() => {
+          try {
+            const ts = subData.current_period_end;
+            if (!ts || typeof ts !== 'number') return null;
+            const date = new Date(ts * 1000);
+            return isNaN(date.getTime()) ? null : date.toISOString();
+          } catch {
+            return null;
+          }
+        })()
       }
     });
 

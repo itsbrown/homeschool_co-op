@@ -27,6 +27,33 @@ function daysBetween(start: Date, end: Date): number {
 }
 
 /**
+ * Safely parse and validate a date, returning null if invalid
+ */
+function safeParseDate(date: any, fieldName: string): Date | null {
+  if (!date) {
+    console.warn(`⚠️ ${fieldName} is null/undefined`);
+    return null;
+  }
+  
+  let parsed: Date;
+  if (date instanceof Date) {
+    parsed = date;
+  } else if (typeof date === 'string' || typeof date === 'number') {
+    parsed = new Date(date);
+  } else {
+    console.warn(`⚠️ ${fieldName} has unexpected type: ${typeof date}`);
+    return null;
+  }
+  
+  if (isNaN(parsed.getTime())) {
+    console.warn(`⚠️ ${fieldName} is invalid date: ${date}`);
+    return null;
+  }
+  
+  return parsed;
+}
+
+/**
  * Calculate payment schedule based on program dates and frequency
  */
 export function calculatePaymentSchedule(
@@ -35,6 +62,30 @@ export function calculatePaymentSchedule(
   endDate: Date,
   frequency: PaymentFrequency
 ): PaymentSchedule {
+  // Validate dates first
+  const validStartDate = safeParseDate(startDate, 'startDate');
+  const validEndDate = safeParseDate(endDate, 'endDate');
+  
+  // If dates are invalid, fall back to one-time payment from today
+  if (!validStartDate || !validEndDate) {
+    console.warn('⚠️ Invalid dates provided to calculatePaymentSchedule, falling back to one-time payment');
+    const today = new Date();
+    return {
+      totalAmount: totalAmountCents,
+      numberOfPayments: 1,
+      paymentAmount: totalAmountCents,
+      finalPaymentAmount: totalAmountCents,
+      paymentDates: [today],
+      frequency: 'one_time',
+      startDate: today,
+      endDate: today
+    };
+  }
+  
+  // Use validated dates from here on
+  startDate = validStartDate;
+  endDate = validEndDate;
+  
   // For one-time payments, return single payment
   if (frequency === 'one_time') {
     return {
@@ -155,6 +206,34 @@ export function recalculatePaymentSchedule(
   currentDate: Date = new Date()
 ): PaymentSchedule & { validationErrors?: string[] } {
   const errors: string[] = [];
+  
+  // Validate dates first
+  const validStartDate = safeParseDate(programStartDate, 'programStartDate');
+  const validEndDate = safeParseDate(programEndDate, 'programEndDate');
+  const validCurrentDate = safeParseDate(currentDate, 'currentDate') || new Date();
+  
+  // If dates are invalid, return one-time payment schedule
+  if (!validStartDate || !validEndDate) {
+    console.warn('⚠️ Invalid dates in recalculatePaymentSchedule, using one-time fallback');
+    const today = new Date();
+    const remainingBalance = totalCostCents - alreadyPaidCents;
+    return {
+      totalAmount: Math.max(0, remainingBalance),
+      numberOfPayments: 1,
+      paymentAmount: Math.max(0, remainingBalance),
+      finalPaymentAmount: Math.max(0, remainingBalance),
+      paymentDates: [today],
+      frequency: 'one_time',
+      startDate: today,
+      endDate: today,
+      validationErrors: ['Invalid program dates - using one-time payment']
+    };
+  }
+  
+  // Use validated dates
+  programStartDate = validStartDate;
+  programEndDate = validEndDate;
+  currentDate = validCurrentDate;
   
   // Validation: Ensure we haven't already paid everything
   const remainingBalance = totalCostCents - alreadyPaidCents;

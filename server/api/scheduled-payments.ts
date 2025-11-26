@@ -184,10 +184,17 @@ router.get('/upcoming-old', async (req, res) => {
                                classNames.length === 1 ? classNames[0] : 
                                `${classNames.length} classes`;
               
+              // Safely parse Stripe timestamp for due date
+              const periodEnd = upcomingInvoice.period_end;
+              const dueDate = (periodEnd && typeof periodEnd === 'number' && periodEnd > 0) 
+                ? new Date(periodEnd * 1000) 
+                : new Date();
+              const validDueDate = isNaN(dueDate.getTime()) ? new Date() : dueDate;
+              
               upcomingPayments.push({
                 id: localSchedule.id,
                 amount: upcomingInvoice.amount_due,
-                dueDate: new Date(upcomingInvoice.period_end * 1000),
+                dueDate: validDueDate,
                 status: 'pending',
                 childName: childName,
                 className: className,
@@ -197,7 +204,7 @@ router.get('/upcoming-old', async (req, res) => {
                 installmentNumber: localSchedule.currentPhase,
                 totalInstallments: localSchedule.totalPhases
               });
-              console.log(`📅 Added upcoming payment: ${upcomingInvoice.amount_due / 100} due ${new Date(upcomingInvoice.period_end * 1000).toLocaleDateString()}`);
+              console.log(`📅 Added upcoming payment: ${upcomingInvoice.amount_due / 100} due ${validDueDate.toLocaleDateString()}`);
             }
           } catch (invoiceError: any) {
             // No upcoming invoice (schedule might be paused or no more payments)

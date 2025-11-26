@@ -826,14 +826,22 @@ export const syncStripeSubscription = async (req: any, res: Response) => {
         customerId: customer.id,
         name: customer.name,
         email: customer.email,
-        subscriptions: subscriptions.data.map((sub: any) => ({
-          id: sub.id,
-          status: sub.status,
-          amount: sub.items.data[0]?.price?.unit_amount,
-          interval: sub.items.data[0]?.price?.recurring?.interval,
-          currentPeriodStart: new Date(sub.current_period_start * 1000),
-          currentPeriodEnd: new Date(sub.current_period_end * 1000)
-        }))
+        subscriptions: subscriptions.data.map((sub: any) => {
+          // Safely parse Stripe timestamps
+          const safeStripeDate = (ts: number | undefined) => {
+            if (!ts || typeof ts !== 'number' || ts <= 0) return null;
+            const date = new Date(ts * 1000);
+            return isNaN(date.getTime()) ? null : date;
+          };
+          return {
+            id: sub.id,
+            status: sub.status,
+            amount: sub.items.data[0]?.price?.unit_amount,
+            interval: sub.items.data[0]?.price?.recurring?.interval,
+            currentPeriodStart: safeStripeDate(sub.current_period_start),
+            currentPeriodEnd: safeStripeDate(sub.current_period_end)
+          };
+        })
       },
       memberships: memberships.map((m: any) => ({
         id: m.id,

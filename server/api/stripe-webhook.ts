@@ -9,6 +9,23 @@ import { getStripeClient } from '../config/stripe';
 const router = express.Router();
 
 /**
+ * Safely parse Stripe Unix timestamp to Date
+ * Returns current date as fallback if timestamp is invalid
+ */
+function safeStripeDate(timestamp: number | undefined | null): Date {
+  if (!timestamp || typeof timestamp !== 'number' || timestamp <= 0) {
+    console.warn('⚠️ Invalid Stripe timestamp, using current date');
+    return new Date();
+  }
+  const date = new Date(timestamp * 1000);
+  if (isNaN(date.getTime())) {
+    console.warn('⚠️ Stripe timestamp resulted in invalid date:', timestamp);
+    return new Date();
+  }
+  return date;
+}
+
+/**
  * Enhanced Stripe webhook handler for subscription schedules
  */
 router.post('/subscription-schedules', async (req, res) => {
@@ -488,9 +505,9 @@ async function handleMembershipSubscriptionCreated(subscription: any) {
       return;
     }
     
-    // Calculate dates
-    const startDate = new Date(subscription.current_period_start * 1000);
-    const renewalDate = new Date(subscription.current_period_end * 1000);
+    // Calculate dates safely
+    const startDate = safeStripeDate(subscription.current_period_start);
+    const renewalDate = safeStripeDate(subscription.current_period_end);
     
     // Update enrollment with subscription data
     await db
@@ -544,8 +561,8 @@ async function handleMembershipSubscriptionUpdated(subscription: any) {
       newStatus = 'expired';
     }
     
-    // Update renewal date
-    const renewalDate = new Date(subscription.current_period_end * 1000);
+    // Update renewal date safely
+    const renewalDate = safeStripeDate(subscription.current_period_end);
     
     // Update enrollment
     await db
@@ -584,8 +601,8 @@ async function handleMembershipSubscriptionDeleted(subscription: any) {
     
     const enrollment = enrollments[0];
     
-    // Calculate expiration date (end of current period)
-    const expirationDate = new Date(subscription.current_period_end * 1000);
+    // Calculate expiration date safely (end of current period)
+    const expirationDate = safeStripeDate(subscription.current_period_end);
     
     // Update enrollment to cancelled
     await db

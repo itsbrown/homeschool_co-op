@@ -9,6 +9,27 @@ import { getStripeClient } from '../config/stripe';
 
 const router = Router();
 
+/**
+ * Safely parse Stripe Unix timestamp to ISO string
+ * Returns null if timestamp is invalid
+ */
+function safeStripeTimestampToISO(timestamp: number | undefined | null): string | null {
+  if (!timestamp || typeof timestamp !== 'number' || timestamp <= 0) {
+    return null;
+  }
+  try {
+    const date = new Date(timestamp * 1000);
+    if (isNaN(date.getTime())) {
+      console.warn('⚠️ Stripe timestamp resulted in invalid date:', timestamp);
+      return null;
+    }
+    return date.toISOString();
+  } catch {
+    console.warn('⚠️ Error parsing Stripe timestamp:', timestamp);
+    return null;
+  }
+}
+
 // Helper: Calculate next payment date from Stripe subscription schedule
 // Uses Stripe's actual subscription data for accuracy (no approximations)
 async function calculateNextPaymentDate(schedule: any, enrollment: any): Promise<string | null> {
@@ -22,11 +43,15 @@ async function calculateNextPaymentDate(schedule: any, enrollment: any): Promise
       const subscription = await stripe.subscriptions.retrieve(schedule.subscription);
       
       // Use current_period_end for the next payment date (Stripe's accurate billing anchor)
-      if ((subscription as any).current_period_end && subscription.status === 'active') {
-        const nextPaymentDate = new Date((subscription as any).current_period_end * 1000);
-        // Only return if it's in the future
-        if (nextPaymentDate.getTime() > Date.now()) {
-          return nextPaymentDate.toISOString();
+      const periodEnd = (subscription as any).current_period_end;
+      if (periodEnd && subscription.status === 'active') {
+        const nextPaymentDateStr = safeStripeTimestampToISO(periodEnd);
+        if (nextPaymentDateStr) {
+          const nextPaymentDate = new Date(nextPaymentDateStr);
+          // Only return if it's in the future
+          if (nextPaymentDate.getTime() > Date.now()) {
+            return nextPaymentDateStr;
+          }
         }
       }
     } catch (err) {
@@ -47,14 +72,14 @@ async function calculateNextPaymentDate(schedule: any, enrollment: any): Promise
   if (currentPhaseIndex >= 0 && currentPhaseIndex < phases.length - 1) {
     // Next payment is the start of next phase
     const nextPhase = phases[currentPhaseIndex + 1];
-    return new Date(nextPhase.start_date * 1000).toISOString();
+    return safeStripeTimestampToISO(nextPhase.start_date);
   }
   
   // Fallback: if phase has end_date and it's in the future
   if (currentPhase.end_date) {
-    const endDateMs = currentPhase.end_date * 1000;
-    if (endDateMs > Date.now()) {
-      return new Date(endDateMs).toISOString();
+    const endDateStr = safeStripeTimestampToISO(currentPhase.end_date);
+    if (endDateStr && new Date(endDateStr).getTime() > Date.now()) {
+      return endDateStr;
     }
   }
   
@@ -184,7 +209,7 @@ router.get('/history', supabaseAuth, async (req: any, res) => {
           // Stripe enrichment
           stripeStatus: stripeIntent?.status || null,
           stripeAmount: stripeIntent?.amount || null,
-          stripeCreated: stripeIntent?.created ? new Date(stripeIntent.created * 1000).toISOString() : null,
+          stripeCreated: safeStripeTimestampToISO(stripeIntent?.created),
           // Schedule-derived fields
           nextPaymentDate: nextPaymentDate,
           source: 'database' as const
@@ -207,29 +232,33 @@ router.get('/history', supabaseAuth, async (req: any, res) => {
         }
         return true;
       })
-      .map(intent => ({
-        id: -1, // Synthetic ID (frontend should use stripePaymentIntentId as key)
-        amount: intent.amount, // Send raw cents (number) - validated above
-        currency: intent.currency || 'usd',
-        status: intent.status || 'unknown',
-        description: intent.description || (intent.metadata?.className ? `Payment for ${intent.metadata.className}` : 'Stripe payment'),
-        date: new Date(intent.created * 1000).toISOString(),
-        createdAt: new Date(intent.created * 1000).toISOString(),
-        updatedAt: new Date(intent.created * 1000).toISOString(),
-        stripePaymentIntentId: intent.id, // CRITICAL: Set this for unique React keys
-        enrollmentIds: [],
-        metadata: intent.metadata || null,
-        childName: intent.metadata?.childName || '',
-        programName: intent.metadata?.className || '',
-        paymentMethod: intent.payment_method_types?.[0] || 'card',
-        paymentPlan: intent.metadata?.paymentPlan || null,
-        enrollmentDetails: [],
-        stripeStatus: intent.status || null,
-        stripeAmount: intent.amount || null,
-        stripeCreated: new Date(intent.created * 1000).toISOString(),
-        nextPaymentDate: null,
-        source: 'stripe' as const
-      }));
+      .map(intent => {
+        // Safely parse Stripe timestamp for created date
+        const createdDate = safeStripeTimestampToISO(intent.created) || new Date().toISOString();
+        return {
+          id: -1, // Synthetic ID (frontend should use stripePaymentIntentId as key)
+          amount: intent.amount, // Send raw cents (number) - validated above
+          currency: intent.currency || 'usd',
+          status: intent.status || 'unknown',
+          description: intent.description || (intent.metadata?.className ? `Payment for ${intent.metadata.className}` : 'Stripe payment'),
+          date: createdDate,
+          createdAt: createdDate,
+          updatedAt: createdDate,
+          stripePaymentIntentId: intent.id, // CRITICAL: Set this for unique React keys
+          enrollmentIds: [],
+          metadata: intent.metadata || null,
+          childName: intent.metadata?.childName || '',
+          programName: intent.metadata?.className || '',
+          paymentMethod: intent.payment_method_types?.[0] || 'card',
+          paymentPlan: intent.metadata?.paymentPlan || null,
+          enrollmentDetails: [],
+          stripeStatus: intent.status || null,
+          stripeAmount: intent.amount || null,
+          stripeCreated: createdDate,
+          nextPaymentDate: null,
+          source: 'stripe' as const
+        };
+      });
     
     console.log(`🔍 Found ${stripeOnlyPayments.length} Stripe-only payments`);
     
