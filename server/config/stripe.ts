@@ -52,23 +52,43 @@ async function fetchStripeCredentials(): Promise<{ publishableKey: string; secre
   url.searchParams.set('connector_names', connectorName);
   url.searchParams.set('environment', targetEnvironment);
 
-  const response = await fetch(url.toString(), {
-    headers: {
-      'Accept': 'application/json',
-      'X_REPLIT_TOKEN': xReplitToken
+  try {
+    const response = await fetch(url.toString(), {
+      headers: {
+        'Accept': 'application/json',
+        'X_REPLIT_TOKEN': xReplitToken
+      }
+    });
+
+    const data = await response.json();
+    const connectionSettings = data.items?.[0];
+
+    if (connectionSettings?.settings?.publishable && connectionSettings?.settings?.secret) {
+      console.log(`✅ Using Stripe keys from Replit Connection API (${targetEnvironment})`);
+      return {
+        publishableKey: connectionSettings.settings.publishable,
+        secretKey: connectionSettings.settings.secret,
+      };
     }
-  });
-
-  const data = await response.json();
-  const connectionSettings = data.items?.[0];
-
-  if (!connectionSettings?.settings?.publishable || !connectionSettings?.settings?.secret) {
-    throw new Error(`Stripe ${targetEnvironment} connection not found`);
+  } catch (error) {
+    console.log(`⚠️ Replit Connection API failed, falling back to environment variables`);
   }
 
+  // Fall back to environment variable secrets
+  const secretKey = isProduction
+    ? process.env.STRIPE_SECRET_KEY
+    : (process.env.TESTING_STRIPE_SECRET_KEY || process.env.STRIPE_SECRET_KEY);
+  
+  const publishableKey = process.env.VITE_STRIPE_PUBLIC_KEY || '';
+
+  if (!secretKey) {
+    throw new Error(`Stripe secret key not found. Please set STRIPE_SECRET_KEY in your secrets.`);
+  }
+
+  console.log(`✅ Using Stripe keys from environment variables (${targetEnvironment})`);
   return {
-    publishableKey: connectionSettings.settings.publishable,
-    secretKey: connectionSettings.settings.secret,
+    publishableKey,
+    secretKey,
   };
 }
 
