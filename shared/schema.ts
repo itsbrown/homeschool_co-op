@@ -387,7 +387,7 @@ export const schoolClassEnrollments = pgTable("school_class_enrollments", {
   studentId: integer("student_id").notNull().references(() => schoolStudents.id),
   enrollmentDate: timestamp("enrollment_date").defaultNow().notNull(),
   grade: text("grade"), // final grade for the class
-  status: text("status", { enum: ["pending_payment", "enrolled", "waitlist", "cancelled", "completed", "withdrawn", "failed"] }).default("enrolled").notNull(),
+  status: text("status", { enum: ["pending_payment", "pending_admin_approval", "enrolled", "waitlist", "cancelled", "completed", "withdrawn", "failed"] }).default("enrolled").notNull(),
   notes: text("notes"),
   lastReminderSentAt: timestamp("last_reminder_sent_at"), // For payment reminder tracking
   reminderCount: integer("reminder_count").default(0), // Track how many reminders sent
@@ -541,7 +541,7 @@ export const programEnrollments = pgTable("program_enrollments", {
   
   // Enrollment status
   status: text("status", { 
-    enum: ["pending_payment", "enrolled", "waitlist", "cancelled", "completed", "withdrawn", "failed"] 
+    enum: ["pending_payment", "pending_admin_approval", "enrolled", "waitlist", "cancelled", "completed", "withdrawn", "failed"] 
   }).default("enrolled").notNull(),
   waitlistPosition: integer("waitlist_position"), // Position in waitlist (null if not waitlisted)
   enrollmentDate: timestamp("enrollment_date").defaultNow().notNull(),

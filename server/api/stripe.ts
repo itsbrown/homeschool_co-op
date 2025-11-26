@@ -42,7 +42,16 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
       });
     }
 
-    if (!total || total <= 0) {
+    // Handle $0 total (100% discount) - requires admin approval
+    if (total === 0) {
+      return res.status(400).json({
+        message: 'Free enrollment requires admin approval. Please use the free enrollment endpoint.',
+        error: 'FREE_ENROLLMENT_REQUIRES_APPROVAL',
+        requiresAdminApproval: true
+      });
+    }
+
+    if (total < 0) {
       return res.status(400).json({
         message: 'Invalid total amount',
         error: 'INVALID_TOTAL'
@@ -860,5 +869,394 @@ router.post('/test-account-lookup', supabaseAuth, async (req: any, res) => {
 // to ensure proper raw buffer handling for signature verification.
 // This prevents middleware order issues where JSON parsers would 
 // corrupt the raw buffer needed for Stripe signature verification.
+
+// Request free enrollment (100% discount) - requires admin approval
+router.post('/request-free-enrollment', supabaseAuth, async (req: any, res) => {
+  try {
+    console.log('🆓 Processing free enrollment request (100% discount)');
+    
+    const userEmail = req.user.email;
+    const { items, subtotal, discounts, total, discountCode } = req.body;
+
+    // Validate this is actually a free enrollment
+    if (total !== 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'This endpoint is only for free enrollments (100% discount)',
+        error: 'NOT_FREE_ENROLLMENT'
+      });
+    }
+
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cart items are required',
+        error: 'MISSING_ITEMS'
+      });
+    }
+
+    // Get parent user
+    const parent = await storage.getUserByEmail(userEmail);
+    if (!parent) {
+      return res.status(404).json({
+        success: false,
+        message: 'Parent user not found',
+        error: 'USER_NOT_FOUND'
+      });
+    }
+
+    // Verify user owns the children in the cart
+    const children = await storage.getChildrenByParentEmail(userEmail);
+    const childIds = children.map(child => child.id);
+    
+    const invalidItems = items.filter((item: any) => !childIds.includes(item.childId));
+    if (invalidItems.length > 0) {
+      return res.status(403).json({
+        success: false,
+        message: 'Unauthorized: Cannot enroll children not owned by this parent',
+        error: 'UNAUTHORIZED_CHILDREN'
+      });
+    }
+
+    // Find or update existing pending enrollments to pending_admin_approval
+    const enrollmentIds = [];
+    const allEnrollments = await storage.getAllEnrollments?.() || [];
+    
+    for (const item of items) {
+      const child = children.find(c => c.id === item.childId);
+      if (!child) {
+        throw new Error(`Child ${item.childId} not found`);
+      }
+
+      // Find existing pending enrollment
+      let enrollment = allEnrollments.find(e => 
+        (item.enrollmentId && e.id === item.enrollmentId) ||
+        (e.childId === item.childId &&
+         ((item.classType === 'marketplace' && e.marketplaceClassId === item.marketplaceClassId) ||
+          (item.classType !== 'marketplace' && e.classId === item.classId)) &&
+         e.status === 'pending_payment')
+      );
+
+      if (enrollment) {
+        // Update to pending_admin_approval status
+        await storage.updateEnrollment(enrollment.id, {
+          status: 'pending_admin_approval',
+          totalCost: 0,
+          remainingBalance: 0,
+          paymentStatus: 'completed', // No payment needed
+          notes: `Free enrollment - 100% discount applied (${discountCode || 'unknown code'}). Awaiting admin approval.`,
+          metadata: {
+            ...((enrollment.metadata as any) || {}),
+            discountCode: discountCode,
+            discountAmount: subtotal,
+            originalTotal: subtotal,
+            discountedTotal: 0,
+            requestedAt: new Date().toISOString(),
+            requestedBy: userEmail
+          }
+        });
+        enrollmentIds.push(enrollment.id);
+        console.log(`✅ Updated enrollment ${enrollment.id} to pending_admin_approval`);
+      } else {
+        // Create new enrollment with pending_admin_approval status
+        const schoolId = parent.schoolId || child.schoolId || 1;
+        const newEnrollment = await storage.createEnrollment({
+          schoolId,
+          classType: item.classType || 'marketplace',
+          classId: item.classType !== 'marketplace' ? item.classId : null,
+          marketplaceClassId: item.classType === 'marketplace' ? item.marketplaceClassId : null,
+          programId: null,
+          childId: item.childId,
+          childName: item.childName,
+          className: item.className,
+          variantId: item.variantId || null,
+          parentId: parent.id,
+          parentEmail: userEmail,
+          totalCost: 0,
+          totalPaid: 0,
+          remainingBalance: 0,
+          depositRequired: 0,
+          paymentStatus: 'completed',
+          paymentPlan: 'full_payment',
+          paymentFrequency: 'one_time',
+          paymentSystemVersion: 'v2_stripe',
+          programStartDate: item.startDate || null,
+          programEndDate: item.endDate || null,
+          status: 'pending_admin_approval',
+          enrollmentDate: new Date(),
+          notes: `Free enrollment - 100% discount applied (${discountCode || 'unknown code'}). Awaiting admin approval.`,
+          metadata: {
+            discountCode: discountCode,
+            discountAmount: subtotal,
+            originalTotal: subtotal,
+            discountedTotal: 0,
+            requestedAt: new Date().toISOString(),
+            requestedBy: userEmail
+          }
+        });
+        enrollmentIds.push(newEnrollment.id);
+        console.log(`✅ Created new enrollment ${newEnrollment.id} with pending_admin_approval`);
+      }
+    }
+
+    // Create notification for school admin
+    try {
+      const schoolId = parent.schoolId || 1;
+      const childNames = items.map((item: any) => item.childName).join(', ');
+      const classNames = items.map((item: any) => item.className).join(', ');
+      
+      // Find school admins to notify - get all staff and filter by role
+      const allSchoolStaff = await storage.getSchoolStaffBySchoolId(schoolId);
+      const schoolAdmins = allSchoolStaff.filter((s: any) => s.role === 'school_admin');
+      
+      for (const admin of schoolAdmins) {
+        if (!admin.userId) continue;
+        
+        // Create notification with required fields
+        const notification = await storage.createNotification({
+          senderId: parent.id,
+          type: 'in_app',
+          priority: 'high',
+          subject: 'Free Enrollment Pending Approval',
+          content: `${parent.email} has requested a free enrollment (100% discount) for ${childNames} in ${classNames}. Please review and approve or reject this request.`,
+          targetType: 'individual',
+          targetData: { userId: admin.userId, enrollmentIds, discountCode },
+          scheduledFor: null
+        });
+        
+        // Create recipient for the notification
+        await storage.createNotificationRecipient({
+          notificationId: notification.id,
+          recipientId: admin.userId,
+          deliveryType: 'in_app',
+          status: 'pending'
+        });
+      }
+      console.log(`📧 Sent notification to ${schoolAdmins.length} school admins`);
+    } catch (notifyError) {
+      console.error('⚠️ Error sending admin notification (non-blocking):', notifyError);
+    }
+
+    res.json({
+      success: true,
+      message: 'Free enrollment request submitted. Awaiting admin approval.',
+      enrollmentIds,
+      status: 'pending_admin_approval'
+    });
+
+  } catch (error: any) {
+    console.error('❌ Free enrollment request error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to process free enrollment request',
+      error: error.message
+    });
+  }
+});
+
+// Admin: Get pending approval enrollments
+router.get('/pending-approvals', supabaseAuth, async (req: any, res) => {
+  try {
+    const userEmail = req.user.email;
+    const user = await storage.getUserByEmail(userEmail);
+    
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    // Check if user is a school admin (check role from user object or staff records)
+    const isSchoolAdmin = user.role === 'schoolAdmin' || user.role === 'admin' || user.role === 'superAdmin';
+    
+    if (!isSchoolAdmin) {
+      return res.status(403).json({ 
+        success: false, 
+        error: 'Only school administrators can view pending approvals' 
+      });
+    }
+
+    // Get all pending_admin_approval enrollments for this school
+    const allEnrollments = await storage.getAllEnrollments?.() || [];
+    const pendingApprovals = allEnrollments.filter(e => 
+      e.status === 'pending_admin_approval' && 
+      e.schoolId === user.schoolId
+    );
+
+    res.json({
+      success: true,
+      pendingApprovals: pendingApprovals.map(e => ({
+        id: e.id,
+        childName: e.childName,
+        className: e.className,
+        parentEmail: e.parentEmail,
+        discountCode: (e.metadata as any)?.discountCode || 'Unknown',
+        originalTotal: (e.metadata as any)?.originalTotal || 0,
+        requestedAt: (e.metadata as any)?.requestedAt || e.createdAt,
+        status: e.status
+      }))
+    });
+
+  } catch (error: any) {
+    console.error('❌ Error fetching pending approvals:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Admin: Approve or reject free enrollment
+router.post('/approve-enrollment/:enrollmentId', supabaseAuth, async (req: any, res) => {
+  try {
+    const userEmail = req.user.email;
+    const enrollmentId = parseInt(req.params.enrollmentId);
+    const { action, reason } = req.body; // action: 'approve' or 'reject'
+
+    if (!['approve', 'reject'].includes(action)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid action. Must be "approve" or "reject"'
+      });
+    }
+
+    const user = await storage.getUserByEmail(userEmail);
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    // Check if user is a school admin
+    const isSchoolAdmin = user.role === 'schoolAdmin' || user.role === 'admin' || user.role === 'superAdmin';
+    
+    if (!isSchoolAdmin) {
+      return res.status(403).json({ 
+        success: false, 
+        error: 'Only school administrators can approve enrollments' 
+      });
+    }
+
+    // Get the enrollment
+    const allEnrollments = await storage.getAllEnrollments?.() || [];
+    const enrollment = allEnrollments.find(e => e.id === enrollmentId);
+
+    if (!enrollment) {
+      return res.status(404).json({ success: false, error: 'Enrollment not found' });
+    }
+
+    if (enrollment.status !== 'pending_admin_approval') {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Enrollment is not pending approval' 
+      });
+    }
+
+    // Verify enrollment belongs to admin's school
+    if (enrollment.schoolId !== user.schoolId) {
+      return res.status(403).json({ 
+        success: false, 
+        error: 'Cannot approve enrollments from other schools' 
+      });
+    }
+
+    if (action === 'approve') {
+      // Approve the enrollment
+      await storage.updateEnrollment(enrollmentId, {
+        status: 'enrolled',
+        notes: `${enrollment.notes || ''}\n\nApproved by ${userEmail} on ${new Date().toISOString()}`,
+        metadata: {
+          ...((enrollment.metadata as any) || {}),
+          approvedAt: new Date().toISOString(),
+          approvedBy: userEmail
+        }
+      });
+
+      // Notify parent of approval
+      try {
+        const parentUser = await storage.getUserByEmail(enrollment.parentEmail);
+        if (parentUser) {
+          const notification = await storage.createNotification({
+            senderId: user.id,
+            type: 'in_app',
+            priority: 'normal',
+            subject: 'Enrollment Approved!',
+            content: `Your free enrollment request for ${enrollment.childName} in ${enrollment.className} has been approved. The enrollment is now active.`,
+            targetType: 'individual',
+            targetData: { userId: parentUser.id, enrollmentId },
+            scheduledFor: null
+          });
+          
+          await storage.createNotificationRecipient({
+            notificationId: notification.id,
+            recipientId: parentUser.id,
+            deliveryType: 'in_app',
+            status: 'pending'
+          });
+        }
+      } catch (notifyError) {
+        console.error('⚠️ Error sending approval notification:', notifyError);
+      }
+
+      console.log(`✅ Enrollment ${enrollmentId} approved by ${userEmail}`);
+      res.json({
+        success: true,
+        message: 'Enrollment approved successfully',
+        enrollmentId,
+        newStatus: 'enrolled'
+      });
+
+    } else {
+      // Reject the enrollment
+      await storage.updateEnrollment(enrollmentId, {
+        status: 'cancelled',
+        notes: `${enrollment.notes || ''}\n\nRejected by ${userEmail} on ${new Date().toISOString()}. Reason: ${reason || 'Not specified'}`,
+        metadata: {
+          ...((enrollment.metadata as any) || {}),
+          rejectedAt: new Date().toISOString(),
+          rejectedBy: userEmail,
+          rejectionReason: reason || 'Not specified'
+        }
+      });
+
+      // Notify parent of rejection
+      try {
+        const parentUser = await storage.getUserByEmail(enrollment.parentEmail);
+        if (parentUser) {
+          const notification = await storage.createNotification({
+            senderId: user.id,
+            type: 'in_app',
+            priority: 'normal',
+            subject: 'Enrollment Request Not Approved',
+            content: `Your free enrollment request for ${enrollment.childName} in ${enrollment.className} was not approved. ${reason ? `Reason: ${reason}` : 'Please contact the school for more information.'}`,
+            targetType: 'individual',
+            targetData: { userId: parentUser.id, enrollmentId, reason },
+            scheduledFor: null
+          });
+          
+          await storage.createNotificationRecipient({
+            notificationId: notification.id,
+            recipientId: parentUser.id,
+            deliveryType: 'in_app',
+            status: 'pending'
+          });
+        }
+      } catch (notifyError) {
+        console.error('⚠️ Error sending rejection notification:', notifyError);
+      }
+
+      console.log(`❌ Enrollment ${enrollmentId} rejected by ${userEmail}`);
+      res.json({
+        success: true,
+        message: 'Enrollment rejected',
+        enrollmentId,
+        newStatus: 'cancelled'
+      });
+    }
+
+  } catch (error: any) {
+    console.error('❌ Error processing enrollment approval:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
 
 export default router;

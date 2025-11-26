@@ -12,7 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useLocation } from 'wouter';
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { apiRequest } from '@/lib/queryClient';
-import { ShoppingCart, CreditCard, Percent, Gift, AlertCircle, Check, Loader2, Calendar, DollarSign } from 'lucide-react';
+import { ShoppingCart, CreditCard, Percent, Gift, AlertCircle, Check, Loader2, Calendar, DollarSign, Clock, CheckCircle2 } from 'lucide-react';
 import ParentAppShell from '@/components/layout/ParentAppShell';
 import { formatCurrency } from '@/utils/currency';
 import { stripePromise } from '@/config/stripe';
@@ -184,6 +184,10 @@ export default function CartCheckout() {
   // Stripe subscription state
   const [hasActiveSubscription, setHasActiveSubscription] = useState(false);
   const [subscriptionInfo, setSubscriptionInfo] = useState<any>(null);
+  
+  // Free enrollment state (for 100% discount requiring admin approval)
+  const [freeEnrollmentRequested, setFreeEnrollmentRequested] = useState(false);
+  const [requestingFreeEnrollment, setRequestingFreeEnrollment] = useState(false);
 
   // Debug cart data
   console.log('🛒 CartCheckout - cart data:', {
@@ -336,6 +340,69 @@ export default function CartCheckout() {
       setError(error.message || 'Failed to initialize payment');
     } finally {
       setLoading(false);
+    }
+  };
+  
+  // Handler for free enrollment requests (100% discount requiring admin approval)
+  const handleFreeEnrollmentRequest = async () => {
+    if (!user?.email) {
+      toast({
+        title: "Not Authenticated",
+        description: "Please log in to request free enrollment.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setRequestingFreeEnrollment(true);
+    
+    try {
+      const response = await apiRequest(
+        'POST',
+        '/api/stripe/request-free-enrollment',
+        {
+          items: cart.items.map(item => ({
+            ...item,
+            price: item.price,
+            totalCost: item.totalCost || item.price,
+          })),
+          subtotal: cart.subtotal,
+          discounts: {
+            siblingDiscount: cart.discounts.siblingDiscount,
+            freeAfterThree: cart.discounts.freeAfterThree,
+            appliedDiscounts: cart.discounts.appliedDiscounts || [],
+            totalDiscountAmount: cart.discounts.totalDiscountAmount || 0
+          },
+          total: cart.total,
+          parentEmail: user.email,
+        }
+      );
+      
+      // apiRequest already returns parsed JSON, so use response directly
+      const data = response as any;
+      
+      if (data.success) {
+        setFreeEnrollmentRequested(true);
+        
+        // Clear the cart after successful request
+        await clearCart();
+        
+        toast({
+          title: "Enrollment Request Submitted",
+          description: "Your free enrollment request has been submitted for admin approval. You will be notified once it's reviewed.",
+        });
+      } else {
+        throw new Error(data.error || 'Failed to submit free enrollment request');
+      }
+    } catch (error: any) {
+      console.error('Error requesting free enrollment:', error);
+      toast({
+        title: "Request Failed",
+        description: error.message || "There was an error submitting your free enrollment request. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setRequestingFreeEnrollment(false);
     }
   };
 
@@ -708,7 +775,8 @@ export default function CartCheckout() {
 
           {/* Payment Form */}
           <div className="space-y-6">
-            {/* Payment Plan Selection */}
+            {/* Payment Plan Selection - only show when there's a balance to pay */}
+            {cart.total > 0 && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -796,9 +864,10 @@ export default function CartCheckout() {
                 </div>
               </CardContent>
             </Card>
+            )}
 
-            {/* Stripe Subscription Alert */}
-            {hasActiveSubscription && subscriptionInfo && (
+            {/* Stripe Subscription Alert - only show when there's a balance to pay */}
+            {cart.total > 0 && hasActiveSubscription && subscriptionInfo && (
               <Alert className="border-green-200 bg-green-50" data-testid="alert-stripe-subscription">
                 <Check className="h-4 w-4 text-green-600" />
                 <AlertDescription className="text-green-700">
@@ -813,8 +882,8 @@ export default function CartCheckout() {
               </Alert>
             )}
 
-            {/* Payment Frequency Selector - Only show for split payment plan */}
-            {['split'].includes(selectedPaymentPlan) && (
+            {/* Payment Frequency Selector - Only show for split payment plan and when there's a balance */}
+            {cart.total > 0 && ['split'].includes(selectedPaymentPlan) && (
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -888,56 +957,170 @@ export default function CartCheckout() {
               </Card>
             )}
 
-            {/* Payment Information */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <CreditCard className="h-5 w-5" />
-                  Payment Information
-                </CardTitle>
-                <CardDescription>
-                  Enter your payment details to complete enrollment
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {!stripeReady ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                    <span className="ml-2 text-muted-foreground">Initializing payment system...</span>
-                  </div>
-                ) : stripeError ? (
-                  <Alert variant="destructive">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription>
-                      {stripeError}
-                    </AlertDescription>
-                  </Alert>
-                ) : loading && !clientSecret ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                    <span className="ml-2 text-muted-foreground">Loading payment form...</span>
-                  </div>
-                ) : error ? (
-                  <Alert variant="destructive">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription>
-                      {error}
-                    </AlertDescription>
-                  </Alert>
-                ) : clientSecret && stripeInstance ? (
-                  <Elements key={clientSecret} stripe={stripeInstance} options={{ clientSecret }}>
-                    <CheckoutForm selectedPaymentPlan={selectedPaymentPlan} selectedPlanAmount={getButtonDisplayAmount()} />
-                  </Elements>
-                ) : (
-                  <Alert variant="destructive">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription>
-                      Failed to initialize payment. Please try again or contact support.
-                    </AlertDescription>
-                  </Alert>
-                )}
-              </CardContent>
-            </Card>
+            {/* Payment Information or Free Enrollment */}
+            {cart.total === 0 ? (
+              // Free Enrollment UI - when 100% discount is applied
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Gift className="h-5 w-5 text-green-600" />
+                    Free Enrollment
+                  </CardTitle>
+                  <CardDescription>
+                    Your enrollment qualifies for a full discount - no payment required
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {freeEnrollmentRequested ? (
+                    // Success state after request is submitted
+                    <div className="text-center py-8 space-y-4">
+                      <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full">
+                        <CheckCircle2 className="h-8 w-8 text-green-600" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-semibold text-green-800">
+                          Enrollment Request Submitted!
+                        </h3>
+                        <p className="text-sm text-muted-foreground mt-2">
+                          Your free enrollment request has been submitted for approval.
+                          A school administrator will review your request and you will be
+                          notified once it's approved.
+                        </p>
+                      </div>
+                      <Alert className="border-blue-200 bg-blue-50 text-left">
+                        <Clock className="h-4 w-4 text-blue-600" />
+                        <AlertDescription className="text-blue-700">
+                          <strong>What happens next?</strong>
+                          <ul className="list-disc list-inside mt-2 space-y-1">
+                            <li>A school administrator will review your request</li>
+                            <li>You'll receive a notification when approved</li>
+                            <li>Once approved, enrollment will be active immediately</li>
+                          </ul>
+                        </AlertDescription>
+                      </Alert>
+                      <Button
+                        onClick={() => setLocation('/parent-dashboard')}
+                        className="mt-4"
+                        data-testid="button-go-to-dashboard"
+                      >
+                        Go to Dashboard
+                      </Button>
+                    </div>
+                  ) : (
+                    // Request form
+                    <div className="space-y-6">
+                      <Alert className="border-amber-200 bg-amber-50">
+                        <AlertCircle className="h-4 w-4 text-amber-600" />
+                        <AlertDescription className="text-amber-700">
+                          <strong>Admin Approval Required</strong>
+                          <p className="mt-1">
+                            Free enrollments require approval from a school administrator.
+                            Your request will be reviewed and you'll be notified of the decision.
+                          </p>
+                        </AlertDescription>
+                      </Alert>
+                      
+                      <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="font-medium text-green-900">Total Amount</div>
+                            <div className="text-sm text-green-700">
+                              {cart.items.length} enrollment{cart.items.length > 1 ? 's' : ''} with full discount applied
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-2xl font-bold text-green-900">
+                              FREE
+                            </div>
+                            {cart.subtotal > 0 && (
+                              <div className="text-sm text-green-600 line-through">
+                                {formatCurrency(cart.subtotal)}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <Button
+                        onClick={handleFreeEnrollmentRequest}
+                        disabled={requestingFreeEnrollment || cart.items.length === 0}
+                        className="w-full bg-green-600 hover:bg-green-700"
+                        size="lg"
+                        data-testid="button-request-free-enrollment"
+                      >
+                        {requestingFreeEnrollment ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Submitting Request...
+                          </>
+                        ) : (
+                          <>
+                            <Gift className="mr-2 h-4 w-4" />
+                            Request Free Enrollment
+                          </>
+                        )}
+                      </Button>
+                      
+                      <p className="text-xs text-muted-foreground text-center">
+                        By submitting this request, you agree to our terms of service.
+                        Enrollment will be confirmed after admin approval.
+                      </p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            ) : (
+              // Regular payment form
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <CreditCard className="h-5 w-5" />
+                    Payment Information
+                  </CardTitle>
+                  <CardDescription>
+                    Enter your payment details to complete enrollment
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {!stripeReady ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                      <span className="ml-2 text-muted-foreground">Initializing payment system...</span>
+                    </div>
+                  ) : stripeError ? (
+                    <Alert variant="destructive">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>
+                        {stripeError}
+                      </AlertDescription>
+                    </Alert>
+                  ) : loading && !clientSecret ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                      <span className="ml-2 text-muted-foreground">Loading payment form...</span>
+                    </div>
+                  ) : error ? (
+                    <Alert variant="destructive">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>
+                        {error}
+                      </AlertDescription>
+                    </Alert>
+                  ) : clientSecret && stripeInstance ? (
+                    <Elements key={clientSecret} stripe={stripeInstance} options={{ clientSecret }}>
+                      <CheckoutForm selectedPaymentPlan={selectedPaymentPlan} selectedPlanAmount={getButtonDisplayAmount()} />
+                    </Elements>
+                  ) : (
+                    <Alert variant="destructive">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>
+                        Failed to initialize payment. Please try again or contact support.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                </CardContent>
+              </Card>
+            )}
           </div>
         </div>
       </div>

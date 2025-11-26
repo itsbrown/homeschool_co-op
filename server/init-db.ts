@@ -543,6 +543,32 @@ async function runMigrations() {
     `);
     console.log('✅ Migration completed: onboarding tour columns added');
     
+    // Add pending_admin_approval status to enrollment constraints
+    console.log('Running migration: Adding pending_admin_approval status to enrollments...');
+    await db.execute(sql`
+      ALTER TABLE program_enrollments 
+      DROP CONSTRAINT IF EXISTS program_enrollments_status_check;
+    `);
+    await db.execute(sql`
+      ALTER TABLE program_enrollments 
+      ADD CONSTRAINT program_enrollments_status_check 
+      CHECK (status IN ('pending_payment', 'pending_admin_approval', 'enrolled', 'waitlist', 'cancelled', 'completed', 'withdrawn', 'failed'));
+    `);
+    await db.execute(sql`
+      ALTER TABLE school_class_enrollments 
+      DROP CONSTRAINT IF EXISTS school_class_enrollments_status_check;
+    `);
+    await db.execute(sql`
+      DO $$ BEGIN
+        ALTER TABLE school_class_enrollments 
+        ADD CONSTRAINT school_class_enrollments_status_check 
+        CHECK (status IN ('pending_payment', 'pending_admin_approval', 'enrolled', 'waitlist', 'cancelled', 'completed', 'withdrawn', 'failed'));
+      EXCEPTION
+        WHEN duplicate_object THEN NULL;
+      END $$;
+    `);
+    console.log('✅ Migration completed: pending_admin_approval status added to enrollments');
+    
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     

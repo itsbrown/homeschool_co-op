@@ -35,7 +35,8 @@ The platform prioritizes scalability, security, and user experience, incorporati
 -   **Payment Reminder System**: Automated email reminders for scheduled payments at T-7, T-3, T-1, T+0 (due day), and T+1 (overdue) days. Uses Brevo SMTP for delivery.
 -   **Cart System**: TanStack Query-based cart implementation with API-first state management, race condition prevention, and atomic bulk cancellation.
 -   **Discount Systems**: Database-managed Free After Threshold Discount System.
--   **Enrollment Management**: Prevents duplicate enrollments, manages status workflows, and integrates with the cart-to-checkout flow.
+-   **Free Enrollment Admin Approval**: When a 100% discount results in a $0 total, enrollments require admin approval as a safeguard against abuse. Parents see a "Request Free Enrollment" UI, admins receive notifications, and can approve/reject via admin dashboard. Approved enrollments become active immediately; parents are notified of decisions.
+-   **Enrollment Management**: Prevents duplicate enrollments, manages status workflows (including pending_admin_approval status), and integrates with the cart-to-checkout flow.
 -   **Class Management**: School administrators can create, edit, and manage classes with multi-variant pricing and school isolation.
 -   **Registration Flow**: Two-tier registration with school code validation.
 -   **AI Enrollment Assistant**: Provides personalized AI guidance.
