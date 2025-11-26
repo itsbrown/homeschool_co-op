@@ -309,7 +309,18 @@ router.get('/forms/:formId', async (req: any, res) => {
       .where(eq(customFormFields.formId, formId))
       .orderBy(customFormFields.order);
     
-    res.json({ ...form, fields });
+    // Fetch school information for branding
+    const [school] = await db
+      .select({
+        id: schools.id,
+        name: schools.name,
+        logo: schools.logo,
+        website: schools.website,
+      })
+      .from(schools)
+      .where(eq(schools.id, form.schoolId));
+    
+    res.json({ ...form, fields, school: school || null });
   } catch (error) {
     console.error('Error fetching form:', error);
     res.status(500).json({ message: 'Error fetching form' });

@@ -133,7 +133,7 @@ function SocialShareButtons({ formTitle, formUrl }: { formTitle: string; formUrl
               variant="ghost"
               size="icon"
               className="h-8 w-8"
-              onClick={() => window.location.href = shareLinks.email}
+              onClick={() => window.open(shareLinks.email, '_blank', 'noopener,noreferrer')}
               data-testid="button-share-email"
             >
               <Mail className="h-4 w-4 text-gray-600" />
@@ -211,42 +211,89 @@ export default function DynamicFormPage() {
 
   const buildValidationSchema = (fields: FormFieldType[]) => {
     const shape: any = {};
+    
+    const numericPreprocess = (val: unknown) => {
+      if (val === '' || val === null || val === undefined) return undefined;
+      if (typeof val === 'string') {
+        const trimmed = val.trim();
+        if (trimmed === '') return undefined;
+        const num = parseFloat(trimmed);
+        return num;
+      }
+      if (typeof val === 'number') return val;
+      return NaN;
+    };
+    
     fields.forEach((field) => {
       let fieldSchema: any;
       
       switch (field.fieldType) {
         case 'email':
-          fieldSchema = z.string().email('Invalid email address');
+          fieldSchema = z.string();
+          if (field.isRequired) {
+            fieldSchema = fieldSchema.min(1, `${field.label} is required`).email('Invalid email address');
+          } else {
+            fieldSchema = fieldSchema.email('Invalid email address').optional().or(z.literal(''));
+          }
           break;
         case 'phone':
-          fieldSchema = z.string().regex(/^[0-9\-\+\(\)\s]+$/, 'Invalid phone number');
+          fieldSchema = z.string();
+          if (field.isRequired) {
+            fieldSchema = fieldSchema.min(1, `${field.label} is required`).regex(/^[0-9\-\+\(\)\s]+$/, 'Invalid phone number');
+          } else {
+            fieldSchema = fieldSchema.regex(/^[0-9\-\+\(\)\s]*$/, 'Invalid phone number').optional();
+          }
           break;
         case 'number':
         case 'quantity':
-          fieldSchema = z.coerce.number();
+          if (field.isRequired) {
+            fieldSchema = z.preprocess(
+              numericPreprocess,
+              z.number({ required_error: `${field.label} is required`, invalid_type_error: `${field.label} must be a valid number` }).finite(`${field.label} must be a valid number`)
+            );
+          } else {
+            fieldSchema = z.preprocess(
+              numericPreprocess,
+              z.number({ invalid_type_error: `${field.label} must be a valid number` }).finite(`${field.label} must be a valid number`).optional()
+            );
+          }
           break;
         case 'price':
-          fieldSchema = z.coerce.number().min(0, 'Price must be positive');
+          if (field.isRequired) {
+            fieldSchema = z.preprocess(
+              numericPreprocess,
+              z.number({ required_error: `${field.label} is required`, invalid_type_error: `${field.label} must be a valid number` }).finite(`${field.label} must be a valid number`).min(0, 'Price must be positive')
+            );
+          } else {
+            fieldSchema = z.preprocess(
+              numericPreprocess,
+              z.number({ invalid_type_error: `${field.label} must be a valid number` }).finite(`${field.label} must be a valid number`).min(0, 'Price must be positive').optional()
+            );
+          }
           break;
         case 'date':
-          fieldSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date');
+          if (field.isRequired) {
+            fieldSchema = z.string().min(1, `${field.label} is required`).regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date');
+          } else {
+            fieldSchema = z.string().regex(/^(\d{4}-\d{2}-\d{2})?$/, 'Invalid date').optional().or(z.literal(''));
+          }
           break;
         case 'checkbox':
           fieldSchema = z.boolean();
           break;
         case 'multi_checkbox':
-          fieldSchema = z.array(z.string());
+          if (field.isRequired) {
+            fieldSchema = z.array(z.string()).min(1, `${field.label} is required`);
+          } else {
+            fieldSchema = z.array(z.string()).optional();
+          }
           break;
         default:
-          fieldSchema = z.string();
-      }
-
-      if (field.isRequired && field.fieldType !== 'checkbox') {
-        fieldSchema = fieldSchema.min(1, `${field.label} is required`);
-      }
-
-      if (!field.isRequired) {
-        fieldSchema = fieldSchema.optional();
+          if (field.isRequired) {
+            fieldSchema = z.string().min(1, `${field.label} is required`);
+          } else {
+            fieldSchema = z.string().optional();
+          }
       }
 
       shape[`field_${field.id}`] = fieldSchema;

@@ -4,7 +4,8 @@ import { useQuery } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { ArrowLeft, AlertCircle } from 'lucide-react';
+import { ArrowLeft, AlertCircle, Share2, Facebook, Mail, Linkedin, Link2, School } from 'lucide-react';
+import { SiX } from 'react-icons/si';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -16,11 +17,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useLocation } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
 import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
 
-interface FormField {
+interface FormFieldType {
   id: number;
   formId: number;
   fieldType: string;
@@ -33,6 +36,13 @@ interface FormField {
   validationRules: any;
 }
 
+interface SchoolInfo {
+  id: number;
+  name: string;
+  logo: string | null;
+  website: string | null;
+}
+
 interface CustomForm {
   id: number;
   schoolId: number;
@@ -42,8 +52,157 @@ interface CustomForm {
   isActive: boolean;
   accessLevel: string;
   description: string | null;
-  fields: FormField[];
+  fields: FormFieldType[];
   settings: any;
+  school?: SchoolInfo | null;
+}
+
+function SocialShareButtons({ formTitle, formUrl }: { formTitle: string; formUrl: string }) {
+  const { toast } = useToast();
+  
+  const shareText = `Check out this form: ${formTitle}`;
+  const encodedText = encodeURIComponent(shareText);
+  const encodedUrl = encodeURIComponent(formUrl);
+  
+  const shareLinks = {
+    facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`,
+    twitter: `https://twitter.com/intent/tweet?text=${encodedText}&url=${encodedUrl}`,
+    linkedin: `https://www.linkedin.com/sharing/share-offsite/?url=${encodedUrl}`,
+    email: `mailto:?subject=${encodeURIComponent(formTitle)}&body=${encodeURIComponent(`Check out this form: ${formUrl}`)}`,
+  };
+  
+  const copyToClipboard = async () => {
+    try {
+      await navigator.clipboard.writeText(formUrl);
+      toast({ title: 'Link copied!', description: 'Form link has been copied to your clipboard.' });
+    } catch (err) {
+      toast({ title: 'Failed to copy', description: 'Could not copy link to clipboard.', variant: 'destructive' });
+    }
+  };
+  
+  const openShareWindow = (url: string) => {
+    window.open(url, '_blank', 'width=600,height=400,noopener,noreferrer');
+  };
+  
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-sm text-muted-foreground flex items-center gap-1">
+        <Share2 className="h-4 w-4" />
+        Share:
+      </span>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => openShareWindow(shareLinks.facebook)}
+              data-testid="button-share-facebook"
+            >
+              <Facebook className="h-4 w-4 text-blue-600" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Share on Facebook</TooltipContent>
+        </Tooltip>
+        
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => openShareWindow(shareLinks.twitter)}
+              data-testid="button-share-twitter"
+            >
+              <SiX className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Share on X</TooltipContent>
+        </Tooltip>
+        
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => openShareWindow(shareLinks.linkedin)}
+              data-testid="button-share-linkedin"
+            >
+              <Linkedin className="h-4 w-4 text-blue-700" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Share on LinkedIn</TooltipContent>
+        </Tooltip>
+        
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => window.open(shareLinks.email, '_blank', 'noopener,noreferrer')}
+              data-testid="button-share-email"
+            >
+              <Mail className="h-4 w-4 text-gray-600" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Share via Email</TooltipContent>
+        </Tooltip>
+        
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={copyToClipboard}
+              data-testid="button-copy-link"
+            >
+              <Link2 className="h-4 w-4 text-gray-600" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Copy Link</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    </div>
+  );
+}
+
+function SchoolBranding({ school }: { school: SchoolInfo }) {
+  return (
+    <div className="flex items-center gap-4 mb-6 pb-6 border-b" data-testid="school-branding">
+      {school.logo ? (
+        <Avatar className="h-16 w-16">
+          <AvatarImage src={school.logo} alt={school.name} />
+          <AvatarFallback className="text-lg bg-primary/10 text-primary">
+            {school.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
+          </AvatarFallback>
+        </Avatar>
+      ) : (
+        <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
+          <School className="h-8 w-8 text-primary" />
+        </div>
+      )}
+      <div>
+        <h2 className="text-xl font-semibold text-foreground" data-testid="text-school-name">
+          {school.name}
+        </h2>
+        {school.website && (
+          <a 
+            href={school.website} 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="text-sm text-muted-foreground hover:text-primary transition-colors"
+            data-testid="link-school-website"
+          >
+            {school.website.replace(/^https?:\/\//, '')}
+          </a>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export default function PreviewFormPage() {
@@ -51,52 +210,105 @@ export default function PreviewFormPage() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const formId = params?.id ? parseInt(params.id) : null;
+  
+  const publicFormUrl = typeof window !== 'undefined' && formId 
+    ? `${window.location.origin}/forms/{SLUG}` 
+    : '';
 
-  // Fetch form with authentication
   const { data: form, isLoading, error } = useQuery<CustomForm>({
     queryKey: [`/api/custom-forms/forms/${formId}`],
     enabled: !!formId,
   });
 
-  // Build dynamic validation schema
-  const buildValidationSchema = (fields: FormField[]) => {
+  const actualPublicUrl = form?.slug 
+    ? `${typeof window !== 'undefined' ? window.location.origin : ''}/forms/${form.slug}`
+    : '';
+
+  const buildValidationSchema = (fields: FormFieldType[]) => {
     const shape: any = {};
+    
+    const numericPreprocess = (val: unknown) => {
+      if (val === '' || val === null || val === undefined) return undefined;
+      if (typeof val === 'string') {
+        const trimmed = val.trim();
+        if (trimmed === '') return undefined;
+        const num = parseFloat(trimmed);
+        return num;
+      }
+      if (typeof val === 'number') return val;
+      return NaN;
+    };
+    
     fields.forEach((field) => {
       let fieldSchema: any;
       
       switch (field.fieldType) {
         case 'email':
-          fieldSchema = z.string().email('Invalid email address');
+          fieldSchema = z.string();
+          if (field.isRequired) {
+            fieldSchema = fieldSchema.min(1, `${field.label} is required`).email('Invalid email address');
+          } else {
+            fieldSchema = fieldSchema.email('Invalid email address').optional().or(z.literal(''));
+          }
           break;
         case 'phone':
-          fieldSchema = z.string().regex(/^[0-9\-\+\(\)\s]+$/, 'Invalid phone number');
+          fieldSchema = z.string();
+          if (field.isRequired) {
+            fieldSchema = fieldSchema.min(1, `${field.label} is required`).regex(/^[0-9\-\+\(\)\s]+$/, 'Invalid phone number');
+          } else {
+            fieldSchema = fieldSchema.regex(/^[0-9\-\+\(\)\s]*$/, 'Invalid phone number').optional();
+          }
           break;
         case 'number':
         case 'quantity':
-          fieldSchema = z.coerce.number();
+          if (field.isRequired) {
+            fieldSchema = z.preprocess(
+              numericPreprocess,
+              z.number({ required_error: `${field.label} is required`, invalid_type_error: `${field.label} must be a valid number` }).finite(`${field.label} must be a valid number`)
+            );
+          } else {
+            fieldSchema = z.preprocess(
+              numericPreprocess,
+              z.number({ invalid_type_error: `${field.label} must be a valid number` }).finite(`${field.label} must be a valid number`).optional()
+            );
+          }
           break;
         case 'price':
-          fieldSchema = z.coerce.number().min(0, 'Price must be positive');
+          if (field.isRequired) {
+            fieldSchema = z.preprocess(
+              numericPreprocess,
+              z.number({ required_error: `${field.label} is required`, invalid_type_error: `${field.label} must be a valid number` }).finite(`${field.label} must be a valid number`).min(0, 'Price must be positive')
+            );
+          } else {
+            fieldSchema = z.preprocess(
+              numericPreprocess,
+              z.number({ invalid_type_error: `${field.label} must be a valid number` }).finite(`${field.label} must be a valid number`).min(0, 'Price must be positive').optional()
+            );
+          }
           break;
         case 'date':
-          fieldSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date');
+          if (field.isRequired) {
+            fieldSchema = z.string().min(1, `${field.label} is required`).regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date');
+          } else {
+            fieldSchema = z.string().regex(/^(\d{4}-\d{2}-\d{2})?$/, 'Invalid date').optional().or(z.literal(''));
+          }
           break;
         case 'checkbox':
           fieldSchema = z.boolean();
           break;
         case 'multi_checkbox':
-          fieldSchema = z.array(z.string());
+          if (field.isRequired) {
+            fieldSchema = z.array(z.string()).min(1, `${field.label} is required`);
+          } else {
+            fieldSchema = z.array(z.string()).optional();
+          }
           break;
         default:
-          fieldSchema = z.string();
-      }
-
-      if (field.isRequired && field.fieldType !== 'checkbox') {
-        fieldSchema = fieldSchema.min(1, `${field.label} is required`);
-      }
-
-      if (!field.isRequired) {
-        fieldSchema = fieldSchema.optional();
+          if (field.isRequired) {
+            fieldSchema = z.string().min(1, `${field.label} is required`);
+          } else {
+            fieldSchema = z.string().optional();
+          }
       }
 
       shape[`field_${field.id}`] = fieldSchema;
@@ -114,7 +326,6 @@ export default function PreviewFormPage() {
   });
 
   const onSubmit = (data: any) => {
-    // Preview mode - don't actually submit
     console.log('Preview form data:', data);
     toast({
       title: 'Preview Mode',
@@ -182,22 +393,28 @@ export default function PreviewFormPage() {
 
         <Card>
           <CardHeader>
-            <div className="flex items-start justify-between">
+            {form.school && <SchoolBranding school={form.school} />}
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
               <div className="flex-1">
-                <CardTitle className="text-2xl">{form.title}</CardTitle>
+                <CardTitle className="text-2xl" data-testid="text-form-title">{form.title}</CardTitle>
                 {form.description && (
                   <CardDescription className="mt-2 text-base">
                     {form.description}
                   </CardDescription>
                 )}
               </div>
-              <div className="flex gap-2">
-                <Badge variant={form.isActive ? 'default' : 'destructive'}>
-                  {form.isActive ? 'Active' : 'Inactive'}
-                </Badge>
-                <Badge variant="outline" className="capitalize">
-                  {form.accessLevel}
-                </Badge>
+              <div className="flex flex-col gap-2 items-end">
+                <div className="flex gap-2">
+                  <Badge variant={form.isActive ? 'default' : 'destructive'}>
+                    {form.isActive ? 'Active' : 'Inactive'}
+                  </Badge>
+                  <Badge variant="outline" className="capitalize">
+                    {form.accessLevel}
+                  </Badge>
+                </div>
+                {actualPublicUrl && (
+                  <SocialShareButtons formTitle={form.title} formUrl={actualPublicUrl} />
+                )}
               </div>
             </div>
           </CardHeader>
