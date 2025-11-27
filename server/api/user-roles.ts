@@ -402,11 +402,43 @@ userRolesRouter.get('/admin/users/:userId/roles', supabaseAuth, async (req: Auth
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // For schoolAdmins, enforce school isolation
-    if (adminSchoolId !== null && targetUser[0].schoolId !== adminSchoolId) {
-      return res.status(403).json({ 
-        error: 'Access denied. You can only manage users from your school.' 
-      });
+    // For schoolAdmins, check if user has ANY role at their school (not just users.schoolId)
+    // This allows managing users who may have null users.schoolId but have roles in the school
+    if (adminSchoolId !== null) {
+      // Check if user has at least one role at the admin's school
+      const userRolesAtAdminSchool = await db
+        .select({ id: userRoles.id })
+        .from(userRoles)
+        .where(and(
+          eq(userRoles.userId, targetUserId),
+          eq(userRoles.schoolId, adminSchoolId)
+        ))
+        .limit(1);
+      
+      // Check if user has roles at OTHER schools (for cross-tenant protection)
+      const userRolesAtOtherSchools = await db
+        .select({ id: userRoles.id, schoolId: userRoles.schoolId })
+        .from(userRoles)
+        .where(and(
+          eq(userRoles.userId, targetUserId),
+          ne(userRoles.schoolId, adminSchoolId)
+        ))
+        .limit(1);
+      
+      // Also check if user's primary school matches (legacy support)
+      const hasAccessViaSchoolId = targetUser[0].schoolId === adminSchoolId;
+      const hasAccessViaRoles = userRolesAtAdminSchool.length > 0;
+      // Only allow access to users with null schoolId if they have NO roles at other schools
+      // This prevents cross-tenant access to users who belong to different schools
+      const isNewUserWithNoSchool = targetUser[0].schoolId === null && userRolesAtOtherSchools.length === 0;
+      
+      if (!hasAccessViaSchoolId && !hasAccessViaRoles && !isNewUserWithNoSchool) {
+        return res.status(403).json({ 
+          error: 'Access denied. You can only manage users from your school.' 
+        });
+      }
+      
+      console.log(`📋 SchoolAdmin fetching roles: userId=${targetUserId}, hasAccessViaSchoolId=${hasAccessViaSchoolId}, hasAccessViaRoles=${hasAccessViaRoles}, isNewUser=${isNewUserWithNoSchool}, rolesAtOtherSchools=${userRolesAtOtherSchools.length}`);
     }
 
     // Get all roles for this user with school name
@@ -529,8 +561,34 @@ userRolesRouter.post('/admin/users/:userId/roles', supabaseAuth, async (req: Aut
     let roleSchoolId: number;
     
     if (adminSchoolId !== null) {
-      // SchoolAdmin: Enforce school isolation
-      if (targetUser[0].schoolId !== adminSchoolId) {
+      // SchoolAdmin: Check if user has ANY role at their school or has matching schoolId
+      // This allows adding roles to users who may have null users.schoolId but have existing roles in the school
+      const existingRolesAtSchool = await db
+        .select({ id: userRoles.id })
+        .from(userRoles)
+        .where(and(
+          eq(userRoles.userId, targetUserId),
+          eq(userRoles.schoolId, adminSchoolId)
+        ))
+        .limit(1);
+      
+      // Check if user has roles at OTHER schools (for cross-tenant protection)
+      const existingRolesAtOtherSchools = await db
+        .select({ id: userRoles.id, schoolId: userRoles.schoolId })
+        .from(userRoles)
+        .where(and(
+          eq(userRoles.userId, targetUserId),
+          ne(userRoles.schoolId, adminSchoolId)
+        ))
+        .limit(1);
+      
+      const hasAccessViaSchoolId = targetUser[0].schoolId === adminSchoolId;
+      const hasAccessViaRoles = existingRolesAtSchool.length > 0;
+      // Only allow access to users with null schoolId if they have NO roles at other schools
+      // This prevents cross-tenant role assignment to users who belong to different schools
+      const isNewUserWithNoSchool = targetUser[0].schoolId === null && existingRolesAtOtherSchools.length === 0;
+      
+      if (!hasAccessViaSchoolId && !hasAccessViaRoles && !isNewUserWithNoSchool) {
         return res.status(403).json({ 
           error: 'Access denied. You can only manage users from your school.' 
         });
@@ -544,9 +602,13 @@ userRolesRouter.post('/admin/users/:userId/roles', supabaseAuth, async (req: Aut
       }
       
       roleSchoolId = adminSchoolId;
+      
+      console.log(`📝 SchoolAdmin adding role: userId=${targetUserId}, role=${role}, schoolId=${roleSchoolId}, targetUserSchoolId=${targetUser[0].schoolId}, rolesAtOtherSchools=${existingRolesAtOtherSchools.length}`);
     } else {
       // Global admin: Use provided schoolId or default to user's school
       roleSchoolId = schoolId || targetUser[0].schoolId;
+      
+      console.log(`📝 GlobalAdmin adding role: userId=${targetUserId}, role=${role}, schoolId=${roleSchoolId}`);
     }
 
     // Check if role already exists AT THE SAME SCHOOL
