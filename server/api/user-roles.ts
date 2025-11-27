@@ -30,6 +30,68 @@ async function isAdminOrSchoolAdmin(userId: number): Promise<{ isAdmin: boolean;
   };
 }
 
+/**
+ * Helper function to check if a SchoolAdmin has access to manage a target user's roles.
+ * 
+ * Access is granted if ANY of these conditions are true:
+ * 1. Target user's schoolId matches admin's school (legacy support)
+ * 2. Target user has existing roles at admin's school (multi-role users)
+ * 3. Target user has null schoolId AND no roles at other schools (new user onboarding)
+ * 
+ * This ensures proper multi-tenant isolation while allowing legitimate onboarding.
+ */
+interface SchoolAdminAccessResult {
+  hasAccess: boolean;
+  hasAccessViaSchoolId: boolean;
+  hasAccessViaRoles: boolean;
+  isNewUserWithNoSchool: boolean;
+  rolesAtOtherSchools: number;
+}
+
+async function checkSchoolAdminAccessToUser(
+  targetUserId: number,
+  targetUserSchoolId: number | null,
+  adminSchoolId: number
+): Promise<SchoolAdminAccessResult> {
+  const db = await getDb();
+  
+  // Check if user has at least one role at the admin's school
+  const userRolesAtAdminSchool = await db
+    .select({ id: userRoles.id })
+    .from(userRoles)
+    .where(and(
+      eq(userRoles.userId, targetUserId),
+      eq(userRoles.schoolId, adminSchoolId)
+    ))
+    .limit(1);
+  
+  // Check if user has roles at OTHER schools (for cross-tenant protection)
+  const userRolesAtOtherSchools = await db
+    .select({ id: userRoles.id, schoolId: userRoles.schoolId })
+    .from(userRoles)
+    .where(and(
+      eq(userRoles.userId, targetUserId),
+      ne(userRoles.schoolId, adminSchoolId)
+    ))
+    .limit(1);
+  
+  // Determine access via three pathways
+  const hasAccessViaSchoolId = targetUserSchoolId === adminSchoolId;
+  const hasAccessViaRoles = userRolesAtAdminSchool.length > 0;
+  // Only allow access to users with null schoolId if they have NO roles at other schools
+  const isNewUserWithNoSchool = targetUserSchoolId === null && userRolesAtOtherSchools.length === 0;
+  
+  const hasAccess = hasAccessViaSchoolId || hasAccessViaRoles || isNewUserWithNoSchool;
+  
+  return {
+    hasAccess,
+    hasAccessViaSchoolId,
+    hasAccessViaRoles,
+    isNewUserWithNoSchool,
+    rolesAtOtherSchools: userRolesAtOtherSchools.length,
+  };
+}
+
 // Type for authenticated requests - uses the extended Request type from middleware/types.ts
 type AuthenticatedRequest = ExpressRequest;
 
