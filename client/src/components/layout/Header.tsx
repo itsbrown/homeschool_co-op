@@ -66,6 +66,13 @@ export default function Header({ onMenuClick }: HeaderProps) {
           <AIStatusBadge />
         </div>
 
+        {/* DEBUG: Show role count */}
+        {canSwitchRoles && (
+          <span className="text-xs text-green-500 font-bold">
+            [CAN_SWITCH: {canSwitchRoles ? 'true' : 'false'}]
+          </span>
+        )}
+
         <RoleSwitcher />
 
         <NotificationCenter
