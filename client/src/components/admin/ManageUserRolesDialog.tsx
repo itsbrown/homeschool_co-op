@@ -120,6 +120,8 @@ export default function ManageUserRolesDialog({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/user/admin/users', userId, 'roles'] });
       queryClient.invalidateQueries({ queryKey: ['/api/school-admin/users'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/user/roles'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/user/current-role'] });
       toast({
         title: 'Success',
         description: 'Role added successfully',
@@ -163,6 +165,8 @@ export default function ManageUserRolesDialog({
       console.log('🔄 Invalidating query cache...');
       queryClient.invalidateQueries({ queryKey: ['/api/user/admin/users', userId, 'roles'] });
       queryClient.invalidateQueries({ queryKey: ['/api/school-admin/users'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/user/roles'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/user/current-role'] });
       console.log('✅ Cache invalidated');
       toast({
         title: 'Success',

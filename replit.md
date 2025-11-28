@@ -28,7 +28,7 @@ The platform prioritizes scalability, security, and user experience, incorporati
 
 ### Key Features
 -   **Authentication and Authorization**: Supabase-based secure authentication with role-based access control, JWT validation, multi-tenant security, and user metadata auto-sync.
--   **Multi-Role System**: Supports users holding multiple roles with dynamic, school-context-restricted role-switching capabilities.
+-   **Multi-Role System**: Supports users holding multiple roles with dynamic, school-context-restricted role-switching capabilities. Role management uses a centralized three-way access control helper (`checkSchoolAdminAccessToUser`) for consistent security. RoleSwitcher updates immediately via TanStack Query cache invalidation when roles are added/removed.
 -   **School Branding System**: Allows school administrators to upload and display school logos.
 -   **Membership Management System**: Admin interface for managing annual membership fees and enrollment validation.
 -   **Payment System**: Stripe-only system with subscription schedules, webhooks, smart cart logic, automated refunds, and automatic payment reminders.

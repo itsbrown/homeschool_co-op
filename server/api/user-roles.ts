@@ -141,7 +141,7 @@ userRolesRouter.get('/roles', supabaseAuth, async (req: AuthenticatedRequest, re
     const effectiveActiveRole = currentUser?.activeRole || currentUser?.role;
     const effectiveActiveRoleId = currentUser?.activeRoleId;
 
-    return res.json({
+    const response = {
       roles: roles.map((r: any) => ({
         id: r.id,
         role: r.role,
@@ -153,7 +153,11 @@ userRolesRouter.get('/roles', supabaseAuth, async (req: AuthenticatedRequest, re
       activeRole: effectiveActiveRole,
       activeRoleId: effectiveActiveRoleId,
       canSwitchRoles: roles.length > 1,
-    });
+    };
+    
+    console.log(`📋 GET /api/user/roles - userId=${userId}, roleCount=${roles.length}, canSwitch=${response.canSwitchRoles}, roles=${JSON.stringify(response.roles.map(r => ({ id: r.id, role: r.role })))}`);
+    
+    return res.json(response);
   } catch (error) {
     console.error('Error fetching user roles:', error);
     next(error);
