@@ -31,6 +31,7 @@ interface Discount {
   applicableToGradeLevels: string[];
   newStudentsOnly: boolean;
   siblingDiscount: boolean;
+  appliesToMembership: boolean;
   requiredRoles: string[] | null;
   roleMatchLogic: 'and' | 'or' | null;
   usageLimit: number | null;
@@ -60,6 +61,7 @@ interface DiscountFormData {
   applicableToGradeLevels: string[];
   newStudentsOnly: boolean;
   siblingDiscount: boolean;
+  appliesToMembership: boolean;
   requiredRoles: string[];
   roleMatchLogic: 'and' | 'or';
   usageLimit: number | null;
@@ -115,6 +117,7 @@ export default function DiscountsPage() {
     applicableToGradeLevels: [],
     newStudentsOnly: false,
     siblingDiscount: false,
+    appliesToMembership: false,
     requiredRoles: [],
     roleMatchLogic: 'or',
     usageLimit: null,
@@ -384,6 +387,7 @@ export default function DiscountsPage() {
       applicableToGradeLevels: discount.applicableToGradeLevels || [],
       newStudentsOnly: discount.newStudentsOnly,
       siblingDiscount: discount.siblingDiscount,
+      appliesToMembership: discount.appliesToMembership || false,
       requiredRoles: discount.requiredRoles || [],
       roleMatchLogic: discount.roleMatchLogic || 'or',
       usageLimit: discount.usageLimit,
@@ -571,7 +575,14 @@ export default function DiscountsPage() {
                     <TableRow key={discount.id}>
                       <TableCell>
                         <div>
-                          <div className="font-medium">{discount.name}</div>
+                          <div className="font-medium flex items-center gap-2">
+                            {discount.name}
+                            {discount.appliesToMembership && (
+                              <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
+                                Membership
+                              </Badge>
+                            )}
+                          </div>
                           {discount.code && (
                             <div className="text-sm text-muted-foreground">
                               Code: {discount.code}
@@ -1108,6 +1119,27 @@ function DiscountFormDialog({
                 )}
                 {formData.siblingDiscount && formData.type === 'fixed_amount' && (
                   <span className="font-medium text-blue-600"> Active: ${formData.value} off when 2+ siblings are enrolled.</span>
+                )}
+              </p>
+            </div>
+
+            <div className="p-4 border rounded-lg bg-green-50/50 space-y-3">
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="appliesToMembership"
+                  checked={formData.appliesToMembership}
+                  onCheckedChange={(checked) => setFormData({ ...formData, appliesToMembership: checked })}
+                  data-testid="switch-applies-to-membership"
+                />
+                <Label htmlFor="appliesToMembership" className="font-medium">Membership Discount</Label>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Apply this discount to membership fees. 
+                {formData.appliesToMembership && formData.type === 'percentage' && (
+                  <span className="font-medium text-green-600"> Active: {formData.value}% off membership fees.</span>
+                )}
+                {formData.appliesToMembership && formData.type === 'fixed_amount' && (
+                  <span className="font-medium text-green-600"> Active: ${formData.value} off membership fees.</span>
                 )}
               </p>
             </div>

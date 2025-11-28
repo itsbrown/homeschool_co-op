@@ -110,6 +110,14 @@ async function runMigrations() {
     `);
     console.log('✅ Migration completed: bundle_rule column added to discounts table');
     
+    // Add applies_to_membership column to discounts table
+    console.log('Running migration: Adding applies_to_membership column to discounts table...');
+    await db.execute(sql`
+      ALTER TABLE discounts 
+      ADD COLUMN IF NOT EXISTS applies_to_membership BOOLEAN DEFAULT FALSE;
+    `);
+    console.log('✅ Migration completed: applies_to_membership column added to discounts table');
+    
     // Create categories table for school-specific class categorization
     console.log('Running migration: Creating categories table...');
     await db.execute(sql`

@@ -3265,6 +3265,7 @@ router.post('/discounts', supabaseAuth, requireSchoolContext, async (req: any, r
       applicableToGradeLevels,
       newStudentsOnly,
       siblingDiscount,
+      appliesToMembership,
       usageLimit,
       usageLimitPerUser,
       validFrom,
@@ -3331,6 +3332,7 @@ router.post('/discounts', supabaseAuth, requireSchoolContext, async (req: any, r
       applicableToGradeLevels: applicableToGradeLevels || [],
       newStudentsOnly: newStudentsOnly || false,
       siblingDiscount: siblingDiscount || false,
+      appliesToMembership: appliesToMembership || false,
       usageLimit: usageLimit || null,
       usageLimitPerUser: usageLimitPerUser || null,
       currentUsageCount: 0,
@@ -3432,6 +3434,7 @@ router.put('/discounts/:id', supabaseAuth, async (req: any, res) => {
       applicableToGradeLevels,
       newStudentsOnly,
       siblingDiscount,
+      appliesToMembership,
       usageLimit,
       usageLimitPerUser,
       validFrom,
@@ -3485,6 +3488,7 @@ router.put('/discounts/:id', supabaseAuth, async (req: any, res) => {
     if (applicableToGradeLevels !== undefined) updates.applicableToGradeLevels = applicableToGradeLevels;
     if (newStudentsOnly !== undefined) updates.newStudentsOnly = newStudentsOnly;
     if (siblingDiscount !== undefined) updates.siblingDiscount = siblingDiscount;
+    if (appliesToMembership !== undefined) updates.appliesToMembership = appliesToMembership;
     if (usageLimit !== undefined) updates.usageLimit = usageLimit;
     if (usageLimitPerUser !== undefined) updates.usageLimitPerUser = usageLimitPerUser;
     if (validFrom !== undefined) updates.validFrom = parseDiscountDate(validFrom);
@@ -3598,6 +3602,7 @@ router.post('/discounts/:id/duplicate', async (req, res) => {
       applicableToGradeLevels: originalDiscount.applicableToGradeLevels,
       newStudentsOnly: originalDiscount.newStudentsOnly,
       siblingDiscount: originalDiscount.siblingDiscount,
+      appliesToMembership: originalDiscount.appliesToMembership,
       usageLimit: originalDiscount.usageLimit,
       usageLimitPerUser: originalDiscount.usageLimitPerUser,
       currentUsageCount: 0,

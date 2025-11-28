@@ -1575,6 +1575,7 @@ export const discounts = pgTable("discounts", {
   applicableToGradeLevels: text("applicable_to_grade_levels").array(), // Grade levels
   newStudentsOnly: boolean("new_students_only").default(false),
   siblingDiscount: boolean("sibling_discount").default(false), // Apply when multiple siblings enroll
+  appliesToMembership: boolean("applies_to_membership").default(false), // Apply to membership fees
   
   // Role-based discount eligibility
   requiredRoles: text("required_roles").array(), // Roles required for discount (e.g., ["parent", "educator"])
