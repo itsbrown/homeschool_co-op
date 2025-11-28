@@ -24,11 +24,18 @@ const roleConfig: Record<string, { icon: any; label: string }> = {
 export default function RoleSwitcher() {
   const { activeRole, activeRoleId, availableRoles, canSwitchRoles, setActiveRole, isLoadingRoles } = useRole();
 
-  console.log('🎯🎯🎯 RoleSwitcher RENDER - canSwitchRoles:', canSwitchRoles, 'roles:', availableRoles.length, 'loading:', isLoadingRoles, 'data:', JSON.stringify(availableRoles));
+  console.log('🎯🎯🎯 RoleSwitcher RENDER:', {
+    canSwitchRoles,
+    roleCount: availableRoles.length,
+    isLoadingRoles,
+    activeRole,
+    activeRoleId,
+    roles: availableRoles.map(r => ({ id: r.id, role: r.role, schoolId: r.schoolId }))
+  });
 
   // Don't show switcher for single-role users
   if (!canSwitchRoles || availableRoles.length <= 1 || isLoadingRoles) {
-    console.log('🎯🎯🎯 RoleSwitcher EARLY EXIT - canSwitch:', canSwitchRoles, 'count:', availableRoles.length, 'loading:', isLoadingRoles);
+    console.log('🎯🎯🎯 RoleSwitcher EARLY EXIT:', { canSwitchRoles, count: availableRoles.length, isLoadingRoles });
     return null;
   }
 
@@ -43,7 +50,7 @@ export default function RoleSwitcher() {
   
   // Defensive guard: If we can't find current role data, don't render the switcher
   if (!currentRoleData || !currentRoleData.schoolId) {
-    console.error('⚠️ RoleSwitcher MISSING DATA - activeRoleId:', activeRoleId, 'activeRole:', activeRole, 'currentRoleData:', currentRoleData);
+    console.error('⚠️🎯🎯🎯 RoleSwitcher MISSING DATA EXIT:', { activeRoleId, activeRole, currentRoleData, availableRoles });
     return null;
   }
   
