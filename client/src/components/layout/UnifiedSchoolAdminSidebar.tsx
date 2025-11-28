@@ -335,11 +335,6 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
           </nav>
         </div>
         
-        {/* Role Switcher */}
-        <div className={cn("border-t", isCollapsed ? "p-2" : "p-4")}>
-          <RoleSwitcher />
-        </div>
-        
         {/* User Profile & Logout */}
         <div className="border-t p-4">
           {isAuthenticated && user && (
