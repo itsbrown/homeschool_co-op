@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useAuth } from "@/components/SupabaseProvider";
 import { useRole } from "@/contexts/RoleContext";
 import { cn } from '@/lib/utils';
+import RoleSwitcher from "@/components/RoleSwitcher";
 import { 
   School, 
   BookOpen, 
@@ -334,6 +335,13 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
           </nav>
         </div>
         
+        {/* Role Switcher */}
+        {!isCollapsed && (
+          <div className="border-t p-4">
+            <RoleSwitcher />
+          </div>
+        )}
+        
         {/* User Profile & Logout */}
         <div className="border-t p-4">
           {isAuthenticated && user && (
@@ -438,6 +446,11 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
                     );
                   })}
                 </nav>
+              </div>
+              
+              {/* Role Switcher */}
+              <div className="border-t p-4 flex-shrink-0">
+                <RoleSwitcher />
               </div>
               
               {/* Footer - User Profile & Logout */}
