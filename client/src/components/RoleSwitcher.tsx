@@ -24,18 +24,19 @@ const roleConfig: Record<string, { icon: any; label: string }> = {
 export default function RoleSwitcher() {
   const { activeRole, activeRoleId, availableRoles, canSwitchRoles, setActiveRole, isLoadingRoles } = useRole();
 
-  console.log('🎯🎯🎯 RoleSwitcher RENDER:', {
+  // DEBUG: Always log on every render
+  console.warn('🎯 ROLE_SWITCHER_DEBUG:', JSON.stringify({
     canSwitchRoles,
     roleCount: availableRoles.length,
     isLoadingRoles,
     activeRole,
     activeRoleId,
     roles: availableRoles.map(r => ({ id: r.id, role: r.role, schoolId: r.schoolId }))
-  });
+  }));
 
   // Don't show switcher for single-role users
   if (!canSwitchRoles || availableRoles.length <= 1 || isLoadingRoles) {
-    console.log('🎯🎯🎯 RoleSwitcher EARLY EXIT:', { canSwitchRoles, count: availableRoles.length, isLoadingRoles });
+    console.warn('🎯 ROLE_SWITCHER_EARLY_EXIT:', JSON.stringify({ canSwitchRoles, count: availableRoles.length, isLoadingRoles }));
     return null;
   }
 
