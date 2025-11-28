@@ -3224,6 +3224,27 @@ router.get('/discounts/:id', async (req, res) => {
   }
 });
 
+// Helper function to safely parse date strings for discount fields
+function parseDiscountDate(dateValue: any): Date | null {
+  if (!dateValue || dateValue === "" || dateValue === null || dateValue === undefined) {
+    return null;
+  }
+  
+  // If it's already a Date object, return it
+  if (dateValue instanceof Date) {
+    return isNaN(dateValue.getTime()) ? null : dateValue;
+  }
+  
+  // Try to parse the string
+  const parsed = new Date(dateValue);
+  if (isNaN(parsed.getTime())) {
+    console.warn(`⚠️ Invalid date value: ${dateValue}`);
+    return null; // Return null for invalid dates instead of throwing
+  }
+  
+  return parsed;
+}
+
 // Create a new discount
 router.post('/discounts', supabaseAuth, requireSchoolContext, async (req: any, res) => {
   try {
@@ -3313,8 +3334,8 @@ router.post('/discounts', supabaseAuth, requireSchoolContext, async (req: any, r
       usageLimit: usageLimit || null,
       usageLimitPerUser: usageLimitPerUser || null,
       currentUsageCount: 0,
-      validFrom: validFrom === "" ? null : validFrom,
-      validUntil: validUntil === "" ? null : validUntil,
+      validFrom: parseDiscountDate(validFrom),
+      validUntil: parseDiscountDate(validUntil),
       isActive: isActive !== undefined ? isActive : true,
       priority: priority || 0,
       combinableWithOthers: combinableWithOthers || false,
@@ -3466,8 +3487,8 @@ router.put('/discounts/:id', supabaseAuth, async (req: any, res) => {
     if (siblingDiscount !== undefined) updates.siblingDiscount = siblingDiscount;
     if (usageLimit !== undefined) updates.usageLimit = usageLimit;
     if (usageLimitPerUser !== undefined) updates.usageLimitPerUser = usageLimitPerUser;
-    if (validFrom !== undefined) updates.validFrom = validFrom === "" ? null : validFrom;
-    if (validUntil !== undefined) updates.validUntil = validUntil === "" ? null : validUntil;
+    if (validFrom !== undefined) updates.validFrom = parseDiscountDate(validFrom);
+    if (validUntil !== undefined) updates.validUntil = parseDiscountDate(validUntil);
     if (isActive !== undefined) updates.isActive = isActive;
     if (priority !== undefined) updates.priority = priority;
     if (combinableWithOthers !== undefined) updates.combinableWithOthers = combinableWithOthers;
