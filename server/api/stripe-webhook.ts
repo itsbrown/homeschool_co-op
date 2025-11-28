@@ -404,9 +404,9 @@ async function handleMembershipInvoicePaid(invoice: any) {
     // Determine new status based on payment
     let newStatus = enrollment.status;
     if (remainingBalance === 0) {
-      newStatus = 'active';
+      newStatus = 'enrolled';
     } else if (amountPaid > 0) {
-      newStatus = 'active'; // Partial payment still activates membership
+      newStatus = 'enrolled'; // Partial payment still activates membership
     }
     
     // Calculate renewal date (1 year from start date)
@@ -517,7 +517,7 @@ async function handleMembershipSubscriptionCreated(subscription: any) {
         stripeCustomerId: subscription.customer,
         startDate: startDate,
         renewalDate: renewalDate,
-        status: subscription.status === 'active' ? 'active' : 'pending_payment',
+        status: (subscription.status === 'active' || subscription.status === 'trialing') ? 'enrolled' : 'pending_payment',
         updatedAt: new Date()
       })
       .where(eq(membershipEnrollments.id, parseInt(membershipId)));
@@ -549,16 +549,29 @@ async function handleMembershipSubscriptionUpdated(subscription: any) {
     
     const enrollment = enrollments[0];
     
-    // Map Stripe status to our status
-    let newStatus = enrollment.status;
-    if (subscription.status === 'active') {
-      newStatus = 'active';
-    } else if (subscription.status === 'canceled') {
-      newStatus = 'cancelled';
-    } else if (subscription.status === 'past_due') {
-      newStatus = 'payment_failed';
-    } else if (subscription.status === 'unpaid') {
-      newStatus = 'expired';
+    // Map Stripe status to our valid schema status
+    // Valid statuses: pending_payment, enrolled, expired, grace_period, suspended
+    let newStatus: 'pending_payment' | 'enrolled' | 'expired' | 'grace_period' | 'suspended' = enrollment.status as any;
+    switch (subscription.status) {
+      case 'active':
+      case 'trialing':
+        newStatus = 'enrolled';
+        break;
+      case 'past_due':
+        newStatus = 'grace_period';
+        break;
+      case 'canceled':
+        newStatus = 'suspended';
+        break;
+      case 'unpaid':
+      case 'incomplete_expired':
+        newStatus = 'expired';
+        break;
+      case 'incomplete':
+      case 'paused':
+      default:
+        newStatus = 'pending_payment';
+        break;
     }
     
     // Update renewal date safely

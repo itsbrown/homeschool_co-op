@@ -106,29 +106,37 @@ export class MembershipService {
       const remainingBalance = membership.amount - totalPaid;
 
       if (remainingBalance <= 0) {
-        newStatus = 'active';
-      } else if (totalPaid > 0) {
-        newStatus = 'partial_payment';
+        newStatus = 'enrolled'; // Fully paid
       } else {
+        // Partial payment or no payment - check expiration status
         // Check if expired or in grace period
         const now = new Date();
-        if (now > membership.gracePeriodEnd) {
+        const gracePeriodEnd = membership.gracePeriodEnd ? new Date(membership.gracePeriodEnd) : null;
+        const expirationDate = membership.expirationDate ? new Date(membership.expirationDate) : null;
+        
+        if (gracePeriodEnd && now > gracePeriodEnd) {
           newStatus = 'expired';
-        } else if (now > membership.expirationDate) {
+        } else if (expirationDate && now > expirationDate) {
           newStatus = 'grace_period';
         } else {
           newStatus = 'pending_payment';
         }
       }
 
-      if (newStatus !== membership.status) {
+      // Always update amountPaid and remainingBalance to track payment progress
+      // Status changes only when fully paid or expiration conditions are met
+      const hasChanges = newStatus !== membership.status || 
+                         totalPaid !== membership.amountPaid || 
+                         remainingBalance !== membership.remainingBalance;
+      
+      if (hasChanges) {
         await storage.updateMembershipEnrollment(membershipId, {
           status: newStatus,
           amountPaid: totalPaid,
           remainingBalance: remainingBalance
         });
         
-        console.log(`✅ Updated membership ${membershipId} status to ${newStatus}`);
+        console.log(`✅ Updated membership ${membershipId}: status=${newStatus}, paid=${totalPaid}, balance=${remainingBalance}`);
       }
 
     } catch (error) {

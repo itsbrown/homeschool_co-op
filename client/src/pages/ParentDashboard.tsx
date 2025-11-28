@@ -1,16 +1,18 @@
 import { useState } from "react";
 import { useAuth } from "@/components/SupabaseProvider";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Users, BookOpen, Calendar, Plus, User, GraduationCap, CreditCard, ShoppingCart, Clock } from "lucide-react";
+import { Users, BookOpen, Calendar, Plus, User, GraduationCap, CreditCard, ShoppingCart, Clock, Star, CheckCircle } from "lucide-react";
 import { AlertCircle } from "lucide-react";
 import { Link } from "wouter";
 import ParentAppShell from "@/components/layout/ParentAppShell";
 import { useCart } from "@/contexts/CartContext";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 
 interface Child {
   id: number;
@@ -35,10 +37,31 @@ interface Program {
   duration: string;
 }
 
+interface MembershipEnrollment {
+  id: number;
+  schoolId: number;
+  parentUserId: number;
+  membershipYear: number;
+  amount: number;
+  amountPaid: number;
+  remainingBalance: number;
+  status: 'pending_payment' | 'enrolled' | 'expired' | 'grace_period' | 'suspended';
+  dueDate: string | null;
+  expirationDate: string | null;
+  membershipTier: string | null;
+  schoolName: string;
+  schoolLogo: string | null;
+  membershipFeeAmount: number;
+  membershipDescription: string | null;
+}
+
 export default function ParentDashboard() {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const [activeTab, setActiveTab] = useState("overview");
-  const { items: cartItems } = useCart();
+  const { cart } = useCart();
+  const cartItems = cart.items;
+  const { toast } = useToast();
+  const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
 
   // Query for children data
   const { data: children = [], isLoading: childrenLoading, error: childrenError } = useQuery<Child[]>({
@@ -57,6 +80,61 @@ export default function ParentDashboard() {
     queryKey: ["/api/parent/enrollments"],
     enabled: !!user,
   });
+
+  // Query for membership enrollments
+  const { data: memberships = [], isLoading: membershipsLoading } = useQuery<MembershipEnrollment[]>({
+    queryKey: ["/api/parent/memberships"],
+    enabled: !!user,
+  });
+
+  // Mutation to create Stripe checkout session for membership
+  const membershipCheckoutMutation = useMutation({
+    mutationFn: async ({ membershipEnrollmentId, tier }: { membershipEnrollmentId: number; tier: string }) => {
+      const token = session?.access_token || localStorage.getItem("supabase_token");
+      if (!token) {
+        throw new Error('Authentication required');
+      }
+      const response = await fetch('/api/parent/memberships/checkout', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ membershipEnrollmentId, tier })
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to create checkout session');
+      }
+      return response.json();
+    },
+    onSuccess: (data) => {
+      if (data.sessionUrl) {
+        window.location.href = data.sessionUrl;
+      }
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Payment Error",
+        description: error.message || "Failed to initiate payment. Please try again.",
+        variant: "destructive",
+      });
+      setIsCheckoutLoading(false);
+    }
+  });
+
+  const handleMembershipPayment = (membership: MembershipEnrollment) => {
+    setIsCheckoutLoading(true);
+    membershipCheckoutMutation.mutate({
+      membershipEnrollmentId: membership.id,
+      tier: membership.membershipTier || 'basic'
+    });
+  };
+
+  // Get pending memberships
+  const pendingMemberships = memberships.filter(m => m.status === 'pending_payment');
+  const activeMemberships = memberships.filter(m => m.status === 'enrolled');
+  const hasPendingMembership = pendingMemberships.length > 0;
 
   const isLoadingChildren = childrenLoading;
   
@@ -121,6 +199,41 @@ export default function ParentDashboard() {
                   </Button>
                 </div>
               )}
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* Membership Payment Alert */}
+        {hasPendingMembership && (
+          <Alert className="border-blue-500 bg-blue-50 dark:bg-blue-950/30" data-testid="alert-membership-payment">
+            <Star className="h-5 w-5 text-blue-600" />
+            <AlertTitle className="text-blue-800 dark:text-blue-200 font-semibold">
+              Annual Membership Payment Due
+            </AlertTitle>
+            <AlertDescription className="text-blue-700 dark:text-blue-300">
+              <div className="mt-2">
+                <p className="mb-3">
+                  You have <strong>{pendingMemberships.length} membership{pendingMemberships.length !== 1 ? 's' : ''}</strong> pending payment.
+                  Complete your membership payment to access all program benefits.
+                </p>
+                {pendingMemberships.map((membership) => (
+                  <div key={membership.id} className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 mb-2">
+                    <span className="text-sm">
+                      <strong>{membership.schoolName}</strong> - ${(membership.remainingBalance / 100).toFixed(2)}
+                    </span>
+                    <Button 
+                      size="sm" 
+                      className="bg-blue-600 hover:bg-blue-700 text-white w-full sm:w-auto"
+                      onClick={() => handleMembershipPayment(membership)}
+                      disabled={isCheckoutLoading || membershipCheckoutMutation.isPending}
+                      data-testid={`button-pay-membership-${membership.id}`}
+                    >
+                      <CreditCard className="mr-2 h-4 w-4" />
+                      {isCheckoutLoading ? "Processing..." : "Pay Now"}
+                    </Button>
+                  </div>
+                ))}
+              </div>
             </AlertDescription>
           </Alert>
         )}
@@ -210,6 +323,86 @@ export default function ParentDashboard() {
                 </CardContent>
               </Card>
             </div>
+
+            {/* Membership Status Card */}
+            {memberships.length > 0 && (
+              <Card className={hasPendingMembership ? "border-blue-500" : "border-green-500"} data-testid="card-membership-status">
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="flex items-center gap-2">
+                      <Star className="h-5 w-5" />
+                      Family Membership
+                    </CardTitle>
+                    {activeMemberships.length > 0 ? (
+                      <Badge className="bg-green-500" data-testid="badge-membership-active">
+                        <CheckCircle className="h-3 w-3 mr-1" />
+                        Active
+                      </Badge>
+                    ) : (
+                      <Badge variant="secondary" className="bg-blue-100 text-blue-800" data-testid="badge-membership-pending">
+                        <Clock className="h-3 w-3 mr-1" />
+                        Payment Required
+                      </Badge>
+                    )}
+                  </div>
+                  <CardDescription>
+                    {activeMemberships.length > 0 
+                      ? "Your family membership is active"
+                      : "Complete payment to activate your membership"
+                    }
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {membershipsLoading ? (
+                    <div className="flex justify-center py-4">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {memberships.map((membership) => (
+                        <div key={membership.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-lg bg-muted/50 gap-3">
+                          <div>
+                            <p className="font-medium">{membership.schoolName}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {membership.membershipYear} Membership
+                              {membership.membershipTier && ` • ${membership.membershipTier.charAt(0).toUpperCase() + membership.membershipTier.slice(1)} Tier`}
+                            </p>
+                            {membership.status === 'enrolled' && membership.expirationDate && (
+                              <p className="text-xs text-muted-foreground">
+                                Expires: {new Date(membership.expirationDate).toLocaleDateString()}
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {membership.status === 'pending_payment' ? (
+                              <>
+                                <span className="text-sm font-medium text-blue-600">
+                                  ${(membership.remainingBalance / 100).toFixed(2)}
+                                </span>
+                                <Button 
+                                  size="sm"
+                                  onClick={() => handleMembershipPayment(membership)}
+                                  disabled={isCheckoutLoading || membershipCheckoutMutation.isPending}
+                                  data-testid={`button-pay-membership-card-${membership.id}`}
+                                >
+                                  <CreditCard className="h-4 w-4 mr-1" />
+                                  Pay Now
+                                </Button>
+                              </>
+                            ) : (
+                              <Badge variant="outline" className="text-green-600 border-green-600">
+                                <CheckCircle className="h-3 w-3 mr-1" />
+                                Paid
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
 
             {/* Welcome Card - Full Width on Mobile */}
             <div className="grid gap-4 grid-cols-1 lg:grid-cols-3">
