@@ -441,6 +441,117 @@ router.get('/memberships', jwtCheck, async (req: any, res) => {
   }
 });
 
+// Get membership details after successful Stripe payment
+router.get('/memberships/confirm', jwtCheck, async (req: any, res) => {
+  try {
+    console.log('✅ Confirming membership payment');
+
+    const userEmail = req.auth?.email || req.user?.email;
+    if (!userEmail) {
+      return res.status(401).json({ 
+        message: 'Authentication required',
+        error: 'NO_USER_EMAIL'
+      });
+    }
+
+    const sessionId = req.query.session_id as string;
+    if (!sessionId) {
+      return res.status(400).json({ 
+        message: 'Session ID is required',
+        error: 'MISSING_SESSION_ID'
+      });
+    }
+
+    // Get the parent user from database
+    const user = await storage.getUserByEmail(userEmail);
+    if (!user) {
+      return res.status(404).json({ 
+        message: 'User not found',
+        error: 'USER_NOT_FOUND'
+      });
+    }
+
+    // Import Stripe client and retrieve session
+    const { getStripeClient } = await import('../config/stripe');
+    const stripe = await getStripeClient();
+    
+    const session = await stripe.checkout.sessions.retrieve(sessionId, {
+      expand: ['subscription', 'line_items']
+    });
+    
+    // Check payment status - accept 'paid' or 'no_payment_required' (for $0 subscriptions)
+    if (!session || (session.payment_status !== 'paid' && session.payment_status !== 'no_payment_required')) {
+      console.log('❌ Payment status:', session?.payment_status);
+      return res.status(400).json({ 
+        message: 'Payment not completed',
+        error: 'PAYMENT_NOT_COMPLETED',
+        paymentStatus: session?.payment_status
+      });
+    }
+
+    // For subscription mode, also verify subscription status
+    if (session.mode === 'subscription' && session.subscription) {
+      const subscription = typeof session.subscription === 'string' 
+        ? await stripe.subscriptions.retrieve(session.subscription)
+        : session.subscription;
+      
+      // Only accept active or trialing subscriptions
+      if (!['active', 'trialing'].includes(subscription.status)) {
+        console.log('⚠️ Subscription status not active:', subscription.status);
+        return res.status(400).json({ 
+          message: 'Subscription not active',
+          error: 'SUBSCRIPTION_NOT_ACTIVE',
+          subscriptionStatus: subscription.status
+        });
+      }
+    }
+
+    // Get membership enrollment ID from session metadata
+    const membershipEnrollmentId = session.metadata?.membershipEnrollmentId;
+    if (!membershipEnrollmentId) {
+      return res.status(400).json({ 
+        message: 'Membership enrollment not found in session',
+        error: 'NO_ENROLLMENT_ID'
+      });
+    }
+
+    // Get membership enrollment
+    const membership = await storage.getMembershipEnrollmentById(parseInt(membershipEnrollmentId));
+    if (!membership) {
+      return res.status(404).json({ 
+        message: 'Membership enrollment not found',
+        error: 'MEMBERSHIP_NOT_FOUND'
+      });
+    }
+
+    // Get school info
+    const school = await storage.getSchool(membership.schoolId);
+
+    // Get amount paid from session
+    const amountPaid = session.amount_total || membership.amount;
+
+    // Return membership details for the success page
+    return res.status(200).json({
+      membershipEnrollmentId: membership.id,
+      schoolName: school?.name || session.metadata?.schoolName || 'Your School',
+      membershipYear: membership.membershipYear || new Date().getFullYear(),
+      amount: amountPaid,
+      amountPaid: amountPaid,
+      tier: membership.membershipTier || session.metadata?.tier,
+      status: membership.status,
+      expirationDate: membership.expirationDate,
+      paymentStatus: session.payment_status,
+      subscriptionActive: true
+    });
+  } catch (error: any) {
+    console.error('❌ Error confirming membership:', error);
+    return res.status(500).json({ 
+      message: 'Failed to confirm membership',
+      error: error.message || 'CONFIRM_ERROR'
+    });
+  }
+});
+
 // Create Stripe checkout session for parent's membership payment
 router.post('/memberships/checkout', jwtCheck, async (req: any, res) => {
   try {

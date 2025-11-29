@@ -33,6 +33,7 @@ import Checkout from "@/pages/Checkout";
 import CheckoutSuccess from "@/pages/CheckoutSuccess";
 import CartCheckout from "@/pages/CartCheckout";
 import CartSuccess from "@/pages/CartSuccess";
+import MembershipSuccess from "@/pages/MembershipSuccess";
 import { RegistrationPage } from "@/pages/RegistrationPage";
 import { ProgramsPage } from "@/pages/ProgramsPage";
 import ProgramsParentPage from "@/pages/ProgramsParentPage";
@@ -459,6 +460,13 @@ function Router() {
           <Route path="/cart/success">
             {isAuthenticated ? (
               <CartSuccess />
+            ) : (
+              <Redirect to="/login" />
+            )}
+          </Route>
+          <Route path="/membership-success">
+            {isAuthenticated ? (
+              <MembershipSuccess />
             ) : (
               <Redirect to="/login" />
             )}

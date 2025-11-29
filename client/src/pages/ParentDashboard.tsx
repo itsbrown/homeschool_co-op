@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Users, BookOpen, Calendar, Plus, User, GraduationCap, CreditCard, ShoppingCart, Clock, Star, CheckCircle } from "lucide-react";
+import { Users, BookOpen, Calendar, Plus, User, GraduationCap, CreditCard, ShoppingCart, Clock, Star, CheckCircle, AlertTriangle, XCircle, Loader2 } from "lucide-react";
 import { AlertCircle } from "lucide-react";
 import { Link } from "wouter";
 import ParentAppShell from "@/components/layout/ParentAppShell";
@@ -325,8 +325,33 @@ export default function ParentDashboard() {
             </div>
 
             {/* Membership Status Card */}
-            {memberships.length > 0 && (
-              <Card className={hasPendingMembership ? "border-blue-500" : "border-green-500"} data-testid="card-membership-status">
+            {membershipsLoading ? (
+              <Card className="border-muted" data-testid="card-membership-loading">
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="flex items-center gap-2">
+                      <Star className="h-5 w-5" />
+                      Family Membership
+                    </CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center justify-center py-6">
+                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                    <span className="ml-2 text-muted-foreground">Loading membership status...</span>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : memberships.length > 0 && (
+              <Card 
+                className={
+                  activeMemberships.length > 0 ? "border-green-500" :
+                  memberships.some(m => m.status === 'grace_period') ? "border-amber-500" :
+                  memberships.some(m => m.status === 'expired' || m.status === 'suspended') ? "border-red-500" :
+                  "border-blue-500"
+                } 
+                data-testid="card-membership-status"
+              >
                 <CardHeader>
                   <div className="flex items-center justify-between">
                     <CardTitle className="flex items-center gap-2">
@@ -338,6 +363,21 @@ export default function ParentDashboard() {
                         <CheckCircle className="h-3 w-3 mr-1" />
                         Active
                       </Badge>
+                    ) : memberships.some(m => m.status === 'grace_period') ? (
+                      <Badge variant="secondary" className="bg-amber-100 text-amber-800" data-testid="badge-membership-grace">
+                        <AlertTriangle className="h-3 w-3 mr-1" />
+                        Grace Period
+                      </Badge>
+                    ) : memberships.some(m => m.status === 'expired') ? (
+                      <Badge variant="destructive" data-testid="badge-membership-expired">
+                        <XCircle className="h-3 w-3 mr-1" />
+                        Expired
+                      </Badge>
+                    ) : memberships.some(m => m.status === 'suspended') ? (
+                      <Badge variant="destructive" data-testid="badge-membership-suspended">
+                        <XCircle className="h-3 w-3 mr-1" />
+                        Suspended
+                      </Badge>
                     ) : (
                       <Badge variant="secondary" className="bg-blue-100 text-blue-800" data-testid="badge-membership-pending">
                         <Clock className="h-3 w-3 mr-1" />
@@ -348,33 +388,81 @@ export default function ParentDashboard() {
                   <CardDescription>
                     {activeMemberships.length > 0 
                       ? "Your family membership is active"
+                      : memberships.some(m => m.status === 'grace_period')
+                      ? "Your payment is past due - please pay to avoid service interruption"
+                      : memberships.some(m => m.status === 'expired')
+                      ? "Your membership has expired - renew to regain access"
+                      : memberships.some(m => m.status === 'suspended')
+                      ? "Your membership is suspended - please contact support"
                       : "Complete payment to activate your membership"
                     }
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {membershipsLoading ? (
-                    <div className="flex justify-center py-4">
-                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {memberships.map((membership) => (
-                        <div key={membership.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-lg bg-muted/50 gap-3">
+                  <div className="space-y-3">
+                    {memberships.map((membership) => {
+                      const getDaysUntilExpiration = () => {
+                        if (!membership.expirationDate) return null;
+                        const now = new Date();
+                        const expDate = new Date(membership.expirationDate);
+                        const diffTime = expDate.getTime() - now.getTime();
+                        return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                      };
+                      const daysRemaining = getDaysUntilExpiration();
+
+                      return (
+                        <div 
+                          key={membership.id} 
+                          className={`flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-lg gap-3 ${
+                            membership.status === 'enrolled' ? 'bg-green-50 dark:bg-green-950/30' :
+                            membership.status === 'grace_period' ? 'bg-amber-50 dark:bg-amber-950/30' :
+                            membership.status === 'expired' || membership.status === 'suspended' ? 'bg-red-50 dark:bg-red-950/30' :
+                            'bg-muted/50'
+                          }`}
+                        >
                           <div>
                             <p className="font-medium">{membership.schoolName}</p>
                             <p className="text-sm text-muted-foreground">
                               {membership.membershipYear} Membership
                               {membership.membershipTier && ` • ${membership.membershipTier.charAt(0).toUpperCase() + membership.membershipTier.slice(1)} Tier`}
                             </p>
+                            
+                            {/* Status-specific messages */}
                             {membership.status === 'enrolled' && membership.expirationDate && (
-                              <p className="text-xs text-muted-foreground">
+                              <p className="text-xs text-green-600 dark:text-green-400">
+                                <CheckCircle className="h-3 w-3 inline mr-1" />
                                 Expires: {new Date(membership.expirationDate).toLocaleDateString()}
+                                {daysRemaining && daysRemaining <= 30 && (
+                                  <span className="ml-1 text-amber-600">({daysRemaining} days remaining)</span>
+                                )}
+                              </p>
+                            )}
+                            
+                            {membership.status === 'grace_period' && (
+                              <p className="text-xs text-amber-600 dark:text-amber-400">
+                                <AlertTriangle className="h-3 w-3 inline mr-1" />
+                                Payment past due - Balance: ${(membership.remainingBalance / 100).toFixed(2)}
+                              </p>
+                            )}
+                            
+                            {membership.status === 'expired' && (
+                              <p className="text-xs text-red-600 dark:text-red-400">
+                                <XCircle className="h-3 w-3 inline mr-1" />
+                                Expired on {membership.expirationDate ? new Date(membership.expirationDate).toLocaleDateString() : 'N/A'}
+                              </p>
+                            )}
+                            
+                            {membership.status === 'suspended' && (
+                              <p className="text-xs text-red-600 dark:text-red-400">
+                                <XCircle className="h-3 w-3 inline mr-1" />
+                                Membership suspended - Please contact support
                               </p>
                             )}
                           </div>
+                          
                           <div className="flex items-center gap-2">
-                            {membership.status === 'pending_payment' ? (
+                            {/* Pending payment - show Pay Now */}
+                            {membership.status === 'pending_payment' && (
                               <>
                                 <span className="text-sm font-medium text-blue-600">
                                   ${(membership.remainingBalance / 100).toFixed(2)}
@@ -385,21 +473,77 @@ export default function ParentDashboard() {
                                   disabled={isCheckoutLoading || membershipCheckoutMutation.isPending}
                                   data-testid={`button-pay-membership-card-${membership.id}`}
                                 >
-                                  <CreditCard className="h-4 w-4 mr-1" />
+                                  {membershipCheckoutMutation.isPending ? (
+                                    <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                                  ) : (
+                                    <CreditCard className="h-4 w-4 mr-1" />
+                                  )}
                                   Pay Now
                                 </Button>
                               </>
-                            ) : (
+                            )}
+                            
+                            {/* Enrolled - show Paid badge */}
+                            {membership.status === 'enrolled' && (
                               <Badge variant="outline" className="text-green-600 border-green-600">
                                 <CheckCircle className="h-3 w-3 mr-1" />
                                 Paid
                               </Badge>
                             )}
+                            
+                            {/* Grace period - show balance and Pay Now */}
+                            {membership.status === 'grace_period' && (
+                              <>
+                                <span className="text-sm font-medium text-amber-600">
+                                  ${(membership.remainingBalance / 100).toFixed(2)}
+                                </span>
+                                <Button 
+                                  size="sm"
+                                  variant="destructive"
+                                  onClick={() => handleMembershipPayment(membership)}
+                                  disabled={isCheckoutLoading || membershipCheckoutMutation.isPending}
+                                  data-testid={`button-pay-membership-grace-${membership.id}`}
+                                >
+                                  {membershipCheckoutMutation.isPending ? (
+                                    <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                                  ) : (
+                                    <CreditCard className="h-4 w-4 mr-1" />
+                                  )}
+                                  Pay Now
+                                </Button>
+                              </>
+                            )}
+                            
+                            {/* Expired - show Renew button */}
+                            {membership.status === 'expired' && (
+                              <Button 
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleMembershipPayment(membership)}
+                                disabled={isCheckoutLoading || membershipCheckoutMutation.isPending}
+                                data-testid={`button-renew-membership-${membership.id}`}
+                              >
+                                {membershipCheckoutMutation.isPending ? (
+                                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                                ) : (
+                                  <Star className="h-4 w-4 mr-1" />
+                                )}
+                                Renew Membership
+                              </Button>
+                            )}
+                            
+                            {/* Suspended - show contact support message */}
+                            {membership.status === 'suspended' && (
+                              <Badge variant="destructive">
+                                <AlertCircle className="h-3 w-3 mr-1" />
+                                Contact Support
+                              </Badge>
+                            )}
                           </div>
                         </div>
-                      ))}
-                    </div>
-                  )}
+                      );
+                    })}
+                  </div>
                 </CardContent>
               </Card>
             )}
