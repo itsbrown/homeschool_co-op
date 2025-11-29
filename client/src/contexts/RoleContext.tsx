@@ -1,8 +1,12 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, useRef } from "react";
 import { useAuth } from "@/components/SupabaseProvider";
 import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
+
+// Maximum retry attempts for role loading (for newly registered users)
+const MAX_ROLE_RETRY_ATTEMPTS = 3;
+const ROLE_RETRY_DELAY_MS = 1500;
 
 interface UserRole {
   id: number;
@@ -21,6 +25,7 @@ interface RoleContextType {
   showRoleSelection: boolean;
   setShowRoleSelection: (show: boolean) => void;
   isLoadingRoles: boolean;
+  isSettingUpAccount: boolean;
 }
 
 export const RoleContext = createContext<RoleContextType | undefined>(undefined);
@@ -47,11 +52,17 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
 
   const [showRoleSelection, setShowRoleSelection] = useState<boolean>(false);
   const [canSwitchRoles, setCanSwitchRoles] = useState<boolean>(false);
+  
+  // Retry mechanism for newly registered users
+  const [roleRetryCount, setRoleRetryCount] = useState<number>(0);
+  const [isSettingUpAccount, setIsSettingUpAccount] = useState<boolean>(false);
+  const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Fetch user roles from database
-  const { data: rolesData, isLoading: isLoadingRoles, error: rolesError } = useQuery({
+  // Fetch user roles from database with retry logic
+  const { data: rolesData, isLoading: isLoadingRoles, error: rolesError, refetch: refetchRoles } = useQuery({
     queryKey: ['/api/user/roles', user?.email],
     queryFn: async () => {
+      console.log('🔍 Fetching user roles from database...');
       const token = localStorage.getItem('supabase_token');
       const response = await fetch('/api/user/roles', {
         headers: {
@@ -61,23 +72,110 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
       if (!response.ok) {
         throw new Error('Failed to fetch roles');
       }
-      return response.json();
+      const data = await response.json();
+      console.log('📋 Roles data received:', { 
+        roleCount: data.roles?.length || 0, 
+        activeRole: data.activeRole,
+        activeRoleId: data.activeRoleId 
+      });
+      return data;
     },
     enabled: !!user,
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    retry: 2, // Built-in retry for network failures
   });
 
-  // Show error toast if role fetch fails
+  // Cleanup retry timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Handle retry logic for newly registered users with empty roles
+  useEffect(() => {
+    // Only retry if:
+    // 1. User is authenticated
+    // 2. Roles data loaded successfully (not loading/error)
+    // 3. No roles were returned (empty array)
+    // 4. But there's a fallback activeRole from the API (users.role column)
+    // 5. Haven't exceeded max retries
+    // 6. No retry timeout already pending (prevents race condition)
+    if (
+      user && 
+      rolesData && 
+      !isLoadingRoles && 
+      !rolesError &&
+      Array.isArray(rolesData.roles) && 
+      rolesData.roles.length === 0 &&
+      rolesData.activeRole && // Has fallback role from users.role
+      roleRetryCount < MAX_ROLE_RETRY_ATTEMPTS &&
+      !retryTimeoutRef.current // Guard: don't re-enter if timeout pending
+    ) {
+      // Increment counter SYNCHRONOUSLY when scheduling retry
+      // This prevents race condition where effect re-runs before timeout fires
+      const nextRetryCount = roleRetryCount + 1;
+      setRoleRetryCount(nextRetryCount);
+      setIsSettingUpAccount(true);
+      
+      console.log(`🔄 Empty roles array detected, scheduling retry... (attempt ${nextRetryCount}/${MAX_ROLE_RETRY_ATTEMPTS})`);
+      
+      retryTimeoutRef.current = setTimeout(() => {
+        // Clear ref to allow next retry
+        retryTimeoutRef.current = null;
+        queryClient.invalidateQueries({ queryKey: ['/api/user/roles', user?.email] });
+        refetchRoles();
+      }, ROLE_RETRY_DELAY_MS);
+    } else if (rolesData?.roles?.length > 0) {
+      // Successfully loaded roles - reset retry state and clear any pending timeout
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+        retryTimeoutRef.current = null;
+      }
+      setRoleRetryCount(0);
+      setIsSettingUpAccount(false);
+    } else if (roleRetryCount >= MAX_ROLE_RETRY_ATTEMPTS) {
+      // Retries exhausted - reset setting up state to avoid indefinite loading
+      console.log(`❌ Role loading retries exhausted (${MAX_ROLE_RETRY_ATTEMPTS} attempts)`);
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+        retryTimeoutRef.current = null;
+      }
+      setIsSettingUpAccount(false);
+    }
+  }, [user, rolesData, isLoadingRoles, rolesError, roleRetryCount, refetchRoles]);
+
+  // Also reset isSettingUpAccount on error
   useEffect(() => {
     if (rolesError) {
-      console.error('❌ Failed to load roles:', rolesError);
+      setIsSettingUpAccount(false);
+    }
+  }, [rolesError]);
+
+  // Show error toast if role fetch fails (after retries exhausted)
+  useEffect(() => {
+    if (rolesError && roleRetryCount >= MAX_ROLE_RETRY_ATTEMPTS) {
+      console.error('❌ Failed to load roles after retries:', rolesError);
       toast({
-        title: 'Failed to load roles',
-        description: 'Unable to load your account roles. Please try refreshing the page.',
+        title: 'Account setup issue',
+        description: 'Unable to load your account settings. Please try refreshing the page or contact support if this persists.',
         variant: 'destructive',
       });
     }
-  }, [rolesError, toast]);
+  }, [rolesError, roleRetryCount, toast]);
+
+  // Show "Setting up account" toast for newly registered users
+  useEffect(() => {
+    if (isSettingUpAccount && roleRetryCount === 1) {
+      console.log('🔧 Account setup in progress...');
+      toast({
+        title: 'Setting up your account...',
+        description: 'Please wait while we prepare your dashboard.',
+      });
+    }
+  }, [isSettingUpAccount, roleRetryCount, toast]);
 
   const availableRoles: UserRole[] = rolesData?.roles || [];
 
@@ -224,7 +322,7 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
     }
   };
 
-  console.log(`🔄 RoleProvider rendering - activeRole: ${activeRole}, canSwitchRoles: ${canSwitchRoles}, showRoleSelection: ${showRoleSelection}, user: ${user?.email}`);
+  console.log(`🔄 RoleProvider rendering - activeRole: ${activeRole}, canSwitchRoles: ${canSwitchRoles}, showRoleSelection: ${showRoleSelection}, isSettingUpAccount: ${isSettingUpAccount}, user: ${user?.email}`);
 
   return (
     <RoleContext.Provider
@@ -237,6 +335,7 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
         showRoleSelection,
         setShowRoleSelection,
         isLoadingRoles,
+        isSettingUpAccount,
       }}
     >
       {children}

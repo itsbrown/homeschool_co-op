@@ -38,7 +38,7 @@ The platform prioritizes scalability, security, and user experience, incorporati
 -   **Free Enrollment Admin Approval**: When a 100% discount results in a $0 total, enrollments require admin approval as a safeguard against abuse. Parents see a "Request Free Enrollment" UI, admins receive notifications, and can approve/reject via admin dashboard. Approved enrollments become active immediately; parents are notified of decisions.
 -   **Enrollment Management**: Prevents duplicate enrollments, manages status workflows (including pending_admin_approval status), and integrates with the cart-to-checkout flow.
 -   **Class Management**: School administrators can create, edit, and manage classes with multi-variant pricing and school isolation.
--   **Registration Flow**: Two-tier registration with school code validation.
+-   **Registration Flow**: Two-tier registration with school code validation. Role creation is transactional - user_roles and activeRoleId are created atomically before registration completes. Frontend RoleContext includes defensive retry mechanism (max 3 attempts, 1.5s delay) for edge cases.
 -   **AI Enrollment Assistant**: Provides personalized AI guidance.
 -   **Staff Management & Invitation System**: Automated onboarding and secure token-based invitations.
 -   **User Account Management**: School administrators can send account invites and password reset emails.
