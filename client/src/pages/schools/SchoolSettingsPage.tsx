@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -28,7 +29,8 @@ import {
   CheckCircle,
   Upload,
   Image as ImageIcon,
-  X
+  X,
+  FileText
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -64,6 +66,9 @@ interface SchoolData {
   membershipGracePeriodDays?: number;
   membershipRequired?: boolean;
   showSubscriptionStatus?: boolean;
+  membershipAgreementTemplate?: string;
+  membershipAgreementVersion?: string;
+  membershipAgreementUpdatedAt?: string;
 }
 
 interface NotificationSettings {
@@ -104,6 +109,10 @@ export default function SchoolSettingsPage() {
     systemMaintenance: false,
   });
 
+  // Agreement template state
+  const [agreementTemplate, setAgreementTemplate] = useState("");
+  const [agreementDialogOpen, setAgreementDialogOpen] = useState(false);
+
   // Fetch user profile data
   const { data: userProfile } = useQuery<UserProfile>({
     queryKey: ['/api/users/profile'],
@@ -125,6 +134,35 @@ export default function SchoolSettingsPage() {
       setUsername(userProfile.email || "");
     }
   }, [userProfile]);
+
+  // Initialize agreement template from school data
+  useEffect(() => {
+    if (schoolData?.membershipAgreementTemplate) {
+      setAgreementTemplate(schoolData.membershipAgreementTemplate);
+    }
+  }, [schoolData]);
+
+  // Update agreement template mutation
+  const updateAgreementMutation = useMutation({
+    mutationFn: async (templateData: { membershipAgreementTemplate: string }) => {
+      return await apiRequest('PATCH', '/api/school-admin/my-school/agreement', templateData);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Agreement Template Updated",
+        description: "The membership agreement template has been saved. A new version number has been assigned.",
+      });
+      setAgreementDialogOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['/api/school-admin/my-school'] });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to update agreement template. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
 
   // Update profile mutation
   const updateProfileMutation = useMutation({
@@ -1321,6 +1359,141 @@ export default function SchoolSettingsPage() {
                         </AlertDescription>
                       </Alert>
                     )}
+                  </div>
+
+                  {/* Membership Agreement Template Section */}
+                  <Separator className="my-6" />
+                  <div className="space-y-4">
+                    <div>
+                      <h4 className="font-medium mb-1 flex items-center gap-2">
+                        <FileText className="h-4 w-4" />
+                        Membership Agreement Template
+                      </h4>
+                      <p className="text-sm text-muted-foreground">
+                        Create and manage the legal agreement that parents must sign before paying membership fees.
+                        Parents cannot proceed to payment until they sign this agreement.
+                      </p>
+                    </div>
+
+                    {/* Current Agreement Status */}
+                    <div className="p-4 border rounded-lg bg-muted/30">
+                      <div className="flex items-center justify-between mb-3">
+                        <div>
+                          <p className="font-medium">Current Agreement</p>
+                          {schoolData?.membershipAgreementVersion ? (
+                            <div className="flex items-center gap-2 mt-1">
+                              <Badge variant="outline">Version {schoolData.membershipAgreementVersion}</Badge>
+                              {schoolData.membershipAgreementUpdatedAt && (
+                                <span className="text-xs text-muted-foreground">
+                                  Last updated: {new Date(schoolData.membershipAgreementUpdatedAt).toLocaleDateString()}
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <p className="text-sm text-amber-600 mt-1">No agreement template configured</p>
+                          )}
+                        </div>
+                        <Dialog open={agreementDialogOpen} onOpenChange={setAgreementDialogOpen}>
+                          <DialogTrigger asChild>
+                            <Button 
+                              variant={schoolData?.membershipAgreementTemplate ? "outline" : "default"}
+                              data-testid="button-edit-agreement"
+                            >
+                              <FileText className="h-4 w-4 mr-2" />
+                              {schoolData?.membershipAgreementTemplate ? "Edit Agreement" : "Create Agreement"}
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+                            <DialogHeader>
+                              <DialogTitle>Membership Agreement Template</DialogTitle>
+                              <DialogDescription>
+                                Write the legal agreement text that parents will sign. This should include terms, conditions, 
+                                liability waivers, and any other required disclosures. Changes will create a new version number.
+                              </DialogDescription>
+                            </DialogHeader>
+                            
+                            <div className="space-y-4 py-4">
+                              <div className="space-y-2">
+                                <Label htmlFor="agreement-template">Agreement Text</Label>
+                                <Textarea
+                                  id="agreement-template"
+                                  placeholder="Enter your membership agreement text here...
+
+Example:
+MEMBERSHIP AGREEMENT AND RELEASE OF LIABILITY
+
+By signing this agreement, I acknowledge and agree to the following terms:
+
+1. I understand that my family is enrolling in the annual membership program.
+2. I agree to the membership fee and renewal terms as outlined.
+3. I release [School Name] from liability for any injuries or damages.
+..."
+                                  value={agreementTemplate}
+                                  onChange={(e) => setAgreementTemplate(e.target.value)}
+                                  className="min-h-[300px] font-mono text-sm"
+                                  data-testid="textarea-agreement-template"
+                                />
+                                <p className="text-sm text-muted-foreground">
+                                  Tip: Use clear, numbered sections for easy readability. Consider including liability waivers, 
+                                  cancellation policies, and code of conduct.
+                                </p>
+                              </div>
+
+                              {schoolData?.membershipAgreementVersion && (
+                                <Alert>
+                                  <AlertCircle className="h-4 w-4" />
+                                  <AlertDescription>
+                                    Saving changes will create a new version ({parseInt(schoolData.membershipAgreementVersion.replace('v', '')) + 1 || 2}). 
+                                    Previously signed agreements will remain valid and accessible.
+                                  </AlertDescription>
+                                </Alert>
+                              )}
+                            </div>
+
+                            <DialogFooter>
+                              <Button 
+                                variant="outline" 
+                                onClick={() => {
+                                  setAgreementDialogOpen(false);
+                                  setAgreementTemplate(schoolData?.membershipAgreementTemplate || "");
+                                }}
+                                disabled={updateAgreementMutation.isPending}
+                              >
+                                Cancel
+                              </Button>
+                              <Button 
+                                onClick={() => updateAgreementMutation.mutate({ membershipAgreementTemplate: agreementTemplate })}
+                                disabled={updateAgreementMutation.isPending || !agreementTemplate.trim()}
+                                data-testid="button-save-agreement"
+                              >
+                                {updateAgreementMutation.isPending ? (
+                                  <>
+                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                    Saving...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Save className="h-4 w-4 mr-2" />
+                                    Save Agreement
+                                  </>
+                                )}
+                              </Button>
+                            </DialogFooter>
+                          </DialogContent>
+                        </Dialog>
+                      </div>
+
+                      {/* Preview of current agreement */}
+                      {schoolData?.membershipAgreementTemplate && (
+                        <div className="mt-3 p-3 bg-background border rounded text-sm max-h-32 overflow-y-auto">
+                          <p className="text-xs text-muted-foreground mb-2">Preview:</p>
+                          <p className="whitespace-pre-wrap text-muted-foreground line-clamp-4">
+                            {schoolData.membershipAgreementTemplate.substring(0, 300)}
+                            {schoolData.membershipAgreementTemplate.length > 300 ? "..." : ""}
+                          </p>
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   {/* Checkout Settings Section */}

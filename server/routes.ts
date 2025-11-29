@@ -46,6 +46,7 @@ import discountsRouter from "./api/discounts";
 import enrollmentConflictsRouter from "./api/enrollment-conflicts";
 import classInclusionsRouter from "./api/class-inclusions";
 import onboardingRouter from "./api/onboarding";
+import membershipAgreementRouter from "./api/membership-agreement";
 import archiver from 'archiver';
 import fs from 'fs';
 import path from 'path';
@@ -2935,6 +2936,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Onboarding tour routes
   app.use("/api/onboarding", onboardingRouter);
+  
+  // Membership agreement routes
+  app.use("/api", membershipAgreementRouter);
   
   // 🧪 Register test-only endpoints (only available in test environment)
   if (process.env.NODE_ENV !== 'production') {

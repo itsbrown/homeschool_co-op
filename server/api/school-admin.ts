@@ -2361,6 +2361,73 @@ router.patch("/my-school/settings", supabaseAuth, async (req: any, res) => {
   }
 });
 
+// Update school membership agreement template
+router.patch("/my-school/agreement", supabaseAuth, async (req: any, res) => {
+  try {
+    const schoolId = await getSchoolIdFromRequest(req, res);
+    if (schoolId === null) return;
+
+    const { membershipAgreementTemplate } = req.body;
+
+    if (!membershipAgreementTemplate || typeof membershipAgreementTemplate !== 'string') {
+      return res.status(400).json({ 
+        message: "Membership agreement template is required" 
+      });
+    }
+
+    if (membershipAgreementTemplate.trim().length < 50) {
+      return res.status(400).json({ 
+        message: "Agreement template must be at least 50 characters long" 
+      });
+    }
+
+    console.log('🔄 Updating membership agreement template for school:', schoolId);
+
+    // Get current school to determine next version
+    const db = await getDb();
+    const currentSchools = await db
+      .select({ membershipAgreementVersion: schools.membershipAgreementVersion })
+      .from(schools)
+      .where(eq(schools.id, schoolId))
+      .limit(1);
+
+    // Increment version number
+    let nextVersion = "1";
+    if (currentSchools.length > 0 && currentSchools[0].membershipAgreementVersion) {
+      const currentVersion = parseInt(currentSchools[0].membershipAgreementVersion.replace('v', '')) || 0;
+      nextVersion = String(currentVersion + 1);
+    }
+
+    // Update the school with new agreement template and version
+    const updateData: Partial<typeof schools.$inferInsert> = {
+      membershipAgreementTemplate: membershipAgreementTemplate.trim(),
+      membershipAgreementVersion: nextVersion,
+      membershipAgreementUpdatedAt: new Date(),
+    };
+
+    const updatedSchool = await storage.updateSchool(schoolId, updateData);
+
+    if (!updatedSchool) {
+      console.error('❌ Database update failed: School not found');
+      return res.status(404).json({ 
+        message: "Failed to update agreement template",
+        error: "School not found"
+      });
+    }
+
+    console.log('✅ Membership agreement template updated to version:', nextVersion);
+
+    return res.json({
+      message: "Membership agreement template updated successfully",
+      version: nextVersion,
+      school: updatedSchool
+    });
+  } catch (error) {
+    console.error("Error updating membership agreement template:", error);
+    return res.status(500).json({ message: "Server error while updating agreement template" });
+  }
+});
+
 // Update school "Free After Threshold" discount configuration
 router.patch("/my-school/free-after-threshold", supabaseAuth, async (req: any, res) => {
   try {

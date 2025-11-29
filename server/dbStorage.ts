@@ -11,6 +11,7 @@ import {
   Program, InsertProgram, programs,
   ProgramEnrollment, InsertProgramEnrollment, programEnrollments,
   MembershipEnrollment, InsertMembershipEnrollment, membershipEnrollments,
+  MembershipAgreement, InsertMembershipAgreement, membershipAgreements,
   StripeSubscriptionSchedule, InsertStripeSubscriptionSchedule, stripeSubscriptionSchedules,
   DailyFlowTemplate, InsertDailyFlowTemplate, dailyFlowTemplates,
   DailyFlowEntry, InsertDailyFlowEntry, dailyFlowEntries,
@@ -990,6 +991,74 @@ export class DatabaseStorage implements IStorage {
     };
 
     return this.createMembershipEnrollment(enrollmentData);
+  }
+
+  // Membership Agreement methods
+  async getMembershipAgreementById(id: number): Promise<MembershipAgreement | undefined> {
+    const db = await getDb();
+    const [agreement] = await db.select().from(membershipAgreements).where(eq(membershipAgreements.id, id));
+    return agreement;
+  }
+
+  async getMembershipAgreementsByParentId(parentUserId: number): Promise<MembershipAgreement[]> {
+    const db = await getDb();
+    return await db
+      .select()
+      .from(membershipAgreements)
+      .where(eq(membershipAgreements.parentUserId, parentUserId))
+      .orderBy(desc(membershipAgreements.signedAt));
+  }
+
+  async getMembershipAgreementsBySchoolId(schoolId: number): Promise<MembershipAgreement[]> {
+    const db = await getDb();
+    return await db
+      .select()
+      .from(membershipAgreements)
+      .where(eq(membershipAgreements.schoolId, schoolId))
+      .orderBy(desc(membershipAgreements.signedAt));
+  }
+
+  async getMembershipAgreementByEnrollmentId(enrollmentId: number): Promise<MembershipAgreement | undefined> {
+    const db = await getDb();
+    const [agreement] = await db
+      .select()
+      .from(membershipAgreements)
+      .where(eq(membershipAgreements.membershipEnrollmentId, enrollmentId));
+    return agreement;
+  }
+
+  async getLatestMembershipAgreementByParentAndSchool(parentUserId: number, schoolId: number): Promise<MembershipAgreement | undefined> {
+    const db = await getDb();
+    const [agreement] = await db
+      .select()
+      .from(membershipAgreements)
+      .where(
+        and(
+          eq(membershipAgreements.parentUserId, parentUserId),
+          eq(membershipAgreements.schoolId, schoolId)
+        )
+      )
+      .orderBy(desc(membershipAgreements.signedAt))
+      .limit(1);
+    return agreement;
+  }
+
+  async createMembershipAgreement(agreementData: InsertMembershipAgreement): Promise<MembershipAgreement> {
+    const db = await getDb();
+    const [newAgreement] = await db
+      .insert(membershipAgreements)
+      .values({
+        ...agreementData,
+        signedAt: new Date(),
+        createdAt: new Date()
+      })
+      .returning();
+    return newAgreement;
+  }
+
+  async hasSignedCurrentAgreement(parentUserId: number, schoolId: number, currentVersion: string): Promise<boolean> {
+    const latestAgreement = await this.getLatestMembershipAgreementByParentAndSchool(parentUserId, schoolId);
+    return latestAgreement !== undefined && latestAgreement.agreementVersion === currentVersion;
   }
 
   // Child methods

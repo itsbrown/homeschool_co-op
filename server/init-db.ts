@@ -597,6 +597,48 @@ async function runMigrations() {
     `);
     console.log('✅ Migration completed: role-based discount columns added to discounts table');
     
+    // Add membership agreement columns to schools table
+    console.log('Running migration: Adding membership agreement columns to schools table...');
+    await db.execute(sql`
+      ALTER TABLE schools 
+      ADD COLUMN IF NOT EXISTS membership_agreement_template TEXT;
+    `);
+    await db.execute(sql`
+      ALTER TABLE schools 
+      ADD COLUMN IF NOT EXISTS membership_agreement_version TEXT DEFAULT '1.0';
+    `);
+    await db.execute(sql`
+      ALTER TABLE schools 
+      ADD COLUMN IF NOT EXISTS membership_agreement_updated_at TIMESTAMP;
+    `);
+    console.log('✅ Migration completed: membership agreement columns added to schools table');
+    
+    // Create membership_agreements table for signed agreements
+    console.log('Running migration: Creating membership_agreements table...');
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS membership_agreements (
+        id SERIAL PRIMARY KEY,
+        school_id INTEGER NOT NULL REFERENCES schools(id),
+        parent_user_id INTEGER NOT NULL REFERENCES users(id),
+        membership_enrollment_id INTEGER REFERENCES membership_enrollments(id),
+        signatory_name TEXT NOT NULL,
+        agreement_version TEXT NOT NULL,
+        agreement_content TEXT NOT NULL,
+        signed_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        ip_address TEXT,
+        user_agent TEXT,
+        document_path TEXT,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL
+      );
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_membership_agreements_school_id ON membership_agreements(school_id);
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_membership_agreements_parent_user_id ON membership_agreements(parent_user_id);
+    `);
+    console.log('✅ Migration completed: membership_agreements table created');
+    
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     

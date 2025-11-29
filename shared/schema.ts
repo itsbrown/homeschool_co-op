@@ -97,6 +97,11 @@ export const schools = pgTable("schools", {
   
   // Payment/Subscription Display Configuration
   showSubscriptionStatus: boolean("show_subscription_status").default(false), // Show subscription status during checkout (disabled by default to avoid date parsing issues)
+  
+  // Membership Agreement Configuration
+  membershipAgreementTemplate: text("membership_agreement_template"), // The agreement text/HTML that members must sign
+  membershipAgreementVersion: text("membership_agreement_version").default("1.0"), // Version of the current agreement
+  membershipAgreementUpdatedAt: timestamp("membership_agreement_updated_at"), // When the agreement was last updated
 });
 
 export const insertSchoolSchema = createInsertSchema(schools)
@@ -130,6 +135,11 @@ export const insertSchoolSchema = createInsertSchema(schools)
     
     // Payment/Subscription Display Configuration
     showSubscriptionStatus: z.boolean().default(false),
+    
+    // Membership Agreement Configuration
+    membershipAgreementTemplate: z.string().nullable().default(null),
+    membershipAgreementVersion: z.string().default("1.0"),
+    membershipAgreementUpdatedAt: z.date().nullable().default(null),
   });
 export type InsertSchool = z.infer<typeof insertSchoolSchema>;
 export type School = typeof schools.$inferSelect;
@@ -1007,6 +1017,43 @@ export type MembershipEnrollment = typeof membershipEnrollments.$inferSelect;
 export const membershipEnrollmentsRelations = relations(membershipEnrollments, ({ one }) => ({
   school: one(schools, { fields: [membershipEnrollments.schoolId], references: [schools.id] }),
   parent: one(users, { fields: [membershipEnrollments.parentUserId], references: [users.id] })
+}));
+
+// Membership Agreements table - stores signed membership agreements
+export const membershipAgreements = pgTable("membership_agreements", {
+  id: serial("id").primaryKey(),
+  schoolId: integer("school_id").notNull().references(() => schools.id),
+  parentUserId: integer("parent_user_id").notNull().references(() => users.id),
+  membershipEnrollmentId: integer("membership_enrollment_id").references(() => membershipEnrollments.id), // Optional link to specific enrollment
+  signatoryName: text("signatory_name").notNull(), // Legal name used for signature
+  agreementVersion: text("agreement_version").notNull(), // Version of agreement that was signed
+  agreementContent: text("agreement_content").notNull(), // Full text of the agreement at time of signing (preserved for legal purposes)
+  signedAt: timestamp("signed_at").defaultNow().notNull(), // When the agreement was signed
+  ipAddress: text("ip_address"), // IP address for audit purposes
+  userAgent: text("user_agent"), // Browser/device info for audit purposes
+  documentPath: text("document_path"), // Path to PDF copy in storage (optional)
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertMembershipAgreementSchema = createInsertSchema(membershipAgreements)
+  .omit({ id: true, createdAt: true, signedAt: true })
+  .extend({
+    signatoryName: z.string().min(2, "Legal name is required"),
+    agreementVersion: z.string().default("1.0"),
+    agreementContent: z.string().min(1, "Agreement content is required"),
+    ipAddress: z.string().nullable().default(null),
+    userAgent: z.string().nullable().default(null),
+    documentPath: z.string().nullable().default(null),
+    membershipEnrollmentId: z.number().nullable().default(null),
+  });
+export type InsertMembershipAgreement = z.infer<typeof insertMembershipAgreementSchema>;
+export type MembershipAgreement = typeof membershipAgreements.$inferSelect;
+
+// Define membership agreement relations
+export const membershipAgreementsRelations = relations(membershipAgreements, ({ one }) => ({
+  school: one(schools, { fields: [membershipAgreements.schoolId], references: [schools.id] }),
+  parent: one(users, { fields: [membershipAgreements.parentUserId], references: [users.id] }),
+  enrollment: one(membershipEnrollments, { fields: [membershipAgreements.membershipEnrollmentId], references: [membershipEnrollments.id] })
 }));
 
 // Curriculum table

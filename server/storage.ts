@@ -10,6 +10,7 @@ import {
   programs, type Program, type InsertProgram,
   programEnrollments, type ProgramEnrollment, type InsertProgramEnrollment,
   membershipEnrollments, type MembershipEnrollment, type InsertMembershipEnrollment,
+  membershipAgreements, type MembershipAgreement, type InsertMembershipAgreement,
   stripeSubscriptionSchedules, type StripeSubscriptionSchedule, type InsertStripeSubscriptionSchedule,
   stripePaymentHistory, type StripePaymentHistory, type InsertStripePaymentHistory,
   classes, type Class, type InsertClass,
@@ -204,6 +205,15 @@ export interface IStorage {
   updateMembershipEnrollment(id: number, enrollment: Partial<InsertMembershipEnrollment>): Promise<MembershipEnrollment | undefined>;
   deleteMembershipEnrollment(id: number): Promise<void>;
   createOrUpdateMembershipEnrollment(parentUserId: number, schoolId: number, membershipYear: number): Promise<MembershipEnrollment>;
+
+  // Membership Agreement methods
+  getMembershipAgreementById(id: number): Promise<MembershipAgreement | undefined>;
+  getMembershipAgreementsByParentId(parentUserId: number): Promise<MembershipAgreement[]>;
+  getMembershipAgreementsBySchoolId(schoolId: number): Promise<MembershipAgreement[]>;
+  getMembershipAgreementByEnrollmentId(enrollmentId: number): Promise<MembershipAgreement | undefined>;
+  getLatestMembershipAgreementByParentAndSchool(parentUserId: number, schoolId: number): Promise<MembershipAgreement | undefined>;
+  createMembershipAgreement(agreement: InsertMembershipAgreement): Promise<MembershipAgreement>;
+  hasSignedCurrentAgreement(parentUserId: number, schoolId: number, currentVersion: string): Promise<boolean>;
 
   // Class Enrollment methods (DEPRECATED - Use Program Enrollment methods above)
   /**
@@ -447,6 +457,7 @@ export class MemStorage implements IStorage {
   private programsStore: Map<number, Program>;
   private programEnrollmentsStore: Map<number, ProgramEnrollment>;
   private membershipEnrollmentsStore: Map<number, MembershipEnrollment>;
+  private membershipAgreementsStore: Map<number, MembershipAgreement>;
   private classesStore: Map<number, Class>;
   private activitiesStore: Map<number, Activity>;
   private marketingLinksStore: Map<number, MarketingLink>;
@@ -475,6 +486,7 @@ export class MemStorage implements IStorage {
   private programIdCounter: number;
   private programEnrollmentIdCounter: number;
   private membershipEnrollmentIdCounter: number;
+  private membershipAgreementIdCounter: number;
   private classIdCounter: number;
   private activityIdCounter: number;
   private marketingLinkIdCounter: number;
@@ -502,6 +514,7 @@ export class MemStorage implements IStorage {
     this.programsStore = new Map();
     this.programEnrollmentsStore = new Map();
     this.membershipEnrollmentsStore = new Map();
+    this.membershipAgreementsStore = new Map();
     this.classesStore = new Map();
     this.activitiesStore = new Map();
     this.marketingLinksStore = new Map();
@@ -531,6 +544,7 @@ export class MemStorage implements IStorage {
     this.programIdCounter = 1;
     this.programEnrollmentIdCounter = 1;
     this.membershipEnrollmentIdCounter = 1;
+    this.membershipAgreementIdCounter = 1;
     this.classIdCounter = 1;
     this.activityIdCounter = 1;
     this.marketingLinkIdCounter = 1;
@@ -1650,6 +1664,55 @@ export class MemStorage implements IStorage {
     };
 
     return this.createMembershipEnrollment(enrollmentData);
+  }
+
+  // Membership Agreement methods
+  async getMembershipAgreementById(id: number): Promise<MembershipAgreement | undefined> {
+    return this.membershipAgreementsStore.get(id);
+  }
+
+  async getMembershipAgreementsByParentId(parentUserId: number): Promise<MembershipAgreement[]> {
+    return Array.from(this.membershipAgreementsStore.values())
+      .filter(agreement => agreement.parentUserId === parentUserId)
+      .sort((a, b) => new Date(b.signedAt).getTime() - new Date(a.signedAt).getTime());
+  }
+
+  async getMembershipAgreementsBySchoolId(schoolId: number): Promise<MembershipAgreement[]> {
+    return Array.from(this.membershipAgreementsStore.values())
+      .filter(agreement => agreement.schoolId === schoolId)
+      .sort((a, b) => new Date(b.signedAt).getTime() - new Date(a.signedAt).getTime());
+  }
+
+  async getMembershipAgreementByEnrollmentId(enrollmentId: number): Promise<MembershipAgreement | undefined> {
+    return Array.from(this.membershipAgreementsStore.values())
+      .find(agreement => agreement.membershipEnrollmentId === enrollmentId);
+  }
+
+  async getLatestMembershipAgreementByParentAndSchool(parentUserId: number, schoolId: number): Promise<MembershipAgreement | undefined> {
+    const agreements = Array.from(this.membershipAgreementsStore.values())
+      .filter(agreement => agreement.parentUserId === parentUserId && agreement.schoolId === schoolId)
+      .sort((a, b) => new Date(b.signedAt).getTime() - new Date(a.signedAt).getTime());
+    return agreements[0];
+  }
+
+  async createMembershipAgreement(agreementData: InsertMembershipAgreement): Promise<MembershipAgreement> {
+    const id = this.membershipAgreementIdCounter++;
+    const now = new Date();
+
+    const agreement: MembershipAgreement = {
+      ...agreementData,
+      id,
+      signedAt: now,
+      createdAt: now
+    };
+
+    this.membershipAgreementsStore.set(id, agreement);
+    return agreement;
+  }
+
+  async hasSignedCurrentAgreement(parentUserId: number, schoolId: number, currentVersion: string): Promise<boolean> {
+    const latestAgreement = await this.getLatestMembershipAgreementByParentAndSchool(parentUserId, schoolId);
+    return latestAgreement !== undefined && latestAgreement.agreementVersion === currentVersion;
   }
 
   // Class Enrollment methods
@@ -5580,6 +5643,35 @@ export class MemStorage implements IStorage {
 
       async createOrUpdateMembershipEnrollment(parentUserId: number, schoolId: number, membershipYear: number): Promise<MembershipEnrollment> {
         return this.dbStorage.createOrUpdateMembershipEnrollment(parentUserId, schoolId, membershipYear);
+      }
+
+      // Membership Agreement methods
+      async getMembershipAgreementById(id: number): Promise<MembershipAgreement | undefined> {
+        return this.dbStorage.getMembershipAgreementById(id);
+      }
+
+      async getMembershipAgreementsByParentId(parentUserId: number): Promise<MembershipAgreement[]> {
+        return this.dbStorage.getMembershipAgreementsByParentId(parentUserId);
+      }
+
+      async getMembershipAgreementsBySchoolId(schoolId: number): Promise<MembershipAgreement[]> {
+        return this.dbStorage.getMembershipAgreementsBySchoolId(schoolId);
+      }
+
+      async getMembershipAgreementByEnrollmentId(enrollmentId: number): Promise<MembershipAgreement | undefined> {
+        return this.dbStorage.getMembershipAgreementByEnrollmentId(enrollmentId);
+      }
+
+      async getLatestMembershipAgreementByParentAndSchool(parentUserId: number, schoolId: number): Promise<MembershipAgreement | undefined> {
+        return this.dbStorage.getLatestMembershipAgreementByParentAndSchool(parentUserId, schoolId);
+      }
+
+      async createMembershipAgreement(agreement: InsertMembershipAgreement): Promise<MembershipAgreement> {
+        return this.dbStorage.createMembershipAgreement(agreement);
+      }
+
+      async hasSignedCurrentAgreement(parentUserId: number, schoolId: number, currentVersion: string): Promise<boolean> {
+        return this.dbStorage.hasSignedCurrentAgreement(parentUserId, schoolId, currentVersion);
       }
 
       async getRoleInvitations(): Promise<any[]> {
