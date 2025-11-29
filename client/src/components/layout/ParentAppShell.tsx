@@ -9,7 +9,7 @@ import RoleSwitcher from "@/components/RoleSwitcher.tsx";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetTrigger, SheetClose } from "@/components/ui/sheet";
-import { LogOut, Menu, User, Bell, X, Home, Users, BookOpen, Calendar, DollarSign, Bot, Brain, Settings } from "lucide-react";
+import { LogOut, Menu, User, Bell, X, Home, Users, BookOpen, Calendar, DollarSign, Bot, Brain, Settings, FolderOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { Link, useLocation } from "wouter";
@@ -56,6 +56,11 @@ const mobileNavigationItems = [
     href: "/payments",
     title: "Payments",
     icon: DollarSign,
+  },
+  {
+    href: "/parent/documents",
+    title: "My Documents",
+    icon: FolderOpen,
   },
   // Hidden: AI features not yet ready for production
   // {

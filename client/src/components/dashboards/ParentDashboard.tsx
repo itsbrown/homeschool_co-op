@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
-import { PlusCircle, User, Calendar, BookOpen, Clock, DollarSign, Users, UserPlus, CreditCard, RefreshCw, FileText, FolderOpen, Loader2 } from "lucide-react";
+import { PlusCircle, User, Calendar, BookOpen, Clock, DollarSign, Users, UserPlus, CreditCard, RefreshCw, FileText, FolderOpen, Loader2, Award, CheckCircle, AlertCircle, XCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/components/SupabaseProvider";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -190,6 +190,67 @@ export default function ParentDashboard() {
     enabled: !!user && !!session,
     retry: 1,
   });
+
+  // Fetch parent membership enrollments
+  interface MembershipEnrollment {
+    id: number;
+    schoolId: number;
+    schoolName: string;
+    schoolLogo: string | null;
+    membershipYear: string;
+    status: string;
+    amount: number;
+    amountPaid: number;
+    remainingBalance: number;
+    dueDate: string | null;
+    expirationDate: string | null;
+    startDate: string | null;
+    renewalDate: string | null;
+    membershipDescription: string | null;
+  }
+  
+  const { data: membershipsData, isLoading: membershipsLoading, isError: membershipsError } = useQuery<MembershipEnrollment[]>({
+    queryKey: ["/api/parent/memberships"],
+    queryFn: async () => {
+      const token = localStorage.getItem('supabase_token');
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+      
+      const response = await fetch("/api/parent/memberships", {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch memberships: ${response.status}`);
+      }
+      return response.json();
+    },
+    enabled: !!user && !!session,
+    retry: 1,
+  });
+
+  // Helper function to get membership status display info
+  const getMembershipStatusInfo = (status: string) => {
+    switch (status) {
+      case 'active':
+        return { label: 'Active', color: 'bg-green-100 text-green-800', icon: CheckCircle };
+      case 'pending':
+      case 'pending_payment':
+        return { label: 'Pending Payment', color: 'bg-yellow-100 text-yellow-800', icon: AlertCircle };
+      case 'expired':
+        return { label: 'Expired', color: 'bg-red-100 text-red-800', icon: XCircle };
+      case 'cancelled':
+        return { label: 'Cancelled', color: 'bg-gray-100 text-gray-800', icon: XCircle };
+      case 'grace_period':
+        return { label: 'Grace Period', color: 'bg-orange-100 text-orange-800', icon: AlertCircle };
+      default:
+        return { label: status, color: 'bg-gray-100 text-gray-800', icon: AlertCircle };
+    }
+  };
 
   // Handle syncing children accounts with parent email
   const handleSyncChildren = async () => {
@@ -426,6 +487,130 @@ export default function ParentDashboard() {
               </CardContent>
             </Card>
           </div>
+
+          {/* My Membership Card */}
+          <Card data-testid="card-my-membership">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <Award className="h-5 w-5" />
+                  My Membership
+                </CardTitle>
+                {membershipsData && membershipsData.length > 0 && (
+                  <Badge variant="secondary">
+                    {membershipsData.length} membership{membershipsData.length !== 1 ? 's' : ''}
+                  </Badge>
+                )}
+              </div>
+              <CardDescription>
+                View your membership status and payment details
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {membershipsLoading ? (
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  <span className="ml-2 text-muted-foreground">Loading membership...</span>
+                </div>
+              ) : membershipsError ? (
+                <div className="text-center py-4 text-muted-foreground">
+                  <Award className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm text-red-500">Unable to load membership.</p>
+                  <Button 
+                    variant="link" 
+                    size="sm" 
+                    onClick={() => queryClient.invalidateQueries({ queryKey: ["/api/parent/memberships"] })}
+                    className="mt-1"
+                  >
+                    Try again
+                  </Button>
+                </div>
+              ) : !membershipsData || membershipsData.length === 0 ? (
+                <div className="text-center py-4 text-muted-foreground">
+                  <Award className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">No membership yet.</p>
+                  <p className="text-xs">Enroll in a program to get started.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {membershipsData.map((membership) => {
+                    const statusInfo = getMembershipStatusInfo(membership.status);
+                    const StatusIcon = statusInfo.icon;
+                    
+                    return (
+                      <div 
+                        key={membership.id} 
+                        className="p-4 rounded-lg border bg-muted/30"
+                        data-testid={`membership-item-${membership.id}`}
+                      >
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-center gap-3">
+                            {membership.schoolLogo ? (
+                              <img 
+                                src={membership.schoolLogo} 
+                                alt={membership.schoolName}
+                                className="h-10 w-10 object-contain rounded"
+                              />
+                            ) : (
+                              <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                                <Award className="h-5 w-5 text-primary" />
+                              </div>
+                            )}
+                            <div>
+                              <p className="font-medium">{membership.schoolName}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {membership.membershipYear} Membership
+                              </p>
+                            </div>
+                          </div>
+                          <Badge className={statusInfo.color}>
+                            <StatusIcon className="h-3 w-3 mr-1" />
+                            {statusInfo.label}
+                          </Badge>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-3 text-sm">
+                          <div>
+                            <p className="text-muted-foreground">Amount</p>
+                            <p className="font-medium">${(membership.amount / 100).toFixed(2)}</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">Paid</p>
+                            <p className="font-medium">${(membership.amountPaid / 100).toFixed(2)}</p>
+                          </div>
+                          {membership.remainingBalance > 0 && (
+                            <div>
+                              <p className="text-muted-foreground">Balance Due</p>
+                              <p className="font-medium text-orange-600">${(membership.remainingBalance / 100).toFixed(2)}</p>
+                            </div>
+                          )}
+                          {membership.expirationDate && (
+                            <div>
+                              <p className="text-muted-foreground">Expires</p>
+                              <p className="font-medium">{new Date(membership.expirationDate).toLocaleDateString()}</p>
+                            </div>
+                          )}
+                        </div>
+                        
+                        {membership.status === 'pending' || membership.status === 'pending_payment' ? (
+                          <Button 
+                            className="w-full mt-3" 
+                            size="sm"
+                            asChild
+                          >
+                            <Link href="/payments">
+                              <CreditCard className="mr-2 h-4 w-4" />
+                              Pay Now
+                            </Link>
+                          </Button>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
           {/* My Documents Card */}
           <Card data-testid="card-my-documents">

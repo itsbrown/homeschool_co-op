@@ -16,6 +16,7 @@ import {
   DollarSign,
   Brain,
   Bell,
+  FolderOpen,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -219,6 +220,11 @@ export default function ParentSidebar() {
       title: "Payments",
       icon: <DollarSign className="h-5 w-5" />,
       description: "Manage billing and view payment history"
+    },
+    {
+      href: "/parent/documents",
+      title: "My Documents",
+      icon: <FolderOpen className="h-5 w-5" />,
     },
     // TODO: Future feature - AI Enrollment Assistant
     // {
