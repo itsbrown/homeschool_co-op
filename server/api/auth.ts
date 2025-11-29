@@ -692,7 +692,12 @@ router.post("/login", async (req, res) => {
       console.log(`✅ Supabase authentication successful for: ${signInData.user.email}`);
 
       // Get user data from local database
-      const user = await storage.getUserByEmail?.(signInData.user.email);
+      const userEmail = signInData.user.email;
+      if (!userEmail) {
+        console.log('⚠️ Supabase user has no email');
+        return res.status(401).json({ message: "User account not properly configured. Please contact support." });
+      }
+      const user = await storage.getUserByEmail?.(userEmail);
       if (!user) {
         console.log('⚠️ User authenticated but not found in local database:', signInData.user.email);
         return res.status(401).json({ message: "User account not properly configured. Please contact support." });
@@ -1089,7 +1094,7 @@ router.get("/validate-reset-token", async (req, res) => {
       return res.status(400).json({ valid: false, message: "Token is required" });
     }
 
-    const tokenData = await storage.getPasswordResetToken(token);
+    const tokenData = await storage.getPasswordResetTokenByToken(token);
     if (!tokenData) {
       return res.status(400).json({ valid: false, message: "Invalid token" });
     }
