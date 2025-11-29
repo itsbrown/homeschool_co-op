@@ -40,6 +40,7 @@ import { ProgramsPage } from "@/pages/ProgramsPage";
 import ProgramsParentPage from "@/pages/ProgramsParentPage";
 import ParentClassDetailsPage from "@/pages/parents/ParentClassDetailsPage";
 import MyDocumentsPage from "@/pages/parent/MyDocumentsPage";
+import DocumentDetailPage from "@/pages/parent/DocumentDetailPage";
 import { SimpleClassesPage } from "./pages/SimpleClassesPage";
 import StaffInvitePage from "./pages/schools/StaffInvitePage";
 import StaffPositionsPage from "./pages/schools/StaffPositionsPage";
@@ -530,7 +531,7 @@ function Router() {
       <Route path="/parent/programs/browse" component={ProgramsBrowseRedirect} />
       <Route path="/parent/classes/:id" component={ParentClassDetailsPage} />
       <Route path="/parent/documents" component={MyDocumentsPage} />
-      <Route path="/parent/documents/:id" component={MyDocumentsPage} />
+      <Route path="/parent/documents/:id" component={DocumentDetailPage} />
 
       {/* Educator routes */}
       <Route path="/educator" component={() => <AppShell><EducatorDashboard /></AppShell>} />
