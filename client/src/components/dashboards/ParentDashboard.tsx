@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
-import { PlusCircle, User, Calendar, BookOpen, Clock, DollarSign, Users, UserPlus, CreditCard, RefreshCw } from "lucide-react";
+import { PlusCircle, User, Calendar, BookOpen, Clock, DollarSign, Users, UserPlus, CreditCard, RefreshCw, FileText, FolderOpen, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/components/SupabaseProvider";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -154,6 +154,41 @@ export default function ParentDashboard() {
   const { data: eventsData, isLoading: eventsLoading } = useQuery({
     queryKey: ["/api/events/upcoming"],
     enabled: !!user && !!session,
+  });
+
+  // Fetch parent documents (signed agreements)
+  interface ParentDocument {
+    id: number;
+    type: string;
+    title: string;
+    schoolName: string;
+    signedAt: string;
+    signatoryName: string;
+    agreementVersion: string;
+  }
+  
+  const { data: documentsData, isLoading: documentsLoading, isError: documentsError } = useQuery<{ documents: ParentDocument[] }>({
+    queryKey: ["/api/parent/documents"],
+    queryFn: async () => {
+      const token = localStorage.getItem('supabase_token');
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+      
+      const response = await fetch("/api/parent/documents", {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch documents: ${response.status}`);
+      }
+      return response.json();
+    },
+    enabled: !!user && !!session,
+    retry: 1,
   });
 
   // Handle syncing children accounts with parent email
@@ -391,6 +426,92 @@ export default function ParentDashboard() {
               </CardContent>
             </Card>
           </div>
+
+          {/* My Documents Card */}
+          <Card data-testid="card-my-documents">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <FolderOpen className="h-5 w-5" />
+                  My Documents
+                </CardTitle>
+                {documentsData?.documents && documentsData.documents.length > 0 && (
+                  <Badge variant="secondary">
+                    {documentsData.documents.length} document{documentsData.documents.length !== 1 ? 's' : ''}
+                  </Badge>
+                )}
+              </div>
+              <CardDescription>
+                View and download your signed agreements and important documents
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {documentsLoading ? (
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  <span className="ml-2 text-muted-foreground">Loading documents...</span>
+                </div>
+              ) : documentsError ? (
+                <div className="text-center py-4 text-muted-foreground">
+                  <FileText className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm text-red-500">Unable to load documents.</p>
+                  <Button 
+                    variant="link" 
+                    size="sm" 
+                    onClick={() => queryClient.invalidateQueries({ queryKey: ["/api/parent/documents"] })}
+                    className="mt-1"
+                  >
+                    Try again
+                  </Button>
+                </div>
+              ) : !documentsData?.documents || documentsData.documents.length === 0 ? (
+                <div className="text-center py-4 text-muted-foreground">
+                  <FileText className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">No documents yet.</p>
+                  <p className="text-xs">Signed agreements will appear here.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {documentsData.documents.slice(0, 3).map((doc) => (
+                    <div 
+                      key={doc.id} 
+                      className="flex items-center justify-between p-3 rounded-lg border bg-muted/30"
+                      data-testid={`document-item-${doc.id}`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+                          <FileText className="h-4 w-4 text-primary" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium">{doc.title}</p>
+                          <p className="text-xs text-muted-foreground">
+                            Signed on {new Date(doc.signedAt).toLocaleDateString()} • v{doc.agreementVersion}
+                          </p>
+                        </div>
+                      </div>
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        asChild
+                        data-testid={`button-view-document-${doc.id}`}
+                      >
+                        <Link href={`/parent/documents/${doc.id}`}>
+                          View
+                        </Link>
+                      </Button>
+                    </div>
+                  ))}
+                  {documentsData.documents.length > 3 && (
+                    <Button variant="link" asChild className="w-full">
+                      <Link href="/parent/documents">
+                        View all {documentsData.documents.length} documents →
+                      </Link>
+                    </Button>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="children" className="space-y-4">
