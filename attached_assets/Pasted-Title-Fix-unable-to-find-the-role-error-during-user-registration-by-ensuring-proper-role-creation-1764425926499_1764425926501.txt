@@ -1,0 +1,56 @@
+Title: Fix "unable to find the role" error during user registration by ensuring proper role creation and synchronous data flow
+
+Context:
+Users are seeing "unable to find the role" errors during registration. The backend successfully creates users in Supabase auth and the users table, but the user_roles table entry creation has timing/error handling issues. The RoleContext tries to fetch roles immediately after registration, but sometimes the roles aren't available yet or the creation failed silently.
+
+Requirements:
+
+Backend Registration Flow (server/api/auth.ts):
+
+After creating the Supabase auth account and local user record, IMMEDIATELY create a user_roles entry synchronously (not deferred)
+The role entry MUST be created BEFORE responding to the client with success
+If user_roles creation fails, ROLLBACK both the Supabase auth account AND the local user record
+Add comprehensive error logging with emoji prefixes for visibility (🔐, ✅, ❌, etc.)
+Use the existing Phase 2 multi-role pattern from server/api/user-roles.ts as reference
+Frontend Role Loading (client/src/contexts/RoleContext.tsx):
+
+Add defensive null checks and fallback logic for newly registered users
+If roles query returns empty array but user is authenticated, show a clear "Setting up your account..." message instead of error
+Add a retry mechanism (max 3 attempts with 1-second delays) to handle timing edge cases
+Log all role loading steps with console.log for debugging
+Database Constraints:
+
+Ensure user_roles table has proper indexes on (userId, role, schoolId)
+Verify the unique constraint allows NULL schoolId for parent roles
+Check that the foreign key cascade deletes are properly configured
+Error Messages:
+
+Replace generic "unable to find the role" with specific user-friendly messages:
+"Setting up your account, please wait..." (during initial load)
+"Account created successfully, redirecting to dashboard..." (on success)
+"Failed to complete account setup. Please contact support." (on critical failure)
+Architecture Compliance:
+
+Follow the existing Phase 2 multi-role implementation patterns from PHASE_3_IMPLEMENTATION_PLAN.md
+Use database as single source of truth (never rely on localStorage for role state)
+Maintain backward compatibility with existing single-role users
+Use proper TypeScript types from shared/schema.ts
+Testing:
+
+Test registration flow for new parent users with and without school association
+Test that role switching works immediately after registration
+Test error recovery when database write fails
+Verify Supabase session is properly established before role queries
+Files to modify:
+
+server/api/auth.ts (registration endpoint - add synchronous role creation with rollback)
+client/src/contexts/RoleContext.tsx (add defensive loading and retry logic)
+Review server/migrations/add-multi-role-support.sql for any missing constraints
+Success Criteria:
+
+New users can register and immediately see their correct role without errors
+If registration fails, all created records are cleaned up (no orphaned accounts)
+Clear loading states prevent race conditions
+Error messages are actionable for users and informative for developers
+Reference Implementation:
+See server/api/user-roles.ts lines 200-300 for proper role creation patterns and server/tests/integration/phase2/multi-role-management.test.ts for expected behavior.
