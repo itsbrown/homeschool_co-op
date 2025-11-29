@@ -6,7 +6,9 @@ import { nlpService } from "./nlp-service";
 import bcrypt from "bcryptjs";
 import session from "express-session";
 import { z } from "zod";
-import { insertUserSchema, insertCurriculumSchema, insertLessonSchema, insertEventSchema, insertMarketplaceItemSchema, insertKnowledgeBaseSchema, insertChildSchema, insertEmergencyContactSchema, insertProgramSchema, insertProgramEnrollmentSchema, insertMembershipEnrollmentSchema } from "@shared/schema";
+import { insertUserSchema, insertCurriculumSchema, insertLessonSchema, insertEventSchema, insertMarketplaceItemSchema, insertKnowledgeBaseSchema, insertChildSchema, insertEmergencyContactSchema, insertProgramSchema, insertProgramEnrollmentSchema, insertMembershipEnrollmentSchema, userRoles, users } from "@shared/schema";
+import { getDb } from "./db";
+import { eq } from "drizzle-orm";
 import { supabaseAuth } from "./middleware/supabase-auth";
 
 // Type for authenticated requests with our auth structure
@@ -403,6 +405,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         return res.status(500).json({ 
           message: "Failed to create user account. Please try again." 
+        });
+      }
+
+      // 🔐 CRITICAL: Create user_roles entry SYNCHRONOUSLY before responding to client
+      // This ensures the role is available immediately when RoleContext queries after registration
+      let userRoleEntry;
+      try {
+        console.log(`🔐 Creating user_roles entry for user ${user.id} with role ${validatedData.role || 'parent'}`);
+        
+        const db = await getDb();
+        const userRole = validatedData.role || 'parent';
+        
+        // Use database transaction to ensure atomicity
+        userRoleEntry = await db.transaction(async (tx: any) => {
+          // Insert the initial role as primary
+          const [newUserRole] = await tx.insert(userRoles).values({
+            userId: user.id,
+            role: userRole as any,
+            schoolId: validatedData.schoolId || null,
+            isPrimary: true
+          }).returning();
+          
+          console.log(`✅ User role created successfully: ID=${newUserRole.id}, role=${userRole}, schoolId=${validatedData.schoolId || 'null'}`);
+          
+          // Update the user's activeRoleId to point to this new role within same transaction
+          await tx.update(users)
+            .set({ activeRoleId: newUserRole.id })
+            .where(eq(users.id, user.id));
+          
+          console.log(`✅ Set activeRoleId=${newUserRole.id} for user ${user.id}`);
+          
+          return newUserRole;
+        });
+        
+        console.log(`🔐 Role creation transaction completed successfully`);
+        
+      } catch (roleError) {
+        console.error('❌ Failed to create user_roles entry - ROLLING BACK:', roleError);
+        
+        // CRITICAL: Clean up both the local user record AND Supabase account
+        try {
+          await storage.deleteUser(user.id);
+          console.log(`🧹 Rolled back: Deleted local user record (ID: ${user.id})`);
+          
+          await supabaseAdmin.auth.admin.deleteUser(authUser.user.id);
+          console.log(`🧹 Rolled back: Deleted Supabase auth account (ID: ${authUser.user.id})`);
+        } catch (cleanupError) {
+          console.error('❌ Failed to cleanup after role creation failure:', cleanupError);
+          console.error(`⚠️ ORPHANED RECORDS: Local user ID=${user.id}, Supabase ID=${authUser.user.id}`);
+        }
+        
+        return res.status(500).json({ 
+          message: 'Failed to complete account setup. Please contact support if this persists.' 
         });
       }
 
