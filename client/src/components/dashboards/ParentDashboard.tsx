@@ -23,7 +23,9 @@ export default function ParentDashboard() {
   const [showTour, setShowTour] = useState(false);
   const [isEditingMemberId, setIsEditingMemberId] = useState(false);
   const [memberIdInput, setMemberIdInput] = useState("");
+  const [membershipAutoAdded, setMembershipAutoAdded] = useState(false);
   const { toast } = useToast();
+  const { cart, setMembership } = useCart();
 
   // Fetch user's member ID
   interface MemberIdResponse {
@@ -375,6 +377,45 @@ export default function ParentDashboard() {
         fetchUserSchool();
       }
     }, [user?.email]);
+
+  // Auto-add membership fee to cart when parent doesn't have a memberId
+  useEffect(() => {
+    // Only run if:
+    // - memberIdData is loaded and parent has no memberId
+    // - userSchool is loaded and has a membership fee configured
+    // - membership not already in cart
+    // - we haven't already auto-added it in this session
+    if (
+      !memberIdLoading &&
+      memberIdData &&
+      !memberIdData.memberId &&
+      !memberIdData.hasMembership &&
+      userSchool &&
+      userSchool.membershipFeeAmount > 0 &&
+      !cart.membership &&
+      !membershipAutoAdded
+    ) {
+      console.log('🎫 Auto-adding membership fee to cart:', {
+        schoolId: userSchool.id,
+        schoolName: userSchool.name,
+        amount: userSchool.membershipFeeAmount,
+      });
+      
+      setMembership({
+        schoolId: userSchool.id,
+        schoolName: userSchool.name,
+        amount: userSchool.membershipFeeAmount, // Keep in cents for consistency
+        year: new Date().getFullYear(),
+      });
+      
+      setMembershipAutoAdded(true);
+      
+      toast({
+        title: "Membership Required",
+        description: `Annual membership fee of $${(userSchool.membershipFeeAmount / 100).toFixed(2)} has been added to your cart.`,
+      });
+    }
+  }, [memberIdData, memberIdLoading, userSchool, cart.membership, membershipAutoAdded, setMembership, toast]);
 
   return (
     <>

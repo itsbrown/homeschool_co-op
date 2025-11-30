@@ -7,13 +7,13 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/componen
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Trash2, ShoppingCart, CreditCard, Percent, Gift, X, Clock, AlertCircle } from 'lucide-react';
+import { Trash2, ShoppingCart, CreditCard, Percent, Gift, X, Clock, AlertCircle, Award } from 'lucide-react';
 import { useLocation } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
 import { formatCurrency } from '@/utils/currency';
 
 export default function CartDrawer() {
-  const { cart, isOpen, closeCart, removeItem, clearCart, getItemCount } = useCart();
+  const { cart, isOpen, closeCart, removeItem, clearCart, removeMembership, getItemCount } = useCart();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
@@ -23,13 +23,14 @@ export default function CartDrawer() {
     e.preventDefault();
     e.stopPropagation();
     
-    console.log('🛒 Cart items length:', cart.items.length);
+    console.log('🛒 Cart items length:', cart.items.length, 'membership:', cart.membership);
     
-    if (cart.items.length === 0) {
-      console.log('🛒 No items in cart, showing toast');
+    // Allow checkout if there are items OR membership
+    if (cart.items.length === 0 && !cart.membership) {
+      console.log('🛒 No items or membership in cart, showing toast');
       toast({
-        title: "No unpaid enrollments",
-        description: "All your enrollments are paid or you haven't enrolled in any classes yet",
+        title: "Cart is empty",
+        description: "Add classes or membership to your cart before checking out",
         variant: "destructive",
       });
       return;
@@ -65,7 +66,7 @@ export default function CartDrawer() {
           </SheetHeader>
         </div>
 
-        {cart.items.length === 0 ? (
+        {cart.items.length === 0 && !cart.membership ? (
           <div className="flex flex-col items-center justify-center py-8 px-6 text-center">
           <ShoppingCart className="h-12 w-12 text-muted-foreground mb-4" />
           <h3 className="text-lg font-medium mb-2">No unpaid enrollments</h3>
@@ -162,6 +163,46 @@ export default function CartDrawer() {
                   </Card>
                 );
                 })}
+                
+                {/* Membership Fee Card */}
+                {cart.membership && (
+                  <Card className="relative border-primary/20 bg-primary/5" data-testid="card-membership-fee">
+                    <CardHeader className="pb-2">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <h4 className="font-medium flex items-center gap-2">
+                            <Award className="h-4 w-4 text-primary" />
+                            Annual Membership
+                          </h4>
+                          <p className="text-sm text-muted-foreground">{cart.membership.schoolName}</p>
+                          <Badge variant="secondary" className="text-xs bg-primary/10 text-primary mt-1">
+                            {cart.membership.year} Membership
+                          </Badge>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-medium">{formatCurrency(cart.membership.amount)}</p>
+                          <p className="text-xs text-muted-foreground">Annual Fee</p>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="pt-0">
+                      <div className="flex justify-between items-center">
+                        <p className="text-xs text-muted-foreground">
+                          Required for enrollment. Generates your Member ID.
+                        </p>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          onClick={() => removeMembership()}
+                          className="h-7 px-2 text-muted-foreground hover:text-destructive"
+                          data-testid="btn-remove-membership"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
               </div>
             </div>
 
@@ -171,10 +212,22 @@ export default function CartDrawer() {
               style={{ paddingBottom: 'max(2rem, env(safe-area-inset-bottom))' }}
             >
               <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span>Subtotal:</span>
-                  <span>{formatCurrency(cart.subtotal)}</span>
-                </div>
+                {cart.items.length > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span>Class Enrollments:</span>
+                    <span>{formatCurrency(cart.subtotal)}</span>
+                  </div>
+                )}
+
+                {cart.membership && (
+                  <div className="flex justify-between text-sm" data-testid="summary-membership-fee">
+                    <span className="flex items-center gap-1">
+                      <Award className="h-3 w-3 text-primary" />
+                      Membership Fee:
+                    </span>
+                    <span>{formatCurrency(cart.membership.amount)}</span>
+                  </div>
+                )}
 
                 {hasDiscounts && (
                   <>
@@ -213,7 +266,7 @@ export default function CartDrawer() {
                 <Separator />
                 <div className="flex justify-between font-medium">
                   <span>Total:</span>
-                  <span>{formatCurrency(cart.total)}</span>
+                  <span>{formatCurrency(cart.total + (cart.membership?.amount || 0))}</span>
                 </div>
               </div>
 

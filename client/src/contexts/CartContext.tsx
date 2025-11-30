@@ -35,6 +35,13 @@ export interface CartItem {
   variantName?: string;
 }
 
+export interface MembershipFee {
+  schoolId: number;
+  schoolName: string;
+  amount: number; // in cents
+  year: number;
+}
+
 export interface Cart {
   items: CartItem[];
   subtotal: number;
@@ -47,6 +54,7 @@ export interface Cart {
     freeItemIds?: string[]; // Track which cart items are free (from "free after 3")
   };
   total: number;
+  membership?: MembershipFee | null; // Optional membership fee (separate from items, not subject to class discounts)
   appliedPromoCode?: {
     code: string;
     discountId: number;
@@ -97,7 +105,9 @@ type CartAction =
   | { type: 'CLOSE_CART' }
   | { type: 'LOAD_CART'; payload: Cart }
   | { type: 'APPLY_PROMO'; payload: { code: string; discountId: number; name: string; type: 'percentage' | 'fixed_amount' | 'bundle'; value: number; discountAmount: number } }
-  | { type: 'REMOVE_PROMO' };
+  | { type: 'REMOVE_PROMO' }
+  | { type: 'SET_MEMBERSHIP'; payload: MembershipFee }
+  | { type: 'REMOVE_MEMBERSHIP' };
 
 // Function to check for applicable automatic discounts
 // Fetch sibling discount settings from school admin
@@ -812,6 +822,7 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
             totalDiscountAmount: 0
           },
           total: 0,
+          membership: null,
           appliedPromoCode: null,
         },
       };
@@ -830,6 +841,7 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
             totalDiscountAmount: 0
           },
           total: 0,
+          membership: null,
           appliedPromoCode: null,
         },
         cartHydrated: true,
@@ -882,6 +894,33 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
       };
     }
 
+    case 'SET_MEMBERSHIP': {
+      // Store membership fee separately from items (not subject to discounts)
+      // IMPORTANT: Do NOT add membership to cart.total here
+      // Other reducer actions recalculate total without membership, which would cause it to be lost
+      // Instead, membership is added to the payable amount in CartDrawer, CartCheckout, etc.
+      return {
+        ...state,
+        cart: {
+          ...state.cart,
+          membership: action.payload,
+        },
+      };
+    }
+
+    case 'REMOVE_MEMBERSHIP': {
+      // Remove membership fee from cart
+      // Do NOT modify cart.total - it stays as the class enrollment total
+      // Membership is tracked separately
+      return {
+        ...state,
+        cart: {
+          ...state.cart,
+          membership: null,
+        },
+      };
+    }
+
     default:
       return state;
   }
@@ -922,6 +961,8 @@ interface CartContextType {
   refreshDiscounts: () => Promise<void>;
   applyPromoCode: (code: string) => Promise<{ success: boolean; error?: string; discount?: any }>;
   removePromoCode: () => void;
+  setMembership: (membership: MembershipFee) => void;
+  removeMembership: () => void;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -1528,6 +1569,20 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   };
 
+  const setMembership = (membership: MembershipFee) => {
+    console.log('🎫 Adding membership to cart:', membership);
+    dispatch({ type: 'SET_MEMBERSHIP', payload: membership });
+  };
+
+  const removeMembership = () => {
+    console.log('🎫 Removing membership from cart');
+    dispatch({ type: 'REMOVE_MEMBERSHIP' });
+    toast({
+      title: "Membership Removed",
+      description: "Membership fee has been removed from your cart",
+    });
+  };
+
   const contextValue: CartContextType = {
     cart: state.cart,
     isOpen: state.isOpen,
@@ -1546,6 +1601,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     refreshDiscounts,
     applyPromoCode,
     removePromoCode,
+    setMembership,
+    removeMembership,
   };
 
   return (

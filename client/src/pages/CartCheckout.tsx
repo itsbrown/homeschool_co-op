@@ -12,7 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useLocation } from 'wouter';
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { apiRequest } from '@/lib/queryClient';
-import { ShoppingCart, CreditCard, Percent, Gift, AlertCircle, Check, Loader2, Calendar, DollarSign, Clock, CheckCircle2 } from 'lucide-react';
+import { ShoppingCart, CreditCard, Percent, Gift, AlertCircle, Check, Loader2, Calendar, DollarSign, Clock, CheckCircle2, Award } from 'lucide-react';
 import ParentAppShell from '@/components/layout/ParentAppShell';
 import { formatCurrency } from '@/utils/currency';
 import { stripePromise } from '@/config/stripe';
@@ -117,7 +117,7 @@ function CheckoutForm({ selectedPaymentPlan, selectedPlanAmount }: { selectedPay
       <Button 
         type="submit" 
         className="w-full" 
-        disabled={!stripe || !elementsReady || processing || cart.items.length === 0}
+        disabled={!stripe || !elementsReady || processing || (cart.items.length === 0 && !cart.membership)}
         size="lg"
       >
         {processing ? (
@@ -213,7 +213,7 @@ export default function CartCheckout() {
   const [isInitialLoad, setIsInitialLoad] = useState(true);
 
   useEffect(() => {
-    console.log('🛒 CartCheckout useEffect - isAuthenticated:', isAuthenticated, 'cart items:', cart.items.length, 'cartHydrated:', cartHydrated, 'cartLoading:', cartLoading);
+    console.log('🛒 CartCheckout useEffect - isAuthenticated:', isAuthenticated, 'cart items:', cart.items.length, 'membership:', cart.membership, 'cartHydrated:', cartHydrated, 'cartLoading:', cartLoading);
     
     if (!isAuthenticated) {
       console.log('🛒 User not authenticated, redirecting to login');
@@ -240,10 +240,11 @@ export default function CartCheckout() {
       return;
     }
 
-    // If cart has items after hydration, create payment intent
-    if (cart.items.length > 0) {
+    // If cart has items OR membership after hydration, create payment intent
+    const hasCartContent = cart.items.length > 0 || cart.membership;
+    if (hasCartContent) {
       if (!clientSecret) {
-        console.log('🛒 Creating initial payment intent with', cart.items.length, 'items');
+        console.log('🛒 Creating initial payment intent with', cart.items.length, 'items and membership:', !!cart.membership);
         createPaymentIntent();
       }
     } else {
@@ -251,7 +252,7 @@ export default function CartCheckout() {
       console.log('🛒 Cart hydrated, not loading, and empty - redirecting to programs');
       setLocation('/programs');
     }
-  }, [isAuthenticated, cartHydrated, cartLoading, cart.items.length, cart.total]); // Re-run when cart or loading status changes
+  }, [isAuthenticated, cartHydrated, cartLoading, cart.items.length, cart.membership, cart.total]); // Re-run when cart or loading status changes
   
   // Separate effect to handle discount changes - recreate payment intent when cart total changes
   useEffect(() => {
@@ -315,6 +316,13 @@ export default function CartCheckout() {
           paymentPlan: selectedPaymentPlan, // Include payment plan info
           paymentFrequency: paymentFrequency, // Include payment frequency for date-based scheduling
           parentEmail: user?.email,
+          // Include membership fee if present in cart
+          membership: cart.membership ? {
+            schoolId: cart.membership.schoolId,
+            schoolName: cart.membership.schoolName,
+            amount: cart.membership.amount, // Already in cents
+            year: cart.membership.year,
+          } : null,
         }
       );
 
@@ -485,26 +493,35 @@ export default function CartCheckout() {
   };
 
   const getSelectedPlanAmount = () => {
+    // Get the membership fee to add to total
+    const membershipAmount = cart.membership?.amount || 0;
+    const totalWithMembership = cart.total + membershipAmount;
+    
     // For biweekly plans, send the FULL cart total to backend
     // The backend will calculate the payment schedule and divide it properly
     if (selectedPaymentPlan === 'biweekly') {
-      return cart.total;
+      return totalWithMembership;
     }
     
-    // For other plans, return the calculated plan amount
+    // For other plans, return the calculated plan amount plus membership
     const plans = getPaymentPlanOptions();
     const selectedPlan = plans.find(plan => plan.id === selectedPaymentPlan);
-    return selectedPlan ? selectedPlan.amount : cart.total;
+    // Add membership fee to the selected plan amount
+    return selectedPlan ? selectedPlan.amount + membershipAmount : totalWithMembership;
   };
 
   // Get the amount to display on the Pay button (first payment amount)
   const getButtonDisplayAmount = () => {
+    // Get the membership fee to add to total
+    const membershipAmount = cart.membership?.amount || 0;
+    const totalWithMembership = cart.total + membershipAmount;
+    
     // For biweekly plans, show the FIRST payment amount (total divided by 4)
     if (selectedPaymentPlan === 'biweekly') {
-      return Math.ceil(cart.total / 4);
+      return Math.ceil(totalWithMembership / 4);
     }
     
-    // For all other plans, show the full selected plan amount
+    // For all other plans, show the full selected plan amount (already includes membership)
     return getSelectedPlanAmount();
   };
 
@@ -617,13 +634,44 @@ export default function CartCheckout() {
                 );
                 })}
 
+                {/* Membership Fee */}
+                {cart.membership && (
+                  <div className="flex justify-between items-start p-3 border rounded-lg border-primary/20 bg-primary/5" data-testid="checkout-membership-fee">
+                    <div className="flex-1">
+                      <h4 className="font-medium text-sm flex items-center gap-2">
+                        <Award className="h-4 w-4 text-primary" />
+                        Annual Membership
+                      </h4>
+                      <p className="text-xs text-muted-foreground">{cart.membership.schoolName}</p>
+                      <Badge variant="secondary" className="text-xs bg-primary/10 text-primary mt-1">
+                        {cart.membership.year} Membership
+                      </Badge>
+                    </div>
+                    <div className="text-sm font-medium">
+                      {formatCurrency(cart.membership.amount)}
+                    </div>
+                  </div>
+                )}
+
                 <Separator />
 
                 <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span>Subtotal:</span>
-                    <span>{formatCurrency(cart.subtotal)}</span>
-                  </div>
+                  {cart.items.length > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span>Class Enrollments:</span>
+                      <span>{formatCurrency(cart.subtotal)}</span>
+                    </div>
+                  )}
+
+                  {cart.membership && (
+                    <div className="flex justify-between text-sm" data-testid="checkout-summary-membership">
+                      <span className="flex items-center gap-1">
+                        <Award className="h-3 w-3 text-primary" />
+                        Membership Fee:
+                      </span>
+                      <span>{formatCurrency(cart.membership.amount)}</span>
+                    </div>
+                  )}
 
                   {hasDiscounts && (
                     <>
@@ -674,7 +722,7 @@ export default function CartCheckout() {
                   <Separator />
                   <div className="flex justify-between font-medium text-lg">
                     <span>Total:</span>
-                    <span>{formatCurrency(cart.total)}</span>
+                    <span>{formatCurrency(cart.total + (cart.membership?.amount || 0))}</span>
                   </div>
                 </div>
               </CardContent>
