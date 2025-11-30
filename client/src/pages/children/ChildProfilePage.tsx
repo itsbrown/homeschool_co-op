@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo } from "react";
 import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { ArrowLeft, User, Calendar, GraduationCap, Mail, Phone, MapPin, Heart, AlertTriangle, BookOpen, X, Clock } from "lucide-react";
@@ -14,8 +14,7 @@ import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { queryClient } from "@/lib/queryClient";
-import { useRole } from '@/contexts/RoleContext';
-import { useAuth } from '@/components/SupabaseProvider';
+import { useRoleAwareLayout } from '@/hooks/use-role-aware-layout';
 
 // Layout-agnostic content component for child profile
 // Can be wrapped with appropriate layout by parent components
@@ -477,46 +476,16 @@ export function ChildProfileContent({ activeRole }: ChildProfileContentProps) {
 }
 
 // Default export with role-scoped layout wrapper
-// This handles auth verification, role loading, and proper layout selection
-// Loading states always render inside the appropriate layout to prevent unstyled flash
+// Uses shared useRoleAwareLayout hook for consistent auth verification, 
+// role loading, URL-based layout detection, and redirect handling
 export default function ChildProfilePage() {
-  const [location, setLocation] = useLocation();
-  const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
-  const { activeRole, isLoadingRoles } = useRole();
-  const { toast } = useToast();
-  
-  // Guard ref to prevent duplicate toast/redirect emissions
-  const hasHandledMissingRole = useRef(false);
-  const hasHandledUnauthenticated = useRef(false);
-
-  // Handle redirect for unauthenticated users via effect (no side effects in render)
-  useEffect(() => {
-    if (!isAuthLoading && !isAuthenticated && !hasHandledUnauthenticated.current) {
-      hasHandledUnauthenticated.current = true;
-      setLocation('/login');
-    }
-    // Reset guard if user becomes authenticated (e.g., after login)
-    if (isAuthenticated) {
-      hasHandledUnauthenticated.current = false;
-    }
-  }, [isAuthLoading, isAuthenticated, setLocation]);
-
-  // Handle redirect for missing role after loading complete
-  useEffect(() => {
-    if (!isAuthLoading && isAuthenticated && !isLoadingRoles && !activeRole && !hasHandledMissingRole.current) {
-      hasHandledMissingRole.current = true;
-      toast({
-        title: "Session Error",
-        description: "Unable to determine your role. Please try logging in again.",
-        variant: "destructive",
-      });
-      setLocation('/login');
-    }
-    // Reset guard if role becomes available
-    if (activeRole) {
-      hasHandledMissingRole.current = false;
-    }
-  }, [isAuthLoading, isAuthenticated, isLoadingRoles, activeRole, setLocation, toast]);
+  const { 
+    layoutType, 
+    isLoading, 
+    shouldRedirect, 
+    activeRole, 
+    isSchoolAdminContext 
+  } = useRoleAwareLayout();
 
   // Loading state component - renders inside layout shells
   const LoadingContent = () => (
@@ -528,11 +497,6 @@ export default function ChildProfilePage() {
     </div>
   );
 
-  // Determine if we're still loading or pending redirect
-  const isLoading = isAuthLoading || isLoadingRoles;
-  const shouldRedirect = (!isAuthLoading && !isAuthenticated) || 
-                         (!isAuthLoading && isAuthenticated && !isLoadingRoles && !activeRole);
-
   // Content to render based on state - always shows loading/content inside layout
   const renderContent = () => {
     if (isLoading || shouldRedirect) {
@@ -540,14 +504,6 @@ export default function ChildProfilePage() {
     }
     return <ChildProfileContent activeRole={activeRole} />;
   };
-
-  // Derive layout from activeRole, with URL-based fallback during loading
-  // This prevents layout flash: if URL is /school-admin/*, use admin layout even while loading
-  // Use window.location.pathname as fallback when wouter location is undefined during initial render
-  const currentPath = location || (typeof window !== 'undefined' ? window.location.pathname : '/');
-  const normalizedLocation = currentPath.startsWith('/') ? currentPath : `/${currentPath}`;
-  const isSchoolAdminContext = activeRole === 'schoolAdmin' || 
-                               normalizedLocation.startsWith('/school-admin/');
 
   // Always render with appropriate layout based on role or URL context
   if (isSchoolAdminContext) {
