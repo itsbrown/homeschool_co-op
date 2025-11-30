@@ -27,7 +27,7 @@ router.get('/status', supabaseAuth, async (req: any, res) => {
     // Get school info to check if tour is enabled
     let tourEnabled = true;
     if (user.schoolId) {
-      const school = await storage.getSchoolById(user.schoolId);
+      const school = await storage.getSchool(user.schoolId);
       if (school) {
         tourEnabled = school.onboardingTourEnabled !== false;
       }
@@ -196,7 +196,7 @@ router.get('/school-setting', supabaseAuth, async (req: any, res) => {
       });
     }
     
-    const school = await storage.getSchoolById(user.schoolId);
+    const school = await storage.getSchool(user.schoolId);
     if (!school) {
       return res.status(404).json({ 
         success: false, 

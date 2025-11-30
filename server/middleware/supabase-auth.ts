@@ -112,7 +112,12 @@ export const supabaseAuth = async (
     const { data: { user }, error } = await supabase.auth.getUser(token);
 
     if (error || !user) {
-      console.error('Supabase auth error:', error);
+      // Handle deleted/stale user tokens more gracefully
+      if (error && (error as any).code === 'user_not_found') {
+        console.log('🔄 Stale token: User was deleted from Supabase, token still cached in browser');
+      } else {
+        console.error('Supabase auth error:', error);
+      }
       return res.status(401).json({ error: 'Invalid or expired token' });
     }
 
