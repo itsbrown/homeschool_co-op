@@ -4,13 +4,14 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
-import { PlusCircle, User, Calendar, BookOpen, Clock, DollarSign, Users, UserPlus, CreditCard, RefreshCw, FileText, FolderOpen, Loader2, Award, CheckCircle, AlertCircle, XCircle } from "lucide-react";
+import { PlusCircle, User, Calendar, BookOpen, Clock, DollarSign, Users, UserPlus, CreditCard, RefreshCw, FileText, FolderOpen, Loader2, Award, CheckCircle, AlertCircle, XCircle, Copy, Edit2, Save, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/components/SupabaseProvider";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useCart } from "@/contexts/CartContext";
 import OnboardingTour from "@/components/onboarding/OnboardingTour";
+import { Input } from "@/components/ui/input";
 
 
 export default function ParentDashboard() {
@@ -20,7 +21,79 @@ export default function ParentDashboard() {
   const [activeTab, setActiveTab] = useState("overview");
   const [isSyncing, setIsSyncing] = useState(false);
   const [showTour, setShowTour] = useState(false);
+  const [isEditingMemberId, setIsEditingMemberId] = useState(false);
+  const [memberIdInput, setMemberIdInput] = useState("");
   const { toast } = useToast();
+
+  // Fetch user's member ID
+  interface MemberIdResponse {
+    memberId: string | null;
+    hasMembership: boolean;
+  }
+
+  const { data: memberIdData, isLoading: memberIdLoading } = useQuery<MemberIdResponse>({
+    queryKey: ["/api/parent/member-id"],
+    queryFn: async () => {
+      const token = localStorage.getItem('supabase_token');
+      if (!token) throw new Error('No authentication token found');
+      
+      const response = await fetch("/api/parent/member-id", {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) throw new Error(`Failed to fetch member ID: ${response.status}`);
+      return response.json();
+    },
+    enabled: !!session,
+  });
+
+  // Mutation to update member ID
+  const updateMemberIdMutation = useMutation({
+    mutationFn: async (newMemberId: string) => {
+      const response = await apiRequest("PUT", "/api/parent/member-id", { memberId: newMemberId });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to update member ID');
+      }
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/parent/member-id"] });
+      setIsEditingMemberId(false);
+      setMemberIdInput("");
+      toast({
+        title: "Member ID Saved",
+        description: data.hasMembership 
+          ? "Your membership has been verified." 
+          : "Member ID cleared.",
+      });
+    },
+    onError: (error: Error) => {
+      setMemberIdInput(memberIdData?.memberId || "");
+      toast({
+        title: "Error",
+        description: error.message || "Failed to save member ID.",
+        variant: "destructive",
+      });
+    }
+  });
+
+  const handleSaveMemberId = () => {
+    updateMemberIdMutation.mutate(memberIdInput);
+  };
+
+  const handleCopyMemberId = () => {
+    if (memberIdData?.memberId) {
+      navigator.clipboard.writeText(memberIdData.memberId);
+      toast({
+        title: "Copied",
+        description: "Member ID copied to clipboard.",
+      });
+    }
+  };
 
   // Fetch onboarding status
   const { data: onboardingStatus } = useQuery({
@@ -489,33 +562,146 @@ export default function ParentDashboard() {
           </div>
 
           {/* My Membership Card */}
-          <Card data-testid="card-my-membership">
+          <Card data-testid="card-my-membership" data-tour="membership-section">
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle className="flex items-center gap-2">
                   <Award className="h-5 w-5" />
                   My Membership
                 </CardTitle>
-                {membershipsData && membershipsData.length > 0 && (
-                  <Badge variant="secondary">
-                    {membershipsData.length} membership{membershipsData.length !== 1 ? 's' : ''}
+                {memberIdData?.hasMembership && (
+                  <Badge variant="default" className="bg-green-100 text-green-800">
+                    <CheckCircle className="h-3 w-3 mr-1" />
+                    Active Member
                   </Badge>
                 )}
               </div>
               <CardDescription>
-                View your membership status and payment details
+                View your membership status and Member ID
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
+              {/* Member ID Section */}
+              <div className="p-4 rounded-lg border bg-gradient-to-r from-primary/5 to-primary/10">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium text-muted-foreground">Member ID</span>
+                  {memberIdData?.hasMembership && !isEditingMemberId && (
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={handleCopyMemberId}
+                      className="h-8"
+                      data-testid="btn-copy-member-id"
+                    >
+                      <Copy className="h-3.5 w-3.5 mr-1" />
+                      Copy
+                    </Button>
+                  )}
+                </div>
+                
+                {memberIdLoading ? (
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span className="text-sm text-muted-foreground">Loading...</span>
+                  </div>
+                ) : memberIdData?.hasMembership && !isEditingMemberId ? (
+                  <div className="flex items-center justify-between">
+                    <code className="text-lg font-mono font-bold text-primary bg-white/50 px-3 py-1 rounded" data-testid="text-member-id">
+                      {memberIdData.memberId}
+                    </code>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={() => {
+                        setMemberIdInput(memberIdData.memberId || "");
+                        setIsEditingMemberId(true);
+                      }}
+                      className="h-8"
+                      data-testid="btn-edit-member-id"
+                    >
+                      <Edit2 className="h-3.5 w-3.5 mr-1" />
+                      Edit
+                    </Button>
+                  </div>
+                ) : isEditingMemberId ? (
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={memberIdInput}
+                      onChange={(e) => setMemberIdInput(e.target.value.toUpperCase())}
+                      placeholder="ASA-YYYY-XXXXXX"
+                      className="font-mono"
+                      data-testid="input-member-id"
+                    />
+                    <Button 
+                      size="sm" 
+                      onClick={handleSaveMemberId}
+                      disabled={updateMemberIdMutation.isPending}
+                      data-testid="btn-save-member-id"
+                    >
+                      {updateMemberIdMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Save className="h-4 w-4" />
+                      )}
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={() => {
+                        setIsEditingMemberId(false);
+                        setMemberIdInput("");
+                      }}
+                      data-testid="btn-cancel-member-id"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <p className="text-sm text-muted-foreground">
+                      No Member ID yet. Enter your existing Member ID below, or it will be generated when you complete your membership payment.
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        value={memberIdInput}
+                        onChange={(e) => setMemberIdInput(e.target.value.toUpperCase())}
+                        placeholder="ASA-YYYY-XXXXXX"
+                        className="font-mono"
+                        data-testid="input-member-id"
+                      />
+                      <Button 
+                        size="sm" 
+                        onClick={handleSaveMemberId}
+                        disabled={updateMemberIdMutation.isPending || !memberIdInput}
+                        data-testid="btn-save-member-id"
+                      >
+                        {updateMemberIdMutation.isPending ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <>
+                            <Save className="h-4 w-4 mr-1" />
+                            Save
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Format: ASA-2025-X7K9M2
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Membership Enrollments Section */}
               {membershipsLoading ? (
                 <div className="flex items-center justify-center py-4">
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                  <span className="ml-2 text-muted-foreground">Loading membership...</span>
+                  <span className="ml-2 text-muted-foreground">Loading membership details...</span>
                 </div>
               ) : membershipsError ? (
                 <div className="text-center py-4 text-muted-foreground">
                   <Award className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                  <p className="text-sm text-red-500">Unable to load membership.</p>
+                  <p className="text-sm text-red-500">Unable to load membership details.</p>
                   <Button 
                     variant="link" 
                     size="sm" 
@@ -526,11 +712,11 @@ export default function ParentDashboard() {
                   </Button>
                 </div>
               ) : !membershipsData || membershipsData.length === 0 ? (
-                <div className="text-center py-4 text-muted-foreground">
-                  <Award className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                  <p className="text-sm">No membership yet.</p>
-                  <p className="text-xs">Enroll in a program to get started.</p>
-                </div>
+                !memberIdData?.hasMembership && (
+                  <div className="text-center py-2 text-muted-foreground">
+                    <p className="text-xs">Complete your membership payment to receive your Member ID.</p>
+                  </div>
+                )
               ) : (
                 <div className="space-y-4">
                   {membershipsData.map((membership) => {

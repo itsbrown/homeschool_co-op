@@ -714,4 +714,95 @@ router.post('/memberships/checkout', jwtCheck, async (req: any, res) => {
   }
 });
 
+// Get parent's member ID
+router.get('/member-id', jwtCheck, async (req: any, res) => {
+  try {
+    console.log('🎫 Get member ID API called');
+
+    const userEmail = req.auth?.email || req.user?.email;
+    
+    if (!userEmail) {
+      return res.status(401).json({ 
+        message: 'Authentication required',
+        error: 'NO_USER_EMAIL'
+      });
+    }
+
+    const user = await storage.getUserByEmail(userEmail);
+    if (!user) {
+      return res.status(404).json({ 
+        message: 'User not found',
+        error: 'USER_NOT_FOUND'
+      });
+    }
+
+    return res.status(200).json({
+      memberId: user.memberId || null,
+      hasMembership: !!user.memberId && user.memberId.trim() !== ''
+    });
+  } catch (error: any) {
+    console.error('❌ Error getting member ID:', error);
+    return res.status(500).json({ 
+      message: 'Failed to get member ID',
+      error: error.message || 'GET_MEMBER_ID_ERROR'
+    });
+  }
+});
+
+// Save/update parent's member ID (used when parent enters an existing member ID)
+router.put('/member-id', jwtCheck, async (req: any, res) => {
+  try {
+    console.log('🎫 Update member ID API called');
+
+    const userEmail = req.auth?.email || req.user?.email;
+    
+    if (!userEmail) {
+      return res.status(401).json({ 
+        message: 'Authentication required',
+        error: 'NO_USER_EMAIL'
+      });
+    }
+
+    const { memberId } = req.body;
+
+    // Validate memberId format if provided
+    if (memberId !== null && memberId !== '') {
+      const { isValidMemberIdFormat } = await import('../utils/membership');
+      if (!isValidMemberIdFormat(memberId)) {
+        return res.status(400).json({ 
+          message: 'Invalid member ID format. Expected format: ASA-YEAR-XXXXXX (e.g., ASA-2025-X7K9M2)',
+          error: 'INVALID_FORMAT'
+        });
+      }
+    }
+
+    const user = await storage.getUserByEmail(userEmail);
+    if (!user) {
+      return res.status(404).json({ 
+        message: 'User not found',
+        error: 'USER_NOT_FOUND'
+      });
+    }
+
+    // Update user's member ID
+    const updatedUser = await storage.updateUser(user.id, { 
+      memberId: memberId || null 
+    });
+
+    console.log(`✅ Updated member ID for user ${user.id}: ${memberId || 'cleared'}`);
+
+    return res.status(200).json({
+      success: true,
+      memberId: updatedUser.memberId || null,
+      hasMembership: !!updatedUser.memberId && updatedUser.memberId.trim() !== ''
+    });
+  } catch (error: any) {
+    console.error('❌ Error updating member ID:', error);
+    return res.status(500).json({ 
+      message: 'Failed to update member ID',
+      error: error.message || 'UPDATE_MEMBER_ID_ERROR'
+    });
+  }
+});
+
 export default router;

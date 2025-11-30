@@ -54,7 +54,12 @@ import {
   CheckCircle,
   Plus,
   Edit,
-  Trash2
+  Trash2,
+  Award,
+  Copy,
+  Loader2,
+  XCircle,
+  RefreshCw
 } from 'lucide-react';
 import { Link } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
@@ -73,6 +78,7 @@ interface ParentProfile {
     isActive: boolean;
     createdAt: string;
     updatedAt: string;
+    memberId: string | null;
   };
   children: Array<{
     id: number;
@@ -661,6 +667,69 @@ export default function ParentProfilePage() {
     },
   });
 
+  // Activate membership mutation (generates Member ID)
+  const activateMembershipMutation = useMutation({
+    mutationFn: async (userId: number) => {
+      const response = await apiRequest("POST", `/api/admin/membership/activate/${userId}`);
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to activate membership');
+      }
+      return response.json();
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Membership Activated",
+        description: `Member ID ${data.memberId} has been generated for this parent.`
+      });
+      queryClient.invalidateQueries({ queryKey: [`/api/parent-profile/${parentId}`] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to activate membership",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Revoke membership mutation (clears Member ID)
+  const revokeMembershipMutation = useMutation({
+    mutationFn: async (userId: number) => {
+      const response = await apiRequest("POST", `/api/admin/membership/revoke/${userId}`);
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to revoke membership');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Membership Revoked",
+        description: "Member ID has been removed from this parent's account."
+      });
+      queryClient.invalidateQueries({ queryKey: [`/api/parent-profile/${parentId}`] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to revoke membership",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Copy Member ID to clipboard
+  const handleCopyMemberId = () => {
+    if (profile?.parent.memberId) {
+      navigator.clipboard.writeText(profile.parent.memberId);
+      toast({
+        title: "Copied",
+        description: "Member ID copied to clipboard."
+      });
+    }
+  };
+
   // Membership action handlers
   const handlePayViaStripe = (membership: any) => {
     createCheckoutMutation.mutate({
@@ -873,6 +942,110 @@ export default function ParentProfilePage() {
               })()}
             </div>
           </CardHeader>
+        </Card>
+
+        {/* Member ID Card */}
+        <Card data-testid="card-member-id">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Award className="h-5 w-5 text-primary" />
+                <div>
+                  <CardTitle className="text-lg">Member ID</CardTitle>
+                  <CardDescription>Manage membership status for this parent</CardDescription>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {profile.parent.memberId ? (
+                  <>
+                    <Badge variant="default" className="bg-green-100 text-green-800">
+                      <CheckCircle className="h-3 w-3 mr-1" />
+                      Active Member
+                    </Badge>
+                  </>
+                ) : (
+                  <Badge variant="outline">
+                    <XCircle className="h-3 w-3 mr-1" />
+                    No Membership
+                  </Badge>
+                )}
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {profile.parent.memberId ? (
+              <div className="flex items-center justify-between p-4 rounded-lg border bg-gradient-to-r from-primary/5 to-primary/10">
+                <div className="flex items-center gap-3">
+                  <span className="text-sm text-muted-foreground">Member ID:</span>
+                  <code className="text-lg font-mono font-bold text-primary bg-white/50 px-3 py-1 rounded" data-testid="text-admin-member-id">
+                    {profile.parent.memberId}
+                  </code>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={handleCopyMemberId}
+                    className="h-8"
+                    data-testid="btn-admin-copy-member-id"
+                  >
+                    <Copy className="h-3.5 w-3.5 mr-1" />
+                    Copy
+                  </Button>
+                </div>
+                <AlertDialog>
+                  <DialogTrigger asChild>
+                    <Button 
+                      variant="destructive" 
+                      size="sm"
+                      data-testid="btn-admin-revoke-membership"
+                    >
+                      <XCircle className="h-4 w-4 mr-1" />
+                      Revoke Membership
+                    </Button>
+                  </DialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Revoke Membership</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Are you sure you want to revoke membership for {profile.parent.firstName} {profile.parent.lastName}?
+                        This will remove their Member ID ({profile.parent.memberId}) from their account.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={() => revokeMembershipMutation.mutate(profile.parent.id)}
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      >
+                        {revokeMembershipMutation.isPending ? (
+                          <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                        ) : null}
+                        Revoke Membership
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between p-4 rounded-lg border border-dashed">
+                <div className="text-sm text-muted-foreground">
+                  <p>This parent does not have a Member ID yet.</p>
+                  <p className="text-xs mt-1">Generate a Member ID to activate their membership manually, or it will be created automatically when they complete a membership payment.</p>
+                </div>
+                <Button 
+                  onClick={() => activateMembershipMutation.mutate(profile.parent.id)}
+                  disabled={activateMembershipMutation.isPending}
+                  data-testid="btn-admin-activate-membership"
+                >
+                  {activateMembershipMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                  ) : (
+                    <Award className="h-4 w-4 mr-1" />
+                  )}
+                  Activate Membership
+                </Button>
+              </div>
+            )}
+          </CardContent>
         </Card>
 
         {/* Summary Stats */}

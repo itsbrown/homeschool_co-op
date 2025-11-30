@@ -195,7 +195,7 @@ export default function OnboardingTour({
       />
 
       {currentStepData?.highlight && currentStepData.target !== "body" && (
-        <HighlightElement target={currentStepData.target} />
+        <HighlightElement target={currentStepData.target} onElementClick={handleNext} />
       )}
 
       <Card
@@ -298,7 +298,7 @@ export default function OnboardingTour({
   );
 }
 
-function HighlightElement({ target }: { target: string }) {
+function HighlightElement({ target, onElementClick }: { target: string; onElementClick?: () => void }) {
   const [rect, setRect] = useState<DOMRect | null>(null);
 
   useEffect(() => {
@@ -318,18 +318,32 @@ function HighlightElement({ target }: { target: string }) {
   if (!rect) return null;
 
   return (
-    <div
-      className="fixed z-[9998] pointer-events-none"
-      style={{
-        top: rect.top - 8,
-        left: rect.left - 8,
-        width: rect.width + 16,
-        height: rect.height + 16,
-        boxShadow: "0 0 0 9999px rgba(0, 0, 0, 0.5)",
-        borderRadius: "8px",
-        border: "2px solid hsl(var(--primary))",
-      }}
-    />
+    <>
+      <div
+        className="fixed z-[9998] pointer-events-none"
+        style={{
+          top: rect.top - 8,
+          left: rect.left - 8,
+          width: rect.width + 16,
+          height: rect.height + 16,
+          boxShadow: "0 0 0 9999px rgba(0, 0, 0, 0.5)",
+          borderRadius: "8px",
+          border: "2px solid hsl(var(--primary))",
+        }}
+      />
+      <div
+        className="fixed z-[9999] cursor-pointer"
+        style={{
+          top: rect.top,
+          left: rect.left,
+          width: rect.width,
+          height: rect.height,
+          background: "transparent",
+        }}
+        onClick={onElementClick}
+        title="Click to continue tour"
+      />
+    </>
   );
 }
 

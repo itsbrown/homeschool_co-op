@@ -600,6 +600,7 @@ function Router() {
       <Route path="/schools/staff/invite" component={StaffInvitePage} />
       <Route path="/schools/staff/positions" component={StaffPositionsPage} />
       <Route path="/school-admin/staff-positions" component={StaffPositionsPage} />
+      <Route path="/school-admin/children" component={StudentsPage} />
       <Route path="/school-admin/forms" component={FormBuilderPage} />
       <Route path="/school-admin/forms/:id/edit" component={FormEditorPage} />
       <Route path="/school-admin/forms/:id/preview" component={PreviewFormPage} />
@@ -622,6 +623,7 @@ function Router() {
           <ManualPaymentEntryPage />
         </SchoolAdminLayout>
       </Route>
+      <Route path="/schools/knowledge-base/create" component={KnowledgeBaseCreationPage} />
       <Route path="/schools/knowledge-base/:id" component={KnowledgeBaseDetailsPage} />
       <Route path="/schools/knowledge-base" component={KnowledgeBasePage} />
       <Route path="/schools/marketing-links" component={MarketingLinksPage} />

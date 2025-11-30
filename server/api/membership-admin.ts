@@ -867,3 +867,171 @@ export const syncStripeSubscription = async (req: any, res: Response) => {
     res.status(500).json({ message: "Error syncing subscription", error: error.message });
   }
 };
+
+/**
+ * Activate membership for a parent (generate memberId)
+ * Admin only - manually activates a parent's membership
+ */
+export const activateParentMembership = async (req: any, res: Response) => {
+  try {
+    const userEmail = req.user?.email || req.auth?.email;
+    if (!userEmail) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+
+    const adminUser = await storage.getUserByEmail(userEmail);
+    if (!adminUser) {
+      return res.status(401).json({ message: "Admin user not found" });
+    }
+
+    if (adminUser.role !== 'schoolAdmin' && adminUser.role !== 'admin' && adminUser.role !== 'superAdmin') {
+      return res.status(403).json({ message: "Not authorized - admin access required" });
+    }
+
+    const parentUserId = parseInt(req.params.parentId);
+    if (isNaN(parentUserId)) {
+      return res.status(400).json({ message: "Invalid parent user ID" });
+    }
+
+    const parentUser = await storage.getUser(parentUserId);
+    if (!parentUser) {
+      return res.status(404).json({ message: "Parent user not found" });
+    }
+
+    if (adminUser.role === 'schoolAdmin' && adminUser.schoolId !== parentUser.schoolId) {
+      return res.status(403).json({ message: "Not authorized - parent belongs to a different school" });
+    }
+
+    if (parentUser.memberId && parentUser.memberId.trim() !== '') {
+      return res.status(400).json({ 
+        message: "Parent already has an active membership",
+        memberId: parentUser.memberId
+      });
+    }
+
+    const { generateMemberId } = await import('../utils/membership');
+    const newMemberId = generateMemberId();
+
+    const updatedUser = await storage.updateUser(parentUserId, { memberId: newMemberId });
+
+    if (!updatedUser) {
+      return res.status(500).json({ message: "Failed to update user" });
+    }
+
+    console.log(`✅ Admin ${userEmail} activated membership for parent ${parentUserId}: ${newMemberId}`);
+
+    res.json({
+      success: true,
+      message: "Membership activated successfully",
+      parentId: parentUserId,
+      memberId: updatedUser.memberId
+    });
+  } catch (error: any) {
+    console.error("Error activating membership:", error);
+    res.status(500).json({ message: "Failed to activate membership", error: error.message });
+  }
+};
+
+/**
+ * Revoke membership for a parent (clear memberId)
+ * Admin only - revokes a parent's membership
+ */
+export const revokeParentMembership = async (req: any, res: Response) => {
+  try {
+    const userEmail = req.user?.email || req.auth?.email;
+    if (!userEmail) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+
+    const adminUser = await storage.getUserByEmail(userEmail);
+    if (!adminUser) {
+      return res.status(401).json({ message: "Admin user not found" });
+    }
+
+    if (adminUser.role !== 'schoolAdmin' && adminUser.role !== 'admin' && adminUser.role !== 'superAdmin') {
+      return res.status(403).json({ message: "Not authorized - admin access required" });
+    }
+
+    const parentUserId = parseInt(req.params.parentId);
+    if (isNaN(parentUserId)) {
+      return res.status(400).json({ message: "Invalid parent user ID" });
+    }
+
+    const parentUser = await storage.getUser(parentUserId);
+    if (!parentUser) {
+      return res.status(404).json({ message: "Parent user not found" });
+    }
+
+    if (adminUser.role === 'schoolAdmin' && adminUser.schoolId !== parentUser.schoolId) {
+      return res.status(403).json({ message: "Not authorized - parent belongs to a different school" });
+    }
+
+    if (!parentUser.memberId || parentUser.memberId.trim() === '') {
+      return res.status(400).json({ message: "Parent does not have an active membership to revoke" });
+    }
+
+    const previousMemberId = parentUser.memberId;
+    await storage.updateUser(parentUserId, { memberId: null });
+
+    console.log(`✅ Admin ${userEmail} revoked membership for parent ${parentUserId} (was: ${previousMemberId})`);
+
+    res.json({
+      success: true,
+      message: "Membership revoked successfully",
+      parentId: parentUserId,
+      previousMemberId
+    });
+  } catch (error: any) {
+    console.error("Error revoking membership:", error);
+    res.status(500).json({ message: "Failed to revoke membership", error: error.message });
+  }
+};
+
+/**
+ * Get membership status for a parent
+ * Admin only - checks if a parent has an active membership
+ */
+export const getParentMembershipStatus = async (req: any, res: Response) => {
+  try {
+    const userEmail = req.user?.email || req.auth?.email;
+    if (!userEmail) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+
+    const adminUser = await storage.getUserByEmail(userEmail);
+    if (!adminUser) {
+      return res.status(401).json({ message: "Admin user not found" });
+    }
+
+    if (adminUser.role !== 'schoolAdmin' && adminUser.role !== 'admin' && adminUser.role !== 'superAdmin') {
+      return res.status(403).json({ message: "Not authorized - admin access required" });
+    }
+
+    const parentUserId = parseInt(req.params.parentId);
+    if (isNaN(parentUserId)) {
+      return res.status(400).json({ message: "Invalid parent user ID" });
+    }
+
+    const parentUser = await storage.getUser(parentUserId);
+    if (!parentUser) {
+      return res.status(404).json({ message: "Parent user not found" });
+    }
+
+    if (adminUser.role === 'schoolAdmin' && adminUser.schoolId !== parentUser.schoolId) {
+      return res.status(403).json({ message: "Not authorized - parent belongs to a different school" });
+    }
+
+    const hasMembership = !!parentUser.memberId && parentUser.memberId.trim() !== '';
+
+    res.json({
+      parentId: parentUserId,
+      parentName: parentUser.name,
+      parentEmail: parentUser.email,
+      memberId: parentUser.memberId || null,
+      hasMembership
+    });
+  } catch (error: any) {
+    console.error("Error getting membership status:", error);
+    res.status(500).json({ message: "Failed to get membership status", error: error.message });
+  }
+};

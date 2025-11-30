@@ -281,7 +281,8 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
         role: parent.role,
         isActive: parent.isActive,
         createdAt: parent.createdAt,
-        updatedAt: parent.updatedAt
+        updatedAt: parent.updatedAt,
+        memberId: parent.memberId || null
       },
       children: children.map(child => ({
         id: child.id,

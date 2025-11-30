@@ -639,6 +639,14 @@ async function runMigrations() {
     `);
     console.log('✅ Migration completed: membership_agreements table created');
     
+    // Add member_id column to users table for membership tracking
+    console.log('Running migration: Adding member_id column to users table...');
+    await db.execute(sql`
+      ALTER TABLE users 
+      ADD COLUMN IF NOT EXISTS member_id TEXT;
+    `);
+    console.log('✅ Migration completed: member_id column added to users table');
+    
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     

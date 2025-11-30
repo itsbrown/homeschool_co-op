@@ -173,7 +173,29 @@ const fetchFreeAfterThresholdSettings = async (getAccessTokenSilently?: () => Pr
   }
 };
 
-const fetchApplicableDiscounts = async (items: CartItem[], subtotal: number, getAccessTokenSilently?: () => Promise<string>): Promise<AppliedDiscount[]> => {
+// Helper function to check if user meets role requirements for a discount
+const checkRoleEligibility = (
+  userRolesList: string[], 
+  requiredRoles: string[] | null | undefined, 
+  matchLogic: string | null | undefined
+): boolean => {
+  // If no required roles specified, discount is available to everyone
+  if (!requiredRoles || requiredRoles.length === 0) {
+    return true;
+  }
+
+  const logic = matchLogic || 'or';
+  
+  if (logic === 'and') {
+    // User must have ALL required roles
+    return requiredRoles.every(role => userRolesList.includes(role));
+  } else {
+    // User must have ANY of the required roles (OR logic)
+    return requiredRoles.some(role => userRolesList.includes(role));
+  }
+};
+
+const fetchApplicableDiscounts = async (items: CartItem[], subtotal: number, getAccessTokenSilently?: () => Promise<string>, userRoles?: string[]): Promise<AppliedDiscount[]> => {
   try {
     // Get Auth0 access token
     if (!getAccessTokenSilently) {
@@ -204,15 +226,25 @@ const fetchApplicableDiscounts = async (items: CartItem[], subtotal: number, get
     const { discounts } = await response.json();
     const applicableDiscounts: AppliedDiscount[] = [];
 
-    // Filter for active, automatic discounts
+    // Filter for active, automatic discounts that user is eligible for
     // Note: Sibling discounts are excluded here because they're handled by the manual per-child
     // calculation in calculateCartTotalsWithDiscounts to ensure correct discount application
     // (only lower-cost siblings receive the discount, not whole-order percentage)
-    const activeDiscounts = discounts.filter((discount: any) => 
-      discount.isActive && 
-      (discount.applicationMethod === 'automatic' || discount.applicationMethod === 'both') &&
-      !discount.siblingDiscount  // Skip sibling discounts - they're handled separately
-    );
+    const activeDiscounts = discounts.filter((discount: any) => {
+      // Basic filters
+      if (!discount.isActive) return false;
+      if (discount.applicationMethod !== 'automatic' && discount.applicationMethod !== 'both') return false;
+      if (discount.siblingDiscount) return false; // Skip sibling discounts - handled separately
+      
+      // Role eligibility check
+      const userRolesList = userRoles || [];
+      if (!checkRoleEligibility(userRolesList, discount.requiredRoles, discount.roleMatchLogic)) {
+        console.log(`🎫 Discount "${discount.name}" skipped - user roles [${userRolesList.join(', ')}] don't match required roles [${discount.requiredRoles?.join(', ') || 'none'}]`);
+        return false;
+      }
+      
+      return true;
+    });
 
     // Sort by priority (higher priority applies first)
     activeDiscounts.sort((a: any, b: any) => b.priority - a.priority);
@@ -541,7 +573,8 @@ const calculateCartTotalsSync = (
 const calculateCartTotalsWithDiscounts = async (
   items: CartItem[],
   getAccessTokenSilently?: () => Promise<string>,
-  appliedPromo?: { code: string; discountId: number; name: string; type: 'percentage' | 'fixed_amount' | 'bundle'; value: number; discountAmount: number } | null
+  appliedPromo?: { code: string; discountId: number; name: string; type: 'percentage' | 'fixed_amount' | 'bundle'; value: number; discountAmount: number } | null,
+  userRoles?: string[]
 ): Promise<{ subtotal: number; discounts: any; total: number; schoolSettings?: { freeAfterThresholdEnabled: boolean; freeAfterThreshold: number; siblingDiscountRate: number; showSubscriptionStatus?: boolean } }> => {
   const subtotal = items.reduce((sum, item) => sum + item.price, 0);
 
@@ -647,7 +680,7 @@ const calculateCartTotalsWithDiscounts = async (
   
   if (!freeAfterThreeEnabled || uniqueChildren <= freeAfterThreshold) {
     // Only fetch automatic discounts if "free after threshold" is NOT active
-    autoDiscounts = await fetchApplicableDiscounts(items, subtotal, getAccessTokenSilently);
+    autoDiscounts = await fetchApplicableDiscounts(items, subtotal, getAccessTokenSilently, userRoles);
     allDiscounts = [...autoDiscounts];
     
     // Add promo code discount if present
@@ -905,7 +938,10 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [state, dispatch] = useReducer(cartReducer, initialState);
   const { toast } = useToast();
   const { user, isAuthenticated, session, isLoading } = useAuth(); // Using Supabase hooks
-  const { activeRole } = useRole(); // Get active role to gate cart loading
+  const { activeRole, availableRoles } = useRole(); // Get active role and all user roles
+  
+  // Get list of role names for discount eligibility checking
+  const userRolesList = availableRoles?.map(r => r.role) || [];
   
   // Helper function to get access token from Supabase session
   const getAccessToken = useCallback(async (): Promise<string> => {
@@ -1075,7 +1111,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       // Use calculateCartTotalsWithDiscounts to fetch school settings and calculate discounts properly
-      const totals = await calculateCartTotalsWithDiscounts(cartItems, getAccessToken, null); // Fresh load - no promo code yet
+      const totals = await calculateCartTotalsWithDiscounts(cartItems, getAccessToken, null, userRolesList); // Fresh load - no promo code yet
 
       // CRITICAL: Always replace cart with API data (no localStorage merge)
       // This ensures API is the single source of truth and prevents stale data conflicts
@@ -1114,7 +1150,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       processingRef.current = false;
     }
-  }, [user?.email, getAccessToken]);
+  }, [user?.email, getAccessToken, userRolesList]);
 
   // Process enrollments data when query result changes
   useEffect(() => {
@@ -1143,7 +1179,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const totalsWithDiscounts = await calculateCartTotalsWithDiscounts(
         state.cart.items, 
         getAccessToken,
-        state.cart.appliedPromoCode // Pass promo code to preserve it
+        state.cart.appliedPromoCode, // Pass promo code to preserve it
+        userRolesList // Pass user roles for eligibility checking
       );
       dispatch({
         type: 'LOAD_CART',
@@ -1156,7 +1193,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error) {
       console.error('Error refreshing discounts:', error);
     }
-  }, [state.cart.items, state.cart.appliedPromoCode, getAccessToken]);
+  }, [state.cart.items, state.cart.appliedPromoCode, getAccessToken, userRolesList]);
 
   // Load cart from localStorage on mount (ONLY for non-authenticated users or non-parent roles)
   useEffect(() => {

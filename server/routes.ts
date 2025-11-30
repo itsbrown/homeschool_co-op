@@ -1657,6 +1657,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return syncStripeSubscription(req, res);
   });
 
+  // Admin routes for parent membership activation/revocation (memberId management)
+  app.get('/api/admin/parents/:parentId/membership', supabaseAuth, async (req: any, res) => {
+    const { getParentMembershipStatus } = await import('./api/membership-admin');
+    return getParentMembershipStatus(req, res);
+  });
+
+  app.post('/api/admin/parents/:parentId/membership/activate', supabaseAuth, async (req: any, res) => {
+    const { activateParentMembership } = await import('./api/membership-admin');
+    return activateParentMembership(req, res);
+  });
+
+  app.post('/api/admin/parents/:parentId/membership/revoke', supabaseAuth, async (req: any, res) => {
+    const { revokeParentMembership } = await import('./api/membership-admin');
+    return revokeParentMembership(req, res);
+  });
+
   app.post('/api/admin/membership-enrollments', supabaseAuth, async (req: any, res) => {
     try {
       // Extract authenticated user from supabaseAuth middleware

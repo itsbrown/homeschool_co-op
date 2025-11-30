@@ -33,6 +33,7 @@ export const users = pgTable("users", {
   activeRoleId: integer("active_role_id"), // ID of the currently active role from user_roles table (NULL means use primary role)
   stripeCustomerId: text("stripe_customer_id"), // Stripe customer ID for payments
   hasCompletedOnboarding: boolean("has_completed_onboarding").default(false), // Whether user has completed the onboarding tour
+  memberId: text("member_id"), // System-generated or admin-assigned membership ID (e.g., ASA-2025-X7K9M2)
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
