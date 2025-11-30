@@ -1,5 +1,6 @@
 import {
   users, type User, type InsertUser,
+  userRoles, type UserRole,
   curricula, type Curriculum, type InsertCurriculum,
   lessons, type Lesson, type InsertLesson,
   events, type Event, type InsertEvent,
@@ -64,6 +65,10 @@ export interface IStorage {
   createSchool(school: InsertSchool): Promise<School>;
   updateSchool(id: number, school: Partial<InsertSchool>): Promise<School | undefined>;
   getAllSchools(): Promise<School[]>;
+  getSchoolsByAdminId(adminId: number): Promise<School[]>;
+
+  // User Role methods
+  getUserRolesByUserId(userId: number): Promise<UserRole[]>;
 
   // Location methods
   getLocationsBySchool(schoolId: number): Promise<Location[]>;
@@ -846,6 +851,16 @@ export class MemStorage implements IStorage {
 
   async getAllSchools(): Promise<School[]> {
     return Array.from(this.schoolsStore.values());
+  }
+
+  async getSchoolsByAdminId(adminId: number): Promise<School[]> {
+    return Array.from(this.schoolsStore.values()).filter(
+      school => school.adminId === adminId
+    );
+  }
+
+  async getUserRolesByUserId(userId: number): Promise<UserRole[]> {
+    return [];
   }
 
   async getLocationsBySchool(schoolId: number): Promise<Location[]> {
@@ -4423,6 +4438,22 @@ export class MemStorage implements IStorage {
         return await this.dbStorage.getAllSchools();
       } catch (error) {
         return this.memStorage.getAllSchools();
+      }
+    }
+
+    async getSchoolsByAdminId(adminId: number): Promise<School[]> {
+      try {
+        return await this.dbStorage.getSchoolsByAdminId(adminId);
+      } catch (error) {
+        return this.memStorage.getSchoolsByAdminId(adminId);
+      }
+    }
+
+    async getUserRolesByUserId(userId: number): Promise<UserRole[]> {
+      try {
+        return await this.dbStorage.getUserRolesByUserId(userId);
+      } catch (error) {
+        return this.memStorage.getUserRolesByUserId(userId);
       }
     }
 

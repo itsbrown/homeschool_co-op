@@ -148,7 +148,9 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
         const classInfo = await storage.getClassById(classId);
         if (classInfo) {
           classes.push(classInfo);
-          classSchoolMap.set(classInfo.id, classInfo.schoolId);
+          if (classInfo.schoolId !== null) {
+            classSchoolMap.set(classInfo.id, classInfo.schoolId);
+          }
         }
       } catch (error) {
         console.error(`❌ Error fetching class ${classId}:`, error);
@@ -220,12 +222,8 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
     // FILTER: Only scheduled payments linked to filtered enrollments
     const filteredEnrollmentIds = new Set(filteredEnrollments.map(e => e.id));
     const scheduledPayments = allScheduledPayments.filter(payment => {
-      // Check if any of the payment's enrollment IDs are in filtered set
-      if (payment.enrollmentIds && payment.enrollmentIds.length > 0) {
-        return payment.enrollmentIds.some(id => filteredEnrollmentIds.has(id));
-      }
-      // If no enrollment IDs, exclude (can't verify it's in scope)
-      return false;
+      // Check if the payment's enrollment ID is in filtered set
+      return payment.enrollmentId && filteredEnrollmentIds.has(payment.enrollmentId);
     });
     
     console.log(`📅 Found ${allScheduledPayments.length} total scheduled payments, ${scheduledPayments.length} visible to admin`);
@@ -369,10 +367,9 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
       scheduledPayments: scheduledPayments.map(payment => ({
         id: payment.id,
         amount: CurrencyUtils.toDisplay(payment.amount || 0),
-        dueDate: payment.dueDate,
+        dueDate: payment.scheduledDate,
         status: payment.status,
-        description: payment.description || '',
-        enrollmentId: payment.enrollmentIds?.[0] || null
+        enrollmentId: payment.enrollmentId
       })),
       emergencyContacts,
       summary: {

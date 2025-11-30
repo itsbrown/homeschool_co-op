@@ -3,6 +3,7 @@ import { getDb } from './db';
 import { IStorage } from './storage';
 import {
   User, InsertUser, users,
+  UserRole, userRoles,
   Class, InsertClass, classes,
   KnowledgeBase, InsertKnowledgeBase, knowledgeBases,
   Curriculum, InsertCurriculum, curricula,
@@ -133,6 +134,17 @@ export class DatabaseStorage implements IStorage {
   async getLocationsBySchool(schoolId: number): Promise<Location[]> {
     const db = await getDb();
     return await db.select().from(locations).where(eq(locations.schoolId, schoolId));
+  }
+
+  async getSchoolsByAdminId(adminId: number): Promise<School[]> {
+    const db = await getDb();
+    return await db.select().from(schools).where(eq(schools.adminId, adminId));
+  }
+
+  // User Role methods
+  async getUserRolesByUserId(userId: number): Promise<UserRole[]> {
+    const db = await getDb();
+    return await db.select().from(userRoles).where(eq(userRoles.userId, userId));
   }
 
   // School Student methods
