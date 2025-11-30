@@ -1,7 +1,7 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { ArrowLeft, User, Calendar, GraduationCap, Mail, Phone, MapPin, Heart, AlertTriangle, BookOpen, X } from "lucide-react";
+import { ArrowLeft, User, Calendar, GraduationCap, Mail, Phone, MapPin, Heart, AlertTriangle, BookOpen, X, Clock } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,16 +10,23 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import ParentAppShell from '@/components/layout/ParentAppShell';
+import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { queryClient } from "@/lib/queryClient";
 import { useRole } from '@/contexts/RoleContext';
+import { useAuth } from '@/components/SupabaseProvider';
 
-export default function ChildProfilePage() {
+// Layout-agnostic content component for child profile
+// Can be wrapped with appropriate layout by parent components
+export interface ChildProfileContentProps {
+  activeRole: string;
+}
+
+export function ChildProfileContent({ activeRole }: ChildProfileContentProps) {
   const { id } = useParams();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const { activeRole } = useRole();
   const [confirmDialog, setConfirmDialog] = useState({ open: false, enrollmentId: null, className: "" });
 
   // Calculate age from birthdate
@@ -114,47 +121,43 @@ export default function ChildProfilePage() {
 
   if (isLoading) {
     return (
-      <ParentAppShell>
-        <div className="flex items-center justify-center min-h-screen">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-            <p className="text-muted-foreground">Loading profile...</p>
-          </div>
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading profile...</p>
         </div>
-      </ParentAppShell>
+      </div>
     );
   }
 
   if (!child) {
     return (
-      <ParentAppShell>
-        <div className="flex items-center justify-center min-h-screen">
-          <div className="text-center">
-            <h2 className="text-2xl font-bold mb-2">Student Not Found</h2>
-            <p className="text-muted-foreground mb-4">The requested student profile could not be found.</p>
-            <Button onClick={() => setLocation("/children")}>
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Children
-            </Button>
-          </div>
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold mb-2">Student Not Found</h2>
+          <p className="text-muted-foreground mb-4">The requested student profile could not be found.</p>
+          <Button onClick={() => setLocation(activeRole === 'schoolAdmin' ? "/school-admin/children" : "/children")}>
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to {activeRole === 'schoolAdmin' ? 'Students' : 'Children'}
+          </Button>
         </div>
-      </ParentAppShell>
+      </div>
     );
   }
 
   return (
-    <ParentAppShell>
+    <>
       <div className="max-w-4xl mx-auto p-4 sm:p-6 space-y-4 sm:space-y-6">
         {/* Header */}
         <div className="flex items-center gap-4 mb-4 sm:mb-6">
-          <Button 
+          <Button
             variant="ghost" 
             size="sm" 
-            onClick={() => setLocation("/children/view")}
+            onClick={() => setLocation(activeRole === 'schoolAdmin' ? "/school-admin/children" : "/children/view")}
             className="flex items-center gap-2"
           >
             <ArrowLeft className="h-4 w-4" />
-            <span className="hidden sm:inline">Back to Children</span>
+            <span className="hidden sm:inline">Back to {activeRole === 'schoolAdmin' ? 'Students' : 'Children'}</span>
             <span className="sm:hidden">Back</span>
           </Button>
         </div>
@@ -376,7 +379,7 @@ export default function ChildProfilePage() {
                   <div className="space-y-4">
                     {enrollments.map((enrollment: any) => (
                       <div key={enrollment.id} className="border rounded-lg p-4">
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between mb-2">
                           <div>
                             <h3 className="font-semibold">{enrollment.className}</h3>
                             <p className="text-sm text-muted-foreground">
@@ -403,6 +406,26 @@ export default function ChildProfilePage() {
                             )}
                           </div>
                         </div>
+                        {/* Display variant/schedule details if available */}
+                        {enrollment.variantDetails && (
+                          <div className="mt-3 pt-3 border-t">
+                            <div className="flex flex-wrap gap-4 text-sm">
+                              <div className="flex items-center gap-1.5 text-muted-foreground">
+                                <Clock className="h-4 w-4" />
+                                <span className="font-medium">{enrollment.variantDetails.name}</span>
+                              </div>
+                              <div className="flex items-center gap-1.5 text-muted-foreground">
+                                <span>{enrollment.variantDetails.startTime} - {enrollment.variantDetails.endTime}</span>
+                              </div>
+                              {enrollment.variantDetails.days && enrollment.variantDetails.days.length > 0 && (
+                                <div className="flex items-center gap-1.5 text-muted-foreground">
+                                  <Calendar className="h-4 w-4" />
+                                  <span>{enrollment.variantDetails.days.join(', ')}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -449,6 +472,97 @@ export default function ChildProfilePage() {
           </div>
         </DialogContent>
       </Dialog>
+    </>
+  );
+}
+
+// Default export with role-scoped layout wrapper
+// This handles auth verification, role loading, and proper layout selection
+// Loading states always render inside the appropriate layout to prevent unstyled flash
+export default function ChildProfilePage() {
+  const [location, setLocation] = useLocation();
+  const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
+  const { activeRole, isLoadingRoles } = useRole();
+  const { toast } = useToast();
+  
+  // Guard ref to prevent duplicate toast/redirect emissions
+  const hasHandledMissingRole = useRef(false);
+  const hasHandledUnauthenticated = useRef(false);
+
+  // Handle redirect for unauthenticated users via effect (no side effects in render)
+  useEffect(() => {
+    if (!isAuthLoading && !isAuthenticated && !hasHandledUnauthenticated.current) {
+      hasHandledUnauthenticated.current = true;
+      setLocation('/login');
+    }
+    // Reset guard if user becomes authenticated (e.g., after login)
+    if (isAuthenticated) {
+      hasHandledUnauthenticated.current = false;
+    }
+  }, [isAuthLoading, isAuthenticated, setLocation]);
+
+  // Handle redirect for missing role after loading complete
+  useEffect(() => {
+    if (!isAuthLoading && isAuthenticated && !isLoadingRoles && !activeRole && !hasHandledMissingRole.current) {
+      hasHandledMissingRole.current = true;
+      toast({
+        title: "Session Error",
+        description: "Unable to determine your role. Please try logging in again.",
+        variant: "destructive",
+      });
+      setLocation('/login');
+    }
+    // Reset guard if role becomes available
+    if (activeRole) {
+      hasHandledMissingRole.current = false;
+    }
+  }, [isAuthLoading, isAuthenticated, isLoadingRoles, activeRole, setLocation, toast]);
+
+  // Loading state component - renders inside layout shells
+  const LoadingContent = () => (
+    <div className="flex items-center justify-center min-h-[50vh]">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+        <p className="text-muted-foreground">Loading...</p>
+      </div>
+    </div>
+  );
+
+  // Determine if we're still loading or pending redirect
+  const isLoading = isAuthLoading || isLoadingRoles;
+  const shouldRedirect = (!isAuthLoading && !isAuthenticated) || 
+                         (!isAuthLoading && isAuthenticated && !isLoadingRoles && !activeRole);
+
+  // Content to render based on state - always shows loading/content inside layout
+  const renderContent = () => {
+    if (isLoading || shouldRedirect) {
+      return <LoadingContent />;
+    }
+    return <ChildProfileContent activeRole={activeRole} />;
+  };
+
+  // Derive layout from activeRole, with URL-based fallback during loading
+  // This prevents layout flash: if URL is /school-admin/*, use admin layout even while loading
+  // Use window.location.pathname as fallback when wouter location is undefined during initial render
+  const currentPath = location || (typeof window !== 'undefined' ? window.location.pathname : '/');
+  const normalizedLocation = currentPath.startsWith('/') ? currentPath : `/${currentPath}`;
+  const isSchoolAdminContext = activeRole === 'schoolAdmin' || 
+                               normalizedLocation.startsWith('/school-admin/');
+
+  // Always render with appropriate layout based on role or URL context
+  if (isSchoolAdminContext) {
+    return (
+      <SchoolAdminLayout pageTitle="Student Profile">
+        {renderContent()}
+      </SchoolAdminLayout>
+    );
+  }
+
+  // Default to parent layout (for parent role, or during initial loading when role is unknown)
+  // This ensures loading states render inside a layout rather than unstyled
+  return (
+    <ParentAppShell>
+      {renderContent()}
     </ParentAppShell>
   );
 }

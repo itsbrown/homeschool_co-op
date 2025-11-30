@@ -55,7 +55,72 @@ router.get('/child/:childId', async (req, res) => {
     
     console.log(`📚 Found ${enrollments.length} enrollments for child ${childId}:`, enrollments);
     
-    res.json(enrollments);
+    // Enhance enrollments with variant details from class schedule
+    const enhancedEnrollments = await Promise.all(enrollments.map(async (enrollment: any) => {
+      let variantDetails = null;
+      
+      // If enrollment has a variantId, look up the variant from the class
+      if (enrollment.variantId && enrollment.classId) {
+        try {
+          const classData = await storage.getClassById(enrollment.classId);
+          if (classData && classData.schedule) {
+            let schedule;
+            try {
+              schedule = typeof classData.schedule === 'string' 
+                ? JSON.parse(classData.schedule) 
+                : classData.schedule;
+            } catch (parseErr) {
+              console.log(`📚 Failed to parse schedule for class ${enrollment.classId}:`, parseErr);
+              schedule = null;
+            }
+            
+            if (schedule && schedule.variants && Array.isArray(schedule.variants)) {
+              // Try multiple matching strategies with strict equality
+              let variant = null;
+              const variantIdStr = String(enrollment.variantId);
+              
+              // Strategy 1: Match by id field (strict string equality)
+              variant = schedule.variants.find((v: any) => String(v.id) === variantIdStr);
+              
+              // Strategy 2: Match by name (strict equality)
+              if (!variant) {
+                variant = schedule.variants.find((v: any) => v.name === enrollment.variantId);
+              }
+              
+              // Strategy 3: Match by pure numeric index ONLY if variantId is purely numeric
+              // (reject strings like "0abc" or UUIDs starting with digits)
+              if (!variant) {
+                const isStrictlyNumeric = /^\d+$/.test(variantIdStr);
+                if (isStrictlyNumeric) {
+                  const idx = parseInt(variantIdStr, 10);
+                  if (idx >= 0 && idx < schedule.variants.length) {
+                    variant = schedule.variants[idx];
+                  }
+                }
+              }
+              
+              if (variant) {
+                variantDetails = {
+                  name: variant.name || 'Schedule',
+                  startTime: variant.startTime || variant.start_time || '',
+                  endTime: variant.endTime || variant.end_time || '',
+                  days: variant.days || variant.daysOfWeek || []
+                };
+              }
+            }
+          }
+        } catch (err) {
+          console.log(`📚 Could not fetch variant details for enrollment ${enrollment.id}:`, err);
+        }
+      }
+      
+      return {
+        ...enrollment,
+        variantDetails
+      };
+    }));
+    
+    res.json(enhancedEnrollments);
   } catch (error) {
     console.error('Error fetching child enrollments:', error);
     res.status(500).json({ message: 'Failed to fetch enrollments' });
