@@ -16,6 +16,13 @@ export interface PaymentPlanData {
   totalAmount: number; // In cents
   paymentPlan: 'deposit' | 'split' | 'biweekly' | 'full';
   paymentFrequency?: PaymentFrequency; // Optional: for date-based payment schedules
+  // Membership data (optional) - derived server-side from authenticated user
+  membership?: {
+    parentUserId: number;
+    schoolId: number;
+    amount: number; // In cents
+    year: number;
+  };
 }
 
 export interface PaymentPhase {
@@ -124,21 +131,39 @@ export class StripePaymentPlanService {
       console.log('🧪 Test mode: Created mock PaymentIntent:', paymentIntent.id);
     } else {
       const stripe = await getStripeClient();
+      // Build metadata including membership if present
+      const paymentMetadata: Record<string, string> = {
+        enrollmentIds: JSON.stringify(data.enrollmentIds),
+        parentEmail: data.parentEmail,
+        paymentPlan: data.paymentPlan,
+        totalAmount: data.totalAmount.toString(),
+        installmentNumber: '1',
+        totalInstallments: phases.length.toString(),
+        createdBy: 'asa_payment_system',
+        version: 'v2_stripe_simplified'
+      };
+      
+      // Add membership metadata if present (derived server-side, not from client)
+      if (data.membership) {
+        paymentMetadata.hasMembership = 'true';
+        paymentMetadata.membershipParentUserId = data.membership.parentUserId.toString();
+        paymentMetadata.membershipSchoolId = data.membership.schoolId.toString();
+        paymentMetadata.membershipAmount = data.membership.amount.toString();
+        paymentMetadata.membershipYear = data.membership.year.toString();
+        console.log('🎫 Adding membership metadata to payment intent:', {
+          parentUserId: data.membership.parentUserId,
+          schoolId: data.membership.schoolId,
+          amount: data.membership.amount,
+          year: data.membership.year
+        });
+      }
+      
       paymentIntent = await stripe.paymentIntents.create({
         amount: firstPhase.amount,
         currency: 'usd',
         customer: customer.id,
         description: `ASA Learning Platform - ${data.paymentPlan} payment (${firstPhase.description})`,
-        metadata: {
-          enrollmentIds: JSON.stringify(data.enrollmentIds),
-          parentEmail: data.parentEmail,
-          paymentPlan: data.paymentPlan,
-          totalAmount: data.totalAmount.toString(),
-          installmentNumber: '1',
-          totalInstallments: phases.length.toString(),
-          createdBy: 'asa_payment_system',
-          version: 'v2_stripe_simplified'
-        },
+        metadata: paymentMetadata,
         automatic_payment_methods: {
           enabled: true
         }

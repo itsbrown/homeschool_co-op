@@ -5,6 +5,7 @@ import { getDb } from '../db';
 import { membershipEnrollments, users } from '../../shared/schema';
 import { eq } from 'drizzle-orm';
 import { getStripeClient } from '../config/stripe';
+import { generateMemberId } from '../utils/membership';
 
 const router = express.Router();
 
@@ -198,6 +199,79 @@ async function handleDirectPaymentSuccess(paymentIntent: any) {
     const enrollmentIds = paymentIntent.metadata.enrollmentIds;
     const paymentType = paymentIntent.metadata.paymentType;
     
+    // Check for membership payment (metadata set at creation time, not updated)
+    const hasMembership = paymentIntent.metadata.hasMembership === 'true';
+    const membershipSchoolId = paymentIntent.metadata.membershipSchoolId ? parseInt(paymentIntent.metadata.membershipSchoolId) : null;
+    const membershipAmount = paymentIntent.metadata.membershipAmount ? parseInt(paymentIntent.metadata.membershipAmount) : 0;
+    const membershipYear = paymentIntent.metadata.membershipYear ? parseInt(paymentIntent.metadata.membershipYear) : new Date().getFullYear();
+    // Use membershipParentUserId (set by payment plan service) for security
+    const parentUserId = paymentIntent.metadata.membershipParentUserId ? parseInt(paymentIntent.metadata.membershipParentUserId) : null;
+    
+    // Handle membership payment - generate Member ID
+    if (hasMembership && parentUserId && membershipSchoolId) {
+      console.log('🎫 Processing membership payment:', {
+        parentUserId,
+        membershipSchoolId,
+        membershipAmount,
+        membershipYear
+      });
+      
+      try {
+        const db = await getDb();
+        
+        // Check if user already has a Member ID
+        const existingUser = await db
+          .select()
+          .from(users)
+          .where(eq(users.id, parentUserId))
+          .limit(1);
+        
+        if (existingUser.length > 0 && !existingUser[0].memberId) {
+          // Generate and assign new Member ID
+          const newMemberId = generateMemberId();
+          
+          await db
+            .update(users)
+            .set({ memberId: newMemberId })
+            .where(eq(users.id, parentUserId));
+          
+          console.log(`🎫 ✅ Generated Member ID ${newMemberId} for user ${parentUserId}`);
+          
+          // Create or update membership enrollment record
+          const startDate = new Date();
+          const expirationDate = new Date(startDate);
+          expirationDate.setFullYear(expirationDate.getFullYear() + 1);
+          
+          await storage.createMembershipEnrollment({
+            schoolId: membershipSchoolId,
+            parentUserId: parentUserId,
+            membershipYear: membershipYear,
+            membershipTier: 'basic',
+            amount: membershipAmount,
+            amountPaid: membershipAmount,
+            remainingBalance: 0,
+            status: 'enrolled',
+            stripeSubscriptionId: null,
+            stripeCustomerId: paymentIntent.customer || null,
+            startDate,
+            renewalDate: expirationDate,
+            dueDate: startDate,
+            expirationDate,
+            gracePeriodEnd: null,
+            paymentMethod: 'other', // Stripe payment via cart checkout
+            notes: `Stripe payment via cart checkout (${paymentIntent.id})`
+          });
+          
+          console.log(`🎫 ✅ Created membership enrollment for user ${parentUserId}`);
+        } else if (existingUser.length > 0 && existingUser[0].memberId) {
+          console.log(`🎫 User ${parentUserId} already has Member ID: ${existingUser[0].memberId}`);
+        }
+      } catch (membershipError) {
+        console.error('❌ Error processing membership payment:', membershipError);
+        // Don't fail the whole payment - membership can be manually assigned
+      }
+    }
+    
     if (!parentEmail || !enrollmentIds) {
       console.log('⚠️ Missing required metadata for direct payment:', { parentEmail, enrollmentIds, paymentType });
       return;
@@ -205,7 +279,10 @@ async function handleDirectPaymentSuccess(paymentIntent: any) {
     
     const enrollmentIdList = JSON.parse(enrollmentIds);
     const totalAmount = paymentIntent.amount;
-    const perEnrollmentAmount = Math.round(totalAmount / enrollmentIdList.length);
+    
+    // Calculate per-enrollment amount, excluding membership fee
+    const enrollmentTotal = totalAmount - membershipAmount;
+    const perEnrollmentAmount = Math.round(enrollmentTotal / enrollmentIdList.length);
     
     console.log(`💰 Processing payment for ${enrollmentIdList.length} enrollments, ${perEnrollmentAmount} cents each`);
     

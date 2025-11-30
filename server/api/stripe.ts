@@ -32,7 +32,7 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
     
     console.log('💳 Creating payment intent for authenticated user:', userEmail);
 
-    const { items, subtotal, discounts, total, parentEmail, paymentPlan = 'full', paymentFrequency = 'one_time' } = req.body;
+    const { items, subtotal, discounts, total, parentEmail, paymentPlan = 'full', paymentFrequency = 'one_time', membership } = req.body;
 
     // Validate required fields
     if (!items || !Array.isArray(items) || items.length === 0) {
@@ -299,6 +299,52 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
 
       console.log('✅ Using enrollments with IDs:', enrollmentIds);
 
+      // Validate membership request if present - use server-derived values only
+      // SECURITY: Do not trust client-provided schoolId/parentUserId - derive from authenticated session
+      const membershipAmount = membership?.amount || 0;
+      const totalWithMembership = total + membershipAmount;
+      
+      // Build secure membership data from server-side validated parent info
+      let serverMembership: { parentUserId: number; schoolId: number; amount: number; year: number } | undefined;
+      
+      if (membership && membershipAmount > 0 && parent.schoolId) {
+        // Validate that the requested school matches the parent's school
+        if (membership.schoolId !== parent.schoolId) {
+          console.error('🚨 SECURITY: Membership schoolId mismatch. Request:', membership.schoolId, 'Parent:', parent.schoolId);
+          return res.status(403).json({
+            message: 'Cannot create membership for a different school',
+            error: 'SCHOOL_MISMATCH'
+          });
+        }
+        
+        // Validate membership amount against school's configured fee
+        const parentSchool = await storage.getSchoolById(parent.schoolId);
+        if (parentSchool?.membershipFeeAmount && membershipAmount !== parentSchool.membershipFeeAmount) {
+          console.error('🚨 SECURITY: Membership amount mismatch. Request:', membershipAmount, 'School config:', parentSchool.membershipFeeAmount);
+          return res.status(403).json({
+            message: 'Membership fee amount does not match school configuration',
+            error: 'AMOUNT_MISMATCH'
+          });
+        }
+        
+        // Use server-derived parent info, not client-provided
+        serverMembership = {
+          parentUserId: parent.id, // Server-derived, not from client
+          schoolId: parent.schoolId, // Server-derived, not from client
+          amount: parentSchool?.membershipFeeAmount || membershipAmount, // Use server-configured amount
+          year: membership.year || new Date().getFullYear()
+        };
+        
+        console.log('🎫 Membership fee included in payment (server-validated):', {
+          enrollmentTotal: total,
+          membershipAmount,
+          totalWithMembership,
+          membershipYear: serverMembership.year,
+          parentUserId: serverMembership.parentUserId,
+          schoolId: serverMembership.schoolId
+        });
+      }
+
       // Use payment plan service for ALL payment plans
       // NOTE: CombinedStorage has all IStorage methods needed but doesn't formally implement the interface
       // See server/storage.ts TODO comment for full context on storage interface alignment
@@ -306,9 +352,10 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
       const paymentPlanResult = await paymentPlanService.createEducationalPaymentPlan({
         parentEmail: userEmail,
         enrollmentIds,
-        totalAmount: total,
+        totalAmount: totalWithMembership, // Include membership fee in total
         paymentPlan: paymentPlan as 'deposit' | 'split' | 'biweekly' | 'full',
-        paymentFrequency: paymentFrequency as 'weekly' | 'biweekly' | 'monthly' | 'one_time'
+        paymentFrequency: paymentFrequency as 'weekly' | 'biweekly' | 'monthly' | 'one_time',
+        membership: serverMembership // Pass server-validated membership data
       });
 
       console.log('✅ Payment plan created successfully:', {
