@@ -144,6 +144,7 @@ function CheckoutForm({ selectedPaymentPlan, selectedPlanAmount }: { selectedPay
 export default function CartCheckout() {
   const { cart, cartHydrated, cartLoading, clearCart, applyPromoCode, removePromoCode } = useCart();
   const { user, isAuthenticated } = useAuth();
+  const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [clientSecret, setClientSecret] = useState<string>('');
   const [loading, setLoading] = useState(true);
@@ -189,13 +190,19 @@ export default function CartCheckout() {
   const [freeEnrollmentRequested, setFreeEnrollmentRequested] = useState(false);
   const [requestingFreeEnrollment, setRequestingFreeEnrollment] = useState(false);
 
+  // Calculate the ACTUAL total payable amount (class total + membership)
+  // This is used to determine if we should show the payment form or free enrollment flow
+  const actualPayableAmount = cart.total + (cart.membership?.amount || 0);
+  
   // Debug cart data
   console.log('🛒 CartCheckout - cart data:', {
     itemsCount: cart.items.length,
     items: cart.items,
     subtotal: cart.subtotal,
     discounts: cart.discounts,
-    total: cart.total
+    total: cart.total,
+    membershipAmount: cart.membership?.amount || 0,
+    actualPayableAmount
   });
 
   // Automatically set payment frequency based on selected plan
@@ -240,9 +247,20 @@ export default function CartCheckout() {
       return;
     }
 
-    // If cart has items OR membership after hydration, create payment intent
+    // If cart has items OR membership after hydration, proceed
     const hasCartContent = cart.items.length > 0 || cart.membership;
     if (hasCartContent) {
+      // Calculate actual payable amount (class total + membership)
+      const payableAmount = cart.total + (cart.membership?.amount || 0);
+      
+      // If total payable is $0 (100% discount with no membership), don't create payment intent
+      // The UI will show the Free Enrollment request flow instead
+      if (payableAmount === 0) {
+        console.log('🛒 Total payable is $0 - showing Free Enrollment flow (skipping payment intent)');
+        setLoading(false);
+        return;
+      }
+      
       if (!clientSecret) {
         console.log('🛒 Creating initial payment intent with', cart.items.length, 'items and membership:', !!cart.membership);
         createPaymentIntent();
@@ -256,8 +274,22 @@ export default function CartCheckout() {
   
   // Separate effect to handle discount changes - recreate payment intent when cart total changes
   useEffect(() => {
-    // Don't recreate if we haven't created the initial payment intent yet
-    if (!clientSecret || !isAuthenticated || cart.items.length === 0 || isInitialLoad) {
+    // Check if cart has any content (items OR membership)
+    const hasCartContent = cart.items.length > 0 || cart.membership;
+    
+    // Don't recreate if we haven't created the initial payment intent yet or no cart content
+    if (!clientSecret || !isAuthenticated || !hasCartContent || isInitialLoad) {
+      return;
+    }
+    
+    // Calculate actual payable amount (class total + membership)
+    const payableAmount = cart.total + (cart.membership?.amount || 0);
+    
+    // If total payable becomes $0, clear clientSecret to show Free Enrollment flow
+    if (payableAmount === 0) {
+      console.log('💳 Total payable is $0 - clearing clientSecret for Free Enrollment flow');
+      setClientSecret('');
+      setLoading(false);
       return;
     }
     
@@ -269,8 +301,11 @@ export default function CartCheckout() {
   
   // Separate effect to handle payment plan changes with debouncing
   useEffect(() => {
-    // Don't recreate if we haven't created the initial payment intent yet
-    if (!clientSecret || !isAuthenticated || cart.items.length === 0 || isInitialLoad) {
+    // Check if cart has any content (items OR membership)
+    const hasCartContent = cart.items.length > 0 || cart.membership;
+    
+    // Don't recreate if we haven't created the initial payment intent yet or no cart content
+    if (!clientSecret || !isAuthenticated || !hasCartContent || isInitialLoad) {
       return;
     }
     
@@ -424,10 +459,14 @@ export default function CartCheckout() {
                     (cart.discounts.appliedDiscounts && cart.discounts.appliedDiscounts.length > 0);
 
   const getPaymentPlanOptions = () => {
-    const depositAmount = Math.round(cart.total * 0.1); // 10% deposit
-    const fullAmount = cart.total;
-    const splitAmount = Math.round(cart.total / 2); // 50% split payments
-    const monthlyAmount = Math.round(cart.total / 3); // 3-month installments
+    // Use actualPayableAmount (class total + membership) for all payment plan calculations
+    // This ensures membership is included in payment plan amounts
+    const totalAmount = actualPayableAmount;
+    
+    const depositAmount = Math.round(totalAmount * 0.1); // 10% deposit
+    const fullAmount = totalAmount;
+    const splitAmount = Math.round(totalAmount / 2); // 50% split payments
+    const biweeklyAmount = Math.round(totalAmount / 4); // Estimated 4 payments
     
     return [
       {
@@ -477,7 +516,7 @@ export default function CartCheckout() {
         id: 'biweekly',
         name: 'Biweekly Payment Plan',
         description: 'Automatic payments every 2 weeks until class ends',
-        amount: Math.round(cart.total / 4), // Estimated amount per payment (will be calculated based on class dates)
+        amount: biweeklyAmount,
         features: [
           'Pay every 2 weeks based on class schedule',
           'Payments automatically calculated from class start to end date',
@@ -493,35 +532,26 @@ export default function CartCheckout() {
   };
 
   const getSelectedPlanAmount = () => {
-    // Get the membership fee to add to total
-    const membershipAmount = cart.membership?.amount || 0;
-    const totalWithMembership = cart.total + membershipAmount;
-    
-    // For biweekly plans, send the FULL cart total to backend
+    // For biweekly plans, send the FULL payable amount to backend
     // The backend will calculate the payment schedule and divide it properly
     if (selectedPaymentPlan === 'biweekly') {
-      return totalWithMembership;
+      return actualPayableAmount;
     }
     
-    // For other plans, return the calculated plan amount plus membership
+    // For other plans, return the calculated plan amount (already includes membership via actualPayableAmount)
     const plans = getPaymentPlanOptions();
     const selectedPlan = plans.find(plan => plan.id === selectedPaymentPlan);
-    // Add membership fee to the selected plan amount
-    return selectedPlan ? selectedPlan.amount + membershipAmount : totalWithMembership;
+    return selectedPlan ? selectedPlan.amount : actualPayableAmount;
   };
 
   // Get the amount to display on the Pay button (first payment amount)
   const getButtonDisplayAmount = () => {
-    // Get the membership fee to add to total
-    const membershipAmount = cart.membership?.amount || 0;
-    const totalWithMembership = cart.total + membershipAmount;
-    
     // For biweekly plans, show the FIRST payment amount (total divided by 4)
     if (selectedPaymentPlan === 'biweekly') {
-      return Math.ceil(totalWithMembership / 4);
+      return Math.ceil(actualPayableAmount / 4);
     }
     
-    // For all other plans, show the full selected plan amount (already includes membership)
+    // For all other plans, show the full selected plan amount
     return getSelectedPlanAmount();
   };
 
@@ -563,7 +593,9 @@ export default function CartCheckout() {
     );
   }
 
-  if (!clientSecret) {
+  // Only show loading spinner if we actually need a clientSecret for payment
+  // If actualPayableAmount is $0, we don't need a clientSecret - show Free Enrollment flow
+  if (!clientSecret && actualPayableAmount > 0) {
     return (
       <ParentAppShell>
         <div className="flex items-center justify-center h-[50vh]">
@@ -823,8 +855,8 @@ export default function CartCheckout() {
 
           {/* Payment Form */}
           <div className="space-y-6">
-            {/* Payment Plan Selection - only show when there's a balance to pay */}
-            {cart.total > 0 && (
+            {/* Payment Plan Selection - only show when there's a balance to pay (including membership) */}
+            {actualPayableAmount > 0 && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -889,10 +921,10 @@ export default function CartCheckout() {
                       {selectedPaymentPlan === 'biweekly' ? (
                         <>
                           <div className="text-xs text-blue-600 mb-1">
-                            Total: {formatCurrency(cart.total)}
+                            Total: {formatCurrency(actualPayableAmount)}
                           </div>
                           <div className="text-lg font-bold text-blue-900">
-                            {formatCurrency(Math.ceil(cart.total / 4))} × 4 payments
+                            {formatCurrency(Math.ceil(actualPayableAmount / 4))} × 4 payments
                           </div>
                         </>
                       ) : (
@@ -902,7 +934,7 @@ export default function CartCheckout() {
                           </div>
                           {selectedPaymentPlan === 'deposit' && (
                             <div className="text-xs text-blue-600">
-                              Remaining: {formatCurrency(cart.total - getSelectedPlanAmount())}
+                              Remaining: {formatCurrency(actualPayableAmount - getSelectedPlanAmount())}
                             </div>
                           )}
                         </>
@@ -915,7 +947,7 @@ export default function CartCheckout() {
             )}
 
             {/* Stripe Subscription Alert - only show when school has enabled subscription status display */}
-            {cart.total > 0 && cart.schoolSettings?.showSubscriptionStatus && hasActiveSubscription && subscriptionInfo && (
+            {actualPayableAmount > 0 && cart.schoolSettings?.showSubscriptionStatus && hasActiveSubscription && subscriptionInfo && (
               <Alert className="border-green-200 bg-green-50" data-testid="alert-stripe-subscription">
                 <Check className="h-4 w-4 text-green-600" />
                 <AlertDescription className="text-green-700">
@@ -931,7 +963,7 @@ export default function CartCheckout() {
             )}
 
             {/* Payment Frequency Selector - Only show for split payment plan and when there's a balance */}
-            {cart.total > 0 && ['split'].includes(selectedPaymentPlan) && (
+            {actualPayableAmount > 0 && ['split'].includes(selectedPaymentPlan) && (
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -1006,8 +1038,9 @@ export default function CartCheckout() {
             )}
 
             {/* Payment Information or Free Enrollment */}
-            {cart.total === 0 ? (
-              // Free Enrollment UI - when 100% discount is applied
+            {/* Use actualPayableAmount (class total + membership) to determine if payment is needed */}
+            {actualPayableAmount === 0 ? (
+              // Free Enrollment UI - when 100% discount is applied and no membership fee
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
