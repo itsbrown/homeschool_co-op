@@ -22,6 +22,11 @@ export interface PaymentPlanData {
     schoolId: number;
     amount: number; // In cents
     year: number;
+    // Optional discount info for tracking
+    discountId?: number;
+    discountName?: string;
+    originalAmount?: number;
+    discountAmount?: number;
   };
 }
 
@@ -150,11 +155,22 @@ export class StripePaymentPlanService {
         paymentMetadata.membershipSchoolId = data.membership.schoolId.toString();
         paymentMetadata.membershipAmount = data.membership.amount.toString();
         paymentMetadata.membershipYear = data.membership.year.toString();
+        
+        // Include discount info if a discount was applied
+        if (data.membership.discountId) {
+          paymentMetadata.membershipDiscountId = data.membership.discountId.toString();
+          paymentMetadata.membershipDiscountName = data.membership.discountName || '';
+          paymentMetadata.membershipOriginalAmount = (data.membership.originalAmount || data.membership.amount).toString();
+          paymentMetadata.membershipDiscountAmount = (data.membership.discountAmount || 0).toString();
+        }
+        
         console.log('🎫 Adding membership metadata to payment intent:', {
           parentUserId: data.membership.parentUserId,
           schoolId: data.membership.schoolId,
           amount: data.membership.amount,
-          year: data.membership.year
+          year: data.membership.year,
+          hasDiscount: !!data.membership.discountId,
+          discountName: data.membership.discountName
         });
       }
       

@@ -390,6 +390,7 @@ export interface IStorage {
   getDiscountsBySchoolId(schoolId: number): Promise<Discount[]>;
   createDiscount(discount: InsertDiscount): Promise<Discount>;
   updateDiscount(id: number, discount: Partial<InsertDiscount>): Promise<Discount | undefined>;
+  incrementDiscountUsageAtomic(discountId: number): Promise<boolean>;
   deleteDiscount(id: number): Promise<void>;
 
   // Discount Application methods
@@ -5612,6 +5613,10 @@ export class MemStorage implements IStorage {
 
       async updateDiscount(id: number, discount: Partial<InsertDiscount>): Promise<Discount | undefined> {
         return this.dbStorage.updateDiscount(id, discount);
+      }
+
+      async incrementDiscountUsageAtomic(discountId: number): Promise<boolean> {
+        return this.dbStorage.incrementDiscountUsageAtomic(discountId);
       }
 
       async deleteDiscount(id: number): Promise<void> {

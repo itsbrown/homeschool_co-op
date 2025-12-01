@@ -207,6 +207,12 @@ async function handleDirectPaymentSuccess(paymentIntent: any) {
     // Use membershipParentUserId (set by payment plan service) for security
     const parentUserId = paymentIntent.metadata.membershipParentUserId ? parseInt(paymentIntent.metadata.membershipParentUserId) : null;
     
+    // Check for membership discount info (set when discount was applied)
+    const membershipDiscountId = paymentIntent.metadata.membershipDiscountId ? parseInt(paymentIntent.metadata.membershipDiscountId) : null;
+    const membershipDiscountName = paymentIntent.metadata.membershipDiscountName || null;
+    const membershipOriginalAmount = paymentIntent.metadata.membershipOriginalAmount ? parseInt(paymentIntent.metadata.membershipOriginalAmount) : null;
+    const membershipDiscountAmount = paymentIntent.metadata.membershipDiscountAmount ? parseInt(paymentIntent.metadata.membershipDiscountAmount) : 0;
+    
     // Handle membership payment - generate Member ID
     if (hasMembership && parentUserId && membershipSchoolId) {
       console.log('🎫 Processing membership payment:', {
@@ -259,10 +265,50 @@ async function handleDirectPaymentSuccess(paymentIntent: any) {
             expirationDate,
             gracePeriodEnd: null,
             paymentMethod: 'other', // Stripe payment via cart checkout
-            notes: `Stripe payment via cart checkout (${paymentIntent.id})`
+            notes: `Stripe payment via cart checkout (${paymentIntent.id})${membershipDiscountName ? ` - Discount: ${membershipDiscountName}` : ''}`
           });
           
           console.log(`🎫 ✅ Created membership enrollment for user ${parentUserId}`);
+          
+          // Track membership discount application if a discount was used
+          if (membershipDiscountId && membershipDiscountAmount > 0 && membershipSchoolId) {
+            try {
+              // SECURITY: Fetch discount using school-scoped query to ensure it belongs to this school
+              const schoolDiscounts = await storage.getDiscountsBySchoolId(membershipSchoolId);
+              const discount = schoolDiscounts.find(d => d.id === membershipDiscountId);
+              
+              if (!discount) {
+                console.error(`⚠️ Discount ${membershipDiscountId} not found for school ${membershipSchoolId} - skipping tracking`);
+              } else {
+                // ATOMIC: Try to increment usage counter with limit check (prevents race conditions)
+                const incrementSuccess = await storage.incrementDiscountUsageAtomic(membershipDiscountId);
+                
+                if (!incrementSuccess) {
+                  console.log(`⚠️ Discount ${membershipDiscountName} has reached usage limit - atomic increment failed, skipping discount application record`);
+                } else {
+                  // Create discount application record for membership (only if increment succeeded)
+                  await storage.createDiscountApplication({
+                    discountId: membershipDiscountId,
+                    parentEmail: parentEmail || '',
+                    childId: null,
+                    schoolEnrollmentId: null,
+                    programEnrollmentId: null,
+                    paymentId: paymentIntent.id,
+                    classId: null,
+                    originalAmount: membershipOriginalAmount || membershipAmount + membershipDiscountAmount,
+                    discountAmount: membershipDiscountAmount,
+                    finalAmount: membershipAmount,
+                    applicationMethod: 'automatic',
+                    appliedBy: null,
+                  });
+                  console.log(`🎫 ✅ Tracked membership discount usage: ${membershipDiscountName} (atomic increment succeeded)`);
+                }
+              }
+            } catch (discountTrackError) {
+              console.error('⚠️ Error tracking membership discount application:', discountTrackError);
+              // Don't fail - discount tracking is secondary to membership creation
+            }
+          }
         } else if (existingUser.length > 0 && existingUser[0].memberId) {
           console.log(`🎫 User ${parentUserId} already has Member ID: ${existingUser[0].memberId}`);
         }

@@ -5,6 +5,7 @@ import { StripePaymentPlanService } from '../services/stripe-payment-plans';
 import { supabaseAuth } from '../middleware/supabase-auth';
 import { requireSchoolContext } from '../middleware/require-school-context';
 import { getStripeClient, getStripePublishableKey } from '../config/stripe';
+import { calculateMembershipDiscount } from '../utils/membership';
 
 const router = Router();
 
@@ -305,7 +306,16 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
       const totalWithMembership = total + membershipAmount;
       
       // Build secure membership data from server-side validated parent info
-      let serverMembership: { parentUserId: number; schoolId: number; amount: number; year: number } | undefined;
+      let serverMembership: { 
+        parentUserId: number; 
+        schoolId: number; 
+        amount: number; 
+        year: number;
+        discountId?: number;
+        discountName?: string;
+        originalAmount?: number;
+        discountAmount?: number;
+      } | undefined;
       
       if (membership && membershipAmount > 0 && parent.schoolId) {
         // Validate that the requested school matches the parent's school
@@ -317,22 +327,82 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
           });
         }
         
-        // Validate membership amount against school's configured fee
+        // Get school's configured membership fee
         const parentSchool = await storage.getSchoolById(parent.schoolId);
-        if (parentSchool?.membershipFeeAmount && membershipAmount !== parentSchool.membershipFeeAmount) {
-          console.error('🚨 SECURITY: Membership amount mismatch. Request:', membershipAmount, 'School config:', parentSchool.membershipFeeAmount);
+        const originalMembershipFee = parentSchool?.membershipFeeAmount || 0;
+        
+        if (!originalMembershipFee) {
+          console.error('🚨 SECURITY: School has no membership fee configured but client sent membership');
           return res.status(403).json({
-            message: 'Membership fee amount does not match school configuration',
-            error: 'AMOUNT_MISMATCH'
+            message: 'School does not have a membership fee configured',
+            error: 'NO_MEMBERSHIP_FEE'
+          });
+        }
+        
+        // Calculate the expected discounted membership amount server-side
+        // This accounts for any applicable membership discounts
+        const discountResult = await calculateMembershipDiscount(
+          parent.schoolId,
+          parent.id,
+          originalMembershipFee
+        );
+        
+        // Validate that client's amount matches server-calculated amount
+        // Allow either the original amount OR the discounted amount
+        const isValidAmount = membershipAmount === originalMembershipFee || 
+                             membershipAmount === discountResult.finalAmount;
+        
+        if (!isValidAmount) {
+          console.error('🚨 SECURITY: Membership amount mismatch. Request:', membershipAmount, 
+            'Original:', originalMembershipFee, 'Discounted:', discountResult.finalAmount);
+          return res.status(403).json({
+            message: 'Membership fee amount does not match expected amount',
+            error: 'AMOUNT_MISMATCH',
+            details: {
+              originalAmount: originalMembershipFee,
+              discountedAmount: discountResult.finalAmount,
+              clientAmount: membershipAmount
+            }
+          });
+        }
+        
+        // Use the validated amount (either original or discounted)
+        const validatedMembershipAmount = membershipAmount;
+        
+        // Check if client is actually paying the discounted amount (not full price)
+        const isPayingDiscountedAmount = discountResult.appliedDiscounts.length > 0 && 
+                                         membershipAmount === discountResult.finalAmount;
+        
+        // Log discount application if applicable
+        if (isPayingDiscountedAmount) {
+          console.log('🎫 Membership discount applied:', {
+            originalAmount: originalMembershipFee,
+            discountAmount: discountResult.discountAmount,
+            finalAmount: discountResult.finalAmount,
+            appliedDiscount: discountResult.appliedDiscounts[0]?.discountName
+          });
+        } else if (discountResult.appliedDiscounts.length > 0) {
+          console.log('ℹ️ Membership discount available but parent paying full price:', {
+            originalAmount: originalMembershipFee,
+            availableDiscount: discountResult.appliedDiscounts[0]?.discountName,
+            clientAmount: membershipAmount
           });
         }
         
         // Use server-derived parent info, not client-provided
+        // IMPORTANT: Only include discount info when client is actually paying discounted amount
         serverMembership = {
           parentUserId: parent.id, // Server-derived, not from client
           schoolId: parent.schoolId, // Server-derived, not from client
-          amount: parentSchool?.membershipFeeAmount || membershipAmount, // Use server-configured amount
-          year: membership.year || new Date().getFullYear()
+          amount: validatedMembershipAmount, // Use validated amount (may be discounted)
+          year: membership.year || new Date().getFullYear(),
+          // Only include discount info if client is paying the discounted amount
+          ...(isPayingDiscountedAmount && {
+            discountId: discountResult.appliedDiscounts[0].discountId,
+            discountName: discountResult.appliedDiscounts[0].discountName,
+            originalAmount: originalMembershipFee,
+            discountAmount: discountResult.discountAmount
+          })
         };
         
         console.log('🎫 Membership fee included in payment (server-validated):', {

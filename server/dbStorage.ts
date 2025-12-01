@@ -2371,6 +2371,27 @@ export class DatabaseStorage implements IStorage {
     return updatedDiscount;
   }
 
+  /**
+   * Atomically increment discount usage counter, respecting usage limits.
+   * Uses conditional UPDATE to prevent race conditions from exceeding limits.
+   * @returns true if increment succeeded, false if limit exceeded
+   */
+  async incrementDiscountUsageAtomic(discountId: number): Promise<boolean> {
+    const db = await getDb();
+    // Use raw SQL for atomic conditional update
+    // Only increment if: usage_limit IS NULL (no limit) OR current_usage_count < usage_limit
+    const result = await db.execute(sql`
+      UPDATE discounts 
+      SET current_usage_count = COALESCE(current_usage_count, 0) + 1,
+          updated_at = NOW()
+      WHERE id = ${discountId}
+        AND (usage_limit IS NULL OR COALESCE(current_usage_count, 0) < usage_limit)
+      RETURNING id
+    `);
+    // If no rows returned, the update failed (limit exceeded)
+    return result.rows.length > 0;
+  }
+
   async deleteDiscount(id: number): Promise<void> {
     const db = await getDb();
     await db.delete(discounts).where(eq(discounts.id, id));
