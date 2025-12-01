@@ -35,11 +35,14 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
 
     const { items, subtotal, discounts, total, parentEmail, paymentPlan = 'full', paymentFrequency = 'one_time', membership } = req.body;
 
-    // Validate required fields
-    if (!items || !Array.isArray(items) || items.length === 0) {
+    // Validate required fields - either items OR membership must be present
+    const hasItems = items && Array.isArray(items) && items.length > 0;
+    const hasMembership = membership && membership.amount > 0;
+    
+    if (!hasItems && !hasMembership) {
       return res.status(400).json({
-        message: 'Cart items are required',
-        error: 'MISSING_ITEMS'
+        message: 'Cart must contain items or membership fee',
+        error: 'EMPTY_CART'
       });
     }
 
@@ -59,21 +62,23 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
       });
     }
 
-    // Verify user owns the children in the cart
-    const children = await storage.getChildrenByParentEmail(userEmail);
-    const childIds = children.map(child => child.id);
-    
-    const invalidItems = items.filter((item: any) => !childIds.includes(item.childId));
-    if (invalidItems.length > 0) {
-      return res.status(403).json({
-        message: 'Unauthorized: Cannot enroll children not owned by this parent',
-        error: 'UNAUTHORIZED_CHILDREN'
-      });
+    // Verify user owns the children in the cart (only if there are items)
+    if (hasItems) {
+      const children = await storage.getChildrenByParentEmail(userEmail);
+      const childIds = children.map(child => child.id);
+      
+      const invalidItems = items.filter((item: any) => !childIds.includes(item.childId));
+      if (invalidItems.length > 0) {
+        return res.status(403).json({
+          message: 'Unauthorized: Cannot enroll children not owned by this parent',
+          error: 'UNAUTHORIZED_CHILDREN'
+        });
+      }
     }
 
     // Create detailed description for payment
-    const uniqueChildren = [...new Set(items.map((item: any) => item.childName))];
-    const classNames = items.map((item: any) => item.className);
+    const uniqueChildren = hasItems ? [...new Set(items.map((item: any) => item.childName))] : [];
+    const classNames = hasItems ? items.map((item: any) => item.className) : [];
     
     console.log('💳 Processing payment plan enrollment with database storage:', paymentPlan);
     
