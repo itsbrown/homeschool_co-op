@@ -319,7 +319,13 @@ export default function DynamicFormPage() {
   const form_hook = useForm({
     resolver: form ? zodResolver(buildValidationSchema(form.fields)) : undefined,
     defaultValues: form?.fields.reduce((acc, field) => {
-      acc[`field_${field.id}`] = field.fieldType === 'checkbox' ? false : '';
+      if (field.fieldType === 'checkbox') {
+        acc[`field_${field.id}`] = false;
+      } else if (field.fieldType === 'multi_checkbox') {
+        acc[`field_${field.id}`] = [];
+      } else {
+        acc[`field_${field.id}`] = '';
+      }
       return acc;
     }, {} as any) || {},
   });
@@ -566,6 +572,53 @@ export default function DynamicFormPage() {
                   </FormLabel>
                   {field.helpText && <FormDescription>{field.helpText}</FormDescription>}
                 </div>
+              </FormItem>
+            )}
+          />
+        );
+
+      case 'multi_checkbox':
+        return (
+          <FormField
+            control={form_hook.control}
+            name={fieldKey}
+            render={({ field: formField }) => (
+              <FormItem>
+                <FormLabel>
+                  {field.label}
+                  {field.isRequired && <span className="text-destructive ml-1">*</span>}
+                </FormLabel>
+                <div className="space-y-2">
+                  {field.fieldConfig?.options?.map((option: string) => {
+                    const currentValue = formField.value || [];
+                    const isChecked = Array.isArray(currentValue) && currentValue.includes(option);
+                    return (
+                      <div key={option} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`${fieldKey}_${option}`}
+                          checked={isChecked}
+                          onCheckedChange={(checked) => {
+                            const current = Array.isArray(formField.value) ? formField.value : [];
+                            if (checked) {
+                              formField.onChange([...current, option]);
+                            } else {
+                              formField.onChange(current.filter((v: string) => v !== option));
+                            }
+                          }}
+                          data-testid={`checkbox-${field.id}-${option}`}
+                        />
+                        <Label 
+                          htmlFor={`${fieldKey}_${option}`}
+                          className="cursor-pointer"
+                        >
+                          {option}
+                        </Label>
+                      </div>
+                    );
+                  })}
+                </div>
+                {field.helpText && <FormDescription>{field.helpText}</FormDescription>}
+                <FormMessage />
               </FormItem>
             )}
           />

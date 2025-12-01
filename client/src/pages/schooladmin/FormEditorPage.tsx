@@ -124,7 +124,10 @@ function SortableField({ field, onUpdate, onDelete }: { field: FormField; onUpda
               <Textarea
                 value={field.fieldConfig?.options?.join('\n') || ''}
                 onChange={(e) => onUpdate({
-                  fieldConfig: { ...field.fieldConfig, options: e.target.value.split('\n').filter(Boolean) }
+                  fieldConfig: { ...field.fieldConfig, options: e.target.value.split('\n') }
+                })}
+                onBlur={(e) => onUpdate({
+                  fieldConfig: { ...field.fieldConfig, options: e.target.value.split('\n').filter(o => o.trim()) }
                 })}
                 placeholder="Option 1&#10;Option 2&#10;Option 3"
                 className="h-20"
@@ -177,7 +180,20 @@ function SortableField({ field, onUpdate, onDelete }: { field: FormField; onUpda
                   value={field.fieldConfig?.variants?.map((v: any) => `${v.name}:${(v.price / 100).toFixed(2)}`).join('\n') || ''}
                   onChange={(e) => {
                     const variants = e.target.value.split('\n')
-                      .filter(Boolean)
+                      .map(line => {
+                        const [name, priceStr] = line.split(':');
+                        return {
+                          name: name?.trim() || '',
+                          price: Math.round((parseFloat(priceStr) || 0) * 100)
+                        };
+                      });
+                    onUpdate({
+                      fieldConfig: { ...field.fieldConfig, variants }
+                    });
+                  }}
+                  onBlur={(e) => {
+                    const variants = e.target.value.split('\n')
+                      .filter(line => line.trim())
                       .map(line => {
                         const [name, priceStr] = line.split(':');
                         return {
