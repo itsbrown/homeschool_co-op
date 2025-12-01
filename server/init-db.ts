@@ -439,6 +439,14 @@ async function runMigrations() {
     `);
     console.log('✅ Migration completed: Stripe integration columns added to membership_enrollments table');
     
+    // Drop legacy parent_id column from membership_enrollments table (not used - replaced by parent_user_id)
+    console.log('Running migration: Dropping legacy parent_id column from membership_enrollments...');
+    await db.execute(sql`
+      ALTER TABLE membership_enrollments 
+      DROP COLUMN IF EXISTS parent_id;
+    `);
+    console.log('✅ Migration completed: legacy parent_id column dropped from membership_enrollments');
+    
     // Add stripe_customer_id column to users table
     console.log('Running migration: Adding stripe_customer_id column to users table...');
     await db.execute(sql`
