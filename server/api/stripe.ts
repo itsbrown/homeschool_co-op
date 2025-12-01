@@ -62,9 +62,10 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
       });
     }
 
-    // Verify user owns the children in the cart (only if there are items)
+    // Fetch children for validation and later use (only if there are items)
+    let children: any[] = [];
     if (hasItems) {
-      const children = await storage.getChildrenByParentEmail(userEmail);
+      children = await storage.getChildrenByParentEmail(userEmail);
       const childIds = children.map(child => child.id);
       
       const invalidItems = items.filter((item: any) => !childIds.includes(item.childId));
@@ -200,15 +201,18 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
       const dbPaymentPlan = (paymentPlanMapping[paymentPlan] || 'full_payment') as 'full_payment' | 'deposit_only' | 'biweekly' | 'custom';
       
       // Find or use existing pending enrollments (created when items were added to cart)
-      const enrollmentIds = [];
-      const allEnrollments = await storage.getAllEnrollments?.() || [];
+      const enrollmentIds: number[] = [];
       
-      for (const item of items) {
-        // Get the child to fetch schoolId
-        const child = children.find(c => c.id === item.childId);
-        if (!child) {
-          throw new Error(`Child ${item.childId} not found`);
-        }
+      // Only process items if there are any (skip for membership-only carts)
+      if (hasItems) {
+        const allEnrollments = await storage.getAllEnrollments?.() || [];
+        
+        for (const item of items) {
+          // Get the child to fetch schoolId
+          const child = children.find((c: any) => c.id === item.childId);
+          if (!child) {
+            throw new Error(`Child ${item.childId} not found`);
+          }
         
         // Check if there's already a pending enrollment (from cart or existing)
         let enrollment = allEnrollments.find(e => 
@@ -301,7 +305,8 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
           });
           enrollmentIds.push(enrollment.id);
         }
-      }
+        }
+      } // End of hasItems block
 
       console.log('✅ Using enrollments with IDs:', enrollmentIds);
 
