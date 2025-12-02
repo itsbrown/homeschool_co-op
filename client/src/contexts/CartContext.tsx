@@ -997,6 +997,78 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return session.access_token;
   }, [session]);
 
+  // Helper function to fetch membership requirements during cart hydration
+  // Returns membership data if user should have membership added, null otherwise
+  // Uses timeout to prevent blocking checkout flow
+  const fetchMembershipForCart = useCallback(async (userEmail: string): Promise<MembershipFee | null> => {
+    const TIMEOUT_MS = 3000; // 3 second timeout to prevent blocking
+    
+    const fetchWithTimeout = async (): Promise<MembershipFee | null> => {
+      try {
+        const token = await getAccessToken();
+        
+        // Fetch both school data and member status in parallel
+        const [schoolResponse, memberResponse] = await Promise.all([
+          fetch(`/api/school-parents/school/${userEmail}`, {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
+          }),
+          fetch('/api/parent/member-id', {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
+          })
+        ]);
+        
+        // Check if user already has active membership
+        if (memberResponse.ok) {
+          const memberData = await memberResponse.json();
+          if (memberData.memberId || memberData.hasMembership) {
+            console.log('🎫 User already has active membership, skipping auto-add');
+            return null;
+          }
+        }
+        
+        // Check if school has membership fee configured
+        if (schoolResponse.ok) {
+          const schoolResult = await schoolResponse.json();
+          if (schoolResult.success && schoolResult.school && schoolResult.school.membershipFeeAmount > 0) {
+            console.log('🎫 CartContext: Adding membership during hydration:', {
+              schoolId: schoolResult.school.id,
+              schoolName: schoolResult.school.name,
+              amount: schoolResult.school.membershipFeeAmount,
+            });
+            
+            return {
+              schoolId: schoolResult.school.id,
+              schoolName: schoolResult.school.name,
+              amount: schoolResult.school.membershipFeeAmount,
+              year: new Date().getFullYear(),
+            };
+          }
+        }
+        
+        return null;
+      } catch (error) {
+        console.warn('🎫 Error fetching membership data (non-blocking):', error);
+        return null;
+      }
+    };
+    
+    // Race between fetch and timeout - never block cart hydration
+    const timeoutPromise = new Promise<null>((resolve) => {
+      setTimeout(() => {
+        console.warn('🎫 Membership fetch timed out after', TIMEOUT_MS, 'ms');
+        resolve(null);
+      }, TIMEOUT_MS);
+    });
+    
+    return Promise.race([fetchWithTimeout(), timeoutPromise]);
+  }, [getAccessToken]);
+
   // Use TanStack Query to fetch enrollments with proper caching
   // This prevents duplicate API calls during component remounts
   // CRITICAL: Gate on activeRole === 'parent' to prevent fetch before role resolution
@@ -1154,10 +1226,14 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Use calculateCartTotalsWithDiscounts to fetch school settings and calculate discounts properly
       const totals = await calculateCartTotalsWithDiscounts(cartItems, getAccessToken, null, userRolesList); // Fresh load - no promo code yet
 
+      // Fetch membership data during cart hydration (non-blocking with timeout)
+      // This ensures membership is available when cart first renders
+      const membership = await fetchMembershipForCart(user.email);
+
       // CRITICAL: Always replace cart with API data (no localStorage merge)
       // This ensures API is the single source of truth and prevents stale data conflicts
-      if (cartItems.length > 0) {
-        // API returned enrollments - replace cart state entirely
+      if (cartItems.length > 0 || membership) {
+        // API returned enrollments or user needs membership - replace cart state entirely
         dispatch({
           type: 'LOAD_CART',
           payload: {
@@ -1165,6 +1241,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
             ...totals,
             appliedPromoCode: null, // Fresh load - clear promo
             schoolSettings: totals.schoolSettings,
+            membership: membership, // Include membership in initial load
           },
         });
         
@@ -1175,9 +1252,10 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
           ...totals,
           appliedPromoCode: null,
           schoolSettings: totals.schoolSettings,
+          membership: membership, // Persist membership to localStorage
         }));
       } else {
-        // API returned no enrollments - clear cart but mark as hydrated
+        // API returned no enrollments and no membership needed - clear cart but mark as hydrated
         // This prevents checkout page from spinning forever waiting for hydration
         dispatch({ type: 'LOAD_EMPTY_CART' });
         const cartKey = getCartStorageKey(user.email);
@@ -1191,7 +1269,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       processingRef.current = false;
     }
-  }, [user?.email, getAccessToken, userRolesList]);
+  }, [user?.email, getAccessToken, userRolesList, fetchMembershipForCart]);
 
   // Process enrollments data when query result changes
   useEffect(() => {
