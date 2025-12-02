@@ -13,7 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { formatCurrency } from '@/utils/currency';
 
 export default function CartDrawer() {
-  const { cart, isOpen, closeCart, removeItem, clearCart, removeMembership, getItemCount } = useCart();
+  const { cart, isOpen, closeCart, removeItem, clearCart, getItemCount } = useCart();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
@@ -186,20 +186,9 @@ export default function CartDrawer() {
                       </div>
                     </CardHeader>
                     <CardContent className="pt-0">
-                      <div className="flex justify-between items-center">
-                        <p className="text-xs text-muted-foreground">
-                          Required for enrollment. Generates your Member ID.
-                        </p>
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          onClick={() => removeMembership()}
-                          className="h-7 px-2 text-muted-foreground hover:text-destructive"
-                          data-testid="btn-remove-membership"
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Required for enrollment. Generates your Member ID.
+                      </p>
                     </CardContent>
                   </Card>
                 )}
