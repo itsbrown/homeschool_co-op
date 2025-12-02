@@ -11,6 +11,133 @@ const getCartStorageKey = (userEmail?: string | null): string => {
   return userEmail ? `asa_cart_${userEmail}` : 'asa_cart_guest';
 };
 
+// Helper function to create a complete, valid discounts structure
+// This ensures all required fields exist with safe default values
+const buildDefaultDiscounts = (): Cart['discounts'] => ({
+  siblingDiscount: 0,
+  freeAfterThree: 0,
+  appliedDiscounts: [],
+  totalDiscountAmount: 0,
+  discountedChildIds: [],
+  freeItemIds: [],
+});
+
+// Helper to safely parse a number, handling stringified numbers
+const safeNumber = (value: unknown): number | null => {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null;
+  }
+  if (typeof value === 'string') {
+    const parsed = parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+};
+
+// Helper to validate and normalize an AppliedDiscount entry
+// Returns null for completely invalid entries, preserves bundle discount metadata
+const normalizeAppliedDiscount = (discount: Partial<AppliedDiscount> | null | undefined): AppliedDiscount | null => {
+  if (!discount || typeof discount !== 'object') return null;
+  
+  // Required fields must be valid
+  const id = safeNumber(discount.id);
+  const name = typeof discount.name === 'string' ? discount.name : null;
+  
+  // Detect bundle discounts - preserve their identity for UI logic
+  const hasBundleRule = discount.bundleRule && typeof discount.bundleRule === 'object';
+  const isBundle = discount.sourceType === 'bundle' || discount.type === 'bundle' || hasBundleRule;
+  
+  // Determine type - preserve 'bundle' type for bundle discounts
+  let type: 'percentage' | 'fixed_amount' | 'bundle' | null = null;
+  if (discount.type === 'percentage' || discount.type === 'fixed_amount' || discount.type === 'bundle') {
+    type = discount.type;
+  } else if (isBundle) {
+    // Bundle discounts should have type 'bundle' for UI identification
+    type = 'bundle';
+  }
+  
+  // For bundle discounts, value might be derived from bundleRule, so allow 0 as valid
+  const value = safeNumber(discount.value) ?? (isBundle ? 0 : null);
+    
+  // Safely parse discountAmount - crucial for total calculation
+  const discountAmount = safeNumber(discount.discountAmount) ?? 0;
+  const priority = safeNumber(discount.priority) ?? 0;
+  
+  // If id or name is invalid, return null (minimum required for display)
+  if (id === null || name === null) return null;
+  
+  // For non-bundle discounts, type and value are required
+  if (!isBundle && (type === null || value === null)) return null;
+  
+  // Preserve bundle discount identity - type: 'bundle' and sourceType: 'bundle'
+  return {
+    id,
+    name,
+    type: type || (isBundle ? 'bundle' : 'percentage'),
+    value: value ?? 0,
+    discountAmount,
+    priority,
+    bundleRule: discount.bundleRule,
+    sourceType: isBundle ? 'bundle' : discount.sourceType,
+  };
+};
+
+// Helper to clamp a number to non-negative finite value
+const clampNonNegative = (value: number, fallback: number = 0): number => {
+  if (!Number.isFinite(value)) return fallback;
+  return Math.max(0, value);
+};
+
+// Helper function to normalize discounts from API/calculated data
+// Merges provided discounts with defaults to ensure all required fields exist
+const normalizeDiscounts = (discounts: Partial<Cart['discounts']> | null | undefined): Cart['discounts'] => {
+  const defaults = buildDefaultDiscounts();
+  if (!discounts) return defaults;
+  
+  // Validate and filter appliedDiscounts - remove any malformed entries
+  const validatedAppliedDiscounts: AppliedDiscount[] = [];
+  if (Array.isArray(discounts.appliedDiscounts)) {
+    for (const discount of discounts.appliedDiscounts) {
+      const normalized = normalizeAppliedDiscount(discount);
+      if (normalized) {
+        validatedAppliedDiscounts.push(normalized);
+      }
+    }
+  }
+  
+  // Validate sibling and freeAfterThree discounts using safeNumber (handles strings and NaN)
+  const siblingDiscount = clampNonNegative(safeNumber(discounts.siblingDiscount) ?? defaults.siblingDiscount);
+  const freeAfterThree = clampNonNegative(safeNumber(discounts.freeAfterThree) ?? defaults.freeAfterThree);
+  
+  // Calculate total discount amount - use safeNumber for validation
+  const rawTotal = safeNumber(discounts.totalDiscountAmount);
+  let totalDiscountAmount: number;
+  
+  if (rawTotal === null || rawTotal < 0) {
+    // Recalculate from all discount sources (all values already validated/clamped)
+    const appliedTotal = validatedAppliedDiscounts.reduce((sum, d) => sum + d.discountAmount, 0);
+    totalDiscountAmount = appliedTotal + siblingDiscount + freeAfterThree;
+  } else {
+    totalDiscountAmount = rawTotal;
+  }
+  
+  // Final clamp to non-negative
+  totalDiscountAmount = clampNonNegative(totalDiscountAmount);
+  
+  return {
+    siblingDiscount,
+    freeAfterThree,
+    appliedDiscounts: validatedAppliedDiscounts,
+    totalDiscountAmount,
+    discountedChildIds: Array.isArray(discounts.discountedChildIds) 
+      ? discounts.discountedChildIds.filter(id => safeNumber(id) !== null).map(id => safeNumber(id)!) 
+      : defaults.discountedChildIds,
+    freeItemIds: Array.isArray(discounts.freeItemIds)
+      ? discounts.freeItemIds.filter(id => typeof id === 'string')
+      : defaults.freeItemIds,
+  };
+};
+
 export interface CartItem {
   id: string;
   enrollmentId?: number;
@@ -75,7 +202,7 @@ export interface Cart {
 export interface AppliedDiscount {
   id: number;
   name: string;
-  type: 'percentage' | 'fixed_amount';
+  type: 'percentage' | 'fixed_amount' | 'bundle'; // Include 'bundle' for bundle discounts
   value: number;
   discountAmount: number;
   priority: number;
@@ -1103,6 +1230,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Track last processed enrollments to prevent infinite loops
   const lastProcessedEnrollmentsRef = useRef<string>('');
   const processingRef = useRef<boolean>(false);
+  const initialMembershipLoadedRef = useRef<boolean>(false); // Track if we've done initial membership load
 
   // Process enrollments data when it changes
   const processEnrollmentsData = useCallback(async (enrollments: any[]) => {
@@ -1122,9 +1250,10 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       .sort()
       .join('|');
 
-    // Skip if we've already processed this exact data
-    if (lastProcessedEnrollmentsRef.current === enrollmentHash) {
-      console.log('🛒 Skipping processEnrollmentsData - data unchanged');
+    // Skip if we've already processed this exact data AND we've done initial membership load
+    // On first load, we always need to run to fetch membership even if enrollments are empty
+    if (lastProcessedEnrollmentsRef.current === enrollmentHash && initialMembershipLoadedRef.current) {
+      console.log('🛒 Skipping processEnrollmentsData - data unchanged and membership already loaded');
       return;
     }
 
@@ -1223,8 +1352,61 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
       });
 
+      // Helper to safely calculate basic subtotal from items
+      const calculateBasicSubtotal = (items: CartItem[]): number => {
+        return items.reduce((sum, item) => {
+          const price = typeof item.price === 'number' && Number.isFinite(item.price) ? item.price : 0;
+          return sum + price;
+        }, 0);
+      };
+
+      // Helper to validate and build a safe cart payload
+      const buildValidatedCartPayload = (
+        items: CartItem[],
+        rawSubtotal: number,
+        rawTotal: number,
+        rawDiscounts: Cart['discounts'],
+        rawMembership: MembershipFee | null,
+        rawSchoolSettings: Cart['schoolSettings'] | undefined
+      ): Cart => {
+        // Validate numeric fields with Number.isFinite (stricter than !isNaN)
+        const safeSubtotal = Number.isFinite(rawSubtotal) ? rawSubtotal : calculateBasicSubtotal(items);
+        const safeTotal = Number.isFinite(rawTotal) ? rawTotal : safeSubtotal;
+        // Re-normalize discounts to ensure all nested fields are valid
+        const safeDiscounts = normalizeDiscounts(rawDiscounts);
+        
+        return {
+          items: items,
+          subtotal: safeSubtotal,
+          discounts: safeDiscounts,
+          total: safeTotal,
+          membership: rawMembership,
+          appliedPromoCode: null,
+          schoolSettings: rawSchoolSettings,
+        };
+      };
+
       // Use calculateCartTotalsWithDiscounts to fetch school settings and calculate discounts properly
-      const totals = await calculateCartTotalsWithDiscounts(cartItems, getAccessToken, null, userRolesList); // Fresh load - no promo code yet
+      // Wrap in try-catch to handle errors gracefully - cart should still work even if discounts fail
+      let subtotal = 0;
+      let total = 0;
+      let discounts: Cart['discounts'] = buildDefaultDiscounts();
+      let schoolSettings: Cart['schoolSettings'] | undefined = undefined;
+      
+      try {
+        const calculatedTotals = await calculateCartTotalsWithDiscounts(cartItems, getAccessToken, null, userRolesList);
+        subtotal = typeof calculatedTotals.subtotal === 'number' ? calculatedTotals.subtotal : 0;
+        total = typeof calculatedTotals.total === 'number' ? calculatedTotals.total : subtotal;
+        discounts = normalizeDiscounts(calculatedTotals.discounts);
+        schoolSettings = calculatedTotals.schoolSettings;
+      } catch (totalsError) {
+        console.warn('🛒 Error calculating cart totals, using defaults:', totalsError);
+        // Calculate basic totals from items without discounts
+        subtotal = calculateBasicSubtotal(cartItems);
+        total = subtotal;
+        discounts = buildDefaultDiscounts();
+        schoolSettings = undefined;
+      }
 
       // Fetch membership data during cart hydration (non-blocking with timeout)
       // This ensures membership is available when cart first renders
@@ -1233,27 +1415,25 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // CRITICAL: Always replace cart with API data (no localStorage merge)
       // This ensures API is the single source of truth and prevents stale data conflicts
       if (cartItems.length > 0 || membership) {
+        // Build validated cart payload - all fields are sanitized before dispatch/storage
+        const cartPayload = buildValidatedCartPayload(
+          cartItems,
+          subtotal,
+          total,
+          discounts,
+          membership,
+          schoolSettings
+        );
+        
         // API returned enrollments or user needs membership - replace cart state entirely
         dispatch({
           type: 'LOAD_CART',
-          payload: {
-            items: cartItems,
-            ...totals,
-            appliedPromoCode: null, // Fresh load - clear promo
-            schoolSettings: totals.schoolSettings,
-            membership: membership, // Include membership in initial load
-          },
+          payload: cartPayload,
         });
         
-        // Save to localStorage AFTER API normalization for offline resilience
+        // Save to localStorage AFTER validation for offline resilience
         const cartKey = getCartStorageKey(user.email);
-        localStorage.setItem(cartKey, JSON.stringify({
-          items: cartItems,
-          ...totals,
-          appliedPromoCode: null,
-          schoolSettings: totals.schoolSettings,
-          membership: membership, // Persist membership to localStorage
-        }));
+        localStorage.setItem(cartKey, JSON.stringify(cartPayload));
       } else {
         // API returned no enrollments and no membership needed - clear cart but mark as hydrated
         // This prevents checkout page from spinning forever waiting for hydration
@@ -1264,8 +1444,12 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // Update hash to mark this data as processed
       lastProcessedEnrollmentsRef.current = enrollmentHash;
+      // Mark that we've done initial membership load (even on error paths - prevents retry loop)
+      initialMembershipLoadedRef.current = true;
     } catch (error) {
       console.error('Error loading unpaid enrollments:', error);
+      // Mark initial load as complete even on error to prevent retry loops
+      initialMembershipLoadedRef.current = true;
     } finally {
       processingRef.current = false;
     }
@@ -1347,6 +1531,9 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (isAuthenticated === false && user === null) {
       // SECURITY: Clear cart when user is not authenticated to prevent cross-account enrollment risks
       dispatch({ type: 'CLEAR_CART' });
+      // Reset membership tracking for next login
+      initialMembershipLoadedRef.current = false;
+      lastProcessedEnrollmentsRef.current = '';
       // Also clear the query cache for enrollments
       queryClient.setQueryData(['/api/parent/enrollments', null], []);
     }
