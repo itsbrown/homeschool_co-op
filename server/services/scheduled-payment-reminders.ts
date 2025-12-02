@@ -153,7 +153,7 @@ export async function processScheduledPaymentReminders(): Promise<ReminderResult
           
           // Get school name
           if (enrollment.schoolId) {
-            const school = await storage.getSchoolById(enrollment.schoolId);
+            const school = await storage.getSchool(enrollment.schoolId);
             if (school) {
               schoolName = school.name;
             }

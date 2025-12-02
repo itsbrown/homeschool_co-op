@@ -338,7 +338,7 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
         }
         
         // Get school's configured membership fee
-        const parentSchool = await storage.getSchoolById(parent.schoolId);
+        const parentSchool = await storage.getSchool(parent.schoolId);
         const originalMembershipFee = parentSchool?.membershipFeeAmount || 0;
         
         if (!originalMembershipFee) {
