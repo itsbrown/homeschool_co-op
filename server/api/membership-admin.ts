@@ -912,13 +912,6 @@ export const activateParentMembership = async (req: any, res: Response) => {
       return res.status(403).json({ message: "Not authorized - parent belongs to a different school" });
     }
 
-    if (parentUser.memberId && parentUser.memberId.trim() !== '') {
-      return res.status(400).json({ 
-        message: "Parent already has an active membership",
-        memberId: parentUser.memberId
-      });
-    }
-
     // Get school to fetch membership settings
     const schoolId = parentUser.schoolId;
     if (!schoolId) {
@@ -930,13 +923,27 @@ export const activateParentMembership = async (req: any, res: Response) => {
       return res.status(404).json({ message: "School not found" });
     }
 
-    const { generateMemberId } = await import('../utils/membership');
-    const newMemberId = generateMemberId();
+    // Check if parent already has a memberId - if so, we still need to ensure enrollment record exists
+    let newMemberId: string;
+    let updatedUser: any;
+    const alreadyHadMemberId = !!(parentUser.memberId && parentUser.memberId.trim() !== '');
+    
+    if (alreadyHadMemberId) {
+      // Parent already has a memberId - use existing one, just ensure enrollment record exists
+      newMemberId = parentUser.memberId!;
+      updatedUser = parentUser;
+      console.log(`🏅 Parent ${parentUserId} already has memberId ${newMemberId} - ensuring enrollment record exists`);
+    } else {
+      // Generate new memberId for parent
+      const { generateMemberId } = await import('../utils/membership');
+      newMemberId = generateMemberId();
 
-    const updatedUser = await storage.updateUser(parentUserId, { memberId: newMemberId });
+      updatedUser = await storage.updateUser(parentUserId, { memberId: newMemberId });
 
-    if (!updatedUser) {
-      return res.status(500).json({ message: "Failed to update user" });
+      if (!updatedUser) {
+        return res.status(500).json({ message: "Failed to update user" });
+      }
+      console.log(`🏅 Generated new memberId ${newMemberId} for parent ${parentUserId}`);
     }
 
     // Create membership enrollment record with dates
@@ -985,7 +992,7 @@ export const activateParentMembership = async (req: any, res: Response) => {
       ? allMembershipsForSchool.sort((a: any, b: any) => b.membershipYear - a.membershipYear)[0]
       : null;
 
-    let membershipEnrollment = existingMembershipForYear || latestMembership;
+    let membershipEnrollment: any = existingMembershipForYear || latestMembership || null;
 
     if (!existingMembershipForYear && !latestMembership) {
       // Create new membership enrollment - no prior record exists
@@ -1063,11 +1070,16 @@ export const activateParentMembership = async (req: any, res: Response) => {
 
     console.log(`✅ Admin ${userEmail} activated membership for parent ${parentUserId}: ${newMemberId}`);
 
+    const message = alreadyHadMemberId 
+      ? "Membership enrollment record created for existing member"
+      : "Membership activated successfully";
+
     res.json({
       success: true,
-      message: "Membership activated successfully",
+      message,
       parentId: parentUserId,
-      memberId: updatedUser.memberId,
+      memberId: newMemberId,
+      alreadyHadMemberId,
       membershipEnrollment: membershipEnrollment ? {
         id: membershipEnrollment.id,
         status: membershipEnrollment.status,
