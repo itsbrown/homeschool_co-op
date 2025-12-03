@@ -233,6 +233,91 @@ router.post('/login', async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/test/diagnose-user/:email
+ * Check user's status including roles and related data
+ */
+router.get('/diagnose-user/:email', async (req: Request, res: Response) => {
+  try {
+    const email = decodeURIComponent(req.params.email);
+    console.log(`🔍 Diagnosing user: ${email}`);
+    
+    // Get user by email
+    const user = await storage.getUserByEmail(email);
+    if (!user) {
+      return res.json({
+        success: false,
+        error: 'User not found',
+        email
+      });
+    }
+    
+    // Get user roles
+    const userRoles = await storage.getUserRolesByUserId(user.id);
+    
+    // Get children for parent (using email lookup since that's the standard method)
+    const children = await storage.getChildrenByParentEmail(user.email);
+    
+    // Get enrollments for parent
+    const parentEnrollments = await storage.getProgramEnrollmentsByParent(user.id);
+    
+    // Map enrollments to children
+    const childrenEnrollments = children.map((child: any) => {
+      const enrollments = parentEnrollments.filter((e: any) => e.childId === child.id);
+      return {
+        childId: child.id,
+        childName: `${child.firstName} ${child.lastName}`,
+        enrollments: enrollments.map((e: any) => ({
+          id: e.id,
+          status: e.status,
+          classId: e.classId
+        }))
+      };
+    });
+    
+    res.json({
+      success: true,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        schoolId: user.schoolId,
+        activeRoleId: user.activeRoleId,
+        activeRole: user.activeRole
+      },
+      userRoles: userRoles.map((r: any) => ({
+        id: r.id,
+        role: r.role,
+        schoolId: r.schoolId,
+        isPrimary: r.isPrimary
+      })),
+      children: children.map((c: any) => ({
+        id: c.id,
+        name: `${c.firstName} ${c.lastName}`,
+        schoolId: c.schoolId
+      })),
+      childrenEnrollments,
+      diagnosis: {
+        hasUser: true,
+        hasRoles: userRoles.length > 0,
+        hasActiveRoleId: !!user.activeRoleId,
+        hasSchoolId: !!user.schoolId,
+        hasChildren: children.length > 0,
+        roleCount: userRoles.length,
+        childCount: children.length
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Error diagnosing user:', error);
+    res.status(500).json({ 
+      error: 'Failed to diagnose user',
+      details: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+/**
  * POST /api/test/cleanup
  * Clears all test data from storage
  */

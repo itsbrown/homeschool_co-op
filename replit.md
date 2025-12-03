@@ -27,7 +27,7 @@ The platform prioritizes scalability, security, and user experience, incorporati
 -   **Supabase**: Reserved exclusively for authentication (OAuth on frontend, auth admin operations on backend) and NOT for general data persistence.
 
 ### Key Features
--   **Authentication and Authorization**: Supabase-based secure authentication with role-based access control, JWT validation, multi-tenant security, and user metadata auto-sync.
+-   **Authentication and Authorization**: Supabase-based secure authentication with role-based access control, JWT validation, multi-tenant security, user metadata auto-sync, and **automatic database user creation** for Supabase-authenticated users who don't yet have local database records.
 -   **Multi-Role System**: Supports users holding multiple roles with dynamic, school-context-restricted role-switching capabilities. Role management uses a centralized three-way access control helper (`checkSchoolAdminAccessToUser`) for consistent security. RoleSwitcher updates immediately via TanStack Query cache invalidation when roles are added/removed.
 -   **School Branding System**: Allows school administrators to upload and display school logos.
 -   **Membership Management System**: Admin interface for managing annual membership fees and enrollment validation.
