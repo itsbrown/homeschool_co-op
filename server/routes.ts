@@ -2118,6 +2118,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Import and register enrollments API router (protected by supabaseAuth)
   const enrollmentsRouter = await import("./api/enrollments");
   app.use("/api/enrollments", supabaseAuth, enrollmentsRouter.default);
+  // Also mount at /api/parent/enrollments for frontend compatibility
+  app.use("/api/parent/enrollments", supabaseAuth, enrollmentsRouter.default);
 
   // Add children enrollments endpoint
   app.get("/api/children/:id/enrollments", async (req, res) => {

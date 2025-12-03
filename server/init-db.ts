@@ -439,13 +439,36 @@ async function runMigrations() {
     `);
     console.log('✅ Migration completed: Stripe integration columns added to membership_enrollments table');
     
-    // Drop legacy parent_id column from membership_enrollments table (not used - replaced by parent_user_id)
-    console.log('Running migration: Dropping legacy parent_id column from membership_enrollments...');
+    // Migrate legacy parent_id data and drop column from membership_enrollments table
+    console.log('Running migration: Migrating parent_id data and dropping legacy column from membership_enrollments...');
+    
+    // Step 1: Check if parent_id column exists and migrate data to parent_user_id
     await db.execute(sql`
-      ALTER TABLE membership_enrollments 
-      DROP COLUMN IF EXISTS parent_id;
+      DO $$ 
+      BEGIN
+        -- Check if parent_id column exists
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns 
+          WHERE table_name = 'membership_enrollments' AND column_name = 'parent_id'
+        ) THEN
+          -- Migrate data from parent_id to parent_user_id where parent_user_id is null
+          UPDATE membership_enrollments 
+          SET parent_user_id = parent_id 
+          WHERE parent_user_id IS NULL AND parent_id IS NOT NULL;
+          
+          -- Make parent_id nullable to remove any NOT NULL constraint
+          ALTER TABLE membership_enrollments ALTER COLUMN parent_id DROP NOT NULL;
+          
+          -- Drop the parent_id column
+          ALTER TABLE membership_enrollments DROP COLUMN parent_id;
+          
+          RAISE NOTICE 'Successfully migrated and dropped parent_id column';
+        ELSE
+          RAISE NOTICE 'parent_id column does not exist, skipping migration';
+        END IF;
+      END $$;
     `);
-    console.log('✅ Migration completed: legacy parent_id column dropped from membership_enrollments');
+    console.log('✅ Migration completed: legacy parent_id column migrated and dropped from membership_enrollments');
     
     // Add stripe_customer_id column to users table
     console.log('Running migration: Adding stripe_customer_id column to users table...');
