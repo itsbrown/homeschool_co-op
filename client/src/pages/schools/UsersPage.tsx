@@ -18,7 +18,8 @@ import {
   Key,
   Send,
   UserCog,
-  Eye
+  Eye,
+  RefreshCw
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -185,6 +186,34 @@ export default function UsersPage() {
       toast({
         title: "Error",
         description: "Failed to send welcome email. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleResendStaffInvite = async (user: any) => {
+    if (!user.staffId) {
+      toast({
+        title: "Error",
+        description: "Cannot resend invite - staff record not found.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    try {
+      await apiRequest('POST', `/api/school-admin/staff/${user.staffId}/resend-invite`);
+      
+      toast({
+        title: "Success",
+        description: `Invitation resent to ${user.firstName || user.name} ${user.lastName || ''}`.trim(),
+      });
+    } catch (error: any) {
+      console.error('Error resending staff invite:', error);
+      const errorMessage = error?.message || "Failed to resend invitation. Please try again.";
+      toast({
+        title: "Error",
+        description: errorMessage,
         variant: "destructive",
       });
     }
@@ -375,11 +404,15 @@ export default function UsersPage() {
                       <TableCell>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon">
+                            <Button 
+                              variant="ghost" 
+                              className="h-8 w-8 p-0 relative z-10"
+                              data-testid={`button-actions-${user.id}`}
+                            >
                               <MoreHorizontal className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
+                          <DropdownMenuContent align="end" className="z-50">
                             <Link 
                               href={
                                 user.role === 'parent' ? `/schools/parents/${user.id}` :
@@ -414,6 +447,12 @@ export default function UsersPage() {
                               <Send className="h-4 w-4 mr-2" />
                               Resend Welcome Email
                             </DropdownMenuItem>
+                            {user.role === 'staff' && user.staffId && !user.isActive && (
+                              <DropdownMenuItem onClick={() => handleResendStaffInvite(user)}>
+                                <RefreshCw className="h-4 w-4 mr-2" />
+                                Resend Staff Invite
+                              </DropdownMenuItem>
+                            )}
                             <DropdownMenuItem 
                               className="text-destructive"
                               onClick={() => handleDeleteUser(user.id)}

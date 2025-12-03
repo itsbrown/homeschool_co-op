@@ -4096,6 +4096,7 @@ router.get('/users', supabaseAuth, requireSchoolContext, async (req: any, res) =
         
         return {
           id: staffRecord.userId, // Use canonical userId, not staff record's auto-incremented ID
+          staffId: staffRecord.id, // Include staff record ID for resend invite functionality
           email: user.email,
           firstName: user.name.split(' ')[0] || '',
           lastName: user.name.split(' ').slice(1).join(' ') || '',
@@ -4971,8 +4972,12 @@ router.post("/resend-welcome-email", supabaseAuth, async (req: any, res) => {
       });
     }
 
+    // Get firstName - use firstName field or extract from name field
+    const firstName = user.firstName || (user.name ? user.name.split(' ')[0] : null);
+    const lastName = user.lastName || (user.name ? user.name.split(' ').slice(1).join(' ') : '');
+
     // Validate user has required data for welcome email
-    if (!user.email || !user.firstName) {
+    if (!user.email || !firstName) {
       return res.status(400).json({
         success: false,
         message: "User missing required data (email or firstName)"
@@ -4998,8 +5003,8 @@ router.post("/resend-welcome-email", supabaseAuth, async (req: any, res) => {
     
     const emailSent = await sendWelcomeEmail({
       email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName || '',
+      firstName: firstName,
+      lastName: lastName,
       role: user.role || 'parent',
       schoolName
     });
@@ -5011,8 +5016,8 @@ router.post("/resend-welcome-email", supabaseAuth, async (req: any, res) => {
         message: `Welcome email sent to ${user.email}`,
         user: {
           email: user.email,
-          firstName: user.firstName,
-          lastName: user.lastName
+          firstName: firstName,
+          lastName: lastName
         }
       });
     } else {
