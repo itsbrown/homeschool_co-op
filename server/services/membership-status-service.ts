@@ -71,24 +71,23 @@ export class MembershipStatusService {
     const gracePeriodEnd = new Date(membership.gracePeriodEnd);
     const remainingBalance = membership.amount - totalPaid;
     
-    // If fully paid
+    // If fully paid - membership stays enrolled through the paid term
+    // Grace period only applies to UNPAID renewals
     if (remainingBalance <= 0) {
-      // Check if expired
+      // Check if past grace period (term completely ended)
       if (now > gracePeriodEnd) {
-        return 'expired'; // Fully paid but expired
-      } else if (now > expirationDate) {
-        return 'grace_period'; // Fully paid but in grace period  
+        return 'expired'; // Fully paid but the entire term + grace has passed
       } else {
-        return 'active'; // Fully paid and current
+        return 'enrolled'; // Fully paid - stays enrolled through the entire term
       }
     } 
-    // If not fully paid
+    // If not fully paid - subject to grace period rules
     else {
-      // Check if expired
+      // Check if expired (past grace period)
       if (now > gracePeriodEnd) {
-        return 'expired'; // Not paid and expired
+        return 'expired'; // Not paid and grace period ended
       } else if (now > expirationDate) {
-        return 'grace_period'; // Not paid but in grace period
+        return 'grace_period'; // Not paid but within grace period for late payment
       } else {
         // Not expired yet, check payment status
         if (totalPaid > 0) {
@@ -126,6 +125,7 @@ export class MembershipStatusService {
       memberships.forEach(membership => {
         switch (membership.status) {
           case 'active':
+          case 'enrolled': // 'enrolled' is the canonical active status
             summary.active++;
             break;
           case 'pending_payment':

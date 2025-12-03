@@ -380,7 +380,7 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
         totalAmountPaid: CurrencyUtils.toDisplay(totalAmountPaid), // Based on FILTERED payments
         totalAmountDue: CurrencyUtils.toDisplay(totalAmountDue), // Based on FILTERED data
         activeEnrollments: filteredEnrollments.filter(e => ['enrolled', 'pending_payment'].includes(e.status)).length,
-        activeMemberships: membershipEnrollments.filter(m => ['active', 'pending_payment'].includes(m.status)).length
+        activeMemberships: membershipEnrollments.filter(m => ['active', 'enrolled', 'pending_payment'].includes(m.status)).length
       }
     };
 

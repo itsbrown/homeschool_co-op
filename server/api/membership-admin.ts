@@ -6,7 +6,7 @@ import { getStripeClient } from "../config/stripe";
 
 // Schema for updating membership
 const updateMembershipSchema = z.object({
-  status: z.enum(["pending_payment", "active", "expired", "grace_period", "suspended"]).optional(),
+  status: z.enum(["pending_payment", "active", "enrolled", "expired", "grace_period", "suspended"]).optional(),
   amountPaid: z.number().optional(),
   remainingBalance: z.number().optional(),
   expirationDate: z.string().or(z.date()).optional(),
@@ -112,7 +112,7 @@ export const getMySchoolMembershipSummary = async (req: any, res: Response) => {
 
     // Calculate summary
     const total = memberships.length;
-    const active = memberships.filter((m: any) => m.status === 'active').length;
+    const active = memberships.filter((m: any) => m.status === 'active' || m.status === 'enrolled').length;
     const pending = memberships.filter((m: any) => m.status === 'pending_payment').length;
     const expired = memberships.filter((m: any) => m.status === 'expired').length;
     const gracePeriod = memberships.filter((m: any) => m.status === 'grace_period').length;
@@ -869,7 +869,7 @@ export const syncStripeSubscription = async (req: any, res: Response) => {
 };
 
 /**
- * Activate membership for a parent (generate memberId)
+ * Activate membership for a parent (generate memberId and create membership enrollment)
  * Admin only - manually activates a parent's membership
  */
 export const activateParentMembership = async (req: any, res: Response) => {
@@ -919,6 +919,17 @@ export const activateParentMembership = async (req: any, res: Response) => {
       });
     }
 
+    // Get school to fetch membership settings
+    const schoolId = parentUser.schoolId;
+    if (!schoolId) {
+      return res.status(400).json({ message: "Parent does not have a school assigned" });
+    }
+
+    const school = await storage.getSchool(schoolId);
+    if (!school) {
+      return res.status(404).json({ message: "School not found" });
+    }
+
     const { generateMemberId } = await import('../utils/membership');
     const newMemberId = generateMemberId();
 
@@ -928,13 +939,142 @@ export const activateParentMembership = async (req: any, res: Response) => {
       return res.status(500).json({ message: "Failed to update user" });
     }
 
+    // Create membership enrollment record with dates
+    const currentYear = new Date().getFullYear();
+    const renewalMonth = school.membershipRenewalMonth || 9; // Default to September
+    const renewalDay = school.membershipRenewalDay || 1; // Default to 1st
+    const gracePeriodDays = school.membershipGracePeriodDays || 30; // Default to 30 days
+    const membershipFee = school.membershipFeeAmount || 0;
+
+    // Start date is today
+    const startDate = new Date();
+    
+    // Calculate renewal date - next occurrence of renewal month/day
+    let renewalDate = new Date(currentYear, renewalMonth - 1, renewalDay);
+    if (renewalDate <= startDate) {
+      // If renewal date has already passed this year, set it for next year
+      renewalDate = new Date(currentYear + 1, renewalMonth - 1, renewalDay);
+    }
+    
+    // Due date is the renewal date (when next payment is due)
+    const dueDate = new Date(renewalDate);
+    
+    // Expiration date is the day before the renewal date (membership is valid through this day)
+    // This ensures the membership term covers the full period until renewal is due
+    const expirationDate = new Date(renewalDate);
+    expirationDate.setDate(expirationDate.getDate() - 1);
+    
+    // Grace period end extends past the expiration date for unpaid renewals
+    const gracePeriodEnd = new Date(renewalDate);
+    gracePeriodEnd.setDate(gracePeriodEnd.getDate() + gracePeriodDays);
+
+    // Determine membership year based on renewal date
+    const membershipYear = renewalDate.getFullYear();
+
+    // Check for existing membership for this year to avoid duplicates
+    const existingMembershipForYear = await storage.getMembershipEnrollmentByParentAndSchoolAndYear(
+      parentUserId,
+      schoolId,
+      membershipYear
+    );
+
+    // Also check for any existing membership that might need updating (e.g., from prior year)
+    const allParentMemberships = await storage.getMembershipEnrollmentsByParentId(parentUserId);
+    const allMembershipsForSchool = allParentMemberships.filter((m: any) => m.schoolId === schoolId);
+    const latestMembership = allMembershipsForSchool.length > 0 
+      ? allMembershipsForSchool.sort((a: any, b: any) => b.membershipYear - a.membershipYear)[0]
+      : null;
+
+    let membershipEnrollment = existingMembershipForYear || latestMembership;
+
+    if (!existingMembershipForYear && !latestMembership) {
+      // Create new membership enrollment - no prior record exists
+      try {
+        membershipEnrollment = await storage.createMembershipEnrollment({
+          schoolId,
+          parentUserId,
+          membershipYear,
+          amount: membershipFee,
+          amountPaid: membershipFee, // Mark as fully paid since admin is activating manually
+          remainingBalance: 0,
+          status: 'enrolled' as const,
+          dueDate,
+          expirationDate,
+          gracePeriodEnd,
+          paymentMethod: 'other' as const, // Manual activation
+          notes: `Manually activated by admin ${userEmail}`,
+          membershipTier: 'basic' as const,
+          stripeSubscriptionId: null,
+          stripeCustomerId: null,
+          startDate,
+          renewalDate
+        });
+        console.log(`✅ Created membership enrollment ${membershipEnrollment.id} for parent ${parentUserId}`);
+      } catch (enrollmentError: any) {
+        console.error('Error creating membership enrollment:', enrollmentError);
+        // Continue even if enrollment creation fails - memberId is already set
+      }
+    } else if (existingMembershipForYear) {
+      // Update existing enrollment for current year to active status with refreshed dates
+      try {
+        membershipEnrollment = await storage.updateMembershipEnrollment(existingMembershipForYear.id, {
+          status: 'enrolled',
+          amount: membershipFee, // Update to current fee
+          amountPaid: membershipFee,
+          remainingBalance: 0,
+          startDate,
+          renewalDate,
+          dueDate,
+          expirationDate,
+          gracePeriodEnd,
+          notes: `Manually activated by admin ${userEmail}`
+        });
+        console.log(`✅ Updated existing membership enrollment ${existingMembershipForYear.id} for year ${membershipYear}`);
+      } catch (updateError: any) {
+        console.error('Error updating membership enrollment:', updateError);
+      }
+    } else {
+      // Create new enrollment for current year (prior year record exists but not for current year)
+      try {
+        membershipEnrollment = await storage.createMembershipEnrollment({
+          schoolId,
+          parentUserId,
+          membershipYear,
+          amount: membershipFee,
+          amountPaid: membershipFee,
+          remainingBalance: 0,
+          status: 'enrolled' as const,
+          dueDate,
+          expirationDate,
+          gracePeriodEnd,
+          paymentMethod: 'other' as const,
+          notes: `Manually activated by admin ${userEmail}`,
+          membershipTier: 'basic' as const,
+          stripeSubscriptionId: null,
+          stripeCustomerId: null,
+          startDate,
+          renewalDate
+        });
+        console.log(`✅ Created new membership enrollment for year ${membershipYear} (prior year: ${latestMembership?.membershipYear})`);
+      } catch (enrollmentError: any) {
+        console.error('Error creating membership enrollment:', enrollmentError);
+      }
+    }
+
     console.log(`✅ Admin ${userEmail} activated membership for parent ${parentUserId}: ${newMemberId}`);
 
     res.json({
       success: true,
       message: "Membership activated successfully",
       parentId: parentUserId,
-      memberId: updatedUser.memberId
+      memberId: updatedUser.memberId,
+      membershipEnrollment: membershipEnrollment ? {
+        id: membershipEnrollment.id,
+        status: membershipEnrollment.status,
+        startDate: membershipEnrollment.startDate,
+        renewalDate: membershipEnrollment.renewalDate,
+        expirationDate: membershipEnrollment.expirationDate
+      } : null
     });
   } catch (error: any) {
     console.error("Error activating membership:", error);

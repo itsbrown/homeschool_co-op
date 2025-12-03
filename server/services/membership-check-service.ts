@@ -82,8 +82,8 @@ export class MembershipCheckService {
         };
       }
 
-      // Check if membership is fully paid
-      if (membership.status === 'active' || membership.remainingBalance <= 0) {
+      // Check if membership is fully paid ('enrolled' = active in DB schema)
+      if (membership.status === 'active' || membership.status === 'enrolled' || membership.remainingBalance <= 0) {
         return {
           isValid: true,
           membership,

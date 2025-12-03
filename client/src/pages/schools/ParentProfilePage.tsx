@@ -896,9 +896,12 @@ export default function ParentProfilePage() {
               
               {/* Membership Status Badge */}
               {profile.membershipEnrollments.length > 0 && (() => {
-                // Prioritize: active > grace_period > pending_payment by latest renewal date
+                // Helper to check if status is active (enrolled = active in DB schema)
+                const isActiveStatus = (status: string) => status === 'enrolled' || status === 'active';
+                
+                // Prioritize: enrolled/active > grace_period > pending_payment by latest renewal date
                 const sortedEnrollments = [...profile.membershipEnrollments].sort((a, b) => {
-                  const statusPriority = { active: 0, grace_period: 1, pending_payment: 2, expired: 3, cancelled: 4, suspended: 5 };
+                  const statusPriority = { enrolled: 0, active: 0, grace_period: 1, pending_payment: 2, expired: 3, cancelled: 4, suspended: 5 };
                   const aPriority = statusPriority[a.status as keyof typeof statusPriority] ?? 999;
                   const bPriority = statusPriority[b.status as keyof typeof statusPriority] ?? 999;
                   
@@ -914,25 +917,28 @@ export default function ParentProfilePage() {
                 const tierDisplay = (activeMembership.membershipTier || 'basic').charAt(0).toUpperCase() + (activeMembership.membershipTier || 'basic').slice(1);
                 const renewalDate = activeMembership.renewalDate ? new Date(activeMembership.renewalDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A';
                 
+                // Display status text (show "ACTIVE" for "enrolled")
+                const displayStatus = isActiveStatus(activeMembership.status) ? 'ACTIVE' : activeMembership.status.replace('_', ' ').toUpperCase();
+                
                 return (
                   <div className="flex flex-col items-end space-y-2" data-testid="membership-status-badge">
                     <Badge 
                       variant={
-                        activeMembership.status === 'active' ? 'default' :
+                        isActiveStatus(activeMembership.status) ? 'default' :
                         activeMembership.status === 'pending_payment' ? 'secondary' :
                         activeMembership.status === 'grace_period' ? 'outline' :
                         activeMembership.status === 'expired' ? 'destructive' : 'secondary'
                       }
                       className="text-sm"
                     >
-                      {activeMembership.status === 'active' && <CheckCircle className="h-3 w-3 mr-1" />}
+                      {isActiveStatus(activeMembership.status) && <CheckCircle className="h-3 w-3 mr-1" />}
                       {activeMembership.status === 'pending_payment' && <Clock className="h-3 w-3 mr-1" />}
                       {activeMembership.status === 'grace_period' && <AlertTriangle className="h-3 w-3 mr-1" />}
                       {activeMembership.status === 'expired' && <AlertTriangle className="h-3 w-3 mr-1" />}
                       {tierDisplay} Membership
                     </Badge>
                     <div className="flex flex-col items-end text-xs text-muted-foreground">
-                      <span className="font-medium">{activeMembership.status.replace('_', ' ').toUpperCase()}</span>
+                      <span className="font-medium">{displayStatus}</span>
                       <span className="flex items-center">
                         <Calendar className="h-3 w-3 mr-1" />
                         Renews: {renewalDate}
@@ -1432,12 +1438,12 @@ export default function ParentProfilePage() {
                             </div>
                           </div>
                           <Badge variant={
-                            membership.status === 'active' ? 'default' :
+                            (membership.status === 'active' || membership.status === 'enrolled') ? 'default' :
                             membership.status === 'pending_payment' ? 'secondary' :
                             membership.status === 'grace_period' ? 'outline' :
                             membership.status === 'expired' ? 'destructive' : 'secondary'
                           }>
-                            {membership.status.replace('_', ' ').toUpperCase()}
+                            {membership.status === 'enrolled' ? 'ACTIVE' : membership.status.replace('_', ' ').toUpperCase()}
                           </Badge>
                         </div>
                         
