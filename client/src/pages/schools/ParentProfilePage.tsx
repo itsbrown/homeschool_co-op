@@ -37,6 +37,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { 
   ArrowLeft, 
@@ -992,7 +993,7 @@ export default function ParentProfilePage() {
                   </Button>
                 </div>
                 <AlertDialog>
-                  <DialogTrigger asChild>
+                  <AlertDialogTrigger asChild>
                     <Button 
                       variant="destructive" 
                       size="sm"
@@ -1001,7 +1002,7 @@ export default function ParentProfilePage() {
                       <XCircle className="h-4 w-4 mr-1" />
                       Revoke Membership
                     </Button>
-                  </DialogTrigger>
+                  </AlertDialogTrigger>
                   <AlertDialogContent>
                     <AlertDialogHeader>
                       <AlertDialogTitle>Revoke Membership</AlertDialogTitle>
