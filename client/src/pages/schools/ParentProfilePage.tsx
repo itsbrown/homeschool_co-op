@@ -670,7 +670,7 @@ export default function ParentProfilePage() {
   // Activate membership mutation (generates Member ID)
   const activateMembershipMutation = useMutation({
     mutationFn: async (userId: number) => {
-      const response = await apiRequest("POST", `/api/admin/membership/activate/${userId}`);
+      const response = await apiRequest("POST", `/api/admin/parents/${userId}/membership/activate`);
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.message || 'Failed to activate membership');
@@ -696,7 +696,7 @@ export default function ParentProfilePage() {
   // Revoke membership mutation (clears Member ID)
   const revokeMembershipMutation = useMutation({
     mutationFn: async (userId: number) => {
-      const response = await apiRequest("POST", `/api/admin/membership/revoke/${userId}`);
+      const response = await apiRequest("POST", `/api/admin/parents/${userId}/membership/revoke`);
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.message || 'Failed to revoke membership');
