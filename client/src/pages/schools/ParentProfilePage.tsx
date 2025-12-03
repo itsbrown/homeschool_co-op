@@ -50,6 +50,7 @@ import {
   Mail,
   MapPin,
   AlertTriangle,
+  AlertCircle,
   DollarSign,
   Clock,
   CheckCircle,
@@ -981,56 +982,84 @@ export default function ParentProfilePage() {
           </CardHeader>
           <CardContent>
             {profile.parent.memberId ? (
-              <div className="flex items-center justify-between p-4 rounded-lg border bg-gradient-to-r from-primary/5 to-primary/10">
-                <div className="flex items-center gap-3">
-                  <span className="text-sm text-muted-foreground">Member ID:</span>
-                  <code className="text-lg font-mono font-bold text-primary bg-white/50 px-3 py-1 rounded" data-testid="text-admin-member-id">
-                    {profile.parent.memberId}
-                  </code>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    onClick={handleCopyMemberId}
-                    className="h-8"
-                    data-testid="btn-admin-copy-member-id"
-                  >
-                    <Copy className="h-3.5 w-3.5 mr-1" />
-                    Copy
-                  </Button>
-                </div>
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between p-4 rounded-lg border bg-gradient-to-r from-primary/5 to-primary/10">
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm text-muted-foreground">Member ID:</span>
+                    <code className="text-lg font-mono font-bold text-primary bg-white/50 px-3 py-1 rounded" data-testid="text-admin-member-id">
+                      {profile.parent.memberId}
+                    </code>
                     <Button 
-                      variant="destructive" 
-                      size="sm"
-                      data-testid="btn-admin-revoke-membership"
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={handleCopyMemberId}
+                      className="h-8"
+                      data-testid="btn-admin-copy-member-id"
                     >
-                      <XCircle className="h-4 w-4 mr-1" />
-                      Revoke Membership
+                      <Copy className="h-3.5 w-3.5 mr-1" />
+                      Copy
                     </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Revoke Membership</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        Are you sure you want to revoke membership for {profile.parent.firstName} {profile.parent.lastName}?
-                        This will remove their Member ID ({profile.parent.memberId}) from their account.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction
-                        onClick={() => revokeMembershipMutation.mutate(profile.parent.id)}
-                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  </div>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button 
+                        variant="destructive" 
+                        size="sm"
+                        data-testid="btn-admin-revoke-membership"
                       >
-                        {revokeMembershipMutation.isPending ? (
-                          <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                        ) : null}
+                        <XCircle className="h-4 w-4 mr-1" />
                         Revoke Membership
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Revoke Membership</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Are you sure you want to revoke membership for {profile.parent.firstName} {profile.parent.lastName}?
+                          This will remove their Member ID ({profile.parent.memberId}) from their account.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => revokeMembershipMutation.mutate(profile.parent.id)}
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                          {revokeMembershipMutation.isPending ? (
+                            <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                          ) : null}
+                          Revoke Membership
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+                {/* Show warning if member has ID but no enrollment record for this school */}
+                {profile.summary.totalMemberships === 0 && (
+                  <div className="flex items-center justify-between p-4 rounded-lg border border-amber-200 bg-amber-50">
+                    <div className="flex items-center gap-2 text-sm text-amber-800">
+                      <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                      <div>
+                        <p className="font-medium">Missing Enrollment Record</p>
+                        <p className="text-xs text-amber-700">This member has an ID but no enrollment record. Click "Create Enrollment" to add one.</p>
+                      </div>
+                    </div>
+                    <Button 
+                      onClick={() => activateMembershipMutation.mutate(profile.parent.id)}
+                      disabled={activateMembershipMutation.isPending || !schoolId}
+                      size="sm"
+                      className="bg-amber-600 hover:bg-amber-700"
+                      data-testid="btn-admin-create-enrollment"
+                    >
+                      {activateMembershipMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                      ) : (
+                        <Award className="h-4 w-4 mr-1" />
+                      )}
+                      Create Enrollment
+                    </Button>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="flex items-center justify-between p-4 rounded-lg border border-dashed">

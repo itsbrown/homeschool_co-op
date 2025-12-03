@@ -353,7 +353,11 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
           status: membership.status,
           dueDate: membership.dueDate,
           expirationDate: membership.expirationDate,
-          gracePeriodEnd: membership.gracePeriodEnd
+          gracePeriodEnd: membership.gracePeriodEnd,
+          startDate: membership.startDate,
+          renewalDate: membership.renewalDate,
+          membershipTier: membership.membershipTier,
+          stripeSubscriptionId: membership.stripeSubscriptionId
         };
       }),
       paymentHistory: paymentHistory.map(payment => ({
