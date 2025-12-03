@@ -875,16 +875,23 @@ export const syncStripeSubscription = async (req: any, res: Response) => {
 export const activateParentMembership = async (req: any, res: Response) => {
   try {
     const userEmail = req.user?.email || req.auth?.email;
+    const userRole = req.user?.role; // Use active role from supabaseAuth middleware
+    const userSchoolId = req.user?.schoolId;
+    
     if (!userEmail) {
       return res.status(401).json({ message: "Not authenticated" });
     }
 
+    // Verify admin user exists in database
     const adminUser = await storage.getUserByEmail(userEmail);
     if (!adminUser) {
       return res.status(401).json({ message: "Admin user not found" });
     }
 
-    if (adminUser.role !== 'schoolAdmin' && adminUser.role !== 'admin' && adminUser.role !== 'superAdmin') {
+    // Check role from middleware (supports multi-role system)
+    // Fallback to DB role for backwards compatibility
+    const effectiveRole = userRole || adminUser.role;
+    if (!effectiveRole || !['schoolAdmin', 'admin', 'superAdmin'].includes(effectiveRole)) {
       return res.status(403).json({ message: "Not authorized - admin access required" });
     }
 
@@ -898,7 +905,10 @@ export const activateParentMembership = async (req: any, res: Response) => {
       return res.status(404).json({ message: "Parent user not found" });
     }
 
-    if (adminUser.role === 'schoolAdmin' && adminUser.schoolId !== parentUser.schoolId) {
+    // School admins can only activate memberships for parents in their school
+    // Use middleware schoolId with fallback to DB schoolId
+    const effectiveSchoolId = userSchoolId ?? adminUser.schoolId;
+    if (effectiveRole === 'schoolAdmin' && effectiveSchoolId !== parentUser.schoolId) {
       return res.status(403).json({ message: "Not authorized - parent belongs to a different school" });
     }
 
@@ -939,16 +949,23 @@ export const activateParentMembership = async (req: any, res: Response) => {
 export const revokeParentMembership = async (req: any, res: Response) => {
   try {
     const userEmail = req.user?.email || req.auth?.email;
+    const userRole = req.user?.role; // Use active role from supabaseAuth middleware
+    const userSchoolId = req.user?.schoolId;
+    
     if (!userEmail) {
       return res.status(401).json({ message: "Not authenticated" });
     }
 
+    // Verify admin user exists in database
     const adminUser = await storage.getUserByEmail(userEmail);
     if (!adminUser) {
       return res.status(401).json({ message: "Admin user not found" });
     }
 
-    if (adminUser.role !== 'schoolAdmin' && adminUser.role !== 'admin' && adminUser.role !== 'superAdmin') {
+    // Check role from middleware (supports multi-role system)
+    // Fallback to DB role for backwards compatibility
+    const effectiveRole = userRole || adminUser.role;
+    if (!effectiveRole || !['schoolAdmin', 'admin', 'superAdmin'].includes(effectiveRole)) {
       return res.status(403).json({ message: "Not authorized - admin access required" });
     }
 
@@ -962,7 +979,10 @@ export const revokeParentMembership = async (req: any, res: Response) => {
       return res.status(404).json({ message: "Parent user not found" });
     }
 
-    if (adminUser.role === 'schoolAdmin' && adminUser.schoolId !== parentUser.schoolId) {
+    // School admins can only revoke memberships for parents in their school
+    // Use middleware schoolId with fallback to DB schoolId
+    const effectiveSchoolId = userSchoolId ?? adminUser.schoolId;
+    if (effectiveRole === 'schoolAdmin' && effectiveSchoolId !== parentUser.schoolId) {
       return res.status(403).json({ message: "Not authorized - parent belongs to a different school" });
     }
 
@@ -994,16 +1014,23 @@ export const revokeParentMembership = async (req: any, res: Response) => {
 export const getParentMembershipStatus = async (req: any, res: Response) => {
   try {
     const userEmail = req.user?.email || req.auth?.email;
+    const userRole = req.user?.role; // Use active role from supabaseAuth middleware
+    const userSchoolId = req.user?.schoolId;
+    
     if (!userEmail) {
       return res.status(401).json({ message: "Not authenticated" });
     }
 
+    // Verify admin user exists in database
     const adminUser = await storage.getUserByEmail(userEmail);
     if (!adminUser) {
       return res.status(401).json({ message: "Admin user not found" });
     }
 
-    if (adminUser.role !== 'schoolAdmin' && adminUser.role !== 'admin' && adminUser.role !== 'superAdmin') {
+    // Check role from middleware (supports multi-role system)
+    // Fallback to DB role for backwards compatibility
+    const effectiveRole = userRole || adminUser.role;
+    if (!effectiveRole || !['schoolAdmin', 'admin', 'superAdmin'].includes(effectiveRole)) {
       return res.status(403).json({ message: "Not authorized - admin access required" });
     }
 
@@ -1017,7 +1044,10 @@ export const getParentMembershipStatus = async (req: any, res: Response) => {
       return res.status(404).json({ message: "Parent user not found" });
     }
 
-    if (adminUser.role === 'schoolAdmin' && adminUser.schoolId !== parentUser.schoolId) {
+    // School admins can only view memberships for parents in their school
+    // Use middleware schoolId with fallback to DB schoolId
+    const effectiveSchoolId = userSchoolId ?? adminUser.schoolId;
+    if (effectiveRole === 'schoolAdmin' && effectiveSchoolId !== parentUser.schoolId) {
       return res.status(403).json({ message: "Not authorized - parent belongs to a different school" });
     }
 
