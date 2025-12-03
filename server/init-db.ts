@@ -470,6 +470,30 @@ async function runMigrations() {
     `);
     console.log('✅ Migration completed: legacy parent_id column migrated and dropped from membership_enrollments');
     
+    // Drop legacy parent_email column from membership_enrollments table (not in Drizzle schema - we use parentUserId instead)
+    console.log('Running migration: Dropping legacy parent_email column from membership_enrollments...');
+    await db.execute(sql`
+      DO $$ 
+      BEGIN
+        -- Check if parent_email column exists
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns 
+          WHERE table_name = 'membership_enrollments' AND column_name = 'parent_email'
+        ) THEN
+          -- Make parent_email nullable to remove any NOT NULL constraint
+          ALTER TABLE membership_enrollments ALTER COLUMN parent_email DROP NOT NULL;
+          
+          -- Drop the parent_email column
+          ALTER TABLE membership_enrollments DROP COLUMN parent_email;
+          
+          RAISE NOTICE 'Successfully dropped parent_email column';
+        ELSE
+          RAISE NOTICE 'parent_email column does not exist, skipping migration';
+        END IF;
+      END $$;
+    `);
+    console.log('✅ Migration completed: legacy parent_email column dropped from membership_enrollments');
+    
     // Add stripe_customer_id column to users table
     console.log('Running migration: Adding stripe_customer_id column to users table...');
     await db.execute(sql`
