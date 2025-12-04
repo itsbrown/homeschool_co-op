@@ -5060,15 +5060,39 @@ export class MemStorage implements IStorage {
     }
 
     async getActiveRoleInvitation(tokenOrEmail: string): Promise<RoleInvitation | undefined> {
-      return this.dbStorage.getActiveRoleInvitation(tokenOrEmail);
+      try {
+        // Check if dbStorage is actually DatabaseStorage (not the fallback MemStorage)
+        if (this.dbStorage && this.dbStorage !== this.memStorage) {
+          return await this.dbStorage.getActiveRoleInvitation(tokenOrEmail);
+        }
+      } catch (error) {
+        console.error('❌ Error fetching active role invitation from database:', error);
+      }
+      return this.memStorage.getActiveRoleInvitation(tokenOrEmail);
     }
 
     async createRoleInvitation(invitation: InsertRoleInvitation & { invitedBy: number; token: string }): Promise<RoleInvitation> {
-      return this.dbStorage.createRoleInvitation(invitation);
+      try {
+        // Check if dbStorage is actually DatabaseStorage (not the fallback MemStorage)
+        if (this.dbStorage && this.dbStorage !== this.memStorage) {
+          return await this.dbStorage.createRoleInvitation(invitation);
+        }
+      } catch (error) {
+        console.error('❌ Error creating role invitation in database:', error);
+      }
+      return this.memStorage.createRoleInvitation(invitation);
     }
 
     async updateRoleInvitation(id: number, updates: { token?: string; expiresAt?: Date; isActive?: boolean; usedAt?: Date | null }): Promise<any> {
-      return this.dbStorage.updateRoleInvitation(id, updates);
+      try {
+        // Check if dbStorage is actually DatabaseStorage (not the fallback MemStorage)
+        if (this.dbStorage && this.dbStorage !== this.memStorage) {
+          return await this.dbStorage.updateRoleInvitation(id, updates);
+        }
+      } catch (error) {
+        console.error('❌ Error updating role invitation in database:', error);
+      }
+      return this.memStorage.updateRoleInvitation(id, updates);
     }
 
     async acceptRoleInvitation(token: string): Promise<void>;
