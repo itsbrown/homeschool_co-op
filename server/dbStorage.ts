@@ -2631,7 +2631,7 @@ export class DatabaseStorage implements IStorage {
     return invitation;
   }
 
-  async createRoleInvitation(invitation: InsertRoleInvitation & { invitedBy: number }): Promise<RoleInvitation> {
+  async createRoleInvitation(invitation: InsertRoleInvitation & { invitedBy: number; token: string }): Promise<RoleInvitation> {
     const db = await getDb();
     const [newInvitation] = await db.insert(roleInvitations).values(invitation).returning();
     return newInvitation;

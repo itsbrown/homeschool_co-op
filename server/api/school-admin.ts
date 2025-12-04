@@ -1111,6 +1111,7 @@ router.post("/staff/invite", supabaseAuth, async (req: any, res: any) => {
         role: userRole,
         invitedBy: 1,
         schoolId,
+        token: invitationToken,
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
         isActive: true
       });
@@ -1468,6 +1469,7 @@ router.post("/staff/:id/resend-invite", supabaseAuth, async (req: any, res) => {
         role: userRole,
         invitedBy: 1,
         schoolId: staffRecord.schoolId,
+        token: invitationToken,
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
         isActive: true
       });
@@ -1557,6 +1559,7 @@ router.post("/staff/resend-all-invites", supabaseAuth, async (req: any, res: any
             role: userRole,
             invitedBy: 1,
             schoolId: staffRecord.schoolId,
+            token: invitationToken,
             expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
             isActive: true
           });

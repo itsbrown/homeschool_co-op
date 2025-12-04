@@ -272,7 +272,7 @@ export interface IStorage {
 
   // Role Invitation methods
   getActiveRoleInvitation(tokenOrEmail: string): Promise<RoleInvitation | undefined>;
-  createRoleInvitation(invitation: InsertRoleInvitation & { invitedBy: number }): Promise<RoleInvitation>;
+  createRoleInvitation(invitation: InsertRoleInvitation & { invitedBy: number; token: string }): Promise<RoleInvitation>;
   acceptRoleInvitation(token: string, userEmail: string): Promise<RoleInvitation | undefined>;
   getRoleInvitationsByInviter(inviterId: number): Promise<RoleInvitation[]>;
   getPendingRoleInvitationsByEmails(emails: string[]): Promise<Map<string, boolean>>;
@@ -5039,7 +5039,7 @@ export class MemStorage implements IStorage {
       return this.dbStorage.getActiveRoleInvitation(tokenOrEmail);
     }
 
-    async createRoleInvitation(invitation: InsertRoleInvitation & { invitedBy: number }): Promise<RoleInvitation> {
+    async createRoleInvitation(invitation: InsertRoleInvitation & { invitedBy: number; token: string }): Promise<RoleInvitation> {
       return this.dbStorage.createRoleInvitation(invitation);
     }
 

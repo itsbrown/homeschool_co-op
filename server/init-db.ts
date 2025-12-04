@@ -102,6 +102,14 @@ async function runMigrations() {
     `);
     console.log('✅ Migration completed: used column renamed to used_at in role_invitations table');
     
+    // Add invited_by column to role_invitations table if it doesn't exist
+    console.log('Running migration: Adding invited_by column to role_invitations table...');
+    await db.execute(sql`
+      ALTER TABLE role_invitations 
+      ADD COLUMN IF NOT EXISTS invited_by INTEGER REFERENCES users(id);
+    `);
+    console.log('✅ Migration completed: invited_by column added to role_invitations table');
+    
     // Add bundle_rule column to discounts table
     console.log('Running migration: Adding bundle_rule column to discounts table...');
     await db.execute(sql`
