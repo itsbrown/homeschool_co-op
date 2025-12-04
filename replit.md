@@ -6,6 +6,11 @@ The ASA Learning Platform is an adaptive learning application designed for the A
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 
+## Debugging Guidelines
+- **Trace the entire request flow from endpoint to database before making fixes**, not just the layer where the problem appears to be. Follow the code path through: API route → storage interface → actual storage implementation (database or memory) to ensure all layers are using the correct data source.
+- **HybridStorage architecture**: `dbStorage` can be either DatabaseStorage or MemStorage (fallback). Use identity comparison (`this.dbStorage !== this.memStorage`) to detect real database availability.
+- **Watch for duplicate storage mechanisms**: Some API files may have their own in-memory Maps or caches that bypass the central storage system entirely. Check for module-level variables in API route files.
+
 ## System Architecture
 ### Core Design Principles
 The platform prioritizes scalability, security, and user experience, incorporating role-based access control, AI-driven content generation, a comprehensive payment system, and multi-tenant security for data isolation.
