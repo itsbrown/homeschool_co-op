@@ -5858,6 +5858,31 @@ export class MemStorage implements IStorage {
         return this.dbStorage.deleteExpiredPasswordResetTokens();
       }
 
+      // School Document methods
+      async getSchoolDocumentById(id: number): Promise<SchoolDocument | undefined> {
+        return this.dbStorage.getSchoolDocumentById(id);
+      }
+
+      async getSchoolDocumentsBySchoolId(schoolId: number): Promise<SchoolDocument[]> {
+        return this.dbStorage.getSchoolDocumentsBySchoolId(schoolId);
+      }
+
+      async getPublishedSchoolDocuments(schoolId: number): Promise<SchoolDocument[]> {
+        return this.dbStorage.getPublishedSchoolDocuments(schoolId);
+      }
+
+      async createSchoolDocument(document: InsertSchoolDocument): Promise<SchoolDocument> {
+        return this.dbStorage.createSchoolDocument(document);
+      }
+
+      async updateSchoolDocument(id: number, document: Partial<InsertSchoolDocument>): Promise<SchoolDocument | undefined> {
+        return this.dbStorage.updateSchoolDocument(id, document);
+      }
+
+      async deleteSchoolDocument(id: number): Promise<void> {
+        return this.dbStorage.deleteSchoolDocument(id);
+      }
+
       // Database initialization methods
       async initializeNotifications(): Promise<void> {
         return this.dbStorage.initializeNotifications();
