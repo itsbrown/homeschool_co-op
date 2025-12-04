@@ -26,7 +26,8 @@ import {
   CreditCard,
   UserPlus,
   ClipboardList,
-  Tag
+  Tag,
+  FileText
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -83,6 +84,11 @@ const adminNavItems: NavItem[] = [
     title: 'Forms',
     href: '/school-admin/forms',
     icon: ClipboardList,
+  },
+  {
+    title: 'Documents',
+    href: '/school-admin/documents',
+    icon: FileText,
   },
   {
     title: 'Discounts',
