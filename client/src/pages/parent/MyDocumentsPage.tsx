@@ -3,9 +3,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { FileText, FolderOpen, Loader2, ArrowLeft, Download, Eye } from "lucide-react";
+import { FileText, FolderOpen, Loader2, Eye } from "lucide-react";
 import { useAuth } from "@/components/SupabaseProvider";
 import { queryClient } from "@/lib/queryClient";
+import ParentAppShell from "@/components/layout/ParentAppShell";
 
 interface ParentDocument {
   id: number;
@@ -45,27 +46,19 @@ export default function MyDocumentsPage() {
   });
 
   return (
-    <div className="p-4 md:p-6 space-y-6">
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="sm" asChild>
-          <Link href="/dashboard">
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Dashboard
-          </Link>
-        </Button>
-      </div>
+    <ParentAppShell>
+      <div className="p-4 md:p-6 space-y-6">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-2">
+            <FolderOpen className="h-7 w-7" />
+            My Documents
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            View and download your signed agreements and important documents
+          </p>
+        </div>
 
-      <div>
-        <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-2">
-          <FolderOpen className="h-7 w-7" />
-          My Documents
-        </h1>
-        <p className="text-muted-foreground mt-1">
-          View and download your signed agreements and important documents
-        </p>
-      </div>
-
-      <Card data-testid="card-all-documents">
+        <Card data-testid="card-all-documents">
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle>Signed Agreements</CardTitle>
@@ -152,6 +145,7 @@ export default function MyDocumentsPage() {
           )}
         </CardContent>
       </Card>
-    </div>
+      </div>
+    </ParentAppShell>
   );
 }
