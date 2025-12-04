@@ -5,6 +5,21 @@ import { supabaseStorage } from "../supabase-storage";
 
 const router = Router();
 
+// Map Supabase snake_case fields to camelCase DTO for consistent API responses
+function mapInvitationToDTO(invitation: any) {
+  return {
+    id: invitation.id,
+    email: invitation.email,
+    role: invitation.role,
+    token: invitation.token,
+    invitedBy: invitation.invited_by,
+    isActive: invitation.is_active,
+    usedAt: invitation.used_at,
+    createdAt: invitation.created_at,
+    expiresAt: invitation.expires_at
+  };
+}
+
 // Initialize Brevo
 let brevoApiInstance: brevo.TransactionalEmailsApi | null = null;
 if (process.env.BREVO_API_KEY) {
@@ -92,7 +107,7 @@ This invitation will expire in 7 days. If you have any questions, please contact
 router.get("/", async (req, res) => {
   try {
     const invitations = await supabaseStorage.getRoleInvitations();
-    res.status(200).json(invitations);
+    res.status(200).json(invitations.map(mapInvitationToDTO));
   } catch (error) {
     console.error("Error fetching role invitations:", error);
     res.status(500).json({ message: "Error fetching invitations" });
@@ -147,14 +162,15 @@ router.post("/", async (req, res) => {
       console.warn(`⚠️ Email delivery failed for invitation to ${email}, but invitation was created`);
     }
 
+    const invitationDTO = mapInvitationToDTO(invitation);
     res.status(201).json({
       message: emailSent ? "Invitation sent successfully" : "Invitation created but email delivery failed",
       invitation: {
-        id: invitation.id,
-        email: invitation.email,
-        role: invitation.role,
-        createdAt: invitation.createdAt,
-        expiresAt: invitation.expiresAt
+        id: invitationDTO.id,
+        email: invitationDTO.email,
+        role: invitationDTO.role,
+        createdAt: invitationDTO.createdAt,
+        expiresAt: invitationDTO.expiresAt
       },
       emailSent
     });
@@ -168,15 +184,9 @@ router.post("/", async (req, res) => {
 router.delete("/:id", async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const invitation = roleInvitations.get(id);
-
-    if (!invitation) {
-      return res.status(404).json({ message: "Invitation not found" });
-    }
-
-    // Mark invitation as inactive
-    invitation.isActive = false;
-    roleInvitations.set(id, invitation);
+    
+    // Try to revoke - this will throw if not found
+    await supabaseStorage.revokeRoleInvitation(id);
 
     res.status(200).json({ message: "Invitation revoked successfully" });
   } catch (error) {
@@ -194,8 +204,7 @@ router.post("/check", async (req, res) => {
       return res.status(400).json({ message: "Email is required" });
     }
 
-    const invitation = Array.from(roleInvitations.values())
-      .find(inv => inv.email === email && inv.isActive && !inv.usedAt && inv.expiresAt > new Date());
+    const invitation = await supabaseStorage.getActiveRoleInvitation(email);
 
     if (invitation) {
       return res.status(200).json({
@@ -221,27 +230,28 @@ router.get("/validate", async (req, res) => {
       return res.status(400).json({ valid: false, message: 'Token is required' });
     }
 
-    const invitation = Array.from(roleInvitations.values())
-      .find(inv => inv.token === token && inv.isActive && !inv.usedAt);
+    const invitation = await supabaseStorage.getActiveRoleInvitation(token);
     
     if (!invitation) {
       return res.status(404).json({ valid: false, message: 'Invalid or expired invitation' });
     }
 
+    const invitationDTO = mapInvitationToDTO(invitation);
+    
     // Check if invitation has expired
-    if (new Date() > invitation.expiresAt) {
+    if (invitationDTO.expiresAt && new Date() > new Date(invitationDTO.expiresAt)) {
       return res.status(400).json({ valid: false, message: 'Invitation has expired' });
     }
 
     return res.json({ 
       valid: true, 
       invitation: {
-        id: invitation.id,
-        email: invitation.email,
-        role: invitation.role,
-        invitedBy: invitation.invitedBy,
-        createdAt: invitation.createdAt,
-        expiresAt: invitation.expiresAt
+        id: invitationDTO.id,
+        email: invitationDTO.email,
+        role: invitationDTO.role,
+        invitedBy: invitationDTO.invitedBy,
+        createdAt: invitationDTO.createdAt,
+        expiresAt: invitationDTO.expiresAt
       }
     });
   } catch (error) {
@@ -259,25 +269,25 @@ router.post("/accept", async (req, res) => {
       return res.status(400).json({ message: "Token is required" });
     }
 
-    const invitation = Array.from(roleInvitations.values())
-      .find(inv => inv.token === token && inv.isActive && !inv.usedAt);
+    const invitation = await supabaseStorage.getActiveRoleInvitation(token);
 
     if (!invitation) {
       return res.status(404).json({ message: "Invalid or expired invitation" });
     }
 
-    if (invitation.expiresAt < new Date()) {
+    const invitationDTO = mapInvitationToDTO(invitation);
+    
+    if (invitationDTO.expiresAt && new Date(invitationDTO.expiresAt) < new Date()) {
       return res.status(400).json({ message: "Invitation has expired" });
     }
 
-    // Mark invitation as used
-    invitation.usedAt = new Date();
-    roleInvitations.set(invitation.id, invitation);
+    // Mark invitation as used in database
+    await supabaseStorage.acceptRoleInvitation(token);
 
     res.status(200).json({
       message: "Invitation accepted successfully",
-      role: invitation.role,
-      email: invitation.email
+      role: invitationDTO.role,
+      email: invitationDTO.email
     });
   } catch (error) {
     console.error("Error accepting invitation:", error);

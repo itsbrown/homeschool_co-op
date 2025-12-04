@@ -3059,6 +3059,98 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Registration routes
   const registrationRouter = (await import("./api/registration")).default;
   app.use("/api/registration", registrationRouter);
+  
+  // Helper to map Supabase snake_case fields to camelCase DTO
+  function mapInvitationToDTO(invitation: any) {
+    return {
+      id: invitation.id,
+      email: invitation.email,
+      role: invitation.role,
+      token: invitation.token,
+      invitedBy: invitation.invited_by,
+      isActive: invitation.is_active,
+      usedAt: invitation.used_at,
+      createdAt: invitation.created_at,
+      expiresAt: invitation.expires_at
+    };
+  }
+
+  // Public role invitation validation endpoint (no auth required for invitation recipients)
+  app.get("/api/public/role-invitations/validate", async (req, res) => {
+    try {
+      const { token } = req.query;
+      
+      if (!token || typeof token !== 'string') {
+        return res.status(400).json({ valid: false, message: 'Token is required' });
+      }
+
+      const { supabaseStorage } = await import("./supabase-storage");
+      const invitation = await supabaseStorage.getActiveRoleInvitation(token);
+      
+      if (!invitation) {
+        return res.status(404).json({ valid: false, message: 'Invalid or expired invitation' });
+      }
+
+      const invitationDTO = mapInvitationToDTO(invitation);
+      
+      // Check if invitation has expired
+      if (invitationDTO.expiresAt && new Date() > new Date(invitationDTO.expiresAt)) {
+        return res.status(400).json({ valid: false, message: 'Invitation has expired' });
+      }
+
+      return res.json({ 
+        valid: true, 
+        invitation: {
+          id: invitationDTO.id,
+          email: invitationDTO.email,
+          role: invitationDTO.role,
+          invitedBy: invitationDTO.invitedBy,
+          createdAt: invitationDTO.createdAt,
+          expiresAt: invitationDTO.expiresAt
+        }
+      });
+    } catch (error) {
+      console.error('Error validating invitation:', error);
+      return res.status(500).json({ valid: false, message: 'Failed to validate invitation' });
+    }
+  });
+  
+  // Public role invitation accept endpoint (no auth required for invitation recipients)
+  app.post("/api/public/role-invitations/accept", async (req, res) => {
+    try {
+      const { token } = req.body;
+
+      if (!token) {
+        return res.status(400).json({ message: "Token is required" });
+      }
+
+      const { supabaseStorage } = await import("./supabase-storage");
+      const invitation = await supabaseStorage.getActiveRoleInvitation(token);
+
+      if (!invitation) {
+        return res.status(404).json({ message: "Invalid or expired invitation" });
+      }
+
+      const invitationDTO = mapInvitationToDTO(invitation);
+      
+      if (invitationDTO.expiresAt && new Date(invitationDTO.expiresAt) < new Date()) {
+        return res.status(400).json({ message: "Invitation has expired" });
+      }
+
+      // Mark invitation as used in database
+      await supabaseStorage.acceptRoleInvitation(token);
+
+      res.status(200).json({
+        message: "Invitation accepted successfully",
+        role: invitationDTO.role,
+        email: invitationDTO.email
+      });
+    } catch (error) {
+      console.error("Error accepting invitation:", error);
+      res.status(500).json({ message: "Error accepting invitation" });
+    }
+  });
+  
   app.use("/api/admin/role-invitations", roleInvitationsRouter);
 
   // School Applications route
