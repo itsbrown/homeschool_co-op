@@ -321,7 +321,7 @@ export default function StaffPage() {
                                     <DropdownMenuItem asChild>
                                       <Link href={`/schools/staff/${member.id}/edit`}>Edit</Link>
                                     </DropdownMenuItem>
-                                    {member.status === "Pending" && (
+                                    {(member.status === "Pending" || member.status === "Inactive") && (
                                       <DropdownMenuItem 
                                         onClick={() => resendInviteMutation.mutate(member.id)}
                                         disabled={resendInviteMutation.isPending}
@@ -411,7 +411,7 @@ export default function StaffPage() {
                                 <DropdownMenuItem asChild>
                                   <Link href={`/schools/staff/${member.id}/edit`}>Edit</Link>
                                 </DropdownMenuItem>
-                                {member.status === "Pending" && (
+                                {(member.status === "Pending" || member.status === "Inactive") && (
                                   <DropdownMenuItem 
                                     onClick={() => resendInviteMutation.mutate(member.id)}
                                     disabled={resendInviteMutation.isPending}
@@ -481,7 +481,7 @@ export default function StaffPage() {
                             <Button size="sm" variant="outline">
                               <Link href={`/schools/staff/${member.id}/edit`}>Edit</Link>
                             </Button>
-                            {member.status === "Pending" && (
+                            {(member.status === "Pending" || member.status === "Inactive") && (
                               <Button 
                                 size="sm" 
                                 variant="outline"
