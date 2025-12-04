@@ -171,6 +171,7 @@ export interface IStorage {
   createRoleInvitation(invitation: any): Promise<any>;
   getRoleInvitations(): Promise<any[]>;
   getActiveRoleInvitation(tokenOrEmail: string): Promise<any>;
+  updateRoleInvitation(id: number, updates: { token?: string; expiresAt?: Date; isActive?: boolean; usedAt?: Date | null }): Promise<any>;
   acceptRoleInvitation(token: string): Promise<void>;
   revokeRoleInvitation(id: number): Promise<void>;
 
@@ -3941,6 +3942,11 @@ export class MemStorage implements IStorage {
     return null;
   }
 
+  async updateRoleInvitation(id: number, updates: { token?: string; expiresAt?: Date; isActive?: boolean; usedAt?: Date | null }): Promise<any> {
+    // For in-memory storage, return null/undefined
+    return null;
+  }
+
   async acceptRoleInvitation(token: string, userEmail?: string): Promise<any> {
     // For in-memory storage, return null/undefined
     return null;
@@ -5059,6 +5065,10 @@ export class MemStorage implements IStorage {
 
     async createRoleInvitation(invitation: InsertRoleInvitation & { invitedBy: number; token: string }): Promise<RoleInvitation> {
       return this.dbStorage.createRoleInvitation(invitation);
+    }
+
+    async updateRoleInvitation(id: number, updates: { token?: string; expiresAt?: Date; isActive?: boolean; usedAt?: Date | null }): Promise<any> {
+      return this.dbStorage.updateRoleInvitation(id, updates);
     }
 
     async acceptRoleInvitation(token: string): Promise<void>;

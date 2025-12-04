@@ -2754,6 +2754,16 @@ export class DatabaseStorage implements IStorage {
     return newInvitation;
   }
 
+  async updateRoleInvitation(id: number, updates: { token?: string; expiresAt?: Date; isActive?: boolean; usedAt?: Date | null }): Promise<RoleInvitation | undefined> {
+    const db = await getDb();
+    const [updatedInvitation] = await db
+      .update(roleInvitations)
+      .set(updates)
+      .where(eq(roleInvitations.id, id))
+      .returning();
+    return updatedInvitation;
+  }
+
   async acceptRoleInvitation(token: string, userEmail: string): Promise<RoleInvitation | undefined> {
     const db = await getDb();
     const now = new Date();

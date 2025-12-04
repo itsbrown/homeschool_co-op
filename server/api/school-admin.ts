@@ -1460,10 +1460,21 @@ router.post("/staff/:id/resend-invite", supabaseAuth, async (req: any, res) => {
       inv.email === user.email && inv.schoolId === staffRecord.schoolId
     );
 
-    if (!existingInvitation) {
+    const mappedRole = staffRecord.role;
+    const userRole = mappedRole === 'administrator' ? 'admin' : mappedRole === 'teacher' ? 'teacher' : 'teacher';
+
+    if (existingInvitation) {
+      // Update existing invitation with new token and reset expiration
+      console.log(`📧 Updating existing invitation for ${user.email} with new token`);
+      await storage.updateRoleInvitation(existingInvitation.id, {
+        token: invitationToken,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        isActive: true,
+        usedAt: null // Reset used status so invitation can be accepted again
+      });
+    } else {
       // Create new invitation
-      const mappedRole = staffRecord.role;
-      const userRole = mappedRole === 'administrator' ? 'admin' : mappedRole === 'teacher' ? 'teacher' : 'teacher';
+      console.log(`📧 Creating new invitation for ${user.email}`);
       await storage.createRoleInvitation({
         email: user.email,
         role: userRole,
@@ -1551,9 +1562,21 @@ router.post("/staff/resend-all-invites", supabaseAuth, async (req: any, res: any
           inv.email === user.email && inv.schoolId === staffRecord.schoolId
         );
 
-        if (!existingInvitation) {
-          const mappedRole = staffRecord.role;
-          const userRole = mappedRole === 'administrator' ? 'admin' : mappedRole === 'teacher' ? 'teacher' : 'teacher';
+        const mappedRole = staffRecord.role;
+        const userRole = mappedRole === 'administrator' ? 'admin' : mappedRole === 'teacher' ? 'teacher' : 'teacher';
+
+        if (existingInvitation) {
+          // Update existing invitation with new token and reset expiration
+          console.log(`📧 [Bulk] Updating existing invitation for ${user.email} with new token`);
+          await storage.updateRoleInvitation(existingInvitation.id, {
+            token: invitationToken,
+            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+            isActive: true,
+            usedAt: null // Reset used status so invitation can be accepted again
+          });
+        } else {
+          // Create new invitation
+          console.log(`📧 [Bulk] Creating new invitation for ${user.email}`);
           await storage.createRoleInvitation({
             email: user.email,
             role: userRole,
