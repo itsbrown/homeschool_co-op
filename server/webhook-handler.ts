@@ -3,6 +3,7 @@ import Stripe from 'stripe';
 import { storage } from './storage';
 import { sendPaymentReceipt } from './lib/email-service';
 import { getStripeClient } from './config/stripe';
+import { createReceiptFromPayment } from './services/receiptService';
 
 // Stripe client will be lazily initialized within the webhook handler
 
@@ -198,6 +199,18 @@ export const webhookHandler = async (req: Request, res: Response) => {
 
           await storage.createPayment(payment);
           console.log('✅ Payment record created in database for checkout session:', session.id);
+          
+          // Create payment receipt record for parent documents
+          await createReceiptFromPayment({
+            schoolId: schoolIdForSession,
+            parentId: parentUserForSession?.id,
+            parentEmail: parentEmail,
+            amount: paymentIntent.amount,
+            description: payment.description,
+            childName: payment.childName,
+            className: payment.className,
+            enrollmentIds: updatedEnrollments.map((e: any) => e.id)
+          });
         }
         
       } catch (error) {
@@ -300,6 +313,18 @@ export const webhookHandler = async (req: Request, res: Response) => {
 
             await storage.createPayment(payment);
             console.log(`✅ Created payment history record for scheduled payment ${scheduledPaymentId}`);
+            
+            // Create payment receipt record for parent documents
+            await createReceiptFromPayment({
+              schoolId,
+              parentId: parentUser?.id,
+              parentEmail: parentEmail,
+              amount: paymentIntent.amount,
+              description: `Scheduled payment ${scheduledPayment.installmentNumber} of ${scheduledPayment.totalInstallments} - ${payment.className}`,
+              childName: payment.childName,
+              className: payment.className,
+              enrollmentIds: scheduledPayment.enrollmentIds || []
+            });
             
             // Send email receipt for scheduled payment
             try {
@@ -444,6 +469,18 @@ export const webhookHandler = async (req: Request, res: Response) => {
               });
               
               console.log('📧 Balance payment receipt email sent to:', parentEmail);
+              
+              // Create payment receipt record for parent documents
+              await createReceiptFromPayment({
+                schoolId: parentUser?.schoolId || 1,
+                parentId: parentUser?.id,
+                parentEmail: parentEmail,
+                amount: paymentIntent.amount,
+                description: `Balance payment for ${enrollmentIds.length} enrollment${enrollmentIds.length > 1 ? 's' : ''}`,
+                childName: firstEnrollment?.childName || 'Student',
+                className: firstEnrollment?.className || 'Class',
+                enrollmentIds
+              });
             }
           } catch (emailError) {
             console.error('❌ Failed to send balance payment receipt email:', emailError);
@@ -530,6 +567,18 @@ export const webhookHandler = async (req: Request, res: Response) => {
 
             await storage.createPayment(payment);
             console.log('✅ Payment record created for payment:', paymentIntent.id);
+            
+            // Create payment receipt record for parent documents
+            await createReceiptFromPayment({
+              schoolId: schoolIdForPayment,
+              parentId: parentUserForPayment?.id,
+              parentEmail: parentEmail,
+              amount: paymentIntent.amount,
+              description: payment.description,
+              childName: payment.childName,
+              className: payment.className,
+              enrollmentIds: updatedEnrollments.map((e: any) => e.id)
+            });
             
             // Real-time update for cart payments
             try {

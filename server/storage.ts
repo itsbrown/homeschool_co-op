@@ -12,6 +12,8 @@ import {
   programEnrollments, type ProgramEnrollment, type InsertProgramEnrollment,
   membershipEnrollments, type MembershipEnrollment, type InsertMembershipEnrollment,
   membershipAgreements, type MembershipAgreement, type InsertMembershipAgreement,
+  schoolDocuments, type SchoolDocument, type InsertSchoolDocument,
+  paymentReceipts, type PaymentReceipt, type InsertPaymentReceipt,
   stripeSubscriptionSchedules, type StripeSubscriptionSchedule, type InsertStripeSubscriptionSchedule,
   stripePaymentHistory, type StripePaymentHistory, type InsertStripePaymentHistory,
   classes, type Class, type InsertClass,
@@ -219,6 +221,22 @@ export interface IStorage {
   getLatestMembershipAgreementByParentAndSchool(parentUserId: number, schoolId: number): Promise<MembershipAgreement | undefined>;
   createMembershipAgreement(agreement: InsertMembershipAgreement): Promise<MembershipAgreement>;
   hasSignedCurrentAgreement(parentUserId: number, schoolId: number, currentVersion: string): Promise<boolean>;
+
+  // School Documents methods
+  getSchoolDocumentById(id: number): Promise<SchoolDocument | undefined>;
+  getSchoolDocumentsBySchoolId(schoolId: number): Promise<SchoolDocument[]>;
+  getPublishedSchoolDocuments(schoolId: number): Promise<SchoolDocument[]>;
+  createSchoolDocument(document: InsertSchoolDocument): Promise<SchoolDocument>;
+  updateSchoolDocument(id: number, document: Partial<InsertSchoolDocument>): Promise<SchoolDocument | undefined>;
+  deleteSchoolDocument(id: number): Promise<void>;
+
+  // Payment Receipts methods
+  getPaymentReceiptById(id: number): Promise<PaymentReceipt | undefined>;
+  getPaymentReceiptByNumber(receiptNumber: string): Promise<PaymentReceipt | undefined>;
+  getPaymentReceiptsByParentId(parentUserId: number): Promise<PaymentReceipt[]>;
+  getPaymentReceiptsBySchoolId(schoolId: number): Promise<PaymentReceipt[]>;
+  createPaymentReceipt(receipt: InsertPaymentReceipt): Promise<PaymentReceipt>;
+  updatePaymentReceiptStatus(id: number, status: 'generated' | 'downloaded' | 'emailed'): Promise<PaymentReceipt | undefined>;
 
   // Class Enrollment methods (DEPRECATED - Use Program Enrollment methods above)
   /**

@@ -710,6 +710,59 @@ async function runMigrations() {
     `);
     console.log('✅ Migration completed: member_id column added to users table');
     
+    // Create school_documents table for admin-uploaded documents
+    console.log('Running migration: Creating school_documents table...');
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS school_documents (
+        id SERIAL PRIMARY KEY,
+        school_id INTEGER NOT NULL REFERENCES schools(id),
+        uploaded_by INTEGER NOT NULL REFERENCES users(id),
+        title TEXT NOT NULL,
+        description TEXT,
+        category TEXT DEFAULT 'other' NOT NULL,
+        file_name TEXT NOT NULL,
+        file_path TEXT NOT NULL,
+        file_size INTEGER NOT NULL,
+        mime_type TEXT NOT NULL,
+        is_published BOOLEAN DEFAULT true NOT NULL,
+        visible_to_all BOOLEAN DEFAULT true NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+      );
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_school_documents_school_id ON school_documents(school_id);
+    `);
+    console.log('✅ Migration completed: school_documents table created');
+    
+    // Create payment_receipts table for automatic payment receipts
+    console.log('Running migration: Creating payment_receipts table...');
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS payment_receipts (
+        id SERIAL PRIMARY KEY,
+        school_id INTEGER NOT NULL REFERENCES schools(id),
+        parent_user_id INTEGER NOT NULL REFERENCES users(id),
+        receipt_number TEXT NOT NULL UNIQUE,
+        stripe_payment_intent_id TEXT,
+        enrollment_ids INTEGER[],
+        child_names TEXT[],
+        class_names TEXT[],
+        amount INTEGER NOT NULL,
+        payment_method TEXT,
+        payment_date TIMESTAMP DEFAULT NOW() NOT NULL,
+        status TEXT DEFAULT 'generated' NOT NULL,
+        metadata JSONB DEFAULT '{}' NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL
+      );
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_payment_receipts_school_id ON payment_receipts(school_id);
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_payment_receipts_parent_user_id ON payment_receipts(parent_user_id);
+    `);
+    console.log('✅ Migration completed: payment_receipts table created');
+    
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     

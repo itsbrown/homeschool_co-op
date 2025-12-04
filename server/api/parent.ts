@@ -805,4 +805,103 @@ router.put('/member-id', jwtCheck, async (req: any, res) => {
   }
 });
 
+// Get school documents published for parents
+router.get('/school-documents', jwtCheck, async (req: any, res) => {
+  try {
+    console.log('📄 Get parent school documents API called');
+
+    const userEmail = req.auth?.email || req.user?.email;
+    
+    if (!userEmail) {
+      return res.status(401).json({ 
+        message: 'Authentication required',
+        error: 'NO_USER_EMAIL'
+      });
+    }
+
+    const user = await storage.getUserByEmail(userEmail);
+    if (!user) {
+      return res.status(404).json({ 
+        message: 'User not found',
+        error: 'USER_NOT_FOUND'
+      });
+    }
+
+    // Get the parent's school ID
+    if (!user.schoolId) {
+      return res.status(200).json({ 
+        success: true,
+        documents: []
+      });
+    }
+
+    // Get published documents for the parent's school
+    const documents = await storage.getPublishedSchoolDocuments(user.schoolId);
+
+    console.log(`📄 Found ${documents.length} school documents for parent ${userEmail}`);
+
+    return res.status(200).json({
+      success: true,
+      documents
+    });
+  } catch (error: any) {
+    console.error('❌ Error getting school documents:', error);
+    return res.status(500).json({ 
+      message: 'Failed to get school documents',
+      error: error.message || 'GET_SCHOOL_DOCUMENTS_ERROR'
+    });
+  }
+});
+
+// Get payment receipts for the parent
+router.get('/payment-receipts', jwtCheck, async (req: any, res) => {
+  try {
+    console.log('🧾 Get parent payment receipts API called');
+
+    const userEmail = req.auth?.email || req.user?.email;
+    
+    if (!userEmail) {
+      return res.status(401).json({ 
+        message: 'Authentication required',
+        error: 'NO_USER_EMAIL'
+      });
+    }
+
+    const user = await storage.getUserByEmail(userEmail);
+    if (!user) {
+      return res.status(404).json({ 
+        message: 'User not found',
+        error: 'USER_NOT_FOUND'
+      });
+    }
+
+    // Get payment receipts for this parent
+    const receipts = await storage.getPaymentReceiptsByParentId(user.id);
+
+    // Enrich with school name
+    const enrichedReceipts = await Promise.all(
+      receipts.map(async (receipt) => {
+        const school = await storage.getSchool(receipt.schoolId);
+        return {
+          ...receipt,
+          schoolName: school?.name || 'Unknown School'
+        };
+      })
+    );
+
+    console.log(`🧾 Found ${receipts.length} payment receipts for parent ${userEmail}`);
+
+    return res.status(200).json({
+      success: true,
+      receipts: enrichedReceipts
+    });
+  } catch (error: any) {
+    console.error('❌ Error getting payment receipts:', error);
+    return res.status(500).json({ 
+      message: 'Failed to get payment receipts',
+      error: error.message || 'GET_PAYMENT_RECEIPTS_ERROR'
+    });
+  }
+});
+
 export default router;

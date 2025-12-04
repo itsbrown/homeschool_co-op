@@ -1057,6 +1057,86 @@ export const membershipAgreementsRelations = relations(membershipAgreements, ({ 
   enrollment: one(membershipEnrollments, { fields: [membershipAgreements.membershipEnrollmentId], references: [membershipEnrollments.id] })
 }));
 
+// School Documents table - for admin-uploaded documents that parents can view
+export const schoolDocuments = pgTable("school_documents", {
+  id: serial("id").primaryKey(),
+  schoolId: integer("school_id").notNull().references(() => schools.id),
+  uploadedBy: integer("uploaded_by").notNull().references(() => users.id),
+  title: text("title").notNull(),
+  description: text("description"),
+  category: text("category", { enum: ["policy", "form", "handbook", "announcement", "other"] }).default("other").notNull(),
+  fileName: text("file_name").notNull(),
+  filePath: text("file_path").notNull(),
+  fileSize: integer("file_size").notNull(),
+  mimeType: text("mime_type").notNull(),
+  isPublished: boolean("is_published").default(true).notNull(),
+  visibleToAll: boolean("visible_to_all").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertSchoolDocumentSchema = createInsertSchema(schoolDocuments)
+  .omit({ id: true, createdAt: true, updatedAt: true })
+  .extend({
+    title: z.string().min(1, "Title is required"),
+    description: z.string().nullable().default(null),
+    category: z.enum(["policy", "form", "handbook", "announcement", "other"]).default("other"),
+    fileName: z.string().min(1),
+    filePath: z.string().min(1),
+    fileSize: z.number().positive(),
+    mimeType: z.string().min(1),
+    isPublished: z.boolean().default(true),
+    visibleToAll: z.boolean().default(true),
+  });
+export type InsertSchoolDocument = z.infer<typeof insertSchoolDocumentSchema>;
+export type SchoolDocument = typeof schoolDocuments.$inferSelect;
+
+// Define school document relations
+export const schoolDocumentsRelations = relations(schoolDocuments, ({ one }) => ({
+  school: one(schools, { fields: [schoolDocuments.schoolId], references: [schools.id] }),
+  uploader: one(users, { fields: [schoolDocuments.uploadedBy], references: [users.id] })
+}));
+
+// Payment Receipts table - automatically generated when payments are made
+export const paymentReceipts = pgTable("payment_receipts", {
+  id: serial("id").primaryKey(),
+  schoolId: integer("school_id").notNull().references(() => schools.id),
+  parentUserId: integer("parent_user_id").notNull().references(() => users.id),
+  receiptNumber: text("receipt_number").notNull().unique(),
+  stripePaymentIntentId: text("stripe_payment_intent_id"),
+  enrollmentIds: integer("enrollment_ids").array(),
+  childNames: text("child_names").array(),
+  classNames: text("class_names").array(),
+  amount: integer("amount").notNull(),
+  paymentMethod: text("payment_method"),
+  paymentDate: timestamp("payment_date").defaultNow().notNull(),
+  status: text("status", { enum: ["generated", "downloaded", "emailed"] }).default("generated").notNull(),
+  metadata: jsonb("metadata").default({}).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertPaymentReceiptSchema = createInsertSchema(paymentReceipts)
+  .omit({ id: true, createdAt: true, paymentDate: true })
+  .extend({
+    receiptNumber: z.string().min(1),
+    stripePaymentIntentId: z.string().nullable().default(null),
+    enrollmentIds: z.array(z.number()).nullable().default(null),
+    childNames: z.array(z.string()).nullable().default(null),
+    classNames: z.array(z.string()).nullable().default(null),
+    amount: z.number().positive(),
+    paymentMethod: z.string().nullable().default(null),
+    status: z.enum(["generated", "downloaded", "emailed"]).default("generated"),
+    metadata: z.record(z.any()).default({}),
+  });
+export type InsertPaymentReceipt = z.infer<typeof insertPaymentReceiptSchema>;
+export type PaymentReceipt = typeof paymentReceipts.$inferSelect;
+
+// Define payment receipt relations
+export const paymentReceiptsRelations = relations(paymentReceipts, ({ one }) => ({
+  school: one(schools, { fields: [paymentReceipts.schoolId], references: [schools.id] }),
+  parent: one(users, { fields: [paymentReceipts.parentUserId], references: [users.id] })
+}));
+
 // Curriculum table
 export const curricula = pgTable("curricula", {
   id: serial("id").primaryKey(),

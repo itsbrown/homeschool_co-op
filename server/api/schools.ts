@@ -4,6 +4,7 @@ import { schools, children } from "@shared/schema";
 import { insertSchoolSchema } from "@shared/schema";
 import { eq, and, sql } from "drizzle-orm";
 import uploadLogoRouter from './schools/upload-logo';
+import documentsRouter from './schools/documents';
 
 const router = express.Router();
 
@@ -297,5 +298,8 @@ router.get("/:id/students", async (req, res) => {
 
 // Mount the logo upload route
 router.use('/upload-logo', uploadLogoRouter);
+
+// Mount the documents route
+router.use('/documents', documentsRouter);
 
 export default router;

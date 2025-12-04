@@ -13,6 +13,8 @@ import {
   ProgramEnrollment, InsertProgramEnrollment, programEnrollments,
   MembershipEnrollment, InsertMembershipEnrollment, membershipEnrollments,
   MembershipAgreement, InsertMembershipAgreement, membershipAgreements,
+  SchoolDocument, InsertSchoolDocument, schoolDocuments,
+  PaymentReceipt, InsertPaymentReceipt, paymentReceipts,
   StripeSubscriptionSchedule, InsertStripeSubscriptionSchedule, stripeSubscriptionSchedules,
   DailyFlowTemplate, InsertDailyFlowTemplate, dailyFlowTemplates,
   DailyFlowEntry, InsertDailyFlowEntry, dailyFlowEntries,
@@ -1071,6 +1073,121 @@ export class DatabaseStorage implements IStorage {
   async hasSignedCurrentAgreement(parentUserId: number, schoolId: number, currentVersion: string): Promise<boolean> {
     const latestAgreement = await this.getLatestMembershipAgreementByParentAndSchool(parentUserId, schoolId);
     return latestAgreement !== undefined && latestAgreement.agreementVersion === currentVersion;
+  }
+
+  // School Documents methods
+  async getSchoolDocumentById(id: number): Promise<SchoolDocument | undefined> {
+    const db = await getDb();
+    const [document] = await db.select().from(schoolDocuments).where(eq(schoolDocuments.id, id));
+    return document;
+  }
+
+  async getSchoolDocumentsBySchoolId(schoolId: number): Promise<SchoolDocument[]> {
+    const db = await getDb();
+    return await db
+      .select()
+      .from(schoolDocuments)
+      .where(eq(schoolDocuments.schoolId, schoolId))
+      .orderBy(desc(schoolDocuments.createdAt));
+  }
+
+  async getPublishedSchoolDocuments(schoolId: number): Promise<SchoolDocument[]> {
+    const db = await getDb();
+    return await db
+      .select()
+      .from(schoolDocuments)
+      .where(
+        and(
+          eq(schoolDocuments.schoolId, schoolId),
+          eq(schoolDocuments.isPublished, true)
+        )
+      )
+      .orderBy(desc(schoolDocuments.createdAt));
+  }
+
+  async createSchoolDocument(documentData: InsertSchoolDocument): Promise<SchoolDocument> {
+    const db = await getDb();
+    const [newDocument] = await db
+      .insert(schoolDocuments)
+      .values({
+        ...documentData,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      })
+      .returning();
+    return newDocument;
+  }
+
+  async updateSchoolDocument(id: number, documentData: Partial<InsertSchoolDocument>): Promise<SchoolDocument | undefined> {
+    const db = await getDb();
+    const [updatedDocument] = await db
+      .update(schoolDocuments)
+      .set({
+        ...documentData,
+        updatedAt: new Date()
+      })
+      .where(eq(schoolDocuments.id, id))
+      .returning();
+    return updatedDocument;
+  }
+
+  async deleteSchoolDocument(id: number): Promise<void> {
+    const db = await getDb();
+    await db.delete(schoolDocuments).where(eq(schoolDocuments.id, id));
+  }
+
+  // Payment Receipts methods
+  async getPaymentReceiptById(id: number): Promise<PaymentReceipt | undefined> {
+    const db = await getDb();
+    const [receipt] = await db.select().from(paymentReceipts).where(eq(paymentReceipts.id, id));
+    return receipt;
+  }
+
+  async getPaymentReceiptByNumber(receiptNumber: string): Promise<PaymentReceipt | undefined> {
+    const db = await getDb();
+    const [receipt] = await db.select().from(paymentReceipts).where(eq(paymentReceipts.receiptNumber, receiptNumber));
+    return receipt;
+  }
+
+  async getPaymentReceiptsByParentId(parentUserId: number): Promise<PaymentReceipt[]> {
+    const db = await getDb();
+    return await db
+      .select()
+      .from(paymentReceipts)
+      .where(eq(paymentReceipts.parentUserId, parentUserId))
+      .orderBy(desc(paymentReceipts.paymentDate));
+  }
+
+  async getPaymentReceiptsBySchoolId(schoolId: number): Promise<PaymentReceipt[]> {
+    const db = await getDb();
+    return await db
+      .select()
+      .from(paymentReceipts)
+      .where(eq(paymentReceipts.schoolId, schoolId))
+      .orderBy(desc(paymentReceipts.paymentDate));
+  }
+
+  async createPaymentReceipt(receiptData: InsertPaymentReceipt): Promise<PaymentReceipt> {
+    const db = await getDb();
+    const [newReceipt] = await db
+      .insert(paymentReceipts)
+      .values({
+        ...receiptData,
+        paymentDate: new Date(),
+        createdAt: new Date()
+      })
+      .returning();
+    return newReceipt;
+  }
+
+  async updatePaymentReceiptStatus(id: number, status: 'generated' | 'downloaded' | 'emailed'): Promise<PaymentReceipt | undefined> {
+    const db = await getDb();
+    const [updatedReceipt] = await db
+      .update(paymentReceipts)
+      .set({ status })
+      .where(eq(paymentReceipts.id, id))
+      .returning();
+    return updatedReceipt;
   }
 
   // Child methods
