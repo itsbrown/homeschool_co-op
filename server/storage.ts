@@ -5740,7 +5740,9 @@ export class MemStorage implements IStorage {
 
       async getRoleInvitations(): Promise<any[]> {
         try {
-          if (this.dbStorage && typeof this.dbStorage.getRoleInvitations === 'function') {
+          // Check if dbStorage is actually DatabaseStorage (not the fallback MemStorage)
+          // by verifying it's not the same as memStorage
+          if (this.dbStorage && this.dbStorage !== this.memStorage) {
             return await this.dbStorage.getRoleInvitations();
           }
         } catch (error) {
