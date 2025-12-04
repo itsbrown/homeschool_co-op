@@ -96,14 +96,6 @@ export default function DocumentManagementPage() {
 
   const { data: documentsData, isLoading } = useQuery<{ success: boolean; documents: SchoolDocument[] }>({
     queryKey: ['/api/schools/documents'],
-    queryFn: async () => {
-      const response = await fetch('/api/schools/documents', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('sb-access-token')}`
-        }
-      });
-      return response.json();
-    },
     enabled: !!user?.email,
   });
 
