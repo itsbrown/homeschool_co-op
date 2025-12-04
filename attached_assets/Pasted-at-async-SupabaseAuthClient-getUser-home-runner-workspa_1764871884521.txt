@@ -1,0 +1,102 @@
+at async SupabaseAuthClient.getUser (/home/runner/workspace/node_modules/@supabase/auth-js/dist/main/GoTrueClient.js:873:20)
+
+2025-12-04 13:10:09.78
+ac9f341d
+User
+at async _request (/home/runner/workspace/node_modules/@supabase/auth-js/dist/main/lib/fetch.js:95:18)
+2025-12-04 13:10:09.78
+ac9f341d
+User
+code: 'bad_jwt'
+2025-12-04 13:10:09.78
+ac9f341d
+User
+at async SupabaseAuthClient._getUser (/home/runner/workspace/node_modules/@supabase/auth-js/dist/main/GoTrueClient.js:884:24)
+2025-12-04 13:10:09.78
+ac9f341d
+User
+status: 403,
+2025-12-04 13:10:09.78
+ac9f341d
+User
+at async _handleRequest (/home/runner/workspace/node_modules/@supabase/auth-js/dist/main/lib/fetch.js:114:9)
+2025-12-04 13:10:09.78
+ac9f341d
+User
+}
+2025-12-04 13:10:09.78
+ac9f341d
+User
+__isAuthError: true,
+2025-12-04 13:10:09.78
+ac9f341d
+User
+at handleError (/home/runner/workspace/node_modules/@supabase/auth-js/dist/main/lib/fetch.js:69:11)
+2025-12-04 13:10:09.78
+ac9f341d
+User
+at async supabaseAuth (file:///home/runner/workspace/dist/index.js:9336:43) {
+2025-12-04 13:10:09.78
+ac9f341d
+User
+Supabase auth error: AuthApiError: invalid JWT: unable to parse or verify signature, token has invalid claims: token is expired
+2025-12-04 13:10:09.78
+ac9f341d
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2025-12-04 13:10:09.78
+ac9f341d
+User
+6:10:09 PM [express] GET /api/user/roles 401 in 128ms :: {"error":"Invalid or expired token"}
+2025-12-04 13:10:09.82
+ac9f341d
+User
+code: 'bad_jwt'
+2025-12-04 13:10:09.82
+ac9f341d
+User
+at handleError (/home/runner/workspace/node_modules/@supabase/auth-js/dist/main/lib/fetch.js:69:11)
+2025-12-04 13:10:09.82
+ac9f341d
+User
+Supabase auth error: AuthApiError: invalid JWT: unable to parse or verify signature, token has invalid claims: token is expired
+2025-12-04 13:10:09.82
+ac9f341d
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2025-12-04 13:10:09.82
+ac9f341d
+User
+}
+2025-12-04 13:10:09.82
+ac9f341d
+User
+at async supabaseAuth (file:///home/runner/workspace/dist/index.js:9336:43) {
+2025-12-04 13:10:09.82
+ac9f341d
+User
+__isAuthError: true,
+2025-12-04 13:10:09.82
+ac9f341d
+User
+at async SupabaseAuthClient._getUser (/home/runner/workspace/node_modules/@supabase/auth-js/dist/main/GoTrueClient.js:884:24)
+2025-12-04 13:10:09.82
+ac9f341d
+User
+at async _request (/home/runner/workspace/node_modules/@supabase/auth-js/dist/main/lib/fetch.js:95:18)
+2025-12-04 13:10:09.82
+ac9f341d
+User
+status: 403,
+2025-12-04 13:10:09.82
+ac9f341d
+User
+at async _handleRequest (/home/runner/workspace/node_modules/@supabase/auth-js/dist/main/lib/fetch.js:114:9)
+2025-12-04 13:10:09.82
+ac9f341d
+User
+at async SupabaseAuthClient.getUser (/home/runner/workspace/node_modules/@supabase/auth-js/dist/main/GoTrueClient.js:873:20)
+2025-12-04 13:10:09.82
+ac9f341d
+User
+6:10:09 PM [express] GET /api/users/profile 401 in 145ms :: {"error":"Invalid or expired token"}
