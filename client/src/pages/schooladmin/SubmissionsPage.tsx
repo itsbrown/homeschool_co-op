@@ -87,10 +87,15 @@ export default function SubmissionsPage() {
   });
 
   // Create field ID to label mapping
+  // Response data uses keys like "field_4", "field_7" which correspond to field.id
   const fieldLabelMap: Record<string, string> = {};
   if (formData?.fields) {
     formData.fields.forEach((field) => {
-      fieldLabelMap[field.fieldKey] = field.label;
+      // Map both possible key formats
+      fieldLabelMap[`field_${field.id}`] = field.label;
+      if (field.fieldKey) {
+        fieldLabelMap[field.fieldKey] = field.label;
+      }
     });
   }
 
