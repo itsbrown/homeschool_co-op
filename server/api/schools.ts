@@ -201,6 +201,9 @@ router.get("/knowledge-bases", async (req, res) => {
   }
 });
 
+// Mount the documents route BEFORE catch-all routes like /:id
+router.use('/documents', documentsRouter);
+
 // Get school by registration code
 router.get("/by-code/:code", async (req, res) => {
   try {
@@ -298,8 +301,5 @@ router.get("/:id/students", async (req, res) => {
 
 // Mount the logo upload route
 router.use('/upload-logo', uploadLogoRouter);
-
-// Mount the documents route
-router.use('/documents', documentsRouter);
 
 export default router;
