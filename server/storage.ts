@@ -5739,6 +5739,13 @@ export class MemStorage implements IStorage {
       }
 
       async getRoleInvitations(): Promise<any[]> {
+        try {
+          if (this.dbStorage && typeof this.dbStorage.getRoleInvitations === 'function') {
+            return await this.dbStorage.getRoleInvitations();
+          }
+        } catch (error) {
+          console.error('❌ Error fetching role invitations from database:', error);
+        }
         return this.memStorage.getRoleInvitations();
       }
 

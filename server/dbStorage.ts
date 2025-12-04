@@ -2786,6 +2786,14 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(roleInvitations.createdAt));
   }
 
+  async getRoleInvitations(): Promise<RoleInvitation[]> {
+    const db = await getDb();
+    return await db
+      .select()
+      .from(roleInvitations)
+      .orderBy(desc(roleInvitations.createdAt));
+  }
+
   // Notification data initialization from JSON files
   async initializeNotifications(): Promise<void> {
     const fs = await import('fs');
