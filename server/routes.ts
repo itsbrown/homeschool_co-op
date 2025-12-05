@@ -1950,22 +1950,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/superadmin/schools/:schoolId', jwtCheck, requireRole(['superAdmin']), getSuperAdminSchoolDetails);
   app.patch('/api/superadmin/schools/:schoolId', jwtCheck, requireRole(['superAdmin']), updateSuperAdminSchool);
 
-  // Locations API
-  app.get("/api/locations", async (req, res) => {
-    try {
-      const schoolId = req.query.schoolId ? parseInt(req.query.schoolId as string) : null;
-
-      if (!schoolId) {
-        return res.status(400).json({ message: "schoolId is required" });
-      }
-
-      const schoolLocations = await storage.getLocationsBySchool(schoolId);
-      res.status(200).json(schoolLocations);
-    } catch (error) {
-      console.error("Error fetching locations:", error);
-      res.status(500).json({ message: "Error fetching locations" });
-    }
-  });
+  // Locations API is handled by the locations router with proper authentication
+  // See: app.use("/api/locations", supabaseAuth, locationsRouter);
 
   // Enhanced response generation functions with real data integration
   async function generateRegistrationResponse(extractedInfo: any, analysis: any, userId: string): Promise<string> {

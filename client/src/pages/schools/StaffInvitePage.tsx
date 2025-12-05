@@ -39,9 +39,22 @@ export default function StaffInvitePage() {
     refetchInterval: 5000,
   });
 
-  // Fetch all locations
+  // Fetch all locations for the current school (uses auth middleware to get schoolId)
   const { data: locations = [] } = useQuery({
     queryKey: ['/api/locations'],
+    queryFn: async () => {
+      const token = localStorage.getItem('supabase_token');
+      const response = await fetch('/api/locations', {
+        headers: {
+          ...(token && { Authorization: `Bearer ${token}` })
+        },
+        credentials: 'include',
+      });
+      if (!response.ok) {
+        throw new Error('Failed to fetch locations');
+      }
+      return response.json();
+    },
     refetchInterval: 5000,
   });
 
