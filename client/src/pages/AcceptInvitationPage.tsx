@@ -21,7 +21,6 @@ export default function AcceptInvitationPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [accepting, setAccepting] = useState(false);
-  const [invitationType, setInvitationType] = useState<'staff' | 'role' | null>(null);
 
   // Get token from URL query parameters
   const urlParams = new URLSearchParams(window.location.search);
@@ -34,62 +33,35 @@ export default function AcceptInvitationPage() {
       return;
     }
 
-    // Try to validate as staff invitation first, then fallback to role invitation
-    const tryValidateStaffInvitation = async () => {
-      try {
-        const response = await fetch(`/api/school-admin/staff-invitations/validate?token=${token}`);
-        const data = await response.json();
-        if (data.valid) {
-          setInvitation(data.invitation);
-          setInvitationType('staff');
-          return true;
-        }
-      } catch (err) {
-        console.log("Staff invitation validation failed, trying role invitation");
-      }
-      return false;
-    };
-
-    const tryValidateRoleInvitation = async () => {
-      try {
-        const response = await fetch(`/api/admin/role-invitations/validate?token=${token}`);
-        const data = await response.json();
-        if (data.valid) {
-          setInvitation(data.invitation);
-          setInvitationType('role');
-          return true;
-        }
-      } catch (err) {
-        console.log("Role invitation validation failed");
-      }
-      return false;
-    };
-
+    // Validate invitation using the public endpoint (no auth required)
     const validateInvitation = async () => {
-      const isStaffInvitation = await tryValidateStaffInvitation();
-      if (!isStaffInvitation) {
-        const isRoleInvitation = await tryValidateRoleInvitation();
-        if (!isRoleInvitation) {
-          setError("Invalid or expired invitation token");
+      try {
+        const response = await fetch(`/api/public/role-invitations/validate?token=${token}`);
+        const data = await response.json();
+        
+        if (data.valid) {
+          setInvitation(data.invitation);
+        } else {
+          setError(data.message || "Invalid or expired invitation token");
         }
+      } catch (err) {
+        console.error("Error validating invitation:", err);
+        setError("Failed to validate invitation");
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
 
     validateInvitation();
   }, [token]);
 
   const handleAcceptInvitation = async () => {
-    if (!token || !invitationType) return;
+    if (!token) return;
     
     setAccepting(true);
     try {
-      // Use the correct endpoint based on invitation type
-      const endpoint = invitationType === 'staff' 
-        ? '/api/school-admin/staff-invitations/accept'
-        : '/api/admin/role-invitations/accept';
-        
-      const response = await fetch(endpoint, {
+      // Use the public endpoint (no auth required)
+      const response = await fetch('/api/public/role-invitations/accept', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

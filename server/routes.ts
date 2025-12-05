@@ -3137,13 +3137,73 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invitation has expired" });
       }
 
+      console.log(`📝 Processing invitation acceptance for: ${invitationDTO.email}`);
+
+      // If this is a staff invitation (has schoolId), activate the staff member
+      let accountCreated = false;
+      const schoolId = (invitation as any).school_id || (invitation as any).schoolId;
+      if (schoolId) {
+        try {
+          // Import the createStaffAccount function and sendAccountCredentialsEmail
+          const { createStaffAccount, sendAccountCredentialsEmail } = await import("./api/school-admin");
+          
+          // Get first/last name from invitation (handle both snake_case and camelCase)
+          const firstName = (invitation as any).first_name || (invitation as any).firstName || '';
+          const lastName = (invitation as any).last_name || (invitation as any).lastName || '';
+          
+          // Create Supabase account for the staff member
+          const accountResult = await createStaffAccount(
+            invitationDTO.email,
+            firstName,
+            lastName,
+            invitationDTO.role,
+            invitationDTO.role // Use role as department for compatibility
+          );
+
+          if (accountResult.success) {
+            accountCreated = true;
+            // Send account credentials email
+            if (accountResult.temporaryPassword) {
+              await sendAccountCredentialsEmail(
+                invitationDTO.email,
+                firstName,
+                lastName,
+                accountResult.temporaryPassword,
+                invitationDTO.role
+              );
+              console.log(`✅ Account created and credentials sent to: ${invitationDTO.email}`);
+            }
+          } else if (!accountResult.userExists && !accountResult.error?.includes('already registered')) {
+            console.error(`❌ Failed to create account for ${invitationDTO.email}:`, accountResult.error);
+          }
+
+          // Activate the staff member in the database
+          const allStaff = await storage.getSchoolStaffBySchoolId(schoolId);
+          for (const staffRecord of allStaff) {
+            const user = await storage.getUser(staffRecord.userId);
+            if (user && user.email === invitationDTO.email) {
+              await storage.updateSchoolStaff(staffRecord.id, { isActive: true });
+              console.log(`✅ Activated staff member in database: ${user.email}`);
+              break;
+            }
+          }
+        } catch (staffError) {
+          console.error("Error processing staff activation:", staffError);
+          // Continue with invitation acceptance even if staff activation fails
+        }
+      }
+
       // Mark invitation as used in database
       await supabaseStorage.acceptRoleInvitation(token);
 
       res.status(200).json({
-        message: "Invitation accepted successfully",
+        message: accountCreated 
+          ? "Invitation accepted! Your account has been created and login credentials have been sent to your email."
+          : "Invitation accepted successfully. Please use your existing account to log in.",
         role: invitationDTO.role,
-        email: invitationDTO.email
+        email: invitationDTO.email,
+        accountCreated,
+        redirect: "/login"
       });
     } catch (error) {
       console.error("Error accepting invitation:", error);

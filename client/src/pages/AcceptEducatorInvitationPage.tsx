@@ -24,8 +24,8 @@ export default function AcceptEducatorInvitationPage() {
     const email = urlParams.get('email');
     
     if (token && email) {
-      // Validate invitation token
-      fetch(`/api/role-invitations/validate?token=${token}&email=${email}`)
+      // Validate invitation token using public endpoint (no auth required)
+      fetch(`/api/public/role-invitations/validate?token=${token}&email=${email}`)
         .then(response => response.json())
         .then(data => {
           if (data.valid) {
@@ -83,8 +83,8 @@ export default function AcceptEducatorInvitationPage() {
         });
       }
 
-      // Accept the invitation
-      const response = await fetch('/api/role-invitations/accept', {
+      // Accept the invitation using public endpoint (no auth required)
+      const response = await fetch('/api/public/role-invitations/accept', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

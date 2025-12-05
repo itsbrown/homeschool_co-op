@@ -137,8 +137,8 @@ async function getSchoolIdFromRequest(req: any, res: any): Promise<number | null
   }
 }
 
-// Create Supabase account for staff member
-async function createStaffAccount(email: string, firstName: string, lastName: string, role: string, department: string): Promise<{ success: boolean; temporaryPassword?: string; error?: string; userExists?: boolean }> {
+// Create Supabase account for staff member (exported for use in public invitation flow)
+export async function createStaffAccount(email: string, firstName: string, lastName: string, role: string, department: string): Promise<{ success: boolean; temporaryPassword?: string; error?: string; userExists?: boolean }> {
   try {
     console.log(`👤 Creating Supabase account for: ${email}`);
     
@@ -180,8 +180,8 @@ async function createStaffAccount(email: string, firstName: string, lastName: st
   }
 }
 
-// Send account credentials email
-async function sendAccountCredentialsEmail(email: string, firstName: string, lastName: string, temporaryPassword: string, role: string): Promise<boolean> {
+// Send account credentials email (exported for use in public invitation flow)
+export async function sendAccountCredentialsEmail(email: string, firstName: string, lastName: string, temporaryPassword: string, role: string): Promise<boolean> {
   try {
     if (!brevoApiInstance) {
       console.log('📧 Brevo not configured, skipping credentials email');
@@ -1451,10 +1451,7 @@ router.post("/staff/:id/resend-invite", supabaseAuth, async (req: any, res) => {
       return res.status(400).json({ message: "Can only resend invites to pending staff members" });
     }
 
-    // Generate new invitation token
-    const invitationToken = generateInvitationToken();
-    
-    // Check if invitation exists, or create new one
+    // Check if invitation exists
     const allInvitations = await storage.getRoleInvitations();
     const existingInvitation = allInvitations.find((inv: any) => 
       inv.email === user.email && inv.schoolId === staffRecord.schoolId
@@ -1463,17 +1460,21 @@ router.post("/staff/:id/resend-invite", supabaseAuth, async (req: any, res) => {
     const mappedRole = staffRecord.role;
     const userRole = mappedRole === 'administrator' ? 'admin' : mappedRole === 'teacher' ? 'teacher' : 'teacher';
 
+    let invitationToken: string;
+
     if (existingInvitation) {
-      // Update existing invitation with new token and reset expiration
-      console.log(`📧 Updating existing invitation for ${user.email} with new token`);
+      // REUSE existing token - only reset expiration and active status
+      // This keeps previously sent email links valid
+      invitationToken = existingInvitation.token;
+      console.log(`📧 Reusing existing token for ${user.email} (resend keeps same link valid)`);
       await storage.updateRoleInvitation(existingInvitation.id, {
-        token: invitationToken,
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
         isActive: true,
         usedAt: null // Reset used status so invitation can be accepted again
       });
     } else {
-      // Create new invitation
+      // Only generate new token if no invitation exists
+      invitationToken = generateInvitationToken();
       console.log(`📧 Creating new invitation for ${user.email}`);
       await storage.createRoleInvitation({
         email: user.email,
@@ -1553,10 +1554,7 @@ router.post("/staff/resend-all-invites", supabaseAuth, async (req: any, res: any
           continue;
         }
 
-        // Generate new invitation token
-        const invitationToken = generateInvitationToken();
-        
-        // Check if invitation exists, or create new one
+        // Check if invitation exists
         const allInvitations = await storage.getRoleInvitations();
         const existingInvitation = allInvitations.find((inv: any) => 
           inv.email === user.email && inv.schoolId === staffRecord.schoolId
@@ -1565,17 +1563,21 @@ router.post("/staff/resend-all-invites", supabaseAuth, async (req: any, res: any
         const mappedRole = staffRecord.role;
         const userRole = mappedRole === 'administrator' ? 'admin' : mappedRole === 'teacher' ? 'teacher' : 'teacher';
 
+        let invitationToken: string;
+
         if (existingInvitation) {
-          // Update existing invitation with new token and reset expiration
-          console.log(`📧 [Bulk] Updating existing invitation for ${user.email} with new token`);
+          // REUSE existing token - only reset expiration and active status
+          // This keeps previously sent email links valid
+          invitationToken = existingInvitation.token;
+          console.log(`📧 [Bulk] Reusing existing token for ${user.email} (resend keeps same link valid)`);
           await storage.updateRoleInvitation(existingInvitation.id, {
-            token: invitationToken,
             expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
             isActive: true,
             usedAt: null // Reset used status so invitation can be accepted again
           });
         } else {
-          // Create new invitation
+          // Only generate new token if no invitation exists
+          invitationToken = generateInvitationToken();
           console.log(`📧 [Bulk] Creating new invitation for ${user.email}`);
           await storage.createRoleInvitation({
             email: user.email,
@@ -2973,137 +2975,10 @@ router.get("/metrics/staff", supabaseAuth, requireSchoolContext, async (req: any
   }
 });
 
-// Validate staff invitation token
-router.get("/staff-invitations/validate", async (req, res) => {
-  try {
-    const { token } = req.query;
-    
-    if (!token) {
-      return res.status(400).json({ 
-        valid: false, 
-        message: "Token is required" 
-      });
-    }
-
-    // Find invitation using roleInvitations (database-backed)
-    const roleInvitation = await storage.getActiveRoleInvitation(token);
-
-    if (!roleInvitation) {
-      return res.status(404).json({ 
-        valid: false, 
-        message: "Invalid or expired invitation token" 
-      });
-    }
-
-    res.json({
-      valid: true,
-      invitation: {
-        email: roleInvitation.email,
-        firstName: roleInvitation.firstName || '',
-        lastName: roleInvitation.lastName || '',
-        role: roleInvitation.role,
-        department: roleInvitation.role, // Use role as department for compatibility
-        message: '',
-        createdAt: roleInvitation.createdAt
-      }
-    });
-  } catch (error) {
-    console.error("Error validating staff invitation:", error);
-    res.status(500).json({ 
-      valid: false, 
-      message: "Error validating invitation" 
-    });
-  }
-});
-
-// Accept staff invitation
-router.post("/staff-invitations/accept", async (req, res) => {
-  try {
-    const { token } = req.body;
-    
-    if (!token) {
-      return res.status(400).json({ message: "Token is required" });
-    }
-
-    // Find invitation using roleInvitations (database-backed)
-    const roleInvitation = await storage.getActiveRoleInvitation(token);
-
-    if (!roleInvitation) {
-      return res.status(404).json({ message: "Invalid or expired invitation token" });
-    }
-
-    console.log(`📝 Processing invitation acceptance for: ${roleInvitation.email}`);
-    
-    // Create Supabase account for the staff member
-    const accountResult = await createStaffAccount(
-      roleInvitation.email, 
-      roleInvitation.firstName || '', 
-      roleInvitation.lastName || '', 
-      roleInvitation.role, 
-      roleInvitation.role // Use role as department for compatibility
-    );
-
-    if (!accountResult.success) {
-      // Check if user already exists
-      if (accountResult.userExists || accountResult.error?.includes('already registered') || accountResult.error?.includes('email_exists')) {
-        console.log(`⚠️ User ${roleInvitation.email} already has an account, proceeding with invitation acceptance`);
-        // Continue with invitation acceptance even if account already exists
-      } else {
-        console.error(`❌ Failed to create account for ${roleInvitation.email}:`, accountResult.error);
-        return res.status(500).json({ 
-          message: "Failed to create account. Please contact support.",
-          error: accountResult.error 
-        });
-      }
-    }
-    
-    // Mark invitation as accepted using the database
-    await storage.acceptRoleInvitation(token, roleInvitation.email);
-
-    // Update staff member status in database - use school ID from the role invitation
-    const schoolId = roleInvitation.schoolId;
-    const allStaff = await storage.getSchoolStaffBySchoolId(schoolId);
-    
-    for (const staffRecord of allStaff) {
-      const user = await storage.getUser(staffRecord.userId);
-      if (user && user.email === roleInvitation.email) {
-        // Activate the staff member
-        await storage.updateSchoolStaff(staffRecord.id, { isActive: true });
-        console.log(`✅ Activated staff member in database: ${user.email}`);
-        break;
-      }
-    }
-
-    // Send account credentials email if account was created successfully
-    if (accountResult.success && accountResult.temporaryPassword) {
-      const credentialsEmailSent = await sendAccountCredentialsEmail(
-        roleInvitation.email,
-        roleInvitation.firstName || '',
-        roleInvitation.lastName || '',
-        accountResult.temporaryPassword,
-        roleInvitation.role
-      );
-      
-      if (credentialsEmailSent) {
-        console.log(`✅ Account created and credentials sent to: ${roleInvitation.email}`);
-      } else {
-        console.log(`⚠️ Account created but credentials email failed for: ${roleInvitation.email}`);
-      }
-    }
-
-    res.json({ 
-      success: true, 
-      message: accountResult.success 
-        ? "Invitation accepted! Your account has been created and login credentials have been sent to your email."
-        : "Invitation accepted successfully. Please use your existing account to log in.",
-      accountCreated: accountResult.success,
-      redirect: "/login" 
-    });
-  } catch (error) {
-    console.error("Error accepting staff invitation:", error);
-    res.status(500).json({ message: "Error accepting invitation" });
-  }
-});
+// NOTE: Staff invitation validate/accept endpoints have been consolidated into public routes:
+// - GET /api/public/role-invitations/validate
+// - POST /api/public/role-invitations/accept
+// These public endpoints handle both role and staff invitations with full account creation logic.
 
 // Location-specific student management endpoints
 router.get("/students/by-location/:locationId", async (req, res) => {
