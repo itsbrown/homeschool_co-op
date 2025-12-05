@@ -87,7 +87,7 @@ export class SupabaseStorage implements IStorage {
     invited_by: string;
     expires_at: string;
   }): Promise<RoleInvitation> {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from('role_invitations')
       .insert(invitation)
       .select()
@@ -102,7 +102,7 @@ export class SupabaseStorage implements IStorage {
   }
 
   async getRoleInvitations(): Promise<RoleInvitation[]> {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from('role_invitations')
       .select('*')
       .order('created_at', { ascending: false });
@@ -117,7 +117,7 @@ export class SupabaseStorage implements IStorage {
 
   async getActiveRoleInvitation(tokenOrEmail: string): Promise<RoleInvitation | undefined> {
     // Try to find by token first (most common case for validation)
-    let { data, error } = await supabase
+    let { data, error } = await supabaseAdmin
       .from('role_invitations')
       .select('*')
       .eq('token', tokenOrEmail)
@@ -127,7 +127,7 @@ export class SupabaseStorage implements IStorage {
     
     // If not found by token, try by email (for check-invitation endpoint)
     if (!data && !error) {
-      const emailResult = await supabase
+      const emailResult = await supabaseAdmin
         .from('role_invitations')
         .select('*')
         .eq('email', tokenOrEmail)
@@ -148,7 +148,7 @@ export class SupabaseStorage implements IStorage {
   }
 
   async acceptRoleInvitation(token: string): Promise<void> {
-    const { error } = await supabase
+    const { error } = await supabaseAdmin
       .from('role_invitations')
       .update({ 
         used_at: new Date().toISOString(),
@@ -163,7 +163,7 @@ export class SupabaseStorage implements IStorage {
   }
 
   async revokeRoleInvitation(id: number): Promise<void> {
-    const { error } = await supabase
+    const { error } = await supabaseAdmin
       .from('role_invitations')
       .update({ is_active: false })
       .eq('id', id);
@@ -582,7 +582,7 @@ export class SupabaseStorage implements IStorage {
 
   // Role invitation helper methods
   async getRoleInvitationsByEmail(email: string): Promise<any[]> {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from('role_invitations')
       .select('*')
       .eq('email', email);
@@ -596,7 +596,7 @@ export class SupabaseStorage implements IStorage {
   }
   
   async getRoleInvitationById(id: number): Promise<any | undefined> {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from('role_invitations')
       .select('*')
       .eq('id', id)
@@ -620,7 +620,7 @@ export class SupabaseStorage implements IStorage {
     
     console.log('📝 Updating role invitation:', id, 'with:', updateData);
     
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from('role_invitations')
       .update(updateData)
       .eq('id', id)
@@ -651,7 +651,7 @@ export class SupabaseStorage implements IStorage {
   }
   
   async deleteRoleInvitation(id: number): Promise<void> {
-    const { error } = await supabase
+    const { error } = await supabaseAdmin
       .from('role_invitations')
       .delete()
       .eq('id', id);
