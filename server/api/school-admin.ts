@@ -2099,6 +2099,7 @@ router.post("/classes", supabaseAuth, requireSchoolContext, async (req: any, res
 
     // Create new class object
     const newClassData = {
+      type: 'school_admin' as const,
       schoolId: Number(schoolId),
       title: req.body.title,
       description: req.body.description,
@@ -2109,12 +2110,11 @@ router.post("/classes", supabaseAuth, requireSchoolContext, async (req: any, res
       endDate: req.body.endDate,
       schedule: schedule,
       capacity: req.body.capacity || 10,
-      enrollmentCount: 0,
       locationId: req.body.locationId,
       price: price,
       instructorName: req.body.instructorName,
       instructorId,
-      isAdminOnly: req.body.isAdminOnly || false
+      isPublished: false,
     };
 
     console.log('💰 Extracted price from variants:', price);
@@ -2141,7 +2141,7 @@ router.patch("/schools/:id", supabaseAuth, async (req: any, res) => {
   console.log('🔥 Request body:', JSON.stringify(req.body, null, 2));
   console.log('🔥 School ID:', req.params.id);
   try {
-    const authenticatedSchoolId = requireSchoolContext(req, res);
+    const authenticatedSchoolId = await getSchoolIdFromRequest(req, res);
     if (authenticatedSchoolId === null) return;
 
     const schoolId = parseInt(req.params.id);
@@ -2654,15 +2654,15 @@ router.get('/students/:id', supabaseAuth, async (req: any, res) => {
       interests: student.interests || [],
       medicalNotes: student.medicalInfo || '',
       parentEmail: student.parentEmail || '',
-      parentPhone: student.parentPhone || '',
-      address: student.address || '',
+      parentPhone: '',
+      address: '',
       enrollmentDate: student.createdAt,
       status: 'Active',
       emergencyContact: {
         name: student.emergencyContact || '',
         relationship: 'Emergency Contact',
-        phone: student.emergencyPhone || '',
-        email: student.emergencyEmail || ''
+        phone: '',
+        email: ''
       }
     };
 
@@ -2685,8 +2685,8 @@ router.put('/students/:id', supabaseAuth, async (req: any, res) => {
 
     console.log('Updating student:', studentId, updateData);
 
-    // Get existing student
-    const existingStudent = await storage.getStudentById(studentId);
+    // Get existing student (child)
+    const existingStudent = await storage.getChildById(studentId);
     if (!existingStudent) {
       return res.status(404).json({ message: 'Student not found' });
     }
@@ -2696,18 +2696,15 @@ router.put('/students/:id', supabaseAuth, async (req: any, res) => {
       return res.status(403).json({ message: 'Access denied to this student' });
     }
 
-    // Update student with new data
-    const updatedStudent = await storage.updateStudent(studentId, {
+    // Update student with new data using updateChild
+    const updatedStudent = await storage.updateChild(studentId, {
       firstName: updateData.firstName,
       lastName: updateData.lastName,
       birthdate: updateData.dateOfBirth,
       gradeLevel: updateData.gradeLevel,
-      locationId: updateData.locationId !== undefined ? updateData.locationId : existingStudent.locationId, // Add location support
       parentEmail: updateData.parentEmail,
-      parentPhone: updateData.parentPhone,
       emergencyContact: updateData.emergencyContact,
-      emergencyPhone: updateData.emergencyPhone,
-      medicalNotes: updateData.medicalNotes,
+      medicalInfo: updateData.medicalNotes,
       specialNeeds: updateData.specialNeeds,
     });
 
@@ -3003,7 +3000,7 @@ router.get("/students/by-location/:locationId", async (req, res) => {
           schoolId: schoolStudent.schoolId,
           enrollmentDate: schoolStudent.enrollmentDate,
           status: schoolStudent.status,
-          gradeLevel: schoolStudent.gradeLevel,
+          gradeLevel: schoolStudent.grade,
           child: child ? {
             firstName: child.firstName,
             lastName: child.lastName,
@@ -3108,8 +3105,14 @@ router.get("/user-locations/my-permissions", async (req, res) => {
         return {
           id: userLocation.id,
           locationId: userLocation.locationId,
-          role: userLocation.role,
-          permissions: userLocation.permissions,
+          accessLevel: userLocation.accessLevel,
+          permissions: {
+            canViewReports: userLocation.canViewReports,
+            canManageStaff: userLocation.canManageStaff,
+            canManageClasses: userLocation.canManageClasses,
+            canManageStudents: userLocation.canManageStudents,
+            canSendNotifications: userLocation.canSendNotifications,
+          },
           assignedAt: userLocation.assignedAt,
           isActive: userLocation.isActive,
           location: location ? {
@@ -3293,8 +3296,8 @@ router.post('/discounts', supabaseAuth, requireSchoolContext, async (req: any, r
       type,
       value: valueInCents,
       applicationMethod,
-      minOrderAmount: minOrderAmountInCents,
-      maxDiscountAmount: maxDiscountAmountInCents,
+      minOrderAmount: minOrderAmountInCents ?? undefined,
+      maxDiscountAmount: maxDiscountAmountInCents ?? undefined,
       applicableToClasses: applicableToClasses || [],
       applicableToCategories: applicableToCategories || [],
       applicableToGradeLevels: applicableToGradeLevels || [],
@@ -3303,7 +3306,6 @@ router.post('/discounts', supabaseAuth, requireSchoolContext, async (req: any, r
       appliesToMembership: appliesToMembership || false,
       usageLimit: usageLimit || null,
       usageLimitPerUser: usageLimitPerUser || null,
-      currentUsageCount: 0,
       validFrom: parseDiscountDate(validFrom),
       validUntil: parseDiscountDate(validUntil),
       isActive: isActive !== undefined ? isActive : true,
@@ -3563,8 +3565,8 @@ router.post('/discounts/:id/duplicate', async (req, res) => {
       type: originalDiscount.type,
       value: originalDiscount.value,
       applicationMethod: originalDiscount.applicationMethod,
-      minOrderAmount: originalDiscount.minOrderAmount,
-      maxDiscountAmount: originalDiscount.maxDiscountAmount,
+      minOrderAmount: originalDiscount.minOrderAmount ?? undefined,
+      maxDiscountAmount: originalDiscount.maxDiscountAmount ?? undefined,
       applicableToClasses: originalDiscount.applicableToClasses,
       applicableToCategories: originalDiscount.applicableToCategories,
       applicableToGradeLevels: originalDiscount.applicableToGradeLevels,
@@ -3573,13 +3575,11 @@ router.post('/discounts/:id/duplicate', async (req, res) => {
       appliesToMembership: originalDiscount.appliesToMembership,
       usageLimit: originalDiscount.usageLimit,
       usageLimitPerUser: originalDiscount.usageLimitPerUser,
-      currentUsageCount: 0,
       validFrom: originalDiscount.validFrom,
       validUntil: originalDiscount.validUntil,
       isActive: false, // Start inactive so admin can review before activation
       priority: originalDiscount.priority,
       combinableWithOthers: originalDiscount.combinableWithOthers,
-      adminOnly: originalDiscount.adminOnly,
       createdBy: originalDiscount.createdBy
     });
     
@@ -3666,7 +3666,7 @@ router.post('/discounts/:id/apply', async (req, res) => {
       discountId,
       parentEmail,
       childId: childId || null,
-      enrollmentId: enrollmentId || null,
+      schoolEnrollmentId: enrollmentId || null,
       paymentId: null, // Will be set when payment is processed
       originalAmount,
       discountAmount,
@@ -3675,10 +3675,8 @@ router.post('/discounts/:id/apply', async (req, res) => {
       appliedBy: 1 // TODO: Get from authenticated user
     });
     
-    // Update discount usage count
-    await storage.updateDiscount(discountId, {
-      currentUsageCount: (discount.currentUsageCount || 0) + 1
-    });
+    // Update discount usage count using atomic increment
+    await storage.incrementDiscountUsageAtomic(discountId);
     
     console.log('✅ Discount applied successfully:', newApplication);
     
@@ -3769,11 +3767,11 @@ router.post('/contact-import', supabaseAuth, requireSchoolContext, async (req: a
         
         await new Promise((resolve, reject) => {
           parseCSV(fileContent, { 
-            headers: true,
+            columns: true,
             skip_empty_lines: true,
             trim: true
           })
-          .on('data', (record) => records.push(record))
+          .on('data', (record: any) => records.push(record))
           .on('end', resolve)
           .on('error', reject);
         });
@@ -3838,9 +3836,15 @@ router.post('/contact-import', supabaseAuth, requireSchoolContext, async (req: a
               if (parentData.email && parentData.firstName && parentData.lastName) {
                 // Create user account with school association
                 await storage.createUser({
-                  ...parentData,
+                  email: parentData.email,
+                  firstName: parentData.firstName,
+                  lastName: parentData.lastName,
+                  phone: parentData.phone,
+                  username: parentData.email.split('@')[0] || parentData.email,
+                  password: 'tempPass123!',
+                  name: `${parentData.firstName} ${parentData.lastName}`,
                   role: 'parent',
-                  schoolId: schoolId
+                  schoolId: Number(schoolId)
                 });
                 results.parents.successful++;
                 console.log(`✅ Created parent: ${parentData.email} for school ${schoolId}${locationId ? ` at location ${locationId}` : ''}`);
@@ -3861,10 +3865,33 @@ router.post('/contact-import', supabaseAuth, requireSchoolContext, async (req: a
               };
 
               if (childData.firstName && childData.lastName && childData.parentEmail) {
+                // Find parent to get parentId
+                const parent = await storage.getUserByEmail(childData.parentEmail);
+                if (!parent) {
+                  results.children.failed++;
+                  results.errors.push(`Parent not found for child: ${childData.firstName} ${childData.lastName}`);
+                  continue;
+                }
                 // Create child record with school association
                 await storage.createChild({
-                  ...childData,
-                  schoolId: schoolId
+                  firstName: childData.firstName,
+                  lastName: childData.lastName,
+                  schoolId: Number(schoolId),
+                  school: null,
+                  locationId: locationId,
+                  gradeLevel: childData.grade || '',
+                  birthdate: childData.birthDate || '',
+                  gender: null,
+                  learningStyle: null,
+                  specialNeeds: null,
+                  allergies: null,
+                  medicalInfo: null,
+                  interests: [],
+                  emergencyContact: null,
+                  notes: null,
+                  profileImage: null,
+                  parentEmail: childData.parentEmail,
+                  parentId: parent.id
                 });
                 results.children.successful++;
                 console.log(`✅ Created child: ${childData.firstName} ${childData.lastName} for school ${schoolId}${locationId ? ` at location ${locationId}` : ''}`);
@@ -3885,10 +3912,16 @@ router.post('/contact-import', supabaseAuth, requireSchoolContext, async (req: a
               };
 
               if (staffData.email && staffData.firstName && staffData.lastName) {
-                // Create staff account with school association
-                await storage.createStaffMember({
-                  ...staffData,
-                  schoolId: schoolId
+                // Create staff user account with educator role
+                await storage.createUser({
+                  email: staffData.email,
+                  firstName: staffData.firstName,
+                  lastName: staffData.lastName,
+                  username: staffData.email.split('@')[0] || staffData.email,
+                  password: 'tempPass123!',
+                  name: `${staffData.firstName} ${staffData.lastName}`,
+                  role: 'educator',
+                  schoolId: Number(schoolId)
                 });
                 results.staff.successful++;
                 console.log(`✅ Created staff: ${staffData.email} for school ${schoolId}${locationId ? ` at location ${locationId}` : ''}`);
@@ -3899,8 +3932,9 @@ router.post('/contact-import', supabaseAuth, requireSchoolContext, async (req: a
             }
             // Add handling for enrollments and payments as needed
           } catch (recordError) {
+            const errMsg = recordError instanceof Error ? recordError.message : String(recordError);
             console.error(`❌ Error processing record:`, recordError);
-            results.errors.push(`Error processing record: ${recordError.message}`);
+            results.errors.push(`Error processing record: ${errMsg}`);
             
             if (fileType === 'parents') results.parents.failed++;
             else if (fileType === 'children') results.children.failed++;
@@ -3909,8 +3943,9 @@ router.post('/contact-import', supabaseAuth, requireSchoolContext, async (req: a
         }
 
       } catch (fileError) {
+        const errMsg = fileError instanceof Error ? fileError.message : String(fileError);
         console.error(`❌ Error processing file ${file.name}:`, fileError);
-        results.errors.push(`Error processing file ${file.name}: ${fileError.message}`);
+        results.errors.push(`Error processing file ${file.name}: ${errMsg}`);
       } finally {
         // File cleanup not needed with express-fileupload (memory-based)
       }
@@ -3927,7 +3962,8 @@ router.post('/contact-import', supabaseAuth, requireSchoolContext, async (req: a
     console.error('❌ Contact import error:', error);
     
     // Handle specific multer errors
-    if (error.code === 'UNEXPECTED_END_OF_FORM') {
+    const err = error as any;
+    if (err.code === 'UNEXPECTED_END_OF_FORM') {
       return res.status(400).json({ 
         message: 'Invalid file upload',
         error: 'The form data was incomplete. Please try uploading the file again.' 
@@ -3936,7 +3972,7 @@ router.post('/contact-import', supabaseAuth, requireSchoolContext, async (req: a
     
     res.status(500).json({ 
       message: 'Error processing contact import',
-      error: error.message || 'An unexpected error occurred'
+      error: err.message || 'An unexpected error occurred'
     });
   }
 });
@@ -4526,7 +4562,7 @@ router.post('/users/:userId/send-invite', async (req, res) => {
     console.log(`📧 Sending account invite to user ID: ${userId}`);
 
     // Get user details
-    const user = await storage.getUserById(userId);
+    const user = await storage.getUser(userId);
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
