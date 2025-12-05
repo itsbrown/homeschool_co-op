@@ -181,3 +181,119 @@ const { data: userRoles } = useQuery({
   enabled: !!session?.user,
 });
 ```
+
+## 8. Token-based Invitation Flow Pattern
+**Rule**: All invitation features (staff, role, parent, etc.) should follow this unified pattern for token management and acceptance.
+
+**Core Principles**:
+
+### 8.1 Single Token Lifecycle
+```typescript
+// ❌ WRONG - Generating new token on resend (breaks previous email links)
+const invitationToken = generateInvitationToken();
+await storage.updateRoleInvitation(id, {
+  token: invitationToken,  // This invalidates old links!
+  expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+});
+
+// ✅ CORRECT - Reuse existing token on resend
+if (existingInvitation) {
+  invitationToken = existingInvitation.token;  // Keep same token
+  await storage.updateRoleInvitation(id, {
+    expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),  // Just extend expiry
+    isActive: true,
+    usedAt: null  // Reset if needed
+  });
+} else {
+  invitationToken = generateInvitationToken();  // Only generate if new
+}
+```
+
+**Why This Matters**:
+- Recipients may have old email links they haven't clicked yet
+- Generating new tokens breaks those links, causing 404 errors
+- Resending should extend the expiry, not invalidate the token
+
+### 8.2 Public Validation Endpoints
+```typescript
+// ✅ CORRECT - Public endpoints (no auth middleware) for invitation recipients
+app.get("/api/public/role-invitations/validate", async (req, res) => {
+  // No supabaseAuth middleware - recipients don't have accounts yet
+  const { token } = req.query;
+  const invitation = await supabaseStorage.getActiveRoleInvitation(token);
+  // ...validate and return
+});
+
+app.post("/api/public/role-invitations/accept", async (req, res) => {
+  // No supabaseAuth middleware - creates account on acceptance
+  const { token } = req.body;
+  // ...validate, create account, activate user
+});
+```
+
+**Why This Matters**:
+- Invitation recipients don't have accounts yet
+- They can't authenticate to reach authenticated endpoints
+- Public endpoints allow the "accept invitation → create account" flow
+
+### 8.3 Server-side Token Validation
+```typescript
+// ❌ WRONG - Trusting client-provided data
+const { email, role } = req.body;  // Can be forged
+
+// ✅ CORRECT - Validate token server-side, extract data from database
+const invitation = await storage.getActiveRoleInvitation(token);
+if (!invitation) {
+  return res.status(404).json({ message: "Invalid invitation" });
+}
+const { email, role } = invitation;  // Authoritative data from database
+```
+
+### 8.4 Unified Storage (role_invitations table)
+Use `role_invitations` for ALL invitation types:
+- Staff invitations (has schoolId)
+- Admin role invitations
+- Parent invitations
+- Any future invitation type
+
+**Schema includes**:
+- `token` - Unique invitation token
+- `email` - Recipient email
+- `role` - Role being granted
+- `schoolId` - For school-scoped invitations (null for global)
+- `expiresAt` - Expiration timestamp
+- `isActive` - Whether invitation can still be used
+- `usedAt` - When invitation was accepted
+
+### 8.5 DTO Mapping (snake_case → camelCase)
+```typescript
+// Database uses snake_case (Supabase/PostgreSQL convention)
+// API responses should use camelCase (JavaScript convention)
+
+function mapInvitationToDTO(invitation: any) {
+  return {
+    id: invitation.id,
+    email: invitation.email,
+    role: invitation.role,
+    invitedBy: invitation.invited_by,  // snake_case → camelCase
+    createdAt: invitation.created_at,
+    expiresAt: invitation.expires_at,
+    isActive: invitation.is_active,
+    usedAt: invitation.used_at
+  };
+}
+```
+
+### 8.6 Invitation Flow Checklist
+When creating new invitation features, verify:
+
+- [ ] **Token Reuse**: Resend operations keep existing token, only update expiresAt
+- [ ] **Public Endpoints**: Validate/accept endpoints don't require authentication
+- [ ] **Server Validation**: Token validated server-side, not trusting client data
+- [ ] **Unified Storage**: Uses role_invitations table (not a new table)
+- [ ] **DTO Mapping**: API responses use camelCase field names
+- [ ] **Account Creation**: Accept endpoint handles creating Supabase account if needed
+- [ ] **Activation**: Accept endpoint activates the user/staff record in database
+
+**Real Bug Example (Dec 2025)**:
+Staff invitation resend was generating new tokens, breaking previously sent email links. Fixed by reusing existing token and only updating the expiry date.
