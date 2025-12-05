@@ -89,7 +89,10 @@ export class SupabaseStorage implements IStorage {
   }): Promise<RoleInvitation> {
     const { data, error } = await supabaseAdmin
       .from('role_invitations')
-      .insert(invitation)
+      .insert({
+        ...invitation,
+        is_active: true
+      })
       .select()
       .single();
     
