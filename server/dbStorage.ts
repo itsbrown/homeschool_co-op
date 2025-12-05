@@ -149,6 +149,11 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(userRoles).where(eq(userRoles.userId, userId));
   }
 
+  async deleteUserRolesByUserId(userId: number): Promise<void> {
+    const db = await getDb();
+    await db.delete(userRoles).where(eq(userRoles.userId, userId));
+  }
+
   // School Student methods
   async createSchoolStudent(schoolStudent: InsertSchoolStudent): Promise<SchoolStudent> {
     const db = await getDb();
@@ -1578,6 +1583,11 @@ export class DatabaseStorage implements IStorage {
   async deleteSchoolStaff(id: number): Promise<void> {
     const db = await getDb();
     await db.delete(schoolStaff).where(eq(schoolStaff.id, id));
+  }
+
+  async deleteSchoolStaffByUserId(userId: number): Promise<void> {
+    const db = await getDb();
+    await db.delete(schoolStaff).where(eq(schoolStaff.userId, userId));
   }
 
   // Payment methods

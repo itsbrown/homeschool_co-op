@@ -71,6 +71,7 @@ export interface IStorage {
 
   // User Role methods
   getUserRolesByUserId(userId: number): Promise<UserRole[]>;
+  deleteUserRolesByUserId(userId: number): Promise<void>;
 
   // Location methods
   getLocationsBySchool(schoolId: number): Promise<Location[]>;
@@ -379,6 +380,7 @@ export interface IStorage {
   createSchoolStaff(schoolStaff: InsertSchoolStaff): Promise<SchoolStaff>;
   updateSchoolStaff(id: number, schoolStaff: Partial<InsertSchoolStaff>): Promise<SchoolStaff | undefined>;
   deleteSchoolStaff(id: number): Promise<void>;
+  deleteSchoolStaffByUserId(userId: number): Promise<void>;
 
   // User Location methods  
   getUserLocationById(id: number): Promise<UserLocation | undefined>;
@@ -881,6 +883,10 @@ export class MemStorage implements IStorage {
 
   async getUserRolesByUserId(userId: number): Promise<UserRole[]> {
     return [];
+  }
+
+  async deleteUserRolesByUserId(userId: number): Promise<void> {
+    // MemStorage doesn't track user roles - no-op
   }
 
   async getLocationsBySchool(schoolId: number): Promise<Location[]> {
@@ -4482,6 +4488,10 @@ export class MemStorage implements IStorage {
       }
     }
 
+    async deleteUserRolesByUserId(userId: number): Promise<void> {
+      return this.dbStorage.deleteUserRolesByUserId(userId);
+    }
+
     async getLocationsBySchool(schoolId: number): Promise<Location[]> {
       try {
         return await this.dbStorage.getLocationsBySchool(schoolId);
@@ -5369,6 +5379,10 @@ export class MemStorage implements IStorage {
 
       async deleteSchoolStaff(id: number): Promise<void> {
         return this.dbStorage.deleteSchoolStaff(id);
+      }
+
+      async deleteSchoolStaffByUserId(userId: number): Promise<void> {
+        return this.dbStorage.deleteSchoolStaffByUserId(userId);
       }
 
       // User Location methods

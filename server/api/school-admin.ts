@@ -4235,9 +4235,97 @@ router.delete('/users/:id', supabaseAuth, requireSchoolContext, async (req: any,
       return res.status(404).json({ message: 'User not found or access denied' });
     }
 
-    // Delete user
+    const userEmail = existingUser.email;
+    console.log(`🗑️ Starting deletion process for user: ${userEmail} (ID: ${userId})`);
+
+    // Step 1: Delete user from Supabase Auth (so they can't log in anymore)
+    let supabaseDeleted = false;
+    try {
+      const { createClient } = await import('@supabase/supabase-js');
+      const supabaseUrl = process.env.SUPABASE_URL;
+      const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+      if (supabaseUrl && supabaseServiceKey) {
+        const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+          auth: { autoRefreshToken: false, persistSession: false }
+        });
+
+        // First try using stored supabaseId if available (most reliable)
+        if (existingUser.supabaseId) {
+          const { error: deleteAuthError } = await supabaseAdmin.auth.admin.deleteUser(existingUser.supabaseId);
+          if (deleteAuthError) {
+            console.error(`⚠️ Failed to delete Supabase auth user by ID: ${deleteAuthError.message}`);
+          } else {
+            console.log(`✅ Deleted user from Supabase Auth by supabaseId: ${userEmail}`);
+            supabaseDeleted = true;
+          }
+        }
+
+        // If no supabaseId or deletion by ID failed, search by email with pagination
+        if (!supabaseDeleted) {
+          let page = 1;
+          const perPage = 100;
+          let foundUser = null;
+
+          // Paginate through all users to find by email
+          while (!foundUser) {
+            const { data: listData } = await supabaseAdmin.auth.admin.listUsers({
+              page,
+              perPage
+            });
+            
+            if (!listData?.users || listData.users.length === 0) {
+              break; // No more users to search
+            }
+
+            foundUser = listData.users.find(u => u.email === userEmail);
+            
+            if (listData.users.length < perPage) {
+              break; // Last page
+            }
+            page++;
+          }
+
+          if (foundUser) {
+            const { error: deleteAuthError } = await supabaseAdmin.auth.admin.deleteUser(foundUser.id);
+            if (deleteAuthError) {
+              console.error(`⚠️ Failed to delete Supabase auth user: ${deleteAuthError.message}`);
+            } else {
+              console.log(`✅ Deleted user from Supabase Auth: ${userEmail}`);
+              supabaseDeleted = true;
+            }
+          } else {
+            console.log(`ℹ️ User ${userEmail} not found in Supabase Auth (may be local-only user)`);
+          }
+        }
+      } else {
+        console.log('⚠️ Supabase credentials not available - skipping auth deletion');
+      }
+    } catch (supabaseError) {
+      console.error('⚠️ Error during Supabase auth deletion:', supabaseError);
+      // Continue with local deletion even if Supabase deletion fails
+    }
+
+    // Step 2: Clean up related records before deleting user
+    // Delete user roles for this school
+    try {
+      await storage.deleteUserRolesByUserId(userId);
+      console.log(`✅ Deleted user roles for user ID: ${userId}`);
+    } catch (roleError) {
+      console.error('⚠️ Error deleting user roles:', roleError);
+    }
+
+    // Delete school staff records
+    try {
+      await storage.deleteSchoolStaffByUserId(userId);
+      console.log(`✅ Deleted school staff records for user ID: ${userId}`);
+    } catch (staffError) {
+      console.error('⚠️ Error deleting school staff records:', staffError);
+    }
+
+    // Step 3: Delete user from local database
     await storage.deleteUser(userId);
-    console.log(`✅ Deleted user: ${existingUser.email} (ID: ${userId}) from school ${schoolId}`);
+    console.log(`✅ Deleted user from database: ${userEmail} (ID: ${userId}) from school ${schoolId}`);
     
     res.status(200).json({ message: 'User deleted successfully' });
   } catch (error) {
