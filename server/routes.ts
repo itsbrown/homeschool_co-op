@@ -3098,15 +3098,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ valid: false, message: 'Invitation has expired' });
       }
 
+      // Determine if password is required - only for educator role invitations without schoolId
+      // Staff invitations (with schoolId) auto-generate passwords; existing users don't need passwords
+      const schoolId = (invitation as any).school_id || (invitation as any).schoolId;
+      const educatorRoles = ['educator'];
+      const requiresPassword = !schoolId && educatorRoles.includes(invitationDTO.role);
+      
       return res.json({ 
         valid: true, 
+        requiresPassword,
         invitation: {
           id: invitationDTO.id,
           email: invitationDTO.email,
           role: invitationDTO.role,
           invitedBy: invitationDTO.invitedBy,
           createdAt: invitationDTO.createdAt,
-          expiresAt: invitationDTO.expiresAt
+          expiresAt: invitationDTO.expiresAt,
+          requiresPassword
         }
       });
     } catch (error) {
@@ -3116,9 +3124,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // Public role invitation accept endpoint (no auth required for invitation recipients)
+  // Handles two flows:
+  // 1. Staff invitations (has schoolId) - Auto-create account with generated password
+  // 2. Non-staff invitations (educator) - User provides password in request body
   app.post("/api/public/role-invitations/accept", async (req, res) => {
     try {
-      const { token } = req.body;
+      const { token, password } = req.body;
 
       if (!token) {
         return res.status(400).json({ message: "Token is required" });
@@ -3139,19 +3150,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log(`📝 Processing invitation acceptance for: ${invitationDTO.email}`);
 
-      // If this is a staff invitation (has schoolId), activate the staff member
       let accountCreated = false;
       const schoolId = (invitation as any).school_id || (invitation as any).schoolId;
+      
+      // Get first/last name from invitation (handle both snake_case and camelCase)
+      const firstName = (invitation as any).first_name || (invitation as any).firstName || '';
+      const lastName = (invitation as any).last_name || (invitation as any).lastName || '';
+      
       if (schoolId) {
+        // Flow 1: Staff invitation (has schoolId) - Auto-create account with generated password
         try {
-          // Import the createStaffAccount function and sendAccountCredentialsEmail
           const { createStaffAccount, sendAccountCredentialsEmail } = await import("./api/school-admin");
           
-          // Get first/last name from invitation (handle both snake_case and camelCase)
-          const firstName = (invitation as any).first_name || (invitation as any).firstName || '';
-          const lastName = (invitation as any).last_name || (invitation as any).lastName || '';
-          
-          // Create Supabase account for the staff member
           const accountResult = await createStaffAccount(
             invitationDTO.email,
             firstName,
@@ -3191,6 +3201,78 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.error("Error processing staff activation:", staffError);
           // Continue with invitation acceptance even if staff activation fails
         }
+      } else {
+        // Flow 2: Educator role requiring password OR existing user acceptance
+        const educatorRoles = ['educator'];
+        const requiresPassword = !schoolId && educatorRoles.includes(invitationDTO.role);
+        
+        if (requiresPassword) {
+          if (!password) {
+            return res.status(400).json({ message: "Password is required for educator accounts" });
+          }
+          
+          try {
+            // Validate password
+            if (password.length < 6) {
+              return res.status(400).json({ message: "Password must be at least 6 characters long" });
+            }
+            
+            // Validate required env vars before using them
+            if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+              console.error('❌ Missing Supabase configuration for account creation');
+              return res.status(500).json({ message: "Server configuration error - unable to create account" });
+            }
+            
+            // Create Supabase account with provided password
+            const { createClient } = await import("@supabase/supabase-js");
+            const supabaseAdmin = createClient(
+              process.env.SUPABASE_URL,
+              process.env.SUPABASE_SERVICE_ROLE_KEY,
+              { auth: { autoRefreshToken: false, persistSession: false } }
+            );
+            
+            // Create user in Supabase Auth with provided password
+            const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
+              email: invitationDTO.email,
+              password: password,
+              email_confirm: true,
+              user_metadata: {
+                first_name: firstName,
+                last_name: lastName,
+                role: invitationDTO.role
+              }
+            });
+            
+            if (authError) {
+              if (authError.message?.includes('already registered')) {
+                console.log(`User ${invitationDTO.email} already exists in Supabase`);
+              } else {
+                console.error(`Error creating Supabase user: ${authError.message}`);
+                return res.status(400).json({ message: `Failed to create account: ${authError.message}` });
+              }
+            } else {
+              accountCreated = true;
+              console.log(`✅ Created Supabase account for educator: ${invitationDTO.email}`);
+              
+              // Create user in local database
+              const existingUser = await storage.getUserByEmail(invitationDTO.email);
+              if (!existingUser) {
+                await storage.createUser({
+                  email: invitationDTO.email,
+                  firstName: firstName || '',
+                  lastName: lastName || '',
+                  role: invitationDTO.role,
+                  isActive: true
+                });
+                console.log(`✅ Created local database user for: ${invitationDTO.email}`);
+              }
+            }
+          } catch (createError) {
+            console.error("Error creating educator account:", createError);
+            return res.status(500).json({ message: "Error creating account" });
+          }
+        }
+        // Non-educator roles without schoolId: Just accept invitation (user should have existing account)
       }
 
       // Mark invitation as used in database
@@ -3198,7 +3280,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.status(200).json({
         message: accountCreated 
-          ? "Invitation accepted! Your account has been created and login credentials have been sent to your email."
+          ? "Invitation accepted! Your account has been created."
           : "Invitation accepted successfully. Please use your existing account to log in.",
         role: invitationDTO.role,
         email: invitationDTO.email,

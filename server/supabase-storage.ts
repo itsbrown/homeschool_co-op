@@ -580,11 +580,87 @@ export class SupabaseStorage implements IStorage {
     throw new Error('Program deletion not implemented in Supabase storage');
   }
 
-  // Unimplemented interface methods (real implementations exist above or use fallback storage)
-  async getRoleInvitationsByEmail(email: string): Promise<any[]> { return []; }
-  async getRoleInvitationById(id: number): Promise<any | undefined> { return undefined; }
-  async updateRoleInvitation(id: number, invitation: any): Promise<any> { throw new Error('Not implemented'); }
-  async deleteRoleInvitation(id: number): Promise<void> { throw new Error('Not implemented'); }
+  // Role invitation helper methods
+  async getRoleInvitationsByEmail(email: string): Promise<any[]> {
+    const { data, error } = await supabase
+      .from('role_invitations')
+      .select('*')
+      .eq('email', email);
+    
+    if (error) {
+      console.error('Error fetching role invitations by email:', error);
+      return [];
+    }
+    
+    return data || [];
+  }
+  
+  async getRoleInvitationById(id: number): Promise<any | undefined> {
+    const { data, error } = await supabase
+      .from('role_invitations')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+    
+    if (error) {
+      console.error('Error fetching role invitation by id:', error);
+      return undefined;
+    }
+    
+    return data || undefined;
+  }
+  
+  async updateRoleInvitation(id: number, invitation: any): Promise<any> {
+    // Map camelCase to snake_case for Supabase
+    const updateData: any = {};
+    if (invitation.expiresAt !== undefined) updateData.expires_at = invitation.expiresAt instanceof Date ? invitation.expiresAt.toISOString() : invitation.expiresAt;
+    if (invitation.isActive !== undefined) updateData.is_active = invitation.isActive;
+    if (invitation.usedAt !== undefined) updateData.used_at = invitation.usedAt;
+    if (invitation.lastSentAt !== undefined) updateData.last_sent_at = invitation.lastSentAt;
+    
+    console.log('📝 Updating role invitation:', id, 'with:', updateData);
+    
+    const { data, error } = await supabase
+      .from('role_invitations')
+      .update(updateData)
+      .eq('id', id)
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('Error updating role invitation:', error);
+      throw error;
+    }
+    
+    console.log('✅ Role invitation updated:', data);
+    
+    // Map snake_case back to camelCase for callers
+    return {
+      id: data.id,
+      email: data.email,
+      role: data.role,
+      token: data.token,
+      invitedBy: data.invited_by,
+      schoolId: data.school_id,
+      isActive: data.is_active,
+      usedAt: data.used_at,
+      createdAt: data.created_at,
+      expiresAt: data.expires_at,
+      lastSentAt: data.last_sent_at
+    };
+  }
+  
+  async deleteRoleInvitation(id: number): Promise<void> {
+    const { error } = await supabase
+      .from('role_invitations')
+      .delete()
+      .eq('id', id);
+    
+    if (error) {
+      console.error('Error deleting role invitation:', error);
+      throw error;
+    }
+  }
 }
 
 export const supabaseStorage = new SupabaseStorage();
