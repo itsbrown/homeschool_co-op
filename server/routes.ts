@@ -3280,6 +3280,211 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Error accepting invitation" });
     }
   });
+
+  // ============================================
+  // PUBLIC STAFF INVITATION ENDPOINTS
+  // For educator/staff invitations stored in staff_invitations table
+  // ============================================
+
+  // Public staff invitation validation endpoint (no auth required for invitation recipients)
+  // Uses local PostgreSQL storage - staff_invitations table
+  app.get("/api/public/staff-invitations/validate", async (req, res) => {
+    try {
+      const { token } = req.query;
+      
+      if (!token || typeof token !== 'string') {
+        return res.status(400).json({ valid: false, message: 'Token is required' });
+      }
+
+      // Use local storage (PostgreSQL) - the authoritative data store
+      const invitation = await storage.getStaffInvitationByToken(token);
+      
+      if (!invitation) {
+        return res.status(404).json({ valid: false, message: 'Invalid or expired invitation' });
+      }
+
+      // Check if invitation status is still pending
+      if (invitation.status !== 'pending') {
+        return res.status(400).json({ valid: false, message: 'Invitation has already been used or cancelled' });
+      }
+
+      // Check if invitation has expired
+      if (invitation.expiresAt && new Date() > new Date(invitation.expiresAt)) {
+        return res.status(400).json({ valid: false, message: 'Invitation has expired' });
+      }
+
+      console.log(`✅ Staff invitation validated for: ${invitation.email}`);
+      
+      return res.json({ 
+        valid: true, 
+        requiresPassword: true, // Staff invitations always require password creation
+        invitation: {
+          id: invitation.id,
+          email: invitation.email,
+          role: invitation.role,
+          firstName: invitation.firstName,
+          lastName: invitation.lastName,
+          schoolId: invitation.schoolId,
+          locationId: invitation.locationId,
+          department: invitation.role, // Use role as department for display
+          createdAt: invitation.createdAt,
+          expiresAt: invitation.expiresAt
+        }
+      });
+    } catch (error) {
+      console.error('Error validating staff invitation:', error);
+      return res.status(500).json({ valid: false, message: 'Failed to validate invitation' });
+    }
+  });
+
+  // Public staff invitation accept endpoint (no auth required for invitation recipients)
+  // Creates Supabase auth user and local database user with user-provided password
+  app.post("/api/public/staff-invitations/accept", async (req, res) => {
+    try {
+      const { token, password } = req.body;
+
+      if (!token) {
+        return res.status(400).json({ message: "Token is required" });
+      }
+
+      if (!password) {
+        return res.status(400).json({ message: "Password is required" });
+      }
+
+      if (password.length < 6) {
+        return res.status(400).json({ message: "Password must be at least 6 characters long" });
+      }
+
+      // Use local storage (PostgreSQL) - the authoritative data store
+      const invitation = await storage.getStaffInvitationByToken(token);
+
+      if (!invitation) {
+        return res.status(404).json({ message: "Invalid or expired invitation" });
+      }
+
+      if (invitation.status !== 'pending') {
+        return res.status(400).json({ message: "Invitation has already been used or cancelled" });
+      }
+
+      if (invitation.expiresAt && new Date(invitation.expiresAt) < new Date()) {
+        return res.status(400).json({ message: "Invitation has expired" });
+      }
+
+      console.log(`📝 Processing staff invitation acceptance for: ${invitation.email}`);
+
+      // Validate required env vars before using them
+      if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+        console.error('❌ Missing Supabase configuration for account creation');
+        return res.status(500).json({ message: "Server configuration error - unable to create account" });
+      }
+
+      // Create Supabase account with provided password
+      const { createClient } = await import("@supabase/supabase-js");
+      const supabaseAdmin = createClient(
+        process.env.SUPABASE_URL,
+        process.env.SUPABASE_SERVICE_ROLE_KEY,
+        { auth: { autoRefreshToken: false, persistSession: false } }
+      );
+
+      let accountCreated = false;
+      let supabaseUserId: string | null = null;
+
+      // Check if user already exists in Supabase
+      const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
+      const existingSupabaseUser = existingUsers?.users?.find(u => u.email === invitation.email);
+
+      if (existingSupabaseUser) {
+        console.log(`User ${invitation.email} already exists in Supabase`);
+        supabaseUserId = existingSupabaseUser.id;
+      } else {
+        // Create user in Supabase Auth with provided password
+        const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
+          email: invitation.email,
+          password: password,
+          email_confirm: true,
+          user_metadata: {
+            first_name: invitation.firstName,
+            last_name: invitation.lastName,
+            role: invitation.role
+          }
+        });
+
+        if (authError) {
+          console.error(`Error creating Supabase user: ${authError.message}`);
+          return res.status(400).json({ message: `Failed to create account: ${authError.message}` });
+        }
+
+        accountCreated = true;
+        supabaseUserId = authUser.user?.id || null;
+        console.log(`✅ Created Supabase account for staff: ${invitation.email}`);
+      }
+
+      // Create or update user in local database
+      let localUser = await storage.getUserByEmail(invitation.email);
+      if (!localUser) {
+        localUser = await storage.createUser({
+          email: invitation.email,
+          firstName: invitation.firstName,
+          lastName: invitation.lastName,
+          role: invitation.role,
+          isActive: true
+        });
+        console.log(`✅ Created local database user for: ${invitation.email}`);
+      }
+
+      // Create user role for this school
+      if (localUser && invitation.schoolId) {
+        try {
+          await storage.createUserRole({
+            userId: localUser.id,
+            role: invitation.role,
+            schoolId: invitation.schoolId,
+            isPrimary: true
+          });
+          console.log(`✅ Created user role for: ${invitation.email} at school ${invitation.schoolId}`);
+        } catch (roleError: any) {
+          // Role might already exist - that's ok
+          if (!roleError.message?.includes('duplicate')) {
+            console.error('Error creating user role:', roleError);
+          }
+        }
+
+        // Create school staff record
+        try {
+          await storage.createSchoolStaff({
+            schoolId: invitation.schoolId,
+            userId: localUser.id,
+            role: invitation.role,
+            isActive: true,
+            permissions: {}
+          });
+          console.log(`✅ Created school staff record for: ${invitation.email}`);
+        } catch (staffError: any) {
+          // Staff record might already exist - that's ok
+          if (!staffError.message?.includes('duplicate')) {
+            console.error('Error creating school staff:', staffError);
+          }
+        }
+      }
+
+      // Mark invitation as accepted
+      await storage.updateStaffInvitation(invitation.id, { status: 'accepted' });
+      console.log(`✅ Marked staff invitation as accepted for: ${invitation.email}`);
+
+      res.status(200).json({
+        message: accountCreated 
+          ? "Account created successfully! You can now log in."
+          : "Invitation accepted! You can now log in with your existing account.",
+        role: invitation.role,
+        email: invitation.email,
+        accountCreated,
+        redirect: "/login"
+      });
+    } catch (error) {
+      console.error("Error accepting staff invitation:", error);
+      res.status(500).json({ message: "Error accepting invitation" });
+    }
+  });
   
   app.use("/api/admin/role-invitations", roleInvitationsRouter);
 

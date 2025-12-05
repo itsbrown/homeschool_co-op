@@ -1,18 +1,18 @@
-
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/hooks/useAuth0";
+import { XCircle } from "lucide-react";
 
 export default function AcceptEducatorInvitationPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const { user, login } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
+  const [isValidating, setIsValidating] = useState(true);
+  const [validationError, setValidationError] = useState<string | null>(null);
   const [invitationData, setInvitationData] = useState<any>(null);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -21,32 +21,28 @@ export default function AcceptEducatorInvitationPage() {
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const token = urlParams.get('token');
-    const email = urlParams.get('email');
     
-    if (token && email) {
-      // Validate invitation token using public endpoint (no auth required)
-      fetch(`/api/public/role-invitations/validate?token=${token}&email=${email}`)
+    if (token) {
+      // Validate invitation token using public staff-invitations endpoint (no auth required)
+      // Staff invitations are stored in staff_invitations table (not role_invitations)
+      fetch(`/api/public/staff-invitations/validate?token=${token}`)
         .then(response => response.json())
         .then(data => {
+          setIsValidating(false);
           if (data.valid) {
             setInvitationData(data.invitation);
           } else {
-            toast({
-              title: "Invalid Invitation",
-              description: "This invitation link is invalid or has expired.",
-              variant: "destructive",
-            });
-            setLocation('/');
+            setValidationError(data.message || "This invitation link is invalid or has expired.");
           }
         })
         .catch(error => {
           console.error('Error validating invitation:', error);
-          toast({
-            title: "Error",
-            description: "Failed to validate invitation.",
-            variant: "destructive",
-          });
+          setIsValidating(false);
+          setValidationError("Failed to validate invitation. Please try again.");
         });
+    } else {
+      setIsValidating(false);
+      setValidationError("No invitation token provided in the URL.");
     }
   }, []);
 
@@ -74,41 +70,35 @@ export default function AcceptEducatorInvitationPage() {
     setIsLoading(true);
 
     try {
-      // If user is not logged in, create account and login
-      if (!user) {
-        await login({
-          email: invitationData.email,
-          password: password,
-          role: 'educator'
-        });
-      }
-
-      // Accept the invitation using public endpoint (no auth required)
-      const response = await fetch('/api/public/role-invitations/accept', {
+      const token = new URLSearchParams(window.location.search).get('token');
+      
+      // Accept the invitation using public staff-invitations endpoint (no auth required)
+      // This creates the Supabase auth account and local database user with the provided password
+      const response = await fetch('/api/public/staff-invitations/accept', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          token: new URLSearchParams(window.location.search).get('token'),
-          email: invitationData.email,
+          token: token,
           password: password
         }),
       });
 
+      const result = await response.json();
+
       if (response.ok) {
         toast({
           title: "Welcome!",
-          description: "Your educator account has been activated successfully.",
+          description: result.message || "Your account has been created successfully.",
         });
         
-        // Redirect to educator dashboard
-        setLocation('/educator/dashboard');
+        // Redirect to login page so user can sign in with their new credentials
+        setLocation('/login');
       } else {
-        const errorData = await response.json();
         toast({
           title: "Error",
-          description: errorData.message || "Failed to accept invitation.",
+          description: result.message || "Failed to accept invitation.",
           variant: "destructive",
         });
       }
@@ -124,7 +114,8 @@ export default function AcceptEducatorInvitationPage() {
     }
   };
 
-  if (!invitationData) {
+  // Show loading state while validating
+  if (isValidating) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50">
         <Card className="w-full max-w-md">
@@ -135,6 +126,38 @@ export default function AcceptEducatorInvitationPage() {
         </Card>
       </div>
     );
+  }
+
+  // Show error state if validation failed
+  if (validationError) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-50">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <div className="flex justify-center mb-4">
+              <XCircle className="h-16 w-16 text-destructive" />
+            </div>
+            <CardTitle className="text-destructive">Invalid Invitation</CardTitle>
+            <CardDescription>{validationError}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button 
+              className="w-full" 
+              variant="outline"
+              onClick={() => setLocation('/login')}
+              data-testid="button-go-to-login"
+            >
+              Go to Login
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // If no invitation data (shouldn't happen but safety check)
+  if (!invitationData) {
+    return null;
   }
 
   return (
