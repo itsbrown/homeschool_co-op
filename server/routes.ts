@@ -3046,22 +3046,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const registrationRouter = (await import("./api/registration")).default;
   app.use("/api/registration", registrationRouter);
   
-  // Helper to map Supabase snake_case fields to camelCase DTO
+  // Helper to map invitation fields to camelCase DTO (handles both snake_case from DB and camelCase from storage)
   function mapInvitationToDTO(invitation: any) {
     return {
       id: invitation.id,
       email: invitation.email,
       role: invitation.role,
       token: invitation.token,
-      invitedBy: invitation.invited_by,
-      isActive: invitation.is_active,
-      usedAt: invitation.used_at,
-      createdAt: invitation.created_at,
-      expiresAt: invitation.expires_at
+      invitedBy: invitation.invited_by || invitation.invitedBy,
+      isActive: invitation.is_active ?? invitation.isActive,
+      usedAt: invitation.used_at || invitation.usedAt,
+      createdAt: invitation.created_at || invitation.createdAt,
+      expiresAt: invitation.expires_at || invitation.expiresAt
     };
   }
 
   // Public role invitation validation endpoint (no auth required for invitation recipients)
+  // Uses local PostgreSQL storage (source of truth for all data per architecture)
   app.get("/api/public/role-invitations/validate", async (req, res) => {
     try {
       const { token } = req.query;
@@ -3070,8 +3071,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ valid: false, message: 'Token is required' });
       }
 
-      const { supabaseStorage } = await import("./supabase-storage");
-      const invitation = await supabaseStorage.getActiveRoleInvitation(token);
+      // Use local storage (PostgreSQL) - the authoritative data store
+      const invitation = await storage.getActiveRoleInvitation(token);
       
       if (!invitation) {
         return res.status(404).json({ valid: false, message: 'Invalid or expired invitation' });
@@ -3113,6 +3114,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Handles two flows:
   // 1. Staff invitations (has schoolId) - Auto-create account with generated password
   // 2. Non-staff invitations (educator) - User provides password in request body
+  // Uses local PostgreSQL storage (source of truth for all data per architecture)
   app.post("/api/public/role-invitations/accept", async (req, res) => {
     try {
       const { token, password } = req.body;
@@ -3121,8 +3123,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Token is required" });
       }
 
-      const { supabaseStorage } = await import("./supabase-storage");
-      const invitation = await supabaseStorage.getActiveRoleInvitation(token);
+      // Use local storage (PostgreSQL) - the authoritative data store
+      const invitation = await storage.getActiveRoleInvitation(token);
 
       if (!invitation) {
         return res.status(404).json({ message: "Invalid or expired invitation" });
@@ -3261,8 +3263,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Non-educator roles without schoolId: Just accept invitation (user should have existing account)
       }
 
-      // Mark invitation as used in database
-      await supabaseStorage.acceptRoleInvitation(token);
+      // Mark invitation as used in database (local PostgreSQL storage)
+      await storage.acceptRoleInvitation(token, invitationDTO.email);
 
       res.status(200).json({
         message: accountCreated 

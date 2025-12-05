@@ -1,22 +1,22 @@
 import { Router } from "express";
 import { z } from "zod";
 import * as brevo from '@getbrevo/brevo';
-import { supabaseStorage } from "../supabase-storage";
+import { storage } from "../storage";
 
 const router = Router();
 
-// Map Supabase snake_case fields to camelCase DTO for consistent API responses
+// Map invitation fields to camelCase DTO (handles both snake_case from DB and camelCase from storage)
 function mapInvitationToDTO(invitation: any) {
   return {
     id: invitation.id,
     email: invitation.email,
     role: invitation.role,
     token: invitation.token,
-    invitedBy: invitation.invited_by,
-    isActive: invitation.is_active,
-    usedAt: invitation.used_at,
-    createdAt: invitation.created_at,
-    expiresAt: invitation.expires_at
+    invitedBy: invitation.invited_by || invitation.invitedBy,
+    isActive: invitation.is_active ?? invitation.isActive,
+    usedAt: invitation.used_at || invitation.usedAt,
+    createdAt: invitation.created_at || invitation.createdAt,
+    expiresAt: invitation.expires_at || invitation.expiresAt
   };
 }
 
@@ -103,10 +103,10 @@ This invitation will expire in 7 days. If you have any questions, please contact
   }
 }
 
-// Get all role invitations
+// Get all role invitations (uses local PostgreSQL storage)
 router.get("/", async (req, res) => {
   try {
-    const invitations = await supabaseStorage.getRoleInvitations();
+    const invitations = await storage.getRoleInvitations();
     res.status(200).json(invitations.map(mapInvitationToDTO));
   } catch (error) {
     console.error("Error fetching role invitations:", error);
@@ -129,11 +129,13 @@ router.post("/", async (req, res) => {
       return res.status(400).json({ message: "Invalid role specified" });
     }
 
-    // Check if there's already an active invitation for this email
-    const existingInvitations = await supabaseStorage.getRoleInvitations();
-    const existingInvitation = existingInvitations.find(inv => 
-      inv.email === email && inv.is_active && !inv.used_at
-    );
+    // Check if there's already an active invitation for this email (uses local PostgreSQL storage)
+    const existingInvitations = await storage.getRoleInvitations();
+    const existingInvitation = existingInvitations.find(inv => {
+      const isActive = inv.is_active ?? inv.isActive;
+      const usedAt = inv.used_at || inv.usedAt;
+      return inv.email === email && isActive && !usedAt;
+    });
 
     if (existingInvitation) {
       return res.status(400).json({ message: "An active invitation already exists for this email" });
@@ -148,11 +150,12 @@ router.post("/", async (req, res) => {
       email,
       role,
       token,
-      invited_by: "Admin", // In a real system, get this from the authenticated user
-      expires_at: expiresAt.toISOString(),
+      invitedBy: 1, // Default admin ID
+      expiresAt: expiresAt, // Pass Date object, not string
+      isActive: true,
     };
 
-    const invitation = await supabaseStorage.createRoleInvitation(invitationData);
+    const invitation = await storage.createRoleInvitation(invitationData);
 
     // Send real email invitation
     const emailSent = await sendRoleInvitationEmail(email, role, token);
@@ -180,13 +183,13 @@ router.post("/", async (req, res) => {
   }
 });
 
-// Revoke a role invitation
+// Revoke a role invitation (uses local PostgreSQL storage)
 router.delete("/:id", async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     
     // Try to revoke - this will throw if not found
-    await supabaseStorage.revokeRoleInvitation(id);
+    await storage.revokeRoleInvitation(id);
 
     res.status(200).json({ message: "Invitation revoked successfully" });
   } catch (error) {
@@ -195,7 +198,7 @@ router.delete("/:id", async (req, res) => {
   }
 });
 
-// Check if an email has an active invitation
+// Check if an email has an active invitation (uses local PostgreSQL storage)
 router.post("/check", async (req, res) => {
   try {
     const { email } = req.body;
@@ -204,7 +207,7 @@ router.post("/check", async (req, res) => {
       return res.status(400).json({ message: "Email is required" });
     }
 
-    const invitation = await supabaseStorage.getActiveRoleInvitation(email);
+    const invitation = await storage.getActiveRoleInvitation(email);
 
     if (invitation) {
       return res.status(200).json({
@@ -221,7 +224,7 @@ router.post("/check", async (req, res) => {
   }
 });
 
-// Validate invitation token
+// Validate invitation token (uses local PostgreSQL storage)
 router.get("/validate", async (req, res) => {
   try {
     const { token } = req.query;
@@ -230,7 +233,7 @@ router.get("/validate", async (req, res) => {
       return res.status(400).json({ valid: false, message: 'Token is required' });
     }
 
-    const invitation = await supabaseStorage.getActiveRoleInvitation(token);
+    const invitation = await storage.getActiveRoleInvitation(token);
     
     if (!invitation) {
       return res.status(404).json({ valid: false, message: 'Invalid or expired invitation' });
@@ -260,7 +263,7 @@ router.get("/validate", async (req, res) => {
   }
 });
 
-// Accept an invitation
+// Accept an invitation (uses local PostgreSQL storage)
 router.post("/accept", async (req, res) => {
   try {
     const { token } = req.body;
@@ -269,7 +272,7 @@ router.post("/accept", async (req, res) => {
       return res.status(400).json({ message: "Token is required" });
     }
 
-    const invitation = await supabaseStorage.getActiveRoleInvitation(token);
+    const invitation = await storage.getActiveRoleInvitation(token);
 
     if (!invitation) {
       return res.status(404).json({ message: "Invalid or expired invitation" });
@@ -281,8 +284,8 @@ router.post("/accept", async (req, res) => {
       return res.status(400).json({ message: "Invitation has expired" });
     }
 
-    // Mark invitation as used in database
-    await supabaseStorage.acceptRoleInvitation(token);
+    // Mark invitation as used in database (local PostgreSQL storage)
+    await storage.acceptRoleInvitation(token, invitationDTO.email);
 
     res.status(200).json({
       message: "Invitation accepted successfully",
