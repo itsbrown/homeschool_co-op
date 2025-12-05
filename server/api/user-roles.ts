@@ -1,9 +1,10 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { getDb } from '../db';
 import { sql, eq, and, ne } from 'drizzle-orm';
-import { users, userRoles, schools, insertUserRoleSchema } from '@shared/schema';
+import { users, userRoles, schools, insertUserRoleSchema, StaffPosition } from '@shared/schema';
 import { supabaseAuth } from '../middleware/supabase-auth';
 import type { Request as ExpressRequest } from 'express-serve-static-core';
+import { storage } from '../storage';
 
 export const userRolesRouter = Router();
 
@@ -580,9 +581,48 @@ userRolesRouter.post('/admin/users/:userId/roles', supabaseAuth, async (req: Aut
       return res.status(400).json({ error: 'Role is required' });
     }
 
-    // Validate role using Zod schema
-    const validRoles = ['student', 'parent', 'learner', 'educator', 'teacher', 'schoolAdmin', 'admin', 'superAdmin'];
-    if (!validRoles.includes(role)) {
+    // Validate role: either a system role or a custom staff position
+    const systemRoles = ['student', 'parent', 'learner', 'educator', 'teacher', 'schoolAdmin', 'admin', 'superAdmin'];
+    const isSystemRole = systemRoles.includes(role);
+    let isValidRole = isSystemRole;
+    
+    // If not a system role, check if it's a valid staff position with proper tenant scoping
+    if (!isSystemRole) {
+      // Custom positions require a valid school context for tenant isolation
+      // School admins use their schoolId, global admins must provide schoolId in request
+      const targetSchoolId = adminSchoolId !== null ? adminSchoolId : schoolId;
+      
+      // Strict validation: must be a valid, finite number (catches null, undefined, NaN, strings, etc.)
+      if (!Number.isFinite(targetSchoolId)) {
+        return res.status(400).json({ 
+          error: 'School selection is required when assigning custom staff positions' 
+        });
+      }
+      
+      const allPositions = await storage.getAllStaffPositions();
+      
+      // Filter positions to ONLY those that belong to the target school
+      // Custom positions are school-scoped, so we only allow positions where:
+      // 1. The position belongs to the target school (schoolId matches)
+      // 2. OR the position is a global position (schoolId is null)
+      const schoolPositions = allPositions.filter(
+        (pos: StaffPosition) => pos.schoolId === targetSchoolId || pos.schoolId === null
+      );
+      
+      isValidRole = schoolPositions.some((pos: StaffPosition) => pos.title === role);
+      
+      if (!isValidRole) {
+        // Check if the role exists at another school (for better error message)
+        const existsElsewhere = allPositions.some((pos: StaffPosition) => pos.title === role);
+        if (existsElsewhere) {
+          return res.status(400).json({ 
+            error: 'This staff position belongs to a different school' 
+          });
+        }
+      }
+    }
+    
+    if (!isValidRole) {
       return res.status(400).json({ error: 'Invalid role value' });
     }
 

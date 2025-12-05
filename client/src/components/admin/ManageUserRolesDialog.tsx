@@ -34,6 +34,14 @@ interface School {
   name: string;
 }
 
+interface StaffPosition {
+  id: number;
+  title: string;
+  description: string | null;
+  isDefault: boolean;
+  schoolId: number | null;
+}
+
 interface ManageUserRolesDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -42,15 +50,20 @@ interface ManageUserRolesDialogProps {
   userName: string;
 }
 
-const ROLE_OPTIONS = [
+// Base system roles that are always available
+const BASE_ROLE_OPTIONS = [
   { value: 'parent', label: 'Parent' },
   { value: 'educator', label: 'Educator' },
   { value: 'teacher', label: 'Teacher' },
+  { value: 'student', label: 'Student' },
+  { value: 'learner', label: 'Learner' },
+];
+
+// Admin roles (only shown for super admins)
+const ADMIN_ROLE_OPTIONS = [
   { value: 'schoolAdmin', label: 'School Admin' },
   { value: 'admin', label: 'Admin' },
   { value: 'superAdmin', label: 'Super Admin' },
-  { value: 'student', label: 'Student' },
-  { value: 'learner', label: 'Learner' },
 ];
 
 export default function ManageUserRolesDialog({
@@ -98,11 +111,30 @@ export default function ManageUserRolesDialog({
     enabled: open,
   });
 
+  // Fetch staff positions (custom roles defined by the school)
+  const { data: staffPositions } = useQuery<StaffPosition[]>({
+    queryKey: ['/api/school-admin/staff-positions'],
+    enabled: open,
+  });
+
   // Filter schools based on admin privileges
   // SchoolAdmins can only assign roles to their own school
   const schools = adminProfile?.role === 'schoolAdmin' && adminProfile?.schoolId
     ? allSchools?.filter(school => school.id === adminProfile.schoolId)
     : allSchools;
+
+  // Build combined role options: base roles + custom staff positions + admin roles (if applicable)
+  const roleOptions = [
+    ...BASE_ROLE_OPTIONS,
+    // Add custom staff positions as role options (use title as-is for backend compatibility)
+    ...(staffPositions?.map(position => ({
+      value: position.title,
+      label: position.title,
+      isCustom: true,
+    })) || []),
+    // Add admin roles only for super admins
+    ...(adminProfile?.role === 'superAdmin' ? ADMIN_ROLE_OPTIONS : []),
+  ];
 
   // Add role mutation
   const addRoleMutation = useMutation({
@@ -374,7 +406,7 @@ export default function ManageUserRolesDialog({
                         <SelectValue placeholder="Select a role" />
                       </SelectTrigger>
                       <SelectContent>
-                        {ROLE_OPTIONS.map((option) => (
+                        {roleOptions.map((option) => (
                           <SelectItem key={option.value} value={option.value}>
                             {option.label}
                           </SelectItem>
