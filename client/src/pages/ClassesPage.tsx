@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency } from "@/utils/currency";
+import { trackViewItemList } from "@/lib/analytics";
 
 export default function ClassesPage() {
   const { toast } = useToast();
@@ -59,6 +60,22 @@ export default function ClassesPage() {
     }],
     enabled: true,
   });
+  
+  // Track view_item_list when classes are loaded
+  useEffect(() => {
+    if (classesData.classes.length > 0) {
+      trackViewItemList(
+        'Classes',
+        classesData.classes.map(cls => ({
+          item_id: String(cls.id),
+          item_name: cls.title,
+          price: cls.price,
+          quantity: 1,
+          item_category: cls.categoryName || cls.category || 'Class',
+        }))
+      );
+    }
+  }, [classesData.classes]);
   
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();

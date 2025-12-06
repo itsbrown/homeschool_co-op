@@ -8,6 +8,7 @@ import { SupabaseProvider, useAuth } from "@/components/SupabaseProvider";
 import { RoleProvider, useRole } from "@/contexts/RoleContext";
 import { NotificationProvider } from "@/hooks/useNotifications";
 import { CartProvider } from "@/contexts/CartContext";
+import { FormTracker } from "@/components/FormTracker";
 
 import Home from "@/pages/Home";
 import Login from "@/pages/Login";
@@ -703,6 +704,7 @@ function App() {
               <CartProvider>
                 <TooltipProvider>
                   <Toaster />
+                  <FormTracker />
                   <Router />
                   <SupportAssistantTrigger />
                 </TooltipProvider>

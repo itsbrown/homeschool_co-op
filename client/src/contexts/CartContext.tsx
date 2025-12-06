@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useAuth } from "@/components/SupabaseProvider";
 import { useRole } from "@/contexts/RoleContext";
+import { trackAddToCart, trackRemoveFromCart, trackViewCart } from '@/lib/analytics';
 
 // Helper function to get user-specific cart storage key
 // This prevents cross-account data leakage by namespacing localStorage per user
@@ -1620,6 +1621,16 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     console.log('🛒 Dispatching ADD_ITEM action:', newItem);
     dispatch({ type: 'ADD_ITEM', payload: newItem });
 
+    // Track add to cart event for GA4
+    trackAddToCart({
+      item_id: String(item.classId),
+      item_name: item.className,
+      price: item.price,
+      quantity: 1,
+      item_category: 'Class',
+      item_variant: item.childName,
+    });
+
     console.log('🛒 Cart will update via reducer and useEffect');
 
     // Only show toast if not skipping validation (to avoid duplicate toasts)
@@ -1632,7 +1643,23 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const removeItem = (id: string) => {
+    // Find item before removing for tracking
+    const itemToRemove = state.cart.items.find(item => item.id === id);
+    
     dispatch({ type: 'REMOVE_ITEM', payload: id });
+    
+    // Track remove from cart event for GA4
+    if (itemToRemove) {
+      trackRemoveFromCart({
+        item_id: String(itemToRemove.classId),
+        item_name: itemToRemove.className,
+        price: itemToRemove.price,
+        quantity: 1,
+        item_category: 'Class',
+        item_variant: itemToRemove.childName,
+      });
+    }
+    
     toast({
       title: "Removed from Cart",
       description: "Item removed from cart",
@@ -1748,7 +1775,23 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     refetchEnrollments();
   };
 
-  const openCart = () => dispatch({ type: 'OPEN_CART' });
+  const openCart = () => {
+    dispatch({ type: 'OPEN_CART' });
+    // Track view_cart event for GA4
+    if (state.cart.items.length > 0) {
+      trackViewCart(
+        state.cart.items.map(item => ({
+          item_id: String(item.classId),
+          item_name: item.className,
+          price: item.price,
+          quantity: 1,
+          item_category: 'Class',
+          item_variant: item.childName,
+        })),
+        state.cart.total
+      );
+    }
+  };
   const closeCart = () => dispatch({ type: 'CLOSE_CART' });
 
   const getItemCount = () => {

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,6 +8,7 @@ import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useAuth } from '@/components/SupabaseProvider';
 import { useCart } from '@/contexts/CartContext';
+import { trackPurchase } from '@/lib/analytics';
 
 export default function CartSuccess() {
   const [, setLocation] = useLocation();
@@ -79,6 +79,29 @@ export default function CartSuccess() {
           }
           
           setProcessedEnrollments(itemCount);
+          
+          // Track purchase event for GA4
+          if (cartData) {
+            try {
+              const cart = JSON.parse(cartData);
+              if (cart.items && cart.items.length > 0) {
+                trackPurchase(
+                  paymentIntent,
+                  cart.items.map((item: any) => ({
+                    item_id: String(item.classId),
+                    item_name: item.className,
+                    price: item.price,
+                    quantity: 1,
+                    item_category: 'Class',
+                    item_variant: item.childName,
+                  })),
+                  cart.total || 0
+                );
+              }
+            } catch (e) {
+              console.error('Failed to track purchase:', e);
+            }
+          }
           
           toast({
             title: "Payment Successful!",

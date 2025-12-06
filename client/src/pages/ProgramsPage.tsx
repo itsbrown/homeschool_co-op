@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { DashboardShell } from "../components/ui/dashboard-shell";
 import ParentAppShell from "@/components/layout/ParentAppShell";
 import { useAuth } from "@/hooks/useAuth0";
@@ -19,6 +19,7 @@ import { useCart } from "@/contexts/CartContext";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { trackViewItemList } from "@/lib/analytics";
 
 // Separate component for Programs content to avoid hooks issues
 function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
@@ -82,6 +83,22 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
     queryKey: ["/api/classes", { page: currentPage, limit: 12, search: searchTerm, category: categoryFilter }],
     enabled: activeTab === "classes" || activeTab === "all",
   });
+  
+  // Track view_item_list when classes are loaded
+  useEffect(() => {
+    if (classesData.classes.length > 0) {
+      trackViewItemList(
+        'Programs',
+        classesData.classes.map(cls => ({
+          item_id: String(cls.id),
+          item_name: cls.title,
+          price: cls.price,
+          quantity: 1,
+          item_category: cls.categoryName || cls.category || 'Class',
+        }))
+      );
+    }
+  }, [classesData.classes]);
   
   // Enrollment mutation
   const enrollmentMutation = useMutation({

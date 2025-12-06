@@ -17,6 +17,7 @@ import ParentAppShell from '@/components/layout/ParentAppShell';
 import { formatCurrency } from '@/utils/currency';
 import { stripePromise } from '@/config/stripe';
 import type { Stripe } from '@stripe/stripe-js';
+import { trackBeginCheckout, trackAddPaymentInfo } from '@/lib/analytics';
 
 function CheckoutForm({ selectedPaymentPlan, selectedPlanAmount }: { selectedPaymentPlan: string; selectedPlanAmount: number }) {
   const stripe = useStripe();
@@ -70,6 +71,9 @@ function CheckoutForm({ selectedPaymentPlan, selectedPlanAmount }: { selectedPay
     const returnUrl = `${window.location.protocol}//${window.location.host}/cart/success`;
     console.log('💳 Stripe return URL:', returnUrl);
 
+    // Track add_payment_info event for GA4
+    trackAddPaymentInfo('card', selectedPlanAmount);
+    
     try {
       const result = await stripe.confirmPayment({
         elements,
@@ -189,6 +193,9 @@ export default function CartCheckout() {
   // Free enrollment state (for 100% discount requiring admin approval)
   const [freeEnrollmentRequested, setFreeEnrollmentRequested] = useState(false);
   const [requestingFreeEnrollment, setRequestingFreeEnrollment] = useState(false);
+  
+  // Track if begin_checkout has been fired to prevent duplicates
+  const [hasTrackedBeginCheckout, setHasTrackedBeginCheckout] = useState(false);
 
   // Calculate the ACTUAL total payable amount (class total + membership)
   // This is used to determine if we should show the payment form or free enrollment flow
@@ -365,6 +372,22 @@ export default function CartCheckout() {
       
       if (data.clientSecret) {
         setClientSecret(data.clientSecret);
+        
+        // Track begin_checkout event for GA4 only once per checkout session
+        if (!hasTrackedBeginCheckout) {
+          trackBeginCheckout(
+            cart.items.map(item => ({
+              item_id: String(item.classId),
+              item_name: item.className,
+              price: item.price,
+              quantity: 1,
+              item_category: 'Class',
+              item_variant: item.childName,
+            })),
+            cart.total
+          );
+          setHasTrackedBeginCheckout(true);
+        }
         
         // Capture Stripe subscription info from response
         if (data.hasActiveSubscription) {
