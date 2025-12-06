@@ -319,7 +319,14 @@ function transformStaffToFrontend(schoolStaff: any, user: any, classes: any[] = 
 const STAFF_TYPE_ROLES = ['educator', 'teacher', 'schoolAdmin'];
 
 // Transform user_roles-based staff data to frontend format
-function transformUserRoleStaffToFrontend(userRole: any, user: any, classes: any[] = [], hasPendingInvitation: boolean = false) {
+// Optionally accepts staffRecord from school_staff for department/locationId (dual-write support)
+function transformUserRoleStaffToFrontend(
+  userRole: any, 
+  user: any, 
+  classes: any[] = [], 
+  hasPendingInvitation: boolean = false,
+  staffRecord?: any // Optional school_staff record for enrichment
+) {
   const status = hasPendingInvitation ? 'Pending' : (user.isActive !== false ? 'Active' : 'Inactive');
   
   return {
@@ -329,14 +336,14 @@ function transformUserRoleStaffToFrontend(userRole: any, user: any, classes: any
     lastName: user.lastName || user.name?.split(' ').slice(1).join(' ') || '',
     name: user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim(),
     role: userRole.role, // The role/position from user_roles
-    department: '', // No department in user_roles - can be extended later
+    department: staffRecord?.department || userRole.role || '', // Use department from school_staff if available
     status: status,
     joinDate: userRole.createdAt ? new Date(userRole.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
     avatar: user.avatar || '',
     phone: user.phone || '',
     subjects: [],
     classIds: classes.map(c => c.id.toString()),
-    locationId: null, // Can be extended if needed
+    locationId: staffRecord?.locationId || null, // Use locationId from school_staff if available
     userId: user.id // Include user ID for reference
   };
 }
@@ -1105,7 +1112,10 @@ router.post("/staff/invite", supabaseAuth, async (req: any, res: any) => {
     }
     console.log("✅ Step 3 complete: User ID =", user.id);
 
-    console.log("🔍 Step 4: Creating school_staff record");
+    // DUAL-WRITE: Create both school_staff (for backward compatibility) and user_roles (new source of truth)
+    
+    // Step 4a: Create school_staff record (legacy - for backward compatibility)
+    console.log("🔍 Step 4a: Creating school_staff record (legacy)");
     const staffRecord = await storage.createSchoolStaff({
       schoolId,
       userId: user.id,
@@ -1117,11 +1127,40 @@ router.post("/staff/invite", supabaseAuth, async (req: any, res: any) => {
       isActive: false,
       locationId: locationId || null
     });
-
-    if (!staffRecord) {
-      throw new Error("Failed to create staff record");
+    console.log("✅ Step 4a complete: school_staff ID =", staffRecord?.id);
+    
+    // Step 4b: Create user_roles entry (new source of truth)
+    console.log("🔍 Step 4b: Creating user_roles entry for staff");
+    const db = await getDb();
+    
+    // Check if user_roles entry already exists for this user/school/role combo
+    const existingUserRoles = await db
+      .select()
+      .from(userRoles)
+      .where(eq(userRoles.userId, user.id));
+    
+    const existingRoleForSchool = existingUserRoles.find(
+      r => r.schoolId === schoolId && r.role === role
+    );
+    
+    let userRoleId: number;
+    if (existingRoleForSchool) {
+      userRoleId = existingRoleForSchool.id;
+      console.log("✅ User already has this role at school, using existing user_role ID:", userRoleId);
+    } else {
+      // Create new user_roles entry for this staff member
+      const [newUserRole] = await db
+        .insert(userRoles)
+        .values({
+          userId: user.id,
+          role: role, // Use the exact position/role (educator, teacher, schoolAdmin, or custom like "Mentor")
+          schoolId: schoolId,
+          isPrimary: existingUserRoles.length === 0 // First role becomes primary
+        })
+        .returning();
+      userRoleId = newUserRole.id;
+      console.log("✅ Step 4b complete: user_roles entry ID =", userRoleId);
     }
-    console.log("✅ Step 4 complete: Staff record ID =", staffRecord.id);
 
     console.log("🔍 Step 5: Generating invitation token");
     const invitationToken = generateInvitationToken();
@@ -1147,16 +1186,24 @@ router.post("/staff/invite", supabaseAuth, async (req: any, res: any) => {
       // Continue even if role invitation fails - this is optional
     }
 
-    console.log("🔍 Step 7: Transforming staff to frontend format");
-    // New staff invitation always has pending invitation
-    const responseStaff = transformStaffToFrontend(staffRecord, user, [], true);
+    console.log("🔍 Step 7: Transforming staff to frontend format using user_roles");
+    // Create a role record object to pass to transformer
+    const roleRecord = existingRoleForSchool || {
+      id: userRoleId,
+      userId: user.id,
+      role: role,
+      schoolId: schoolId,
+      isPrimary: false
+    };
+    // Pass staffRecord for department/locationId enrichment
+    const responseStaff = transformUserRoleStaffToFrontend(roleRecord as UserRole, user, [], true, staffRecord);
     console.log("✅ Step 7 complete");
     
     console.log("🔍 Step 8: Sending invitation email");
     const emailSent = await sendStaffInvitationEmail(email, firstName, lastName, role, department, invitationToken, message);
     console.log("✅ Step 8 complete: Email sent =", emailSent);
 
-    console.log("✅ Staff member invited successfully:", { id: staffRecord.id, email });
+    console.log("✅ Staff member invited successfully:", { id: userRoleId, email });
     res.json({ 
       success: true, 
       message: emailSent ? "Staff member invited successfully and invitation email sent" : "Staff member invited successfully (email not sent)",
@@ -1230,6 +1277,15 @@ router.get("/staff", supabaseAuth, async (req: any, res: any) => {
     const allClasses = await storage.getAllClasses();
     const schoolClasses = allClasses.filter(c => c.schoolId === schoolId);
 
+    // Fetch school_staff records for enrichment (department, locationId)
+    const schoolStaffRecords = await storage.getSchoolStaffBySchoolId(schoolId);
+    const staffRecordMap = new Map<number, any>();
+    schoolStaffRecords.forEach((staff: any) => {
+      if (staff.userId) {
+        staffRecordMap.set(staff.userId, staff);
+      }
+    });
+
     // Transform to frontend format - one entry per user role
     const staffWithDetails = staffTypeRoles.map((roleRecord: UserRole) => {
       const user = userMap.get(roleRecord.userId);
@@ -1246,7 +1302,10 @@ router.get("/staff", supabaseAuth, async (req: any, res: any) => {
       // Check if this user has a pending invitation
       const hasPendingInvitation = pendingInvitationsMap.get(user.email) || false;
       
-      return transformUserRoleStaffToFrontend(roleRecord, user, assignedClasses, hasPendingInvitation);
+      // Get school_staff record for department/locationId enrichment
+      const staffRecord = staffRecordMap.get(roleRecord.userId);
+      
+      return transformUserRoleStaffToFrontend(roleRecord, user, assignedClasses, hasPendingInvitation, staffRecord);
     });
 
     // Filter out null entries
@@ -1306,7 +1365,11 @@ router.get("/staff/:id", supabaseAuth, async (req: any, res) => {
     const pendingInvitationsMap = await storage.getPendingRoleInvitationsByEmails([user.email]);
     const hasPendingInvitation = pendingInvitationsMap.get(user.email) || false;
 
-    const staffMember = transformUserRoleStaffToFrontend(roleRecord, user, assignedClasses, hasPendingInvitation);
+    // Fetch school_staff record for enrichment (department, locationId)
+    const schoolStaffRecords = await storage.getSchoolStaffBySchoolId(schoolId);
+    const staffRecord = schoolStaffRecords.find((s: any) => s.userId === roleRecord.userId);
+
+    const staffMember = transformUserRoleStaffToFrontend(roleRecord, user, assignedClasses, hasPendingInvitation, staffRecord);
     
     console.log(`✅ Found staff member: ${staffMember.name}`);
     res.json(staffMember);
@@ -1755,7 +1818,11 @@ router.put("/staff/:id", supabaseAuth, async (req: any, res) => {
     const pendingInvitationsMap = await storage.getPendingRoleInvitationsByEmails([updatedUser!.email]);
     const hasPendingInvitation = pendingInvitationsMap.get(updatedUser!.email) || false;
 
-    const updatedStaff = transformUserRoleStaffToFrontend(updatedRoleRecord, updatedUser!, assignedClasses, hasPendingInvitation);
+    // Fetch school_staff record for enrichment (department, locationId)
+    const schoolStaffRecords = await storage.getSchoolStaffBySchoolId(schoolId);
+    const staffRecord = schoolStaffRecords.find((s: any) => s.userId === updatedRoleRecord.userId);
+
+    const updatedStaff = transformUserRoleStaffToFrontend(updatedRoleRecord, updatedUser!, assignedClasses, hasPendingInvitation, staffRecord);
     
     console.log(`✅ Successfully updated staff member with role ID ${roleId}`);
 

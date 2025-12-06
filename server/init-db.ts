@@ -786,6 +786,56 @@ async function runMigrations() {
     `);
     console.log('✅ Migration completed: user_roles.role column is now text type (supports custom staff positions)');
     
+    // Backfill school_staff entries into user_roles for staff who don't already have a matching user_roles entry
+    // Check for user/school/role combination to support multiple positions per user
+    console.log('Running migration: Backfilling school_staff entries to user_roles...');
+    await db.execute(sql`
+      DO $$ 
+      DECLARE
+        staff_record RECORD;
+        existing_role_count INT;
+        staff_role TEXT;
+      BEGIN
+        -- Check if school_staff table exists
+        IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'school_staff') THEN
+          -- Loop through all school_staff entries
+          FOR staff_record IN 
+            SELECT ss.id, ss.user_id, ss.school_id, ss.position, ss.role
+            FROM school_staff ss
+            WHERE ss.user_id IS NOT NULL
+          LOOP
+            -- Determine the role to use (position takes precedence)
+            staff_role := COALESCE(staff_record.position, staff_record.role, 'educator');
+            
+            -- Check if this user already has THIS SPECIFIC role at this school
+            SELECT COUNT(*) INTO existing_role_count
+            FROM user_roles ur
+            WHERE ur.user_id = staff_record.user_id 
+            AND ur.school_id = staff_record.school_id
+            AND ur.role = staff_role;
+            
+            -- If no existing matching role, create one
+            IF existing_role_count = 0 THEN
+              INSERT INTO user_roles (user_id, role, school_id, is_primary)
+              VALUES (
+                staff_record.user_id,
+                staff_role,
+                staff_record.school_id,
+                FALSE
+              )
+              ON CONFLICT DO NOTHING;
+              
+              RAISE NOTICE 'Backfilled user_roles for school_staff user_id: % with role: %', staff_record.user_id, staff_role;
+            END IF;
+          END LOOP;
+          RAISE NOTICE 'school_staff backfill to user_roles complete';
+        ELSE
+          RAISE NOTICE 'school_staff table does not exist, skipping backfill';
+        END IF;
+      END $$;
+    `);
+    console.log('✅ Migration completed: school_staff entries backfilled to user_roles');
+    
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     
