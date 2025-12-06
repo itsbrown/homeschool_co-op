@@ -763,6 +763,29 @@ async function runMigrations() {
     `);
     console.log('✅ Migration completed: payment_receipts table created');
     
+    // IMPORTANT: Convert user_roles.role from enum to text to support custom staff positions
+    // This allows custom roles like "Mentor", "Tutor", etc. to be stored alongside system roles
+    console.log('Running migration: Converting user_roles.role column from enum to text...');
+    await db.execute(sql`
+      DO $$ 
+      BEGIN
+        -- Check if the column is currently an enum type
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns 
+          WHERE table_name = 'user_roles' 
+          AND column_name = 'role' 
+          AND udt_name = 'role'
+        ) THEN
+          -- Alter the column type from enum to text
+          ALTER TABLE user_roles ALTER COLUMN role TYPE TEXT USING role::TEXT;
+          RAISE NOTICE 'Converted user_roles.role from enum to text';
+        ELSE
+          RAISE NOTICE 'user_roles.role is already text type, skipping conversion';
+        END IF;
+      END $$;
+    `);
+    console.log('✅ Migration completed: user_roles.role column is now text type (supports custom staff positions)');
+    
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     

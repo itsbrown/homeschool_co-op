@@ -43,14 +43,19 @@ export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 
 // User Roles table - for multi-role support (e.g., someone can be both parent AND educator)
+// Note: role column uses text type (not enum) to support both system roles and custom staff positions
 export const userRoles = pgTable("user_roles", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
-  role: roleEnum("role").notNull(),
+  role: text("role").notNull(), // Text type to support custom staff positions like "Mentor", "Tutor", etc.
   schoolId: integer("school_id"), // For tenant scoping - educators/admins must be tied to a school
   isPrimary: boolean("is_primary").default(false).notNull(), // Which role is the user's primary/default role
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+
+// System roles that are always valid, plus custom staff positions validated at API layer
+export const systemRoles = ["student", "parent", "learner", "educator", "teacher", "schoolAdmin", "admin", "superAdmin"] as const;
+export type SystemRole = typeof systemRoles[number];
 
 export const insertUserRoleSchema = createInsertSchema(userRoles).omit({ id: true, createdAt: true });
 export type InsertUserRole = z.infer<typeof insertUserRoleSchema>;

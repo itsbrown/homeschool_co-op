@@ -156,7 +156,7 @@ userRolesRouter.get('/roles', supabaseAuth, async (req: AuthenticatedRequest, re
       canSwitchRoles: roles.length > 1,
     };
     
-    console.log(`📋 GET /api/user/roles - userId=${userId}, roleCount=${roles.length}, canSwitch=${response.canSwitchRoles}, roles=${JSON.stringify(response.roles.map(r => ({ id: r.id, role: r.role })))}`);
+    console.log(`📋 GET /api/user/roles - userId=${userId}, roleCount=${roles.length}, canSwitch=${response.canSwitchRoles}, roles=${JSON.stringify(response.roles.map((r: { id: number; role: string }) => ({ id: r.id, role: r.role })))}`);
     
     return res.json(response);
   } catch (error) {
