@@ -63,10 +63,18 @@ export default function RegistrationLandingPage() {
     }
   });
 
-  // Fetch school locations
+  // Fetch school locations (using public endpoint - no auth required for registration)
   const { data: locationsData } = useQuery({
-    queryKey: ['/api/locations', school?.id],
-    queryFn: () => school?.id ? fetch(`/api/locations?schoolId=${school.id}`).then(res => res.json()) : null,
+    queryKey: ['/api/locations/public', school?.id],
+    queryFn: async () => {
+      if (!school?.id) return null;
+      const response = await apiRequest("GET", `/api/locations/public?schoolId=${school.id}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch locations');
+      }
+      const data = await response.json();
+      return data;
+    },
     enabled: !!school?.id
   });
 

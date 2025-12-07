@@ -9,6 +9,39 @@ const router = express.Router();
 // ROUTE ORDER MATTERS: Static paths must come before parameterized paths
 // to prevent Express from treating "accessible" as an ID
 
+// PUBLIC: Get locations for a school (no authentication required)
+// Used by registration form before user logs in
+router.get("/public", async (req, res) => {
+  try {
+    const schoolIdParam = req.query.schoolId;
+    
+    if (!schoolIdParam) {
+      return res.status(400).json({ message: "School ID is required" });
+    }
+    
+    // Validate schoolId is a valid number
+    const schoolId = parseInt(String(schoolIdParam), 10);
+    if (isNaN(schoolId) || schoolId <= 0) {
+      return res.status(400).json({ message: "Invalid school ID - must be a positive number" });
+    }
+    
+    console.log('🏢 [PUBLIC] Fetching locations for school ID:', schoolId);
+    const locations = await storage.getLocationsBySchoolId(schoolId);
+    console.log('✅ [PUBLIC] Found locations:', locations.length);
+    
+    // Return only public information (id and name) - no sensitive data
+    const publicLocations = locations.map(loc => ({
+      id: loc.id,
+      name: loc.name
+    }));
+    
+    res.json(publicLocations);
+  } catch (error) {
+    console.error("Error fetching public locations:", error);
+    res.status(500).json({ message: "Failed to fetch locations" });
+  }
+});
+
 // Get all locations for a school
 router.get("/", requireSchoolContext, async (req: any, res) => {
   try {
