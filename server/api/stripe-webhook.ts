@@ -74,119 +74,20 @@ router.post('/subscription-schedules', async (req, res) => {
   }
 });
 
-// DEPRECATED: Old subscription schedule handlers - replaced by membership webhook handlers
-// Handle successful subscription schedule payments
+/**
+ * @deprecated Use membership webhook handlers instead
+ * Kept for backward compatibility - logs warning only
+ */
 async function handlePaymentSuccess(invoice: any) {
-  try {
-    console.log('⚠️ DEPRECATED: Old subscription schedule payment handler called for invoice:', invoice.id);
-    console.log('ℹ️ This handler is deprecated. Use membership webhook handlers instead.');
-    
-    // Legacy code commented out - no longer used
-    /*
-    // Get subscription schedule from invoice
-    if (invoice.subscription_schedule) {
-      const scheduleId = invoice.subscription_schedule;
-      
-      // Find enrollments associated with this schedule
-      const schedules = await storage.getStripeSubscriptionSchedules();
-      const schedule = schedules.find((s: any) => s.stripeScheduleId === scheduleId);
-      
-      if (schedule) {
-        const enrollmentIds = JSON.parse(schedule.enrollmentIds);
-        const paymentAmount = invoice.amount_paid;
-        const perEnrollmentAmount = Math.round(paymentAmount / enrollmentIds.length);
-        
-        // Update each enrollment
-        for (const enrollmentId of enrollmentIds) {
-          const enrollment = await storage.getProgramEnrollmentById(enrollmentId);
-          if (enrollment) {
-            const newTotalPaid = (enrollment.totalPaid || 0) + perEnrollmentAmount;
-            const newRemainingBalance = Math.max(0, enrollment.totalCost - newTotalPaid);
-            
-            await storage.updateProgramEnrollment(enrollment.id, {
-              totalPaid: newTotalPaid,
-              remainingBalance: newRemainingBalance,
-              paymentStatus: newRemainingBalance === 0 ? 'completed' : 'stripe_managed',
-              status: 'enrolled'
-            });
-            
-            console.log(`✅ Updated enrollment ${enrollmentId}: paid=${newTotalPaid}, remaining=${newRemainingBalance}`);
-          }
-        }
-        
-        console.log(`📡 Payment received for ${schedule.parentEmail}: ${paymentAmount}`);
-        
-        console.log(`📧 Payment receipt for ${schedule.parentEmail}: ${paymentAmount}`);
-      }
-    }
-    */
-  } catch (error) {
-    console.error('❌ Error handling payment success:', error);
-  }
+  console.log('⚠️ DEPRECATED: Old subscription schedule handler called for invoice:', invoice.id);
 }
 
-// DEPRECATED: Old subscription schedule handlers - replaced by membership webhook handlers
-// Handle failed subscription schedule payments with retry logic
+/**
+ * @deprecated Use membership webhook handlers instead
+ * Kept for backward compatibility - logs warning only
+ */
 async function handlePaymentFailure(invoice: any) {
-  try {
-    console.log('⚠️ DEPRECATED: Old subscription schedule payment failure handler called for invoice:', invoice.id);
-    console.log('ℹ️ This handler is deprecated. Use membership webhook handlers instead.');
-    
-    // Legacy code commented out - no longer used
-    /*
-    if (invoice.subscription_schedule) {
-      const scheduleId = invoice.subscription_schedule;
-      
-      // Find enrollments associated with this schedule
-      const schedules = await storage.getStripeSubscriptionSchedules();
-      const schedule = schedules.find((s: any) => s.stripeScheduleId === scheduleId);
-      
-      if (schedule) {
-        // Check attempt count
-        const attemptCount = invoice.attempt_count || 1;
-        const maxAttempts = 3;
-        
-        if (attemptCount < maxAttempts) {
-          // Schedule retry payment
-          console.log(`🔄 Scheduling retry ${attemptCount + 1}/${maxAttempts} for invoice ${invoice.id}`);
-          
-          try {
-            // Update the subscription schedule to retry payment in 3 days
-            const retryDate = Math.floor(Date.now() / 1000) + (3 * 24 * 60 * 60); // 3 days from now
-            
-            await stripe.subscriptionSchedules.update(scheduleId, {
-              phases: [{
-                items: [{
-                  price: invoice.lines.data[0].price.id,
-                  quantity: 1,
-                }],
-                start_date: retryDate,
-                end_date: retryDate + (30 * 24 * 60 * 60), // 30 days duration
-              }]
-            });
-            
-            console.log(`📧 Retry notification sent to ${schedule.parentEmail}`);
-            
-            console.log(`✅ Scheduled retry payment for ${retryDate}`);
-            
-          } catch (retryError) {
-            console.error('❌ Failed to schedule retry:', retryError);
-            await handleFinalPaymentFailure(schedule, invoice);
-          }
-          
-        } else {
-          // Max attempts reached
-          console.log(`❌ Max retry attempts reached for invoice ${invoice.id}`);
-          await handleFinalPaymentFailure(schedule, invoice);
-        }
-        
-        console.log(`📡 Payment failed for ${schedule.parentEmail}: attempt ${attemptCount}/${maxAttempts}`);
-      }
-    }
-    */
-  } catch (error) {
-    console.error('❌ Error handling payment failure:', error);
-  }
+  console.log('⚠️ DEPRECATED: Old subscription schedule failure handler called for invoice:', invoice.id);
 }
 
 // Handle direct payment success (e.g., "Pay in Full" from billing page)

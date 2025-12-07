@@ -16,7 +16,6 @@ interface AuthenticatedRequest extends Request {
   user?: any;
   session?: any;
 }
-// Removed session-based children router - using Auth0 endpoints instead
 import * as emergencyContactsApi from "./api/emergency-contacts";
 import * as programsApi from "./api/programs";
 import * as programEnrollmentsApi from "./api/program-enrollments";
@@ -112,8 +111,6 @@ function requireSchoolContext(req: any, res: any): number | null {
   }
   return schoolId;
 }
-
-// Removed express-session declarations - using Auth0 token-based authentication
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Initialize database tables
@@ -2371,16 +2368,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Error fetching user role" });
     }
   });
-
-  // DEPRECATED: Legacy unauthenticated routes removed - use /api/school-admin/* routes instead
-  // These routes had NO authentication and used old file-based data access
-  // Proper authenticated routes exist in server/api/school-admin.ts
-  
-  // Removed routes:
-  // - GET /api/schools/students/:id (now: GET /api/school-admin/students/:id)
-  // - PUT /api/schools/students/:id (now: PUT /api/school-admin/students/:id)
-  // - GET /api/schools/students (now: GET /api/school-admin/students)
-
 
   app.get("/api/users/notifications", jwtCheck, async (req: any, res) => {
     try {

@@ -240,44 +240,19 @@ export interface IStorage {
   createPaymentReceipt(receipt: InsertPaymentReceipt): Promise<PaymentReceipt>;
   updatePaymentReceiptStatus(id: number, status: 'generated' | 'downloaded' | 'emailed'): Promise<PaymentReceipt | undefined>;
 
-  // Class Enrollment methods (DEPRECATED - Use Program Enrollment methods above)
-  /**
-   * @deprecated Use createProgramEnrollment() with createEnrollmentData() factory from @shared/enrollment-factory instead
-   * This method exists for backward compatibility only and will be removed in a future version.
-   * See replit.md "Storage Layer Patterns" for correct usage.
-   */
+  /** @deprecated Use createProgramEnrollment() with createEnrollmentData() factory instead */
   createEnrollment(enrollment: any): Promise<any>;
-  
-  /**
-   * @deprecated Use getEnrollmentsByChildIds() (note: plural 'Ids', expects array) instead
-   * This method exists for backward compatibility only and will be removed in a future version.
-   */
+  /** @deprecated Use getEnrollmentsByChildIds() (plural, expects array) instead */
   getEnrollmentsByChildId(childId: number): Promise<any[]>;
   getEnrollmentsByChildIds(childIds: number[]): Promise<any[]>;
   getEnrollmentsByClassId(classId: number): Promise<any[]>;
-  
-  /**
-   * @deprecated Use getProgramEnrollmentById() instead
-   * This method exists for backward compatibility only and will be removed in a future version.
-   */
+  /** @deprecated Use getProgramEnrollmentById() instead */
   getEnrollmentById(id: number): Promise<any>;
-  
-  /**
-   * @deprecated Use updateProgramEnrollment(id, updates) instead
-   * This method exists for backward compatibility only and will be removed in a future version.
-   */
+  /** @deprecated Use updateProgramEnrollment(id, updates) instead */
   updateEnrollment(enrollment: any): Promise<any>;
-  
-  /**
-   * @deprecated Use deleteProgramEnrollment() instead
-   * This method exists for backward compatibility only and will be removed in a future version.
-   */
+  /** @deprecated Use deleteProgramEnrollment() instead */
   deleteEnrollment(id: number): Promise<void>;
-  
-  /**
-   * @deprecated Use deleteProgramEnrollment() instead
-   * This method exists for backward compatibility only and will be removed in a future version.
-   */
+  /** @deprecated Use deleteProgramEnrollment() instead */
   removeEnrollment(enrollmentId: number): Promise<boolean>;
 
   // Class methods
