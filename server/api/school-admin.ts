@@ -4129,55 +4129,100 @@ router.get('/users', supabaseAuth, requireSchoolContext, async (req: any, res) =
       .from(users)
       .where(eq(users.schoolId, Number(schoolId)));
 
-    // Map to frontend format with active role
-    const regularUsers = dbUsers.map((user: any) => ({
-      id: user.id,
-      email: user.email,
-      firstName: user.firstName || user.name?.split(' ')[0] || '',
-      lastName: user.lastName || user.name?.split(' ').slice(1).join(' ') || '',
-      role: user.activeRole || user.role, // Use active role if available, fall back to legacy role
-      phone: user.phone || '',
-      isActive: user.isActive !== false,
-      createdAt: user.createdAt,
-    }));
-    
-    console.log(`👥 Found ${regularUsers.length} regular users for school ${schoolId}`);
-    
-    // Load staff from database
+    // Load staff from database to create a lookup map by userId
     const staffRecords = await storage.getSchoolStaffBySchoolId(Number(schoolId));
     console.log(`👨‍🏫 Found ${staffRecords.length} staff members from database`);
     
-    // Convert staff to user format for the frontend
-    const staffAsUsers = await Promise.all(
-      staffRecords.map(async (staffRecord) => {
-        const user = await storage.getUser(staffRecord.userId);
-        if (!user) {
-          console.log(`⚠️ Skipping orphaned staff record: staffRecord.id=${staffRecord.id}, userId=${staffRecord.userId} - user not found`);
-          return null;
-        }
-        
+    // Create a map of userId -> staffRecord for quick lookup
+    const staffByUserId = new Map<number, any>();
+    for (const staffRecord of staffRecords) {
+      staffByUserId.set(staffRecord.userId, staffRecord);
+    }
+    
+    // Track which user IDs we've already processed
+    const processedUserIds = new Set<number>();
+
+    // Map users from dbUsers, overriding status for staff users from staff records
+    const usersFromDb = dbUsers.map((user: any) => {
+      processedUserIds.add(user.id);
+      const staffRecord = staffByUserId.get(user.id);
+      
+      if (staffRecord) {
+        // This user has a staff record - use staff record's isActive status
         return {
-          id: staffRecord.userId, // Use canonical userId, not staff record's auto-incremented ID
+          id: user.id,
           staffId: staffRecord.id, // Include staff record ID for resend invite functionality
           email: user.email,
-          firstName: user.name.split(' ')[0] || '',
-          lastName: user.name.split(' ').slice(1).join(' ') || '',
+          firstName: user.firstName || user.name?.split(' ')[0] || '',
+          lastName: user.lastName || user.name?.split(' ').slice(1).join(' ') || '',
           role: 'staff', // Standardize role to 'staff'
           phone: user.phone || '',
-          isActive: staffRecord.isActive,
-          createdAt: staffRecord.startDate,
+          isActive: staffRecord.isActive, // Use staff record's isActive, NOT user's
+          createdAt: staffRecord.startDate || user.createdAt,
           department: staffRecord.department,
           position: staffRecord.position || 'Staff Member'
         };
-      })
+      }
+      
+      // Regular user (not staff)
+      return {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName || user.name?.split(' ')[0] || '',
+        lastName: user.lastName || user.name?.split(' ').slice(1).join(' ') || '',
+        role: user.activeRole || user.role, // Use active role if available, fall back to legacy role
+        phone: user.phone || '',
+        isActive: user.isActive !== false,
+        createdAt: user.createdAt,
+      };
+    });
+    
+    // Add staff members whose user.schoolId doesn't match (they weren't in dbUsers)
+    const staffNotInDbUsers = await Promise.all(
+      staffRecords
+        .filter(staffRecord => !processedUserIds.has(staffRecord.userId))
+        .map(async (staffRecord) => {
+          const user = await storage.getUser(staffRecord.userId);
+          
+          if (!user) {
+            // Orphaned staff record - user was deleted but staff record remains
+            // Still show the staff member using data from the staff record itself
+            console.log(`⚠️ Orphaned staff record: staffRecord.id=${staffRecord.id}, userId=${staffRecord.userId} - synthesizing from staff record`);
+            return {
+              id: staffRecord.userId,
+              staffId: staffRecord.id,
+              email: staffRecord.email || `user-${staffRecord.userId}@deleted`,
+              firstName: staffRecord.firstName || 'Unknown',
+              lastName: staffRecord.lastName || 'Staff',
+              role: 'staff',
+              phone: '',
+              isActive: staffRecord.isActive,
+              createdAt: staffRecord.startDate,
+              department: staffRecord.department,
+              position: staffRecord.position || 'Staff Member',
+              isOrphaned: true // Flag for UI to show warning if needed
+            };
+          }
+          
+          return {
+            id: staffRecord.userId,
+            staffId: staffRecord.id,
+            email: user.email,
+            firstName: user.name?.split(' ')[0] || '',
+            lastName: user.name?.split(' ').slice(1).join(' ') || '',
+            role: 'staff',
+            phone: user.phone || '',
+            isActive: staffRecord.isActive,
+            createdAt: staffRecord.startDate,
+            department: staffRecord.department,
+            position: staffRecord.position || 'Staff Member'
+          };
+        })
     );
     
-    // Filter out null entries (orphaned staff records)
-    const validStaffUsers = staffAsUsers.filter(user => user !== null);
+    const allSchoolUsers = [...usersFromDb, ...staffNotInDbUsers];
     
-    // Combine regular users and staff
-    const allSchoolUsers = [...regularUsers, ...validStaffUsers];
-    console.log(`✅ Total users (including staff): ${allSchoolUsers.length}`);
+    console.log(`👥 Found ${allSchoolUsers.length} users for school ${schoolId} (${staffByUserId.size} staff, ${staffNotInDbUsers.length} staff without matching schoolId)`);
     
     res.status(200).json(allSchoolUsers);
   } catch (error) {

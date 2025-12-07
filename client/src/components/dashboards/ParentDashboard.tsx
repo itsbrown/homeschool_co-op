@@ -400,14 +400,14 @@ export default function ParentDashboard() {
             }
           </p>
         </div>
-        <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto" data-tour="children-section">
-          <Button asChild className="w-full sm:w-auto" data-testid="btn-register-child">
+        <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
+          <Button asChild className="w-full sm:w-auto" data-tour="register-child-btn" data-testid="btn-register-child">
             <Link href="/children/register">
               <PlusCircle className="mr-2 h-4 w-4" />
               Register Child
             </Link>
           </Button>
-          <Button asChild variant="outline" className="w-full sm:w-auto whitespace-nowrap" data-tour="classes-section" data-testid="btn-browse-classes">
+          <Button asChild variant="outline" className="w-full sm:w-auto whitespace-nowrap" data-tour="browse-classes-btn" data-testid="btn-browse-classes">
             <Link href="/programs">
               <BookOpen className="mr-2 h-4 w-4" />
               <span className="hidden sm:inline">Browse Classes & Programs</span>
@@ -510,13 +510,13 @@ export default function ParentDashboard() {
             </Card>
 
             {/* Quick Actions */}
-            <Card data-tour="cart-section">
+            <Card data-tour="quick-actions">
               <CardHeader>
                 <CardTitle>Quick Actions</CardTitle>
                 <CardDescription>Common parent tasks</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
-                <Button asChild variant="outline" className="w-full justify-start h-auto p-4" data-tour="profile-section" data-testid="btn-my-children">
+                <Button asChild variant="outline" className="w-full justify-start h-auto p-4" data-tour="my-children-btn" data-testid="btn-my-children">
                   <Link href="/children">
                     <UserPlus className="mr-3 h-5 w-5" />
                     <div className="text-left">
@@ -526,7 +526,7 @@ export default function ParentDashboard() {
                   </Link>
                 </Button>
 
-                <Button asChild variant="outline" className="w-full justify-start h-auto p-4" data-tour="enrollment-info" data-testid="btn-enrollments">
+                <Button asChild variant="outline" className="w-full justify-start h-auto p-4" data-tour="enrollments-btn" data-testid="btn-enrollments">
                   <Link href="/enrollments">
                     <BookOpen className="mr-3 h-5 w-5" />
                     <div className="text-left">
@@ -536,7 +536,7 @@ export default function ParentDashboard() {
                   </Link>
                 </Button>
 
-                <Button asChild variant="outline" className="w-full justify-start h-auto p-4" data-tour="payments-section" data-testid="btn-payments">
+                <Button asChild variant="outline" className="w-full justify-start h-auto p-4" data-tour="payments-btn" data-testid="btn-payments">
                   <Link href="/payments">
                     <CreditCard className="mr-3 h-5 w-5" />
                     <div className="text-left">
