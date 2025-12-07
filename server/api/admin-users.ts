@@ -116,16 +116,39 @@ router.post('/users/create-from-enrollments', async (req, res) => {
       if (authError && (authError.code === 'email_exists' || authError.message?.includes('already registered'))) {
         console.log(`⚠️ Supabase account already exists for ${email}, finding existing account...`);
         
-        const { data: supabaseUsers, error: listError } = await supabaseAdmin.auth.admin.listUsers();
+        // Use paginated lookup to find user by email
+        let existingSupabaseUser = null;
+        let page = 1;
+        const perPage = 1000;
+        let listError = null;
+        
+        while (!existingSupabaseUser && page <= 100) {
+          const { data: userData, error: getUserError } = await supabaseAdmin.auth.admin.listUsers({
+            page,
+            perPage
+          });
+          
+          if (getUserError) {
+            console.error('❌ Failed to list Supabase users:', getUserError);
+            listError = getUserError;
+            break;
+          }
+          
+          existingSupabaseUser = userData?.users?.find((u: any) => u.email === email);
+          
+          if (!existingSupabaseUser && (!userData?.users || userData.users.length < perPage)) {
+            break; // No more users
+          }
+          page++;
+        }
+        
         if (listError) {
-          console.error('❌ Failed to list Supabase users:', listError);
           return res.status(500).json({ message: 'Failed to find existing authentication account' });
         }
         
-        const existingSupabaseUser = supabaseUsers.users.find((u: any) => u.email === email);
         if (!existingSupabaseUser) {
-          console.error('❌ Supabase user not found despite email exists error');
-          return res.status(500).json({ message: 'Authentication account in inconsistent state' });
+          console.error('❌ Supabase user not found despite email exists error for:', email);
+          return res.status(500).json({ message: 'Could not find existing authentication account. Please try again.' });
         }
         
         supabaseUserId = existingSupabaseUser.id;
@@ -212,20 +235,34 @@ router.post('/users/update-role', async (req, res) => {
     
     console.log(`✅ Updated database role for ${email}: ${role}`);
     
-    // Now sync with Supabase
-    const { data: supabaseUsers, error: listError } = await supabaseAdmin.auth.admin.listUsers();
+    // Now sync with Supabase - use paginated lookup to find user by email
+    let supabaseUser = null;
+    let page = 1;
+    const perPage = 1000;
     
-    if (listError) {
-      console.error('Error listing Supabase users:', listError);
-      return res.json({
-        message: 'Database role updated, but failed to sync with Supabase',
-        email: email,
-        databaseRole: role,
-        supabaseSync: 'failed'
+    while (!supabaseUser && page <= 100) {
+      const { data: userData, error: listError } = await supabaseAdmin.auth.admin.listUsers({
+        page,
+        perPage
       });
+      
+      if (listError) {
+        console.error('Error finding Supabase user:', listError);
+        return res.json({
+          message: 'Database role updated, but failed to sync with Supabase',
+          email: email,
+          databaseRole: role,
+          supabaseSync: 'failed'
+        });
+      }
+      
+      supabaseUser = userData?.users?.find((u: any) => u.email === email);
+      
+      if (!supabaseUser && (!userData?.users || userData.users.length < perPage)) {
+        break; // No more users
+      }
+      page++;
     }
-    
-    const supabaseUser = supabaseUsers.users.find((u: any) => u.email === email);
     
     if (!supabaseUser) {
       return res.json({
@@ -329,19 +366,34 @@ router.post('/users/migrate-to-supabase', async (req, res) => {
         if (authError && (authError.code === 'email_exists' || authError.message?.includes('already registered'))) {
           console.log(`⚠️ Supabase account already exists for ${user.email}, finding and linking...`);
           
-          const { data: supabaseUsers, error: listError } = await supabaseAdmin.auth.admin.listUsers();
-          if (listError) {
-            console.error(`❌ Failed to list Supabase users for ${user.email}:`, listError);
-            results.failed++;
-            results.errors.push({ email: user.email, error: 'Failed to find existing account' });
-            continue;
+          // Use paginated lookup to find user by email
+          let existingSupabaseUser = null;
+          let findPage = 1;
+          const findPerPage = 1000;
+          
+          while (!existingSupabaseUser && findPage <= 100) {
+            const { data: userData, error: getUserError } = await supabaseAdmin.auth.admin.listUsers({
+              page: findPage,
+              perPage: findPerPage
+            });
+            
+            if (getUserError) {
+              console.error(`❌ Failed to list Supabase users for ${user.email}:`, getUserError);
+              break;
+            }
+            
+            existingSupabaseUser = userData?.users?.find((u: any) => u.email === user.email);
+            
+            if (!existingSupabaseUser && (!userData?.users || userData.users.length < findPerPage)) {
+              break; // No more users
+            }
+            findPage++;
           }
           
-          const existingSupabaseUser = supabaseUsers.users.find((u: any) => u.email === user.email);
           if (!existingSupabaseUser) {
             console.error(`❌ Supabase user not found for ${user.email} despite email exists error`);
             results.failed++;
-            results.errors.push({ email: user.email, error: 'Account in inconsistent state' });
+            results.errors.push({ email: user.email, error: 'Account not found. Please try again.' });
             continue;
           }
           
@@ -412,15 +464,29 @@ router.post('/users/sync-supabase-role', async (req, res) => {
     
     console.log(`📊 Database role for ${email}: ${user.role}`);
     
-    // Get Supabase user
-    const { data: supabaseUsers, error: listError } = await supabaseAdmin.auth.admin.listUsers();
+    // Get Supabase user - use paginated lookup to find user by email
+    let supabaseUser = null;
+    let syncPage = 1;
+    const syncPerPage = 1000;
     
-    if (listError) {
-      console.error('Error listing Supabase users:', listError);
-      return res.status(500).json({ message: 'Failed to list Supabase users' });
+    while (!supabaseUser && syncPage <= 100) {
+      const { data: userData, error: listError } = await supabaseAdmin.auth.admin.listUsers({
+        page: syncPage,
+        perPage: syncPerPage
+      });
+      
+      if (listError) {
+        console.error('Error finding Supabase user:', listError);
+        return res.status(500).json({ message: 'Failed to find Supabase user' });
+      }
+      
+      supabaseUser = userData?.users?.find((u: any) => u.email === email);
+      
+      if (!supabaseUser && (!userData?.users || userData.users.length < syncPerPage)) {
+        break; // No more users
+      }
+      syncPage++;
     }
-    
-    const supabaseUser = supabaseUsers.users.find((u: any) => u.email === email);
     
     if (!supabaseUser) {
       return res.status(404).json({ message: 'User not found in Supabase' });

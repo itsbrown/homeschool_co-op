@@ -4338,26 +4338,43 @@ router.put('/users/:id', supabaseAuth, requireSchoolContext, async (req: any, re
         if (supabaseUrl && supabaseServiceKey) {
           const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
           
-          // Find user by email in Supabase and update password
-          const { data: users, error: listError } = await supabaseAdmin.auth.admin.listUsers();
-          if (listError) {
-            console.error('❌ Failed to list Supabase users:', listError);
-          } else {
-            const supabaseUser = users.users.find(u => u.email === existingUser.email);
-            if (supabaseUser) {
-              const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
-                supabaseUser.id,
-                { password: plainTextPassword }
-              );
-              
-              if (updateError) {
-                console.error('❌ Failed to update password in Supabase:', updateError);
-              } else {
-                console.log('✅ Password successfully synced to Supabase');
-              }
-            } else {
-              console.log('⚠️ User not found in Supabase - only local password updated');
+          // Find user by email in Supabase using paginated lookup
+          let supabaseUser = null;
+          let page = 1;
+          const perPage = 1000;
+          
+          while (!supabaseUser && page <= 100) {
+            const { data: userData, error: listError } = await supabaseAdmin.auth.admin.listUsers({
+              page,
+              perPage
+            });
+            
+            if (listError) {
+              console.error('❌ Failed to list Supabase users:', listError);
+              break;
             }
+            
+            supabaseUser = userData?.users?.find((u: any) => u.email === existingUser.email);
+            
+            if (!supabaseUser && (!userData?.users || userData.users.length < perPage)) {
+              break; // No more users to check
+            }
+            page++;
+          }
+          
+          if (supabaseUser) {
+            const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
+              supabaseUser.id,
+              { password: plainTextPassword }
+            );
+            
+            if (updateError) {
+              console.error('❌ Failed to update password in Supabase:', updateError);
+            } else {
+              console.log('✅ Password successfully synced to Supabase');
+            }
+          } else {
+            console.log('⚠️ User not found in Supabase - only local password updated');
           }
         } else {
           console.log('⚠️ Supabase credentials not available - only local password updated');
@@ -4730,16 +4747,36 @@ router.post('/users/:userId/send-invite', async (req, res) => {
         if (authError && (authError.code === 'email_exists' || authError.message?.includes('already registered'))) {
           console.log(`⚠️ Supabase account already exists for ${user.email}, finding existing account...`);
           
-          const { data: supabaseUsers, error: listError } = await supabaseAdmin.auth.admin.listUsers();
-          if (listError) {
-            console.error('❌ Failed to list Supabase users:', listError);
-            return res.status(500).json({ message: 'Failed to find existing authentication account' });
-          }
+          // Use paginated lookup to find user by email (Supabase doesn't have getUserByEmail)
+          let existingSupabaseUser = null;
+          let page = 1;
+          const perPage = 1000; // Max allowed per page
           
-          const existingSupabaseUser = supabaseUsers.users.find((u: any) => u.email === user.email);
-          if (!existingSupabaseUser) {
-            console.error('❌ Supabase user not found despite email exists error');
-            return res.status(500).json({ message: 'Authentication account in inconsistent state' });
+          while (!existingSupabaseUser) {
+            const { data: userData, error: getUserError } = await supabaseAdmin.auth.admin.listUsers({
+              page,
+              perPage
+            });
+            
+            if (getUserError) {
+              console.error('❌ Failed to list Supabase users:', getUserError);
+              return res.status(500).json({ message: 'Failed to find existing authentication account' });
+            }
+            
+            existingSupabaseUser = userData?.users?.find((u: any) => u.email === user.email);
+            
+            // If we've exhausted all users and still not found
+            if (!existingSupabaseUser && (!userData?.users || userData.users.length < perPage)) {
+              console.error('❌ Supabase user not found despite email exists error for:', user.email);
+              return res.status(500).json({ message: 'Could not find existing authentication account. Please try again.' });
+            }
+            
+            page++;
+            // Safety limit to prevent infinite loops
+            if (page > 100) {
+              console.error('❌ Exceeded pagination limit searching for user:', user.email);
+              return res.status(500).json({ message: 'Could not find existing authentication account. Please try again.' });
+            }
           }
           
           supabaseUserId = existingSupabaseUser.id;
