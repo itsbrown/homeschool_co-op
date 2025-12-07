@@ -48,28 +48,5 @@
     "emergencyContactRelationship": null,
     "avatar": null,
     "phone": null
-  },
-  {
-    "email": "kpdinvestors@gmail.com",
-    "username": "kpdinvestors",
-    "name": "Sara Puccia",
-    "password": "",
-    "role": "parent",
-    "schoolId": null,
-    "supabaseId": "31ad8076-c274-47bd-acf1-cefcd481efcc",
-    "avatar": null,
-    "isActive": true,
-    "id": 3,
-    "createdAt": "2025-12-07T04:15:57.393Z",
-    "updatedAt": "2025-12-07T04:15:57.393Z",
-    "auth0Id": null,
-    "subscription": "free",
-    "permissions": {},
-    "lastLogin": null,
-    "emergencyContactFirstName": null,
-    "emergencyContactLastName": null,
-    "emergencyContactPhone": null,
-    "emergencyContactRelationship": null,
-    "phone": null
   }
 ]
