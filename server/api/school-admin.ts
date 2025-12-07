@@ -4754,6 +4754,27 @@ router.post('/users/:userId/send-invite', async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
+    // Look up the user's actual role from user_roles table (not the deprecated users.role field)
+    // Priority: 1) activeRoleId match, 2) non-parent role (for staff), 3) first role, 4) fallback
+    const userRoles = await storage.getUserRolesByUserId(userId);
+    let primaryRole = user.role || 'parent';
+    
+    if (userRoles.length > 0) {
+      // Try to find the active role first
+      const activeRole = user.activeRoleId 
+        ? userRoles.find(r => r.id === user.activeRoleId)
+        : null;
+      
+      if (activeRole) {
+        primaryRole = activeRole.role;
+      } else {
+        // Prefer non-parent roles for staff invites (staff/educator/admin/custom roles like Mentor)
+        const nonParentRole = userRoles.find(r => r.role !== 'parent');
+        primaryRole = nonParentRole ? nonParentRole.role : userRoles[0].role;
+      }
+    }
+    console.log(`📋 User ${user.email} has ${userRoles.length} roles, activeRoleId: ${user.activeRoleId}, using role: ${primaryRole}`);
+
     // Generate a temporary password
     const temporaryPassword = Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-8).toUpperCase();
     
@@ -4780,7 +4801,7 @@ router.post('/users/:userId/send-invite', async (req, res) => {
           password: temporaryPassword,
           email_confirm: true,
           app_metadata: {
-            role: user.role || 'parent',
+            role: primaryRole,
             school_id: user.schoolId || null
           },
           user_metadata: {
@@ -4875,12 +4896,12 @@ router.post('/users/:userId/send-invite', async (req, res) => {
       }
     }
 
-    // Send invite email
+    // Send invite email with actual role from user_roles table
     const emailSuccess = await sendAccountInviteEmail({
       email: user.email,
       firstName: user.firstName || user.name || 'User',
       lastName: user.lastName || '',
-      role: user.role,
+      role: primaryRole,
       temporaryPassword
     });
 
