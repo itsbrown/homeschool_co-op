@@ -2111,6 +2111,81 @@ export type CustomFormField = typeof customFormFields.$inferSelect;
 export type InsertCustomFormSubmission = z.infer<typeof insertCustomFormSubmissionSchema>;
 export type CustomFormSubmission = typeof customFormSubmissions.$inferSelect;
 
+// ==========================================
+// EDUCATOR DASHBOARD TABLES (Phase 1a)
+// ==========================================
+
+// Educator Class Assignments - Links educators to classes with permissions
+export const educatorClassAssignments = pgTable("educator_class_assignments", {
+  id: serial("id").primaryKey(),
+  educatorId: integer("educator_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  classId: integer("class_id").notNull().references(() => classes.id, { onDelete: 'cascade' }),
+  schoolId: integer("school_id").notNull().references(() => schools.id, { onDelete: 'cascade' }),
+  isPrimary: boolean("is_primary").default(true).notNull(), // Primary teacher vs assistant
+  canStartSession: boolean("can_start_session").default(true).notNull(), // Permission to start/end sessions
+  validFrom: date("valid_from"), // For substitutes: when assignment starts
+  validTo: date("valid_to"), // For substitutes: when assignment ends (null = permanent)
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertEducatorClassAssignmentSchema = createInsertSchema(educatorClassAssignments)
+  .omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertEducatorClassAssignment = z.infer<typeof insertEducatorClassAssignmentSchema>;
+export type EducatorClassAssignment = typeof educatorClassAssignments.$inferSelect;
+
+// Class Sessions - Tracks individual class session instances
+export const classSessions = pgTable("class_sessions", {
+  id: serial("id").primaryKey(),
+  classId: integer("class_id").notNull().references(() => classes.id, { onDelete: 'cascade' }),
+  schoolId: integer("school_id").notNull().references(() => schools.id, { onDelete: 'cascade' }),
+  educatorId: integer("educator_id").notNull().references(() => users.id), // Who started the session
+  substituteEducatorId: integer("substitute_educator_id").references(() => users.id), // If covered by substitute
+  
+  // Scheduled times (set by admin via educator_schedules in Phase 1b)
+  scheduledDate: date("scheduled_date").notNull(),
+  scheduledStartTime: text("scheduled_start_time").notNull(), // HH:MM format
+  scheduledEndTime: text("scheduled_end_time").notNull(), // HH:MM format
+  
+  // Actual times (recorded when educator checks in/out)
+  actualStartTime: timestamp("actual_start_time"), // When educator clicked "Start Class"
+  actualEndTime: timestamp("actual_end_time"), // When educator clicked "End Class"
+  
+  // Session status
+  status: text("status", { 
+    enum: ["scheduled", "in_progress", "completed", "cancelled", "no_show"] 
+  }).default("scheduled").notNull(),
+  cancelledReason: text("cancelled_reason"), // If cancelled, why
+  
+  // Session content
+  notes: text("notes"), // Educator notes about the session
+  dailyFlowEntryId: integer("daily_flow_entry_id").references(() => dailyFlowEntries.id), // Link to lesson plan
+  
+  // Metadata
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertClassSessionSchema = createInsertSchema(classSessions)
+  .omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertClassSession = z.infer<typeof insertClassSessionSchema>;
+export type ClassSession = typeof classSessions.$inferSelect;
+
+// Relations for educator dashboard tables
+export const educatorClassAssignmentsRelations = relations(educatorClassAssignments, ({ one }) => ({
+  educator: one(users, { fields: [educatorClassAssignments.educatorId], references: [users.id] }),
+  class: one(classes, { fields: [educatorClassAssignments.classId], references: [classes.id] }),
+  school: one(schools, { fields: [educatorClassAssignments.schoolId], references: [schools.id] }),
+}));
+
+export const classSessionsRelations = relations(classSessions, ({ one }) => ({
+  class: one(classes, { fields: [classSessions.classId], references: [classes.id] }),
+  school: one(schools, { fields: [classSessions.schoolId], references: [schools.id] }),
+  educator: one(users, { fields: [classSessions.educatorId], references: [users.id] }),
+  substituteEducator: one(users, { fields: [classSessions.substituteEducatorId], references: [users.id] }),
+  dailyFlowEntry: one(dailyFlowEntries, { fields: [classSessions.dailyFlowEntryId], references: [dailyFlowEntries.id] }),
+}));
+
 // Push Subscriptions table for web push notifications
 export const pushSubscriptions = pgTable("push_subscriptions", {
   id: serial("id").primaryKey(),

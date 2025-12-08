@@ -73,3 +73,76 @@ The platform prioritizes scalability, security, and user experience, incorporati
 -   **Brevo SMTP**: Email service.
 -   **SendGrid**: Email service.
 -   **Twilio**: SMS service.
+
+## Educator Dashboard Roadmap
+
+### Overview
+The Educator Dashboard provides educators/mentors with tools to manage their classes, track attendance, view lesson plans, and log their work hours. It integrates with the existing Daily Flow system for lesson planning.
+
+### Phase 1a: Educator Session MVP (In Progress)
+**Goal**: Educator can view their assigned classes, see today's lessons, and start/end class sessions.
+
+**Database Tables**:
+- `class_sessions` - Tracks individual class session instances with check-in/out times
+- `educator_class_assignments` - Links educators to classes with permissions
+
+**Features**:
+- Educator Dashboard home page with today's classes
+- My Classes list showing all assigned classes
+- Active Session view with start/end class functionality
+- Daily flow integration (lesson links, materials, objectives)
+- Role-based access control via `requireEducatorRole` middleware
+- Error boundaries and loading/error/empty states
+
+**Status**: Not Started
+
+### Phase 1b: Admin Tools & Planning
+**Goal**: Admin can manage educator schedules, full audit trail, educator can plan ahead.
+
+**Database Tables**:
+- `educator_schedules` - Admin-set time blocks per class
+- `audit_logs` - Tracks all actions for compliance
+
+**Features**:
+- Weekly Calendar view for planning ahead
+- My Hours page with logged sessions summary
+- Admin Educator Profile view for schedule management
+- Full audit logging on session actions
+- E2E testing with error scenarios
+
+**Status**: Not Started
+
+### Phase 2: Communication & Attendance
+**Features**:
+- Attendance tracking (present/absent/tardy)
+- Class-specific parent messaging with admin approval workflow
+- Notification system for educators
+- Audit trail for all messages
+
+**Status**: Planned
+
+### Phase 3: Academic Features
+**Features**:
+- Assignment/Gradebook system
+- Document/Resource sharing per class
+- Session feedback mechanism (educator → admin → parents)
+
+**Status**: Planned
+
+### Phase 4: Scheduling & Integration
+**Features**:
+- Parent-teacher conference scheduling
+- Calendar integration (Google/Outlook)
+- Emergency alerts system
+- Substitute staff management
+
+**Status**: Planned
+
+### Phase 5: Analytics & Security
+**Features**:
+- Analytics dashboard (attendance trends, engagement)
+- Two-factor authentication for staff
+- GDPR/FERPA compliance controls
+- Exportable reports
+
+**Status**: Planned

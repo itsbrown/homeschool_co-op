@@ -1,0 +1,59 @@
+Live Class Roster
+View all enrolled students with profiles (name, age, contact info, status).
+Class-Specific Parent Messaging
+Staff drafts message → goes to school admin for approval → then to parents (audit trail).
+Class Schedule Viewer
+Show sessions, locations, time, any changes in real-time.
+Recommended Additional Features & Enhancements
+1. Attendance Tracking
+Mark attendance (present/absent/tardy) live, save to database.
+Export attendance records (CSV/PDF).
+Automated report for admin if attendance drops below threshold.
+2. Assignment/Gradebook
+Post homework/assignments with due dates.
+Grade entries per student; parents can view after teacher entry and admin approval.
+3. Document/Resource Sharing
+Upload/download lesson materials, worksheets, handouts for each class.
+History/log of sent resources.
+4. Parent-Teacher Conference Scheduling
+Request, create, confirm, and track conference times.
+Auto-notify parents when approved.
+5. Role-Based Notifications
+Educators can send announcements to parents (with admin approval), or to students.
+School admin can override/notify all parents instantly.
+6. Roster Actions/Utilities
+Bulk actions: email all parents, download list.
+Flag student (for special alert: missing materials, medical needs, etc.).
+7. Calendar Integration
+Integrate with Google Calendar/Microsoft Outlook (for both educators and parents).
+Subscription to class calendar by parent.
+8. Audit Trail/History
+Log of every message and who approved it; provides compliance (FERPA, GDPR).
+9. Feedback Mechanism
+Educator submits feedback about each session to admin (seen by parents once approved).
+10. Mobile/Tablet Responsive UI
+Page optimized for use on tablets/phones for teachers in classroom.
+Advanced/Security/Compliance Features
+Role-Based Access: Only see data for classes assigned to each educator.
+GDPR/HIPAA Compliance Controls: All messaging logs, attendance, gradebooks securely stored; controlled export/print permissions.
+Two-Factor Authentication (2FA): For staff/admin logins.
+Integration for Substitute Staff: Let admin reassign/cover classes; auto-notify parents.
+Emergency Alerts: Admin/educator can quickly send urgent notifications (lockdown, weather, etc.)—parent contacts auto-populate.
+Analytics/Reporting
+Attendance trends, schedule adherence, message delivery status.
+Exportable engagement/activity reports (for admin oversight).
+Summary Table
+Feature	Purpose/Benefit
+Live roster	Real-time, safe class lists
+Attendance tracker	Track/correct daily presence
+Grades/assignments	Academic record, parent transparency
+Materials/resource share	Consistent lesson handouts
+Parent-teacher conf scheduling	Easier meetings, auto notifications
+Messaging w/ admin approval	Oversight, audit log, safe communication
+Roster bulk actions	Time savings, efficient notifications
+Calendar integration	Reduced confusion, better parent engagement
+Audit/history log	Compliance, safety, accountability
+Feedback system	Quality improvement, communication loop
+Mobile/tablet UI	Usability for teachers
+Emergency alerts	Safety and communication agility
+Analytics/reporting	Data for improvement and compliance
