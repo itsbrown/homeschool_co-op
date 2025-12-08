@@ -11,6 +11,7 @@ Preferred communication style: Simple, everyday language.
 - **HybridStorage architecture**: `dbStorage` can be either DatabaseStorage or MemStorage (fallback). Use identity comparison (`this.dbStorage !== this.memStorage`) to detect real database availability.
 - **Watch for duplicate storage mechanisms**: Some API files may have their own in-memory Maps or caches that bypass the central storage system entirely. Check for module-level variables in API route files.
 - **Invitation-related bugs**: For any staff/role invitation issues, see **ARCHITECTURAL_PATTERNS.md Section 8** (Token-based Invitation Flow). Key rules: reuse tokens on resend (don't generate new), use public endpoints for unauthenticated access, and consolidate to role_invitations table.
+- **Parent profile access for OAuth users**: Parent role check now uses user_roles table (multi-role compatible) with fallback to legacy users.role column. "Orphaned" OAuth parents (schoolId=null, logged in without registration) can be viewed by any school admin to facilitate account association.
 
 ## System Architecture
 ### Core Design Principles
