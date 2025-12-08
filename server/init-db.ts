@@ -836,6 +836,76 @@ async function runMigrations() {
     `);
     console.log('✅ Migration completed: school_staff entries backfilled to user_roles');
     
+    // Create educator_class_assignments table for Phase 1a Educator Dashboard
+    console.log('Running migration: Creating educator_class_assignments table...');
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS educator_class_assignments (
+        id SERIAL PRIMARY KEY,
+        educator_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        class_id INTEGER NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
+        school_id INTEGER NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+        is_primary BOOLEAN NOT NULL DEFAULT true,
+        can_start_session BOOLEAN NOT NULL DEFAULT true,
+        valid_from DATE,
+        valid_to DATE,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_educator_class_assignments_educator_id 
+      ON educator_class_assignments(educator_id);
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_educator_class_assignments_class_id 
+      ON educator_class_assignments(class_id);
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_educator_class_assignments_school_id 
+      ON educator_class_assignments(school_id);
+    `);
+    console.log('✅ Migration completed: educator_class_assignments table created');
+    
+    // Create class_sessions table for Phase 1a Educator Dashboard
+    console.log('Running migration: Creating class_sessions table...');
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS class_sessions (
+        id SERIAL PRIMARY KEY,
+        class_id INTEGER NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
+        school_id INTEGER NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+        educator_id INTEGER NOT NULL REFERENCES users(id),
+        substitute_educator_id INTEGER REFERENCES users(id),
+        scheduled_date DATE NOT NULL,
+        scheduled_start_time TEXT NOT NULL,
+        scheduled_end_time TEXT NOT NULL,
+        actual_start_time TIMESTAMP,
+        actual_end_time TIMESTAMP,
+        status TEXT NOT NULL DEFAULT 'scheduled' CHECK (status IN ('scheduled', 'in_progress', 'completed', 'cancelled', 'no_show')),
+        cancelled_reason TEXT,
+        notes TEXT,
+        daily_flow_entry_id INTEGER REFERENCES daily_flow_entries(id),
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_class_sessions_class_id 
+      ON class_sessions(class_id);
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_class_sessions_educator_id 
+      ON class_sessions(educator_id);
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_class_sessions_school_id 
+      ON class_sessions(school_id);
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_class_sessions_scheduled_date 
+      ON class_sessions(scheduled_date);
+    `);
+    console.log('✅ Migration completed: class_sessions table created');
+    
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     

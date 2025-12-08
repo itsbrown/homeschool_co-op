@@ -40,7 +40,9 @@ import {
   StaffPosition, InsertStaffPosition, staffPositions,
   StaffInvitation, InsertStaffInvitation, staffInvitations,
   PasswordResetToken, InsertPasswordResetToken, passwordResetTokens,
-  RoleInvitation, InsertRoleInvitation, roleInvitations
+  RoleInvitation, InsertRoleInvitation, roleInvitations,
+  EducatorClassAssignment, InsertEducatorClassAssignment, educatorClassAssignments,
+  ClassSession, InsertClassSession, classSessions
 } from '../shared/schema';
 
 /**
@@ -2926,5 +2928,161 @@ export class DatabaseStorage implements IStorage {
       console.error('❌ FATAL: Notification seeding failed, transaction rolled back:', error);
       throw error; // Re-throw to prevent silent failures
     }
+  }
+
+  // ============================================
+  // Educator Class Assignment Methods (Phase 1a)
+  // ============================================
+
+  async getEducatorClassAssignmentById(id: number): Promise<EducatorClassAssignment | undefined> {
+    const db = await getDb();
+    const [assignment] = await db.select().from(educatorClassAssignments).where(eq(educatorClassAssignments.id, id));
+    return assignment;
+  }
+
+  async getEducatorClassAssignmentsByEducatorId(educatorId: number): Promise<EducatorClassAssignment[]> {
+    const db = await getDb();
+    return db.select().from(educatorClassAssignments).where(eq(educatorClassAssignments.educatorId, educatorId));
+  }
+
+  async getEducatorClassAssignmentsByClassId(classId: number): Promise<EducatorClassAssignment[]> {
+    const db = await getDb();
+    return db.select().from(educatorClassAssignments).where(eq(educatorClassAssignments.classId, classId));
+  }
+
+  async getEducatorClassAssignmentsBySchoolId(schoolId: number): Promise<EducatorClassAssignment[]> {
+    const db = await getDb();
+    return db.select().from(educatorClassAssignments).where(eq(educatorClassAssignments.schoolId, schoolId));
+  }
+
+  async getActiveEducatorAssignmentForClass(educatorId: number, classId: number): Promise<EducatorClassAssignment | undefined> {
+    const db = await getDb();
+    const today = new Date().toISOString().split('T')[0];
+    const [assignment] = await db.select().from(educatorClassAssignments)
+      .where(
+        and(
+          eq(educatorClassAssignments.educatorId, educatorId),
+          eq(educatorClassAssignments.classId, classId),
+          or(
+            isNull(educatorClassAssignments.validFrom),
+            sql`${educatorClassAssignments.validFrom} <= ${today}`
+          ),
+          or(
+            isNull(educatorClassAssignments.validTo),
+            sql`${educatorClassAssignments.validTo} >= ${today}`
+          )
+        )
+      );
+    return assignment;
+  }
+
+  async createEducatorClassAssignment(assignment: InsertEducatorClassAssignment): Promise<EducatorClassAssignment> {
+    const db = await getDb();
+    const [newAssignment] = await db.insert(educatorClassAssignments).values({
+      ...assignment,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    }).returning();
+    return newAssignment;
+  }
+
+  async updateEducatorClassAssignment(id: number, assignment: Partial<InsertEducatorClassAssignment>): Promise<EducatorClassAssignment | undefined> {
+    const db = await getDb();
+    const [updated] = await db
+      .update(educatorClassAssignments)
+      .set({ ...assignment, updatedAt: new Date() })
+      .where(eq(educatorClassAssignments.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteEducatorClassAssignment(id: number): Promise<void> {
+    const db = await getDb();
+    await db.delete(educatorClassAssignments).where(eq(educatorClassAssignments.id, id));
+  }
+
+  // ============================================
+  // Class Session Methods (Phase 1a)
+  // ============================================
+
+  async getClassSessionById(id: number): Promise<ClassSession | undefined> {
+    const db = await getDb();
+    const [session] = await db.select().from(classSessions).where(eq(classSessions.id, id));
+    return session;
+  }
+
+  async getClassSessionsByClassId(classId: number): Promise<ClassSession[]> {
+    const db = await getDb();
+    return db.select().from(classSessions).where(eq(classSessions.classId, classId));
+  }
+
+  async getClassSessionsByEducatorId(educatorId: number): Promise<ClassSession[]> {
+    const db = await getDb();
+    return db.select().from(classSessions).where(eq(classSessions.educatorId, educatorId));
+  }
+
+  async getClassSessionsBySchoolId(schoolId: number): Promise<ClassSession[]> {
+    const db = await getDb();
+    return db.select().from(classSessions).where(eq(classSessions.schoolId, schoolId));
+  }
+
+  async getClassSessionsByDate(schoolId: number, date: string): Promise<ClassSession[]> {
+    const db = await getDb();
+    return db.select().from(classSessions)
+      .where(
+        and(
+          eq(classSessions.schoolId, schoolId),
+          eq(classSessions.scheduledDate, date)
+        )
+      );
+  }
+
+  async getClassSessionsByDateRange(schoolId: number, startDate: string, endDate: string): Promise<ClassSession[]> {
+    const db = await getDb();
+    return db.select().from(classSessions)
+      .where(
+        and(
+          eq(classSessions.schoolId, schoolId),
+          sql`${classSessions.scheduledDate} >= ${startDate}`,
+          sql`${classSessions.scheduledDate} <= ${endDate}`
+        )
+      );
+  }
+
+  async getActiveClassSession(educatorId: number): Promise<ClassSession | undefined> {
+    const db = await getDb();
+    const [session] = await db.select().from(classSessions)
+      .where(
+        and(
+          eq(classSessions.educatorId, educatorId),
+          eq(classSessions.status, 'in_progress')
+        )
+      );
+    return session;
+  }
+
+  async createClassSession(session: InsertClassSession): Promise<ClassSession> {
+    const db = await getDb();
+    const [newSession] = await db.insert(classSessions).values({
+      ...session,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    }).returning();
+    return newSession;
+  }
+
+  async updateClassSession(id: number, session: Partial<InsertClassSession>): Promise<ClassSession | undefined> {
+    const db = await getDb();
+    const [updated] = await db
+      .update(classSessions)
+      .set({ ...session, updatedAt: new Date() })
+      .where(eq(classSessions.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteClassSession(id: number): Promise<void> {
+    const db = await getDb();
+    await db.delete(classSessions).where(eq(classSessions.id, id));
   }
 }

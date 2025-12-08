@@ -39,7 +39,9 @@ import {
   notifications, type Notification, type InsertNotification,
   notificationRecipients, type NotificationRecipient, type InsertNotificationRecipient,
   discounts, type Discount, type InsertDiscount,
-  discountApplications, type DiscountApplication, type InsertDiscountApplication
+  discountApplications, type DiscountApplication, type InsertDiscountApplication,
+  educatorClassAssignments, type EducatorClassAssignment, type InsertEducatorClassAssignment,
+  classSessions, type ClassSession, type InsertClassSession
 } from "@shared/schema";
 import { eq, inArray } from 'drizzle-orm';
 import { getDb } from './db';
@@ -445,6 +447,28 @@ export interface IStorage {
   createPasswordResetToken(tokenData: InsertPasswordResetToken): Promise<PasswordResetToken>;
   markPasswordResetTokenAsUsed(token: string): Promise<void>;
   deleteExpiredPasswordResetTokens(): Promise<void>;
+
+  // Educator Class Assignment methods (Phase 1a)
+  getEducatorClassAssignmentById(id: number): Promise<EducatorClassAssignment | undefined>;
+  getEducatorClassAssignmentsByEducatorId(educatorId: number): Promise<EducatorClassAssignment[]>;
+  getEducatorClassAssignmentsByClassId(classId: number): Promise<EducatorClassAssignment[]>;
+  getEducatorClassAssignmentsBySchoolId(schoolId: number): Promise<EducatorClassAssignment[]>;
+  getActiveEducatorAssignmentForClass(educatorId: number, classId: number): Promise<EducatorClassAssignment | undefined>;
+  createEducatorClassAssignment(assignment: InsertEducatorClassAssignment): Promise<EducatorClassAssignment>;
+  updateEducatorClassAssignment(id: number, assignment: Partial<InsertEducatorClassAssignment>): Promise<EducatorClassAssignment | undefined>;
+  deleteEducatorClassAssignment(id: number): Promise<void>;
+
+  // Class Session methods (Phase 1a)
+  getClassSessionById(id: number): Promise<ClassSession | undefined>;
+  getClassSessionsByClassId(classId: number): Promise<ClassSession[]>;
+  getClassSessionsByEducatorId(educatorId: number): Promise<ClassSession[]>;
+  getClassSessionsBySchoolId(schoolId: number): Promise<ClassSession[]>;
+  getClassSessionsByDate(schoolId: number, date: string): Promise<ClassSession[]>;
+  getClassSessionsByDateRange(schoolId: number, startDate: string, endDate: string): Promise<ClassSession[]>;
+  getActiveClassSession(educatorId: number): Promise<ClassSession | undefined>;
+  createClassSession(session: InsertClassSession): Promise<ClassSession>;
+  updateClassSession(id: number, session: Partial<InsertClassSession>): Promise<ClassSession | undefined>;
+  deleteClassSession(id: number): Promise<void>;
 }
 
 export class MemStorage implements IStorage {
@@ -476,6 +500,8 @@ export class MemStorage implements IStorage {
   private technicalIssuesStore: Map<string, any>;
   private adminNotificationsStore: Map<string, any>;
   private userNotificationsStore: Map<string, any>;
+  private educatorClassAssignmentsStore: Map<number, EducatorClassAssignment>;
+  private classSessionsStore: Map<number, ClassSession>;
 
   private userIdCounter: number;
   private curriculumIdCounter: number;
@@ -502,6 +528,8 @@ export class MemStorage implements IStorage {
   private dailyFlowTemplateIdCounter: number;
   private dailyFlowEntryIdCounter: number;
   private dailyFlowScheduleIdCounter: number;
+  private educatorClassAssignmentIdCounter: number;
+  private classSessionIdCounter: number;
   private classEnrollments: any[];
 
   constructor() {
@@ -533,6 +561,8 @@ export class MemStorage implements IStorage {
     this.technicalIssuesStore = new Map();
     this.adminNotificationsStore = new Map();
     this.userNotificationsStore = new Map();
+    this.educatorClassAssignmentsStore = new Map();
+    this.classSessionsStore = new Map();
     this.classEnrollments = [];
 
     this.userIdCounter = 1;
@@ -560,6 +590,8 @@ export class MemStorage implements IStorage {
     this.dailyFlowTemplateIdCounter = 1;
     this.dailyFlowEntryIdCounter = 1;
     this.dailyFlowScheduleIdCounter = 1;
+    this.educatorClassAssignmentIdCounter = 1;
+    this.classSessionIdCounter = 1;
 
     // Initialize with a default admin user
 
@@ -3994,6 +4026,135 @@ export class MemStorage implements IStorage {
   async deleteCategory(id: number): Promise<void> {
     return;
   }
+
+  // Educator Class Assignment methods (Phase 1a)
+  async getEducatorClassAssignmentById(id: number): Promise<EducatorClassAssignment | undefined> {
+    return this.educatorClassAssignmentsStore.get(id);
+  }
+
+  async getEducatorClassAssignmentsByEducatorId(educatorId: number): Promise<EducatorClassAssignment[]> {
+    return Array.from(this.educatorClassAssignmentsStore.values())
+      .filter(a => a.educatorId === educatorId);
+  }
+
+  async getEducatorClassAssignmentsByClassId(classId: number): Promise<EducatorClassAssignment[]> {
+    return Array.from(this.educatorClassAssignmentsStore.values())
+      .filter(a => a.classId === classId);
+  }
+
+  async getEducatorClassAssignmentsBySchoolId(schoolId: number): Promise<EducatorClassAssignment[]> {
+    return Array.from(this.educatorClassAssignmentsStore.values())
+      .filter(a => a.schoolId === schoolId);
+  }
+
+  async getActiveEducatorAssignmentForClass(educatorId: number, classId: number): Promise<EducatorClassAssignment | undefined> {
+    const today = new Date().toISOString().split('T')[0];
+    return Array.from(this.educatorClassAssignmentsStore.values())
+      .find(a => 
+        a.educatorId === educatorId && 
+        a.classId === classId &&
+        (!a.validFrom || a.validFrom <= today) &&
+        (!a.validTo || a.validTo >= today)
+      );
+  }
+
+  async createEducatorClassAssignment(assignment: InsertEducatorClassAssignment): Promise<EducatorClassAssignment> {
+    const id = this.educatorClassAssignmentIdCounter++;
+    const newAssignment: EducatorClassAssignment = {
+      ...assignment,
+      id,
+      isPrimary: assignment.isPrimary ?? true,
+      canStartSession: assignment.canStartSession ?? true,
+      validFrom: assignment.validFrom ?? null,
+      validTo: assignment.validTo ?? null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.educatorClassAssignmentsStore.set(id, newAssignment);
+    return newAssignment;
+  }
+
+  async updateEducatorClassAssignment(id: number, assignment: Partial<InsertEducatorClassAssignment>): Promise<EducatorClassAssignment | undefined> {
+    const existing = this.educatorClassAssignmentsStore.get(id);
+    if (!existing) return undefined;
+    const updated = { ...existing, ...assignment, updatedAt: new Date() };
+    this.educatorClassAssignmentsStore.set(id, updated);
+    return updated;
+  }
+
+  async deleteEducatorClassAssignment(id: number): Promise<void> {
+    this.educatorClassAssignmentsStore.delete(id);
+  }
+
+  // Class Session methods (Phase 1a)
+  async getClassSessionById(id: number): Promise<ClassSession | undefined> {
+    return this.classSessionsStore.get(id);
+  }
+
+  async getClassSessionsByClassId(classId: number): Promise<ClassSession[]> {
+    return Array.from(this.classSessionsStore.values())
+      .filter(s => s.classId === classId);
+  }
+
+  async getClassSessionsByEducatorId(educatorId: number): Promise<ClassSession[]> {
+    return Array.from(this.classSessionsStore.values())
+      .filter(s => s.educatorId === educatorId);
+  }
+
+  async getClassSessionsBySchoolId(schoolId: number): Promise<ClassSession[]> {
+    return Array.from(this.classSessionsStore.values())
+      .filter(s => s.schoolId === schoolId);
+  }
+
+  async getClassSessionsByDate(schoolId: number, date: string): Promise<ClassSession[]> {
+    return Array.from(this.classSessionsStore.values())
+      .filter(s => s.schoolId === schoolId && s.scheduledDate === date);
+  }
+
+  async getClassSessionsByDateRange(schoolId: number, startDate: string, endDate: string): Promise<ClassSession[]> {
+    return Array.from(this.classSessionsStore.values())
+      .filter(s => 
+        s.schoolId === schoolId && 
+        s.scheduledDate >= startDate && 
+        s.scheduledDate <= endDate
+      );
+  }
+
+  async getActiveClassSession(educatorId: number): Promise<ClassSession | undefined> {
+    return Array.from(this.classSessionsStore.values())
+      .find(s => s.educatorId === educatorId && s.status === 'in_progress');
+  }
+
+  async createClassSession(session: InsertClassSession): Promise<ClassSession> {
+    const id = this.classSessionIdCounter++;
+    const newSession: ClassSession = {
+      ...session,
+      id,
+      substituteEducatorId: session.substituteEducatorId ?? null,
+      actualStartTime: session.actualStartTime ?? null,
+      actualEndTime: session.actualEndTime ?? null,
+      status: session.status ?? 'scheduled',
+      cancelledReason: session.cancelledReason ?? null,
+      notes: session.notes ?? null,
+      dailyFlowEntryId: session.dailyFlowEntryId ?? null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.classSessionsStore.set(id, newSession);
+    return newSession;
+  }
+
+  async updateClassSession(id: number, session: Partial<InsertClassSession>): Promise<ClassSession | undefined> {
+    const existing = this.classSessionsStore.get(id);
+    if (!existing) return undefined;
+    const updated = { ...existing, ...session, updatedAt: new Date() };
+    this.classSessionsStore.set(id, updated);
+    return updated;
+  }
+
+  async deleteClassSession(id: number): Promise<void> {
+    this.classSessionsStore.delete(id);
+  }
 }
 
   import { DatabaseStorage } from "./dbStorage";
@@ -5908,6 +6069,80 @@ export class MemStorage implements IStorage {
       // Database initialization methods
       async initializeNotifications(): Promise<void> {
         return this.dbStorage.initializeNotifications();
+      }
+
+      // Educator Class Assignment methods (Phase 1a)
+      async getEducatorClassAssignmentById(id: number): Promise<EducatorClassAssignment | undefined> {
+        return this.dbStorage.getEducatorClassAssignmentById(id);
+      }
+
+      async getEducatorClassAssignmentsByEducatorId(educatorId: number): Promise<EducatorClassAssignment[]> {
+        return this.dbStorage.getEducatorClassAssignmentsByEducatorId(educatorId);
+      }
+
+      async getEducatorClassAssignmentsByClassId(classId: number): Promise<EducatorClassAssignment[]> {
+        return this.dbStorage.getEducatorClassAssignmentsByClassId(classId);
+      }
+
+      async getEducatorClassAssignmentsBySchoolId(schoolId: number): Promise<EducatorClassAssignment[]> {
+        return this.dbStorage.getEducatorClassAssignmentsBySchoolId(schoolId);
+      }
+
+      async getActiveEducatorAssignmentForClass(educatorId: number, classId: number): Promise<EducatorClassAssignment | undefined> {
+        return this.dbStorage.getActiveEducatorAssignmentForClass(educatorId, classId);
+      }
+
+      async createEducatorClassAssignment(assignment: InsertEducatorClassAssignment): Promise<EducatorClassAssignment> {
+        return this.dbStorage.createEducatorClassAssignment(assignment);
+      }
+
+      async updateEducatorClassAssignment(id: number, assignment: Partial<InsertEducatorClassAssignment>): Promise<EducatorClassAssignment | undefined> {
+        return this.dbStorage.updateEducatorClassAssignment(id, assignment);
+      }
+
+      async deleteEducatorClassAssignment(id: number): Promise<void> {
+        return this.dbStorage.deleteEducatorClassAssignment(id);
+      }
+
+      // Class Session methods (Phase 1a)
+      async getClassSessionById(id: number): Promise<ClassSession | undefined> {
+        return this.dbStorage.getClassSessionById(id);
+      }
+
+      async getClassSessionsByClassId(classId: number): Promise<ClassSession[]> {
+        return this.dbStorage.getClassSessionsByClassId(classId);
+      }
+
+      async getClassSessionsByEducatorId(educatorId: number): Promise<ClassSession[]> {
+        return this.dbStorage.getClassSessionsByEducatorId(educatorId);
+      }
+
+      async getClassSessionsBySchoolId(schoolId: number): Promise<ClassSession[]> {
+        return this.dbStorage.getClassSessionsBySchoolId(schoolId);
+      }
+
+      async getClassSessionsByDate(schoolId: number, date: string): Promise<ClassSession[]> {
+        return this.dbStorage.getClassSessionsByDate(schoolId, date);
+      }
+
+      async getClassSessionsByDateRange(schoolId: number, startDate: string, endDate: string): Promise<ClassSession[]> {
+        return this.dbStorage.getClassSessionsByDateRange(schoolId, startDate, endDate);
+      }
+
+      async getActiveClassSession(educatorId: number): Promise<ClassSession | undefined> {
+        return this.dbStorage.getActiveClassSession(educatorId);
+      }
+
+      async createClassSession(session: InsertClassSession): Promise<ClassSession> {
+        return this.dbStorage.createClassSession(session);
+      }
+
+      async updateClassSession(id: number, session: Partial<InsertClassSession>): Promise<ClassSession | undefined> {
+        return this.dbStorage.updateClassSession(id, session);
+      }
+
+      async deleteClassSession(id: number): Promise<void> {
+        return this.dbStorage.deleteClassSession(id);
       }
 
       // Clear all data from storage (for testing)
