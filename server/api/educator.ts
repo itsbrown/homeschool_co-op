@@ -34,26 +34,38 @@ router.get('/dashboard', async (req, res) => {
     // Get active session if any
     const activeSession = await storage.getActiveClassSession(userId);
 
-    // Get class details for assignments
-    const classDetails = await Promise.all(
+    // Get class details for assignments (these are "today's classes" for the educator)
+    const todayClasses = await Promise.all(
       assignments.map(async (assignment: EducatorClassAssignment) => {
         const classInfo = await storage.getClassById(assignment.classId);
+        const enrollmentCount = await storage.getEnrollmentCountForClass(assignment.classId);
         return {
-          ...assignment,
+          assignmentId: assignment.id,
+          classId: assignment.classId,
+          isPrimary: assignment.isPrimary,
+          canStartSession: assignment.canStartSession,
+          validFrom: assignment.validFrom,
+          validTo: assignment.validTo,
           className: classInfo?.title || 'Unknown Class',
+          classDescription: classInfo?.description,
           classSchedule: classInfo?.schedule,
           classLocation: classInfo?.location,
-          capacity: classInfo?.capacity
+          capacity: classInfo?.capacity,
+          enrollmentCount,
+          schoolId: assignment.schoolId
         };
       })
     );
 
+    // Calculate completed and upcoming sessions for today
+    const completedToday = todaySessions.filter((s: ClassSession) => s.status === 'completed').length;
+    const upcomingSessions = todaySessions.filter((s: ClassSession) => s.status === 'scheduled').length;
+
     res.json({
-      assignments: classDetails,
-      todaySessions,
+      todayClasses,
       activeSession: activeSession || null,
-      totalAssignments: assignments.length,
-      todaySessionsCount: todaySessions.length
+      upcomingSessions,
+      completedToday
     });
   } catch (error) {
     console.error('[EducatorDashboard] Error fetching dashboard:', error);
