@@ -103,6 +103,9 @@ import EducatorClassesPage from './pages/educator/EducatorClassesPage';
 import EducatorClassDetailsPage from './pages/educator/EducatorClassDetailsPage';
 import EducatorStudentsPage from './pages/educator/EducatorStudentsPage';
 import EducatorNotificationsPage from './pages/educator/EducatorNotificationsPage';
+import EducatorDashboardPage from './pages/educator/EducatorDashboard';
+import MyClassesPage from './pages/educator/MyClasses';
+import ActiveSessionPage from './pages/educator/ActiveSession';
 
 const CallbackPage = () => {
   const { isAuthenticated } = useAuth();
@@ -536,7 +539,9 @@ function Router() {
       <Route path="/parent/documents/:id" component={DocumentDetailPage} />
 
       {/* Educator routes */}
-      <Route path="/educator" component={() => <AppShell><EducatorDashboard /></AppShell>} />
+      <Route path="/educator" component={() => <AppShell><EducatorDashboardPage /></AppShell>} />
+      <Route path="/educator/my-classes" component={() => <AppShell><MyClassesPage /></AppShell>} />
+      <Route path="/educator/session/:id" component={() => <AppShell><ActiveSessionPage /></AppShell>} />
       <Route path="/educator/classes" component={() => <AppShell><EducatorClassesPage /></AppShell>} />
       <Route path="/educator/classes/:id" component={() => <AppShell><EducatorClassDetailsPage /></AppShell>} />
       <Route path="/educator/students" component={() => <AppShell><EducatorStudentsPage /></AppShell>} />
