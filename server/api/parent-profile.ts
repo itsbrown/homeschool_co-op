@@ -22,8 +22,16 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
       return res.status(404).json({ message: 'Parent not found' });
     }
 
-    // Only return profiles for parents
-    if (parent.role !== 'parent') {
+    // Check if user has a parent role using the user_roles table (multi-role system)
+    // This handles users who may have multiple roles or whose legacy users.role field is outdated
+    const parentUserRoles = await storage.getUserRolesByUserId(parentId);
+    const hasParentRole = parentUserRoles.some(r => r.role === 'parent');
+    
+    // Also check the legacy role field for backwards compatibility
+    const isParentByLegacyRole = parent.role === 'parent';
+    
+    if (!hasParentRole && !isParentByLegacyRole) {
+      console.log(`⚠️ User ${parentId} is not a parent. Roles: ${parentUserRoles.map(r => r.role).join(', ')}, legacy role: ${parent.role}`);
       return res.status(400).json({ message: 'User is not a parent' });
     }
 
@@ -105,16 +113,27 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
       
       if (visibleMemberships.length === 0) {
         // No memberships visible, check if parent has a role in admin's schools
-        const parentRoles = await storage.getUserRolesByUserId(parent.id);
-        const visibleRoles = parentRoles.filter(r => 
+        const visibleRoles = parentUserRoles.filter(r => 
           r.role === 'parent' && r.schoolId && adminSchoolIds.includes(r.schoolId)
         );
         
-        if (visibleRoles.length === 0) {
+        // SPECIAL CASE: Allow access to "orphaned" parent accounts
+        // These are users who logged in via Google OAuth but haven't completed registration
+        // They have a parent role with schoolId = null
+        const isOrphanedParent = parentUserRoles.some(r => 
+          r.role === 'parent' && r.schoolId === null
+        ) || (isParentByLegacyRole && parent.schoolId === null);
+        
+        if (visibleRoles.length === 0 && !isOrphanedParent) {
           console.log(`⛔ Access denied: Admin ${adminEmail} has no relationship with parent ${parent.email}`);
           return res.status(403).json({ message: 'You do not have permission to view this parent profile' });
         }
-        console.log(`✅ Access granted via parent role in admin's school`);
+        
+        if (isOrphanedParent) {
+          console.log(`⚠️ Orphaned parent account detected: ${parent.email} - allowing admin access for association`);
+        } else {
+          console.log(`✅ Access granted via parent role in admin's school`);
+        }
       }
     }
 

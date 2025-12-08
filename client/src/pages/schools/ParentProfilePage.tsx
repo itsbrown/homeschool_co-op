@@ -807,14 +807,29 @@ export default function ParentProfilePage() {
   }
 
   if (error || !profile) {
+    const errorMessage = (error as any)?.message || 'The requested parent profile could not be found.';
+    const isNotParent = errorMessage.toLowerCase().includes('not a parent');
+    const isAccessDenied = errorMessage.toLowerCase().includes('permission');
+    
+    let title = 'Parent Not Found';
+    let description = 'The requested parent profile could not be found.';
+    
+    if (isNotParent) {
+      title = 'Not a Parent Account';
+      description = 'This user does not have a parent role assigned to their account.';
+    } else if (isAccessDenied) {
+      title = 'Access Denied';
+      description = 'You do not have permission to view this parent profile.';
+    }
+    
     return (
       <SchoolAdminLayout pageTitle="Parent Profile">
         <div className="flex flex-col items-center justify-center h-96 space-y-4">
           <AlertTriangle className="h-12 w-12 text-destructive" />
-          <h2 className="text-xl font-semibold">Parent Not Found</h2>
-          <p className="text-muted-foreground">The requested parent profile could not be found.</p>
+          <h2 className="text-xl font-semibold" data-testid="error-title">{title}</h2>
+          <p className="text-muted-foreground text-center max-w-md" data-testid="error-description">{description}</p>
           <Link href="/schools/users">
-            <Button>
+            <Button data-testid="button-back-users">
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back to Users
             </Button>
