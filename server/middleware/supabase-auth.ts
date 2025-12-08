@@ -372,3 +372,53 @@ export const supabaseAuth = async (
     return res.status(500).json({ error: 'Internal server error' });
   }
 };
+
+/**
+ * Middleware to require educator role access
+ * Checks if the authenticated user has an educator-type role (educator, mentor, teacher, etc.)
+ * Also allows school admins to access educator features for testing/support
+ */
+export const requireEducatorRole = async (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    console.log('[EducatorDashboard] Checking educator role access for user:', req.user?.email);
+    
+    if (!req.user?.id) {
+      console.log('[EducatorDashboard] No user ID found in request');
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    
+    // Get all user roles
+    const userRoles = await storage.getUserRolesByUserId(req.user.id);
+    console.log('[EducatorDashboard] User roles:', userRoles.map(r => r.role));
+    
+    // Define educator-type roles (case-insensitive matching)
+    const educatorRolePatterns = [
+      'educator', 'mentor', 'teacher', 'instructor', 'tutor', 'facilitator',
+      'schoolAdmin', 'school_admin', 'admin', 'superAdmin'
+    ];
+    
+    const hasEducatorRole = userRoles.some(r => 
+      educatorRolePatterns.some(pattern => 
+        r.role.toLowerCase().includes(pattern.toLowerCase())
+      )
+    );
+    
+    if (!hasEducatorRole) {
+      console.log('[EducatorDashboard] User does not have educator role, access denied');
+      return res.status(403).json({ 
+        error: 'Access denied. Educator role required.',
+        code: 'EDUCATOR_ROLE_REQUIRED'
+      });
+    }
+    
+    console.log('[EducatorDashboard] Educator role verified for:', req.user.email);
+    next();
+  } catch (error) {
+    console.error('[EducatorDashboard] Error checking educator role:', error);
+    return res.status(500).json({ error: 'Failed to verify educator access' });
+  }
+};
