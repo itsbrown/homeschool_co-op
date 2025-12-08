@@ -2208,3 +2208,98 @@ export type PushSubscription = typeof pushSubscriptions.$inferSelect;
 export const pushSubscriptionsRelations = relations(pushSubscriptions, ({ one }) => ({
   user: one(users, { fields: [pushSubscriptions.userId], references: [users.id] }),
 }));
+
+// ===== PHASE 1B: Educator Schedules & Audit Logs =====
+
+// Educator Schedules - Admin-set time blocks for educators per class
+export const educatorSchedules = pgTable("educator_schedules", {
+  id: serial("id").primaryKey(),
+  
+  // Links to assignment (enforces permission scope)
+  assignmentId: integer("assignment_id").notNull().references(() => educatorClassAssignments.id, { onDelete: 'cascade' }),
+  
+  // Denormalized for query efficiency
+  educatorId: integer("educator_id").notNull().references(() => users.id),
+  classId: integer("class_id").notNull().references(() => classes.id),
+  schoolId: integer("school_id").notNull().references(() => schools.id),
+  
+  // Schedule type: recurring (weekly), one_time (specific date), adhoc (flexible)
+  scheduleType: text("schedule_type", { enum: ["recurring", "one_time", "adhoc"] }).default("recurring").notNull(),
+  
+  // For recurring schedules (0=Sunday, 1=Monday, ..., 6=Saturday)
+  dayOfWeek: integer("day_of_week"),
+  
+  // For one-time schedules
+  scheduledDate: text("scheduled_date"), // YYYY-MM-DD format
+  
+  // Time range (stored as HH:MM format in 24-hour time)
+  startTime: text("start_time").notNull(),
+  endTime: text("end_time").notNull(),
+  
+  // Effective date range (when this schedule is valid)
+  effectiveFrom: text("effective_from").notNull(), // YYYY-MM-DD
+  effectiveTo: text("effective_to"), // YYYY-MM-DD, null = indefinite
+  
+  // Status and metadata
+  isActive: boolean("is_active").default(true).notNull(),
+  timezone: text("timezone").default("America/New_York").notNull(),
+  notes: text("notes"),
+  
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertEducatorScheduleSchema = createInsertSchema(educatorSchedules)
+  .omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertEducatorSchedule = z.infer<typeof insertEducatorScheduleSchema>;
+export type EducatorSchedule = typeof educatorSchedules.$inferSelect;
+
+// Educator Schedules relations
+export const educatorSchedulesRelations = relations(educatorSchedules, ({ one }) => ({
+  assignment: one(educatorClassAssignments, { fields: [educatorSchedules.assignmentId], references: [educatorClassAssignments.id] }),
+  educator: one(users, { fields: [educatorSchedules.educatorId], references: [users.id] }),
+  class: one(classes, { fields: [educatorSchedules.classId], references: [classes.id] }),
+  school: one(schools, { fields: [educatorSchedules.schoolId], references: [schools.id] }),
+}));
+
+// Audit Logs - Tracks all actions for compliance and debugging
+export const auditLogs = pgTable("audit_logs", {
+  id: serial("id").primaryKey(),
+  
+  // Action details
+  actionType: text("action_type").notNull(), // e.g., 'session_start', 'session_end', 'schedule_create', 'schedule_update'
+  severity: text("severity", { enum: ["info", "warn", "error"] }).default("info").notNull(),
+  
+  // Actor (who performed the action)
+  actorId: integer("actor_id").references(() => users.id),
+  actorRole: text("actor_role"), // Role at time of action (for historical accuracy)
+  actorEmail: text("actor_email"), // Email for reference even if user deleted
+  
+  // Target (what was affected)
+  targetType: text("target_type").notNull(), // e.g., 'class_session', 'educator_schedule', 'user'
+  targetId: text("target_id").notNull(), // ID of the target (text to support various ID formats)
+  
+  // Context
+  schoolId: integer("school_id").references(() => schools.id),
+  requestId: text("request_id"), // For correlating related logs
+  
+  // Request metadata
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  
+  // Detailed metadata (before/after state, additional context)
+  metadata: jsonb("metadata").default({}).notNull(), // { context, before, after, diff, error }
+  
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertAuditLogSchema = createInsertSchema(auditLogs)
+  .omit({ id: true, createdAt: true });
+export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
+export type AuditLog = typeof auditLogs.$inferSelect;
+
+// Audit Logs relations
+export const auditLogsRelations = relations(auditLogs, ({ one }) => ({
+  actor: one(users, { fields: [auditLogs.actorId], references: [users.id] }),
+  school: one(schools, { fields: [auditLogs.schoolId], references: [schools.id] }),
+}));

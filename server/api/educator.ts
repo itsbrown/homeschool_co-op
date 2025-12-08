@@ -2,7 +2,7 @@ import express from "express";
 import { storage } from "../storage";
 import { supabaseAuth, requireEducatorRole } from "../middleware/supabase-auth";
 import { z } from "zod";
-import type { InsertClassSession, ClassSession, EducatorClassAssignment } from "@shared/schema";
+import type { InsertClassSession, ClassSession, EducatorClassAssignment, InsertAuditLog } from "@shared/schema";
 
 const router = express.Router();
 
@@ -276,6 +276,29 @@ router.post('/sessions/:id/start', async (req, res) => {
       actualStartTime: new Date()
     });
 
+    // Create audit log for session start
+    try {
+      const auditLog: InsertAuditLog = {
+        actionType: 'session_started',
+        severity: 'info',
+        actorId: userId,
+        actorRole: 'educator',
+        actorEmail: req.user?.email,
+        targetType: 'class_session',
+        targetId: String(sessionId),
+        schoolId: session.schoolId,
+        metadata: {
+          context: 'Educator started class session',
+          classId: session.classId,
+          scheduledDate: session.scheduledDate,
+          actualStartTime: updatedSession.actualStartTime
+        }
+      };
+      await storage.createAuditLog(auditLog);
+    } catch (auditError) {
+      console.error('[EducatorDashboard] Failed to create audit log:', auditError);
+    }
+
     console.log('[EducatorDashboard] Session started:', sessionId);
     res.json(updatedSession);
   } catch (error) {
@@ -329,6 +352,31 @@ router.post('/sessions/:id/end', async (req, res) => {
 
     const updatedSession = await storage.updateClassSession(sessionId, updateData);
 
+    // Create audit log for session end
+    try {
+      const auditLog: InsertAuditLog = {
+        actionType: 'session_ended',
+        severity: 'info',
+        actorId: userId,
+        actorRole: 'educator',
+        actorEmail: req.user?.email,
+        targetType: 'class_session',
+        targetId: String(sessionId),
+        schoolId: session.schoolId,
+        metadata: {
+          context: 'Educator ended class session',
+          classId: session.classId,
+          scheduledDate: session.scheduledDate,
+          actualStartTime: session.actualStartTime,
+          actualEndTime: updatedSession.actualEndTime,
+          notes: notes || null
+        }
+      };
+      await storage.createAuditLog(auditLog);
+    } catch (auditError) {
+      console.error('[EducatorDashboard] Failed to create audit log:', auditError);
+    }
+
     console.log('[EducatorDashboard] Session ended:', sessionId);
     res.json(updatedSession);
   } catch (error) {
@@ -376,6 +424,29 @@ router.post('/sessions/:id/cancel', async (req, res) => {
       status: 'cancelled',
       cancelledReason: reason
     });
+
+    // Create audit log for session cancellation
+    try {
+      const auditLog: InsertAuditLog = {
+        actionType: 'session_cancelled',
+        severity: 'warning',
+        actorId: userId,
+        actorRole: 'educator',
+        actorEmail: req.user?.email,
+        targetType: 'class_session',
+        targetId: String(sessionId),
+        schoolId: session.schoolId,
+        metadata: {
+          context: 'Educator cancelled class session',
+          classId: session.classId,
+          scheduledDate: session.scheduledDate,
+          reason: reason || null
+        }
+      };
+      await storage.createAuditLog(auditLog);
+    } catch (auditError) {
+      console.error('[EducatorDashboard] Failed to create audit log:', auditError);
+    }
 
     console.log('[EducatorDashboard] Session cancelled:', sessionId);
     res.json(updatedSession);
@@ -659,5 +730,212 @@ router.get('/class-students/:classId', async (req, res) => {
     res.status(500).json({ message: 'Failed to fetch class students' });
   }
 });
+
+// ============================================
+// PHASE 1b: Educator Schedule & Hours Endpoints
+// ============================================
+
+// GET /api/educator/schedules - Get all schedules for the educator
+router.get('/schedules', async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'User ID not found' });
+    }
+
+    console.log('[EducatorDashboard] Fetching schedules for educator:', userId);
+
+    const schedules = await storage.getEducatorSchedulesByEducatorId(userId);
+
+    // Enrich with class details
+    const schedulesWithDetails = await Promise.all(
+      schedules.map(async (schedule) => {
+        const classInfo = await storage.getClassById(schedule.classId);
+        return {
+          ...schedule,
+          className: classInfo?.title || 'Unknown Class',
+          classLocation: classInfo?.location
+        };
+      })
+    );
+
+    res.json(schedulesWithDetails);
+  } catch (error) {
+    console.error('[EducatorDashboard] Error fetching schedules:', error);
+    res.status(500).json({ error: 'Failed to fetch schedules' });
+  }
+});
+
+// GET /api/educator/schedules/week - Get schedules for a specific week
+router.get('/schedules/week', async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'User ID not found' });
+    }
+
+    const { weekStart } = req.query;
+    const weekStartDate = weekStart as string || getWeekStartDate(new Date());
+    
+    console.log('[EducatorDashboard] Fetching week schedules for educator:', userId, 'week:', weekStartDate);
+
+    const schedules = await storage.getEducatorSchedulesForWeek(userId, weekStartDate);
+
+    // Enrich with class details and expand recurring schedules
+    const expandedSchedules = [];
+    
+    for (const schedule of schedules) {
+      const classInfo = await storage.getClassById(schedule.classId);
+      const baseSchedule = {
+        ...schedule,
+        className: classInfo?.title || 'Unknown Class',
+        classLocation: classInfo?.location
+      };
+
+      if (schedule.scheduleType === 'recurring' && schedule.dayOfWeek !== null) {
+        // Calculate the date for this weekday
+        const weekStartObj = new Date(weekStartDate);
+        const dayOffset = schedule.dayOfWeek;
+        const scheduleDate = new Date(weekStartObj);
+        scheduleDate.setDate(scheduleDate.getDate() + dayOffset);
+        
+        expandedSchedules.push({
+          ...baseSchedule,
+          calculatedDate: scheduleDate.toISOString().split('T')[0]
+        });
+      } else if (schedule.scheduleType === 'one_time' && schedule.scheduledDate) {
+        expandedSchedules.push({
+          ...baseSchedule,
+          calculatedDate: schedule.scheduledDate
+        });
+      } else {
+        expandedSchedules.push(baseSchedule);
+      }
+    }
+
+    res.json({
+      weekStart: weekStartDate,
+      schedules: expandedSchedules
+    });
+  } catch (error) {
+    console.error('[EducatorDashboard] Error fetching week schedules:', error);
+    res.status(500).json({ error: 'Failed to fetch week schedules' });
+  }
+});
+
+// GET /api/educator/my-hours - Get logged hours summary
+router.get('/my-hours', async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'User ID not found' });
+    }
+
+    const { startDate, endDate } = req.query;
+    
+    // Default to current week if no dates provided
+    const today = new Date();
+    const defaultStart = getWeekStartDate(today);
+    const defaultEnd = new Date(defaultStart);
+    defaultEnd.setDate(defaultEnd.getDate() + 6);
+    
+    const start = startDate as string || defaultStart;
+    const end = endDate as string || defaultEnd.toISOString().split('T')[0];
+
+    console.log('[EducatorDashboard] Fetching hours for educator:', userId, 'from', start, 'to', end);
+
+    // Get all sessions for the educator
+    const allSessions = await storage.getClassSessionsByEducatorId(userId);
+    
+    // Filter by date range
+    const sessionsInRange = allSessions.filter((session: ClassSession) => {
+      return session.scheduledDate >= start && session.scheduledDate <= end;
+    });
+
+    // Calculate hours
+    let totalScheduledMinutes = 0;
+    let totalActualMinutes = 0;
+    const sessionsByDate: Record<string, any[]> = {};
+
+    for (const session of sessionsInRange) {
+      // Get class info
+      const classInfo = await storage.getClassById(session.classId);
+      
+      // Calculate scheduled duration
+      const scheduledStart = parseTimeToMinutes(session.scheduledStartTime);
+      const scheduledEnd = parseTimeToMinutes(session.scheduledEndTime);
+      const scheduledDuration = scheduledEnd - scheduledStart;
+      totalScheduledMinutes += scheduledDuration;
+
+      // Calculate actual duration if completed
+      let actualDuration = 0;
+      if (session.actualStartTime && session.actualEndTime) {
+        const actualStart = new Date(session.actualStartTime).getTime();
+        const actualEnd = new Date(session.actualEndTime).getTime();
+        actualDuration = Math.round((actualEnd - actualStart) / (1000 * 60));
+        totalActualMinutes += actualDuration;
+      }
+
+      const sessionData = {
+        id: session.id,
+        classId: session.classId,
+        className: classInfo?.title || 'Unknown Class',
+        status: session.status,
+        scheduledStartTime: session.scheduledStartTime,
+        scheduledEndTime: session.scheduledEndTime,
+        actualStartTime: session.actualStartTime,
+        actualEndTime: session.actualEndTime,
+        scheduledMinutes: scheduledDuration,
+        actualMinutes: actualDuration,
+        notes: session.notes
+      };
+
+      if (!sessionsByDate[session.scheduledDate]) {
+        sessionsByDate[session.scheduledDate] = [];
+      }
+      sessionsByDate[session.scheduledDate].push(sessionData);
+    }
+
+    // Sort sessions by date
+    const sortedDates = Object.keys(sessionsByDate).sort();
+    const sessionsList = sortedDates.map(date => ({
+      date,
+      sessions: sessionsByDate[date]
+    }));
+
+    res.json({
+      startDate: start,
+      endDate: end,
+      summary: {
+        totalScheduledMinutes,
+        totalScheduledHours: Math.round(totalScheduledMinutes / 60 * 10) / 10,
+        totalActualMinutes,
+        totalActualHours: Math.round(totalActualMinutes / 60 * 10) / 10,
+        completedSessions: sessionsInRange.filter((s: ClassSession) => s.status === 'completed').length,
+        cancelledSessions: sessionsInRange.filter((s: ClassSession) => s.status === 'cancelled').length,
+        totalSessions: sessionsInRange.length
+      },
+      sessionsByDate: sessionsList
+    });
+  } catch (error) {
+    console.error('[EducatorDashboard] Error fetching hours:', error);
+    res.status(500).json({ error: 'Failed to fetch hours' });
+  }
+});
+
+// Helper function to get week start date (Monday)
+function getWeekStartDate(date: Date): string {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Adjust when day is Sunday
+  d.setDate(diff);
+  return d.toISOString().split('T')[0];
+}
+
+// Helper function to parse time string to minutes
+function parseTimeToMinutes(timeStr: string): number {
+  const [hours, minutes] = timeStr.split(':').map(Number);
+  return (hours || 0) * 60 + (minutes || 0);
+}
 
 export default router;

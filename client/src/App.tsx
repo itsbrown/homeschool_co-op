@@ -105,6 +105,8 @@ import EducatorStudentsPage from './pages/educator/EducatorStudentsPage';
 import EducatorNotificationsPage from './pages/educator/EducatorNotificationsPage';
 import EducatorDashboardPage from './pages/educator/EducatorDashboard';
 import MyClassesPage from './pages/educator/MyClasses';
+import WeeklyCalendarPage from './pages/educator/WeeklyCalendar';
+import MyHoursPage from './pages/educator/MyHours';
 import ActiveSessionPage from './pages/educator/ActiveSession';
 
 const CallbackPage = () => {
@@ -149,6 +151,7 @@ import SchoolClassCreationPage from "./pages/schools/SchoolClassCreationPage";
 import SchoolClassDetailsPage from "./pages/schools/SchoolClassDetailsPage";
 import ClassRosterPage from "./pages/schools/ClassRosterPage";
 import StaffPage from "./pages/schools/StaffPage";
+import EducatorManagementPage from "./pages/schools/EducatorManagementPage";
 import StaffEditPage from "./pages/schools/StaffEditPage";
 import StudentsPage from "./pages/schools/StudentsPage";
 import StudentDetailPage from "./pages/schools/StudentDetailPage";
@@ -542,6 +545,8 @@ function Router() {
       <Route path="/educator" component={() => <AppShell><EducatorDashboardPage /></AppShell>} />
       <Route path="/educator/my-classes" component={() => <AppShell><MyClassesPage /></AppShell>} />
       <Route path="/educator/session/:id" component={() => <AppShell><ActiveSessionPage /></AppShell>} />
+      <Route path="/educator/weekly-calendar" component={() => <AppShell><WeeklyCalendarPage /></AppShell>} />
+      <Route path="/educator/my-hours" component={() => <AppShell><MyHoursPage /></AppShell>} />
       <Route path="/educator/classes" component={() => <AppShell><EducatorClassesPage /></AppShell>} />
       <Route path="/educator/classes/:id" component={() => <AppShell><EducatorClassDetailsPage /></AppShell>} />
       <Route path="/educator/students" component={() => <AppShell><EducatorStudentsPage /></AppShell>} />
@@ -605,6 +610,8 @@ function Router() {
       <Route path="/schools/classes/:id/roster" component={ClassRosterPage} />
       <Route path="/schools/staff" component={StaffPage} />
       <Route path="/schools/staff/invite" component={StaffInvitePage} />
+      <Route path="/schools/educators" component={EducatorManagementPage} />
+      <Route path="/schools/educators/:educatorId" component={EducatorManagementPage} />
       <Route path="/schools/staff/positions" component={StaffPositionsPage} />
       <Route path="/school-admin/staff-positions" component={StaffPositionsPage} />
       <Route path="/school-admin/children" component={StudentsPage} />

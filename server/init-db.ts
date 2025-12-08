@@ -905,6 +905,85 @@ async function runMigrations() {
       ON class_sessions(scheduled_date);
     `);
     console.log('✅ Migration completed: class_sessions table created');
+
+    // Phase 1b: Create educator_schedules table
+    console.log('Running migration: Creating educator_schedules table...');
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS educator_schedules (
+        id SERIAL PRIMARY KEY,
+        assignment_id INTEGER NOT NULL REFERENCES educator_class_assignments(id) ON DELETE CASCADE,
+        educator_id INTEGER NOT NULL REFERENCES users(id),
+        class_id INTEGER NOT NULL REFERENCES classes(id),
+        school_id INTEGER NOT NULL REFERENCES schools(id),
+        schedule_type TEXT NOT NULL DEFAULT 'recurring' CHECK (schedule_type IN ('recurring', 'one_time', 'adhoc')),
+        day_of_week INTEGER,
+        scheduled_date TEXT,
+        start_time TEXT NOT NULL,
+        end_time TEXT NOT NULL,
+        effective_from TEXT NOT NULL,
+        effective_to TEXT,
+        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+        timezone TEXT NOT NULL DEFAULT 'America/New_York',
+        notes TEXT,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_educator_schedules_educator_id 
+      ON educator_schedules(educator_id);
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_educator_schedules_class_id 
+      ON educator_schedules(class_id);
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_educator_schedules_school_id 
+      ON educator_schedules(school_id);
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_educator_schedules_assignment_id 
+      ON educator_schedules(assignment_id);
+    `);
+    console.log('✅ Migration completed: educator_schedules table created');
+
+    // Phase 1b: Create audit_logs table
+    console.log('Running migration: Creating audit_logs table...');
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS audit_logs (
+        id SERIAL PRIMARY KEY,
+        action_type TEXT NOT NULL,
+        severity TEXT NOT NULL DEFAULT 'info' CHECK (severity IN ('info', 'warn', 'error')),
+        actor_id INTEGER REFERENCES users(id),
+        actor_role TEXT,
+        actor_email TEXT,
+        target_type TEXT NOT NULL,
+        target_id TEXT NOT NULL,
+        school_id INTEGER REFERENCES schools(id),
+        request_id TEXT,
+        ip_address TEXT,
+        user_agent TEXT,
+        metadata JSONB NOT NULL DEFAULT '{}',
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_audit_logs_target 
+      ON audit_logs(target_type, target_id);
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_audit_logs_actor_id 
+      ON audit_logs(actor_id);
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_audit_logs_school_id 
+      ON audit_logs(school_id);
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at 
+      ON audit_logs(created_at);
+    `);
+    console.log('✅ Migration completed: audit_logs table created');
     
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);

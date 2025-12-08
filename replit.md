@@ -98,21 +98,25 @@ The Educator Dashboard provides educators/mentors with tools to manage their cla
 
 **Status**: Completed
 
-### Phase 1b: Admin Tools & Planning
+### Phase 1b: Admin Tools & Planning (Completed)
 **Goal**: Admin can manage educator schedules, full audit trail, educator can plan ahead.
 
 **Database Tables**:
-- `educator_schedules` - Admin-set time blocks per class
-- `audit_logs` - Tracks all actions for compliance
+- `educator_schedules` - Admin-set time blocks per class (recurring weekly or one-time)
+- `audit_logs` - Comprehensive audit trail with actor, target, metadata, and severity levels
 
 **Features**:
-- Weekly Calendar view for planning ahead
-- My Hours page with logged sessions summary
-- Admin Educator Profile view for schedule management
-- Full audit logging on session actions
-- E2E testing with error scenarios
+- Weekly Calendar view for planning ahead (`/educator/weekly-calendar`)
+- My Hours page with logged sessions summary and weekly totals (`/educator/my-hours`)
+- Admin Educator Management page with schedule creation (`/schools/educators`)
+- Admin Educator Profile view for schedule and assignment management (`/schools/educators/:id`)
+- Full audit logging on session start/end/cancel actions
+- Quick action links on Educator Dashboard
+- API routes: GET /api/admin/educators, GET /api/admin/educators/:id
+- Schedule management: POST /api/admin/educators/schedules, DELETE /api/admin/educators/schedules/:id
+- Educator hours API: GET /api/educator/my-hours with date range filtering
 
-**Status**: Not Started
+**Status**: Completed
 
 ### Phase 2: Communication & Attendance
 **Features**:

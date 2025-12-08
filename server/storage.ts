@@ -41,7 +41,9 @@ import {
   discounts, type Discount, type InsertDiscount,
   discountApplications, type DiscountApplication, type InsertDiscountApplication,
   educatorClassAssignments, type EducatorClassAssignment, type InsertEducatorClassAssignment,
-  classSessions, type ClassSession, type InsertClassSession
+  classSessions, type ClassSession, type InsertClassSession,
+  educatorSchedules, type EducatorSchedule, type InsertEducatorSchedule,
+  auditLogs, type AuditLog, type InsertAuditLog
 } from "@shared/schema";
 import { eq, inArray } from 'drizzle-orm';
 import { getDb } from './db';
@@ -469,6 +471,23 @@ export interface IStorage {
   createClassSession(session: InsertClassSession): Promise<ClassSession>;
   updateClassSession(id: number, session: Partial<InsertClassSession>): Promise<ClassSession | undefined>;
   deleteClassSession(id: number): Promise<void>;
+
+  // Educator Schedule methods (Phase 1b)
+  getEducatorScheduleById(id: number): Promise<EducatorSchedule | undefined>;
+  getEducatorSchedulesByEducatorId(educatorId: number): Promise<EducatorSchedule[]>;
+  getEducatorSchedulesByClassId(classId: number): Promise<EducatorSchedule[]>;
+  getEducatorSchedulesBySchoolId(schoolId: number): Promise<EducatorSchedule[]>;
+  getEducatorSchedulesByAssignmentId(assignmentId: number): Promise<EducatorSchedule[]>;
+  getEducatorSchedulesForWeek(educatorId: number, weekStartDate: string): Promise<EducatorSchedule[]>;
+  createEducatorSchedule(schedule: InsertEducatorSchedule): Promise<EducatorSchedule>;
+  updateEducatorSchedule(id: number, schedule: Partial<InsertEducatorSchedule>): Promise<EducatorSchedule | undefined>;
+  deleteEducatorSchedule(id: number): Promise<void>;
+
+  // Audit Log methods (Phase 1b)
+  createAuditLog(log: InsertAuditLog): Promise<AuditLog>;
+  getAuditLogsByTargetId(targetType: string, targetId: string): Promise<AuditLog[]>;
+  getAuditLogsByActorId(actorId: number): Promise<AuditLog[]>;
+  getAuditLogsBySchoolId(schoolId: number, filters?: { actionType?: string; severity?: string; startDate?: string; endDate?: string }): Promise<AuditLog[]>;
 }
 
 export class MemStorage implements IStorage {
@@ -4155,6 +4174,112 @@ export class MemStorage implements IStorage {
   async deleteClassSession(id: number): Promise<void> {
     this.classSessionsStore.delete(id);
   }
+
+  // Educator Schedule methods (Phase 1b) - stub implementations
+  private educatorSchedulesStore = new Map<number, EducatorSchedule>();
+  private educatorScheduleIdCounter = 1;
+  private auditLogsStore = new Map<number, AuditLog>();
+  private auditLogIdCounter = 1;
+
+  async getEducatorScheduleById(id: number): Promise<EducatorSchedule | undefined> {
+    return this.educatorSchedulesStore.get(id);
+  }
+
+  async getEducatorSchedulesByEducatorId(educatorId: number): Promise<EducatorSchedule[]> {
+    return Array.from(this.educatorSchedulesStore.values()).filter(s => s.educatorId === educatorId);
+  }
+
+  async getEducatorSchedulesByClassId(classId: number): Promise<EducatorSchedule[]> {
+    return Array.from(this.educatorSchedulesStore.values()).filter(s => s.classId === classId);
+  }
+
+  async getEducatorSchedulesBySchoolId(schoolId: number): Promise<EducatorSchedule[]> {
+    return Array.from(this.educatorSchedulesStore.values()).filter(s => s.schoolId === schoolId);
+  }
+
+  async getEducatorSchedulesByAssignmentId(assignmentId: number): Promise<EducatorSchedule[]> {
+    return Array.from(this.educatorSchedulesStore.values()).filter(s => s.assignmentId === assignmentId);
+  }
+
+  async getEducatorSchedulesForWeek(educatorId: number, weekStartDate: string): Promise<EducatorSchedule[]> {
+    const weekEnd = new Date(weekStartDate);
+    weekEnd.setDate(weekEnd.getDate() + 7);
+    const weekEndStr = weekEnd.toISOString().split('T')[0];
+    
+    return Array.from(this.educatorSchedulesStore.values()).filter(s => {
+      if (s.educatorId !== educatorId || !s.isActive) return false;
+      if (s.scheduleType === 'recurring') {
+        return (!s.effectiveTo || s.effectiveTo >= weekStartDate) && s.effectiveFrom <= weekEndStr;
+      }
+      return s.scheduledDate && s.scheduledDate >= weekStartDate && s.scheduledDate <= weekEndStr;
+    });
+  }
+
+  async createEducatorSchedule(schedule: InsertEducatorSchedule): Promise<EducatorSchedule> {
+    const id = this.educatorScheduleIdCounter++;
+    const newSchedule: EducatorSchedule = {
+      id,
+      ...schedule,
+      isActive: schedule.isActive ?? true,
+      timezone: schedule.timezone ?? 'America/New_York',
+      scheduleType: schedule.scheduleType ?? 'recurring',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.educatorSchedulesStore.set(id, newSchedule);
+    return newSchedule;
+  }
+
+  async updateEducatorSchedule(id: number, schedule: Partial<InsertEducatorSchedule>): Promise<EducatorSchedule | undefined> {
+    const existing = this.educatorSchedulesStore.get(id);
+    if (!existing) return undefined;
+    const updated = { ...existing, ...schedule, updatedAt: new Date() };
+    this.educatorSchedulesStore.set(id, updated);
+    return updated;
+  }
+
+  async deleteEducatorSchedule(id: number): Promise<void> {
+    this.educatorSchedulesStore.delete(id);
+  }
+
+  // Audit Log methods (Phase 1b)
+  async createAuditLog(log: InsertAuditLog): Promise<AuditLog> {
+    const id = this.auditLogIdCounter++;
+    const newLog: AuditLog = {
+      id,
+      ...log,
+      severity: log.severity ?? 'info',
+      metadata: log.metadata ?? {},
+      createdAt: new Date(),
+    };
+    this.auditLogsStore.set(id, newLog);
+    return newLog;
+  }
+
+  async getAuditLogsByTargetId(targetType: string, targetId: string): Promise<AuditLog[]> {
+    return Array.from(this.auditLogsStore.values())
+      .filter(l => l.targetType === targetType && l.targetId === targetId)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
+
+  async getAuditLogsByActorId(actorId: number): Promise<AuditLog[]> {
+    return Array.from(this.auditLogsStore.values())
+      .filter(l => l.actorId === actorId)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
+
+  async getAuditLogsBySchoolId(schoolId: number, filters?: { actionType?: string; severity?: string; startDate?: string; endDate?: string }): Promise<AuditLog[]> {
+    return Array.from(this.auditLogsStore.values())
+      .filter(l => {
+        if (l.schoolId !== schoolId) return false;
+        if (filters?.actionType && l.actionType !== filters.actionType) return false;
+        if (filters?.severity && l.severity !== filters.severity) return false;
+        if (filters?.startDate && l.createdAt < new Date(filters.startDate)) return false;
+        if (filters?.endDate && l.createdAt > new Date(filters.endDate)) return false;
+        return true;
+      })
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
 }
 
   import { DatabaseStorage } from "./dbStorage";
@@ -6143,6 +6268,60 @@ export class MemStorage implements IStorage {
 
       async deleteClassSession(id: number): Promise<void> {
         return this.dbStorage.deleteClassSession(id);
+      }
+
+      // Educator Schedule methods (Phase 1b)
+      async getEducatorScheduleById(id: number): Promise<EducatorSchedule | undefined> {
+        return this.dbStorage.getEducatorScheduleById(id);
+      }
+
+      async getEducatorSchedulesByEducatorId(educatorId: number): Promise<EducatorSchedule[]> {
+        return this.dbStorage.getEducatorSchedulesByEducatorId(educatorId);
+      }
+
+      async getEducatorSchedulesByClassId(classId: number): Promise<EducatorSchedule[]> {
+        return this.dbStorage.getEducatorSchedulesByClassId(classId);
+      }
+
+      async getEducatorSchedulesBySchoolId(schoolId: number): Promise<EducatorSchedule[]> {
+        return this.dbStorage.getEducatorSchedulesBySchoolId(schoolId);
+      }
+
+      async getEducatorSchedulesByAssignmentId(assignmentId: number): Promise<EducatorSchedule[]> {
+        return this.dbStorage.getEducatorSchedulesByAssignmentId(assignmentId);
+      }
+
+      async getEducatorSchedulesForWeek(educatorId: number, weekStartDate: string): Promise<EducatorSchedule[]> {
+        return this.dbStorage.getEducatorSchedulesForWeek(educatorId, weekStartDate);
+      }
+
+      async createEducatorSchedule(schedule: InsertEducatorSchedule): Promise<EducatorSchedule> {
+        return this.dbStorage.createEducatorSchedule(schedule);
+      }
+
+      async updateEducatorSchedule(id: number, schedule: Partial<InsertEducatorSchedule>): Promise<EducatorSchedule | undefined> {
+        return this.dbStorage.updateEducatorSchedule(id, schedule);
+      }
+
+      async deleteEducatorSchedule(id: number): Promise<void> {
+        return this.dbStorage.deleteEducatorSchedule(id);
+      }
+
+      // Audit Log methods (Phase 1b)
+      async createAuditLog(log: InsertAuditLog): Promise<AuditLog> {
+        return this.dbStorage.createAuditLog(log);
+      }
+
+      async getAuditLogsByTargetId(targetType: string, targetId: string): Promise<AuditLog[]> {
+        return this.dbStorage.getAuditLogsByTargetId(targetType, targetId);
+      }
+
+      async getAuditLogsByActorId(actorId: number): Promise<AuditLog[]> {
+        return this.dbStorage.getAuditLogsByActorId(actorId);
+      }
+
+      async getAuditLogsBySchoolId(schoolId: number, filters?: { actionType?: string; severity?: string; startDate?: string; endDate?: string }): Promise<AuditLog[]> {
+        return this.dbStorage.getAuditLogsBySchoolId(schoolId, filters);
       }
 
       // Clear all data from storage (for testing)

@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useLocation } from 'wouter';
-import { Calendar, Clock, BookOpen, Users, PlayCircle, StopCircle, ChevronRight } from 'lucide-react';
+import { Calendar, Clock, BookOpen, Users, PlayCircle, StopCircle, ChevronRight, Timer } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -226,6 +226,41 @@ function DashboardContent() {
               ))}
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Quick Actions</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-wrap gap-2">
+          <Button 
+            variant="outline"
+            onClick={() => navigate('/educator/weekly-calendar')}
+            data-testid="button-weekly-calendar"
+            className="gap-2"
+          >
+            <Calendar className="h-4 w-4" />
+            Weekly Calendar
+          </Button>
+          <Button 
+            variant="outline"
+            onClick={() => navigate('/educator/my-hours')}
+            data-testid="button-my-hours"
+            className="gap-2"
+          >
+            <Timer className="h-4 w-4" />
+            My Hours
+          </Button>
+          <Button 
+            variant="outline"
+            onClick={() => navigate('/educator/my-classes')}
+            data-testid="button-all-classes"
+            className="gap-2"
+          >
+            <BookOpen className="h-4 w-4" />
+            All My Classes
+          </Button>
         </CardContent>
       </Card>
     </div>

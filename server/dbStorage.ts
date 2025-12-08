@@ -42,7 +42,9 @@ import {
   PasswordResetToken, InsertPasswordResetToken, passwordResetTokens,
   RoleInvitation, InsertRoleInvitation, roleInvitations,
   EducatorClassAssignment, InsertEducatorClassAssignment, educatorClassAssignments,
-  ClassSession, InsertClassSession, classSessions
+  ClassSession, InsertClassSession, classSessions,
+  EducatorSchedule, InsertEducatorSchedule, educatorSchedules,
+  AuditLog, InsertAuditLog, auditLogs
 } from '../shared/schema';
 
 /**
@@ -3084,5 +3086,128 @@ export class DatabaseStorage implements IStorage {
   async deleteClassSession(id: number): Promise<void> {
     const db = await getDb();
     await db.delete(classSessions).where(eq(classSessions.id, id));
+  }
+
+  // Educator Schedule methods (Phase 1b)
+  async getEducatorScheduleById(id: number): Promise<EducatorSchedule | undefined> {
+    const db = await getDb();
+    const [schedule] = await db.select().from(educatorSchedules).where(eq(educatorSchedules.id, id));
+    return schedule;
+  }
+
+  async getEducatorSchedulesByEducatorId(educatorId: number): Promise<EducatorSchedule[]> {
+    const db = await getDb();
+    return db.select().from(educatorSchedules)
+      .where(eq(educatorSchedules.educatorId, educatorId))
+      .orderBy(asc(educatorSchedules.dayOfWeek), asc(educatorSchedules.startTime));
+  }
+
+  async getEducatorSchedulesByClassId(classId: number): Promise<EducatorSchedule[]> {
+    const db = await getDb();
+    return db.select().from(educatorSchedules)
+      .where(eq(educatorSchedules.classId, classId))
+      .orderBy(asc(educatorSchedules.dayOfWeek), asc(educatorSchedules.startTime));
+  }
+
+  async getEducatorSchedulesBySchoolId(schoolId: number): Promise<EducatorSchedule[]> {
+    const db = await getDb();
+    return db.select().from(educatorSchedules)
+      .where(eq(educatorSchedules.schoolId, schoolId))
+      .orderBy(asc(educatorSchedules.educatorId), asc(educatorSchedules.dayOfWeek), asc(educatorSchedules.startTime));
+  }
+
+  async getEducatorSchedulesByAssignmentId(assignmentId: number): Promise<EducatorSchedule[]> {
+    const db = await getDb();
+    return db.select().from(educatorSchedules)
+      .where(eq(educatorSchedules.assignmentId, assignmentId))
+      .orderBy(asc(educatorSchedules.dayOfWeek), asc(educatorSchedules.startTime));
+  }
+
+  async getEducatorSchedulesForWeek(educatorId: number, weekStartDate: string): Promise<EducatorSchedule[]> {
+    const db = await getDb();
+    const weekEnd = new Date(weekStartDate);
+    weekEnd.setDate(weekEnd.getDate() + 7);
+    const weekEndStr = weekEnd.toISOString().split('T')[0];
+    
+    return db.select().from(educatorSchedules)
+      .where(and(
+        eq(educatorSchedules.educatorId, educatorId),
+        eq(educatorSchedules.isActive, true),
+        or(
+          isNull(educatorSchedules.effectiveTo),
+          sql`${educatorSchedules.effectiveTo} >= ${weekStartDate}`
+        ),
+        sql`${educatorSchedules.effectiveFrom} <= ${weekEndStr}`
+      ))
+      .orderBy(asc(educatorSchedules.dayOfWeek), asc(educatorSchedules.startTime));
+  }
+
+  async createEducatorSchedule(schedule: InsertEducatorSchedule): Promise<EducatorSchedule> {
+    const db = await getDb();
+    const [newSchedule] = await db.insert(educatorSchedules).values(schedule).returning();
+    return newSchedule;
+  }
+
+  async updateEducatorSchedule(id: number, schedule: Partial<InsertEducatorSchedule>): Promise<EducatorSchedule | undefined> {
+    const db = await getDb();
+    const [updated] = await db.update(educatorSchedules)
+      .set({ ...schedule, updatedAt: new Date() })
+      .where(eq(educatorSchedules.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteEducatorSchedule(id: number): Promise<void> {
+    const db = await getDb();
+    await db.delete(educatorSchedules).where(eq(educatorSchedules.id, id));
+  }
+
+  // Audit Log methods (Phase 1b)
+  async createAuditLog(log: InsertAuditLog): Promise<AuditLog> {
+    const db = await getDb();
+    const [newLog] = await db.insert(auditLogs).values(log).returning();
+    return newLog;
+  }
+
+  async getAuditLogsByTargetId(targetType: string, targetId: string): Promise<AuditLog[]> {
+    const db = await getDb();
+    return db.select().from(auditLogs)
+      .where(and(
+        eq(auditLogs.targetType, targetType),
+        eq(auditLogs.targetId, targetId)
+      ))
+      .orderBy(desc(auditLogs.createdAt));
+  }
+
+  async getAuditLogsByActorId(actorId: number): Promise<AuditLog[]> {
+    const db = await getDb();
+    return db.select().from(auditLogs)
+      .where(eq(auditLogs.actorId, actorId))
+      .orderBy(desc(auditLogs.createdAt));
+  }
+
+  async getAuditLogsBySchoolId(
+    schoolId: number, 
+    filters?: { actionType?: string; severity?: string; startDate?: string; endDate?: string }
+  ): Promise<AuditLog[]> {
+    const db = await getDb();
+    const conditions: any[] = [eq(auditLogs.schoolId, schoolId)];
+    
+    if (filters?.actionType) {
+      conditions.push(eq(auditLogs.actionType, filters.actionType));
+    }
+    if (filters?.severity) {
+      conditions.push(eq(auditLogs.severity, filters.severity));
+    }
+    if (filters?.startDate) {
+      conditions.push(sql`${auditLogs.createdAt} >= ${filters.startDate}`);
+    }
+    if (filters?.endDate) {
+      conditions.push(sql`${auditLogs.createdAt} <= ${filters.endDate}`);
+    }
+    
+    return db.select().from(auditLogs)
+      .where(and(...conditions))
+      .orderBy(desc(auditLogs.createdAt));
   }
 }

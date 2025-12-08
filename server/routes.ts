@@ -32,6 +32,7 @@ import ocrTestRouter from "./api/ocr-test";
 import schoolsRouter from "./api/schools";
 import schoolAdminRouter from "./api/school-admin";
 import educatorRouter from "./api/educator";
+import adminEducatorsRouter from "./api/admin-educators";
 import roleInvitationsRouter from "./api/role-invitations";
 import parentRouter from "./api/parent";
 import { handleEnrollmentMessage } from "./api/enrollment-assistant";
@@ -2729,6 +2730,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/schools", schoolsRouter);
   app.use("/api/school-admin", schoolAdminRouter);
   app.use("/api/educator", educatorRouter);
+  app.use("/api/admin/educators", adminEducatorsRouter);
   app.use("/api/parent", parentRouter);
   app.use("/api/custom-forms", customFormsRouter);
   
