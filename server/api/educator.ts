@@ -299,8 +299,8 @@ router.get('/classes/:id', async (req, res) => {
 
     // Determine status based on dates
     const now = new Date();
-    const validFrom = classInfo.validFrom ? new Date(classInfo.validFrom) : null;
-    const validTo = classInfo.validTo ? new Date(classInfo.validTo) : null;
+    const validFrom = classInfo.startDate ? new Date(classInfo.startDate) : null;
+    const validTo = classInfo.endDate ? new Date(classInfo.endDate) : null;
     
     let status = 'active';
     if (validTo && now > validTo) {
@@ -314,16 +314,15 @@ router.get('/classes/:id', async (req, res) => {
       title: classInfo.title,
       description: classInfo.description,
       category: classInfo.category,
-      gradeLevel: classInfo.gradeLevel,
+      gradeLevel: classInfo.gradeLevels,
       location: classInfo.location,
       schedule: scheduleStr,
       scheduleRaw: classInfo.schedule,
       price: classInfo.price,
       capacity: classInfo.capacity,
-      maxStudents: classInfo.maxStudents,
       enrollmentCount,
-      startDate: classInfo.validFrom,
-      endDate: classInfo.validTo,
+      startDate: classInfo.startDate,
+      endDate: classInfo.endDate,
       status,
       instructorId: classInfo.instructorId,
       instructorName: classInfo.instructorName
@@ -580,7 +579,7 @@ router.post('/sessions/:id/start', async (req, res) => {
           context: 'Educator started class session',
           classId: session.classId,
           scheduledDate: session.scheduledDate,
-          actualStartTime: updatedSession.actualStartTime
+          actualStartTime: updatedSession?.actualStartTime
         }
       };
       await storage.createAuditLog(auditLog);
@@ -657,7 +656,7 @@ router.post('/sessions/:id/end', async (req, res) => {
           classId: session.classId,
           scheduledDate: session.scheduledDate,
           actualStartTime: session.actualStartTime,
-          actualEndTime: updatedSession.actualEndTime,
+          actualEndTime: updatedSession?.actualEndTime,
           notes: notes || null
         }
       };
@@ -718,7 +717,7 @@ router.post('/sessions/:id/cancel', async (req, res) => {
     try {
       const auditLog: InsertAuditLog = {
         actionType: 'session_cancelled',
-        severity: 'warning',
+        severity: 'warn',
         actorId: userId,
         actorRole: 'educator',
         actorEmail: req.user?.email,
@@ -771,7 +770,7 @@ router.get('/daily-flow/:classId', async (req, res) => {
     }
 
     // Get daily flow entries and filter by class and date
-    const allDailyFlowEntries = await storage.getAllDailyFlowEntries();
+    const allDailyFlowEntries = await storage.getDailyFlowEntries({ classId, date: targetDate });
     const dailyFlowEntry = allDailyFlowEntries.find((entry: any) => 
       entry.classId === classId && entry.date === targetDate
     );
