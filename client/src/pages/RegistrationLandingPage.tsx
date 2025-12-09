@@ -262,9 +262,11 @@ export default function RegistrationLandingPage() {
                   Register for {school.name}
                 </h1>
               </div>
-              <p className="text-xl text-gray-600">
-                Complete your registration for Fall 2025
-              </p>
+              {school.description && (
+                <p className="text-xl text-gray-600">
+                  {school.description}
+                </p>
+              )}
               <Badge variant="secondary" className="text-lg px-4 py-1">
                 Registration Code: {school.registrationCode}
               </Badge>
