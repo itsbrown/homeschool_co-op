@@ -25,22 +25,21 @@ export default function EducatorClassesPage() {
   const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
 
-  // Get educator's assigned classes using authenticated endpoint
+  // Get educator's assigned classes using the working legacy endpoint (same as Dashboard)
   const { data: classesData, isLoading } = useQuery<any[]>({
-    queryKey: ["/api/educator/my-classes"],
+    queryKey: ["/api/educator/classes"],
   });
 
   // Transform data to match the expected format
-  const transformedClasses = classesData?.map((classItem: any) => {
-    // Parse schedule to get start/end dates and time info
-    let scheduleInfo: any = {};
-    if (classItem.classSchedule?.variants?.[0]) {
-      const variant = classItem.classSchedule.variants[0];
-      scheduleInfo = {
-        startTime: variant.startTime,
-        endTime: variant.endTime,
-        days: variant.days?.join(', ') || ''
-      };
+  const transformedClasses = (classesData ?? []).map((classItem: any) => {
+    // Parse schedule from the legacy format
+    let scheduleStr = 'Schedule TBD';
+    if (classItem.schedule?.variants?.[0]) {
+      const variant = classItem.schedule.variants[0];
+      const days = variant.days?.join(', ') || '';
+      if (days && variant.startTime && variant.endTime) {
+        scheduleStr = `${days} ${variant.startTime}-${variant.endTime}`;
+      }
     }
     
     // Determine status based on dates
@@ -56,21 +55,21 @@ export default function EducatorClassesPage() {
     }
     
     return {
-      id: classItem.classId,
-      title: classItem.className,
-      description: classItem.classDescription,
-      schedule: scheduleInfo.days ? `${scheduleInfo.days} ${scheduleInfo.startTime}-${scheduleInfo.endTime}` : 'Schedule TBD',
-      location: classItem.classLocation,
+      id: classItem.id,
+      title: classItem.title,
+      description: classItem.description,
+      schedule: scheduleStr,
+      location: classItem.location,
       capacity: classItem.capacity,
-      enrollmentCount: classItem.enrollmentCount,
+      enrollmentCount: classItem.enrollmentCount || 0,
       status,
       startDate: classItem.validFrom,
       endDate: classItem.validTo,
-      category: classItem.classCategory,
-      isPrimary: classItem.isPrimary,
-      canStartSession: classItem.canStartSession
+      category: classItem.category,
+      isPrimary: true,
+      canStartSession: true
     };
-  }) || [];
+  });
 
   const filteredClasses = transformedClasses.filter((classItem: any) =>
     classItem.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||

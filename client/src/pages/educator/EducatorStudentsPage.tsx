@@ -27,50 +27,26 @@ export default function EducatorStudentsPage() {
   const [filterClass, setFilterClass] = useState<string>("all");
   const [filterGrade, setFilterGrade] = useState<string>("all");
 
-  // Get educator's assigned classes using authenticated endpoint
+  // Get educator's assigned classes using the working legacy endpoint (same as Dashboard)
   const { data: classesData, isLoading: classesLoading } = useQuery<any[]>({
-    queryKey: ["/api/educator/my-classes"],
+    queryKey: ["/api/educator/classes"],
   });
 
-  // Get students for each assigned class (parallel requests)
-  const { data: studentsData, isLoading: studentsLoading } = useQuery({
-    queryKey: ["/api/educator/my-students", classesData?.map((c: any) => c.classId)],
-    queryFn: async () => {
-      if (!classesData || classesData.length === 0) {
-        return { students: [], totalStudents: 0, uniqueStudentCount: 0 };
-      }
-      
-      // Fetch rosters in parallel for efficiency
-      const rosterPromises = classesData.map(async (classData: any) => {
-        const response = await fetch(`/api/school-admin/classes/${classData.classId}/roster`, {
-          credentials: "include"
-        });
-        
-        if (response.ok) {
-          const rosterData = await response.json();
-          return (rosterData.students || []).map((student: any) => ({
-            ...student,
-            classId: classData.classId,
-            className: classData.className
-          }));
-        }
-        return [];
-      });
-      
-      const results = await Promise.all(rosterPromises);
-      const allStudents = results.flat();
-      
-      // Count unique students (by id) for stats
-      const uniqueStudentIds = new Set(allStudents.map(s => s.id));
-      
-      return { 
-        students: allStudents, 
-        totalStudents: allStudents.length,
-        uniqueStudentCount: uniqueStudentIds.size
-      };
-    },
-    enabled: !!classesData && classesData.length > 0,
+  // Get students directly using the working legacy endpoint (same as Dashboard)
+  const { data: studentsResponse, isLoading: studentsLoading } = useQuery<{ students: any[] }>({
+    queryKey: ["/api/educator/students"],
   });
+
+  // Transform students data to include class info
+  const studentsData = {
+    students: (studentsResponse?.students ?? []).map((student: any) => ({
+      ...student,
+      classId: student.classId,
+      className: student.className
+    })),
+    totalStudents: studentsResponse?.students?.length || 0,
+    uniqueStudentCount: new Set((studentsResponse?.students ?? []).map((s: any) => s.id)).size
+  };
 
   const isLoading = classesLoading || studentsLoading;
 
@@ -188,9 +164,9 @@ export default function EducatorStudentsPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Classes</SelectItem>
-                {classesData?.map((classItem: any) => (
-                  <SelectItem key={classItem.classId} value={classItem.classId.toString()}>
-                    {classItem.className}
+                {(classesData ?? []).map((classItem: any) => (
+                  <SelectItem key={classItem.id} value={classItem.id?.toString() || ''}>
+                    {classItem.title || 'Unnamed Class'}
                   </SelectItem>
                 ))}
               </SelectContent>
