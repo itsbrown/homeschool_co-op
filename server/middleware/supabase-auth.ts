@@ -225,115 +225,25 @@ export const supabaseAuth = async (
     // This is CRITICAL for multi-role API endpoints that query by user ID
     // Also populate role, schoolId, permissions, and name from dbUser
     
-    // AUTO-CREATE: If user authenticated via Supabase but doesn't exist in database, create them
-    // SECURITY: Only trust app_metadata (admin-only) for role/school, NEVER user_metadata
-    // New users default to 'parent' role with no school - role elevation requires admin action
+    // REGISTRATION REQUIRED: Users must register through proper channels before using OAuth login
+    // This prevents orphaned accounts without school association
+    // Users who try to login via OAuth without an existing account will see a friendly message
     if (dbUserId === null && user.email) {
-      console.log(`🔄 Auto-creating database record for Supabase user: ${user.email}`);
-      try {
-        // SECURITY: Only trust app_metadata (set by admin) for privileged fields
-        // user_metadata is client-modifiable and MUST NOT be trusted for role/school assignment
-        // Default to 'parent' role - any elevation requires admin action via proper channels
-        const rawRole = user.app_metadata?.role || 'parent';
-        const rawSchoolId = user.app_metadata?.school_id;
-        
-        // Validate role is a known safe value (defense in depth)
-        const allowedRoles = ['parent', 'student', 'learner'];
-        const defaultRole = allowedRoles.includes(rawRole) ? rawRole : 'parent';
-        
-        // Log if we're ignoring an elevated role from metadata (potential attack indicator)
-        if (rawRole !== defaultRole) {
-          console.warn(`🚨 SECURITY: Ignoring elevated role '${rawRole}' for new user ${user.email} - defaulting to 'parent'`);
-        }
-        
-        // SECURITY: Validate schoolId is a valid number or null
-        // Never trust non-numeric values from metadata
-        let safeSchoolId: number | null = null;
-        if (rawSchoolId !== undefined && rawSchoolId !== null) {
-          const parsedSchoolId = typeof rawSchoolId === 'number' ? rawSchoolId : parseInt(String(rawSchoolId), 10);
-          if (!isNaN(parsedSchoolId) && parsedSchoolId > 0) {
-            safeSchoolId = parsedSchoolId;
-          } else {
-            console.warn(`🚨 SECURITY: Ignoring invalid school_id '${rawSchoolId}' for new user ${user.email} - defaulting to null`);
-          }
-        }
-        
-        // Create the user in the database
-        const newUser = await storage.createUser({
-          email: user.email,
-          username: user.email.split('@')[0],
-          name: user.user_metadata?.name || user.user_metadata?.full_name || user.email.split('@')[0],
-          password: '', // Not used with Supabase auth
-          role: defaultRole,
-          schoolId: safeSchoolId,
-          supabaseId: user.id,
-          avatar: user.user_metadata?.avatar_url || user.user_metadata?.picture || null,
-          isActive: true,
-        });
-        
-        if (newUser) {
-          dbUserId = newUser.id;
-          dbUserData = newUser;
-          console.log(`✅ Created database record for ${user.email} with ID: ${newUser.id}, role: ${defaultRole}`);
-          
-          // Also create user_roles entry for the new user with duplicate-key handling
-          try {
-            await storage.createUserRole({
-              userId: newUser.id,
-              role: defaultRole,
-              schoolId: safeSchoolId,
-              isPrimary: true
-            });
-            console.log(`✅ Created user_role for ${user.email}: ${defaultRole}`);
-          } catch (roleError: any) {
-            // Handle race condition for user_roles as well
-            if (roleError?.code === '23505' || roleError?.message?.includes('duplicate key')) {
-              console.log(`⚠️ user_role already exists for ${user.email} - fetching existing roles`);
-            } else {
-              console.error(`⚠️ Failed to create user_role for ${user.email}:`, roleError);
-            }
-          }
-          
-          // Always re-fetch roles and set activeRoleId (handles both new and race-condition cases)
-          try {
-            const roles = await storage.getUserRolesByUserId(newUser.id);
-            if (roles.length > 0 && !newUser.activeRoleId) {
-              await storage.updateUser(newUser.id, { activeRoleId: roles[0].id });
-              console.log(`✅ Set activeRoleId for ${user.email}: ${roles[0].id}`);
-            }
-          } catch (rolesFetchError) {
-            console.error(`⚠️ Failed to fetch/update roles for ${user.email}:`, rolesFetchError);
-          }
-        }
-      } catch (createError: any) {
-        // Handle race condition: concurrent requests may cause duplicate key error
-        // In this case, re-fetch the user instead of returning 500
-        if (createError?.code === '23505' || createError?.message?.includes('duplicate key')) {
-          console.log(`⚠️ Race condition detected for ${user.email} - re-fetching user`);
-          try {
-            const existingUser = await storage.getUserByEmail(user.email!);
-            if (existingUser) {
-              dbUserId = existingUser.id;
-              dbUserData = existingUser;
-              console.log(`✅ Re-fetched existing user after race condition: ${user.email}`);
-            }
-          } catch (refetchError) {
-            console.error(`❌ Failed to re-fetch user after race condition:`, refetchError);
-          }
-        } else {
-          console.error(`❌ Failed to auto-create database record for ${user.email}:`, createError);
-          return res.status(500).json({ 
-            error: 'Failed to create user record. Please try again or contact support.' 
-          });
-        }
-      }
+      console.log(`🚫 BLOCKED: Unregistered user attempted OAuth login: ${user.email}`);
+      console.log(`   User must register with their school first before using Google login`);
+      return res.status(403).json({ 
+        error: 'REGISTRATION_REQUIRED',
+        message: 'You need to register with your school before you can log in. Please contact your school administrator for a registration link.',
+        email: user.email
+      });
     }
     
     // ENFORCE: All authenticated users MUST have a database record
     if (dbUserId === null) {
       console.error(`❌ User ${user.email} authenticated via Supabase but not found in database`);
-      return res.status(401).json({ 
-        error: 'User not found in database. Please contact your administrator.' 
+      return res.status(403).json({ 
+        error: 'REGISTRATION_REQUIRED',
+        message: 'You need to register with your school before you can log in. Please contact your school administrator for a registration link.'
       });
     }
     

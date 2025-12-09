@@ -40,7 +40,25 @@ export default function Login() {
   const [, navigate] = useLocation();
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [registrationRequired, setRegistrationRequired] = useState<{message: string, email: string} | null>(null);
   const setLocation = navigate; // Alias for clarity in the change
+
+  // Check for registration required error from URL and sessionStorage
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('error') === 'registration_required') {
+      const message = sessionStorage.getItem('registration_required_message') || 
+        'You need to register with your school before you can log in. Please contact your school administrator for a registration link.';
+      const email = sessionStorage.getItem('registration_required_email') || '';
+      
+      setRegistrationRequired({ message, email });
+      
+      // Clear the URL parameter and sessionStorage
+      window.history.replaceState({}, document.title, window.location.pathname);
+      sessionStorage.removeItem('registration_required_message');
+      sessionStorage.removeItem('registration_required_email');
+    }
+  }, []);
 
   // If user is already logged in, redirect to dashboard
   useEffect(() => {
@@ -128,6 +146,28 @@ export default function Login() {
           </CardHeader>
 
           <CardContent className="space-y-6">
+            {/* Registration Required Message */}
+            {registrationRequired && (
+              <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg" data-testid="registration-required-banner">
+                <div className="flex items-start gap-3">
+                  <div className="flex-shrink-0 mt-0.5">
+                    <svg className="h-5 w-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-semibold text-amber-800">Registration Required</h3>
+                    <p className="text-sm text-amber-700 mt-1">{registrationRequired.message}</p>
+                    {registrationRequired.email && (
+                      <p className="text-xs text-amber-600 mt-2">
+                        Email: {registrationRequired.email}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Google Login Button */}
             <Button
               type="button"
