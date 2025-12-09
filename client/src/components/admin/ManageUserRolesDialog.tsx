@@ -226,9 +226,6 @@ export default function ManageUserRolesDialog({
       });
       console.log('🔄 Clearing roleToDelete state...');
       setRoleToDelete(null);
-      console.log('🔄 Closing dialog...');
-      onOpenChange(false);
-      console.log('✅ Dialog close triggered');
     },
     onError: (error: any, roleId) => {
       console.error('❌ removeRoleMutation.onError - Failed to delete role:', { error, roleId });
@@ -238,6 +235,43 @@ export default function ManageUserRolesDialog({
         variant: 'destructive',
       });
       setRoleToDelete(null);
+    },
+  });
+
+  // Set primary role mutation
+  const setPrimaryMutation = useMutation({
+    mutationFn: async (roleId: number) => {
+      return await apiRequest(
+        'PATCH',
+        `/api/user/admin/users/${userId}/roles/${roleId}/primary`
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/user/admin/users', userId, 'roles'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/school-admin/users'] });
+      queryClient.invalidateQueries({ 
+        predicate: (query) => {
+          const key = query.queryKey;
+          return Array.isArray(key) && typeof key[0] === 'string' && key[0].startsWith('/api/user/roles');
+        }
+      });
+      queryClient.invalidateQueries({ 
+        predicate: (query) => {
+          const key = query.queryKey;
+          return Array.isArray(key) && typeof key[0] === 'string' && key[0].startsWith('/api/user/current-role');
+        }
+      });
+      toast({
+        title: 'Success',
+        description: 'Primary role updated successfully',
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to update primary role',
+        variant: 'destructive',
+      });
     },
   });
 
@@ -348,16 +382,31 @@ export default function ManageUserRolesDialog({
                           </div>
                         )}
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDeleteRole(role)}
-                        disabled={removeRoleMutation.isPending}
-                        className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
-                        data-testid={`button-delete-role-${role.id}`}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        {!role.isPrimary && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setPrimaryMutation.mutate(role.id)}
+                            disabled={setPrimaryMutation.isPending || removeRoleMutation.isPending}
+                            className="text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50 dark:hover:bg-yellow-900/20"
+                            title="Set as primary role"
+                            data-testid={`button-set-primary-${role.id}`}
+                          >
+                            <Crown className="h-4 w-4" />
+                          </Button>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteRole(role)}
+                          disabled={removeRoleMutation.isPending || setPrimaryMutation.isPending}
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
+                          data-testid={`button-delete-role-${role.id}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
                   ))}
                 </div>

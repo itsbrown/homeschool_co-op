@@ -837,11 +837,21 @@ userRolesRouter.delete('/admin/users/:userId/roles/:roleId', supabaseAuth, async
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // For schoolAdmins, enforce school isolation
-    if (adminSchoolId !== null && targetUser[0].schoolId !== adminSchoolId) {
-      return res.status(403).json({ 
-        error: 'Access denied. You can only manage users from your school.' 
-      });
+    // For schoolAdmins, use helper to check access (same as GET/POST endpoints)
+    if (adminSchoolId !== null) {
+      const accessResult = await checkSchoolAdminAccessToUser(
+        targetUserId,
+        targetUser[0].schoolId,
+        adminSchoolId
+      );
+      
+      if (!accessResult.hasAccess) {
+        return res.status(403).json({ 
+          error: 'Access denied. You can only manage users from your school.' 
+        });
+      }
+      
+      console.log(`🗑️ SchoolAdmin deleting role: userId=${targetUserId}, roleId=${roleId}, hasAccessViaSchoolId=${accessResult.hasAccessViaSchoolId}, hasAccessViaRoles=${accessResult.hasAccessViaRoles}`);
     }
 
     // Get the role to be deleted
@@ -960,6 +970,124 @@ userRolesRouter.delete('/admin/users/:userId/roles/:roleId', supabaseAuth, async
     });
   } catch (error) {
     console.error('Error removing role (admin):', error);
+    next(error);
+  }
+});
+
+/**
+ * PATCH /api/user/admin/users/:userId/roles/:roleId/primary
+ * Set a role as the primary role for a user (admin only)
+ */
+userRolesRouter.patch('/admin/users/:userId/roles/:roleId/primary', supabaseAuth, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const adminId = req.user?.id;
+    
+    if (!adminId) {
+      return res.status(401).json({ error: 'User not authenticated' });
+    }
+
+    // Check if requester is admin
+    const { isAdmin, schoolId: adminSchoolId } = await isAdminOrSchoolAdmin(adminId);
+    if (!isAdmin) {
+      return res.status(403).json({ error: 'Insufficient permissions. Admin or SchoolAdmin role required.' });
+    }
+
+    const targetUserId = parseInt(req.params.userId);
+    const roleId = parseInt(req.params.roleId);
+    
+    if (isNaN(targetUserId) || isNaN(roleId)) {
+      return res.status(400).json({ error: 'Invalid user ID or role ID' });
+    }
+
+    const db = await getDb();
+    
+    // Get target user
+    const targetUser = await db
+      .select({ schoolId: users.schoolId })
+      .from(users)
+      .where(eq(users.id, targetUserId))
+      .limit(1);
+
+    if (!targetUser || targetUser.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // For schoolAdmins, use helper to check access
+    if (adminSchoolId !== null) {
+      const accessResult = await checkSchoolAdminAccessToUser(
+        targetUserId,
+        targetUser[0].schoolId,
+        adminSchoolId
+      );
+      
+      if (!accessResult.hasAccess) {
+        return res.status(403).json({ 
+          error: 'Access denied. You can only manage users from your school.' 
+        });
+      }
+      
+      console.log(`👑 SchoolAdmin setting primary role: userId=${targetUserId}, roleId=${roleId}`);
+    }
+
+    // Get the role to be set as primary
+    const roleToUpdate = await db
+      .select({ role: userRoles.role, userId: userRoles.userId, schoolId: userRoles.schoolId })
+      .from(userRoles)
+      .where(eq(userRoles.id, roleId))
+      .limit(1);
+
+    if (!roleToUpdate || roleToUpdate.length === 0) {
+      return res.status(404).json({ error: 'Role not found' });
+    }
+
+    // Verify role belongs to target user
+    if (roleToUpdate[0].userId !== targetUserId) {
+      return res.status(400).json({ error: 'Role does not belong to specified user' });
+    }
+
+    // For schoolAdmins, ensure the role belongs to their school
+    if (adminSchoolId !== null && roleToUpdate[0].schoolId !== adminSchoolId) {
+      return res.status(403).json({ 
+        error: 'Access denied. You can only set primary for roles at your school.' 
+      });
+    }
+
+    // Execute primary role update in a transaction
+    await db.transaction(async (tx: any) => {
+      // Clear all primary flags for this user
+      await tx
+        .update(userRoles)
+        .set({ isPrimary: false })
+        .where(eq(userRoles.userId, targetUserId));
+      
+      // Set the target role as primary
+      await tx
+        .update(userRoles)
+        .set({ isPrimary: true })
+        .where(eq(userRoles.id, roleId));
+      
+      // Update users table with new primary/active role
+      await tx
+        .update(users)
+        .set({ 
+          role: roleToUpdate[0].role, // Update legacy role column
+          activeRole: roleToUpdate[0].role,
+          activeRoleId: roleId,
+          schoolId: roleToUpdate[0].schoolId, // Update school context
+        })
+        .where(eq(users.id, targetUserId));
+
+      console.log(`👑 Set primary role for user ${targetUserId} to ${roleToUpdate[0].role} (roleId: ${roleId}, school: ${roleToUpdate[0].schoolId})`);
+    });
+
+    return res.json({
+      success: true,
+      message: `Successfully set ${roleToUpdate[0].role} as primary role`,
+      role: roleToUpdate[0].role,
+      roleId: roleId,
+    });
+  } catch (error) {
+    console.error('Error setting primary role (admin):', error);
     next(error);
   }
 });
