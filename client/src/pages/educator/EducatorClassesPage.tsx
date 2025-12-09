@@ -25,9 +25,9 @@ export default function EducatorClassesPage() {
   const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
 
-  // Get educator's assigned classes using the working legacy endpoint (same as Dashboard)
+  // Get educator's assigned classes using authenticated endpoint
   const { data: classesData, isLoading } = useQuery<any[]>({
-    queryKey: ["/api/educator/classes"],
+    queryKey: ["/api/educator/my-classes"],
   });
 
   // Transform data to match the expected format

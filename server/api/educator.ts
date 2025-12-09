@@ -77,42 +77,167 @@ router.get('/dashboard', async (req, res) => {
 router.get('/my-classes', async (req, res) => {
   try {
     const userId = req.user?.id;
+    const userEmail = req.user?.email;
     if (!userId) {
       return res.status(401).json({ error: 'User ID not found' });
     }
 
-    console.log('[EducatorDashboard] Fetching my classes for user:', userId);
+    console.log('[EducatorDashboard] Fetching my classes for user:', userId, userEmail);
 
     const assignments = await storage.getEducatorClassAssignmentsByEducatorId(userId);
 
-    // Enrich with class details
-    const classesWithDetails = await Promise.all(
-      assignments.map(async (assignment: EducatorClassAssignment) => {
-        const classInfo = await storage.getClassById(assignment.classId);
-        const enrollmentCount = await storage.getEnrollmentCountForClass(assignment.classId);
-        
+    // If assignments exist, use them
+    if (assignments.length > 0) {
+      console.log('[EducatorDashboard] Found', assignments.length, 'class assignments');
+      const classesWithDetails = await Promise.all(
+        assignments.map(async (assignment: EducatorClassAssignment) => {
+          const classInfo = await storage.getClassById(assignment.classId);
+          const enrollmentCount = await storage.getEnrollmentCountForClass(assignment.classId);
+          
+          return {
+            assignmentId: assignment.id,
+            classId: assignment.classId,
+            id: assignment.classId,
+            title: classInfo?.title || 'Unknown Class',
+            isPrimary: assignment.isPrimary,
+            canStartSession: assignment.canStartSession,
+            validFrom: assignment.validFrom,
+            validTo: assignment.validTo,
+            className: classInfo?.title || 'Unknown Class',
+            classDescription: classInfo?.description,
+            classSchedule: classInfo?.schedule,
+            schedule: classInfo?.schedule,
+            classLocation: classInfo?.location,
+            location: classInfo?.location,
+            capacity: classInfo?.capacity,
+            enrollmentCount,
+            schoolId: assignment.schoolId
+          };
+        })
+      );
+      return res.json(classesWithDetails);
+    }
+
+    // Fallback: Look up classes by instructor email/name (legacy data)
+    console.log('[EducatorDashboard] No assignments found, falling back to instructor lookup');
+    const educator = await storage.getUser(userId);
+    if (!educator) {
+      console.log('[EducatorDashboard] Educator not found for userId:', userId);
+      return res.json([]);
+    }
+
+    const allClasses = await storage.getAllClasses();
+    const assignedClasses = allClasses.filter(cls => 
+      cls.instructorId === educator.id ||
+      cls.instructorName === educator.name
+    );
+
+    console.log(`[EducatorDashboard] Fallback found ${assignedClasses.length} classes for educator`);
+
+    const classesWithEnrollmentCounts = await Promise.all(
+      assignedClasses.map(async (cls) => {
+        const enrollmentCount = await storage.getEnrollmentCountForClass(cls.id);
         return {
-          assignmentId: assignment.id,
-          classId: assignment.classId,
-          isPrimary: assignment.isPrimary,
-          canStartSession: assignment.canStartSession,
-          validFrom: assignment.validFrom,
-          validTo: assignment.validTo,
-          className: classInfo?.title || 'Unknown Class',
-          classDescription: classInfo?.description,
-          classSchedule: classInfo?.schedule,
-          classLocation: classInfo?.location,
-          capacity: classInfo?.capacity,
-          enrollmentCount,
-          schoolId: assignment.schoolId
+          ...cls,
+          classId: cls.id,
+          className: cls.title,
+          classDescription: cls.description,
+          classSchedule: cls.schedule,
+          classLocation: cls.location,
+          enrollmentCount
         };
       })
     );
 
-    res.json(classesWithDetails);
+    res.json(classesWithEnrollmentCounts);
   } catch (error) {
     console.error('[EducatorDashboard] Error fetching my classes:', error);
     res.status(500).json({ error: 'Failed to fetch classes' });
+  }
+});
+
+// GET /api/educator/my-students - Get students for educator's classes (authenticated)
+router.get('/my-students', async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'User ID not found' });
+    }
+
+    console.log('[EducatorDashboard] Fetching my students for user:', userId);
+
+    const educator = await storage.getUser(userId);
+    if (!educator) {
+      console.log('[EducatorDashboard] Educator not found for userId:', userId);
+      return res.json({ students: [], totalStudents: 0 });
+    }
+
+    // Get classes assigned to this educator (check assignments first, then fall back to instructor lookup)
+    const assignments = await storage.getEducatorClassAssignmentsByEducatorId(userId);
+    
+    let assignedClassIds: number[] = [];
+    let assignedClasses: any[] = [];
+
+    if (assignments.length > 0) {
+      assignedClassIds = assignments.map(a => a.classId);
+      assignedClasses = await Promise.all(
+        assignedClassIds.map(async (classId) => {
+          const classInfo = await storage.getClassById(classId);
+          return classInfo;
+        })
+      );
+      assignedClasses = assignedClasses.filter(Boolean);
+    } else {
+      // Fallback to instructor lookup
+      const allClasses = await storage.getAllClasses();
+      assignedClasses = allClasses.filter(cls => 
+        cls.instructorId === educator.id ||
+        cls.instructorName === educator.name
+      );
+      assignedClassIds = assignedClasses.map(cls => cls.id);
+    }
+
+    console.log(`[EducatorDashboard] Found ${assignedClasses.length} classes for educator`);
+
+    const allChildren = await storage.getAllChildren();
+    const allProgramEnrollments = await storage.getAllEnrollments();
+    
+    const allEnrollments = allProgramEnrollments.filter((enrollment: any) =>
+      enrollment.classType === 'marketplace' &&
+      enrollment.marketplaceClassId &&
+      assignedClassIds.includes(enrollment.marketplaceClassId)
+    );
+
+    const studentsWithClasses = allEnrollments.map((enrollment: any) => {
+      const child = allChildren.find(c => c.id === enrollment.childId);
+      const classInfo = assignedClasses.find(c => c.id === enrollment.marketplaceClassId);
+      
+      if (child) {
+        return {
+          id: child.id,
+          firstName: child.firstName,
+          lastName: child.lastName,
+          gradeLevel: child.gradeLevel,
+          parentEmail: child.parentEmail,
+          classId: enrollment.marketplaceClassId,
+          className: classInfo ? classInfo.title : 'Unknown Class',
+          enrollmentDate: enrollment.enrollmentDate,
+          enrollmentStatus: enrollment.status
+        };
+      }
+      return null;
+    }).filter(Boolean);
+
+    console.log(`[EducatorDashboard] Found ${studentsWithClasses.length} students for educator`);
+    
+    res.json({
+      students: studentsWithClasses,
+      totalStudents: studentsWithClasses.length,
+      assignedClasses: assignedClasses.length
+    });
+  } catch (error) {
+    console.error('[EducatorDashboard] Error fetching my students:', error);
+    res.status(500).json({ error: 'Failed to fetch students' });
   }
 });
 

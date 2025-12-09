@@ -27,14 +27,14 @@ export default function EducatorStudentsPage() {
   const [filterClass, setFilterClass] = useState<string>("all");
   const [filterGrade, setFilterGrade] = useState<string>("all");
 
-  // Get educator's assigned classes using the working legacy endpoint (same as Dashboard)
+  // Get educator's assigned classes using authenticated endpoint
   const { data: classesData, isLoading: classesLoading } = useQuery<any[]>({
-    queryKey: ["/api/educator/classes"],
+    queryKey: ["/api/educator/my-classes"],
   });
 
-  // Get students directly using the working legacy endpoint (same as Dashboard)
+  // Get students using authenticated endpoint
   const { data: studentsResponse, isLoading: studentsLoading } = useQuery<{ students: any[] }>({
-    queryKey: ["/api/educator/students"],
+    queryKey: ["/api/educator/my-students"],
   });
 
   // Transform students data to include class info
