@@ -1000,35 +1000,41 @@ router.get("/classes/:id/roster", supabaseAuth, async (req: any, res) => {
       return res.status(403).json({ message: "Access denied to this class" });
     }
 
-    // Get enrollment and children data from database
-    const allEnrollments = await storage.getAllEnrollments();
-    const enrollments = allEnrollments.filter((e: any) => e.classId === classId);
-    const children = await storage.getAllChildren();
-
-    // Get enrollments for this specific class
-    const classEnrollments = enrollments.filter((enrollment: any) => 
-      Number(enrollment.classId) === Number(classId) && 
-      ['enrolled', 'confirmed', 'completed', 'pending_payment'].includes(enrollment.status)
+    // Get enrollments from school_class_enrollments table (the correct source)
+    const schoolClassEnrollmentsList = await storage.getSchoolClassEnrollmentsByClassId(classId);
+    
+    // Filter for active enrollment statuses
+    const activeEnrollments = schoolClassEnrollmentsList.filter((enrollment: any) => 
+      ['enrolled', 'pending_payment', 'waitlist', 'completed'].includes(enrollment.status)
     );
 
-    console.log(`📚 Found ${classEnrollments.length} enrollments for class ${classId}`);
+    console.log(`📚 Found ${activeEnrollments.length} school class enrollments for class ${classId}`);
 
-    // Map enrollments to student data
-    const students = classEnrollments.map((enrollment: any) => {
-      // Find child data by ID
-      const child = children.find(c => c.id === enrollment.childId);
+    // Map enrollments to student data by looking up school_students and children
+    const students = await Promise.all(activeEnrollments.map(async (enrollment: any) => {
+      // Get the school student by studentId
+      const schoolStudent = await storage.getSchoolStudentById(enrollment.studentId);
+      
+      if (!schoolStudent) {
+        console.warn(`⚠️ School student not found for enrollment studentId: ${enrollment.studentId}`);
+        return null;
+      }
+
+      // Get child data using the childId from school_students
+      const child = await storage.getChildById(schoolStudent.childId);
       
       if (!child) {
-        // If no child data found, use enrollment data
+        console.warn(`⚠️ Child not found for school student childId: ${schoolStudent.childId}`);
         return {
-          id: enrollment.childId || enrollment.id,
-          firstName: enrollment.childName ? enrollment.childName.split(' ')[0] : 'Unknown',
-          lastName: enrollment.childName ? enrollment.childName.split(' ').slice(1).join(' ') : 'Student',
+          id: schoolStudent.id,
+          firstName: 'Unknown',
+          lastName: 'Student',
           email: '',
           phone: '',
           gradeLevel: 'Unknown',
-          enrollmentDate: enrollment.enrollmentDate || new Date().toISOString(),
-          status: enrollment.status === 'pending_payment' ? 'Pending' : 'Active'
+          enrollmentDate: enrollment.enrollmentDate?.toISOString() || new Date().toISOString(),
+          status: enrollment.status === 'pending_payment' ? 'Pending' : 
+                  enrollment.status === 'waitlist' ? 'Waitlist' : 'Active'
         };
       }
 
@@ -1039,14 +1045,18 @@ router.get("/classes/:id/roster", supabaseAuth, async (req: any, res) => {
         email: child.parentEmail || '',
         phone: '',
         gradeLevel: child.gradeLevel || 'Unknown',
-        enrollmentDate: enrollment.enrollmentDate || new Date().toISOString(),
-        status: enrollment.status === 'pending_payment' ? 'Pending' : 'Active'
+        enrollmentDate: enrollment.enrollmentDate?.toISOString() || new Date().toISOString(),
+        status: enrollment.status === 'pending_payment' ? 'Pending' : 
+                enrollment.status === 'waitlist' ? 'Waitlist' : 'Active'
       };
-    });
+    }));
+
+    // Filter out null entries (students that couldn't be found)
+    const validStudents = students.filter(s => s !== null);
 
     res.json({
-      students: students,
-      totalStudents: students.length
+      students: validStudents,
+      totalStudents: validStudents.length
     });
 
   } catch (error) {

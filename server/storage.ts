@@ -43,7 +43,8 @@ import {
   educatorClassAssignments, type EducatorClassAssignment, type InsertEducatorClassAssignment,
   classSessions, type ClassSession, type InsertClassSession,
   educatorSchedules, type EducatorSchedule, type InsertEducatorSchedule,
-  auditLogs, type AuditLog, type InsertAuditLog
+  auditLogs, type AuditLog, type InsertAuditLog,
+  schoolClassEnrollments, type SchoolClassEnrollment, type InsertSchoolClassEnrollment
 } from "@shared/schema";
 import { eq, inArray } from 'drizzle-orm';
 import { getDb } from './db';
@@ -349,6 +350,10 @@ export interface IStorage {
   updateSchoolStudent(id: number, schoolStudent: Partial<InsertSchoolStudent>): Promise<SchoolStudent | undefined>;
   deleteSchoolStudent(id: number): Promise<void>;
 
+  // School Class Enrollment methods
+  getSchoolClassEnrollmentsByClassId(classId: number): Promise<SchoolClassEnrollment[]>;
+  getSchoolClassEnrollmentsByStudentId(studentId: number): Promise<SchoolClassEnrollment[]>;
+
   // School Staff methods
   getSchoolStaffById(id: number): Promise<SchoolStaff | undefined>;
   getAllSchoolStaff(): Promise<SchoolStaff[]>;
@@ -521,6 +526,7 @@ export class MemStorage implements IStorage {
   private userNotificationsStore: Map<string, any>;
   private educatorClassAssignmentsStore: Map<number, EducatorClassAssignment>;
   private classSessionsStore: Map<number, ClassSession>;
+  private schoolClassEnrollmentsStore: Map<number, SchoolClassEnrollment>;
 
   private userIdCounter: number;
   private curriculumIdCounter: number;
@@ -582,6 +588,7 @@ export class MemStorage implements IStorage {
     this.userNotificationsStore = new Map();
     this.educatorClassAssignmentsStore = new Map();
     this.classSessionsStore = new Map();
+    this.schoolClassEnrollmentsStore = new Map();
     this.classEnrollments = [];
 
     this.userIdCounter = 1;
@@ -3285,6 +3292,19 @@ export class MemStorage implements IStorage {
     await this.saveSchoolStudentsToDisk();
   }
 
+  // School Class Enrollment methods
+  async getSchoolClassEnrollmentsByClassId(classId: number): Promise<SchoolClassEnrollment[]> {
+    return Array.from(this.schoolClassEnrollmentsStore.values()).filter(
+      enrollment => enrollment.classId === classId
+    );
+  }
+
+  async getSchoolClassEnrollmentsByStudentId(studentId: number): Promise<SchoolClassEnrollment[]> {
+    return Array.from(this.schoolClassEnrollmentsStore.values()).filter(
+      enrollment => enrollment.studentId === studentId
+    );
+  }
+
   private async saveSchoolStudentsToDisk(): Promise<void> {
     try {
       const fs = await import('fs');
@@ -5565,8 +5585,12 @@ export class MemStorage implements IStorage {
 
       // School Student methods - Migrated to database storage
       async getSchoolStudentById(id: number): Promise<SchoolStudent | undefined> {
-        // dbStorage doesn't have getById, so use memStorage as fallback
-        return this.memStorage.getSchoolStudentById(id);
+        try {
+          return await this.dbStorage.getSchoolStudentById(id);
+        } catch (error) {
+          console.error("Error fetching school student by ID from database:", error);
+          return this.memStorage.getSchoolStudentById(id);
+        }
       }
 
       async getAllSchoolStudents(): Promise<SchoolStudent[]> {
@@ -5603,6 +5627,29 @@ export class MemStorage implements IStorage {
 
       async deleteSchoolStudent(id: number): Promise<void> {
         return this.dbStorage.deleteSchoolStudent(id);
+      }
+
+      // School Class Enrollment methods - Database storage
+      async getSchoolClassEnrollmentsByClassId(classId: number): Promise<SchoolClassEnrollment[]> {
+        try {
+          const db = await getDb();
+          const result = await db.select().from(schoolClassEnrollments).where(eq(schoolClassEnrollments.classId, classId));
+          return result;
+        } catch (error) {
+          console.error("Error fetching school class enrollments by class ID:", error);
+          return this.memStorage.getSchoolClassEnrollmentsByClassId(classId);
+        }
+      }
+
+      async getSchoolClassEnrollmentsByStudentId(studentId: number): Promise<SchoolClassEnrollment[]> {
+        try {
+          const db = await getDb();
+          const result = await db.select().from(schoolClassEnrollments).where(eq(schoolClassEnrollments.studentId, studentId));
+          return result;
+        } catch (error) {
+          console.error("Error fetching school class enrollments by student ID:", error);
+          return this.memStorage.getSchoolClassEnrollmentsByStudentId(studentId);
+        }
       }
 
       // School Staff methods - Database storage
