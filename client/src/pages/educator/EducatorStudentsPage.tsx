@@ -27,31 +27,52 @@ export default function EducatorStudentsPage() {
   const [filterClass, setFilterClass] = useState<string>("all");
   const [filterGrade, setFilterGrade] = useState<string>("all");
 
-  // Get educator's students
-  const { data: studentsData, isLoading } = useQuery({
-    queryKey: ["/api/educator/students", user?.email],
-    queryFn: async () => {
-      const response = await fetch(`/api/educator/students?email=${user?.email}`, {
-        credentials: "include"
-      });
-      if (!response.ok) throw new Error("Failed to fetch students");
-      return response.json();
-    },
-    enabled: !!user?.email,
+  // Get educator's assigned classes using authenticated endpoint
+  const { data: classesData, isLoading: classesLoading } = useQuery<any[]>({
+    queryKey: ["/api/educator/my-classes"],
   });
 
-  // Get educator's classes for filtering
-  const { data: classesData } = useQuery({
-    queryKey: ["/api/educator/classes", user?.email],
+  // Get students for each assigned class (parallel requests)
+  const { data: studentsData, isLoading: studentsLoading } = useQuery({
+    queryKey: ["/api/educator/my-students", classesData?.map((c: any) => c.classId)],
     queryFn: async () => {
-      const response = await fetch(`/api/educator/classes?email=${user?.email}`, {
-        credentials: "include"
+      if (!classesData || classesData.length === 0) {
+        return { students: [], totalStudents: 0, uniqueStudentCount: 0 };
+      }
+      
+      // Fetch rosters in parallel for efficiency
+      const rosterPromises = classesData.map(async (classData: any) => {
+        const response = await fetch(`/api/school-admin/classes/${classData.classId}/roster`, {
+          credentials: "include"
+        });
+        
+        if (response.ok) {
+          const rosterData = await response.json();
+          return (rosterData.students || []).map((student: any) => ({
+            ...student,
+            classId: classData.classId,
+            className: classData.className
+          }));
+        }
+        return [];
       });
-      if (!response.ok) throw new Error("Failed to fetch classes");
-      return response.json();
+      
+      const results = await Promise.all(rosterPromises);
+      const allStudents = results.flat();
+      
+      // Count unique students (by id) for stats
+      const uniqueStudentIds = new Set(allStudents.map(s => s.id));
+      
+      return { 
+        students: allStudents, 
+        totalStudents: allStudents.length,
+        uniqueStudentCount: uniqueStudentIds.size
+      };
     },
-    enabled: !!user?.email,
+    enabled: !!classesData && classesData.length > 0,
   });
+
+  const isLoading = classesLoading || studentsLoading;
 
   // Filter students based on search and filters
   const filteredStudents = studentsData?.students?.filter((student: any) => {
@@ -65,8 +86,8 @@ export default function EducatorStudentsPage() {
     return matchesSearch && matchesClass && matchesGrade;
   }) || [];
 
-  // Get unique grade levels for filter
-  const gradeLevels = [...new Set(studentsData?.students?.map((s: any) => s.gradeLevel).filter(Boolean))] as string[];
+  // Get unique grade levels for filter (guard against undefined)
+  const gradeLevels = [...new Set((studentsData?.students ?? []).map((s: any) => s.gradeLevel).filter(Boolean))] as string[];
 
   if (isLoading) {
     return (
@@ -168,8 +189,8 @@ export default function EducatorStudentsPage() {
               <SelectContent>
                 <SelectItem value="all">All Classes</SelectItem>
                 {classesData?.map((classItem: any) => (
-                  <SelectItem key={classItem.id} value={classItem.id.toString()}>
-                    {classItem.title}
+                  <SelectItem key={classItem.classId} value={classItem.classId.toString()}>
+                    {classItem.className}
                   </SelectItem>
                 ))}
               </SelectContent>

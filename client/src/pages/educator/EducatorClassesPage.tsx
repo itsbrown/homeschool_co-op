@@ -25,23 +25,57 @@ export default function EducatorClassesPage() {
   const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
 
-  // Get educator's assigned classes
-  const { data: classesData, isLoading } = useQuery({
-    queryKey: ["/api/educator/classes", user?.email],
-    queryFn: async () => {
-      const response = await fetch(`/api/educator/classes?email=${user?.email}`, {
-        credentials: "include"
-      });
-      if (!response.ok) throw new Error("Failed to fetch classes");
-      return response.json();
-    },
-    enabled: !!user?.email,
+  // Get educator's assigned classes using authenticated endpoint
+  const { data: classesData, isLoading } = useQuery<any[]>({
+    queryKey: ["/api/educator/my-classes"],
   });
 
-  const filteredClasses = classesData?.filter((classItem: any) =>
-    classItem.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+  // Transform data to match the expected format
+  const transformedClasses = classesData?.map((classItem: any) => {
+    // Parse schedule to get start/end dates and time info
+    let scheduleInfo: any = {};
+    if (classItem.classSchedule?.variants?.[0]) {
+      const variant = classItem.classSchedule.variants[0];
+      scheduleInfo = {
+        startTime: variant.startTime,
+        endTime: variant.endTime,
+        days: variant.days?.join(', ') || ''
+      };
+    }
+    
+    // Determine status based on dates
+    const now = new Date();
+    const validFrom = classItem.validFrom ? new Date(classItem.validFrom) : null;
+    const validTo = classItem.validTo ? new Date(classItem.validTo) : null;
+    
+    let status = 'active';
+    if (validTo && now > validTo) {
+      status = 'completed';
+    } else if (validFrom && now < validFrom) {
+      status = 'upcoming';
+    }
+    
+    return {
+      id: classItem.classId,
+      title: classItem.className,
+      description: classItem.classDescription,
+      schedule: scheduleInfo.days ? `${scheduleInfo.days} ${scheduleInfo.startTime}-${scheduleInfo.endTime}` : 'Schedule TBD',
+      location: classItem.classLocation,
+      capacity: classItem.capacity,
+      enrollmentCount: classItem.enrollmentCount,
+      status,
+      startDate: classItem.validFrom,
+      endDate: classItem.validTo,
+      category: classItem.classCategory,
+      isPrimary: classItem.isPrimary,
+      canStartSession: classItem.canStartSession
+    };
+  }) || [];
+
+  const filteredClasses = transformedClasses.filter((classItem: any) =>
+    classItem.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     classItem.category?.toLowerCase().includes(searchTerm.toLowerCase())
-  ) || [];
+  );
 
   const activeClasses = filteredClasses.filter((cls: any) => cls.status === 'active');
   const upcomingClasses = filteredClasses.filter((cls: any) => cls.status === 'upcoming');
