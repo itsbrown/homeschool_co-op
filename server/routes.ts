@@ -2969,6 +2969,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Multi-location support routes
   const locationsRouter = (await import("./api/locations")).default;
+  
+  // PUBLIC endpoint for locations - no auth required (for registration page)
+  // Must be defined BEFORE the authenticated router
+  app.get("/api/locations/public", async (req, res) => {
+    try {
+      const schoolIdParam = req.query.schoolId;
+      
+      if (!schoolIdParam) {
+        return res.status(400).json({ message: "School ID is required" });
+      }
+      
+      const schoolId = parseInt(String(schoolIdParam), 10);
+      if (isNaN(schoolId) || schoolId <= 0) {
+        return res.status(400).json({ message: "Invalid school ID - must be a positive number" });
+      }
+      
+      console.log('🏢 [PUBLIC] Fetching locations for school ID:', schoolId);
+      const locations = await storage.getLocationsBySchoolId(schoolId);
+      console.log('✅ [PUBLIC] Found locations:', locations.length);
+      
+      // Return only public information (id and name) - no sensitive data
+      const publicLocations = locations.map(loc => ({
+        id: loc.id,
+        name: loc.name
+      }));
+      
+      res.json(publicLocations);
+    } catch (error) {
+      console.error("Error fetching public locations:", error);
+      res.status(500).json({ message: "Failed to fetch locations" });
+    }
+  });
+  
   app.use("/api/locations", supabaseAuth, locationsRouter);
   
   const notificationsRouter = (await import("./api/notifications")).default;
