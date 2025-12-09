@@ -1000,42 +1000,24 @@ router.get("/classes/:id/roster", supabaseAuth, async (req: any, res) => {
       return res.status(403).json({ message: "Access denied to this class" });
     }
 
-    // Get enrollments from school_class_enrollments table (the correct source)
-    const schoolClassEnrollmentsList = await storage.getSchoolClassEnrollmentsByClassId(classId);
-    
-    // Filter for active enrollment statuses
-    const activeEnrollments = schoolClassEnrollmentsList.filter((enrollment: any) => 
+    // Get enrollments from program_enrollments table (same source as enrollment count)
+    // This queries by classId or marketplaceClassId for consistency
+    const allEnrollments = await storage.getAllEnrollments();
+    const classEnrollments = allEnrollments.filter((enrollment: any) => 
+      (enrollment.classId === classId || enrollment.marketplaceClassId === classId) &&
       ['enrolled', 'pending_payment', 'waitlist', 'completed'].includes(enrollment.status)
     );
 
-    console.log(`📚 Found ${activeEnrollments.length} school class enrollments for class ${classId}`);
+    console.log(`📚 Found ${classEnrollments.length} program enrollments for class ${classId}`);
 
-    // Map enrollments to student data by looking up school_students and children
-    const students = await Promise.all(activeEnrollments.map(async (enrollment: any) => {
-      // Get the school student by studentId
-      const schoolStudent = await storage.getSchoolStudentById(enrollment.studentId);
-      
-      if (!schoolStudent) {
-        console.warn(`⚠️ School student not found for enrollment studentId: ${enrollment.studentId}`);
-        return null;
-      }
-
-      // Get child data using the childId from school_students
-      const child = await storage.getChildById(schoolStudent.childId);
+    // Map enrollments to student data by looking up children directly
+    const students = await Promise.all(classEnrollments.map(async (enrollment: any) => {
+      // Get child data directly using the childId from program_enrollments
+      const child = await storage.getChildById(enrollment.childId);
       
       if (!child) {
-        console.warn(`⚠️ Child not found for school student childId: ${schoolStudent.childId}`);
-        return {
-          id: schoolStudent.id,
-          firstName: 'Unknown',
-          lastName: 'Student',
-          email: '',
-          phone: '',
-          gradeLevel: 'Unknown',
-          enrollmentDate: enrollment.enrollmentDate?.toISOString() || new Date().toISOString(),
-          status: enrollment.status === 'pending_payment' ? 'Pending' : 
-                  enrollment.status === 'waitlist' ? 'Waitlist' : 'Active'
-        };
+        console.warn(`⚠️ Child not found for enrollment childId: ${enrollment.childId}`);
+        return null;
       }
 
       return {
@@ -1045,9 +1027,10 @@ router.get("/classes/:id/roster", supabaseAuth, async (req: any, res) => {
         email: child.parentEmail || '',
         phone: '',
         gradeLevel: child.gradeLevel || 'Unknown',
-        enrollmentDate: enrollment.enrollmentDate?.toISOString() || new Date().toISOString(),
+        enrollmentDate: enrollment.enrollmentDate?.toISOString() || enrollment.createdAt?.toISOString() || new Date().toISOString(),
         status: enrollment.status === 'pending_payment' ? 'Pending' : 
-                enrollment.status === 'waitlist' ? 'Waitlist' : 'Active'
+                enrollment.status === 'waitlist' ? 'Waitlist' : 'Active',
+        variantName: enrollment.variantName || null
       };
     }));
 

@@ -13,9 +13,9 @@ Preferred communication style: Simple, everyday language.
 - **Invitation-related bugs**: For any staff/role invitation issues, see **ARCHITECTURAL_PATTERNS.md Section 8** (Token-based Invitation Flow). Key rules: reuse tokens on resend (don't generate new), use public endpoints for unauthenticated access, and consolidate to role_invitations table.
 - **Parent profile access for OAuth users**: Parent role check now uses user_roles table (multi-role compatible) with fallback to legacy users.role column. "Orphaned" OAuth parents (schoolId=null, logged in without registration) can be viewed by any school admin to facilitate account association.
 - **Dual Enrollment Systems**: The platform has TWO separate enrollment systems that must NOT be confused:
-  - `school_class_enrollments` table: Used for **class rosters** and school-specific class management. Links via `studentId` → `school_students` → `children`. Use `storage.getSchoolClassEnrollmentsByClassId()` for roster queries.
-  - `program_enrollments` table: Used for **legacy program enrollments** and cart/checkout flows. Links via `childId` → `children` directly. Use `storage.getAllEnrollments()` for program-related queries.
-  - **Critical**: Class roster endpoints must query `school_class_enrollments`, NOT `program_enrollments`. Mixing these tables causes rosters to show 0 students.
+  - `school_class_enrollments` table: Used for **school-specific class management** and future roster features. Links via `studentId` → `school_students` → `children`. Currently not populated by the enrollment flow.
+  - `program_enrollments` table: Used for **active class enrollments** including enrollment count, rosters, and cart/checkout flows. Links via `childId` → `children` directly. Use `storage.getAllEnrollments()` or `storage.getEnrollmentCountForClass()`.
+  - **Critical**: Class roster endpoints must query `program_enrollments` (same as enrollment count) to show students. The enrollment count and roster must use the same data source.
 
 ## System Architecture
 ### Core Design Principles
