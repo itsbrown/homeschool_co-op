@@ -241,6 +241,170 @@ router.get('/my-students', async (req, res) => {
   }
 });
 
+// GET /api/educator/classes/:id - Get specific class details for an educator
+router.get('/classes/:id', async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'User ID not found' });
+    }
+
+    const classId = parseInt(req.params.id);
+    if (isNaN(classId)) {
+      return res.status(400).json({ error: 'Invalid class ID' });
+    }
+
+    console.log('[EducatorDashboard] Fetching class details for class:', classId, 'user:', userId);
+
+    // Get class info
+    const classInfo = await storage.getClassById(classId);
+    if (!classInfo) {
+      return res.status(404).json({ error: 'Class not found' });
+    }
+
+    // Verify educator has access to this class (via assignments or instructor match)
+    const assignments = await storage.getEducatorClassAssignmentsByEducatorId(userId);
+    const isAssigned = assignments.some(a => a.classId === classId);
+    
+    if (!isAssigned) {
+      // Fallback: check if educator is the instructor
+      const educator = await storage.getUser(userId);
+      const isInstructor = educator && (
+        classInfo.instructorId === educator.id ||
+        classInfo.instructorName === educator.name
+      );
+      
+      if (!isInstructor) {
+        return res.status(403).json({ error: 'You do not have access to this class' });
+      }
+    }
+
+    // Get enrollment count
+    const enrollmentCount = await storage.getEnrollmentCountForClass(classId);
+    
+    // Format schedule for display
+    let scheduleStr = 'Schedule TBD';
+    if (classInfo.schedule && typeof classInfo.schedule === 'object' && 'variants' in classInfo.schedule) {
+      const variants = (classInfo.schedule as any).variants;
+      if (Array.isArray(variants) && variants[0]) {
+        const variant = variants[0];
+        const days = variant.days?.join(', ') || '';
+        if (days && variant.startTime && variant.endTime) {
+          scheduleStr = `${days} ${variant.startTime}-${variant.endTime}`;
+        }
+      }
+    } else if (typeof classInfo.schedule === 'string') {
+      scheduleStr = classInfo.schedule;
+    }
+
+    // Determine status based on dates
+    const now = new Date();
+    const validFrom = classInfo.validFrom ? new Date(classInfo.validFrom) : null;
+    const validTo = classInfo.validTo ? new Date(classInfo.validTo) : null;
+    
+    let status = 'active';
+    if (validTo && now > validTo) {
+      status = 'completed';
+    } else if (validFrom && now < validFrom) {
+      status = 'upcoming';
+    }
+
+    res.json({
+      id: classInfo.id,
+      title: classInfo.title,
+      description: classInfo.description,
+      category: classInfo.category,
+      gradeLevel: classInfo.gradeLevel,
+      location: classInfo.location,
+      schedule: scheduleStr,
+      scheduleRaw: classInfo.schedule,
+      price: classInfo.price,
+      capacity: classInfo.capacity,
+      maxStudents: classInfo.maxStudents,
+      enrollmentCount,
+      startDate: classInfo.validFrom,
+      endDate: classInfo.validTo,
+      status,
+      instructorId: classInfo.instructorId,
+      instructorName: classInfo.instructorName
+    });
+  } catch (error) {
+    console.error('[EducatorDashboard] Error fetching class details:', error);
+    res.status(500).json({ error: 'Failed to fetch class details' });
+  }
+});
+
+// GET /api/educator/classes/:id/students - Get students for a specific class
+router.get('/classes/:id/students', async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'User ID not found' });
+    }
+
+    const classId = parseInt(req.params.id);
+    if (isNaN(classId)) {
+      return res.status(400).json({ error: 'Invalid class ID' });
+    }
+
+    console.log('[EducatorDashboard] Fetching students for class:', classId, 'user:', userId);
+
+    // Verify educator has access to this class
+    const assignments = await storage.getEducatorClassAssignmentsByEducatorId(userId);
+    const isAssigned = assignments.some(a => a.classId === classId);
+    
+    if (!isAssigned) {
+      // Fallback: check if educator is the instructor
+      const classInfo = await storage.getClassById(classId);
+      const educator = await storage.getUser(userId);
+      const isInstructor = classInfo && educator && (
+        classInfo.instructorId === educator.id ||
+        classInfo.instructorName === educator.name
+      );
+      
+      if (!isInstructor) {
+        return res.status(403).json({ error: 'You do not have access to this class' });
+      }
+    }
+
+    // Get enrolled students from program_enrollments
+    const allChildren = await storage.getAllChildren();
+    const allEnrollments = await storage.getAllEnrollments();
+    
+    const classEnrollments = allEnrollments.filter((enrollment: any) =>
+      enrollment.classType === 'marketplace' &&
+      enrollment.marketplaceClassId === classId
+    );
+
+    const students = classEnrollments.map((enrollment: any) => {
+      const child = allChildren.find(c => c.id === enrollment.childId);
+      if (child) {
+        return {
+          id: child.id,
+          firstName: child.firstName,
+          lastName: child.lastName,
+          gradeLevel: child.gradeLevel,
+          birthdate: child.birthdate,
+          parentEmail: child.parentEmail,
+          enrollmentDate: enrollment.enrollmentDate,
+          enrollmentStatus: enrollment.status
+        };
+      }
+      return null;
+    }).filter(Boolean);
+
+    console.log(`[EducatorDashboard] Found ${students.length} students for class ${classId}`);
+    
+    res.json({
+      students,
+      totalStudents: students.length
+    });
+  } catch (error) {
+    console.error('[EducatorDashboard] Error fetching class students:', error);
+    res.status(500).json({ error: 'Failed to fetch class students' });
+  }
+});
+
 // GET /api/educator/sessions - Get educator's sessions with optional filters
 router.get('/sessions', async (req, res) => {
   try {

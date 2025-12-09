@@ -27,11 +27,11 @@ export default function EducatorClassDetailsPage() {
   const [match, params] = useRoute("/educator/classes/:id");
   const classId = params?.id;
 
-  // Get class details
+  // Get class details using authenticated educator endpoint
   const { data: classData, isLoading: classLoading } = useQuery({
-    queryKey: ["/api/classes", classId],
+    queryKey: ["/api/educator/classes", classId],
     queryFn: async () => {
-      const response = await fetch(`/api/classes/${classId}`, {
+      const response = await fetch(`/api/educator/classes/${classId}`, {
         credentials: "include"
       });
       if (!response.ok) throw new Error("Failed to fetch class");
@@ -40,17 +40,17 @@ export default function EducatorClassDetailsPage() {
     enabled: !!classId,
   });
 
-  // Get enrolled students for this class
+  // Get enrolled students for this class using authenticated endpoint
   const { data: studentsData, isLoading: studentsLoading } = useQuery({
-    queryKey: ["/api/educator/class-students", classId],
+    queryKey: ["/api/educator/classes", classId, "students"],
     queryFn: async () => {
-      const response = await fetch(`/api/educator/class-students/${classId}?email=${user?.email}`, {
+      const response = await fetch(`/api/educator/classes/${classId}/students`, {
         credentials: "include"
       });
       if (!response.ok) throw new Error("Failed to fetch students");
       return response.json();
     },
-    enabled: !!classId && !!user?.email,
+    enabled: !!classId,
   });
 
   if (classLoading) {
