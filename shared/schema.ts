@@ -2303,3 +2303,51 @@ export const auditLogsRelations = relations(auditLogs, ({ one }) => ({
   actor: one(users, { fields: [auditLogs.actorId], references: [users.id] }),
   school: one(schools, { fields: [auditLogs.schoolId], references: [schools.id] }),
 }));
+
+// ==========================================
+// PHASE 2: ATTENDANCE TRACKING
+// ==========================================
+
+// Session Attendance - Tracks student attendance per class session
+export const sessionAttendance = pgTable("session_attendance", {
+  id: serial("id").primaryKey(),
+  sessionId: integer("session_id").notNull().references(() => classSessions.id, { onDelete: 'cascade' }),
+  childId: integer("child_id").notNull().references(() => children.id, { onDelete: 'cascade' }),
+  schoolId: integer("school_id").notNull().references(() => schools.id, { onDelete: 'cascade' }),
+  
+  // Attendance status
+  status: text("status", { 
+    enum: ["present", "absent", "tardy", "excused", "early_departure"] 
+  }).default("present").notNull(),
+  
+  // Timestamps
+  checkInTime: timestamp("check_in_time"), // Actual arrival time
+  checkOutTime: timestamp("check_out_time"), // Actual departure time
+  
+  // Additional info
+  tardyMinutes: integer("tardy_minutes"), // How many minutes late
+  earlyDepartureMinutes: integer("early_departure_minutes"), // How many minutes early left
+  excuseReason: text("excuse_reason"), // Reason for absence/early departure
+  notes: text("notes"), // Educator notes about attendance
+  
+  // Who recorded the attendance
+  recordedBy: integer("recorded_by").notNull().references(() => users.id),
+  recordedAt: timestamp("recorded_at").defaultNow().notNull(),
+  
+  // Tracking
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertSessionAttendanceSchema = createInsertSchema(sessionAttendance)
+  .omit({ id: true, createdAt: true, updatedAt: true, recordedAt: true });
+export type InsertSessionAttendance = z.infer<typeof insertSessionAttendanceSchema>;
+export type SessionAttendance = typeof sessionAttendance.$inferSelect;
+
+// Session Attendance relations
+export const sessionAttendanceRelations = relations(sessionAttendance, ({ one }) => ({
+  session: one(classSessions, { fields: [sessionAttendance.sessionId], references: [classSessions.id] }),
+  child: one(children, { fields: [sessionAttendance.childId], references: [children.id] }),
+  school: one(schools, { fields: [sessionAttendance.schoolId], references: [schools.id] }),
+  recorder: one(users, { fields: [sessionAttendance.recordedBy], references: [users.id] }),
+}));

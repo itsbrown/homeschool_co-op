@@ -2,7 +2,7 @@ import express from "express";
 import { storage } from "../storage";
 import { supabaseAuth, requireEducatorRole } from "../middleware/supabase-auth";
 import { z } from "zod";
-import type { InsertClassSession, ClassSession, EducatorClassAssignment, InsertAuditLog } from "@shared/schema";
+import type { InsertClassSession, ClassSession, EducatorClassAssignment, InsertAuditLog, InsertSessionAttendance, SessionAttendance } from "@shared/schema";
 
 const router = express.Router();
 
@@ -1210,6 +1210,540 @@ router.get('/my-hours', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch hours' });
   }
 });
+
+// ==================== ATTENDANCE ENDPOINTS (Phase 2) ====================
+
+// Schema for attendance status validation
+const attendanceStatusSchema = z.enum(['present', 'absent', 'late', 'excused']);
+
+// Time format validation (HH:MM or HH:MM:SS)
+const timeStringSchema = z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?$/, {
+  message: 'Time must be in HH:MM or HH:MM:SS format'
+});
+
+// Notes length limit (prevent excessively long notes)
+const notesSchema = z.string().max(500, { message: 'Notes must be 500 characters or less' });
+
+const createAttendanceSchema = z.object({
+  sessionId: z.number().int().positive(),
+  childId: z.number().int().positive(),
+  status: attendanceStatusSchema,
+  checkInTime: timeStringSchema.optional(),
+  checkOutTime: timeStringSchema.optional(),
+  notes: notesSchema.optional()
+});
+
+const updateAttendanceSchema = z.object({
+  status: attendanceStatusSchema.optional(),
+  checkInTime: timeStringSchema.nullable().optional(),
+  checkOutTime: timeStringSchema.nullable().optional(),
+  notes: notesSchema.nullable().optional()
+});
+
+const bulkAttendanceSchema = z.object({
+  sessionId: z.number().int().positive(),
+  attendance: z.array(z.object({
+    childId: z.number().int().positive(),
+    status: attendanceStatusSchema,
+    checkInTime: timeStringSchema.optional(),
+    checkOutTime: timeStringSchema.optional(),
+    notes: notesSchema.optional()
+  }))
+});
+
+// Helper function to verify educator assignment for a class with validity check
+async function verifyEducatorAssignment(userId: number, classId: number, schoolId: number): Promise<boolean> {
+  const assignments = await storage.getEducatorClassAssignmentsByEducatorId(userId);
+  const today = new Date().toISOString().split('T')[0];
+  
+  return assignments.some(a => 
+    a.classId === classId && 
+    a.schoolId === schoolId &&
+    (!a.validFrom || a.validFrom <= today) &&
+    (!a.validTo || a.validTo >= today)
+  );
+}
+
+// GET /api/educator/sessions/:sessionId/attendance - Get attendance for a session
+router.get('/sessions/:sessionId/attendance', async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'User ID not found' });
+    }
+
+    const sessionId = parseInt(req.params.sessionId);
+    if (isNaN(sessionId)) {
+      return res.status(400).json({ error: 'Invalid session ID' });
+    }
+
+    // Verify the session exists
+    const session = await storage.getClassSession(sessionId);
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    // Verify educator has a valid assignment for this class (checks school, validity dates)
+    const hasValidAssignment = await verifyEducatorAssignment(userId, session.classId, session.schoolId);
+    
+    // Must be either the session educator OR have a valid assignment for this class
+    if (session.educatorId !== userId && !hasValidAssignment) {
+      return res.status(403).json({ error: 'Not authorized to view this session\'s attendance' });
+    }
+
+    const attendance = await storage.getAttendanceBySessionId(sessionId);
+    
+    // Enrich with child names
+    const attendanceWithChildren = await Promise.all(
+      attendance.map(async (record: SessionAttendance) => {
+        const child = await storage.getChildById(record.childId);
+        return {
+          ...record,
+          childName: child ? `${child.firstName} ${child.lastName}` : 'Unknown',
+          childFirstName: child?.firstName,
+          childLastName: child?.lastName
+        };
+      })
+    );
+
+    console.log(`[Attendance] Retrieved ${attendanceWithChildren.length} attendance records for session ${sessionId}`);
+    res.json(attendanceWithChildren);
+  } catch (error) {
+    console.error('[Attendance] Error fetching attendance:', error);
+    res.status(500).json({ error: 'Failed to fetch attendance' });
+  }
+});
+
+// GET /api/educator/sessions/:sessionId/roster - Get students enrolled in the class for attendance
+router.get('/sessions/:sessionId/roster', async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'User ID not found' });
+    }
+
+    const sessionId = parseInt(req.params.sessionId);
+    if (isNaN(sessionId)) {
+      return res.status(400).json({ error: 'Invalid session ID' });
+    }
+
+    // Verify the session exists
+    const session = await storage.getClassSession(sessionId);
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    // Verify educator has a valid assignment for this class (checks school, validity dates)
+    const hasValidAssignment = await verifyEducatorAssignment(userId, session.classId, session.schoolId);
+    
+    // Must be either the session educator OR have a valid assignment for this class
+    if (session.educatorId !== userId && !hasValidAssignment) {
+      return res.status(403).json({ error: 'Not authorized to view this class roster' });
+    }
+
+    // Get enrollments for this class
+    const enrollments = await storage.getEnrollmentsByClassId(session.classId);
+    const activeEnrollments = enrollments.filter(e => e.status === 'active');
+
+    // Get existing attendance for this session
+    const existingAttendance = await storage.getAttendanceBySessionId(sessionId);
+    const attendanceMap = new Map(existingAttendance.map(a => [a.childId, a]));
+
+    // Build roster with attendance status
+    const roster = await Promise.all(
+      activeEnrollments.map(async (enrollment) => {
+        const child = await storage.getChildById(enrollment.childId);
+        const attendance = attendanceMap.get(enrollment.childId);
+        return {
+          childId: enrollment.childId,
+          childName: child ? `${child.firstName} ${child.lastName}` : 'Unknown',
+          childFirstName: child?.firstName,
+          childLastName: child?.lastName,
+          enrollmentId: enrollment.id,
+          attendance: attendance ? {
+            id: attendance.id,
+            status: attendance.status,
+            checkInTime: attendance.checkInTime,
+            checkOutTime: attendance.checkOutTime,
+            notes: attendance.notes
+          } : null
+        };
+      })
+    );
+
+    console.log(`[Attendance] Roster for session ${sessionId}: ${roster.length} students`);
+    res.json(roster);
+  } catch (error) {
+    console.error('[Attendance] Error fetching roster:', error);
+    res.status(500).json({ error: 'Failed to fetch roster' });
+  }
+});
+
+// POST /api/educator/attendance - Create a single attendance record
+router.post('/attendance', async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'User ID not found' });
+    }
+
+    const parseResult = createAttendanceSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      return res.status(400).json({ error: 'Invalid request data', details: parseResult.error.errors });
+    }
+
+    const { sessionId, childId, status, checkInTime, checkOutTime, notes } = parseResult.data;
+
+    // Verify the session exists
+    const session = await storage.getClassSession(sessionId);
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    // Verify educator has a valid assignment for this class (checks school, validity dates)
+    const hasValidAssignment = await verifyEducatorAssignment(userId, session.classId, session.schoolId);
+    
+    if (session.educatorId !== userId && !hasValidAssignment) {
+      return res.status(403).json({ error: 'Not authorized to modify attendance for this session' });
+    }
+
+    // Verify child is enrolled in the class
+    const enrollments = await storage.getEnrollmentsByClassId(session.classId);
+    const childEnrolled = enrollments.some(e => e.childId === childId && e.status === 'active');
+    if (!childEnrolled) {
+      return res.status(400).json({ error: 'Child is not enrolled in this class' });
+    }
+
+    const attendanceData: InsertSessionAttendance = {
+      sessionId,
+      childId,
+      schoolId: session.schoolId,
+      status,
+      recordedById: userId,
+      checkInTime: checkInTime || null,
+      checkOutTime: checkOutTime || null,
+      notes: notes || null
+    };
+
+    // Use upsert to handle duplicate submissions gracefully
+    const record = await storage.upsertAttendance(attendanceData);
+
+    // Create audit log
+    await storage.createAuditLog({
+      action: 'attendance_recorded',
+      targetType: 'session_attendance',
+      targetId: record.id,
+      actorId: userId,
+      schoolId: session.schoolId,
+      metadata: { sessionId, childId, status, classId: session.classId },
+      severity: 'info'
+    });
+
+    console.log(`[Attendance] Created/updated attendance for child ${childId} in session ${sessionId}: ${status}`);
+    res.status(201).json(record);
+  } catch (error) {
+    console.error('[Attendance] Error creating attendance:', error);
+    res.status(500).json({ error: 'Failed to create attendance record' });
+  }
+});
+
+// POST /api/educator/attendance/bulk - Create/update multiple attendance records at once
+router.post('/attendance/bulk', async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'User ID not found' });
+    }
+
+    const parseResult = bulkAttendanceSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      return res.status(400).json({ error: 'Invalid request data', details: parseResult.error.errors });
+    }
+
+    const { sessionId, attendance } = parseResult.data;
+
+    // Verify the session exists
+    const session = await storage.getClassSession(sessionId);
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    // Verify educator has a valid assignment for this class (checks school, validity dates)
+    const hasValidAssignment = await verifyEducatorAssignment(userId, session.classId, session.schoolId);
+    
+    if (session.educatorId !== userId && !hasValidAssignment) {
+      return res.status(403).json({ error: 'Not authorized to modify attendance for this session' });
+    }
+
+    // Process all attendance records sequentially to maintain consistency
+    const results: SessionAttendance[] = [];
+    const errors: Array<{ childId: number; error: string }> = [];
+    
+    for (const item of attendance) {
+      try {
+        const attendanceData: InsertSessionAttendance = {
+          sessionId,
+          childId: item.childId,
+          schoolId: session.schoolId,
+          status: item.status,
+          recordedById: userId,
+          checkInTime: item.checkInTime || null,
+          checkOutTime: item.checkOutTime || null,
+          notes: item.notes || null
+        };
+
+        const record = await storage.upsertAttendance(attendanceData);
+        results.push(record);
+      } catch (itemError) {
+        console.error(`[Attendance] Error processing child ${item.childId}:`, itemError);
+        errors.push({ childId: item.childId, error: 'Failed to record attendance' });
+      }
+    }
+
+    // Create audit log for bulk operation
+    await storage.createAuditLog({
+      action: 'attendance_bulk_recorded',
+      targetType: 'class_session',
+      targetId: sessionId,
+      actorId: userId,
+      schoolId: session.schoolId,
+      metadata: { 
+        sessionId, 
+        classId: session.classId,
+        successCount: results.length,
+        errorCount: errors.length,
+        statuses: attendance.map(a => ({ childId: a.childId, status: a.status }))
+      },
+      severity: errors.length > 0 ? 'warning' : 'info'
+    });
+
+    console.log(`[Attendance] Bulk recorded ${results.length} attendance records for session ${sessionId}`);
+    
+    // Return results with any errors
+    if (errors.length > 0) {
+      return res.status(207).json({ results, errors }); // 207 Multi-Status
+    }
+    res.status(201).json(results);
+  } catch (error) {
+    console.error('[Attendance] Error creating bulk attendance:', error);
+    res.status(500).json({ error: 'Failed to create attendance records' });
+  }
+});
+
+// PATCH /api/educator/attendance/:id - Update an attendance record
+router.patch('/attendance/:id', async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'User ID not found' });
+    }
+
+    const attendanceId = parseInt(req.params.id);
+    if (isNaN(attendanceId)) {
+      return res.status(400).json({ error: 'Invalid attendance ID' });
+    }
+
+    const parseResult = updateAttendanceSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      return res.status(400).json({ error: 'Invalid request data', details: parseResult.error.errors });
+    }
+
+    // Get educator's class assignments to determine which schools/classes they can access
+    const assignments = await storage.getEducatorClassAssignmentsByEducatorId(userId);
+    if (assignments.length === 0) {
+      return res.status(403).json({ error: 'No class assignments found' });
+    }
+
+    // Get sessions for educator's assigned classes to find the attendance record
+    const assignedClassIds = assignments.map(a => a.classId);
+    let existingRecord: SessionAttendance | undefined;
+    let session;
+
+    // Look up attendance by checking sessions the educator has access to
+    for (const classId of assignedClassIds) {
+      const sessions = await storage.getClassSessionsByClassId(classId);
+      for (const sess of sessions) {
+        const attendance = await storage.getAttendanceBySessionId(sess.id);
+        const found = attendance.find(a => a.id === attendanceId);
+        if (found) {
+          existingRecord = found;
+          session = sess;
+          break;
+        }
+      }
+      if (existingRecord) break;
+    }
+
+    if (!existingRecord || !session) {
+      return res.status(404).json({ error: 'Attendance record not found' });
+    }
+
+    // Verify educator has a valid assignment for this class (checks school, validity dates)
+    const hasValidAssignment = await verifyEducatorAssignment(userId, session.classId, session.schoolId);
+    
+    if (session.educatorId !== userId && !hasValidAssignment) {
+      return res.status(403).json({ error: 'Not authorized to modify this attendance record' });
+    }
+
+    const updateData: Partial<InsertSessionAttendance> = {};
+    if (parseResult.data.status !== undefined) updateData.status = parseResult.data.status;
+    if (parseResult.data.checkInTime !== undefined) updateData.checkInTime = parseResult.data.checkInTime;
+    if (parseResult.data.checkOutTime !== undefined) updateData.checkOutTime = parseResult.data.checkOutTime;
+    if (parseResult.data.notes !== undefined) updateData.notes = parseResult.data.notes;
+
+    const updated = await storage.updateAttendance(attendanceId, updateData);
+
+    // Create audit log
+    await storage.createAuditLog({
+      action: 'attendance_updated',
+      targetType: 'session_attendance',
+      targetId: attendanceId,
+      actorId: userId,
+      schoolId: session.schoolId,
+      metadata: { changes: updateData, sessionId: session.id, classId: session.classId },
+      severity: 'info'
+    });
+
+    console.log(`[Attendance] Updated attendance record ${attendanceId}`);
+    res.json(updated);
+  } catch (error) {
+    console.error('[Attendance] Error updating attendance:', error);
+    res.status(500).json({ error: 'Failed to update attendance record' });
+  }
+});
+
+// DELETE /api/educator/attendance/:id - Delete an attendance record
+router.delete('/attendance/:id', async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'User ID not found' });
+    }
+
+    const attendanceId = parseInt(req.params.id);
+    if (isNaN(attendanceId)) {
+      return res.status(400).json({ error: 'Invalid attendance ID' });
+    }
+
+    // Get educator's class assignments to determine which schools/classes they can access
+    const assignments = await storage.getEducatorClassAssignmentsByEducatorId(userId);
+    if (assignments.length === 0) {
+      return res.status(403).json({ error: 'No class assignments found' });
+    }
+
+    // Get sessions for educator's assigned classes to find the attendance record
+    const assignedClassIds = assignments.map(a => a.classId);
+    let existingRecord: SessionAttendance | undefined;
+    let session;
+
+    // Look up attendance by checking sessions the educator has access to
+    for (const classId of assignedClassIds) {
+      const sessions = await storage.getClassSessionsByClassId(classId);
+      for (const sess of sessions) {
+        const attendance = await storage.getAttendanceBySessionId(sess.id);
+        const found = attendance.find(a => a.id === attendanceId);
+        if (found) {
+          existingRecord = found;
+          session = sess;
+          break;
+        }
+      }
+      if (existingRecord) break;
+    }
+
+    if (!existingRecord || !session) {
+      return res.status(404).json({ error: 'Attendance record not found' });
+    }
+
+    // Verify educator has a valid assignment for this class (checks school, validity dates)
+    const hasValidAssignment = await verifyEducatorAssignment(userId, session.classId, session.schoolId);
+    
+    if (session.educatorId !== userId && !hasValidAssignment) {
+      return res.status(403).json({ error: 'Not authorized to delete this attendance record' });
+    }
+
+    await storage.deleteAttendance(attendanceId);
+
+    // Create audit log
+    await storage.createAuditLog({
+      action: 'attendance_deleted',
+      targetType: 'session_attendance',
+      targetId: attendanceId,
+      actorId: userId,
+      schoolId: session.schoolId,
+      metadata: { childId: existingRecord.childId, status: existingRecord.status, sessionId: session.id, classId: session.classId },
+      severity: 'warning'
+    });
+
+    console.log(`[Attendance] Deleted attendance record ${attendanceId}`);
+    res.status(204).send();
+  } catch (error) {
+    console.error('[Attendance] Error deleting attendance:', error);
+    res.status(500).json({ error: 'Failed to delete attendance record' });
+  }
+});
+
+// GET /api/educator/children/:childId/attendance - Get attendance history for a child
+router.get('/children/:childId/attendance', async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'User ID not found' });
+    }
+
+    const childId = parseInt(req.params.childId);
+    if (isNaN(childId)) {
+      return res.status(400).json({ error: 'Invalid child ID' });
+    }
+
+    // Verify the educator teaches this child (has an assignment for a class the child is enrolled in)
+    const assignments = await storage.getEducatorClassAssignmentsByEducatorId(userId);
+    const classIds = assignments.map(a => a.classId);
+    
+    // Get child's enrollments
+    const child = await storage.getChildById(childId);
+    if (!child) {
+      return res.status(404).json({ error: 'Child not found' });
+    }
+
+    // Check if child is in any of educator's classes
+    let isTeachingChild = false;
+    for (const classId of classIds) {
+      const enrollments = await storage.getEnrollmentsByClassId(classId);
+      if (enrollments.some(e => e.childId === childId && e.status === 'active')) {
+        isTeachingChild = true;
+        break;
+      }
+    }
+
+    if (!isTeachingChild) {
+      return res.status(403).json({ error: 'Not authorized to view this child\'s attendance' });
+    }
+
+    const attendance = await storage.getAttendanceByChildId(childId);
+
+    // Enrich with session and class info
+    const attendanceWithDetails = await Promise.all(
+      attendance.map(async (record: SessionAttendance) => {
+        const session = await storage.getClassSession(record.sessionId);
+        const classInfo = session ? await storage.getClassById(session.classId) : null;
+        return {
+          ...record,
+          sessionDate: session?.scheduledDate,
+          className: classInfo?.title || 'Unknown'
+        };
+      })
+    );
+
+    console.log(`[Attendance] Retrieved ${attendanceWithDetails.length} attendance records for child ${childId}`);
+    res.json(attendanceWithDetails);
+  } catch (error) {
+    console.error('[Attendance] Error fetching child attendance:', error);
+    res.status(500).json({ error: 'Failed to fetch attendance history' });
+  }
+});
+
+// ==================== END ATTENDANCE ENDPOINTS ====================
 
 // Helper function to get week start date (Monday)
 function getWeekStartDate(date: Date): string {

@@ -44,7 +44,8 @@ import {
   classSessions, type ClassSession, type InsertClassSession,
   educatorSchedules, type EducatorSchedule, type InsertEducatorSchedule,
   auditLogs, type AuditLog, type InsertAuditLog,
-  schoolClassEnrollments, type SchoolClassEnrollment, type InsertSchoolClassEnrollment
+  schoolClassEnrollments, type SchoolClassEnrollment, type InsertSchoolClassEnrollment,
+  sessionAttendance, type SessionAttendance, type InsertSessionAttendance
 } from "@shared/schema";
 import { eq, inArray } from 'drizzle-orm';
 import { getDb } from './db';
@@ -493,6 +494,16 @@ export interface IStorage {
   getAuditLogsByTargetId(targetType: string, targetId: string): Promise<AuditLog[]>;
   getAuditLogsByActorId(actorId: number): Promise<AuditLog[]>;
   getAuditLogsBySchoolId(schoolId: number, filters?: { actionType?: string; severity?: string; startDate?: string; endDate?: string }): Promise<AuditLog[]>;
+  
+  // Session Attendance methods (Phase 2)
+  getAttendanceBySessionId(sessionId: number): Promise<SessionAttendance[]>;
+  getAttendanceByChildId(childId: number): Promise<SessionAttendance[]>;
+  getAttendanceBySchoolId(schoolId: number): Promise<SessionAttendance[]>;
+  getAttendanceRecord(sessionId: number, childId: number): Promise<SessionAttendance | undefined>;
+  createAttendance(attendance: InsertSessionAttendance): Promise<SessionAttendance>;
+  updateAttendance(id: number, attendance: Partial<InsertSessionAttendance>): Promise<SessionAttendance | undefined>;
+  deleteAttendance(id: number): Promise<void>;
+  upsertAttendance(attendance: InsertSessionAttendance): Promise<SessionAttendance>;
 }
 
 export class MemStorage implements IStorage {
@@ -4300,6 +4311,73 @@ export class MemStorage implements IStorage {
       })
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }
+
+  // Session Attendance methods (Phase 2)
+  private sessionAttendanceStore = new Map<number, SessionAttendance>();
+  private sessionAttendanceIdCounter = 1;
+
+  async getAttendanceBySessionId(sessionId: number): Promise<SessionAttendance[]> {
+    return Array.from(this.sessionAttendanceStore.values())
+      .filter(a => a.sessionId === sessionId);
+  }
+
+  async getAttendanceByChildId(childId: number): Promise<SessionAttendance[]> {
+    return Array.from(this.sessionAttendanceStore.values())
+      .filter(a => a.childId === childId)
+      .sort((a, b) => b.recordedAt.getTime() - a.recordedAt.getTime());
+  }
+
+  async getAttendanceBySchoolId(schoolId: number): Promise<SessionAttendance[]> {
+    return Array.from(this.sessionAttendanceStore.values())
+      .filter(a => a.schoolId === schoolId)
+      .sort((a, b) => b.recordedAt.getTime() - a.recordedAt.getTime());
+  }
+
+  async getAttendanceRecord(sessionId: number, childId: number): Promise<SessionAttendance | undefined> {
+    return Array.from(this.sessionAttendanceStore.values())
+      .find(a => a.sessionId === sessionId && a.childId === childId);
+  }
+
+  async createAttendance(attendance: InsertSessionAttendance): Promise<SessionAttendance> {
+    const id = this.sessionAttendanceIdCounter++;
+    const newAttendance: SessionAttendance = {
+      id,
+      ...attendance,
+      status: attendance.status ?? 'present',
+      checkInTime: attendance.checkInTime ?? null,
+      checkOutTime: attendance.checkOutTime ?? null,
+      tardyMinutes: attendance.tardyMinutes ?? null,
+      earlyDepartureMinutes: attendance.earlyDepartureMinutes ?? null,
+      excuseReason: attendance.excuseReason ?? null,
+      notes: attendance.notes ?? null,
+      recordedAt: new Date(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.sessionAttendanceStore.set(id, newAttendance);
+    return newAttendance;
+  }
+
+  async updateAttendance(id: number, attendance: Partial<InsertSessionAttendance>): Promise<SessionAttendance | undefined> {
+    const existing = this.sessionAttendanceStore.get(id);
+    if (!existing) return undefined;
+    const updated = { ...existing, ...attendance, updatedAt: new Date() };
+    this.sessionAttendanceStore.set(id, updated);
+    return updated;
+  }
+
+  async deleteAttendance(id: number): Promise<void> {
+    this.sessionAttendanceStore.delete(id);
+  }
+
+  async upsertAttendance(attendance: InsertSessionAttendance): Promise<SessionAttendance> {
+    const existing = await this.getAttendanceRecord(attendance.sessionId, attendance.childId);
+    if (existing) {
+      const updated = await this.updateAttendance(existing.id, attendance);
+      return updated!;
+    }
+    return this.createAttendance(attendance);
+  }
 }
 
   import { DatabaseStorage } from "./dbStorage";
@@ -6369,6 +6447,39 @@ export class MemStorage implements IStorage {
 
       async getAuditLogsBySchoolId(schoolId: number, filters?: { actionType?: string; severity?: string; startDate?: string; endDate?: string }): Promise<AuditLog[]> {
         return this.dbStorage.getAuditLogsBySchoolId(schoolId, filters);
+      }
+
+      // Session Attendance methods (Phase 2)
+      async getAttendanceBySessionId(sessionId: number): Promise<SessionAttendance[]> {
+        return this.dbStorage.getAttendanceBySessionId(sessionId);
+      }
+
+      async getAttendanceByChildId(childId: number): Promise<SessionAttendance[]> {
+        return this.dbStorage.getAttendanceByChildId(childId);
+      }
+
+      async getAttendanceBySchoolId(schoolId: number): Promise<SessionAttendance[]> {
+        return this.dbStorage.getAttendanceBySchoolId(schoolId);
+      }
+
+      async getAttendanceRecord(sessionId: number, childId: number): Promise<SessionAttendance | undefined> {
+        return this.dbStorage.getAttendanceRecord(sessionId, childId);
+      }
+
+      async createAttendance(attendance: InsertSessionAttendance): Promise<SessionAttendance> {
+        return this.dbStorage.createAttendance(attendance);
+      }
+
+      async updateAttendance(id: number, attendance: Partial<InsertSessionAttendance>): Promise<SessionAttendance | undefined> {
+        return this.dbStorage.updateAttendance(id, attendance);
+      }
+
+      async deleteAttendance(id: number): Promise<void> {
+        return this.dbStorage.deleteAttendance(id);
+      }
+
+      async upsertAttendance(attendance: InsertSessionAttendance): Promise<SessionAttendance> {
+        return this.dbStorage.upsertAttendance(attendance);
       }
 
       // Clear all data from storage (for testing)

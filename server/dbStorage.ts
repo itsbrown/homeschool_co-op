@@ -44,7 +44,8 @@ import {
   EducatorClassAssignment, InsertEducatorClassAssignment, educatorClassAssignments,
   ClassSession, InsertClassSession, classSessions,
   EducatorSchedule, InsertEducatorSchedule, educatorSchedules,
-  AuditLog, InsertAuditLog, auditLogs
+  AuditLog, InsertAuditLog, auditLogs,
+  SessionAttendance, InsertSessionAttendance, sessionAttendance
 } from '../shared/schema';
 
 /**
@@ -3215,5 +3216,68 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(auditLogs)
       .where(and(...conditions))
       .orderBy(desc(auditLogs.createdAt));
+  }
+
+  // Session Attendance methods (Phase 2)
+  async getAttendanceBySessionId(sessionId: number): Promise<SessionAttendance[]> {
+    const db = await getDb();
+    return db.select().from(sessionAttendance)
+      .where(eq(sessionAttendance.sessionId, sessionId));
+  }
+
+  async getAttendanceByChildId(childId: number): Promise<SessionAttendance[]> {
+    const db = await getDb();
+    return db.select().from(sessionAttendance)
+      .where(eq(sessionAttendance.childId, childId))
+      .orderBy(desc(sessionAttendance.recordedAt));
+  }
+
+  async getAttendanceBySchoolId(schoolId: number): Promise<SessionAttendance[]> {
+    const db = await getDb();
+    return db.select().from(sessionAttendance)
+      .where(eq(sessionAttendance.schoolId, schoolId))
+      .orderBy(desc(sessionAttendance.recordedAt));
+  }
+
+  async getAttendanceRecord(sessionId: number, childId: number): Promise<SessionAttendance | undefined> {
+    const db = await getDb();
+    const [record] = await db.select().from(sessionAttendance)
+      .where(and(
+        eq(sessionAttendance.sessionId, sessionId),
+        eq(sessionAttendance.childId, childId)
+      ))
+      .limit(1);
+    return record;
+  }
+
+  async createAttendance(attendance: InsertSessionAttendance): Promise<SessionAttendance> {
+    const db = await getDb();
+    const [newAttendance] = await db.insert(sessionAttendance)
+      .values(attendance)
+      .returning();
+    return newAttendance;
+  }
+
+  async updateAttendance(id: number, attendanceData: Partial<InsertSessionAttendance>): Promise<SessionAttendance | undefined> {
+    const db = await getDb();
+    const [updated] = await db.update(sessionAttendance)
+      .set({ ...attendanceData, updatedAt: new Date() })
+      .where(eq(sessionAttendance.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteAttendance(id: number): Promise<void> {
+    const db = await getDb();
+    await db.delete(sessionAttendance).where(eq(sessionAttendance.id, id));
+  }
+
+  async upsertAttendance(attendance: InsertSessionAttendance): Promise<SessionAttendance> {
+    const existing = await this.getAttendanceRecord(attendance.sessionId, attendance.childId);
+    if (existing) {
+      const updated = await this.updateAttendance(existing.id, attendance);
+      return updated!;
+    }
+    return this.createAttendance(attendance);
   }
 }

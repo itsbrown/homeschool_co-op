@@ -985,6 +985,45 @@ async function runMigrations() {
     `);
     console.log('✅ Migration completed: audit_logs table created');
     
+    // Phase 2: Create session_attendance table for attendance tracking
+    console.log('Running migration: Creating session_attendance table...');
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS session_attendance (
+        id SERIAL PRIMARY KEY,
+        session_id INTEGER NOT NULL REFERENCES class_sessions(id) ON DELETE CASCADE,
+        child_id INTEGER NOT NULL REFERENCES children(id) ON DELETE CASCADE,
+        school_id INTEGER NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+        status TEXT NOT NULL DEFAULT 'present' CHECK (status IN ('present', 'absent', 'tardy', 'excused', 'early_departure')),
+        check_in_time TIMESTAMP,
+        check_out_time TIMESTAMP,
+        tardy_minutes INTEGER,
+        early_departure_minutes INTEGER,
+        excuse_reason TEXT,
+        notes TEXT,
+        recorded_by INTEGER NOT NULL REFERENCES users(id),
+        recorded_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_session_attendance_session_id 
+      ON session_attendance(session_id);
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_session_attendance_child_id 
+      ON session_attendance(child_id);
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_session_attendance_school_id 
+      ON session_attendance(school_id);
+    `);
+    await db.execute(sql`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_session_attendance_unique 
+      ON session_attendance(session_id, child_id);
+    `);
+    console.log('✅ Migration completed: session_attendance table created');
+    
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     

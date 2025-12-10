@@ -123,14 +123,33 @@ The Educator Dashboard provides educators/mentors with tools to manage their cla
 
 **Status**: Completed
 
-### Phase 2: Communication & Attendance
-**Features**:
-- Attendance tracking (present/absent/tardy)
+### Phase 2: Communication & Attendance (In Progress)
+**Goal**: Attendance tracking for class sessions, parent messaging with admin approval, educator notifications.
+
+**Database Tables**:
+- `session_attendance` - Tracks student attendance per class session (status: present/absent/late/excused, check-in/out times, notes)
+
+**Completed Features**:
+- Session attendance schema with status tracking, check-in/out times, notes, and recorded-by tracking
+- Full CRUD API endpoints for attendance management:
+  - GET /api/educator/sessions/:sessionId/attendance - Get attendance for a session
+  - GET /api/educator/sessions/:sessionId/roster - Get class roster with attendance status
+  - POST /api/educator/attendance - Create single attendance record
+  - POST /api/educator/attendance/bulk - Bulk create/update attendance records
+  - PATCH /api/educator/attendance/:id - Update attendance record
+  - DELETE /api/educator/attendance/:id - Delete attendance record
+  - GET /api/educator/children/:childId/attendance - Get child's attendance history
+- Upsert pattern to prevent duplicate attendance records
+- Full audit logging for attendance operations
+- Authorization: Educators can only manage attendance for their assigned classes
+
+**Remaining Features**:
+- Frontend attendance UI for educators
 - Class-specific parent messaging with admin approval workflow
 - Notification system for educators
 - Audit trail for all messages
 
-**Status**: Planned
+**Status**: In Progress (Backend Complete)
 
 ### Phase 3: Academic Features
 **Features**:
