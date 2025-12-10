@@ -102,8 +102,11 @@ import ResetPasswordPage from './pages/ResetPasswordPage';
 import EducatorClassesPage from './pages/educator/EducatorClassesPage';
 import EducatorClassDetailsPage from './pages/educator/EducatorClassDetailsPage';
 import EducatorStudentsPage from './pages/educator/EducatorStudentsPage';
+import EducatorStudentDetailPage from './pages/educator/EducatorStudentDetailPage';
 import EducatorNotificationsPage from './pages/educator/EducatorNotificationsPage';
 import EducatorDashboardPage from './pages/educator/EducatorDashboard';
+import EducatorSchedulePage from './pages/educator/EducatorSchedulePage';
+import EducatorSettingsPage from './pages/educator/EducatorSettingsPage';
 import MyClassesPage from './pages/educator/MyClasses';
 import WeeklyCalendarPage from './pages/educator/WeeklyCalendar';
 import MyHoursPage from './pages/educator/MyHours';
@@ -550,7 +553,9 @@ function Router() {
       <Route path="/educator/classes" component={() => <AppShell><EducatorClassesPage /></AppShell>} />
       <Route path="/educator/classes/:id" component={() => <AppShell><EducatorClassDetailsPage /></AppShell>} />
       <Route path="/educator/students" component={() => <AppShell><EducatorStudentsPage /></AppShell>} />
-      <Route path="/educator/schedule" component={SchedulePage} />
+      <Route path="/educator/students/:id" component={() => <AppShell><EducatorStudentDetailPage /></AppShell>} />
+      <Route path="/educator/schedule" component={() => <AppShell><EducatorSchedulePage /></AppShell>} />
+      <Route path="/educator/settings" component={() => <AppShell><EducatorSettingsPage /></AppShell>} />
       <Route path="/educator/notifications" component={() => <AppShell><EducatorNotificationsPage /></AppShell>} />
       
       {/* Daily Flow routes */}

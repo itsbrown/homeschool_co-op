@@ -21,6 +21,16 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDate } from "@/lib/utils";
 
+function calculateAge(birthdate: string): number {
+  const today = new Date();
+  const bday = new Date(birthdate);
+  let age = today.getFullYear() - bday.getFullYear();
+  if (today < new Date(today.getFullYear(), bday.getMonth(), bday.getDate())) {
+    age--;
+  }
+  return age;
+}
+
 export default function EducatorStudentsPage() {
   const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
@@ -209,6 +219,7 @@ export default function EducatorStudentsPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Student Name</TableHead>
+                    <TableHead>Birthday</TableHead>
                     <TableHead>Grade Level</TableHead>
                     <TableHead>Class</TableHead>
                     <TableHead>Parent Contact</TableHead>
@@ -221,16 +232,21 @@ export default function EducatorStudentsPage() {
                   {filteredStudents.map((student: any) => (
                     <TableRow key={student.id}>
                       <TableCell className="font-medium">
-                        <div>
-                          <div className="font-semibold">
-                            {student.firstName} {student.lastName}
-                          </div>
-                          {student.dateOfBirth && (
-                            <div className="text-sm text-muted-foreground">
-                              Age: {Math.floor((Date.now() - new Date(student.dateOfBirth).getTime()) / (365.25 * 24 * 60 * 60 * 1000))}
-                            </div>
-                          )}
+                        <div className="font-semibold">
+                          {student.firstName} {student.lastName}
                         </div>
+                      </TableCell>
+                      <TableCell>
+                        {student.birthdate ? (
+                          <div className="text-sm">
+                            <div>{new Date(student.birthdate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div>
+                            <div className="text-muted-foreground">
+                              Age {calculateAge(student.birthdate)}
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">N/A</span>
+                        )}
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline">

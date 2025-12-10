@@ -1223,6 +1223,11 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(children).where(eq(children.parentId, parentId));
   }
 
+  // Alias for getChildrenByParent to maintain API compatibility
+  async getChildrenByParentId(parentId: number): Promise<Child[]> {
+    return this.getChildrenByParent(parentId);
+  }
+
   async createChild(child: InsertChild): Promise<Child> {
     const db = await getDb();
     const [newChild] = await db

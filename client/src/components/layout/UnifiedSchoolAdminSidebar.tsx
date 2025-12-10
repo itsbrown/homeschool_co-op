@@ -161,7 +161,7 @@ const educatorNavItems: NavItem[] = [
   },
   {
     title: 'Settings',
-    href: '/settings',
+    href: '/educator/settings',
     icon: Settings,
   },
 ];

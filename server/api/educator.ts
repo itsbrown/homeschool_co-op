@@ -219,6 +219,7 @@ router.get('/my-students', async (req, res) => {
           lastName: child.lastName,
           gradeLevel: child.gradeLevel,
           parentEmail: child.parentEmail,
+          birthdate: child.birthdate,
           classId: enrollment.marketplaceClassId,
           className: classInfo ? classInfo.title : 'Unknown Class',
           enrollmentDate: enrollment.enrollmentDate,

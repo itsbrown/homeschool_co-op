@@ -8,7 +8,8 @@ import {
   ChevronRight, 
   MapPin,
   BookOpen,
-  PlayCircle
+  PlayCircle,
+  Cake
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -42,6 +43,20 @@ interface WeekScheduleData {
   schedules: ScheduleEntry[];
 }
 
+interface Student {
+  id: number;
+  firstName: string;
+  lastName: string;
+  birthdate?: string;
+}
+
+interface BirthdayEvent {
+  studentId: number;
+  studentName: string;
+  date: string;
+  age: number;
+}
+
 const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const DAY_ABBREV = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -60,19 +75,39 @@ function formatTime(timeStr: string): string {
   return `${hour12}:${minutes.toString().padStart(2, '0')} ${period}`;
 }
 
-function WeeklyCalendarContent() {
+function calculateAgeOnDate(birthdate: string, targetDate: string): number {
+  const target = new Date(targetDate);
+  const bday = new Date(birthdate);
+  return target.getFullYear() - bday.getFullYear();
+}
+
+interface WeeklyCalendarProps {
+  showBirthdays?: boolean;
+  showQuickActions?: boolean;
+}
+
+function WeeklyCalendarContent({ showBirthdays = false, showQuickActions = true }: WeeklyCalendarProps) {
   const [, navigate] = useLocation();
   const [currentWeekStart, setCurrentWeekStart] = useState(() => getWeekStartDate(new Date()));
 
   const { data: weekData, isLoading, error, refetch } = useQuery<WeekScheduleData>({
     queryKey: ['/api/educator/schedules/week', currentWeekStart],
     queryFn: async () => {
+      const token = localStorage.getItem('supabase_token');
       const response = await fetch(`/api/educator/schedules/week?weekStart=${currentWeekStart}`, {
-        credentials: 'include'
+        credentials: 'include',
+        headers: {
+          ...(token && { 'Authorization': `Bearer ${token}` }),
+        },
       });
       if (!response.ok) throw new Error('Failed to fetch schedule');
       return response.json();
     }
+  });
+
+  const { data: studentsResponse } = useQuery<{ students: Student[] }>({
+    queryKey: ["/api/educator/my-students"],
+    enabled: showBirthdays,
   });
 
   const goToPreviousWeek = () => {
@@ -114,6 +149,27 @@ function WeeklyCalendarContent() {
     return weekData.schedules.filter(s => s.calculatedDate === dateStr);
   };
 
+  const getBirthdaysForDay = (dateStr: string): BirthdayEvent[] => {
+    if (!showBirthdays || !studentsResponse?.students) return [];
+    
+    const targetDate = new Date(dateStr);
+    const targetMonth = targetDate.getMonth();
+    const targetDay = targetDate.getDate();
+    
+    return studentsResponse.students
+      .filter(student => {
+        if (!student.birthdate) return false;
+        const bday = new Date(student.birthdate);
+        return bday.getMonth() === targetMonth && bday.getDate() === targetDay;
+      })
+      .map(student => ({
+        studentId: student.id,
+        studentName: `${student.firstName} ${student.lastName}`,
+        date: dateStr,
+        age: calculateAgeOnDate(student.birthdate!, dateStr)
+      }));
+  };
+
   const weekDates = getWeekDates();
 
   if (isLoading) {
@@ -139,7 +195,7 @@ function WeeklyCalendarContent() {
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <Calendar className="h-6 w-6" />
-            Weekly Schedule
+            {showBirthdays ? 'My Schedule' : 'Weekly Schedule'}
           </h1>
           <p className="text-muted-foreground">{weekRange}</p>
         </div>
@@ -173,6 +229,7 @@ function WeeklyCalendarContent() {
       <div className="grid grid-cols-1 md:grid-cols-7 gap-4">
         {weekDates.map((day) => {
           const daySchedules = getSchedulesForDay(day.date);
+          const dayBirthdays = getBirthdaysForDay(day.date);
           
           return (
             <Card 
@@ -192,16 +249,32 @@ function WeeklyCalendarContent() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-2 space-y-2">
-                {daySchedules.length === 0 ? (
+                {dayBirthdays.map((birthday) => (
+                  <div 
+                    key={`birthday-${birthday.studentId}`}
+                    className="p-2 rounded-md bg-pink-100 dark:bg-pink-900/30 text-pink-800 dark:text-pink-200"
+                    data-testid={`birthday-event-${birthday.studentId}`}
+                  >
+                    <div className="flex items-start gap-2">
+                      <Cake className="h-3 w-3 mt-0.5 shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-xs font-medium truncate">{birthday.studentName}</p>
+                        <p className="text-xs opacity-75">Turns {birthday.age}!</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                
+                {daySchedules.length === 0 && dayBirthdays.length === 0 ? (
                   <p className="text-xs text-muted-foreground text-center py-2">
-                    No classes
+                    No events
                   </p>
                 ) : (
                   daySchedules.map((schedule) => (
                     <div 
                       key={schedule.id}
                       className="p-2 rounded-md bg-muted hover:bg-muted/80 cursor-pointer transition-colors"
-                      onClick={() => navigate(`/educator/my-classes`)}
+                      onClick={() => navigate(`/educator/classes/${schedule.classId}`)}
                       data-testid={`schedule-item-${schedule.id}`}
                     >
                       <div className="flex items-start gap-2">
@@ -229,46 +302,66 @@ function WeeklyCalendarContent() {
         })}
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <PlayCircle className="h-5 w-5" />
-            Quick Actions
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-wrap gap-2">
-          <Button 
-            variant="outline" 
-            onClick={() => navigate('/educator')}
-            data-testid="button-back-dashboard"
-          >
-            Back to Dashboard
-          </Button>
-          <Button 
-            variant="outline" 
-            onClick={() => navigate('/educator/my-classes')}
-            data-testid="button-view-classes"
-          >
-            View All Classes
-          </Button>
-          <Button 
-            variant="outline" 
-            onClick={() => navigate('/educator/my-hours')}
-            data-testid="button-view-hours"
-          >
-            View My Hours
-          </Button>
-        </CardContent>
-      </Card>
+      {showBirthdays && (
+        <div className="flex items-center gap-4 text-sm text-muted-foreground">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 bg-muted rounded" />
+            <span>Classes</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 bg-pink-200 dark:bg-pink-900/30 rounded" />
+            <span>Student Birthdays</span>
+          </div>
+        </div>
+      )}
+
+      {showQuickActions && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <PlayCircle className="h-5 w-5" />
+              Quick Actions
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-2">
+            <Button 
+              variant="outline" 
+              onClick={() => navigate('/educator')}
+              data-testid="button-back-dashboard"
+            >
+              Back to Dashboard
+            </Button>
+            <Button 
+              variant="outline" 
+              onClick={() => navigate('/educator/classes')}
+              data-testid="button-view-classes"
+            >
+              View All Classes
+            </Button>
+            <Button 
+              variant="outline" 
+              onClick={() => navigate('/educator/my-hours')}
+              data-testid="button-view-hours"
+            >
+              View My Hours
+            </Button>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
 
-export default function WeeklyCalendar() {
+interface WeeklyCalendarPageProps {
+  showBirthdays?: boolean;
+  showQuickActions?: boolean;
+}
+
+export default function WeeklyCalendar({ showBirthdays = false, showQuickActions = true }: WeeklyCalendarPageProps) {
   return (
     <EducatorErrorBoundary>
       <div className="container mx-auto px-4 py-6 max-w-7xl">
-        <WeeklyCalendarContent />
+        <WeeklyCalendarContent showBirthdays={showBirthdays} showQuickActions={showQuickActions} />
       </div>
     </EducatorErrorBoundary>
   );

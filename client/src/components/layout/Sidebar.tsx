@@ -257,7 +257,7 @@ const educatorNavItems: {
   },
   {
     title: 'Settings',
-    href: '/settings',
+    href: '/educator/settings',
     icon: Settings,
   },
 ];
