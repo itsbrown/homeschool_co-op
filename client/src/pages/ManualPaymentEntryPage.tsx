@@ -15,8 +15,6 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Calendar, DollarSign, User, FileText, CreditCard } from 'lucide-react';
 import { format } from 'date-fns';
 import { formatCurrency, centsToDollars } from '@/utils/currency';
-import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
-
 const manualPaymentSchema = z.object({
   parentEmail: z.string().email('Please enter a valid email address'),
   childName: z.string().min(1, 'Child name is required'),
@@ -108,19 +106,18 @@ export default function ManualPaymentEntryPage() {
   };
 
   return (
-    <SchoolAdminLayout pageTitle="Manual Payment Entry">
-      <div className="space-y-6">
-        <div className="flex items-center gap-4">
-          <div className="p-3 bg-primary/10 rounded-lg">
-            <CreditCard className="h-6 w-6 text-primary" />
-          </div>
-          <div>
-            <h1 className="text-3xl font-bold">Manual Payment Entry</h1>
-            <p className="text-muted-foreground">
-              Record payments made outside the online system
-            </p>
-          </div>
+    <div className="space-y-6">
+      <div className="flex items-center gap-4">
+        <div className="p-3 bg-primary/10 rounded-lg">
+          <CreditCard className="h-6 w-6 text-primary" />
         </div>
+        <div>
+          <h1 className="text-3xl font-bold">Manual Payment Entry</h1>
+          <p className="text-muted-foreground">
+            Record payments made outside the online system
+          </p>
+        </div>
+      </div>
 
       <Card className="max-w-2xl">
         <CardHeader>
@@ -428,7 +425,6 @@ export default function ManualPaymentEntryPage() {
           </div>
         </CardContent>
       </Card>
-      </div>
-    </SchoolAdminLayout>
+    </div>
   );
 }

@@ -556,7 +556,7 @@ router.post('/manual', supabaseAuth, async (req: any, res) => {
         parentEmail: payment.parentEmail,
         childName: payment.childName,
         className: payment.className,
-        amount: CurrencyUtils.toDisplay(payment.amount),
+        amount: payment.amount, // Return cents (platform standard) - frontend uses formatCurrency()
         currency: payment.currency,
         status: payment.status,
         description: description || `Manual payment for ${childName} - ${className}`,

@@ -268,7 +268,7 @@ async function runMigrations() {
     
     // Add missing role values to existing role enum if they don't exist
     console.log('Running migration: Adding missing role values to enum...');
-    const rolesToAdd = ['educator', 'learner'];
+    const rolesToAdd = ['educator', 'learner', 'mentor'];
     for (const roleValue of rolesToAdd) {
       try {
         await db.execute(sql.raw(`

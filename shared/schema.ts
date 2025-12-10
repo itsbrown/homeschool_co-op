@@ -4,7 +4,7 @@ import { z } from "zod";
 import { relations } from "drizzle-orm";
 
 // Define the enum for user roles
-const roleEnum = pgEnum('role', ["student", "parent", "learner", "educator", "teacher", "schoolAdmin", "admin", "superAdmin"]);
+const roleEnum = pgEnum('role', ["student", "parent", "learner", "educator", "mentor", "teacher", "schoolAdmin", "admin", "superAdmin"]);
 
 // Users table
 export const users = pgTable("users", {
@@ -54,7 +54,7 @@ export const userRoles = pgTable("user_roles", {
 });
 
 // System roles that are always valid, plus custom staff positions validated at API layer
-export const systemRoles = ["student", "parent", "learner", "educator", "teacher", "schoolAdmin", "admin", "superAdmin"] as const;
+export const systemRoles = ["student", "parent", "learner", "educator", "mentor", "teacher", "schoolAdmin", "admin", "superAdmin"] as const;
 export type SystemRole = typeof systemRoles[number];
 
 export const insertUserRoleSchema = createInsertSchema(userRoles).omit({ id: true, createdAt: true });
