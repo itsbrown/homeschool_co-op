@@ -13,6 +13,7 @@ import { ChevronDown, User, School, GraduationCap, BookOpen, Shield } from "luci
 const roleConfig: Record<string, { icon: any; label: string }> = {
   parent: { icon: User, label: 'Parent' },
   educator: { icon: GraduationCap, label: 'Educator' },
+  mentor: { icon: GraduationCap, label: 'Mentor' },
   teacher: { icon: GraduationCap, label: 'Teacher' },
   learner: { icon: BookOpen, label: 'Learner' },
   student: { icon: BookOpen, label: 'Student' },
