@@ -117,11 +117,13 @@ export default function UsersPage() {
   const handleExportUsers = async () => {
     setIsExporting(true);
     try {
+      const token = localStorage.getItem('supabase_token');
       const response = await fetch('/api/admin-users/export/users-and-children', {
         method: 'GET',
         credentials: 'include',
         headers: {
           'Accept': 'text/csv',
+          ...(token && { 'Authorization': `Bearer ${token}` }),
         },
       });
       

@@ -1,7 +1,7 @@
 # ASA Learning Platform
 
 ## Overview
-The ASA Learning Platform is an adaptive learning application designed for the American Seekers Academy. It offers a comprehensive and engaging educational experience through a full-stack web architecture, AI-powered content generation, and robust assessment tools. The platform aims to provide personalized learning paths, efficient administrative capabilities, and a secure, user-friendly environment, positioning itself for significant market impact in adaptive learning.
+The ASA Learning Platform is an adaptive learning application for the American Seekers Academy. It offers a comprehensive educational experience through a full-stack web architecture, AI-powered content generation, and robust assessment tools. The platform aims to provide personalized learning paths, efficient administrative capabilities, and a secure, user-friendly environment, positioning itself for significant market impact in adaptive learning.
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
@@ -16,6 +16,37 @@ Preferred communication style: Simple, everyday language.
   - `school_class_enrollments` table: Used for **school-specific class management** and future roster features. Links via `studentId` → `school_students` → `children`. Currently not populated by the enrollment flow.
   - `program_enrollments` table: Used for **active class enrollments** including enrollment count, rosters, and cart/checkout flows. Links via `childId` → `children` directly. Use `storage.getAllEnrollments()` or `storage.getEnrollmentCountForClass()`.
   - **Critical**: Class roster endpoints must query `program_enrollments` (same as enrollment count) to show students. The enrollment count and roster must use the same data source.
+
+## Authentication Patterns
+When adding or modifying authenticated endpoints, ALWAYS verify BOTH backend and frontend:
+
+### Backend Endpoint Checklist
+1. **Middleware chain**: Use `supabaseAuth` + `requireSchoolContext` for school-scoped endpoints
+   ```typescript
+   router.get('/endpoint', supabaseAuth, requireSchoolContext, async (req: any, res) => {
+   ```
+2. **School ID access**: Use `req.schoolId` (from middleware), NEVER `req.user?.schoolId` directly
+3. **Role access**: Check `req.user?.role || req.user?.activeRole` for multi-role users
+4. **Authorization**: Verify user has permission via role check or assignment lookup
+
+### Frontend Caller Checklist
+1. **JSON requests**: Use `apiRequest()` from `queryClient.ts` - automatically adds Bearer token
+2. **Blob/File downloads**: For raw `fetch` (CSV, files), manually add auth header:
+   ```typescript
+   const token = localStorage.getItem('supabase_token');
+   const response = await fetch('/api/endpoint', {
+     headers: {
+       ...(token && { 'Authorization': `Bearer ${token}` }),
+     },
+   });
+   ```
+3. **Never use cookies-only auth**: `credentials: 'include'` alone is insufficient - always include Bearer token
+
+### Common Auth Mistakes
+- Adding backend middleware but forgetting to update frontend caller
+- Using `req.user?.schoolId` instead of `req.schoolId` from middleware
+- Using raw `fetch` without Authorization header for authenticated endpoints
+- Not checking both `role` and `activeRole` for multi-role users
 
 ## System Architecture
 ### Core Design Principles
@@ -38,18 +69,17 @@ The platform prioritizes scalability, security, and user experience, incorporati
 -   **Supabase**: Reserved exclusively for authentication (OAuth on frontend, auth admin operations on backend) and NOT for general data persistence.
 
 ### Key Features
--   **Authentication and Authorization**: Supabase-based secure authentication with role-based access control, JWT validation, multi-tenant security, and user metadata auto-sync. **OAuth Registration Blocker**: Users attempting Google OAuth login without prior school registration are blocked with a friendly error message redirecting them to contact their school administrator. This prevents orphaned accounts (schoolId=null) from being created. Existing registered users continue normal login flow.
--   **Multi-Role System**: Supports users holding multiple roles with dynamic, school-context-restricted role-switching capabilities. Role management uses a centralized three-way access control helper (`checkSchoolAdminAccessToUser`) for consistent security. RoleSwitcher updates immediately via TanStack Query cache invalidation when roles are added/removed.
+-   **Authentication and Authorization**: Supabase-based secure authentication with role-based access control, JWT validation, multi-tenant security, and user metadata auto-sync. OAuth registration is blocked for users without prior school registration to prevent orphaned accounts.
+-   **Multi-Role System**: Supports users holding multiple roles with dynamic, school-context-restricted role-switching.
 -   **School Branding System**: Allows school administrators to upload and display school logos.
 -   **Membership Management System**: Admin interface for managing annual membership fees and enrollment validation.
--   **Payment System**: Stripe-only system with subscription schedules, webhooks, smart cart logic, automated refunds, and automatic payment reminders.
--   **Payment Reminder System**: Automated email reminders for scheduled payments at T-7, T-3, T-1, T+0 (due day), and T+1 (overdue) days. Uses Brevo SMTP for delivery.
--   **Cart System**: TanStack Query-based cart implementation with API-first state management, race condition prevention, and atomic bulk cancellation.
+-   **Payment System**: Stripe-only system with subscription schedules, webhooks, smart cart logic, automated refunds, and payment reminders.
+-   **Cart System**: TanStack Query-based cart implementation with API-first state management and race condition prevention.
 -   **Discount Systems**: Database-managed Free After Threshold Discount System.
--   **Free Enrollment Admin Approval**: When a 100% discount results in a $0 total, enrollments require admin approval as a safeguard against abuse. Parents see a "Request Free Enrollment" UI, admins receive notifications, and can approve/reject via admin dashboard. Approved enrollments become active immediately; parents are notified of decisions.
--   **Enrollment Management**: Prevents duplicate enrollments, manages status workflows (including pending_admin_approval status), and integrates with the cart-to-checkout flow.
+-   **Free Enrollment Admin Approval**: Enrollments resulting in a $0 total require admin approval.
+-   **Enrollment Management**: Prevents duplicate enrollments, manages status workflows, and integrates with the cart-to-checkout flow.
 -   **Class Management**: School administrators can create, edit, and manage classes with multi-variant pricing and school isolation.
--   **Registration Flow**: Two-tier registration with school code validation. Role creation is transactional - user_roles and activeRoleId are created atomically before registration completes. Frontend RoleContext includes defensive retry mechanism (max 3 attempts, 1.5s delay) for edge cases.
+-   **Registration Flow**: Two-tier registration with school code validation and transactional role creation.
 -   **AI Enrollment Assistant**: Provides personalized AI guidance.
 -   **Staff Management & Invitation System**: Automated onboarding and secure token-based invitations.
 -   **User Account Management**: School administrators can send account invites and password reset emails.
@@ -62,22 +92,8 @@ The platform prioritizes scalability, security, and user experience, incorporati
 -   **Student Management System**: Tracks students across schools, including auto-sync for existing children.
 -   **Notification System**: In-app notification system with PostgreSQL storage and real-time unread counts.
 -   **Category Management System**: School-level custom category system with dynamic dropdown integration and idempotent seeding of default categories.
--   **Interactive Onboarding Tour**: Custom-built guided tour for new parent accounts explaining dashboard features, enrollment workflow, and emphasizing that children are only enrolled after first payment. School admins can toggle this feature on/off.
--   **Subscription Status Toggle**: School admin-configurable toggle in School Settings → Checkout Settings to control whether subscription status is displayed during checkout. Defaults to OFF to prevent potential date parsing errors when subscription data is unavailable.
-
-## External Dependencies
--   **Supabase**: Authentication (OAuth).
--   **Neon PostgreSQL**: Primary database.
--   **Stripe**: Payment processing.
--   **Anthropic Claude API**: AI content generation and analysis.
--   **Stability AI**: Image generation.
--   **Hugging Face Inference API**: Text processing and analysis.
--   **Shadcn/ui**: React component library.
--   **Tailwind CSS**: CSS framework.
--   **Vite**: Build tool.
--   **Brevo SMTP**: Email service.
--   **SendGrid**: Email service.
--   **Twilio**: SMS service.
+-   **Interactive Onboarding Tour**: Custom-built guided tour for new parent accounts.
+-   **Subscription Status Toggle**: School admin-configurable toggle to control subscription status display during checkout.
 
 ## Educator Dashboard Roadmap
 
@@ -176,3 +192,17 @@ The Educator Dashboard provides educators/mentors with tools to manage their cla
 - Exportable reports
 
 **Status**: Planned
+
+## External Dependencies
+-   **Supabase**: Authentication (OAuth).
+-   **Neon PostgreSQL**: Primary database.
+-   **Stripe**: Payment processing.
+-   **Anthropic Claude API**: AI content generation and analysis.
+-   **Stability AI**: Image generation.
+-   **Hugging Face Inference API**: Text processing and analysis.
+-   **Shadcn/ui**: React component library.
+-   **Tailwind CSS**: CSS framework.
+-   **Vite**: Build tool.
+-   **Brevo SMTP**: Email service.
+-   **SendGrid**: Email service.
+-   **Twilio**: SMS service.
