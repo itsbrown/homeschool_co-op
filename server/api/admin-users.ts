@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { storage } from '../storage';
 import { createClient } from '@supabase/supabase-js';
+import { supabaseAuth } from '../middleware/supabase-auth';
+import { requireSchoolContext } from '../middleware/require-school-context';
 
 const router = Router();
 
@@ -528,17 +530,11 @@ router.post('/users/sync-supabase-role', async (req, res) => {
 });
 
 // GET export all users and children data as CSV
-router.get('/export/users-and-children', async (req, res) => {
+router.get('/export/users-and-children', supabaseAuth, requireSchoolContext, async (req: any, res) => {
   try {
-    const schoolId = req.user?.schoolId;
-    const userRole = req.user?.role;
+    const schoolId = parseInt(req.schoolId);
+    const userRole = req.user?.role || req.user?.activeRole;
     const userEmail = req.user?.email;
-    
-    // Verify user is authenticated and has school admin role
-    if (!schoolId || !userRole) {
-      console.log(`❌ Export denied - no school context. User: ${userEmail}`);
-      return res.status(403).json({ message: 'School context required for export' });
-    }
     
     // Only school admins can export user data
     if (userRole !== 'schoolAdmin' && userRole !== 'admin' && userRole !== 'superAdmin') {
