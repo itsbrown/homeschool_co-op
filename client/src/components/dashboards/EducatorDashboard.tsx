@@ -322,7 +322,7 @@ export default function EducatorDashboard() {
         </TabsContent>
 
         <TabsContent value="schedule" className="space-y-4">
-          <WeeklyCalendarContent showBirthdays={false} showQuickActions={false} />
+          <WeeklyCalendarContent showBirthdays={true} showQuickActions={true} />
         </TabsContent>
       </Tabs>
     </div>
