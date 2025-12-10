@@ -237,8 +237,8 @@ function DashboardRouter() {
     );
   }
 
-  // For super admin, admin, educator - route to EducatorDashboard with AppShell and AI tools
-  if (['superAdmin', 'admin', 'educator'].includes(activeRole)) {
+  // For super admin, admin, educator, mentor - route to EducatorDashboard with AppShell and AI tools
+  if (['superAdmin', 'admin', 'educator', 'mentor'].includes(activeRole)) {
     console.log(`🎯 Routing ${activeRole} to EducatorDashboard with AI tools`);
     return (
       <AppShell key={`dashboard-${activeRole}`}>

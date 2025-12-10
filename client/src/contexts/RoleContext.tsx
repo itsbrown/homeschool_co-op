@@ -250,19 +250,39 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
         }
       }
 
+      // Normalize role to canonical casing for consistent routing/matching
+      // Handles database values like "Mentor" -> "mentor", "SchoolAdmin" -> "schoolAdmin"
+      const normalizeRoleCasing = (role: string): string => {
+        const lowerRole = role.toLowerCase();
+        const roleMap: Record<string, string> = {
+          'superadmin': 'superAdmin',
+          'schooladmin': 'schoolAdmin',
+          'mentor': 'mentor',
+          'educator': 'educator',
+          'parent': 'parent',
+          'admin': 'admin',
+          'student': 'student',
+          'learner': 'learner',
+          'teacher': 'teacher',
+        };
+        return roleMap[lowerRole] || role;
+      };
+      
+      const normalizedRole = normalizeRoleCasing(currentActiveRole);
+      
       if (hasMultipleRoles) {
         console.log(`🎯 Multi-role user detected:`, user.email, 'roles:', availableRoles.map(r => r.role));
-        setActiveRole(currentActiveRole);
+        setActiveRole(normalizedRole);
         setActiveRoleId(currentActiveRoleId);
         setCanSwitchRoles(true);
         setShowRoleSelection(false);
       } else {
         // Single role user (or user with basic role only)
-        console.log(`🎯 Single role user - setting role: ${currentActiveRole} for ${user.email}`);
-        setActiveRole(currentActiveRole);
+        console.log(`🎯 Single role user - setting role: ${normalizedRole} for ${user.email}`);
+        setActiveRole(normalizedRole);
         setActiveRoleId(currentActiveRoleId);
         // Allow role switching for superAdmin
-        setCanSwitchRoles(currentActiveRole === 'superAdmin');
+        setCanSwitchRoles(normalizedRole === 'superAdmin');
         setShowRoleSelection(false);
       }
     };
@@ -292,8 +312,26 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
       const data = await response.json();
       console.log(`🔄 Role switch successful:`, data);
 
-      // Update local state with roleId from backend
-      setActiveRole(data.activeRole);
+      // Normalize role to canonical casing
+      const normalizeRoleCasing = (role: string): string => {
+        const lowerRole = role.toLowerCase();
+        const roleMap: Record<string, string> = {
+          'superadmin': 'superAdmin',
+          'schooladmin': 'schoolAdmin',
+          'mentor': 'mentor',
+          'educator': 'educator',
+          'parent': 'parent',
+          'admin': 'admin',
+          'student': 'student',
+          'learner': 'learner',
+          'teacher': 'teacher',
+        };
+        return roleMap[lowerRole] || role;
+      };
+      
+      // Update local state with roleId from backend (normalize casing)
+      const normalizedSwitchedRole = data.activeRole ? normalizeRoleCasing(data.activeRole) : '';
+      setActiveRole(normalizedSwitchedRole);
       setActiveRoleId(data.activeRoleId);
       setShowRoleSelection(false);
 
