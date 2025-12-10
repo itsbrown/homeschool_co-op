@@ -527,4 +527,164 @@ router.post('/users/sync-supabase-role', async (req, res) => {
   }
 });
 
+// GET export all users and children data as CSV
+router.get('/export/users-and-children', async (req, res) => {
+  try {
+    const schoolId = req.user?.schoolId;
+    const userRole = req.user?.role;
+    const userEmail = req.user?.email;
+    
+    // Verify user is authenticated and has school admin role
+    if (!schoolId || !userRole) {
+      console.log(`❌ Export denied - no school context. User: ${userEmail}`);
+      return res.status(403).json({ message: 'School context required for export' });
+    }
+    
+    // Only school admins can export user data
+    if (userRole !== 'schoolAdmin' && userRole !== 'admin' && userRole !== 'superAdmin') {
+      console.log(`❌ Export denied - insufficient permissions. User: ${userEmail}, Role: ${userRole}`);
+      return res.status(403).json({ message: 'Only school administrators can export user data' });
+    }
+    
+    console.log(`📊 Exporting users and children for school ${schoolId} by ${userEmail}`);
+    
+    // Get all users for this school
+    const allUsers = await storage.getAllUsers();
+    const schoolUsers = allUsers.filter((u: any) => u.schoolId === schoolId);
+    
+    console.log(`👥 Found ${schoolUsers.length} users for school ${schoolId}`);
+    
+    // Build export data - one row per child, with parent info repeated
+    const exportRows: any[] = [];
+    
+    for (const user of schoolUsers) {
+      // Get children for this user
+      const children = await storage.getChildrenByParentId(user.id);
+      
+      if (children.length === 0) {
+        // User with no children - still include them
+        exportRows.push({
+          // Parent/User info
+          userId: user.id,
+          memberId: user.memberId || '',
+          userEmail: user.email,
+          userName: user.name,
+          userFirstName: user.firstName || '',
+          userLastName: user.lastName || '',
+          userPhone: user.phone || '',
+          userRole: user.role,
+          emergencyContactFirstName: user.emergencyContactFirstName || '',
+          emergencyContactLastName: user.emergencyContactLastName || '',
+          emergencyContactPhone: user.emergencyContactPhone || '',
+          emergencyContactRelationship: user.emergencyContactRelationship || '',
+          userCreatedAt: user.createdAt ? new Date(user.createdAt).toISOString() : '',
+          // Child info - empty for users without children
+          childId: '',
+          childFirstName: '',
+          childLastName: '',
+          childBirthdate: '',
+          childGradeLevel: '',
+          childGender: '',
+          childSchool: '',
+          childLearningStyle: '',
+          childSpecialNeeds: '',
+          childInterests: '',
+          childAllergies: '',
+          childMedicalInfo: '',
+          childEmergencyContact: '',
+          childAdditionalLanguages: '',
+          childNotes: '',
+          childCreatedAt: '',
+        });
+      } else {
+        // User with children - one row per child
+        for (const child of children) {
+          exportRows.push({
+            // Parent/User info
+            userId: user.id,
+            memberId: user.memberId || '',
+            userEmail: user.email,
+            userName: user.name,
+            userFirstName: user.firstName || '',
+            userLastName: user.lastName || '',
+            userPhone: user.phone || '',
+            userRole: user.role,
+            emergencyContactFirstName: user.emergencyContactFirstName || '',
+            emergencyContactLastName: user.emergencyContactLastName || '',
+            emergencyContactPhone: user.emergencyContactPhone || '',
+            emergencyContactRelationship: user.emergencyContactRelationship || '',
+            userCreatedAt: user.createdAt ? new Date(user.createdAt).toISOString() : '',
+            // Child info
+            childId: child.id,
+            childFirstName: child.firstName,
+            childLastName: child.lastName,
+            childBirthdate: child.birthdate || '',
+            childGradeLevel: child.gradeLevel || '',
+            childGender: child.gender || '',
+            childSchool: child.school || '',
+            childLearningStyle: child.learningStyle || '',
+            childSpecialNeeds: child.specialNeeds || '',
+            childInterests: Array.isArray(child.interests) ? child.interests.join('; ') : (child.interests || ''),
+            childAllergies: child.allergies || '',
+            childMedicalInfo: child.medicalInfo || '',
+            childEmergencyContact: child.emergencyContact || '',
+            childAdditionalLanguages: child.additionalLanguages || '',
+            childNotes: child.notes || '',
+            childCreatedAt: child.createdAt ? new Date(child.createdAt).toISOString() : '',
+          });
+        }
+      }
+    }
+    
+    console.log(`📝 Generated ${exportRows.length} export rows`);
+    
+    // Generate CSV
+    const headers = [
+      'User ID', 'Member ID', 'User Email', 'User Name', 'First Name', 'Last Name', 'Phone', 'Role',
+      'Emergency Contact First Name', 'Emergency Contact Last Name', 'Emergency Contact Phone', 'Emergency Contact Relationship',
+      'User Created At',
+      'Child ID', 'Child First Name', 'Child Last Name', 'Child Birthdate', 'Child Grade Level',
+      'Child Gender', 'Child School', 'Child Learning Style', 'Child Special Needs', 'Child Interests',
+      'Child Allergies', 'Child Medical Info', 'Child Emergency Contact', 'Child Additional Languages', 'Child Notes', 'Child Created At'
+    ];
+    
+    // Helper to escape CSV values
+    const escapeCSV = (value: any): string => {
+      if (value === null || value === undefined) return '';
+      const str = String(value);
+      if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+    
+    // Build CSV content
+    let csvContent = headers.map(h => escapeCSV(h)).join(',') + '\n';
+    
+    for (const row of exportRows) {
+      const values = [
+        row.userId, row.memberId, row.userEmail, row.userName, row.userFirstName, row.userLastName,
+        row.userPhone, row.userRole, row.emergencyContactFirstName, row.emergencyContactLastName,
+        row.emergencyContactPhone, row.emergencyContactRelationship, row.userCreatedAt,
+        row.childId, row.childFirstName, row.childLastName, row.childBirthdate, row.childGradeLevel,
+        row.childGender, row.childSchool, row.childLearningStyle, row.childSpecialNeeds, row.childInterests,
+        row.childAllergies, row.childMedicalInfo, row.childEmergencyContact, row.childAdditionalLanguages,
+        row.childNotes, row.childCreatedAt
+      ];
+      csvContent += values.map(v => escapeCSV(v)).join(',') + '\n';
+    }
+    
+    // Set headers for file download
+    const filename = `users_and_children_export_${new Date().toISOString().split('T')[0]}.csv`;
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    
+    console.log(`✅ Export complete: ${filename}`);
+    res.send(csvContent);
+  } catch (error) {
+    console.error('Error exporting users and children:', error);
+    res.status(500).json({ message: 'Failed to export data' });
+  }
+});
+
 export default router;

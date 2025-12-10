@@ -19,7 +19,8 @@ import {
   Send,
   UserCog,
   Eye,
-  RefreshCw
+  RefreshCw,
+  Download
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -51,9 +52,11 @@ export default function UsersPage() {
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [editingUser, setEditingUser] = useState<any>(null);
   const [manageRolesUser, setManageRolesUser] = useState<any>(null);
+  const [isExporting, setIsExporting] = useState(false);
   
   const queryClient = useQueryClient();
   const { schoolId, isLoading: isLoadingSchool, userProfile } = useSchoolAdmin();
+  const { toast } = useToast();
 
   console.log('🔍 UsersPage - schoolId:', schoolId, 'isLoadingSchool:', isLoadingSchool, 'userProfile:', userProfile);
 
@@ -111,7 +114,56 @@ export default function UsersPage() {
     setShowCreateDialog(true); // Reuse the create dialog for editing
   };
 
-  const { toast } = useToast();
+  const handleExportUsers = async () => {
+    setIsExporting(true);
+    try {
+      const response = await fetch('/api/admin-users/export/users-and-children', {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+          'Accept': 'text/csv',
+        },
+      });
+      
+      if (!response.ok) {
+        // Handle specific error codes
+        if (response.status === 403) {
+          const errorData = await response.json().catch(() => ({}));
+          toast({
+            title: "Access Denied",
+            description: errorData.message || "You don't have permission to export user data.",
+            variant: "destructive",
+          });
+          return;
+        }
+        throw new Error(`Export failed with status ${response.status}`);
+      }
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `users_and_children_export_${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      toast({
+        title: "Export Complete",
+        description: "Users and children data has been downloaded.",
+      });
+    } catch (error) {
+      console.error('Error exporting users:', error);
+      toast({
+        title: "Export Failed",
+        description: "Failed to export data. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   const handleDeleteUser = async (userId: number) => {
     if (!confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
@@ -236,6 +288,16 @@ export default function UsersPage() {
             Manage user accounts and permissions for your school
           </p>
           <div className="flex items-center gap-2">
+            <Button 
+              onClick={handleExportUsers}
+              variant="outline"
+              className="flex items-center gap-2"
+              disabled={isExporting}
+              data-testid="button-export-users"
+            >
+              <Download className="h-4 w-4" />
+              {isExporting ? 'Exporting...' : 'Export Data'}
+            </Button>
             <Button 
               onClick={() => setShowImportDialog(true)}
               variant="outline"
