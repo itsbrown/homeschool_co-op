@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -11,7 +11,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/hooks/useAuth0";
 import { useSupabaseAuth } from "@/components/SupabaseProvider";
 import { formatDate, formatClassSchedule } from "@/lib/utils";
-import { useRole } from "@/hooks/useRole"; // Assuming useRole hook is available
+import { useRole } from "@/hooks/useRole";
+import { WeeklyCalendarContent } from "@/pages/educator/WeeklyCalendar";
 
 export default function EducatorDashboard() {
   const { user: auth0User } = useAuth();
@@ -321,23 +322,7 @@ export default function EducatorDashboard() {
         </TabsContent>
 
         <TabsContent value="schedule" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Weekly Schedule</CardTitle>
-              <CardDescription>
-                Your class schedule for this week
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex h-[300px] flex-col items-center justify-center rounded-md border border-dashed p-8">
-                <Calendar className="h-12 w-12 text-muted-foreground" />
-                <h3 className="mt-4 text-lg font-semibold">Schedule Coming Soon</h3>
-                <p className="mb-4 mt-2 text-center text-sm text-muted-foreground">
-                  Weekly schedule view will be available soon.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+          <WeeklyCalendarContent showBirthdays={false} showQuickActions={false} />
         </TabsContent>
       </Tabs>
     </div>

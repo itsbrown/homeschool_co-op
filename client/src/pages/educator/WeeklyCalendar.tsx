@@ -357,6 +357,8 @@ interface WeeklyCalendarPageProps {
   showQuickActions?: boolean;
 }
 
+export { WeeklyCalendarContent };
+
 export default function WeeklyCalendar({ showBirthdays = false, showQuickActions = true }: WeeklyCalendarPageProps) {
   return (
     <EducatorErrorBoundary>
