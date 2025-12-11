@@ -14,12 +14,14 @@ import {
   Clock,
   Loader2,
   RefreshCw,
-  Building2
+  Building2,
+  BookOpen
 } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
 import { useAuth } from '@/components/SupabaseProvider';
 import { useToast } from '@/hooks/use-toast';
 import ContactSchoolDialog from './ContactSchoolDialog';
+import HelpTutorials from './HelpTutorials';
 
 interface SupportAssistantProps {
   isOpen: boolean;
@@ -313,6 +315,7 @@ export default function AISupportAssistant({ isOpen, onClose, initialIssue }: Su
 export function SupportAssistantTrigger() {
   const [isSupportOpen, setIsSupportOpen] = useState(false);
   const [isContactOpen, setIsContactOpen] = useState(false);
+  const [isTutorialsOpen, setIsTutorialsOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   return (
@@ -323,10 +326,24 @@ export function SupportAssistantTrigger() {
           <div className="absolute bottom-16 right-0 mb-2 w-64 bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden">
             <button
               onClick={() => {
-                setIsSupportOpen(true);
+                setIsTutorialsOpen(true);
                 setIsMenuOpen(false);
               }}
               className="w-full px-4 py-3 text-left hover:bg-gray-50 flex items-center gap-3 transition-colors"
+              data-testid="help-menu-tutorials"
+            >
+              <BookOpen className="h-5 w-5 text-purple-600" />
+              <div>
+                <p className="font-medium text-gray-900">Tutorials & Guides</p>
+                <p className="text-xs text-gray-500">Step-by-step instructions</p>
+              </div>
+            </button>
+            <button
+              onClick={() => {
+                setIsSupportOpen(true);
+                setIsMenuOpen(false);
+              }}
+              className="w-full px-4 py-3 text-left hover:bg-gray-50 flex items-center gap-3 border-t transition-colors"
               data-testid="help-menu-technical-support"
             >
               <Bot className="h-5 w-5 text-blue-600" />
@@ -371,6 +388,11 @@ export function SupportAssistantTrigger() {
           onClick={() => setIsMenuOpen(false)}
         />
       )}
+
+      <HelpTutorials
+        isOpen={isTutorialsOpen}
+        onClose={() => setIsTutorialsOpen(false)}
+      />
 
       <AISupportAssistant 
         isOpen={isSupportOpen}
