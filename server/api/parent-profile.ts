@@ -98,68 +98,103 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
     // Get ALL children for this parent
     const allChildren = await storage.getChildrenByParentEmail(parent.email);
     
-    // For school admins, we need to check if children have enrollments in their school's classes
-    // even if the child's schoolId is not set or doesn't match
+    // For school admins, we need to determine visibility based on multiple factors:
+    // 1. Child's schoolId matches admin's school
+    // 2. Child has enrollments in admin's school's classes
+    // 3. Parent has a role (registration) at admin's school - makes ALL their children visible
+    // 4. Parent has a membership enrollment at admin's school - makes ALL their children visible
     let children = allChildren;
+    let parentHasSchoolRelationship = false;
     
     if (!isSuperAdmin && allChildren.length > 0) {
-      // Get all child IDs to fetch their enrollments
-      const allChildIds = allChildren.map(c => c.id);
+      // First, check if parent has a direct relationship with admin's school
+      // This would make ALL children visible regardless of individual child schoolId
       
-      // Fetch all enrollments for all children in one batch
-      const allChildEnrollments = await storage.getEnrollmentsByChildIds(allChildIds);
-      
-      // Get class IDs from enrollments to determine which schools they belong to
-      const enrollmentClassIds = [...new Set(allChildEnrollments.map(e => e.classId).filter((id): id is number => id !== null))];
-      
-      // Build a map of classId -> schoolId
-      const enrollmentClassSchoolMap = new Map<number, number>();
-      for (const classId of enrollmentClassIds) {
-        try {
-          const classInfo = await storage.getClassById(classId);
-          if (classInfo && classInfo.schoolId) {
-            enrollmentClassSchoolMap.set(classId, classInfo.schoolId);
-          }
-        } catch (error) {
-          console.error(`❌ Error fetching class ${classId} for enrollment check:`, error);
-        }
-      }
-      
-      // Build a map of child IDs to their enrolled school IDs (from class enrollments)
-      // This tracks which school(s) each child is actually enrolled in
-      const childToEnrolledSchoolId = new Map<number, number>();
-      const childrenWithEnrollmentsInAdminSchool = new Set<number>();
-      
-      for (const enrollment of allChildEnrollments) {
-        if (enrollment.classId === null) continue;
-        const classSchoolId = enrollmentClassSchoolMap.get(enrollment.classId);
-        if (classSchoolId && adminSchoolIds.includes(classSchoolId)) {
-          childrenWithEnrollmentsInAdminSchool.add(enrollment.childId);
-          // Track the actual school the child is enrolled in (use first enrollment's school if multiple)
-          if (!childToEnrolledSchoolId.has(enrollment.childId)) {
-            childToEnrolledSchoolId.set(enrollment.childId, classSchoolId);
-          }
-        }
-      }
-      
-      // Filter children: include if schoolId matches OR has enrollments in admin's school
-      children = allChildren.filter(child => 
-        (child.schoolId && adminSchoolIds.includes(child.schoolId)) ||
-        childrenWithEnrollmentsInAdminSchool.has(child.id)
+      // Check 1: Parent has a role at admin's school
+      const parentRolesAtAdminSchools = parentUserRoles.filter(r => 
+        r.role === 'parent' && r.schoolId && adminSchoolIds.includes(r.schoolId)
       );
+      if (parentRolesAtAdminSchools.length > 0) {
+        parentHasSchoolRelationship = true;
+        console.log(`✅ Parent ${parent.email} has role at admin's school - all children visible`);
+      }
       
-      // Auto-sync schoolId for children with enrollments but missing schoolId
-      // Use the actual school from their enrollment, not a default
-      for (const child of children) {
-        if (!child.schoolId && childrenWithEnrollmentsInAdminSchool.has(child.id)) {
-          const enrolledSchoolId = childToEnrolledSchoolId.get(child.id);
-          if (enrolledSchoolId) {
-            try {
-              await storage.updateChild(child.id, { schoolId: enrolledSchoolId });
-              child.schoolId = enrolledSchoolId; // Update in-memory too
-              console.log(`🔄 Auto-synced schoolId for child ${child.id} (${child.firstName} ${child.lastName}) to school ${enrolledSchoolId} (derived from enrollment)`);
-            } catch (error) {
-              console.error(`❌ Failed to auto-sync schoolId for child ${child.id}:`, error);
+      // Check 2: Parent has a membership enrollment at admin's school
+      if (!parentHasSchoolRelationship) {
+        const parentMemberships = await storage.getMembershipEnrollmentsByParentId(parent.id);
+        const membershipAtAdminSchool = parentMemberships.find(m => adminSchoolIds.includes(m.schoolId));
+        if (membershipAtAdminSchool) {
+          parentHasSchoolRelationship = true;
+          console.log(`✅ Parent ${parent.email} has membership at admin's school - all children visible`);
+        }
+      }
+      
+      // Check 3: Parent's legacy schoolId matches admin's school
+      if (!parentHasSchoolRelationship && parent.schoolId && adminSchoolIds.includes(parent.schoolId)) {
+        parentHasSchoolRelationship = true;
+        console.log(`✅ Parent ${parent.email} has legacy schoolId matching admin's school - all children visible`);
+      }
+      
+      // If parent has relationship with school, all children are visible
+      if (parentHasSchoolRelationship) {
+        children = allChildren;
+        console.log(`👶 Parent-school relationship found: showing all ${children.length} children`);
+      } else {
+        // Fall back to per-child visibility checks (enrollment-based or child schoolId-based)
+        const allChildIds = allChildren.map(c => c.id);
+        
+        // Fetch all enrollments for all children in one batch
+        const allChildEnrollments = await storage.getEnrollmentsByChildIds(allChildIds);
+        
+        // Get class IDs from enrollments to determine which schools they belong to
+        const enrollmentClassIds = [...new Set(allChildEnrollments.map(e => e.classId).filter((id): id is number => id !== null))];
+        
+        // Build a map of classId -> schoolId
+        const enrollmentClassSchoolMap = new Map<number, number>();
+        for (const classId of enrollmentClassIds) {
+          try {
+            const classInfo = await storage.getClassById(classId);
+            if (classInfo && classInfo.schoolId) {
+              enrollmentClassSchoolMap.set(classId, classInfo.schoolId);
+            }
+          } catch (error) {
+            console.error(`❌ Error fetching class ${classId} for enrollment check:`, error);
+          }
+        }
+        
+        // Build a map of child IDs to their enrolled school IDs (from class enrollments)
+        const childToEnrolledSchoolId = new Map<number, number>();
+        const childrenWithEnrollmentsInAdminSchool = new Set<number>();
+        
+        for (const enrollment of allChildEnrollments) {
+          if (enrollment.classId === null) continue;
+          const classSchoolId = enrollmentClassSchoolMap.get(enrollment.classId);
+          if (classSchoolId && adminSchoolIds.includes(classSchoolId)) {
+            childrenWithEnrollmentsInAdminSchool.add(enrollment.childId);
+            if (!childToEnrolledSchoolId.has(enrollment.childId)) {
+              childToEnrolledSchoolId.set(enrollment.childId, classSchoolId);
+            }
+          }
+        }
+        
+        // Filter children: include if schoolId matches OR has enrollments in admin's school
+        children = allChildren.filter(child => 
+          (child.schoolId && adminSchoolIds.includes(child.schoolId)) ||
+          childrenWithEnrollmentsInAdminSchool.has(child.id)
+        );
+        
+        // Auto-sync schoolId for children with enrollments but missing schoolId
+        for (const child of children) {
+          if (!child.schoolId && childrenWithEnrollmentsInAdminSchool.has(child.id)) {
+            const enrolledSchoolId = childToEnrolledSchoolId.get(child.id);
+            if (enrolledSchoolId) {
+              try {
+                await storage.updateChild(child.id, { schoolId: enrolledSchoolId });
+                child.schoolId = enrolledSchoolId;
+                console.log(`🔄 Auto-synced schoolId for child ${child.id} (${child.firstName} ${child.lastName}) to school ${enrolledSchoolId}`);
+              } catch (error) {
+                console.error(`❌ Failed to auto-sync schoolId for child ${child.id}:`, error);
+              }
             }
           }
         }

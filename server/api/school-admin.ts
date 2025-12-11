@@ -2029,10 +2029,124 @@ router.get("/students", supabaseAuth, async (req: any, res) => {
     
     // Get school students from database (not in-memory storage)
     const schoolStudents = await storage.getSchoolStudentsBySchoolId(schoolId);
-    console.log(`📊 Found ${schoolStudents.length} students for school ${schoolId} in database`);
+    const schoolStudentChildIds = new Set(schoolStudents.map(ss => ss.childId));
+    console.log(`📊 Found ${schoolStudents.length} students in school_students table for school ${schoolId}`);
     
-    // Get children details for each school student
-    const studentsWithDetails = await Promise.all(
+    // [FIX:v4.0] Also include children whose parent has a relationship with this school
+    // This covers parents who registered at the school but whose children aren't in school_students yet
+    const additionalChildren: any[] = [];
+    
+    // Collect parent emails from multiple sources
+    const parentEmailsToCheck = new Set<string>();
+    
+    // Get membership enrollments for this school - use parentUserId to get parent email
+    const allMemberships = await storage.getMembershipEnrollmentsBySchoolId(schoolId);
+    for (const membership of allMemberships) {
+      // Get parent email from their user record using parentUserId
+      const parentUser = await storage.getUser(membership.parentUserId);
+      if (parentUser?.email) {
+        parentEmailsToCheck.add(parentUser.email);
+      }
+    }
+    
+    // Get all users with legacy schoolId matching this school and parent role
+    const allUsers = await storage.getAllUsers();
+    const parentsWithLegacySchoolId = allUsers.filter(u => 
+      u.role === 'parent' && u.schoolId === schoolId
+    );
+    for (const parent of parentsWithLegacySchoolId) {
+      if (parent.email) {
+        parentEmailsToCheck.add(parent.email);
+      }
+    }
+    
+    // Also check user_roles table for parents with role at this school
+    for (const user of allUsers) {
+      if (user.email) {
+        const userRoles = await storage.getUserRolesByUserId(user.id);
+        const hasParentRoleAtSchool = userRoles.some(
+          (r: any) => r.role === 'parent' && r.schoolId === schoolId
+        );
+        if (hasParentRoleAtSchool) {
+          parentEmailsToCheck.add(user.email);
+        }
+      }
+    }
+    
+    console.log(`🔍 Found ${parentEmailsToCheck.size} parent emails with school relationship`);
+    
+    // Get children for each parent email and add if not already in school_students
+    for (const parentEmail of parentEmailsToCheck) {
+      const children = await storage.getChildrenByParentEmail(parentEmail);
+      for (const child of children) {
+        if (!schoolStudentChildIds.has(child.id)) {
+          additionalChildren.push(child);
+          schoolStudentChildIds.add(child.id); // Prevent duplicates
+        }
+      }
+    }
+    
+    console.log(`📊 Found ${additionalChildren.length} additional children from parent school relationships`);
+    
+    // Helper function to format child details
+    const formatChildDetails = async (child: any, schoolStudent: any | null) => {
+      try {
+        // Calculate age from birthdate
+        let age = null;
+        if (child.birthdate) {
+          const today = new Date();
+          const birthDate = new Date(child.birthdate);
+          age = today.getFullYear() - birthDate.getFullYear();
+          const monthDiff = today.getMonth() - birthDate.getMonth();
+          if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+            age--;
+          }
+        }
+
+        // Get location details
+        let locationName = 'Unknown Location';
+        let locationCode = 'N/A';
+        const locationId = schoolStudent?.locationId || child.locationId;
+        if (locationId) {
+          const location = await storage.getLocationById(locationId);
+          if (location) {
+            locationName = location.name;
+            locationCode = location.code;
+          }
+        }
+
+        return {
+          id: child.id,
+          schoolStudentId: schoolStudent?.id || null,
+          name: `${child.firstName} ${child.lastName}`,
+          firstName: child.firstName,
+          lastName: child.lastName,
+          gradeLevel: child.gradeLevel || 'Not specified',
+          age: age || 'Unknown',
+          parentName: child.parentEmail || 'Unknown Parent',
+          parentEmail: child.parentEmail,
+          email: child.parentEmail,
+          enrollmentDate: schoolStudent?.enrollmentDate || child.createdAt,
+          status: schoolStudent?.status || 'Active',
+          locationId: locationId,
+          locationName: locationName,
+          locationCode: locationCode,
+          schoolId: schoolStudent?.schoolId || schoolId,
+          classes: [],
+          avatar: child.profileImage || "",
+          allergies: child.allergies,
+          medicalInfo: child.medicalInfo,
+          interests: child.interests || [],
+          learningStyle: child.learningStyle
+        };
+      } catch (error) {
+        console.error(`❌ Error formatting child ${child.id}:`, error);
+        return null;
+      }
+    };
+    
+    // Get children details for school students from school_students table
+    const studentsFromSchoolStudents = await Promise.all(
       schoolStudents.map(async (schoolStudent) => {
         try {
           const child = await storage.getChildById(schoolStudent.childId);
@@ -2040,65 +2154,29 @@ router.get("/students", supabaseAuth, async (req: any, res) => {
             console.warn(`⚠️ Child not found for school student: ${schoolStudent.childId}`);
             return null;
           }
-
-          // Calculate age from birthdate
-          let age = null;
-          if (child.birthdate) {
-            const today = new Date();
-            const birthDate = new Date(child.birthdate);
-            age = today.getFullYear() - birthDate.getFullYear();
-            const monthDiff = today.getMonth() - birthDate.getMonth();
-            if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-              age--;
-            }
-          }
-
-          // Get location details
-          let locationName = 'Unknown Location';
-          let locationCode = 'N/A';
-          if (schoolStudent.locationId) {
-            const location = await storage.getLocationById(schoolStudent.locationId);
-            if (location) {
-              locationName = location.name;
-              locationCode = location.code;
-            }
-          }
-
-          return {
-            id: child.id,
-            schoolStudentId: schoolStudent.id,
-            name: `${child.firstName} ${child.lastName}`,
-            firstName: child.firstName,
-            lastName: child.lastName,
-            gradeLevel: child.gradeLevel || 'Not specified',
-            age: age || 'Unknown',
-            parentName: child.parentEmail || 'Unknown Parent',
-            parentEmail: child.parentEmail,
-            email: child.parentEmail,
-            enrollmentDate: schoolStudent.enrollmentDate,
-            status: schoolStudent.status || 'Active',
-            locationId: schoolStudent.locationId,
-            locationName: locationName,
-            locationCode: locationCode,
-            schoolId: schoolStudent.schoolId,
-            classes: [], // We could expand this later to fetch actual class enrollments
-            avatar: child.profileImage || "",
-            allergies: child.allergies,
-            medicalInfo: child.medicalInfo,
-            interests: child.interests || [],
-            learningStyle: child.learningStyle
-          };
+          return formatChildDetails(child, schoolStudent);
         } catch (childError) {
           console.error(`❌ Error processing school student ${schoolStudent.id}:`, childError);
           return null;
         }
       })
     );
-
-    // Filter out any null results
-    const validStudents = studentsWithDetails.filter(student => student !== null);
     
-    console.log(`✅ Successfully processed ${validStudents.length} students with details`);
+    // Get children details for additional children from parent relationships
+    const studentsFromParentRelationships = await Promise.all(
+      additionalChildren.map(async (child) => {
+        return formatChildDetails(child, null);
+      })
+    );
+
+    // Combine and filter out any null results
+    const allStudentsWithDetails = [
+      ...studentsFromSchoolStudents,
+      ...studentsFromParentRelationships
+    ];
+    const validStudents = allStudentsWithDetails.filter(student => student !== null);
+    
+    console.log(`✅ Successfully processed ${validStudents.length} students with details (${schoolStudents.length} from school_students + ${additionalChildren.length} from parent relationships)`);
     res.json(validStudents);
     
   } catch (error) {
