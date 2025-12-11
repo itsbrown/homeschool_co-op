@@ -48,12 +48,22 @@ export default function ClassEnrollmentsPage() {
   // Determine which layout to use based on the matched route
   const isSchoolAdminRoute = !!schoolParams?.id;
 
+  // Helper to get auth headers
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem('supabase_token');
+    return {
+      'Content-Type': 'application/json',
+      ...(token && { 'Authorization': `Bearer ${token}` }),
+    };
+  };
+
   // Fetch class details
   const { data: classData, isLoading: isLoadingClass } = useQuery({
     queryKey: ['/api/admin-classes/classes', classId],
     queryFn: async () => {
       if (!classId) return null;
       const response = await fetch(`/api/admin-classes/classes/${classId}`, {
+        headers: getAuthHeaders(),
         credentials: "include"
       });
       if (!response.ok) throw new Error('Failed to fetch class');
@@ -67,6 +77,7 @@ export default function ClassEnrollmentsPage() {
     queryKey: ['/api/school-admin/students'],
     queryFn: async () => {
       const response = await fetch('/api/school-admin/students', {
+        headers: getAuthHeaders(),
         credentials: "include"
       });
       if (!response.ok) throw new Error('Failed to fetch students');
@@ -80,6 +91,7 @@ export default function ClassEnrollmentsPage() {
     queryFn: async () => {
       if (!classId) return [];
       const response = await fetch(`/api/enrollments/class/${classId}`, {
+        headers: getAuthHeaders(),
         credentials: "include"
       });
       if (!response.ok) throw new Error('Failed to fetch enrollments');
