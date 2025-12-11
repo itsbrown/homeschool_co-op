@@ -709,6 +709,9 @@ export default function SchoolClassesPage() {
                                         <Link href={`/schools/classes/${cls.id}/roster`}>View Roster</Link>
                                       </DropdownMenuItem>
                                       <DropdownMenuItem>
+                                        <Link href={`/schools/classes/${cls.id}/enrollments`}>Manage Enrollments</Link>
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem>
                                         <Link href={`/schools/classes/${cls.id}/schedule`}>Manage Schedule</Link>
                                       </DropdownMenuItem>
                                       <DropdownMenuItem 
@@ -807,6 +810,9 @@ export default function SchoolClassesPage() {
                               </DropdownMenuItem>
                               <DropdownMenuItem>
                                 <Link href={`/schools/classes/${cls.id}/roster`}>View Roster</Link>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem>
+                                <Link href={`/schools/classes/${cls.id}/enrollments`}>Manage Enrollments</Link>
                               </DropdownMenuItem>
                               <DropdownMenuItem 
                                 onClick={() => handleDuplicateClass(cls)}

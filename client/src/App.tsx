@@ -613,6 +613,7 @@ function Router() {
       <Route path="/schools/classes/:id" component={SchoolClassDetailsPage} />
       <Route path="/schools/classes/:id/edit" component={SchoolClassCreationPage} />
       <Route path="/schools/classes/:id/roster" component={ClassRosterPage} />
+      <Route path="/schools/classes/:id/enrollments" component={React.lazy(() => import('./pages/admin/ClassEnrollmentsPage'))} />
       <Route path="/schools/staff" component={StaffPage} />
       <Route path="/schools/staff/invite" component={StaffInvitePage} />
       <Route path="/schools/educators" component={EducatorManagementPage} />

@@ -29,7 +29,9 @@ import {
 } from "@/components/ui/dialog";
 
 export default function ClassEnrollmentsPage() {
-  const [, params] = useRoute("/admin/classes/:classId/enrollments");
+  // Support both /admin/classes/:classId/enrollments and /schools/classes/:id/enrollments
+  const [, adminParams] = useRoute("/admin/classes/:classId/enrollments");
+  const [, schoolParams] = useRoute("/schools/classes/:id/enrollments");
   const [location, setLocation] = useLocation();
   const { user } = useAuth();
   const { toast } = useToast();
@@ -37,7 +39,10 @@ export default function ClassEnrollmentsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [isEnrollDialogOpen, setIsEnrollDialogOpen] = useState(false);
 
-  const classId = params?.classId ? parseInt(params.classId) : null;
+  // Use whichever route matched
+  const classId = adminParams?.classId 
+    ? parseInt(adminParams.classId) 
+    : (schoolParams?.id ? parseInt(schoolParams.id) : null);
 
   // Fetch class details
   const { data: classData, isLoading: isLoadingClass } = useQuery({
@@ -164,7 +169,7 @@ export default function ClassEnrollmentsPage() {
             <Button 
               variant="outline" 
               size="icon" 
-              onClick={() => setLocation("/admin/classes")}
+              onClick={() => window.history.back()}
               className="h-8 w-8"
             >
               <ArrowLeft className="h-4 w-4" />
