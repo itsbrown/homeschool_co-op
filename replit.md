@@ -94,6 +94,7 @@ The platform prioritizes scalability, security, and user experience, incorporati
 -   **Category Management System**: School-level custom category system with dynamic dropdown integration and idempotent seeding of default categories.
 -   **Interactive Onboarding Tour**: Custom-built guided tour for new parent accounts.
 -   **Subscription Status Toggle**: School admin-configurable toggle to control subscription status display during checkout.
+-   **AI Smart Tutorial System**: Conversational AI guidance using Anthropic Claude that provides context-aware help to parents. Features rate limiting (20 req/min), conversation truncation (10 messages), dynamic UI element highlighting, and page-specific suggestions. Accessible via Help menu > Smart Guide.
 
 ## Educator Dashboard Roadmap
 
