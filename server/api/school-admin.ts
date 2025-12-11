@@ -1134,7 +1134,7 @@ router.post("/staff/invite", supabaseAuth, async (req: any, res: any) => {
       .where(eq(userRoles.userId, user.id));
     
     const existingRoleForSchool = existingUserRoles.find(
-      r => r.schoolId === schoolId && r.role === role
+      (r: { schoolId: number | null; role: string }) => r.schoolId === schoolId && r.role === role
     );
     
     let userRoleId: number;
@@ -2344,7 +2344,7 @@ router.patch("/schools/:id", supabaseAuth, async (req: any, res) => {
       console.log('🔍 Executing SQL:', query);
       console.log('🔍 With values:', [...values, schoolId]);
       
-      const result = await sql.unsafe(query, [...values, schoolId]);
+      const result = await sql.unsafe(query, [...values, schoolId] as any[]);
       await sql.end();
       
       if (!result || result.length === 0) {
@@ -2465,7 +2465,7 @@ router.patch("/my-school/settings", supabaseAuth, async (req: any, res) => {
     console.log('🔄 Received school settings update request:', req.body);
 
     // Build update object with camelCase table properties
-    const updateData: Partial<typeof schools.$inferInsert> = {};
+    const updateData: Record<string, any> = {};
 
     if (showSubscriptionStatus !== undefined) {
       updateData.showSubscriptionStatus = Boolean(showSubscriptionStatus);
@@ -2486,7 +2486,7 @@ router.patch("/my-school/settings", supabaseAuth, async (req: any, res) => {
     console.log('🔄 Updating school settings:', updateData);
 
     // Update the school settings using Drizzle ORM
-    const updatedSchool = await storage.updateSchool(schoolId, updateData);
+    const updatedSchool = await storage.updateSchool(schoolId, updateData as any);
 
     if (!updatedSchool) {
       console.error('❌ Database update failed: School not found');
@@ -2546,13 +2546,13 @@ router.patch("/my-school/agreement", supabaseAuth, async (req: any, res) => {
     }
 
     // Update the school with new agreement template and version
-    const updateData: Partial<typeof schools.$inferInsert> = {
+    const updateData: Record<string, any> = {
       membershipAgreementTemplate: membershipAgreementTemplate.trim(),
       membershipAgreementVersion: nextVersion,
       membershipAgreementUpdatedAt: new Date(),
     };
 
-    const updatedSchool = await storage.updateSchool(schoolId, updateData);
+    const updatedSchool = await storage.updateSchool(schoolId, updateData as any);
 
     if (!updatedSchool) {
       console.error('❌ Database update failed: School not found');
@@ -3208,8 +3208,8 @@ router.get("/user-locations/my-permissions", async (req, res) => {
       user = { email: adminUser.email, id: adminUser.id };
     }
 
-    // Look up user in our system
-    const systemUser = await storage.getUserByEmail(user.email);
+    // Look up user in our system (user.email is guaranteed by both auth paths above)
+    const systemUser = await storage.getUserByEmail(user.email!);
     if (!systemUser) {
       return res.status(404).json({ message: "User not found in system" });
     }
@@ -3430,9 +3430,8 @@ router.post('/discounts', supabaseAuth, requireSchoolContext, async (req: any, r
       isActive: isActive !== undefined ? isActive : true,
       priority: priority || 0,
       combinableWithOthers: combinableWithOthers || false,
-      adminOnly: adminOnly || false,
       createdBy: 1 // TODO: Get from authenticated user
-    });
+    } as any);
     
     console.log('✅ Discount created successfully:', newDiscount);
     
@@ -4010,8 +4009,9 @@ router.post('/contact-import', supabaseAuth, requireSchoolContext, async (req: a
                   notes: null,
                   profileImage: null,
                   parentEmail: childData.parentEmail,
-                  parentId: parent.id
-                });
+                  parentId: parent.id,
+                  additionalLanguages: []
+                } as any);
                 results.children.successful++;
                 console.log(`✅ Created child: ${childData.firstName} ${childData.lastName} for school ${schoolId}${locationId ? ` at location ${locationId}` : ''}`);
               } else {
@@ -4182,12 +4182,13 @@ router.get('/users', supabaseAuth, requireSchoolContext, async (req: any, res) =
             // Orphaned staff record - user was deleted but staff record remains
             // Still show the staff member using data from the staff record itself
             console.log(`⚠️ Orphaned staff record: staffRecord.id=${staffRecord.id}, userId=${staffRecord.userId} - synthesizing from staff record`);
+            const staffAny = staffRecord as any;
             return {
               id: staffRecord.userId,
               staffId: staffRecord.id,
-              email: staffRecord.email || `user-${staffRecord.userId}@deleted`,
-              firstName: staffRecord.firstName || 'Unknown',
-              lastName: staffRecord.lastName || 'Staff',
+              email: staffAny.email || `user-${staffRecord.userId}@deleted`,
+              firstName: staffAny.firstName || 'Unknown',
+              lastName: staffAny.lastName || 'Staff',
               role: 'staff',
               phone: '',
               isActive: staffRecord.isActive,
@@ -4259,18 +4260,19 @@ router.get('/users/:userId', supabaseAuth, requireSchoolContext, async (req: any
     }
 
     // Format user data consistently with the list endpoint
+    const userAny = user as any;
     const formattedUser = {
       id: user.id,
       email: user.email,
-      firstName: (user as any).firstName || user.name?.split(' ')[0] || '',
-      lastName: (user as any).lastName || user.name?.split(' ').slice(1).join(' ') || '',
+      firstName: userAny.firstName || user.name?.split(' ')[0] || '',
+      lastName: userAny.lastName || user.name?.split(' ').slice(1).join(' ') || '',
       role: user.role,
       phone: user.phone || '',
       isActive: user.isActive ?? true,
       schoolId: userSchoolId,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
-      metadata: user.metadata || {}
+      metadata: userAny.metadata || {}
     };
 
     console.log(`✅ Found user: ${user.email}`);
@@ -4638,17 +4640,22 @@ async function processParentRecords(records: any[], results: any, schoolId: stri
   
   for (const record of records) {
     try {
+      const firstName = record['First Name'] || record.firstName;
+      const lastName = record['Last Name'] || record.lastName;
+      const email = record['Email'] || record.email;
+      
       const userData = {
-        firstName: record['First Name'] || record.firstName,
-        lastName: record['Last Name'] || record.lastName,
-        email: record['Email'] || record.email,
+        firstName,
+        lastName,
+        email,
+        name: `${firstName} ${lastName}`,
         phone: record['Phone'] || record.phone,
         emergencyContactFirstName: record['Emergency Contact - First Name'] || record.emergencyContactFirstName,
         emergencyContactLastName: record['Emergency Contact - Last Name'] || record.emergencyContactLastName,
         emergencyContactPhone: record['Emergency Contact Phone'] || record.emergencyContactPhone,
-        role: 'parent',
-        schoolId: schoolId,
-        username: (record['Email'] || record.email)?.split('@')[0] || '',
+        role: 'parent' as const,
+        schoolId: Number(schoolId),
+        username: email?.split('@')[0] || '',
         password: 'tempPass123!' // Temporary password
       };
       
@@ -4658,7 +4665,7 @@ async function processParentRecords(records: any[], results: any, schoolId: stri
         continue;
       }
       
-      await storage.createUser(userData);
+      await storage.createUser(userData as any);
       results.parents.successful++;
       console.log(`✅ Created parent: ${userData.firstName} ${userData.lastName}`);
     } catch (error: any) {
@@ -4708,14 +4715,19 @@ async function processStaffRecords(records: any[], results: any, schoolId: strin
   
   for (const record of records) {
     try {
+      const firstName = record['First Name'] || record.firstName;
+      const lastName = record['Last Name'] || record.lastName;
+      const email = record['Email'] || record.email;
+      
       const userData = {
-        firstName: record['First Name'] || record.firstName,
-        lastName: record['Last Name'] || record.lastName,
-        email: record['Email'] || record.email,
+        firstName,
+        lastName,
+        email,
+        name: `${firstName} ${lastName}`,
         phone: record['Phone'] || record.phone,
-        role: 'educator',
+        role: 'educator' as const,
         schoolId: Number(schoolId), // [FIX:v3.0] Convert string to number for Drizzle schema
-        username: (record['Email'] || record.email)?.split('@')[0] || '',
+        username: email?.split('@')[0] || '',
         password: 'tempPass123!' // Temporary password
       };
       
@@ -4725,7 +4737,7 @@ async function processStaffRecords(records: any[], results: any, schoolId: strin
         continue;
       }
       
-      await storage.createUser(userData);
+      await storage.createUser(userData as any);
       results.staff.successful++;
       console.log(`✅ Created staff: ${userData.firstName} ${userData.lastName}`);
     } catch (error: any) {
@@ -4750,24 +4762,24 @@ router.post('/users/:userId/send-invite', async (req, res) => {
 
     // Look up the user's actual role from user_roles table (not the deprecated users.role field)
     // Priority: 1) activeRoleId match, 2) non-parent role (for staff), 3) first role, 4) fallback
-    const userRoles = await storage.getUserRolesByUserId(userId);
-    let primaryRole = user.role || 'parent';
+    const userRolesData = await storage.getUserRolesByUserId(userId);
+    let primaryRole: string = user.role || 'parent';
     
-    if (userRoles.length > 0) {
+    if (userRolesData.length > 0) {
       // Try to find the active role first
       const activeRole = user.activeRoleId 
-        ? userRoles.find(r => r.id === user.activeRoleId)
+        ? userRolesData.find(r => r.id === user.activeRoleId)
         : null;
       
       if (activeRole) {
         primaryRole = activeRole.role;
       } else {
         // Prefer non-parent roles for staff invites (staff/educator/admin/custom roles like Mentor)
-        const nonParentRole = userRoles.find(r => r.role !== 'parent');
-        primaryRole = nonParentRole ? nonParentRole.role : userRoles[0].role;
+        const nonParentRole = userRolesData.find(r => r.role !== 'parent');
+        primaryRole = nonParentRole ? nonParentRole.role : userRolesData[0].role;
       }
     }
-    console.log(`📋 User ${user.email} has ${userRoles.length} roles, activeRoleId: ${user.activeRoleId}, using role: ${primaryRole}`);
+    console.log(`📋 User ${user.email} has ${userRolesData.length} roles, activeRoleId: ${user.activeRoleId}, using role: ${primaryRole}`);
 
     // Generate a temporary password
     const temporaryPassword = Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-8).toUpperCase();
