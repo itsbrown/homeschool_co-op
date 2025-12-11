@@ -51,6 +51,9 @@ router.post('/manual-enrollment', requireRole(['admin', 'superAdmin', 'schoolAdm
       return res.status(400).json({ message: 'Student is already enrolled in this class' });
     }
 
+    // Get class price (already in cents from database)
+    const classCost = classItem.price || 0;
+    
     // Create complete enrollment using factory function
     const enrollmentData = createEnrollmentDataSimple({
       schoolId: child.schoolId || classItem.schoolId || null,
@@ -61,14 +64,14 @@ router.post('/manual-enrollment', requireRole(['admin', 'superAdmin', 'schoolAdm
       classId: classId,
       className: classItem.title,
       classType: 'school_class',
-      totalCost: 0, // No payment required for admin enrollments
+      totalCost: classCost,
       totalPaid: 0,
-      remainingBalance: 0,
+      remainingBalance: classCost,
       depositRequired: 0,
-      paymentStatus: 'completed',
+      paymentStatus: classCost > 0 ? 'pending' : 'completed',
       programStartDate: classItem.startDate || new Date(),
       programEndDate: classItem.endDate || new Date(),
-      status: 'enrolled'
+      status: classCost > 0 ? 'pending_payment' : 'enrolled'
     });
 
     const enrollment = await storage.createProgramEnrollment(enrollmentData);
