@@ -5,12 +5,12 @@ import { createEnrollmentDataSimple } from "@shared/enrollment-factory";
 
 const router = express.Router();
 
-// Apply auth middleware to all admin routes
+// All routes require authentication
 router.use(verifyAuth0Token);
-router.use(requireRole(['admin', 'superAdmin']));
 
-// Manual enrollment for admin-only classes
-router.post('/manual-enrollment', async (req, res) => {
+// Manual enrollment for any class (admin/schoolAdmin can bypass cart/checkout)
+// This route is defined BEFORE the admin-only middleware to allow schoolAdmin access
+router.post('/manual-enrollment', requireRole(['admin', 'superAdmin', 'schoolAdmin']), async (req, res) => {
   try {
     const { studentId, classId } = req.body;
 
@@ -18,14 +18,10 @@ router.post('/manual-enrollment', async (req, res) => {
       return res.status(400).json({ message: 'Student ID and Class ID are required' });
     }
 
-    // Verify the class exists and is admin-only
+    // Verify the class exists
     const classItem = await storage.getClassById(classId);
     if (!classItem) {
       return res.status(404).json({ message: 'Class not found' });
-    }
-
-    if (!classItem.isAdminOnly) {
-      return res.status(400).json({ message: 'Manual enrollment is only allowed for admin-only classes' });
     }
 
     // Get child data for parent information
@@ -76,5 +72,10 @@ router.post('/manual-enrollment', async (req, res) => {
     res.status(500).json({ message: 'Failed to enroll student' });
   }
 });
+
+// Apply strict admin-only middleware for all remaining routes
+router.use(requireRole(['admin', 'superAdmin']));
+
+// Add any other admin-only routes below this line
 
 export default router;

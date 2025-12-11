@@ -145,9 +145,9 @@ export default function ClassEnrollmentsPage() {
     student.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Redirect if not admin
+  // Redirect if not admin or school admin
   useEffect(() => {
-    if (user && user.role !== "admin" && user.role !== "superAdmin") {
+    if (user && user.role !== "admin" && user.role !== "superAdmin" && user.role !== "schoolAdmin") {
       setLocation("/");
     }
   }, [user, setLocation]);
@@ -188,7 +188,7 @@ export default function ClassEnrollmentsPage() {
               <DialogHeader>
                 <DialogTitle>Enroll Student</DialogTitle>
                 <DialogDescription>
-                  Select a student to manually enroll in this admin-only class.
+                  Select a student to manually enroll in this class.
                 </DialogDescription>
               </DialogHeader>
               
@@ -245,7 +245,7 @@ export default function ClassEnrollmentsPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 {classData.title}
-                <Badge variant="destructive">Admin Only</Badge>
+                {classData.isAdminOnly && <Badge variant="destructive">Admin Only</Badge>}
               </CardTitle>
               <CardDescription>{classData.description}</CardDescription>
             </CardHeader>
@@ -273,7 +273,7 @@ export default function ClassEnrollmentsPage() {
           <CardHeader>
             <CardTitle>Current Enrollments</CardTitle>
             <CardDescription>
-              Students currently enrolled in this admin-only class
+              Students currently enrolled in this class
             </CardDescription>
           </CardHeader>
           <CardContent>
