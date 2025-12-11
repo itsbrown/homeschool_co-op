@@ -52,10 +52,10 @@ export default function SchoolAdminClassEnrollmentsPage() {
   };
 
   const { data: classData, isLoading: isLoadingClass } = useQuery({
-    queryKey: ['/api/admin-classes/classes', classId],
+    queryKey: ['/api/class-details', classId],
     queryFn: async () => {
       if (!classId) return null;
-      const response = await fetch(`/api/admin-classes/classes/${classId}`, {
+      const response = await fetch(`/api/class-details/${classId}`, {
         headers: getAuthHeaders(),
         credentials: "include"
       });
@@ -151,11 +151,24 @@ export default function SchoolAdminClassEnrollmentsPage() {
     }
   });
 
-  // Extract variants from class schedule (schedule may be JSON string or object)
-  const parsedSchedule = classData?.schedule 
-    ? (typeof classData.schedule === 'string' ? JSON.parse(classData.schedule) : classData.schedule)
-    : null;
-  const classVariants = parsedSchedule?.variants || [];
+  // Extract variants from class data
+  // The /api/class-details endpoint returns variants at top level (classData.variants)
+  // Also check schedule.variants as fallback for other endpoints
+  const getClassVariants = () => {
+    // First check if variants are at top level (from /api/class-details)
+    if (classData?.variants && Array.isArray(classData.variants)) {
+      return classData.variants;
+    }
+    // Fallback: parse from schedule field
+    if (classData?.schedule) {
+      const parsed = typeof classData.schedule === 'string' 
+        ? JSON.parse(classData.schedule) 
+        : classData.schedule;
+      return parsed?.variants || [];
+    }
+    return [];
+  };
+  const classVariants = classData ? getClassVariants() : [];
   const hasMultipleVariants = classVariants.length > 1;
   
   const handleEnrollStudent = () => {

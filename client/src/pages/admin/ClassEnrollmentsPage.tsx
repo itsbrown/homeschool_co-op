@@ -151,11 +151,23 @@ export default function ClassEnrollmentsPage() {
     }
   });
 
-  // Extract variants from class schedule (schedule may be JSON string or object)
-  const parsedSchedule = classData?.schedule 
-    ? (typeof classData.schedule === 'string' ? JSON.parse(classData.schedule) : classData.schedule)
-    : null;
-  const classVariants = parsedSchedule?.variants || [];
+  // Extract variants from class data
+  // Check both top-level variants (from some endpoints) and schedule.variants
+  const getClassVariants = () => {
+    // First check if variants are at top level
+    if (classData?.variants && Array.isArray(classData.variants)) {
+      return classData.variants;
+    }
+    // Fallback: parse from schedule field
+    if (classData?.schedule) {
+      const parsed = typeof classData.schedule === 'string' 
+        ? JSON.parse(classData.schedule) 
+        : classData.schedule;
+      return parsed?.variants || [];
+    }
+    return [];
+  };
+  const classVariants = classData ? getClassVariants() : [];
   const hasMultipleVariants = classVariants.length > 1;
   
   const handleEnrollStudent = () => {
