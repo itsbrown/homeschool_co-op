@@ -112,6 +112,10 @@ import WeeklyCalendarPage from './pages/educator/WeeklyCalendar';
 import MyHoursPage from './pages/educator/MyHours';
 import ActiveSessionPage from './pages/educator/ActiveSession';
 
+// Eagerly imported to avoid suspension errors with wouter's synchronous navigation
+import SchoolClassEnrollmentsPage from './pages/schools/ClassEnrollmentsPage';
+import AdminClassEnrollmentsPage from './pages/admin/ClassEnrollmentsPage';
+
 const CallbackPage = () => {
   const { isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
@@ -613,7 +617,7 @@ function Router() {
       <Route path="/schools/classes/:id" component={SchoolClassDetailsPage} />
       <Route path="/schools/classes/:id/edit" component={SchoolClassCreationPage} />
       <Route path="/schools/classes/:id/roster" component={ClassRosterPage} />
-      <Route path="/schools/classes/:id/enrollments" component={React.lazy(() => import('./pages/admin/ClassEnrollmentsPage'))} />
+      <Route path="/schools/classes/:id/enrollments" component={SchoolClassEnrollmentsPage} />
       <Route path="/schools/staff" component={StaffPage} />
       <Route path="/schools/staff/invite" component={StaffInvitePage} />
       <Route path="/schools/educators" component={EducatorManagementPage} />
@@ -691,7 +695,7 @@ function Router() {
       <Route path="/admin/role-management" component={RoleManagementPage} />
       <Route path="/admin/features" component={FeaturesOverviewPage} />
       <Route path="/admin/classes/edit/:id" component={ClassCreationPage} />
-      <Route path="/admin/classes/:classId/enrollments" component={React.lazy(() => import('./pages/admin/ClassEnrollmentsPage'))} />
+      <Route path="/admin/classes/:classId/enrollments" component={AdminClassEnrollmentsPage} />
       <Route path="/admin/programs" component={Dashboard} />
       <Route path="/admin/programs/:rest*" component={Dashboard} />
       <Route path="/admin/users" component={Dashboard} />

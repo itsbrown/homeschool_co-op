@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { AdminShell } from "@/components/ui/admin-shell";
+import SchoolAdminLayout from "@/components/layout/SchoolAdminLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,8 +28,8 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 
-export default function ClassEnrollmentsPage() {
-  const [, params] = useRoute("/admin/classes/:classId/enrollments");
+export default function SchoolAdminClassEnrollmentsPage() {
+  const [, params] = useRoute("/schools/classes/:id/enrollments");
   const [location, setLocation] = useLocation();
   const { user } = useAuth();
   const { toast } = useToast();
@@ -37,7 +37,7 @@ export default function ClassEnrollmentsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [isEnrollDialogOpen, setIsEnrollDialogOpen] = useState(false);
 
-  const classId = params?.classId ? parseInt(params.classId) : null;
+  const classId = params?.id ? parseInt(params.id) : null;
 
   const getAuthHeaders = () => {
     const token = localStorage.getItem('supabase_token');
@@ -161,7 +161,7 @@ export default function ClassEnrollmentsPage() {
   }
 
   return (
-    <AdminShell>
+    <SchoolAdminLayout pageTitle="Manage Enrollments">
       <div className="flex flex-col space-y-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -334,6 +334,6 @@ export default function ClassEnrollmentsPage() {
           </CardContent>
         </Card>
       </div>
-    </AdminShell>
+    </SchoolAdminLayout>
   );
 }
