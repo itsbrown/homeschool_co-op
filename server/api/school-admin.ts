@@ -2036,21 +2036,28 @@ router.get("/students", supabaseAuth, async (req: any, res) => {
     // This covers parents who registered at the school but whose children aren't in school_students yet
     const additionalChildren: any[] = [];
     
-    // Collect parent emails from multiple sources
+    // Collect parent emails from multiple sources - OPTIMIZED to reduce N+1 queries
     const parentEmailsToCheck = new Set<string>();
     
-    // Get membership enrollments for this school - use parentUserId to get parent email
-    const allMemberships = await storage.getMembershipEnrollmentsBySchoolId(schoolId);
-    for (const membership of allMemberships) {
-      // Get parent email from their user record using parentUserId
-      const parentUser = await storage.getUser(membership.parentUserId);
-      if (parentUser?.email) {
-        parentEmailsToCheck.add(parentUser.email);
+    // Pre-load all users for efficient lookups (avoids N+1 pattern)
+    const allUsers = await storage.getAllUsers();
+    const userIdToEmailMap = new Map<number, string>();
+    for (const user of allUsers) {
+      if (user.email) {
+        userIdToEmailMap.set(user.id, user.email);
       }
     }
     
-    // Get all users with legacy schoolId matching this school and parent role
-    const allUsers = await storage.getAllUsers();
+    // Get membership enrollments for this school - use cached user data
+    const allMemberships = await storage.getMembershipEnrollmentsBySchoolId(schoolId);
+    for (const membership of allMemberships) {
+      const parentEmail = userIdToEmailMap.get(membership.parentUserId);
+      if (parentEmail) {
+        parentEmailsToCheck.add(parentEmail);
+      }
+    }
+    
+    // Add parents with legacy schoolId matching this school
     const parentsWithLegacySchoolId = allUsers.filter(u => 
       u.role === 'parent' && u.schoolId === schoolId
     );
@@ -2061,15 +2068,25 @@ router.get("/students", supabaseAuth, async (req: any, res) => {
     }
     
     // Also check user_roles table for parents with role at this school
-    for (const user of allUsers) {
-      if (user.email) {
+    // Batch-load roles for parents only (not all users) to reduce queries
+    const parentUsers = allUsers.filter(u => u.role === 'parent' || u.email);
+    const roleChecks = await Promise.all(
+      parentUsers.map(async (user) => {
+        if (!user.email || parentEmailsToCheck.has(user.email)) {
+          return null; // Already have this email or no email
+        }
         const userRoles = await storage.getUserRolesByUserId(user.id);
         const hasParentRoleAtSchool = userRoles.some(
           (r: any) => r.role === 'parent' && r.schoolId === schoolId
         );
-        if (hasParentRoleAtSchool) {
-          parentEmailsToCheck.add(user.email);
-        }
+        return hasParentRoleAtSchool ? user.email : null;
+      })
+    );
+    
+    // Add valid emails from role checks
+    for (const email of roleChecks) {
+      if (email) {
+        parentEmailsToCheck.add(email);
       }
     }
     
@@ -4712,8 +4729,8 @@ router.post('/import-users', async (req: any, res) => {
   }
 });
 
-// [FIX:v3.0] Helper function to process parent records - schoolId is now string
-async function processParentRecords(records: any[], results: any, schoolId: string) {
+// [FIX:v3.0] Helper function to process parent records
+async function processParentRecords(records: any[], results: any, schoolId: number) {
   console.log(`👨‍👩‍👧‍👦 Processing ${records.length} parent records...`);
   
   for (const record of records) {
@@ -4754,8 +4771,8 @@ async function processParentRecords(records: any[], results: any, schoolId: stri
   }
 }
 
-// [FIX:v3.0] Helper function to process child records - schoolId is now string
-async function processChildRecords(records: any[], results: any, schoolId: string) {
+// [FIX:v3.0] Helper function to process child records
+async function processChildRecords(records: any[], results: any, schoolId: number) {
   console.log(`👶 Processing ${records.length} child records...`);
   
   for (const record of records) {
@@ -4787,8 +4804,8 @@ async function processChildRecords(records: any[], results: any, schoolId: strin
   }
 }
 
-// [FIX:v3.0] Helper function to process staff records - schoolId is now string
-async function processStaffRecords(records: any[], results: any, schoolId: string) {
+// [FIX:v3.0] Helper function to process staff records
+async function processStaffRecords(records: any[], results: any, schoolId: number) {
   console.log(`👩‍🏫 Processing ${records.length} staff records...`);
   
   for (const record of records) {
