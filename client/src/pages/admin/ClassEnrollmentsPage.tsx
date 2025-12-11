@@ -10,7 +10,10 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth0";
-import { ArrowLeft, UserPlus, UserMinus, Search, Loader2 } from "lucide-react";
+import { ArrowLeft, UserPlus, UserMinus, Search, Loader2, Clock, Calendar } from "lucide-react";
+import { formatCurrency } from "@/utils/currency";
+import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Table,
   TableBody,
@@ -34,6 +37,7 @@ export default function ClassEnrollmentsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [selectedStudentId, setSelectedStudentId] = useState("");
+  const [selectedVariantId, setSelectedVariantId] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [isEnrollDialogOpen, setIsEnrollDialogOpen] = useState(false);
 
@@ -101,10 +105,11 @@ export default function ClassEnrollmentsPage() {
   }));
 
   const enrollStudentMutation = useMutation({
-    mutationFn: async ({ studentId, classId }: { studentId: number; classId: number }) => {
+    mutationFn: async ({ studentId, classId, variantId }: { studentId: number; classId: number; variantId?: string }) => {
       return apiRequest("POST", "/api/admin/manual-enrollment", {
         studentId,
-        classId
+        classId,
+        variantId
       });
     },
     onSuccess: () => {
@@ -115,6 +120,7 @@ export default function ClassEnrollmentsPage() {
       refetchEnrollments();
       setIsEnrollDialogOpen(false);
       setSelectedStudentId("");
+      setSelectedVariantId("");
     },
     onError: (error: any) => {
       toast({
@@ -145,11 +151,28 @@ export default function ClassEnrollmentsPage() {
     }
   });
 
+  // Extract variants from class schedule (schedule may be JSON string or object)
+  const parsedSchedule = classData?.schedule 
+    ? (typeof classData.schedule === 'string' ? JSON.parse(classData.schedule) : classData.schedule)
+    : null;
+  const classVariants = parsedSchedule?.variants || [];
+  const hasMultipleVariants = classVariants.length > 1;
+  
   const handleEnrollStudent = () => {
     if (!selectedStudentId || !classId) return;
+    // Require variant selection if multiple variants exist
+    if (hasMultipleVariants && !selectedVariantId) {
+      toast({
+        title: "Select Time Option",
+        description: "Please select a time option for this class.",
+        variant: "destructive"
+      });
+      return;
+    }
     enrollStudentMutation.mutate({
       studentId: parseInt(selectedStudentId),
-      classId
+      classId,
+      variantId: selectedVariantId || (classVariants[0]?.id)
     });
   };
 
@@ -225,18 +248,66 @@ export default function ClassEnrollmentsPage() {
                   />
                 </div>
                 
-                <Select value={selectedStudentId} onValueChange={setSelectedStudentId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a student" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableStudents.map((student: any) => (
-                      <SelectItem key={student.id} value={student.id.toString()}>
-                        {student.name} (Grade: {student.grade})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div>
+                  <Label className="text-sm font-medium">Select Student</Label>
+                  <Select value={selectedStudentId} onValueChange={setSelectedStudentId}>
+                    <SelectTrigger data-testid="select-student">
+                      <SelectValue placeholder="Select a student" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableStudents.map((student: any) => (
+                        <SelectItem key={student.id} value={student.id.toString()} data-testid={`student-option-${student.id}`}>
+                          {student.name} (Grade: {student.grade})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                {/* Show variant selection if class has multiple time options */}
+                {classVariants.length > 0 && (
+                  <div className="space-y-3">
+                    <Label className="text-sm font-medium">
+                      Select Time Option {hasMultipleVariants && <span className="text-destructive">*</span>}
+                    </Label>
+                    <RadioGroup 
+                      value={selectedVariantId} 
+                      onValueChange={setSelectedVariantId}
+                      className="space-y-2"
+                    >
+                      {classVariants.map((variant: any) => (
+                        <div
+                          key={variant.id}
+                          className={`flex items-center space-x-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                            selectedVariantId === variant.id 
+                              ? 'border-primary bg-primary/5' 
+                              : 'border-border hover:bg-muted/50'
+                          }`}
+                          onClick={() => setSelectedVariantId(variant.id)}
+                          data-testid={`variant-option-${variant.id}`}
+                        >
+                          <RadioGroupItem value={variant.id} id={variant.id} />
+                          <div className="flex-1">
+                            <div className="flex items-center justify-between">
+                              <span className="font-medium">{variant.name}</span>
+                              <Badge variant="secondary">{formatCurrency(variant.price)}</Badge>
+                            </div>
+                            <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
+                              <span className="flex items-center gap-1">
+                                <Clock className="h-3 w-3" />
+                                {variant.startTime} - {variant.endTime}
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <Calendar className="h-3 w-3" />
+                                {variant.days?.join(', ') || 'TBD'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </RadioGroup>
+                  </div>
+                )}
                 
                 <div className="flex justify-end gap-2">
                   <Button variant="outline" onClick={() => setIsEnrollDialogOpen(false)}>

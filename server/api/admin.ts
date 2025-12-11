@@ -12,7 +12,7 @@ router.use(verifyAuth0Token);
 // This route is defined BEFORE the admin-only middleware to allow schoolAdmin access
 router.post('/manual-enrollment', requireRole(['admin', 'superAdmin', 'schoolAdmin']), async (req, res) => {
   try {
-    const { studentId, classId } = req.body;
+    const { studentId, classId, variantId } = req.body;
 
     if (!studentId || !classId) {
       return res.status(400).json({ message: 'Student ID and Class ID are required' });
@@ -51,8 +51,25 @@ router.post('/manual-enrollment', requireRole(['admin', 'superAdmin', 'schoolAdm
       return res.status(400).json({ message: 'Student is already enrolled in this class' });
     }
 
-    // Get class price (already in cents from database)
-    const classCost = classItem.price || 0;
+    // Get price from variant if provided, otherwise use base class price
+    // Variants are stored in schedule.variants as JSON array
+    let classCost = classItem.price || 0;
+    let selectedVariantName = '';
+    
+    if (variantId && classItem.schedule) {
+      const schedule = typeof classItem.schedule === 'string' 
+        ? JSON.parse(classItem.schedule) 
+        : classItem.schedule;
+      
+      if (schedule.variants && Array.isArray(schedule.variants)) {
+        const variant = schedule.variants.find((v: any) => v.id === variantId);
+        if (variant) {
+          classCost = variant.price || classCost;
+          selectedVariantName = variant.name || '';
+          console.log(`📋 Using variant "${selectedVariantName}" price: ${classCost} cents`);
+        }
+      }
+    }
     
     // Create complete enrollment using factory function
     const enrollmentData = createEnrollmentDataSimple({
