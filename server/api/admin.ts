@@ -30,9 +30,22 @@ router.post('/manual-enrollment', requireRole(['admin', 'superAdmin', 'schoolAdm
       return res.status(404).json({ message: 'Student not found' });
     }
 
-    // Check if student is already enrolled
+    // Check if student is already enrolled - check all class ID fields with type coercion
     const existingEnrollments = await storage.getEnrollmentsByChildId(studentId);
-    const alreadyEnrolled = existingEnrollments.some((e: any) => e.programId === classId || e.classId === classId);
+    const classIdNum = typeof classId === 'string' ? parseInt(classId, 10) : classId;
+    const alreadyEnrolled = existingEnrollments.some((e: any) => {
+      const enrollmentProgramId = typeof e.programId === 'string' ? parseInt(e.programId, 10) : e.programId;
+      const enrollmentClassId = typeof e.classId === 'string' ? parseInt(e.classId, 10) : e.classId;
+      const enrollmentMarketplaceClassId = typeof e.marketplaceClassId === 'string' ? parseInt(e.marketplaceClassId, 10) : e.marketplaceClassId;
+      
+      // Check all possible class ID fields and exclude cancelled/withdrawn enrollments
+      const isActiveEnrollment = e.status !== 'cancelled' && e.status !== 'withdrawn';
+      const matchesClass = enrollmentProgramId === classIdNum || 
+                          enrollmentClassId === classIdNum || 
+                          enrollmentMarketplaceClassId === classIdNum;
+      
+      return isActiveEnrollment && matchesClass;
+    });
     
     if (alreadyEnrolled) {
       return res.status(400).json({ message: 'Student is already enrolled in this class' });

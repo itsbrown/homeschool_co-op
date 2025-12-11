@@ -144,11 +144,16 @@ export default function ClassEnrollmentsPage() {
     unenrollMutation.mutate(enrollmentId);
   };
 
-  const enrolledStudentIds = enrollments.map((e: any) => e.childId || e.studentId);
-  const availableStudents = students.filter((student: any) => 
-    !enrolledStudentIds.includes(student.id) &&
-    student.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Convert all enrolled IDs to numbers for consistent comparison
+  const enrolledStudentIds = enrollments.map((e: any) => {
+    const id = e.childId || e.studentId;
+    return typeof id === 'string' ? parseInt(id, 10) : id;
+  });
+  const availableStudents = students.filter((student: any) => {
+    const studentId = typeof student.id === 'string' ? parseInt(student.id, 10) : student.id;
+    return !enrolledStudentIds.includes(studentId) &&
+      student.name.toLowerCase().includes(searchTerm.toLowerCase());
+  });
 
   useEffect(() => {
     if (user && user.role !== "admin" && user.role !== "superAdmin" && user.role !== "schoolAdmin") {
