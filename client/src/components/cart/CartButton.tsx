@@ -17,6 +17,8 @@ export default function CartButton() {
       size="sm"
       className="relative"
       onClick={openCart}
+      data-tutorial="cart-icon"
+      data-testid="cart-button"
     >
       <ShoppingCart className="h-5 w-5" />
       {itemCount > 0 && (

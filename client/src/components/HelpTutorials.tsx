@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { 
   X, 
@@ -12,8 +11,12 @@ import {
   CreditCard,
   HelpCircle,
   CheckCircle2,
-  BookOpen
+  BookOpen,
+  Play,
+  FileText
 } from 'lucide-react';
+import { useInteractiveTutorial } from './tutorials/InteractiveTutorial';
+import { getTutorialById } from './tutorials/tutorialDefinitions';
 
 interface HelpTutorialsProps {
   isOpen: boolean;
@@ -26,6 +29,7 @@ interface Tutorial {
   description: string;
   icon: typeof UserPlus;
   iconColor: string;
+  hasInteractiveMode: boolean;
   steps: TutorialStep[];
 }
 
@@ -42,6 +46,7 @@ const tutorials: Tutorial[] = [
     description: 'Learn how to add your children to your account',
     icon: UserPlus,
     iconColor: 'text-blue-600',
+    hasInteractiveMode: true,
     steps: [
       {
         title: 'Go to My Children',
@@ -69,6 +74,7 @@ const tutorials: Tutorial[] = [
     description: 'Step-by-step guide to enrolling your child in classes',
     icon: GraduationCap,
     iconColor: 'text-green-600',
+    hasInteractiveMode: true,
     steps: [
       {
         title: 'Browse Available Classes',
@@ -104,6 +110,7 @@ const tutorials: Tutorial[] = [
     description: 'Complete your enrollment with payment',
     icon: CreditCard,
     iconColor: 'text-purple-600',
+    hasInteractiveMode: true,
     steps: [
       {
         title: 'Review Your Cart',
@@ -140,6 +147,7 @@ const tutorials: Tutorial[] = [
     description: 'How to reach out when you need assistance',
     icon: HelpCircle,
     iconColor: 'text-orange-600',
+    hasInteractiveMode: true,
     steps: [
       {
         title: 'Use the Help Button',
@@ -163,16 +171,24 @@ const tutorials: Tutorial[] = [
   }
 ];
 
+type ViewMode = 'list' | 'select-mode' | 'read-guide';
+
 export default function HelpTutorials({ isOpen, onClose }: HelpTutorialsProps) {
   const [selectedTutorial, setSelectedTutorial] = useState<Tutorial | null>(null);
   const [currentStep, setCurrentStep] = useState(0);
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
+  
+  const { startTutorial } = useInteractiveTutorial();
 
   if (!isOpen) return null;
 
   const handleBack = () => {
-    if (selectedTutorial) {
-      setSelectedTutorial(null);
+    if (viewMode === 'read-guide') {
+      setViewMode('select-mode');
       setCurrentStep(0);
+    } else if (viewMode === 'select-mode') {
+      setViewMode('list');
+      setSelectedTutorial(null);
     } else {
       onClose();
     }
@@ -180,7 +196,22 @@ export default function HelpTutorials({ isOpen, onClose }: HelpTutorialsProps) {
 
   const handleSelectTutorial = (tutorial: Tutorial) => {
     setSelectedTutorial(tutorial);
+    setViewMode('select-mode');
     setCurrentStep(0);
+  };
+
+  const handleStartInteractive = () => {
+    if (!selectedTutorial) return;
+    
+    const interactiveTutorial = getTutorialById(selectedTutorial.id);
+    if (interactiveTutorial) {
+      onClose();
+      startTutorial(interactiveTutorial);
+    }
+  };
+
+  const handleReadGuide = () => {
+    setViewMode('read-guide');
   };
 
   const handleNextStep = () => {
@@ -195,13 +226,197 @@ export default function HelpTutorials({ isOpen, onClose }: HelpTutorialsProps) {
     }
   };
 
+  const renderTutorialList = () => (
+    <ScrollArea className="h-full px-6 pb-6">
+      <div className="space-y-3">
+        {tutorials.map((tutorial) => {
+          const IconComponent = tutorial.icon;
+          return (
+            <button
+              key={tutorial.id}
+              onClick={() => handleSelectTutorial(tutorial)}
+              className="w-full p-4 text-left bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors flex items-center gap-4"
+              data-testid={`tutorial-card-${tutorial.id}`}
+            >
+              <div className={`p-3 rounded-full bg-white dark:bg-gray-900 shadow-sm ${tutorial.iconColor}`}>
+                <IconComponent className="h-6 w-6" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-semibold text-gray-900 dark:text-gray-100">{tutorial.title}</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400">{tutorial.description}</p>
+              </div>
+              <ChevronRight className="h-5 w-5 text-gray-400" />
+            </button>
+          );
+        })}
+      </div>
+    </ScrollArea>
+  );
+
+  const renderModeSelection = () => (
+    <div className="px-6 pb-6">
+      <div className="text-center mb-6">
+        <div className={`mx-auto w-16 h-16 rounded-full flex items-center justify-center mb-4 ${selectedTutorial?.iconColor} bg-gray-100 dark:bg-gray-800`}>
+          {selectedTutorial && <selectedTutorial.icon className="h-8 w-8" />}
+        </div>
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+          {selectedTutorial?.title}
+        </h3>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+          {selectedTutorial?.description}
+        </p>
+      </div>
+
+      <div className="space-y-3">
+        {selectedTutorial?.hasInteractiveMode && (
+          <button
+            onClick={handleStartInteractive}
+            className="w-full p-4 text-left bg-primary/10 hover:bg-primary/20 border-2 border-primary rounded-lg transition-colors flex items-center gap-4"
+            data-testid="btn-start-interactive-tutorial"
+          >
+            <div className="p-3 rounded-full bg-primary text-primary-foreground">
+              <Play className="h-5 w-5" />
+            </div>
+            <div className="flex-1">
+              <h4 className="font-semibold text-gray-900 dark:text-gray-100">Interactive Guide</h4>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Click through each step with highlighted buttons
+              </p>
+            </div>
+            <div className="px-2 py-1 bg-primary text-primary-foreground text-xs font-medium rounded">
+              Recommended
+            </div>
+          </button>
+        )}
+
+        <button
+          onClick={handleReadGuide}
+          className="w-full p-4 text-left bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 border rounded-lg transition-colors flex items-center gap-4"
+          data-testid="btn-read-guide"
+        >
+          <div className="p-3 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+            <FileText className="h-5 w-5" />
+          </div>
+          <div className="flex-1">
+            <h4 className="font-semibold text-gray-900 dark:text-gray-100">Read Guide</h4>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Read step-by-step instructions at your own pace
+            </p>
+          </div>
+        </button>
+      </div>
+    </div>
+  );
+
+  const renderReadGuide = () => (
+    <div className="flex flex-col h-full">
+      <div className="px-6 mb-4">
+        <div className="flex gap-1">
+          {selectedTutorial?.steps.map((_, index) => (
+            <div
+              key={index}
+              className={`h-1.5 flex-1 rounded-full transition-colors ${
+                index <= currentStep ? 'bg-primary' : 'bg-gray-200 dark:bg-gray-700'
+              }`}
+            />
+          ))}
+        </div>
+      </div>
+
+      <ScrollArea className="flex-1 px-6">
+        <div className="space-y-4 pb-4">
+          <div className="flex items-start gap-3">
+            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-semibold text-sm">
+              {currentStep + 1}
+            </div>
+            <div className="flex-1">
+              <h3 className="font-semibold text-lg text-gray-900 dark:text-gray-100 mb-2">
+                {selectedTutorial?.steps[currentStep].title}
+              </h3>
+              <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
+                {selectedTutorial?.steps[currentStep].content}
+              </p>
+            </div>
+          </div>
+
+          {selectedTutorial?.steps[currentStep].tip && (
+            <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-3 flex items-start gap-2">
+              <CheckCircle2 className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-blue-900 dark:text-blue-100">Tip</p>
+                <p className="text-sm text-blue-700 dark:text-blue-300">
+                  {selectedTutorial?.steps[currentStep].tip}
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      </ScrollArea>
+
+      <div className="flex-shrink-0 px-6 pb-6 pt-4 border-t bg-white dark:bg-gray-950">
+        <div className="flex gap-3">
+          <Button
+            variant="outline"
+            onClick={handlePrevStep}
+            disabled={currentStep === 0}
+            className="flex-1"
+            data-testid="tutorial-prev-button"
+          >
+            Previous
+          </Button>
+          {selectedTutorial && currentStep < selectedTutorial.steps.length - 1 ? (
+            <Button
+              onClick={handleNextStep}
+              className="flex-1"
+              data-testid="tutorial-next-button"
+            >
+              Next Step
+            </Button>
+          ) : (
+            <Button
+              onClick={() => {
+                setSelectedTutorial(null);
+                setViewMode('list');
+                setCurrentStep(0);
+              }}
+              className="flex-1"
+              data-testid="tutorial-done-button"
+            >
+              Done
+            </Button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
+  const getTitle = () => {
+    if (viewMode === 'read-guide' && selectedTutorial) {
+      return selectedTutorial.title;
+    }
+    if (viewMode === 'select-mode' && selectedTutorial) {
+      return 'Choose How to Learn';
+    }
+    return 'Tutorials & Guides';
+  };
+
+  const getDescription = () => {
+    if (viewMode === 'read-guide' && selectedTutorial) {
+      return `Step ${currentStep + 1} of ${selectedTutorial.steps.length}`;
+    }
+    if (viewMode === 'select-mode') {
+      return 'Pick your preferred learning style';
+    }
+    return 'Learn how to use the platform';
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <Card className="w-full max-w-lg max-h-[90vh] flex flex-col" data-testid="help-tutorials-modal">
         <CardHeader className="flex-shrink-0 pb-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              {(selectedTutorial) && (
+              {viewMode !== 'list' && (
                 <Button 
                   variant="ghost" 
                   size="icon" 
@@ -215,13 +430,10 @@ export default function HelpTutorials({ isOpen, onClose }: HelpTutorialsProps) {
               <div>
                 <CardTitle className="flex items-center gap-2">
                   <BookOpen className="h-5 w-5 text-primary" />
-                  {selectedTutorial ? selectedTutorial.title : 'Tutorials & Guides'}
+                  {getTitle()}
                 </CardTitle>
                 <CardDescription>
-                  {selectedTutorial 
-                    ? `Step ${currentStep + 1} of ${selectedTutorial.steps.length}`
-                    : 'Learn how to use the platform'
-                  }
+                  {getDescription()}
                 </CardDescription>
               </div>
             </div>
@@ -237,111 +449,9 @@ export default function HelpTutorials({ isOpen, onClose }: HelpTutorialsProps) {
         </CardHeader>
 
         <CardContent className="flex-1 overflow-hidden p-0">
-          {!selectedTutorial ? (
-            <ScrollArea className="h-full px-6 pb-6">
-              <div className="space-y-3">
-                {tutorials.map((tutorial) => {
-                  const IconComponent = tutorial.icon;
-                  return (
-                    <button
-                      key={tutorial.id}
-                      onClick={() => handleSelectTutorial(tutorial)}
-                      className="w-full p-4 text-left bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors flex items-center gap-4"
-                      data-testid={`tutorial-card-${tutorial.id}`}
-                    >
-                      <div className={`p-3 rounded-full bg-white shadow-sm ${tutorial.iconColor}`}>
-                        <IconComponent className="h-6 w-6" />
-                      </div>
-                      <div className="flex-1">
-                        <h3 className="font-semibold text-gray-900">{tutorial.title}</h3>
-                        <p className="text-sm text-gray-500">{tutorial.description}</p>
-                      </div>
-                      <ChevronRight className="h-5 w-5 text-gray-400" />
-                    </button>
-                  );
-                })}
-              </div>
-            </ScrollArea>
-          ) : (
-            <div className="flex flex-col h-full">
-              <div className="px-6 mb-4">
-                <div className="flex gap-1">
-                  {selectedTutorial.steps.map((_, index) => (
-                    <div
-                      key={index}
-                      className={`h-1.5 flex-1 rounded-full transition-colors ${
-                        index <= currentStep ? 'bg-primary' : 'bg-gray-200'
-                      }`}
-                    />
-                  ))}
-                </div>
-              </div>
-
-              <ScrollArea className="flex-1 px-6">
-                <div className="space-y-4 pb-4">
-                  <div className="flex items-start gap-3">
-                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-semibold text-sm">
-                      {currentStep + 1}
-                    </div>
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-lg text-gray-900 mb-2">
-                        {selectedTutorial.steps[currentStep].title}
-                      </h3>
-                      <p className="text-gray-600 leading-relaxed">
-                        {selectedTutorial.steps[currentStep].content}
-                      </p>
-                    </div>
-                  </div>
-
-                  {selectedTutorial.steps[currentStep].tip && (
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-start gap-2">
-                      <CheckCircle2 className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-sm font-medium text-blue-900">Tip</p>
-                        <p className="text-sm text-blue-700">
-                          {selectedTutorial.steps[currentStep].tip}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </ScrollArea>
-
-              <div className="flex-shrink-0 px-6 pb-6 pt-4 border-t bg-white">
-                <div className="flex gap-3">
-                  <Button
-                    variant="outline"
-                    onClick={handlePrevStep}
-                    disabled={currentStep === 0}
-                    className="flex-1"
-                    data-testid="tutorial-prev-button"
-                  >
-                    Previous
-                  </Button>
-                  {currentStep < selectedTutorial.steps.length - 1 ? (
-                    <Button
-                      onClick={handleNextStep}
-                      className="flex-1"
-                      data-testid="tutorial-next-button"
-                    >
-                      Next Step
-                    </Button>
-                  ) : (
-                    <Button
-                      onClick={() => {
-                        setSelectedTutorial(null);
-                        setCurrentStep(0);
-                      }}
-                      className="flex-1"
-                      data-testid="tutorial-done-button"
-                    >
-                      Done
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
+          {viewMode === 'list' && renderTutorialList()}
+          {viewMode === 'select-mode' && renderModeSelection()}
+          {viewMode === 'read-guide' && renderReadGuide()}
         </CardContent>
       </Card>
     </div>

@@ -330,7 +330,8 @@ export function SupportAssistantTrigger() {
                 setIsMenuOpen(false);
               }}
               className="w-full px-4 py-3 text-left hover:bg-gray-50 flex items-center gap-3 transition-colors"
-              data-testid="help-menu-tutorials"
+              data-tutorial="tutorials-btn"
+              data-testid="btn-tutorials"
             >
               <BookOpen className="h-5 w-5 text-purple-600" />
               <div>
@@ -344,7 +345,8 @@ export function SupportAssistantTrigger() {
                 setIsMenuOpen(false);
               }}
               className="w-full px-4 py-3 text-left hover:bg-gray-50 flex items-center gap-3 border-t transition-colors"
-              data-testid="help-menu-technical-support"
+              data-tutorial="ai-support-btn"
+              data-testid="btn-ai-support"
             >
               <Bot className="h-5 w-5 text-blue-600" />
               <div>
@@ -358,7 +360,8 @@ export function SupportAssistantTrigger() {
                 setIsMenuOpen(false);
               }}
               className="w-full px-4 py-3 text-left hover:bg-gray-50 flex items-center gap-3 border-t transition-colors"
-              data-testid="help-menu-contact-school"
+              data-tutorial="contact-school-btn"
+              data-testid="btn-contact-school"
             >
               <Building2 className="h-5 w-5 text-green-600" />
               <div>
@@ -374,6 +377,7 @@ export function SupportAssistantTrigger() {
           onClick={() => setIsMenuOpen(!isMenuOpen)}
           className="rounded-full shadow-lg hover:shadow-xl transition-shadow"
           size="lg"
+          data-tutorial="help-button"
           data-testid="help-button"
         >
           <MessageCircle className="h-5 w-5 md:mr-2" />

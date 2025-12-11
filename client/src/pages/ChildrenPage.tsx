@@ -165,7 +165,7 @@ export default function ChildrenPage() {
               Manage your children's profiles and program enrollments
             </p>
           </div>
-          <Button asChild className="w-full sm:w-auto">
+          <Button asChild className="w-full sm:w-auto" data-tutorial="add-child-btn" data-testid="btn-add-child">
             <Link href="/children/register">
               <UserPlus className="mr-2 h-4 w-4" />
               Register New Child
