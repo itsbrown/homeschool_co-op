@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AdminShell } from "@/components/ui/admin-shell";
+import SchoolAdminLayout from "@/components/layout/SchoolAdminLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -43,6 +44,9 @@ export default function ClassEnrollmentsPage() {
   const classId = adminParams?.classId 
     ? parseInt(adminParams.classId) 
     : (schoolParams?.id ? parseInt(schoolParams.id) : null);
+  
+  // Determine which layout to use based on the matched route
+  const isSchoolAdminRoute = !!schoolParams?.id;
 
   // Fetch class details
   const { data: classData, isLoading: isLoadingClass } = useQuery({
@@ -161,9 +165,9 @@ export default function ClassEnrollmentsPage() {
     return <div>Invalid class ID</div>;
   }
 
-  return (
-    <AdminShell>
-      <div className="flex flex-col space-y-6">
+  // The page content that works in either layout
+  const pageContent = (
+    <div className="flex flex-col space-y-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Button 
@@ -337,6 +341,20 @@ export default function ClassEnrollmentsPage() {
           </CardContent>
         </Card>
       </div>
+  );
+
+  // Use the appropriate layout based on the route
+  if (isSchoolAdminRoute) {
+    return (
+      <SchoolAdminLayout pageTitle="Manage Enrollments">
+        {pageContent}
+      </SchoolAdminLayout>
+    );
+  }
+
+  return (
+    <AdminShell>
+      {pageContent}
     </AdminShell>
   );
 }
