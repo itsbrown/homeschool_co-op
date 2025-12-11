@@ -113,7 +113,7 @@ export default function ClassRosterPage() {
                 {totalEnrolled} {totalEnrolled === 1 ? 'student' : 'students'} enrolled
               </p>
             </div>
-            <Button>
+            <Button onClick={() => setLocation(`/schools/classes/${classId}/enrollments`)}>
               <UserPlus className="mr-2 h-4 w-4" />
               Add Student to Class
             </Button>

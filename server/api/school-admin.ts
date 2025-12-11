@@ -1022,6 +1022,7 @@ router.get("/classes/:id/roster", supabaseAuth, async (req: any, res) => {
 
       return {
         id: child.id,
+        enrollmentId: enrollment.id,
         firstName: child.firstName,
         lastName: child.lastName,
         email: child.parentEmail || '',

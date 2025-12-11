@@ -73,11 +73,11 @@ export default function SchoolAdminClassEnrollmentsPage() {
     }
   });
 
-  const { data: enrollments = [], isLoading: isLoadingEnrollments, refetch: refetchEnrollments } = useQuery({
-    queryKey: ['/api/enrollments/class', classId],
+  const { data: rosterData, isLoading: isLoadingEnrollments, refetch: refetchEnrollments } = useQuery({
+    queryKey: ['/api/school-admin/classes', classId, 'roster'],
     queryFn: async () => {
-      if (!classId) return [];
-      const response = await fetch(`/api/enrollments/class/${classId}`, {
+      if (!classId) return { students: [] };
+      const response = await fetch(`/api/school-admin/classes/${classId}/roster`, {
         headers: getAuthHeaders(),
         credentials: "include"
       });
@@ -86,6 +86,19 @@ export default function SchoolAdminClassEnrollmentsPage() {
     },
     enabled: !!classId
   });
+  
+  // Transform roster data to match enrollments format
+  // Note: enrollmentId is required for unenrollment to work
+  const enrollments = (rosterData?.students || []).map((student: any) => ({
+    id: student.enrollmentId,
+    childId: student.id,
+    studentId: student.id,
+    status: student.status || 'enrolled',
+    enrollmentDate: student.enrollmentDate,
+    createdAt: student.enrollmentDate,
+    studentName: `${student.firstName} ${student.lastName}`,
+    grade: student.gradeLevel
+  }));
 
   const enrollStudentMutation = useMutation({
     mutationFn: async ({ studentId, classId }: { studentId: number; classId: number }) => {
@@ -310,11 +323,11 @@ export default function SchoolAdminClassEnrollmentsPage() {
                     return (
                       <TableRow key={enrollment.id}>
                         <TableCell className="font-medium">
-                          {student?.name || "Unknown Student"}
+                          {enrollment.studentName || student?.name || "Unknown Student"}
                         </TableCell>
-                        <TableCell>{student?.grade || "N/A"}</TableCell>
+                        <TableCell>{enrollment.grade || student?.grade || "N/A"}</TableCell>
                         <TableCell>
-                          {new Date(enrollment.enrollmentDate || enrollment.createdAt).toLocaleDateString()}
+                          {enrollment.enrollmentDate ? new Date(enrollment.enrollmentDate).toLocaleDateString() : "N/A"}
                         </TableCell>
                         <TableCell>
                           <Badge variant="default">{enrollment.status || "enrolled"}</Badge>
