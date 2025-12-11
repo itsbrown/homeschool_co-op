@@ -49,6 +49,7 @@ import enrollmentConflictsRouter from "./api/enrollment-conflicts";
 import classInclusionsRouter from "./api/class-inclusions";
 import onboardingRouter from "./api/onboarding";
 import membershipAgreementRouter from "./api/membership-agreement";
+import smartTutorialRouter from "./api/smart-tutorial";
 import archiver from 'archiver';
 import fs from 'fs';
 import path from 'path';
@@ -2089,6 +2090,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/discounts", discountsRouter);
   app.use("/api/ai", aiPricingRouter);
   app.use("/api/ai-insights", aiInsightsRouter);
+  app.use("/api/smart-tutorial", smartTutorialRouter);
   app.use("/api/admin", adminRouter);
   app.use("/api/admin-classes", adminClassesRouter); // Add duplicate route for backwards compatibility
   app.use("/api/admin-enrollments", adminEnrollmentsRouter); // Admin enrollment management

@@ -13,10 +13,12 @@ import {
   CheckCircle2,
   BookOpen,
   Play,
-  FileText
+  FileText,
+  Sparkles
 } from 'lucide-react';
 import { useInteractiveTutorial } from './tutorials/InteractiveTutorial';
 import { getTutorialById } from './tutorials/tutorialDefinitions';
+import SmartTutorialAssistant from './tutorials/SmartTutorialAssistant';
 
 interface HelpTutorialsProps {
   isOpen: boolean;
@@ -177,8 +179,23 @@ export default function HelpTutorials({ isOpen, onClose }: HelpTutorialsProps) {
   const [selectedTutorial, setSelectedTutorial] = useState<Tutorial | null>(null);
   const [currentStep, setCurrentStep] = useState(0);
   const [viewMode, setViewMode] = useState<ViewMode>('list');
+  const [showSmartGuide, setShowSmartGuide] = useState(false);
   
   const { startTutorial } = useInteractiveTutorial();
+
+  const handleOpenSmartGuide = () => {
+    setShowSmartGuide(true);
+    onClose();
+  };
+
+  if (showSmartGuide) {
+    return (
+      <SmartTutorialAssistant 
+        isOpen={true} 
+        onClose={() => setShowSmartGuide(false)} 
+      />
+    );
+  }
 
   if (!isOpen) return null;
 
@@ -229,6 +246,39 @@ export default function HelpTutorials({ isOpen, onClose }: HelpTutorialsProps) {
   const renderTutorialList = () => (
     <ScrollArea className="h-full px-6 pb-6">
       <div className="space-y-3">
+        <button
+          onClick={handleOpenSmartGuide}
+          className="w-full p-4 text-left bg-gradient-to-r from-blue-500/10 to-purple-500/10 hover:from-blue-500/20 hover:to-purple-500/20 border-2 border-blue-500/30 rounded-lg transition-all flex items-center gap-4"
+          data-testid="btn-smart-guide"
+        >
+          <div className="p-3 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 text-white shadow-lg">
+            <Sparkles className="h-6 w-6" />
+          </div>
+          <div className="flex-1">
+            <div className="flex items-center gap-2">
+              <h3 className="font-semibold text-gray-900 dark:text-gray-100">Smart Guide</h3>
+              <span className="px-2 py-0.5 bg-gradient-to-r from-blue-500 to-purple-600 text-white text-xs font-medium rounded-full">
+                AI
+              </span>
+            </div>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Ask me anything - I'll guide you step by step
+            </p>
+          </div>
+          <ChevronRight className="h-5 w-5 text-blue-500" />
+        </button>
+
+        <div className="relative py-2">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-gray-200 dark:border-gray-700" />
+          </div>
+          <div className="relative flex justify-center">
+            <span className="bg-white dark:bg-gray-900 px-3 text-xs text-gray-500 dark:text-gray-400">
+              Or choose a topic
+            </span>
+          </div>
+        </div>
+
         {tutorials.map((tutorial) => {
           const IconComponent = tutorial.icon;
           return (
