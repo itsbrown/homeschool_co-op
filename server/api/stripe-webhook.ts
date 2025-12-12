@@ -157,6 +157,7 @@ async function handleDirectPaymentSuccess(paymentIntent: any) {
             amount: membershipAmount,
             amountPaid: membershipAmount,
             remainingBalance: 0,
+            totalAmount: membershipAmount, // Total membership amount in cents
             status: 'enrolled',
             stripeSubscriptionId: null,
             stripeCustomerId: paymentIntent.customer || null,

@@ -609,6 +609,7 @@ export const createMembershipEnrollment = async (req: any, res: Response) => {
       amount: membershipFee,
       amountPaid: 0,
       remainingBalance: membershipFee,
+      totalAmount: membershipFee, // Total membership amount in cents
       status: 'pending_payment' as const,
       dueDate,
       endDate: expirationDate, // End date same as expiration date
@@ -1005,6 +1006,7 @@ export const activateParentMembership = async (req: any, res: Response) => {
         amount: membershipFee,
         amountPaid: membershipFee, // Mark as fully paid since admin is activating manually
         remainingBalance: 0,
+        totalAmount: membershipFee, // Total membership amount in cents
         status: 'enrolled' as const,
         dueDate,
         endDate: expirationDate, // End date same as expiration date
@@ -1055,6 +1057,7 @@ export const activateParentMembership = async (req: any, res: Response) => {
         amount: membershipFee,
         amountPaid: membershipFee,
         remainingBalance: 0,
+        totalAmount: membershipFee, // Total membership amount in cents
         status: 'enrolled' as const,
         dueDate,
         endDate: expirationDate, // End date same as expiration date

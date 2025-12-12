@@ -164,6 +164,7 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
                 amount: 17500, // $175 in cents
                 amountPaid: 17500,
                 remainingBalance: 0,
+                totalAmount: 17500, // Total membership amount in cents
                 status: 'enrolled',
                 stripeSubscriptionId: existingSubscription.id,
                 stripeCustomerId: customer.id,
@@ -843,6 +844,7 @@ router.post('/admin/sync-stripe-subscription', supabaseAuth, requireSchoolContex
         amount: 17500, // $175 in cents
         amountPaid: 17500,
         remainingBalance: 0,
+        totalAmount: 17500, // Total membership amount in cents
         status: 'enrolled',
         stripeSubscriptionId: subscription.id,
         stripeCustomerId: customer.id,
