@@ -996,76 +996,81 @@ export const activateParentMembership = async (req: any, res: Response) => {
 
     if (!existingMembershipForYear && !latestMembership) {
       // Create new membership enrollment - no prior record exists
-      try {
-        membershipEnrollment = await storage.createMembershipEnrollment({
-          schoolId,
-          parentUserId,
-          membershipYear,
-          amount: membershipFee,
-          amountPaid: membershipFee, // Mark as fully paid since admin is activating manually
-          remainingBalance: 0,
-          status: 'enrolled' as const,
-          dueDate,
-          expirationDate,
-          gracePeriodEnd,
-          paymentMethod: 'other' as const, // Manual activation
-          notes: `Manually activated by admin ${userEmail}`,
-          membershipTier: 'basic' as const,
-          stripeSubscriptionId: null,
-          stripeCustomerId: null,
-          startDate,
-          renewalDate
-        });
-        console.log(`✅ Created membership enrollment ${membershipEnrollment.id} for parent ${parentUserId}`);
-      } catch (enrollmentError: any) {
-        console.error('Error creating membership enrollment:', enrollmentError);
-        // Continue even if enrollment creation fails - memberId is already set
+      console.log(`📝 Creating new membership enrollment for parent ${parentUserId}, school ${schoolId}, year ${membershipYear}`);
+      membershipEnrollment = await storage.createMembershipEnrollment({
+        schoolId,
+        parentUserId,
+        membershipYear,
+        amount: membershipFee,
+        amountPaid: membershipFee, // Mark as fully paid since admin is activating manually
+        remainingBalance: 0,
+        status: 'enrolled' as const,
+        dueDate,
+        expirationDate,
+        gracePeriodEnd,
+        paymentMethod: 'other' as const, // Manual activation
+        notes: `Manually activated by admin ${userEmail}`,
+        membershipTier: 'basic' as const,
+        stripeSubscriptionId: null,
+        stripeCustomerId: null,
+        startDate,
+        renewalDate
+      });
+      
+      if (!membershipEnrollment) {
+        console.error(`❌ Failed to create membership enrollment for parent ${parentUserId}`);
+        return res.status(500).json({ message: "Failed to create membership enrollment record" });
       }
+      console.log(`✅ Created membership enrollment ${membershipEnrollment.id} for parent ${parentUserId}`);
     } else if (existingMembershipForYear) {
       // Update existing enrollment for current year to active status with refreshed dates
-      try {
-        membershipEnrollment = await storage.updateMembershipEnrollment(existingMembershipForYear.id, {
-          status: 'enrolled',
-          amount: membershipFee, // Update to current fee
-          amountPaid: membershipFee,
-          remainingBalance: 0,
-          startDate,
-          renewalDate,
-          dueDate,
-          expirationDate,
-          gracePeriodEnd,
-          notes: `Manually activated by admin ${userEmail}`
-        });
-        console.log(`✅ Updated existing membership enrollment ${existingMembershipForYear.id} for year ${membershipYear}`);
-      } catch (updateError: any) {
-        console.error('Error updating membership enrollment:', updateError);
+      console.log(`📝 Updating existing membership enrollment ${existingMembershipForYear.id} for year ${membershipYear}`);
+      membershipEnrollment = await storage.updateMembershipEnrollment(existingMembershipForYear.id, {
+        status: 'enrolled',
+        amount: membershipFee, // Update to current fee
+        amountPaid: membershipFee,
+        remainingBalance: 0,
+        startDate,
+        renewalDate,
+        dueDate,
+        expirationDate,
+        gracePeriodEnd,
+        notes: `Manually activated by admin ${userEmail}`
+      });
+      
+      if (!membershipEnrollment) {
+        console.error(`❌ Failed to update membership enrollment ${existingMembershipForYear.id}`);
+        return res.status(500).json({ message: "Failed to update membership enrollment record" });
       }
+      console.log(`✅ Updated existing membership enrollment ${existingMembershipForYear.id} for year ${membershipYear}`);
     } else {
       // Create new enrollment for current year (prior year record exists but not for current year)
-      try {
-        membershipEnrollment = await storage.createMembershipEnrollment({
-          schoolId,
-          parentUserId,
-          membershipYear,
-          amount: membershipFee,
-          amountPaid: membershipFee,
-          remainingBalance: 0,
-          status: 'enrolled' as const,
-          dueDate,
-          expirationDate,
-          gracePeriodEnd,
-          paymentMethod: 'other' as const,
-          notes: `Manually activated by admin ${userEmail}`,
-          membershipTier: 'basic' as const,
-          stripeSubscriptionId: null,
-          stripeCustomerId: null,
-          startDate,
-          renewalDate
-        });
-        console.log(`✅ Created new membership enrollment for year ${membershipYear} (prior year: ${latestMembership?.membershipYear})`);
-      } catch (enrollmentError: any) {
-        console.error('Error creating membership enrollment:', enrollmentError);
+      console.log(`📝 Creating new membership enrollment for year ${membershipYear} (prior year: ${latestMembership?.membershipYear})`);
+      membershipEnrollment = await storage.createMembershipEnrollment({
+        schoolId,
+        parentUserId,
+        membershipYear,
+        amount: membershipFee,
+        amountPaid: membershipFee,
+        remainingBalance: 0,
+        status: 'enrolled' as const,
+        dueDate,
+        expirationDate,
+        gracePeriodEnd,
+        paymentMethod: 'other' as const,
+        notes: `Manually activated by admin ${userEmail}`,
+        membershipTier: 'basic' as const,
+        stripeSubscriptionId: null,
+        stripeCustomerId: null,
+        startDate,
+        renewalDate
+      });
+      
+      if (!membershipEnrollment) {
+        console.error(`❌ Failed to create membership enrollment for parent ${parentUserId} year ${membershipYear}`);
+        return res.status(500).json({ message: "Failed to create membership enrollment record" });
       }
+      console.log(`✅ Created new membership enrollment for year ${membershipYear} (prior year: ${latestMembership?.membershipYear})`);
     }
 
     console.log(`✅ Admin ${userEmail} activated membership for parent ${parentUserId}: ${newMemberId}`);
