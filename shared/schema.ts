@@ -979,6 +979,7 @@ export const membershipEnrollments = pgTable("membership_enrollments", {
   amount: integer("amount").notNull(), // Total membership fee in cents
   amountPaid: integer("amount_paid").default(0).notNull(), // Amount paid so far in cents
   remainingBalance: integer("remaining_balance").notNull(), // Remaining balance in cents
+  totalAmount: integer("total_amount").notNull(), // Total membership amount in cents (required by database)
   status: text("status", { 
     enum: ["pending_payment", "enrolled", "expired", "grace_period", "suspended"] 
   }).default("pending_payment").notNull(),
@@ -1017,6 +1018,7 @@ export const insertMembershipEnrollmentSchema = createInsertSchema(membershipEnr
     startDate: z.date().nullable().default(null),
     renewalDate: z.date().nullable().default(null),
     endDate: z.date(), // Required field - when membership period ends
+    totalAmount: z.number(), // Required field - total membership amount in cents
   });
 export type InsertMembershipEnrollment = z.infer<typeof insertMembershipEnrollmentSchema>;
 export type MembershipEnrollment = typeof membershipEnrollments.$inferSelect;
