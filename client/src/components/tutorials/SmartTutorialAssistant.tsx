@@ -13,7 +13,8 @@ import {
   Loader2,
   ChevronRight,
   Lightbulb,
-  Bot
+  Bot,
+  ArrowRight
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -198,6 +199,31 @@ export default function SmartTutorialAssistant({ isOpen, onClose }: SmartTutoria
     sendMessage(suggestion);
   };
 
+  const handleNextStep = () => {
+    sendMessage("Done! What's next?");
+  };
+
+  const isLastAssistantMessage = (messageId: string) => {
+    const assistantMessages = messages.filter(m => m.role === 'assistant' && m.id !== 'welcome');
+    return assistantMessages.length > 0 && assistantMessages[assistantMessages.length - 1].id === messageId;
+  };
+
+  const shouldShowNextStepButton = (message: Message) => {
+    if (message.role !== 'assistant' || message.id === 'welcome') return false;
+    if (!isLastAssistantMessage(message.id)) return false;
+    if (isLoading) return false;
+    
+    const content = message.content.toLowerCase();
+    return content.includes('let me know') || 
+           content.includes('ready for') || 
+           content.includes('next step') ||
+           content.includes('when you') ||
+           content.includes('once you') ||
+           content.includes('step 1') ||
+           content.includes('step 2') ||
+           content.includes('step 3');
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -270,18 +296,34 @@ export default function SmartTutorialAssistant({ isOpen, onClose }: SmartTutoria
                   )}
                 >
                   <p className="whitespace-pre-wrap">{message.content}</p>
-                  {message.highlight && (
-                    <Button
-                      variant="link"
-                      size="sm"
-                      className="h-auto p-0 mt-1 text-xs"
-                      onClick={() => highlightElement(message.highlight!)}
-                    >
-                      <Lightbulb className="h-3 w-3 mr-1" />
-                      Show me where
-                    </Button>
-                  )}
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {message.highlight && (
+                      <Button
+                        variant="link"
+                        size="sm"
+                        className="h-auto p-0 text-xs"
+                        onClick={() => highlightElement(message.highlight!)}
+                      >
+                        <Lightbulb className="h-3 w-3 mr-1" />
+                        Show me where
+                      </Button>
+                    )}
+                  </div>
                 </div>
+                {shouldShowNextStepButton(message) && (
+                  <div className="flex-shrink-0 self-end">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleNextStep}
+                      className="h-7 text-xs bg-gradient-to-r from-blue-500/10 to-purple-500/10 border-blue-500/30 hover:from-blue-500/20 hover:to-purple-500/20"
+                      data-testid="btn-next-step"
+                    >
+                      Next Step
+                      <ArrowRight className="h-3 w-3 ml-1" />
+                    </Button>
+                  </div>
+                )}
               </div>
             ))}
             
