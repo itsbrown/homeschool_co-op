@@ -172,6 +172,7 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
                 notes: 'Auto-synced from Stripe subscription',
                 paymentMethod: 'other',
                 dueDate: startDate,
+                endDate: endDate, // End date same as expiration date
                 expirationDate: endDate,
                 gracePeriodEnd: null
               });
@@ -850,6 +851,7 @@ router.post('/admin/sync-stripe-subscription', supabaseAuth, requireSchoolContex
         notes: 'Admin-synced from Stripe subscription',
         paymentMethod: 'other',
         dueDate: startDate,
+        endDate: endDate, // End date same as expiration date
         expirationDate: endDate,
         gracePeriodEnd: null
       });

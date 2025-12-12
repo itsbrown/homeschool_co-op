@@ -983,6 +983,7 @@ export const membershipEnrollments = pgTable("membership_enrollments", {
     enum: ["pending_payment", "enrolled", "expired", "grace_period", "suspended"] 
   }).default("pending_payment").notNull(),
   dueDate: timestamp("due_date").notNull(), // When membership payment is due
+  endDate: timestamp("end_date").notNull(), // When membership period ends (same as expirationDate for consistency)
   expirationDate: timestamp("expiration_date").notNull(), // When membership expires
   gracePeriodEnd: timestamp("grace_period_end"), // End of grace period if applicable
   paymentMethod: text("payment_method", { 
@@ -1015,6 +1016,7 @@ export const insertMembershipEnrollmentSchema = createInsertSchema(membershipEnr
     stripeCustomerId: z.string().nullable().default(null),
     startDate: z.date().nullable().default(null),
     renewalDate: z.date().nullable().default(null),
+    endDate: z.date(), // Required field - when membership period ends
   });
 export type InsertMembershipEnrollment = z.infer<typeof insertMembershipEnrollmentSchema>;
 export type MembershipEnrollment = typeof membershipEnrollments.$inferSelect;

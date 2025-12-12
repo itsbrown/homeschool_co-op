@@ -611,6 +611,7 @@ export const createMembershipEnrollment = async (req: any, res: Response) => {
       remainingBalance: membershipFee,
       status: 'pending_payment' as const,
       dueDate,
+      endDate: expirationDate, // End date same as expiration date
       expirationDate,
       gracePeriodEnd,
       paymentMethod: null,
@@ -1006,6 +1007,7 @@ export const activateParentMembership = async (req: any, res: Response) => {
         remainingBalance: 0,
         status: 'enrolled' as const,
         dueDate,
+        endDate: expirationDate, // End date same as expiration date
         expirationDate,
         gracePeriodEnd,
         paymentMethod: 'other' as const, // Manual activation
@@ -1055,6 +1057,7 @@ export const activateParentMembership = async (req: any, res: Response) => {
         remainingBalance: 0,
         status: 'enrolled' as const,
         dueDate,
+        endDate: expirationDate, // End date same as expiration date
         expirationDate,
         gracePeriodEnd,
         paymentMethod: 'other' as const,

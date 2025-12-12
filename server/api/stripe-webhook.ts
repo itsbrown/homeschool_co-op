@@ -163,6 +163,7 @@ async function handleDirectPaymentSuccess(paymentIntent: any) {
             startDate,
             renewalDate: expirationDate,
             dueDate: startDate,
+            endDate: expirationDate, // End date same as expiration date
             expirationDate,
             gracePeriodEnd: null,
             paymentMethod: 'other', // Stripe payment via cart checkout
