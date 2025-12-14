@@ -1036,6 +1036,8 @@ export const activateParentMembership = async (req: any, res: Response) => {
         amount: membershipFee, // Update to current fee
         amountPaid: membershipFee,
         remainingBalance: 0,
+        totalAmount: membershipFee, // Total membership amount in cents
+        balanceDue: 0, // Fully paid - no balance due
         startDate,
         renewalDate,
         dueDate,
