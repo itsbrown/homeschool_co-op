@@ -1,0 +1,38 @@
+queryClient.ts:158 ❌ API 500: {"message":"Failed to create membership","error":"null value in column \"start_date\" of relation \"membership_enrollments\" violates not-null constraint"}
+RoleContext.tsx:363 🔄 RoleProvider rendering - activeRole: schoolAdmin, canSwitchRoles: false, showRoleSelection: false, isSettingUpAccount: false, user: contact.americanseekersacademy@gmail.com
+App.tsx:290 🔐 Router render - activeRole: schoolAdmin isAuthenticated: true showRoleSelection: false user: contact.americanseekersacademy@gmail.com location: /schools/parents/10
+installHook.js:1 🎯 ROLE_SWITCHER_DEBUG: {"canSwitchRoles":false,"roleCount":1,"isLoadingRoles":false,"activeRole":"schoolAdmin","activeRoleId":34,"roles":[{"id":34,"role":"schoolAdmin","schoolId":1}]} Error Component Stack
+    at RoleSwitcher (RoleSwitcher.tsx:26:103)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at header (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at SchoolAdminLayout (SchoolAdminLayout.tsx:15:45)
+    at ParentProfilePage (ParentProfilePage.tsx:496:27)
+    at Route (wouter.js?v=8ce0edd7:323:16)
+    at Switch (wouter.js?v=8ce0edd7:379:17)
+    at Router (App.tsx:286:55)
+    at Provider (chunk-XOUBXFGS.js?v=8ce0edd7:38:15)
+    at TooltipProvider (@radix-ui_react-tooltip.js?v=8ce0edd7:64:5)
+    at InteractiveTutorialProvider (InteractiveTutorial.tsx:49:47)
+    at CartProvider (CartContext.tsx:1106:73)
+    at AIStatusProvider (AIStatusContext.tsx:30:71)
+    at NotificationProvider (useNotifications.tsx:31:40)
+    at RoleProvider (RoleContext.tsx:45:61)
+    at SupabaseProvider (SupabaseProvider.tsx:41:3)
+    at QueryClientProvider (@tanstack_react-query.js?v=8ce0edd7:2805:3)
+    at App (<anonymous>)
+overrideMethod @ installHook.js:1
+RoleSwitcher @ RoleSwitcher.tsx:29
+renderWithHooks @ chunk-NFC5BX5N.js?v=8ce0edd7:11548
+updateFunctionComponent @ chunk-NFC5BX5N.js?v=8ce0edd7:14582
+beginWork @ chunk-NFC5BX5N.js?v=8ce0edd7:15924
+beginWork$1 @ chunk-NFC5BX5N.js?v=8ce0edd7:19753
+performUnitOfWork @ chunk-NFC5BX5N.js?v=8ce0edd7:19198
+workLoopSync @ chunk-NFC5BX5N.js?v=8ce0edd7:19137
+renderRootSync @ chunk-NFC5BX5N.js?v=8ce0edd7:19116
+performConcurrentWorkOnRoot @ chunk-NFC5BX5N.js?v=8ce0edd7:18678
+workLoop @ chunk-NFC5BX5N.js?v=8ce0edd7:197
+flushWork @ chunk-NFC5BX5N.js?v=8ce0edd7:176
+performWorkUntilDeadline @ chunk-NFC5BX5N.js?v=8ce0edd7:384
