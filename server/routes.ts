@@ -1801,9 +1801,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         amount: membershipFee,
         amountPaid: 0,
         remainingBalance: membershipFee,
+        totalAmount: membershipFee,
+        balanceDue: membershipFee,
         status: 'pending_payment' as const,
         dueDate,
         expirationDate,
+        endDate: expirationDate,
         gracePeriodEnd,
         paymentMethod: null,
         notes: null
