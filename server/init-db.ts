@@ -447,6 +447,16 @@ async function runMigrations() {
     `);
     console.log('✅ Migration completed: Stripe integration columns added to membership_enrollments table');
     
+    // Add balance tracking columns to membership_enrollments table
+    console.log('Running migration: Adding balance tracking columns to membership_enrollments table...');
+    await db.execute(sql`
+      ALTER TABLE membership_enrollments 
+      ADD COLUMN IF NOT EXISTS total_amount INTEGER DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS balance_due INTEGER DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS end_date TIMESTAMP;
+    `);
+    console.log('✅ Migration completed: balance tracking columns added to membership_enrollments table');
+    
     // Migrate legacy parent_id data and drop column from membership_enrollments table
     console.log('Running migration: Migrating parent_id data and dropping legacy column from membership_enrollments...');
     

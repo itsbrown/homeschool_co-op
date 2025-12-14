@@ -119,8 +119,10 @@ interface ParentProfile {
     schoolName: string;
     membershipYear: number;
     amount: number;
+    amountPaid: number;
     totalCost: number;
     remainingBalance: number;
+    balanceDue: number;
     status: string;
     dueDate: string;
     expirationDate: string;
@@ -1494,16 +1496,16 @@ export default function ParentProfilePage() {
                         <div className="grid grid-cols-3 gap-4 text-sm">
                           <div>
                             <p className="text-muted-foreground">Total Cost</p>
-                            <p className="font-semibold">${membership.totalCost.toFixed(2)}</p>
+                            <p className="font-semibold">${(membership.totalCost ?? 0).toFixed(2)}</p>
                           </div>
                           <div>
                             <p className="text-muted-foreground">Amount Paid</p>
-                            <p className="font-semibold text-green-600">${membership.amount.toFixed(2)}</p>
+                            <p className="font-semibold text-green-600">${(membership.amountPaid ?? 0).toFixed(2)}</p>
                           </div>
                           <div>
                             <p className="text-muted-foreground">Balance Due</p>
-                            <p className={`font-semibold ${membership.remainingBalance > 0 ? 'text-orange-600' : 'text-green-600'}`}>
-                              ${membership.remainingBalance.toFixed(2)}
+                            <p className={`font-semibold ${(membership.remainingBalance ?? 0) > 0 ? 'text-orange-600' : 'text-green-600'}`}>
+                              ${(membership.remainingBalance ?? 0).toFixed(2)}
                             </p>
                           </div>
                         </div>
