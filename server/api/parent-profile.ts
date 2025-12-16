@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { storage } from '../storage';
 import { supabaseAuth } from '../middleware/supabase-auth';
 import { CurrencyUtils, BillingCalculationService } from '../../shared/currency-utils';
+import { getStripeClient } from '../config/stripe';
 
 const router = Router();
 
@@ -292,17 +293,70 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
     
     console.log(`🏅 Found ${allMembershipEnrollments.length} total memberships, ${membershipEnrollments.length} visible to admin`);
 
-    // Get ALL payment history
-    const allPaymentHistory = await storage.getPaymentsByParentEmail(parent.email);
+    // Get payment history from BOTH database AND Stripe (like the parent view does)
+    // This ensures admin sees all the same payments the parent can see
+    const dbPayments = await storage.getPaymentsByParentEmail(parent.email);
     
     // Create a Set for filtered enrollment IDs (needed for scheduled payment filtering)
     const filteredEnrollmentIds = new Set(filteredEnrollments.map(e => e.id));
     
+    // Fetch Stripe customer IDs for this parent
+    const stripeCustomerIds = await storage.getStripeCustomerIdsByParentEmail(parent.email);
+    
+    // Fetch PaymentIntents from Stripe for each customer ID
+    const stripePaymentIntents: any[] = [];
+    if (stripeCustomerIds.length > 0) {
+      try {
+        const stripe = await getStripeClient();
+        for (const customerId of stripeCustomerIds) {
+          try {
+            const paymentIntents = await stripe.paymentIntents.list({
+              customer: customerId,
+              limit: 100
+            });
+            stripePaymentIntents.push(...paymentIntents.data);
+          } catch (stripeError: any) {
+            console.warn(`⚠️ Failed to fetch Stripe payments for customer ${customerId}:`, stripeError.message);
+          }
+        }
+      } catch (stripeError: any) {
+        console.warn('⚠️ Failed to initialize Stripe client:', stripeError.message);
+      }
+    }
+    
+    console.log(`💳 Found ${dbPayments.length} DB payments, ${stripePaymentIntents.length} Stripe PaymentIntents`);
+    
+    // Find "Stripe-only" payments (in Stripe but not in database)
+    const dbPaymentIntentIds = new Set(dbPayments.map((p: any) => p.stripePaymentIntentId).filter(Boolean));
+    const stripeOnlyPayments = stripePaymentIntents
+      .filter(intent => !dbPaymentIntentIds.has(intent.id) && intent.status === 'succeeded')
+      .filter(intent => intent.amount && intent.amount > 0)
+      .map(intent => ({
+        id: -parseInt(intent.id.replace(/\D/g, '').slice(0, 8)) || -Date.now(), // Synthetic negative ID
+        amount: intent.amount,
+        currency: intent.currency || 'usd',
+        status: intent.status || 'succeeded',
+        description: intent.description || (intent.metadata?.className ? `Payment for ${intent.metadata.className}` : 'Stripe payment'),
+        childName: intent.metadata?.childName || '',
+        className: intent.metadata?.className || '',
+        schoolId: null, // Stripe payments don't have schoolId
+        stripePaymentIntentId: intent.id,
+        enrollmentIds: [],
+        createdAt: new Date(intent.created * 1000),
+        paymentDate: new Date(intent.created * 1000),
+        metadata: intent.metadata || null,
+        source: 'stripe' as const
+      }));
+    
+    console.log(`🔍 Found ${stripeOnlyPayments.length} Stripe-only payments`);
+    
+    // Merge DB payments with Stripe-only payments
+    const allPaymentHistory = [...dbPayments, ...stripeOnlyPayments];
+    
     // SIMPLIFIED PAYMENT FILTERING:
     // If admin has access to view this parent's profile (verified above via parentHasSchoolRelationship 
     // or visible children), they should see all payments from their school(s) OR payments 
-    // without a schoolId (older data that predates schoolId tracking).
-    // This is more inclusive and fixes the bug where legitimate payments were hidden.
+    // without a schoolId (older data or Stripe-only payments).
     const paymentHistory = isSuperAdmin
       ? allPaymentHistory
       : allPaymentHistory.filter(payment => {
@@ -311,7 +365,7 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
             return true;
           }
           
-          // Include payments without schoolId (legacy data) - admin has already 
+          // Include payments without schoolId (legacy data or Stripe-only) - admin has already 
           // been verified to have access to this parent's profile
           if (!payment.schoolId) {
             return true;

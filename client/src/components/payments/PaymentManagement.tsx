@@ -603,10 +603,12 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
     return unpaidEnrollments;
   }, [enrollments]);
 
-  // Group payments by status for the overview tab, including outstanding balances
+  // Group payments by status for the overview tab, including outstanding balances and scheduled payments
   const paymentStats = React.useMemo(() => {
     const paymentData = payments || [];
     const outstandingData = outstandingBalances || [];
+    const stripeScheduledData = scheduledPayments || [];
+    const dbScheduledData = dbScheduledPayments || [];
     
     const stats = paymentData.reduce((acc: any, payment: Payment) => {
       // Count by exact status for filtering
@@ -622,16 +624,33 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
       }
       
       return acc;
-    }, { paid: 0, succeeded: 0, pending: 0, failed: 0, refunded: 0, canceled: 0, total: 0, totalPaid: 0, totalPending: 0, totalOutstanding: 0, outstandingCount: 0, successfulCount: 0 });
+    }, { paid: 0, succeeded: 0, pending: 0, failed: 0, refunded: 0, canceled: 0, total: 0, totalPaid: 0, totalPending: 0, totalOutstanding: 0, outstandingCount: 0, successfulCount: 0, scheduledPaymentsTotal: 0, scheduledPaymentsCount: 0 });
     
-    // Add outstanding balances
+    // Add outstanding balances from enrollments
     stats.totalOutstanding = outstandingData.reduce((total: number, enrollment: any) => 
       total + (enrollment.remainingBalance || 0), 0
     );
     stats.outstandingCount = outstandingData.length;
     
+    // Add scheduled/upcoming payments (from both Stripe schedules and database)
+    // Only count pending scheduled payments
+    const pendingStripeScheduled = stripeScheduledData.filter((p: any) => p.status === 'pending');
+    const pendingDbScheduled = dbScheduledData.filter((p: any) => p.status === 'pending');
+    
+    const scheduledTotal = [
+      ...pendingStripeScheduled.map((p: any) => p.amount || 0),
+      ...pendingDbScheduled.map((p: any) => p.amount || 0)
+    ].reduce((sum, amount) => sum + amount, 0);
+    
+    stats.scheduledPaymentsTotal = scheduledTotal;
+    stats.scheduledPaymentsCount = pendingStripeScheduled.length + pendingDbScheduled.length;
+    
+    // Include scheduled payments in the outstanding balance so parents see true amount owed
+    stats.totalOutstanding += scheduledTotal;
+    stats.outstandingCount += stats.scheduledPaymentsCount;
+    
     return stats;
-  }, [payments, outstandingBalances]);
+  }, [payments, outstandingBalances, scheduledPayments, dbScheduledPayments]);
   
   // Format currency amount
   const formatCurrency = (amount: number) => {
@@ -725,12 +744,12 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
             
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Pending Payments</CardTitle>
+                <CardTitle className="text-sm font-medium">Upcoming Payments</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{formatCurrency(paymentStats.totalPending || 0)}</div>
+                <div className="text-2xl font-bold">{formatCurrency(paymentStats.scheduledPaymentsTotal || 0)}</div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {paymentStats.pending || 0} pending payments
+                  {paymentStats.scheduledPaymentsCount || 0} scheduled payments
                 </p>
               </CardContent>
             </Card>
