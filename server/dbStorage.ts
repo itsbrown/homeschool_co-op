@@ -74,7 +74,12 @@ export class DatabaseStorage implements IStorage {
 
   async createUser(user: InsertUser): Promise<User> {
     const db = await getDb();
-    const [newUser] = await db.insert(users).values(user).returning();
+    // Normalize email to lowercase to prevent case-sensitivity issues
+    const normalizedUser = {
+      ...user,
+      email: user.email?.toLowerCase()
+    };
+    const [newUser] = await db.insert(users).values(normalizedUser).returning();
     return newUser;
   }
 
@@ -85,9 +90,14 @@ export class DatabaseStorage implements IStorage {
 
   async updateUser(id: number, user: Partial<InsertUser>): Promise<User | undefined> {
     const db = await getDb();
+    // Normalize email to lowercase to prevent case-sensitivity issues
+    const normalizedUser = {
+      ...user,
+      ...(user.email && { email: user.email.toLowerCase() })
+    };
     const [updatedUser] = await db
       .update(users)
-      .set(user)
+      .set(normalizedUser)
       .where(eq(users.id, id))
       .returning();
     return updatedUser;
@@ -1267,8 +1277,8 @@ export class DatabaseStorage implements IStorage {
 
   async getChildrenByParentEmail(parentEmail: string): Promise<Child[]> {
     const db = await getDb();
-    // First, find the parent user by email
-    const [parent] = await db.select().from(users).where(eq(users.email, parentEmail));
+    // First, find the parent user by email (case-insensitive)
+    const [parent] = await db.select().from(users).where(sql`LOWER(${users.email}) = LOWER(${parentEmail})`);
     if (!parent) return [];
     
     // Then get children by parent ID
