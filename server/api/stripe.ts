@@ -1437,4 +1437,193 @@ router.post('/approve-enrollment/:enrollmentId', supabaseAuth, async (req: any, 
   }
 });
 
+// Admin endpoint to sync payments from Stripe for a specific parent
+// This helps reconcile missing payments that may not have been recorded by webhooks
+router.post('/admin/sync-payments/:parentEmail', supabaseAuth, requireSchoolContext, async (req: any, res) => {
+  try {
+    const parentEmail = decodeURIComponent(req.params.parentEmail);
+    const adminSchoolId = req.schoolId;
+    
+    console.log(`🔄 Syncing Stripe payments for ${parentEmail} (admin from school ${adminSchoolId})`);
+    
+    // SECURITY: Verify the parent exists and admin has access to them
+    const parentUser = await storage.getUserByEmail(parentEmail);
+    if (!parentUser) {
+      return res.status(404).json({
+        success: false,
+        message: 'Parent not found',
+        error: 'PARENT_NOT_FOUND'
+      });
+    }
+    
+    // SECURITY: Check if admin has access to this parent via their children or enrollments
+    const parentChildren = await storage.getChildrenByParentEmail(parentEmail);
+    const parentEnrollments = await storage.getProgramEnrollmentsByParent(parentUser.id);
+    const parentMemberships = await storage.getMembershipEnrollmentsByParentId(parentUser.id);
+    
+    // Check if any enrollment or membership is from admin's school
+    const hasSchoolEnrollment = parentEnrollments.some(e => e.schoolId === adminSchoolId);
+    const hasSchoolMembership = parentMemberships.some(m => m.schoolId === adminSchoolId);
+    const parentBelongsToSchool = parentUser.schoolId === adminSchoolId;
+    
+    if (!hasSchoolEnrollment && !hasSchoolMembership && !parentBelongsToSchool) {
+      console.warn(`🚫 Admin from school ${adminSchoolId} attempted to sync payments for parent ${parentEmail} who is not associated with their school`);
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied: This parent is not associated with your school',
+        error: 'UNAUTHORIZED_ACCESS'
+      });
+    }
+    
+    const stripe = await getStripeClient();
+    
+    // Find the Stripe customer for this parent
+    const customers = await stripe.customers.list({
+      email: parentEmail,
+      limit: 1
+    });
+    
+    if (customers.data.length === 0) {
+      return res.json({
+        success: true,
+        message: 'No Stripe customer found for this email',
+        synced: 0,
+        paymentsFound: 0
+      });
+    }
+    
+    const customer = customers.data[0];
+    
+    // Get all successful payment intents for this customer
+    const paymentIntents = await stripe.paymentIntents.list({
+      customer: customer.id,
+      limit: 100
+    });
+    
+    // Filter for succeeded payments only
+    const succeededPayments = paymentIntents.data.filter(pi => pi.status === 'succeeded');
+    
+    console.log(`💳 Found ${succeededPayments.length} succeeded payments in Stripe for ${parentEmail}`);
+    
+    // Check which payments are already recorded in the database
+    const existingPayments = await storage.getPaymentsByParentEmail(parentEmail);
+    const existingStripeIds = new Set(existingPayments.map(p => p.stripePaymentIntentId));
+    
+    // Find missing payments
+    const missingPayments = succeededPayments.filter(pi => !existingStripeIds.has(pi.id));
+    
+    console.log(`⚠️ Found ${missingPayments.length} payments missing from database`);
+    
+    // Sync missing payments to database
+    const syncedPayments = [];
+    for (const pi of missingPayments) {
+      try {
+        // Extract metadata with defensive parsing
+        let itemsJson: string | undefined;
+        let description = 'Synced payment from Stripe';
+        let childName = 'Unknown';
+        let className = 'Unknown';
+        let enrollmentIds: number[] = [];
+        let derivedSchoolId = adminSchoolId;
+        
+        // Safely extract itemsJson
+        if (pi.metadata?.itemsJson && typeof pi.metadata.itemsJson === 'string') {
+          itemsJson = pi.metadata.itemsJson;
+          try {
+            const items = JSON.parse(itemsJson);
+            if (Array.isArray(items) && items.length > 0) {
+              childName = items[0]?.childName || 'Unknown';
+              className = items.length > 1 ? `${items.length} classes` : (items[0]?.className || 'Unknown');
+              description = `Synced payment (${items.length} items)`;
+            }
+          } catch (e) {
+            console.warn('Failed to parse itemsJson, using defaults');
+          }
+        }
+        
+        // Safely extract enrollmentIds and derive schoolId from enrollments
+        if (pi.metadata?.enrollmentIds && typeof pi.metadata.enrollmentIds === 'string') {
+          try {
+            const parsedIds = JSON.parse(pi.metadata.enrollmentIds);
+            if (Array.isArray(parsedIds)) {
+              enrollmentIds = parsedIds.filter(id => typeof id === 'number');
+              
+              // Derive schoolId from the first valid enrollment
+              for (const eId of enrollmentIds) {
+                const enrollment = parentEnrollments.find(e => e.id === eId);
+                if (enrollment && enrollment.schoolId) {
+                  derivedSchoolId = enrollment.schoolId;
+                  break;
+                }
+              }
+            }
+          } catch (e) {
+            console.warn('Failed to parse enrollmentIds, using empty array');
+          }
+        }
+        
+        // SECURITY: Only sync payments that belong to admin's school
+        // If we can't determine the school from enrollment, only sync if parent belongs to admin's school
+        if (derivedSchoolId !== adminSchoolId && !parentBelongsToSchool) {
+          console.log(`⚠️ Skipping payment ${pi.id} - belongs to different school (${derivedSchoolId})`);
+          continue;
+        }
+        
+        // Use the parent's email from our verified record, not from Stripe metadata
+        const payment = {
+          schoolId: derivedSchoolId,
+          parentId: parentUser.id,
+          parentEmail: parentEmail, // Use verified email
+          childName,
+          className,
+          description: `[Synced] ${description}`,
+          amount: pi.amount,
+          currency: pi.currency || 'usd',
+          status: 'completed' as const,
+          stripePaymentIntentId: pi.id,
+          stripeChargeId: null,
+          stripeRefundId: null,
+          originalPaymentId: null,
+          enrollmentIds,
+          metadata: {
+            syncedAt: new Date().toISOString(),
+            syncedByAdmin: req.user?.email,
+            originalCreated: new Date(pi.created * 1000).toISOString()
+          },
+          paymentDate: new Date(pi.created * 1000)
+        };
+        
+        const createdPayment = await storage.createPayment(payment);
+        syncedPayments.push({
+          id: createdPayment.id,
+          stripeId: pi.id,
+          amount: pi.amount / 100,
+          created: new Date(pi.created * 1000).toISOString()
+        });
+        
+        console.log(`✅ Synced payment ${pi.id} ($${pi.amount / 100})`);
+      } catch (paymentError: any) {
+        console.error(`❌ Failed to sync payment ${pi.id}:`, paymentError.message);
+      }
+    }
+    
+    res.json({
+      success: true,
+      message: `Synced ${syncedPayments.length} of ${missingPayments.length} missing payments`,
+      synced: syncedPayments.length,
+      paymentsFound: succeededPayments.length,
+      existingPayments: existingPayments.length,
+      missingPayments: missingPayments.length,
+      syncedPayments
+    });
+    
+  } catch (error: any) {
+    console.error('❌ Error syncing payments from Stripe:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 export default router;

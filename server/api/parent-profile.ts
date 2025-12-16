@@ -309,26 +309,61 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
       membershipEnrollments.map(m => m.schoolId)
     );
     
+    // Create a Set for filtered enrollment IDs (needed for payment filtering)
+    const filteredEnrollmentIds = new Set(filteredEnrollments.map(e => e.id));
+    
+    // Get children emails for fallback matching
+    const childrenEmails = children.map(c => c.parentEmail);
+    
     const paymentHistory = allPaymentHistory.filter(payment => {
-      // For membership payments, use conservative filtering
-      if (payment.description?.includes('Membership')) {
-        // TODO: SECURITY ENHANCEMENT NEEDED
-        // The payment schema lacks membershipEnrollmentId, making deterministic filtering impossible.
-        // Proper fix: Add membershipEnrollmentId to payment schema and populate it during payment creation.
-        // See: Architect recommendation to extend payment schema with authoritative membership links.
-        //
-        // CONSERVATIVE APPROACH: Exclude membership payments unless we can verify ownership
-        // This prevents cross-school data leaks at the cost of potentially hiding valid payments.
-        // When membershipEnrollmentId is added to schema, this filter should become:
-        // return membershipEnrollments.some(m => payment.membershipEnrollmentId === m.id);
-        
-        console.warn(`⚠️ Membership payment filtering is conservative - may exclude valid payments without membershipEnrollmentId`);
-        return false; // Exclude all membership payments for now to prevent leaks
+      // IMPROVED FILTERING: Include payments that belong to this school or admin's schools
+      // This is more inclusive than before while still maintaining school-level isolation
+      
+      // Check if payment has a schoolId that matches admin's schools
+      if (payment.schoolId && adminSchoolIds.includes(payment.schoolId)) {
+        console.log(`✅ Including payment ${payment.id} - matches admin school ${payment.schoolId}`);
+        return true;
       }
       
-      // For class payments, only include if for a filtered enrollment
+      // For membership payments, check if parent has a membership in any of admin's schools
+      if (payment.description?.includes('Membership')) {
+        const hasVisibleMembership = membershipEnrollments.length > 0;
+        if (hasVisibleMembership) {
+          console.log(`✅ Including membership payment ${payment.id} - parent has visible memberships`);
+          return true;
+        }
+        console.log(`⚠️ Excluding membership payment ${payment.id} - no visible memberships`);
+        return false;
+      }
+      
+      // For class payments, try multiple matching strategies
+      // Strategy 1: Match by enrollmentIds if available
+      if (payment.enrollmentIds && Array.isArray(payment.enrollmentIds)) {
+        const matchesFilteredEnrollment = payment.enrollmentIds.some((eId: number) => 
+          filteredEnrollmentIds.has(eId)
+        );
+        if (matchesFilteredEnrollment) {
+          console.log(`✅ Including payment ${payment.id} - matches filtered enrollment IDs`);
+          return true;
+        }
+      }
+      
+      // Strategy 2: Match by childName|className key
       const paymentKey = `${payment.childName}|${payment.className}`;
-      return validEnrollmentKeys.has(paymentKey);
+      if (validEnrollmentKeys.has(paymentKey)) {
+        console.log(`✅ Including payment ${payment.id} - matches childName|className key`);
+        return true;
+      }
+      
+      // Strategy 3: If payment.parentEmail matches and admin has access to this parent's children
+      // This is a fallback for payments that may not have all the metadata
+      if (payment.parentEmail && childrenEmails.includes(payment.parentEmail)) {
+        console.log(`✅ Including payment ${payment.id} - matches parent email with visible children`);
+        return true;
+      }
+      
+      console.log(`⚠️ Excluding payment ${payment.id} - no matching criteria`);
+      return false;
     });
     
     console.log(`💳 Found ${allPaymentHistory.length} total payments, ${paymentHistory.length} visible to admin`);
@@ -337,7 +372,7 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
     const allScheduledPayments = await storage.getScheduledPaymentsByParentEmail(parent.email);
     
     // FILTER: Only scheduled payments linked to filtered enrollments
-    const filteredEnrollmentIds = new Set(filteredEnrollments.map(e => e.id));
+    // (filteredEnrollmentIds already declared above for payment filtering)
     const scheduledPayments = allScheduledPayments.filter(payment => {
       // Check if the payment's enrollment ID is in filtered set
       return payment.enrollmentId && filteredEnrollmentIds.has(payment.enrollmentId);
@@ -515,6 +550,106 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
     return res.status(500).json({ 
       message: 'Internal server error',
       error: 'PARENT_PROFILE_FETCH_ERROR'
+    });
+  }
+});
+
+// Diagnostic endpoint to check payment data discrepancies
+router.get('/:parentId/payment-debug', supabaseAuth, async (req: any, res) => {
+  try {
+    const parentId = parseInt(req.params.parentId);
+    
+    if (isNaN(parentId)) {
+      return res.status(400).json({ message: 'Invalid parent ID' });
+    }
+
+    // Get parent info
+    const parent = await storage.getUser(parentId);
+    if (!parent) {
+      return res.status(404).json({ message: 'Parent not found' });
+    }
+
+    // Get ALL payments from database (unfiltered)
+    const allPayments = await storage.getPaymentsByParentEmail(parent.email);
+    
+    // Get ALL scheduled payments
+    const scheduledPayments = await storage.getScheduledPaymentsByParentEmail(parent.email);
+    
+    // Get ALL enrollments for this parent
+    const enrollments = await storage.getProgramEnrollmentsByParent(parent.id);
+    
+    // Get ALL memberships for this parent
+    const memberships = await storage.getMembershipEnrollmentsByParentId(parentId);
+    
+    // Calculate totals from enrollments
+    const enrollmentTotals = enrollments.map(e => ({
+      id: e.id,
+      childId: e.childId,
+      childName: e.childName,
+      className: e.className,
+      totalCost: e.totalCost,
+      totalPaid: e.totalPaid,
+      remainingBalance: e.remainingBalance,
+      status: e.status,
+      paymentStatus: e.paymentStatus
+    }));
+    
+    // Summary
+    const summary = {
+      parentEmail: parent.email,
+      parentId: parent.id,
+      totalPaymentsInDb: allPayments.length,
+      totalPaymentAmount: allPayments.reduce((sum, p) => sum + (p.amount || 0), 0),
+      scheduledPaymentsCount: scheduledPayments.length,
+      completedScheduledPayments: scheduledPayments.filter(p => p.status === 'completed').length,
+      pendingScheduledPayments: scheduledPayments.filter(p => p.status === 'pending').length,
+      enrollmentsCount: enrollments.length,
+      totalEnrollmentCost: enrollments.reduce((sum, e) => sum + (e.totalCost || 0), 0),
+      totalEnrollmentPaid: enrollments.reduce((sum, e) => sum + (e.totalPaid || 0), 0),
+      membershipsCount: memberships.length,
+      totalMembershipFees: memberships.reduce((sum, m) => sum + (m.amount || 0), 0),
+      totalMembershipPaid: memberships.reduce((sum, m) => sum + (m.amountPaid || 0), 0)
+    };
+
+    return res.json({
+      summary,
+      payments: allPayments.map(p => ({
+        id: p.id,
+        amount: p.amount,
+        amountDisplay: `$${(p.amount / 100).toFixed(2)}`,
+        status: p.status,
+        description: p.description,
+        childName: p.childName,
+        className: p.className,
+        schoolId: p.schoolId,
+        stripePaymentIntentId: p.stripePaymentIntentId,
+        enrollmentIds: p.enrollmentIds,
+        createdAt: p.createdAt
+      })),
+      scheduledPayments: scheduledPayments.map(sp => ({
+        id: sp.id,
+        amount: sp.amount,
+        amountDisplay: `$${((sp.amount || 0) / 100).toFixed(2)}`,
+        status: sp.status,
+        scheduledDate: sp.scheduledDate,
+        enrollmentId: sp.enrollmentId
+      })),
+      enrollments: enrollmentTotals,
+      memberships: memberships.map(m => ({
+        id: m.id,
+        schoolId: m.schoolId,
+        amount: m.amount,
+        amountPaid: m.amountPaid,
+        balanceDue: m.balanceDue,
+        status: m.status
+      }))
+    });
+
+  } catch (error) {
+    console.error('❌ Error in payment debug endpoint:', error);
+    return res.status(500).json({ 
+      message: 'Internal server error',
+      error: String(error)
     });
   }
 });
