@@ -295,76 +295,31 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
     // Get ALL payment history
     const allPaymentHistory = await storage.getPaymentsByParentEmail(parent.email);
     
-    // FILTER: Only payments strictly tied to filtered enrollments or memberships
-    // Create a mapping of valid child+class combinations from filtered enrollments
-    const validEnrollmentKeys = new Set(
-      filteredEnrollments.map(e => {
-        const className = classes.find(c => c.id === e.classId)?.title || '';
-        return `${e.childName}|${className}`;
-      })
-    );
-    
-    // Create a set of visible membership school IDs
-    const visibleMembershipSchoolIds = new Set(
-      membershipEnrollments.map(m => m.schoolId)
-    );
-    
-    // Create a Set for filtered enrollment IDs (needed for payment filtering)
+    // Create a Set for filtered enrollment IDs (needed for scheduled payment filtering)
     const filteredEnrollmentIds = new Set(filteredEnrollments.map(e => e.id));
     
-    // Get children emails for fallback matching
-    const childrenEmails = children.map(c => c.parentEmail);
-    
-    const paymentHistory = allPaymentHistory.filter(payment => {
-      // IMPROVED FILTERING: Include payments that belong to this school or admin's schools
-      // This is more inclusive than before while still maintaining school-level isolation
-      
-      // Check if payment has a schoolId that matches admin's schools
-      if (payment.schoolId && adminSchoolIds.includes(payment.schoolId)) {
-        console.log(`✅ Including payment ${payment.id} - matches admin school ${payment.schoolId}`);
-        return true;
-      }
-      
-      // For membership payments, check if parent has a membership in any of admin's schools
-      if (payment.description?.includes('Membership')) {
-        const hasVisibleMembership = membershipEnrollments.length > 0;
-        if (hasVisibleMembership) {
-          console.log(`✅ Including membership payment ${payment.id} - parent has visible memberships`);
-          return true;
-        }
-        console.log(`⚠️ Excluding membership payment ${payment.id} - no visible memberships`);
-        return false;
-      }
-      
-      // For class payments, try multiple matching strategies
-      // Strategy 1: Match by enrollmentIds if available
-      if (payment.enrollmentIds && Array.isArray(payment.enrollmentIds)) {
-        const matchesFilteredEnrollment = payment.enrollmentIds.some((eId: number) => 
-          filteredEnrollmentIds.has(eId)
-        );
-        if (matchesFilteredEnrollment) {
-          console.log(`✅ Including payment ${payment.id} - matches filtered enrollment IDs`);
-          return true;
-        }
-      }
-      
-      // Strategy 2: Match by childName|className key
-      const paymentKey = `${payment.childName}|${payment.className}`;
-      if (validEnrollmentKeys.has(paymentKey)) {
-        console.log(`✅ Including payment ${payment.id} - matches childName|className key`);
-        return true;
-      }
-      
-      // Strategy 3: If payment.parentEmail matches and admin has access to this parent's children
-      // This is a fallback for payments that may not have all the metadata
-      if (payment.parentEmail && childrenEmails.includes(payment.parentEmail)) {
-        console.log(`✅ Including payment ${payment.id} - matches parent email with visible children`);
-        return true;
-      }
-      
-      console.log(`⚠️ Excluding payment ${payment.id} - no matching criteria`);
-      return false;
-    });
+    // SIMPLIFIED PAYMENT FILTERING:
+    // If admin has access to view this parent's profile (verified above via parentHasSchoolRelationship 
+    // or visible children), they should see all payments from their school(s) OR payments 
+    // without a schoolId (older data that predates schoolId tracking).
+    // This is more inclusive and fixes the bug where legitimate payments were hidden.
+    const paymentHistory = isSuperAdmin
+      ? allPaymentHistory
+      : allPaymentHistory.filter(payment => {
+          // Include payments that match admin's school
+          if (payment.schoolId && adminSchoolIds.includes(payment.schoolId)) {
+            return true;
+          }
+          
+          // Include payments without schoolId (legacy data) - admin has already 
+          // been verified to have access to this parent's profile
+          if (!payment.schoolId) {
+            return true;
+          }
+          
+          // Exclude payments from other schools (multi-tenant isolation)
+          return false;
+        });
     
     console.log(`💳 Found ${allPaymentHistory.length} total payments, ${paymentHistory.length} visible to admin`);
 

@@ -60,8 +60,7 @@ import {
   Award,
   Copy,
   Loader2,
-  XCircle,
-  RefreshCw
+  XCircle
 } from 'lucide-react';
 import { Link } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
@@ -1599,53 +1598,9 @@ export default function ParentProfilePage() {
             <div className="space-y-6">
               {/* Payment History */}
               <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
-                  <div>
-                    <CardTitle>Payment History</CardTitle>
-                    <CardDescription>All completed payments</CardDescription>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={async () => {
-                      if (!profile?.parent?.email) return;
-                      try {
-                        const token = localStorage.getItem('supabase_token');
-                        const response = await fetch(`/api/stripe/admin/sync-payments/${encodeURIComponent(profile.parent.email)}`, {
-                          method: 'POST',
-                          headers: {
-                            'Content-Type': 'application/json',
-                            ...(token && { 'Authorization': `Bearer ${token}` }),
-                          },
-                        });
-                        const result = await response.json();
-                        if (result.success) {
-                          toast({
-                            title: "Sync Complete",
-                            description: result.message,
-                          });
-                          // Refresh the profile data
-                          queryClient.invalidateQueries({ queryKey: [`/api/parent-profile/${parentId}`] });
-                        } else {
-                          toast({
-                            title: "Sync Failed",
-                            description: result.error || "Failed to sync payments",
-                            variant: "destructive",
-                          });
-                        }
-                      } catch (error) {
-                        toast({
-                          title: "Sync Error",
-                          description: "An error occurred while syncing payments",
-                          variant: "destructive",
-                        });
-                      }
-                    }}
-                    data-testid="button-sync-stripe"
-                  >
-                    <RefreshCw className="h-4 w-4 mr-2" />
-                    Sync from Stripe
-                  </Button>
+                <CardHeader>
+                  <CardTitle>Payment History</CardTitle>
+                  <CardDescription>All completed payments</CardDescription>
                 </CardHeader>
                 <CardContent>
                   {profile.paymentHistory.length === 0 ? (

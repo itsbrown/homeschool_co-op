@@ -25,5 +25,33 @@
     "description": "Test payment",
     "metadata": {},
     "currency": "usd"
+  },
+  {
+    "id": 3,
+    "createdAt": "2025-12-16T20:01:28.890Z",
+    "updatedAt": "2025-12-16T20:01:28.890Z",
+    "parentEmail": "jocimarie@gmail.com",
+    "childName": "Membership Fee",
+    "className": "2026 Annual Membership",
+    "amount": 17500,
+    "currency": "usd",
+    "status": "completed",
+    "paymentMethod": "manual",
+    "stripePaymentIntentId": "MANUAL-MEMBERSHIP-1765915288791",
+    "description": "Manual membership payment marked as paid",
+    "schoolId": 1,
+    "parentId": 10,
+    "stripeChargeId": null,
+    "stripeRefundId": null,
+    "enrollmentIds": [],
+    "originalPaymentId": null,
+    "paymentDate": "2025-12-16T20:01:28.791Z",
+    "metadata": {
+      "membershipId": 17,
+      "paymentType": "membership",
+      "membershipYear": 2026,
+      "schoolId": 1,
+      "notes": "Payment marked as paid by school administrator"
+    }
   }
 ]
