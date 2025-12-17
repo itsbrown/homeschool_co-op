@@ -166,7 +166,7 @@ router.delete('/:enrollmentId/unenroll', async (req, res) => {
   }
 });
 
-// Unenroll a child from a class (legacy endpoint)
+// Unenroll a child from a class (admin endpoint - uses database)
 router.delete('/:enrollmentId', async (req: any, res) => {
   try {
     const enrollmentId = parseInt(req.params.enrollmentId);
@@ -177,29 +177,33 @@ router.delete('/:enrollmentId', async (req: any, res) => {
 
     console.log(`❌ Unenrolling enrollment ID: ${enrollmentId}`);
 
-    // Get the enrollment first to verify ownership
-    const allEnrollments = await storage.getAllEnrollments();
-    const enrollmentToRemove = allEnrollments.find((e: any) => e.id === enrollmentId);
+    // Get the enrollment from database to verify it exists
+    const enrollment = await storage.getProgramEnrollmentById(enrollmentId);
     
-    if (!enrollmentToRemove) {
-      console.log(`❌ Enrollment ${enrollmentId} not found`);
+    if (!enrollment) {
+      console.log(`❌ Enrollment ${enrollmentId} not found in database`);
       return res.status(404).json({ message: 'Enrollment not found' });
     }
 
-    // For now, allow any authenticated request to remove enrollments
-    // In production, you would verify the user is the parent of the child
-    console.log(`📝 Found enrollment to remove:`, enrollmentToRemove);
+    console.log(`📝 Found enrollment to remove:`, {
+      id: enrollment.id,
+      childId: enrollment.childId,
+      className: enrollment.className,
+      status: enrollment.status
+    });
     
-    // Remove the enrollment
-    const success = await storage.removeEnrollment(enrollmentId);
+    // Delete the enrollment from database using the correct method
+    await storage.deleteProgramEnrollment(enrollmentId);
     
-    if (success) {
-      console.log(`✅ Successfully unenrolled enrollment ID: ${enrollmentId}`);
-      res.json({ message: 'Unenrollment successful' });
-    } else {
-      console.log(`❌ Failed to remove enrollment ID: ${enrollmentId}`);
-      res.status(404).json({ message: 'Enrollment not found' });
-    }
+    console.log(`✅ Successfully unenrolled enrollment ID: ${enrollmentId}`);
+    res.json({ 
+      message: 'Unenrollment successful',
+      deletedEnrollment: {
+        id: enrollmentId,
+        className: enrollment.className,
+        childName: enrollment.childName
+      }
+    });
   } catch (error) {
     console.error('Error removing enrollment:', error);
     res.status(500).json({ message: 'Failed to unenroll' });
