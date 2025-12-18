@@ -1034,6 +1034,66 @@ async function runMigrations() {
     `);
     console.log('✅ Migration completed: session_attendance table created');
     
+    // Add unique constraint on children table to prevent duplicate children per parent
+    console.log('Running migration: Adding unique constraint on children table...');
+    await db.execute(sql`
+      DO $$ 
+      BEGIN
+        -- First, check if duplicate children exist and clean them up
+        -- Keep the oldest record (lowest ID) for each duplicate set
+        DELETE FROM children c1
+        WHERE EXISTS (
+          SELECT 1 FROM children c2 
+          WHERE c2.parent_id = c1.parent_id 
+            AND LOWER(c2.first_name) = LOWER(c1.first_name) 
+            AND LOWER(c2.last_name) = LOWER(c1.last_name)
+            AND c2.id < c1.id
+        );
+        
+        -- Now add the unique constraint if it doesn't exist
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint 
+          WHERE conname = 'unique_parent_child'
+        ) THEN
+          CREATE UNIQUE INDEX unique_parent_child 
+          ON children(parent_id, LOWER(first_name), LOWER(last_name));
+        END IF;
+      EXCEPTION
+        WHEN duplicate_table THEN NULL;
+        WHEN duplicate_object THEN NULL;
+      END $$;
+    `);
+    console.log('✅ Migration completed: unique constraint added to children table');
+    
+    // Add unique constraint on school_students table to prevent duplicate school-child records
+    console.log('Running migration: Adding unique constraint on school_students table...');
+    await db.execute(sql`
+      DO $$ 
+      BEGIN
+        -- Clean up duplicate school_student records first
+        DELETE FROM school_students ss1
+        WHERE EXISTS (
+          SELECT 1 FROM school_students ss2 
+          WHERE ss2.child_id = ss1.child_id 
+            AND ss2.school_id = ss1.school_id
+            AND ss2.id < ss1.id
+        );
+        
+        -- Add the unique constraint if it doesn't exist
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint 
+          WHERE conname = 'unique_child_school'
+        ) THEN
+          CREATE UNIQUE INDEX unique_child_school 
+          ON school_students(child_id, school_id);
+        END IF;
+      EXCEPTION
+        WHEN duplicate_table THEN NULL;
+        WHEN duplicate_object THEN NULL;
+      END $$;
+    `);
+    console.log('✅ Migration completed: unique constraint added to school_students table');
+    
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     

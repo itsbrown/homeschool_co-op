@@ -1283,42 +1283,42 @@ export class DatabaseStorage implements IStorage {
 
   async createChild(child: InsertChild): Promise<Child> {
     const db = await getDb();
-    // Use upsert to prevent duplicate children with same name under same parent
-    // If a child with the same parentId, firstName, lastName exists, return the existing record
-    const result = await db
-      .insert(children)
-      .values({
-        ...child,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      })
-      .onConflictDoNothing({
-        target: [children.parentId, children.firstName, children.lastName]
-      })
-      .returning();
     
-    // If insert succeeded, return the new child
-    if (result.length > 0) {
-      return result[0];
-    }
+    // Normalize names for case-insensitive duplicate prevention
+    const normalizedFirstName = child.firstName.trim();
+    const normalizedLastName = child.lastName.trim();
     
-    // If conflict (duplicate), fetch and return the existing child
+    // First check if a child with the same parentId and name (case-insensitive) exists
     const [existingChild] = await db
       .select()
       .from(children)
       .where(
         and(
           eq(children.parentId, child.parentId),
-          eq(children.firstName, child.firstName),
-          eq(children.lastName, child.lastName)
+          sql`LOWER(${children.firstName}) = LOWER(${normalizedFirstName})`,
+          sql`LOWER(${children.lastName}) = LOWER(${normalizedLastName})`
         )
       );
     
-    if (!existingChild) {
-      throw new Error('Failed to create or find child record');
+    // If child already exists, return it (idempotent)
+    if (existingChild) {
+      console.log(`⚠️ Child "${normalizedFirstName} ${normalizedLastName}" already exists for parent ${child.parentId}, returning existing record`);
+      return existingChild;
     }
     
-    return existingChild;
+    // Create new child record
+    const [newChild] = await db
+      .insert(children)
+      .values({
+        ...child,
+        firstName: normalizedFirstName,
+        lastName: normalizedLastName,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      })
+      .returning();
+    
+    return newChild;
   }
 
   async updateChild(id: number, child: Partial<InsertChild>): Promise<Child | undefined> {
