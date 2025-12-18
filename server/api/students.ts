@@ -121,25 +121,63 @@ router.post('/register', async (req, res) => {
       emergencyContact: emergencyContactStr || null
     };
 
-    const child = await storage.createChild(childData);
-    console.log('✅ Created child:', child.id);
+    // Check for existing child with same name under this parent to prevent duplicates
+    console.log('🔍 Checking for existing child with same name...');
+    const existingChildren = await storage.getChildrenByParentId(parentUser.id);
+    const existingChild = existingChildren.find(c => 
+      c.firstName?.toLowerCase() === normalizedData.childFirstName?.toLowerCase() &&
+      c.lastName?.toLowerCase() === normalizedData.childLastName?.toLowerCase()
+    );
+
+    let child;
+    if (existingChild) {
+      console.log('⚠️ Child already exists, updating existing record:', existingChild.id);
+      // Update existing child with new data to avoid losing edits
+      const updatedChild = await storage.updateChild(existingChild.id, {
+        birthdate: normalizedData.childBirthdate || existingChild.birthdate,
+        gradeLevel: normalizedData.childGradeLevel || existingChild.gradeLevel,
+        schoolId: schoolId || parentUser.schoolId || existingChild.schoolId,
+        locationId: normalizedData.locationId || existingChild.locationId,
+        specialNeeds: normalizedData.specialNeeds || existingChild.specialNeeds,
+        allergies: allergies || existingChild.allergies,
+        medicalInfo: medicalNotes || existingChild.medicalInfo,
+        notes: normalizedData.medicalNotes || existingChild.notes,
+        emergencyContact: emergencyContactStr || existingChild.emergencyContact
+      });
+      child = updatedChild || existingChild; // Fall back to existing if update returns undefined
+      console.log('✅ Updated existing child:', child.id);
+    } else {
+      child = await storage.createChild(childData);
+      console.log('✅ Created child:', child.id);
+    }
 
     // Create school_student record if child has a schoolId
-    let studentSchoolId = null;
+    let studentSchoolId: number | null = null;
     if (child && (schoolId || parentUser.schoolId)) {
       studentSchoolId = schoolId || parentUser.schoolId;
       try {
-        console.log('📚 Creating school_student record for child:', child.id, 'at school:', studentSchoolId);
-        const schoolStudent = await storage.createSchoolStudent({
-          schoolId: studentSchoolId,
-          childId: child.id,
-          grade: normalizedData.childGradeLevel,
-          status: 'active',
-          locationId: normalizedData.locationId || null,
-          studentId: null,
-          notes: null
-        });
-        console.log('✅ School student record created:', schoolStudent);
+        console.log('📚 Checking for existing school_student record for child:', child.id, 'at school:', studentSchoolId);
+        
+        // Check if school_student record already exists to prevent duplicates
+        const existingSchoolStudents = await storage.getAllSchoolStudents();
+        const existingSchoolStudent = existingSchoolStudents.find(ss => 
+          ss.childId === child.id && ss.schoolId === studentSchoolId
+        );
+        
+        if (existingSchoolStudent) {
+          console.log('⚠️ School student record already exists:', existingSchoolStudent.id);
+        } else {
+          const schoolStudent = await storage.createSchoolStudent({
+            schoolId: studentSchoolId!,
+            childId: child.id,
+            grade: normalizedData.childGradeLevel,
+            status: 'active',
+            locationId: normalizedData.locationId || null,
+            studentId: null,
+            notes: null
+          });
+          console.log('✅ School student record created:', schoolStudent);
+        }
       } catch (schoolStudentError) {
         console.error('⚠️ Failed to create school_student record:', schoolStudentError);
         // Don't fail the entire registration if this fails - child is already created
