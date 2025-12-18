@@ -838,6 +838,22 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(programEnrollments).where(eq(programEnrollments.childId, childId));
   }
 
+  async getProgramEnrollmentsByChildIds(childIds: number[]): Promise<ProgramEnrollment[]> {
+    if (childIds.length === 0) return [];
+    const db = await getDb();
+    return await db.select().from(programEnrollments).where(inArray(programEnrollments.childId, childIds));
+  }
+
+  async getProgramEnrollmentsByClassId(classId: number): Promise<ProgramEnrollment[]> {
+    const db = await getDb();
+    return await db.select().from(programEnrollments).where(
+      or(
+        eq(programEnrollments.classId, classId),
+        eq(programEnrollments.marketplaceClassId, classId)
+      )
+    );
+  }
+
   async getEnrollmentCountForProgram(programId: number): Promise<number> {
     const db = await getDb();
     const enrollments = await db.select().from(programEnrollments)

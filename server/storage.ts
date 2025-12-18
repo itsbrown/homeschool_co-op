@@ -5303,8 +5303,12 @@ export class MemStorage implements IStorage {
 
     async getEnrollmentsByChildIds(childIds: number[]): Promise<any[]> {
       try {
-        console.log('💾 DB storage unavailable, using memStorage fallback for getEnrollmentsByChildIds');
-        return await this.memStorage.getEnrollmentsByChildIds(childIds);
+        if (this.dbStorage && typeof this.dbStorage.getProgramEnrollmentsByChildIds === 'function') {
+          return await this.dbStorage.getProgramEnrollmentsByChildIds(childIds);
+        } else {
+          console.log('💾 DB storage unavailable, using memStorage fallback for getEnrollmentsByChildIds');
+          return await this.memStorage.getEnrollmentsByChildIds(childIds);
+        }
       } catch (error) {
         if (process.env.NODE_ENV === 'production') {
           throw error;
@@ -5316,8 +5320,12 @@ export class MemStorage implements IStorage {
 
     async getEnrollmentsByClassId(classId: number): Promise<any[]> {
       try {
-        console.log('💾 DB storage unavailable, using memStorage fallback for getEnrollmentsByClassId');
-        return await this.memStorage.getEnrollmentsByClassId(classId);
+        if (this.dbStorage && typeof this.dbStorage.getProgramEnrollmentsByClassId === 'function') {
+          return await this.dbStorage.getProgramEnrollmentsByClassId(classId);
+        } else {
+          console.log('💾 DB storage unavailable, using memStorage fallback for getEnrollmentsByClassId');
+          return await this.memStorage.getEnrollmentsByClassId(classId);
+        }
       } catch (error) {
         if (process.env.NODE_ENV === 'production') {
           throw error;
