@@ -173,12 +173,38 @@ export class DatabaseStorage implements IStorage {
   // School Student methods
   async createSchoolStudent(schoolStudent: InsertSchoolStudent): Promise<SchoolStudent> {
     const db = await getDb();
-    const [newSchoolStudent] = await db.insert(schoolStudents).values({
+    // Use upsert to prevent duplicate school_student records for same child at same school
+    const result = await db.insert(schoolStudents).values({
       ...schoolStudent,
       createdAt: new Date(),
       updatedAt: new Date()
-    }).returning();
-    return newSchoolStudent;
+    })
+    .onConflictDoNothing({
+      target: [schoolStudents.childId, schoolStudents.schoolId]
+    })
+    .returning();
+    
+    // If insert succeeded, return the new record
+    if (result.length > 0) {
+      return result[0];
+    }
+    
+    // If conflict (duplicate), fetch and return the existing record
+    const [existingRecord] = await db
+      .select()
+      .from(schoolStudents)
+      .where(
+        and(
+          eq(schoolStudents.childId, schoolStudent.childId),
+          eq(schoolStudents.schoolId, schoolStudent.schoolId)
+        )
+      );
+    
+    if (!existingRecord) {
+      throw new Error('Failed to create or find school_student record');
+    }
+    
+    return existingRecord;
   }
 
   async updateSchoolStudent(id: number, schoolStudent: Partial<InsertSchoolStudent>): Promise<SchoolStudent | undefined> {
@@ -1257,15 +1283,42 @@ export class DatabaseStorage implements IStorage {
 
   async createChild(child: InsertChild): Promise<Child> {
     const db = await getDb();
-    const [newChild] = await db
+    // Use upsert to prevent duplicate children with same name under same parent
+    // If a child with the same parentId, firstName, lastName exists, return the existing record
+    const result = await db
       .insert(children)
       .values({
         ...child,
         createdAt: new Date(),
         updatedAt: new Date()
       })
+      .onConflictDoNothing({
+        target: [children.parentId, children.firstName, children.lastName]
+      })
       .returning();
-    return newChild;
+    
+    // If insert succeeded, return the new child
+    if (result.length > 0) {
+      return result[0];
+    }
+    
+    // If conflict (duplicate), fetch and return the existing child
+    const [existingChild] = await db
+      .select()
+      .from(children)
+      .where(
+        and(
+          eq(children.parentId, child.parentId),
+          eq(children.firstName, child.firstName),
+          eq(children.lastName, child.lastName)
+        )
+      );
+    
+    if (!existingChild) {
+      throw new Error('Failed to create or find child record');
+    }
+    
+    return existingChild;
   }
 
   async updateChild(id: number, child: Partial<InsertChild>): Promise<Child | undefined> {
