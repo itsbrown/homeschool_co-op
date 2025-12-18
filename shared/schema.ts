@@ -233,7 +233,10 @@ export const schoolStudents = pgTable("school_students", {
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (table) => ({
+  // Prevent duplicate school_student records for same child at same school
+  uniqueChildSchool: unique("unique_child_school").on(table.childId, table.schoolId),
+}));
 
 export const insertSchoolStudentSchema = createInsertSchema(schoolStudents)
   .omit({ id: true, createdAt: true, updatedAt: true })
@@ -464,7 +467,10 @@ export const children = pgTable("children", {
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (table) => ({
+  // Prevent duplicate children with same name under same parent
+  uniqueParentChild: unique("unique_parent_child").on(table.parentId, table.firstName, table.lastName),
+}));
 
 export const insertChildSchema = createInsertSchema(children)
   .omit({ id: true, createdAt: true, updatedAt: true, parentId: true })
