@@ -257,7 +257,8 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
     }
 
     // Get classes information for enrollments to filter by school
-    const classIds = [...new Set(allEnrollments.map(e => e.classId))];
+    // Include both classId and marketplaceClassId since marketplace enrollments use marketplaceClassId
+    const classIds = [...new Set(allEnrollments.flatMap(e => [e.classId, e.marketplaceClassId].filter((id): id is number => id !== null && id !== undefined)))];
     const classes: any[] = [];
     const classSchoolMap = new Map<number, number>(); // classId -> schoolId
     
@@ -276,10 +277,12 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
     }
 
     // FILTER: Only enrollments in classes from admin's schools
+    // Check both classId and marketplaceClassId since marketplace enrollments use marketplaceClassId
     const filteredEnrollments = isSuperAdmin
       ? allEnrollments
       : allEnrollments.filter(e => {
-          const classSchoolId = classSchoolMap.get(e.classId);
+          const effectiveClassId = e.classId || e.marketplaceClassId;
+          const classSchoolId = effectiveClassId ? classSchoolMap.get(effectiveClassId) : null;
           return classSchoolId && adminSchoolIds.includes(classSchoolId);
         });
     
