@@ -15,8 +15,9 @@ import { queryClient, apiRequest } from '@/lib/queryClient';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Plus, CalendarDays, ChevronLeft, ChevronRight, Edit, Trash2, Clock } from 'lucide-react';
+import { Plus, CalendarDays, ChevronLeft, ChevronRight, Edit, Trash2, Clock, Download, FileText } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isToday, isSameDay, addMonths, subMonths } from 'date-fns';
+import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
 
 interface CalendarEvent {
   id: number;
@@ -54,6 +55,118 @@ const EVENT_TYPES = [
   { value: 'camp', label: 'Camp', color: '#EC4899' },
   { value: 'other', label: 'Other', color: '#6B7280' },
 ];
+
+const EVENT_TEMPLATES = [
+  { 
+    id: 'holiday',
+    name: 'School Holiday',
+    eventType: 'holiday',
+    title: 'School Closed - ',
+    description: 'The school will be closed for this holiday. No classes will be held.',
+    isAllDay: true,
+  },
+  {
+    id: 'parent-meeting',
+    name: 'Parent Meeting',
+    eventType: 'meeting',
+    title: 'Parent-Teacher Conference',
+    description: 'Scheduled parent-teacher meeting to discuss student progress.',
+    isAllDay: false,
+  },
+  {
+    id: 'registration-deadline',
+    name: 'Registration Deadline',
+    eventType: 'deadline',
+    title: 'Registration Deadline - ',
+    description: 'Final deadline for class registration. Please ensure all enrollments are completed.',
+    isAllDay: true,
+  },
+  {
+    id: 'payment-deadline',
+    name: 'Payment Deadline',
+    eventType: 'deadline',
+    title: 'Payment Due Date',
+    description: 'All outstanding payments are due by this date.',
+    isAllDay: true,
+  },
+  {
+    id: 'open-house',
+    name: 'Open House',
+    eventType: 'special',
+    title: 'Open House Event',
+    description: 'Join us for an open house to learn about our programs and meet our educators.',
+    isAllDay: false,
+  },
+  {
+    id: 'class-session',
+    name: 'Class Session',
+    eventType: 'class',
+    title: '',
+    description: 'Regular class session.',
+    isAllDay: false,
+  },
+  {
+    id: 'workshop',
+    name: 'Workshop',
+    eventType: 'workshop',
+    title: 'Workshop: ',
+    description: 'Interactive workshop for students and families.',
+    isAllDay: false,
+  },
+  {
+    id: 'camp',
+    name: 'Camp/Program',
+    eventType: 'camp',
+    title: '',
+    description: 'Special camp or extended program.',
+    isAllDay: false,
+  },
+];
+
+const generateICSFile = (event: CalendarEvent) => {
+  const formatICSDate = (dateStr: string, isAllDay: boolean) => {
+    const date = new Date(dateStr);
+    if (isAllDay) {
+      return date.toISOString().split('T')[0].replace(/-/g, '');
+    }
+    return date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+  };
+
+  const escapeICS = (str: string) => {
+    return str.replace(/\\/g, '\\\\').replace(/,/g, '\\,').replace(/;/g, '\\;').replace(/\n/g, '\\n');
+  };
+
+  const icsContent = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//ASA Learning Platform//Calendar//EN',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    'BEGIN:VEVENT',
+    `UID:event-${event.id}@asa-learning`,
+    `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, '').split('.')[0]}Z`,
+    event.isAllDay
+      ? `DTSTART;VALUE=DATE:${formatICSDate(event.startDate, true)}`
+      : `DTSTART:${formatICSDate(event.startDate, false)}`,
+    event.isAllDay
+      ? `DTEND;VALUE=DATE:${formatICSDate(event.endDate, true)}`
+      : `DTEND:${formatICSDate(event.endDate, false)}`,
+    `SUMMARY:${escapeICS(event.title)}`,
+    event.description ? `DESCRIPTION:${escapeICS(event.description)}` : '',
+    event.location ? `LOCATION:${escapeICS(event.location)}` : '',
+    'END:VEVENT',
+    'END:VCALENDAR',
+  ].filter(Boolean).join('\r\n');
+
+  const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = `${event.title.replace(/[^a-z0-9]/gi, '_')}.ics`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(link.href);
+};
 
 export default function CalendarPage() {
   const { toast } = useToast();
@@ -96,7 +209,7 @@ export default function CalendarPage() {
       return apiRequest('POST', '/api/calendar-events', values);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/calendar-events'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/calendar-events/range'] });
       setIsDialogOpen(false);
       form.reset();
       toast({ title: 'Event created' });
@@ -111,7 +224,7 @@ export default function CalendarPage() {
       return apiRequest('PATCH', `/api/calendar-events/${id}`, values);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/calendar-events'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/calendar-events/range'] });
       setIsDialogOpen(false);
       setSelectedEvent(null);
       form.reset();
@@ -127,7 +240,7 @@ export default function CalendarPage() {
       return apiRequest('DELETE', `/api/calendar-events/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/calendar-events'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/calendar-events/range'] });
       setIsViewDialogOpen(false);
       setSelectedEvent(null);
       toast({ title: 'Event deleted' });
@@ -190,20 +303,16 @@ export default function CalendarPage() {
 
   if (isLoading) {
     return (
-      <div className="container mx-auto p-6">
+      <SchoolAdminLayout pageTitle="Calendar">
         <Skeleton className="h-[600px] w-full" />
-      </div>
+      </SchoolAdminLayout>
     );
   }
 
   return (
-    <div className="container mx-auto p-6">
+    <SchoolAdminLayout pageTitle="Calendar">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <CalendarDays className="h-6 w-6" />
-            Calendar
-          </h1>
           <p className="text-muted-foreground">Manage school events and schedules</p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -222,6 +331,33 @@ export default function CalendarPage() {
             </DialogHeader>
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                {!selectedEvent && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Start from Template</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {EVENT_TEMPLATES.map((template) => (
+                        <Button
+                          key={template.id}
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="justify-start h-auto py-2 px-3"
+                          onClick={() => {
+                            form.setValue('title', template.title);
+                            form.setValue('description', template.description);
+                            form.setValue('eventType', template.eventType);
+                            form.setValue('isAllDay', template.isAllDay);
+                            toast({ title: `${template.name} template applied` });
+                          }}
+                          data-testid={`template-${template.id}`}
+                        >
+                          <FileText className="h-3 w-3 mr-2" />
+                          <span className="text-xs">{template.name}</span>
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <FormField
                   control={form.control}
                   name="title"
@@ -440,7 +576,19 @@ export default function CalendarPage() {
                   Location: {selectedEvent.location}
                 </div>
               )}
-              <div className="flex justify-end gap-2">
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => {
+                    generateICSFile(selectedEvent);
+                    toast({ title: 'Calendar file downloaded', description: 'Open the .ics file to add to your calendar' });
+                  }} 
+                  data-testid="button-add-to-calendar"
+                >
+                  <Download className="h-4 w-4 mr-1" />
+                  Add to Calendar
+                </Button>
                 <Button variant="outline" size="sm" onClick={handleEditEvent} data-testid="button-edit-event">
                   <Edit className="h-4 w-4 mr-1" />
                   Edit
@@ -454,6 +602,6 @@ export default function CalendarPage() {
           )}
         </DialogContent>
       </Dialog>
-    </div>
+    </SchoolAdminLayout>
   );
 }

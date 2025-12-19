@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useCart } from "@/contexts/CartContext";
 import OnboardingTour from "@/components/onboarding/OnboardingTour";
 import { Input } from "@/components/ui/input";
+import ParentCalendarView from "@/components/calendar/ParentCalendarView";
 
 
 export default function ParentDashboard() {
@@ -1048,19 +1049,7 @@ export default function ParentDashboard() {
         </TabsContent>
 
         <TabsContent value="schedule" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Family Schedule</CardTitle>
-              <CardDescription>View your children's class schedules and upcoming events</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center py-8 text-muted-foreground">
-                <Calendar className="h-12 w-12 mx-auto mb-2" />
-                <p>Schedule view coming soon</p>
-                <p className="text-sm">Track all your children's classes and activities in one place</p>
-              </div>
-            </CardContent>
-          </Card>
+          <ParentCalendarView />
         </TabsContent>
       </Tabs>
       </div>

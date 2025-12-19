@@ -17,6 +17,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { EnrollmentBreakdownChart } from "@/components/analytics/EnrollmentBreakdownChart";
+import { LocationAnalyticsChart } from "@/components/analytics/LocationAnalyticsChart";
+import { ClassEnrollmentTable } from "@/components/analytics/ClassEnrollmentTable";
 
 // School data interface
 interface SchoolData {
@@ -966,36 +969,12 @@ export default function MySchoolPage() {
                 </TabsContent>
 
                 <TabsContent value="stats">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <Card>
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-lg">Classes</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <p className="text-3xl font-bold">12</p>
-                        <p className="text-sm text-muted-foreground">Active classes</p>
-                      </CardContent>
-                    </Card>
-
-                    <Card>
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-lg">Staff</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <p className="text-3xl font-bold">8</p>
-                        <p className="text-sm text-muted-foreground">Teaching staff</p>
-                      </CardContent>
-                    </Card>
-
-                    <Card>
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-lg">Students</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <p className="text-3xl font-bold">{school.enrollmentSize || "N/A"}</p>
-                        <p className="text-sm text-muted-foreground">Total enrollment</p>
-                      </CardContent>
-                    </Card>
+                  <div className="space-y-6">
+                    <EnrollmentBreakdownChart />
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      <LocationAnalyticsChart />
+                      <ClassEnrollmentTable />
+                    </div>
                   </div>
                 </TabsContent>
               </Tabs>

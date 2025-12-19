@@ -15,8 +15,9 @@ import { queryClient, apiRequest } from '@/lib/queryClient';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Plus, Megaphone, Pin, Send, Edit, Trash2, Users, Calendar } from 'lucide-react';
+import { Plus, Megaphone, Pin, Send, Edit, Trash2, Users, Calendar, FileText, Sparkles, MessageSquare } from 'lucide-react';
 import { format } from 'date-fns';
+import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
 
 interface Announcement {
   id: number;
@@ -52,10 +53,64 @@ const TARGET_TYPE_LABELS: Record<string, string> = {
   all: 'Everyone',
 };
 
+const ANNOUNCEMENT_TEMPLATES = [
+  {
+    id: 'payment-reminder',
+    name: 'Payment Reminder',
+    title: 'Payment Reminder',
+    message: 'This is a friendly reminder that your payment is due. Please ensure all outstanding balances are paid to maintain your enrollment status. If you have any questions about your account, please contact our office.',
+    targetType: 'missed_payments',
+    isPinned: false,
+  },
+  {
+    id: 'class-update',
+    name: 'Class Update',
+    title: 'Important Class Update',
+    message: 'We have an important update regarding your class. Please read the details below and let us know if you have any questions.',
+    targetType: 'class_specific',
+    isPinned: false,
+  },
+  {
+    id: 'holiday-notice',
+    name: 'Holiday Notice',
+    title: 'Holiday Schedule Notice',
+    message: 'Please note that our school will be closed for the upcoming holiday. Regular classes will resume after the break. We wish you and your family a wonderful holiday!',
+    targetType: 'all_parents',
+    isPinned: true,
+  },
+  {
+    id: 'enrollment-open',
+    name: 'Enrollment Open',
+    title: 'Enrollment Now Open!',
+    message: 'We are excited to announce that enrollment is now open for the upcoming session! Spaces are limited, so we encourage you to register early. Visit our enrollment page to secure your spot.',
+    targetType: 'unenrolled_parents',
+    isPinned: true,
+  },
+  {
+    id: 'general-update',
+    name: 'General Update',
+    title: 'School Update',
+    message: 'We wanted to share an important update with our school community. Please read the information below.',
+    targetType: 'all_parents',
+    isPinned: false,
+  },
+  {
+    id: 'event-invite',
+    name: 'Event Invitation',
+    title: 'You\'re Invited!',
+    message: 'We would like to invite you to our upcoming school event. We hope to see you there! Please RSVP if required.',
+    targetType: 'enrolled_parents',
+    isPinned: false,
+  },
+];
+
 export default function AnnouncementsPage() {
   const { toast } = useToast();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
+  const [aiQuery, setAiQuery] = useState('');
+  const [aiResult, setAiResult] = useState<{targetType: string, targetClassId: number | null, interpretation: string, confidence: number} | null>(null);
+  const [savedAudienceName, setSavedAudienceName] = useState('');
 
   const { data: announcements, isLoading } = useQuery<Announcement[]>({
     queryKey: ['/api/announcements'],
@@ -64,6 +119,79 @@ export default function AnnouncementsPage() {
   const { data: classes } = useQuery<any[]>({
     queryKey: ['/api/admin/classes'],
   });
+
+  const { data: savedAudiences, refetch: refetchSavedAudiences } = useQuery<any[]>({
+    queryKey: ['/api/announcements/saved-audiences'],
+  });
+
+  const aiResolveMutation = useMutation({
+    mutationFn: async (query: string) => {
+      const response = await apiRequest('POST', '/api/announcements/ai/resolve-audience', { query });
+      if (!response.ok) {
+        throw new Error('Failed to resolve audience');
+      }
+      return response.json();
+    },
+    onSuccess: (result) => {
+      setAiResult(result);
+      form.setValue('targetType', result.targetType);
+      if (result.targetClassId) {
+        form.setValue('targetClassId', result.targetClassId);
+      }
+      toast({
+        title: 'Audience identified',
+        description: result.interpretation,
+      });
+    },
+    onError: () => {
+      toast({
+        title: 'Error',
+        description: 'Failed to resolve audience. Please select manually.',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const handleAiResolve = () => {
+    if (!aiQuery.trim()) return;
+    setAiResult(null);
+    aiResolveMutation.mutate(aiQuery);
+  };
+
+  const isAiLoading = aiResolveMutation.isPending;
+
+  const saveAudienceMutation = useMutation({
+    mutationFn: async (data: {name: string, targetType: string, targetClassId: number | null}) => {
+      const response = await apiRequest('POST', '/api/announcements/saved-audiences', data);
+      if (!response.ok) throw new Error('Failed to save audience');
+      return response.json();
+    },
+    onSuccess: () => {
+      setSavedAudienceName('');
+      queryClient.invalidateQueries({ queryKey: ['/api/announcements/saved-audiences'] });
+      toast({ title: 'Audience saved' });
+    },
+    onError: () => {
+      toast({ title: 'Error', description: 'Failed to save audience', variant: 'destructive' });
+    },
+  });
+
+  const handleSaveAudience = () => {
+    if (!savedAudienceName.trim()) return;
+    saveAudienceMutation.mutate({
+      name: savedAudienceName,
+      targetType: form.getValues('targetType'),
+      targetClassId: form.getValues('targetClassId') || null,
+    });
+  };
+
+  const handleApplySavedAudience = (audience: any) => {
+    form.setValue('targetType', audience.targetType);
+    if (audience.targetClassId) {
+      form.setValue('targetClassId', audience.targetClassId);
+    }
+    toast({ title: `Applied: ${audience.name}` });
+  };
 
   const form = useForm<AnnouncementFormValues>({
     resolver: zodResolver(announcementFormSchema),
@@ -181,7 +309,7 @@ export default function AnnouncementsPage() {
 
   if (isLoading) {
     return (
-      <div className="container mx-auto p-6">
+      <SchoolAdminLayout pageTitle="Announcements">
         <div className="space-y-4">
           <Skeleton className="h-8 w-48" />
           <div className="grid gap-4">
@@ -190,18 +318,14 @@ export default function AnnouncementsPage() {
             ))}
           </div>
         </div>
-      </div>
+      </SchoolAdminLayout>
     );
   }
 
   return (
-    <div className="container mx-auto p-6">
+    <SchoolAdminLayout pageTitle="Announcements">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Megaphone className="h-6 w-6" />
-            Announcements
-          </h1>
           <p className="text-muted-foreground">Create and manage announcements for parents</p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -220,6 +344,33 @@ export default function AnnouncementsPage() {
             </DialogHeader>
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                {!editingAnnouncement && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Start from Template</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {ANNOUNCEMENT_TEMPLATES.map((template) => (
+                        <Button
+                          key={template.id}
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="justify-start h-auto py-2 px-3"
+                          onClick={() => {
+                            form.setValue('title', template.title);
+                            form.setValue('message', template.message);
+                            form.setValue('targetType', template.targetType);
+                            form.setValue('isPinned', template.isPinned);
+                            toast({ title: `${template.name} template applied` });
+                          }}
+                          data-testid={`template-${template.id}`}
+                        >
+                          <FileText className="h-3 w-3 mr-2" />
+                          <span className="text-xs">{template.name}</span>
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <FormField
                   control={form.control}
                   name="title"
@@ -246,13 +397,79 @@ export default function AnnouncementsPage() {
                     </FormItem>
                   )}
                 />
+                <div className="space-y-4 border rounded-lg p-4 bg-muted/30">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-primary" />
+                    <span className="text-sm font-medium">AI Audience Targeting</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Describe your audience (e.g., 'parents who haven't enrolled anyone')"
+                      value={aiQuery}
+                      onChange={(e) => setAiQuery(e.target.value)}
+                      className="flex-1"
+                      data-testid="input-ai-audience"
+                    />
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={handleAiResolve}
+                      disabled={isAiLoading || !aiQuery.trim()}
+                      data-testid="button-ai-resolve"
+                    >
+                      {isAiLoading ? (
+                        <span className="flex items-center gap-2">
+                          <span className="animate-spin h-3 w-3 border-2 border-current border-t-transparent rounded-full" />
+                          Finding...
+                        </span>
+                      ) : (
+                        <>
+                          <MessageSquare className="h-3 w-3 mr-1" />
+                          Find
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                  {aiResult && (
+                    <div className="text-sm p-2 bg-green-50 dark:bg-green-950/30 rounded border border-green-200 dark:border-green-800">
+                      <span className="font-medium">Found: </span>
+                      {aiResult.interpretation}
+                      <span className="ml-2 text-muted-foreground">
+                        ({Math.round(aiResult.confidence * 100)}% confidence)
+                      </span>
+                    </div>
+                  )}
+                  
+                  {savedAudiences && savedAudiences.length > 0 && (
+                    <div className="space-y-2">
+                      <span className="text-xs text-muted-foreground">Saved audiences:</span>
+                      <div className="flex flex-wrap gap-1">
+                        {savedAudiences.map((audience: any) => (
+                          <Button
+                            key={audience.id}
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-7 text-xs"
+                            onClick={() => handleApplySavedAudience(audience)}
+                            data-testid={`saved-audience-${audience.id}`}
+                          >
+                            {audience.name}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 <FormField
                   control={form.control}
                   name="targetType"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Target Audience</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
                           <SelectTrigger data-testid="select-target-type">
                             <SelectValue placeholder="Select audience" />
@@ -264,6 +481,26 @@ export default function AnnouncementsPage() {
                           ))}
                         </SelectContent>
                       </Select>
+                      <div className="flex items-center gap-2 mt-2">
+                        <Input
+                          placeholder="Save as..."
+                          value={savedAudienceName}
+                          onChange={(e) => setSavedAudienceName(e.target.value)}
+                          className="flex-1 h-8 text-xs"
+                          data-testid="input-save-audience-name"
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleSaveAudience}
+                          disabled={!savedAudienceName.trim()}
+                          className="h-8 text-xs"
+                          data-testid="button-save-audience"
+                        >
+                          Save
+                        </Button>
+                      </div>
                       <FormDescription>Choose who will see this announcement</FormDescription>
                       <FormMessage />
                     </FormItem>
@@ -396,6 +633,6 @@ export default function AnnouncementsPage() {
           ))
         )}
       </div>
-    </div>
+    </SchoolAdminLayout>
   );
 }

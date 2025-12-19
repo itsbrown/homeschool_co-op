@@ -1715,6 +1715,20 @@ export const notificationRecipientsRelations = relations(notificationRecipients,
 // Legacy payment tables are now defined earlier in the schema with comprehensive financial tracking
 // See programEnrollments, payments, scheduledPayments, and refunds tables above
 
+// Saved audiences for announcement targeting
+export const savedAudiences = pgTable("saved_audiences", {
+  id: serial("id").primaryKey(),
+  schoolId: integer("school_id").references(() => schools.id).notNull(),
+  name: text("name").notNull(),
+  targetType: text("target_type").notNull(),
+  targetClassId: integer("target_class_id").references(() => schoolClasses.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertSavedAudienceSchema = createInsertSchema(savedAudiences).omit({ id: true, createdAt: true });
+export type InsertSavedAudience = z.infer<typeof insertSavedAudienceSchema>;
+export type SavedAudience = typeof savedAudiences.$inferSelect;
+
 // Discounts table for managing school discounts
 export const discounts = pgTable("discounts", {
   id: serial("id").primaryKey(),

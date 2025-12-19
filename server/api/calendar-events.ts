@@ -152,4 +152,99 @@ router.get('/colors/types', supabaseAuth, async (req: any, res: Response) => {
   res.json(EVENT_COLORS);
 });
 
+router.get('/parent/events', supabaseAuth, async (req: any, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ message: "User not authenticated" });
+    }
+
+    const user = await storage.getUser(userId);
+    if (!user?.schoolId) {
+      return res.status(400).json({ message: "User not associated with a school" });
+    }
+
+    const { start, end } = req.query;
+    
+    let events;
+    if (start && end) {
+      const startDate = new Date(start as string);
+      const endDate = new Date(end as string);
+      events = await storage.getEventsBySchoolAndDateRange(user.schoolId, startDate, endDate);
+    } else {
+      events = await storage.getEventsBySchool(user.schoolId);
+    }
+    
+    res.json(events);
+  } catch (error) {
+    console.error("Get parent calendar events error:", error);
+    res.status(500).json({ message: "Error fetching calendar events" });
+  }
+});
+
+router.get('/feed/:schoolId.ics', async (req: any, res: Response) => {
+  try {
+    const schoolId = parseInt(req.params.schoolId);
+    if (isNaN(schoolId)) {
+      return res.status(400).send("Invalid school ID");
+    }
+
+    const school = await storage.getSchool(schoolId);
+    if (!school) {
+      return res.status(404).send("School not found");
+    }
+
+    const now = new Date();
+    const threeMonthsAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+    const sixMonthsAhead = new Date(now.getTime() + 180 * 24 * 60 * 60 * 1000);
+    
+    const events = await storage.getEventsBySchoolAndDateRange(schoolId, threeMonthsAgo, sixMonthsAhead);
+
+    const formatICSDate = (date: Date, isAllDay: boolean) => {
+      if (isAllDay) {
+        return date.toISOString().split('T')[0].replace(/-/g, '');
+      }
+      return date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+    };
+
+    const escapeICS = (str: string) => {
+      return str.replace(/\\/g, '\\\\').replace(/,/g, '\\,').replace(/;/g, '\\;').replace(/\n/g, '\\n');
+    };
+
+    const icsEvents = events.map((event: any) => [
+      'BEGIN:VEVENT',
+      `UID:event-${event.id}@asa-learning`,
+      `DTSTAMP:${formatICSDate(new Date(), false)}`,
+      event.isAllDay
+        ? `DTSTART;VALUE=DATE:${formatICSDate(new Date(event.startDate), true)}`
+        : `DTSTART:${formatICSDate(new Date(event.startDate), false)}`,
+      event.isAllDay
+        ? `DTEND;VALUE=DATE:${formatICSDate(new Date(event.endDate), true)}`
+        : `DTEND:${formatICSDate(new Date(event.endDate), false)}`,
+      `SUMMARY:${escapeICS(event.title)}`,
+      event.description ? `DESCRIPTION:${escapeICS(event.description)}` : '',
+      event.location ? `LOCATION:${escapeICS(event.location)}` : '',
+      'END:VEVENT',
+    ].filter(Boolean).join('\r\n'));
+
+    const icsContent = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      `PRODID:-//ASA Learning Platform//Calendar//EN`,
+      `X-WR-CALNAME:${escapeICS(school.name)} Calendar`,
+      'CALSCALE:GREGORIAN',
+      'METHOD:PUBLISH',
+      ...icsEvents,
+      'END:VCALENDAR',
+    ].join('\r\n');
+
+    res.setHeader('Content-Type', 'text/calendar;charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${school.name.replace(/[^a-z0-9]/gi, '_')}_calendar.ics"`);
+    res.send(icsContent);
+  } catch (error) {
+    console.error("Generate ICS feed error:", error);
+    res.status(500).send("Error generating calendar feed");
+  }
+});
+
 export default router;
