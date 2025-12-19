@@ -109,6 +109,10 @@ export interface IStorage {
   getUpcomingEvents(userId: number): Promise<Event[]>;
   getAllEvents(userId: number): Promise<Event[]>;
   createEvent(event: InsertEvent): Promise<Event>;
+  updateEvent(id: number, event: Partial<InsertEvent>): Promise<Event | undefined>;
+  deleteEvent(id: number): Promise<void>;
+  getEventsBySchool(schoolId: number): Promise<Event[]>;
+  getEventsBySchoolAndDateRange(schoolId: number, startDate: Date, endDate: Date): Promise<Event[]>;
 
   // Marketplace methods
   getMarketplaceItem(id: number): Promise<MarketplaceItem | undefined>;
@@ -141,6 +145,11 @@ export interface IStorage {
   createNotification(notification: InsertNotification): Promise<Notification>;
   updateNotification(id: number, notification: Partial<InsertNotification>): Promise<Notification | undefined>;
   deleteNotification(id: number): Promise<void>;
+  
+  // Announcement methods (school-scoped notifications)
+  getAnnouncementsBySchool(schoolId: number): Promise<Notification[]>;
+  getPinnedAnnouncementsBySchool(schoolId: number): Promise<Notification[]>;
+  getActiveAnnouncementsForUser(userId: number, schoolId: number): Promise<Notification[]>;
   
   // Notification recipient methods
   getNotificationRecipientById(id: number): Promise<NotificationRecipient | undefined>;
@@ -1065,12 +1074,48 @@ export class MemStorage implements IStorage {
       ...insertEvent, 
       id, 
       createdAt: now,
+      updatedAt: now,
       organizerId: insertEvent.organizerId,
       description: insertEvent.description || null,
-      location: insertEvent.location || null
+      location: insertEvent.location || null,
+      schoolId: insertEvent.schoolId || null,
+      color: insertEvent.color || null,
+      isAllDay: insertEvent.isAllDay || false
     };
     this.eventsStore.set(id, event);
     return event;
+  }
+
+  async updateEvent(id: number, updateData: Partial<InsertEvent>): Promise<Event | undefined> {
+    const event = this.eventsStore.get(id);
+    if (!event) return undefined;
+    const updatedEvent: Event = {
+      ...event,
+      ...updateData,
+      updatedAt: new Date()
+    };
+    this.eventsStore.set(id, updatedEvent);
+    return updatedEvent;
+  }
+
+  async deleteEvent(id: number): Promise<void> {
+    this.eventsStore.delete(id);
+  }
+
+  async getEventsBySchool(schoolId: number): Promise<Event[]> {
+    return Array.from(this.eventsStore.values())
+      .filter(event => event.schoolId === schoolId)
+      .sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
+  }
+
+  async getEventsBySchoolAndDateRange(schoolId: number, startDate: Date, endDate: Date): Promise<Event[]> {
+    return Array.from(this.eventsStore.values())
+      .filter(event => 
+        event.schoolId === schoolId &&
+        event.startDate >= startDate &&
+        event.startDate <= endDate
+      )
+      .sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
   }
 
   // Marketplace methods
@@ -4915,6 +4960,22 @@ export class MemStorage implements IStorage {
       return this.dbStorage.createEvent(event);
     }
 
+    async updateEvent(id: number, event: Partial<InsertEvent>): Promise<Event | undefined> {
+      return this.dbStorage.updateEvent(id, event);
+    }
+
+    async deleteEvent(id: number): Promise<void> {
+      return this.dbStorage.deleteEvent(id);
+    }
+
+    async getEventsBySchool(schoolId: number): Promise<Event[]> {
+      return this.dbStorage.getEventsBySchool(schoolId);
+    }
+
+    async getEventsBySchoolAndDateRange(schoolId: number, startDate: Date, endDate: Date): Promise<Event[]> {
+      return this.dbStorage.getEventsBySchoolAndDateRange(schoolId, startDate, endDate);
+    }
+
     async getMarketplaceItem(id: number): Promise<MarketplaceItem | undefined> {
       return this.dbStorage.getMarketplaceItem(id);
     }
@@ -6006,6 +6067,19 @@ export class MemStorage implements IStorage {
 
       async deleteNotification(id: number): Promise<void> {
         return this.dbStorage.deleteNotification(id);
+      }
+
+      // Announcement methods (school-scoped notifications)
+      async getAnnouncementsBySchool(schoolId: number): Promise<Notification[]> {
+        return this.dbStorage.getAnnouncementsBySchool(schoolId);
+      }
+
+      async getPinnedAnnouncementsBySchool(schoolId: number): Promise<Notification[]> {
+        return this.dbStorage.getPinnedAnnouncementsBySchool(schoolId);
+      }
+
+      async getActiveAnnouncementsForUser(userId: number, schoolId: number): Promise<Notification[]> {
+        return this.dbStorage.getActiveAnnouncementsForUser(userId, schoolId);
       }
 
       // Notification recipient methods

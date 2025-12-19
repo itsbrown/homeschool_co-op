@@ -1551,6 +1551,48 @@ export class DatabaseStorage implements IStorage {
     return newEvent;
   }
 
+  async updateEvent(id: number, eventData: Partial<InsertEvent>): Promise<Event | undefined> {
+    const db = await getDb();
+    const [updatedEvent] = await db
+      .update(events)
+      .set({
+        ...eventData,
+        updatedAt: new Date()
+      })
+      .where(eq(events.id, id))
+      .returning();
+    return updatedEvent;
+  }
+
+  async deleteEvent(id: number): Promise<void> {
+    const db = await getDb();
+    await db.delete(events).where(eq(events.id, id));
+  }
+
+  async getEventsBySchool(schoolId: number): Promise<Event[]> {
+    const db = await getDb();
+    return await db
+      .select()
+      .from(events)
+      .where(eq(events.schoolId, schoolId))
+      .orderBy(asc(events.startDate));
+  }
+
+  async getEventsBySchoolAndDateRange(schoolId: number, startDate: Date, endDate: Date): Promise<Event[]> {
+    const db = await getDb();
+    return await db
+      .select()
+      .from(events)
+      .where(
+        and(
+          eq(events.schoolId, schoolId),
+          sql`${events.startDate} >= ${startDate}`,
+          sql`${events.startDate} <= ${endDate}`
+        )
+      )
+      .orderBy(asc(events.startDate));
+  }
+
   // Marketplace Item methods
   async getMarketplaceItem(id: number): Promise<MarketplaceItem | undefined> {
     const db = await getDb();
@@ -2453,6 +2495,56 @@ export class DatabaseStorage implements IStorage {
   async deleteNotification(id: number): Promise<void> {
     const db = await getDb();
     await db.delete(notifications).where(eq(notifications.id, id));
+  }
+
+  // Announcement methods (school-scoped notifications)
+  async getAnnouncementsBySchool(schoolId: number): Promise<Notification[]> {
+    const db = await getDb();
+    return await db
+      .select()
+      .from(notifications)
+      .where(
+        and(
+          eq(notifications.schoolId, schoolId),
+          eq(notifications.isAnnouncement, true)
+        )
+      )
+      .orderBy(desc(notifications.createdAt));
+  }
+
+  async getPinnedAnnouncementsBySchool(schoolId: number): Promise<Notification[]> {
+    const db = await getDb();
+    return await db
+      .select()
+      .from(notifications)
+      .where(
+        and(
+          eq(notifications.schoolId, schoolId),
+          eq(notifications.isAnnouncement, true),
+          eq(notifications.isPinned, true)
+        )
+      )
+      .orderBy(desc(notifications.createdAt));
+  }
+
+  async getActiveAnnouncementsForUser(userId: number, schoolId: number): Promise<Notification[]> {
+    const db = await getDb();
+    const now = new Date();
+    return await db
+      .select()
+      .from(notifications)
+      .where(
+        and(
+          eq(notifications.schoolId, schoolId),
+          eq(notifications.isAnnouncement, true),
+          eq(notifications.status, 'sent'),
+          or(
+            sql`${notifications.expiresAt} IS NULL`,
+            sql`${notifications.expiresAt} > ${now}`
+          )
+        )
+      )
+      .orderBy(desc(notifications.isPinned), desc(notifications.createdAt));
   }
 
   // Notification recipient methods

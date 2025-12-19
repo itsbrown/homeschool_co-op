@@ -11,6 +11,7 @@ import {
   Users, 
   GraduationCap, 
   Calendar, 
+  CalendarDays,
   Settings, 
   Database,
   Menu,
@@ -27,7 +28,8 @@ import {
   UserPlus,
   ClipboardList,
   Tag,
-  FileText
+  FileText,
+  Megaphone
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -124,6 +126,16 @@ const adminNavItems: NavItem[] = [
     title: 'Notifications',
     href: '/schools/notifications',
     icon: Bell,
+  },
+  {
+    title: 'Announcements',
+    href: '/schools/announcements',
+    icon: Megaphone,
+  },
+  {
+    title: 'Calendar',
+    href: '/schools/calendar',
+    icon: CalendarDays,
   },
   {
     title: 'Settings',

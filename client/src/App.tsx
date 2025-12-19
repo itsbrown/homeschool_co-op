@@ -116,6 +116,8 @@ import ActiveSessionPage from './pages/educator/ActiveSession';
 // Eagerly imported to avoid suspension errors with wouter's synchronous navigation
 import SchoolClassEnrollmentsPage from './pages/schools/ClassEnrollmentsPage';
 import AdminClassEnrollmentsPage from './pages/admin/ClassEnrollmentsPage';
+import AnnouncementsPage from './pages/schools/AnnouncementsPage';
+import SchoolCalendarPage from './pages/schools/CalendarPage';
 
 const CallbackPage = () => {
   const { isAuthenticated } = useAuth();
@@ -652,6 +654,8 @@ function Router() {
       <Route path="/schools/knowledge-base/create" component={KnowledgeBaseCreationPage} />
       <Route path="/schools/knowledge-base/:id" component={KnowledgeBaseDetailsPage} />
       <Route path="/schools/knowledge-base" component={KnowledgeBasePage} />
+      <Route path="/schools/announcements" component={AnnouncementsPage} />
+      <Route path="/schools/calendar" component={SchoolCalendarPage} />
       <Route path="/schools/marketing-links" component={MarketingLinksPage} />
       <Route path="/schools/locations">
         <SchoolAdminLayout pageTitle="Location Management">

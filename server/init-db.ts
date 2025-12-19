@@ -1094,6 +1094,68 @@ async function runMigrations() {
     `);
     console.log('✅ Migration completed: unique constraint added to school_students table');
     
+    // Add school calendar and announcement columns to events table
+    console.log('Running migration: Adding school calendar columns to events table...');
+    await db.execute(sql`
+      ALTER TABLE events 
+      ADD COLUMN IF NOT EXISTS school_id INTEGER REFERENCES schools(id),
+      ADD COLUMN IF NOT EXISTS color TEXT,
+      ADD COLUMN IF NOT EXISTS is_all_day BOOLEAN DEFAULT false,
+      ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
+    `);
+    console.log('✅ Migration completed: school calendar columns added to events table');
+    
+    // Add announcement columns to notifications table
+    console.log('Running migration: Adding announcement columns to notifications table...');
+    await db.execute(sql`
+      ALTER TABLE notifications 
+      ADD COLUMN IF NOT EXISTS school_id INTEGER REFERENCES schools(id),
+      ADD COLUMN IF NOT EXISTS target_class_id INTEGER REFERENCES school_classes(id),
+      ADD COLUMN IF NOT EXISTS target_user_ids INTEGER[],
+      ADD COLUMN IF NOT EXISTS is_announcement BOOLEAN DEFAULT false,
+      ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN DEFAULT false,
+      ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP;
+    `);
+    console.log('✅ Migration completed: announcement columns added to notifications table');
+    
+    // Update notifications target_type constraint to include new targeting options
+    console.log('Running migration: Updating notifications target_type constraint...');
+    await db.execute(sql`
+      DO $$ 
+      BEGIN
+        -- Drop existing constraint if it exists
+        ALTER TABLE notifications 
+        DROP CONSTRAINT IF EXISTS notifications_target_type_check;
+        
+        -- Add updated constraint with new target types
+        ALTER TABLE notifications 
+        ADD CONSTRAINT notifications_target_type_check 
+        CHECK (target_type IN ('individual', 'role', 'location', 'all', 'all_parents', 'enrolled_parents', 'unenrolled_parents', 'class_specific', 'missed_payments'));
+      EXCEPTION
+        WHEN duplicate_object THEN NULL;
+      END $$;
+    `);
+    console.log('✅ Migration completed: notifications target_type constraint updated');
+    
+    // Update events event_type constraint to include new event types
+    console.log('Running migration: Updating events event_type constraint...');
+    await db.execute(sql`
+      DO $$ 
+      BEGIN
+        -- Drop existing constraint if it exists
+        ALTER TABLE events 
+        DROP CONSTRAINT IF EXISTS events_event_type_check;
+        
+        -- Add updated constraint with new event types
+        ALTER TABLE events 
+        ADD CONSTRAINT events_event_type_check 
+        CHECK (event_type IN ('class', 'meeting', 'workshop', 'camp', 'holiday', 'deadline', 'special', 'other'));
+      EXCEPTION
+        WHEN duplicate_object THEN NULL;
+      END $$;
+    `);
+    console.log('✅ Migration completed: events event_type constraint updated');
+    
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     

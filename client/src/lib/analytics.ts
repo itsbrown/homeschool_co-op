@@ -233,3 +233,59 @@ export const trackSelectItem = (listName: string, item: EcommerceItem) => {
   });
   console.log('📊 Select item tracked:', item.item_name);
 };
+
+export const trackSignUp = (method: string, schoolId?: number) => {
+  pushToDataLayer({
+    event: 'sign_up',
+    method: method,
+    school_id: schoolId || undefined,
+    signup_time: new Date().toISOString(),
+  });
+  console.log('📊 Sign up tracked:', method);
+};
+
+export const trackLogin = (method: string) => {
+  pushToDataLayer({
+    event: 'login',
+    method: method,
+    login_time: new Date().toISOString(),
+  });
+  console.log('📊 Login tracked:', method);
+};
+
+export const trackEnrollmentSubmit = (
+  classId: number,
+  className: string,
+  childId: number,
+  childName: string,
+  variantName?: string
+) => {
+  pushToDataLayer({
+    event: 'enrollment_submit',
+    class_id: classId,
+    class_name: className,
+    child_id: childId,
+    child_name: childName,
+    variant_name: variantName || '',
+    submission_time: new Date().toISOString(),
+  });
+  console.log('📊 Enrollment submit tracked:', className, childName);
+};
+
+export const trackPageView = (pagePath: string, pageTitle?: string) => {
+  pushToDataLayer({
+    event: 'page_view',
+    page_path: pagePath,
+    page_title: pageTitle || document.title,
+  });
+  console.log('📊 Page view tracked:', pagePath);
+};
+
+export const trackCustomEvent = (eventName: string, eventParams: Record<string, any> = {}) => {
+  pushToDataLayer({
+    event: eventName,
+    ...eventParams,
+    event_time: new Date().toISOString(),
+  });
+  console.log('📊 Custom event tracked:', eventName);
+};

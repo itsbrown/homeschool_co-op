@@ -1231,7 +1231,7 @@ export const insertRoleInvitationSchema = createInsertSchema(roleInvitations).om
 export type InsertRoleInvitation = z.infer<typeof insertRoleInvitationSchema>;
 export type RoleInvitation = typeof roleInvitations.$inferSelect;
 
-// Events table
+// Events table (extended for school calendar)
 export const events = pgTable("events", {
   id: serial("id").primaryKey(),
   title: text("title").notNull(),
@@ -1240,11 +1240,15 @@ export const events = pgTable("events", {
   endDate: timestamp("end_date").notNull(),
   location: text("location"),
   organizerId: integer("organizer_id").notNull().references(() => users.id),
-  eventType: text("event_type", { enum: ["class", "meeting", "workshop", "camp", "other"] }).notNull(),
+  schoolId: integer("school_id").references(() => schools.id),
+  eventType: text("event_type", { enum: ["class", "meeting", "workshop", "camp", "holiday", "deadline", "special", "other"] }).notNull(),
+  color: text("color"),
+  isAllDay: boolean("is_all_day").default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-export const insertEventSchema = createInsertSchema(events).omit({ id: true, createdAt: true, organizerId: true });
+export const insertEventSchema = createInsertSchema(events).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertEvent = z.infer<typeof insertEventSchema>;
 export type Event = typeof events.$inferSelect;
 
@@ -1256,7 +1260,8 @@ export const roleInvitationsRelations = relations(roleInvitations, ({ one }) => 
 
 // Define event relations
 export const eventsRelations = relations(events, ({ one }) => ({
-  organizer: one(users, { fields: [events.organizerId], references: [users.id] })
+  organizer: one(users, { fields: [events.organizerId], references: [users.id] }),
+  school: one(schools, { fields: [events.schoolId], references: [schools.id] })
 }));
 
 // MarketplaceItems table
@@ -1619,10 +1624,11 @@ export const insertCategorySchema = createInsertSchema(categories)
 export type InsertCategory = z.infer<typeof insertCategorySchema>;
 export type Category = typeof categories.$inferSelect;
 
-// Notifications table for enhanced messaging system
+// Notifications table for enhanced messaging system (extended for announcements)
 export const notifications = pgTable("notifications", {
   id: serial("id").primaryKey(),
   senderId: integer("sender_id").notNull().references(() => users.id),
+  schoolId: integer("school_id").references(() => schools.id),
   type: text("type", { 
     enum: ["email", "in_app", "sms", "both", "all"] 
   }).notNull().default("both"),
@@ -1632,15 +1638,20 @@ export const notifications = pgTable("notifications", {
   subject: text("subject").notNull(),
   content: text("content").notNull(),
   targetType: text("target_type", { 
-    enum: ["individual", "role", "location", "all"] 
+    enum: ["individual", "role", "location", "all", "all_parents", "enrolled_parents", "unenrolled_parents", "class_specific", "missed_payments"] 
   }).notNull(),
-  targetData: jsonb("target_data").notNull(), // Store recipient info as JSON
+  targetData: jsonb("target_data").notNull(),
+  targetClassId: integer("target_class_id").references(() => schoolClasses.id),
+  targetUserIds: integer("target_user_ids").array(),
+  isAnnouncement: boolean("is_announcement").default(false),
+  isPinned: boolean("is_pinned").default(false),
   scheduledFor: timestamp("scheduled_for"),
   sentAt: timestamp("sent_at"),
+  expiresAt: timestamp("expires_at"),
   status: text("status", { 
     enum: ["draft", "scheduled", "sending", "sent", "failed"] 
   }).default("draft").notNull(),
-  deliveryStats: jsonb("delivery_stats").default({}), // Track delivery results
+  deliveryStats: jsonb("delivery_stats").default({}),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -1649,6 +1660,7 @@ export const insertNotificationSchema = createInsertSchema(notifications)
   .omit({ id: true, createdAt: true, updatedAt: true, sentAt: true })
   .extend({
     scheduledFor: z.string().nullable().transform((str) => str ? new Date(str) : null),
+    expiresAt: z.string().nullable().optional().transform((str) => str ? new Date(str) : null),
   });
 export type InsertNotification = z.infer<typeof insertNotificationSchema>;
 export type Notification = typeof notifications.$inferSelect;
@@ -1690,6 +1702,8 @@ export const userLocationsRelations = relations(userLocations, ({ one }) => ({
 
 export const notificationsRelations = relations(notifications, ({ one, many }) => ({
   sender: one(users, { fields: [notifications.senderId], references: [users.id] }),
+  school: one(schools, { fields: [notifications.schoolId], references: [schools.id] }),
+  targetClass: one(schoolClasses, { fields: [notifications.targetClassId], references: [schoolClasses.id] }),
   recipients: many(notificationRecipients),
 }));
 

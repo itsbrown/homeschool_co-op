@@ -50,6 +50,9 @@ import classInclusionsRouter from "./api/class-inclusions";
 import onboardingRouter from "./api/onboarding";
 import membershipAgreementRouter from "./api/membership-agreement";
 import smartTutorialRouter from "./api/smart-tutorial";
+import announcementsRouter from "./api/announcements";
+import calendarEventsRouter from "./api/calendar-events";
+import analyticsRouter from "./api/analytics";
 import archiver from 'archiver';
 import fs from 'fs';
 import path from 'path';
@@ -2739,6 +2742,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/admin/educators", adminEducatorsRouter);
   app.use("/api/parent", parentRouter);
   app.use("/api/custom-forms", customFormsRouter);
+  app.use("/api/announcements", announcementsRouter);
+  app.use("/api/calendar-events", calendarEventsRouter);
+  app.use("/api/analytics", analyticsRouter);
   
   // School Admin Child Management endpoints (with JWT auth for school admins)
   // Delete child as school admin
