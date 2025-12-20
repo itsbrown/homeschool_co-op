@@ -198,7 +198,7 @@ router.post('/ai/resolve-audience', supabaseAuth, requireSchoolContext, async (r
       });
     }
 
-    const classes = await storage.getClassesBySchool(schoolId);
+    const classes = await storage.getClassesBySchoolId(String(schoolId));
     const classNames = classes.map((c: any) => `${c.name} (ID: ${c.id})`).join(', ');
 
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });

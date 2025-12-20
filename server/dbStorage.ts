@@ -1,4 +1,4 @@
-import { eq, and, desc, asc, like, or, sql, lt, gt, isNull, inArray } from 'drizzle-orm';
+import { eq, and, desc, asc, like, or, sql, lt, gt, gte, lte, isNull, inArray } from 'drizzle-orm';
 import { getDb } from './db';
 import { IStorage } from './storage';
 import {
@@ -1586,8 +1586,8 @@ export class DatabaseStorage implements IStorage {
       .where(
         and(
           eq(events.schoolId, schoolId),
-          sql`${events.startDate} >= ${startDate}`,
-          sql`${events.startDate} <= ${endDate}`
+          gte(events.startDate, startDate),
+          lte(events.startDate, endDate)
         )
       )
       .orderBy(asc(events.startDate));
