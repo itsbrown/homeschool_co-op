@@ -209,7 +209,7 @@ export default function CalendarPage() {
       return apiRequest('POST', '/api/calendar-events', values);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/calendar-events/range'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/calendar-events/range'], refetchType: 'all' });
       setIsDialogOpen(false);
       form.reset();
       toast({ title: 'Event created' });
@@ -224,7 +224,7 @@ export default function CalendarPage() {
       return apiRequest('PATCH', `/api/calendar-events/${id}`, values);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/calendar-events/range'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/calendar-events/range'], refetchType: 'all' });
       setIsDialogOpen(false);
       setSelectedEvent(null);
       form.reset();
@@ -240,7 +240,7 @@ export default function CalendarPage() {
       return apiRequest('DELETE', `/api/calendar-events/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/calendar-events/range'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/calendar-events/range'], refetchType: 'all' });
       setIsViewDialogOpen(false);
       setSelectedEvent(null);
       toast({ title: 'Event deleted' });
@@ -322,7 +322,7 @@ export default function CalendarPage() {
               New Event
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-lg">
+          <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{selectedEvent ? 'Edit Event' : 'Create Event'}</DialogTitle>
               <DialogDescription>
