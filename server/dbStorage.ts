@@ -426,7 +426,16 @@ export class DatabaseStorage implements IStorage {
 
   async createClass(classData: InsertClass & { instructorId: number }): Promise<Class> {
     const db = await getDb();
+    
+    // Get the next available ID to avoid sequence conflicts
+    // This is a workaround for out-of-sync database sequences
+    const maxIdResult = await db.select({ maxId: sql<number>`COALESCE(MAX(id), 0)` }).from(classes);
+    const nextId = (maxIdResult[0]?.maxId || 0) + 1;
+    
+    console.log(`📊 Creating class with explicit ID: ${nextId} (max existing: ${maxIdResult[0]?.maxId || 0})`);
+    
     const [newClass] = await db.insert(classes).values({
+      id: nextId,
       ...classData,
       createdAt: new Date(),
       updatedAt: new Date()
