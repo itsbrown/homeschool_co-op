@@ -408,12 +408,24 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
     const totalAmountPaid = BillingCalculationService.calculateTotalPaid(paymentHistory);
     
     // Calculate total amount due by summing actual remaining balances (using FILTERED enrollments)
+    // IMPROVED: Use enrollmentIds for precise matching, with childName as fallback for legacy data
     const classAmountDue = CurrencyUtils.sum(
       filteredEnrollments.map(enrollment => {
-        const enrollmentPayments = paymentHistory.filter(payment => 
-          payment.childName === enrollment.childName &&
-          ['completed', 'succeeded'].includes(payment.status)
-        );
+        const enrollmentPayments = paymentHistory.filter(payment => {
+          // Only consider completed payments
+          if (!['completed', 'succeeded'].includes(payment.status)) {
+            return false;
+          }
+          
+          // PRIMARY: Match by enrollmentIds array (most accurate)
+          const paymentEnrollmentIds = (payment as any).enrollmentIds;
+          if (paymentEnrollmentIds && Array.isArray(paymentEnrollmentIds) && paymentEnrollmentIds.length > 0) {
+            return paymentEnrollmentIds.includes(enrollment.id);
+          }
+          
+          // FALLBACK: Match by childName for legacy payments without enrollmentIds
+          return payment.childName === enrollment.childName;
+        });
         const totalPaid = CurrencyUtils.sum(enrollmentPayments.map(p => p.amount || 0));
         const totalCost = enrollment.totalCost || 0;
         return CurrencyUtils.calculateBalance(totalCost, totalPaid);
@@ -468,10 +480,21 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
         const classInfo = (classes as any[]).find(c => c.id === enrollment.classId);
         
         // Calculate actual payments made for this enrollment
-        const enrollmentPayments = paymentHistory.filter(payment => 
-          payment.childName === enrollment.childName &&
-          ['completed', 'succeeded'].includes(payment.status)
-        );
+        // IMPROVED: Use enrollmentIds for precise matching, with childName as fallback
+        const enrollmentPayments = paymentHistory.filter(payment => {
+          if (!['completed', 'succeeded'].includes(payment.status)) {
+            return false;
+          }
+          
+          // PRIMARY: Match by enrollmentIds array (most accurate)
+          const paymentEnrollmentIds = (payment as any).enrollmentIds;
+          if (paymentEnrollmentIds && Array.isArray(paymentEnrollmentIds) && paymentEnrollmentIds.length > 0) {
+            return paymentEnrollmentIds.includes(enrollment.id);
+          }
+          
+          // FALLBACK: Match by childName for legacy payments without enrollmentIds
+          return payment.childName === enrollment.childName;
+        });
         
         const totalPaid = CurrencyUtils.sum(enrollmentPayments.map(p => p.amount || 0));
         const totalCost = enrollment.totalCost || 0;

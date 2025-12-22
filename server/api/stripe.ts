@@ -75,6 +75,64 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
           error: 'UNAUTHORIZED_CHILDREN'
         });
       }
+      
+      // SERVER-SIDE TOTAL VALIDATION: Verify client total matches sum of item costs
+      // This prevents payment plan miscalculations from incorrect client-sent totals
+      const serverCalculatedItemTotal = items.reduce((sum: number, item: any) => {
+        const itemCost = item.totalCost || item.price || 0;
+        return sum + itemCost;
+      }, 0);
+      
+      const membershipAmount = membership?.amount || 0;
+      const serverCalculatedTotal = serverCalculatedItemTotal + membershipAmount;
+      const clientTotal = total + membershipAmount;
+      
+      // Allow tolerance for discounts (client total should be <= server total)
+      // But flag if client total is significantly different (more than 1% above server total)
+      const discrepancy = clientTotal - serverCalculatedTotal;
+      const discrepancyPercentage = serverCalculatedTotal > 0 
+        ? Math.abs(discrepancy) / serverCalculatedTotal * 100 
+        : 0;
+      
+      if (discrepancy > 0 && discrepancyPercentage > 1) {
+        // Client is trying to pay MORE than items cost - suspicious
+        console.error('🚨 PAYMENT VALIDATION FAILED: Client total exceeds server calculation', {
+          clientTotal,
+          serverCalculatedTotal,
+          discrepancy,
+          discrepancyPercentage: `${discrepancyPercentage.toFixed(2)}%`,
+          items: items.map((item: any) => ({ 
+            classId: item.classId, 
+            childName: item.childName, 
+            totalCost: item.totalCost 
+          })),
+          userEmail
+        });
+        return res.status(400).json({
+          message: 'Payment total does not match cart items. Please refresh your cart and try again.',
+          error: 'TOTAL_MISMATCH'
+        });
+      }
+      
+      // Log if client total is significantly LESS than server total (heavy discounts applied)
+      if (discrepancy < 0 && discrepancyPercentage > 50) {
+        console.warn('⚠️ PAYMENT AUDIT: Large discount applied', {
+          clientTotal,
+          serverCalculatedTotal,
+          discountApplied: Math.abs(discrepancy),
+          discrepancyPercentage: `${discrepancyPercentage.toFixed(2)}%`,
+          userEmail,
+          discounts: discounts || {}
+        });
+      }
+      
+      console.log('✅ Payment total validated:', {
+        clientTotal,
+        serverCalculatedTotal,
+        itemTotal: serverCalculatedItemTotal,
+        membershipAmount,
+        discountApplied: serverCalculatedTotal - clientTotal
+      });
     }
 
     // Create detailed description for payment

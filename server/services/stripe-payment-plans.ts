@@ -205,33 +205,60 @@ export class StripePaymentPlanService {
     }
 
     // Create scheduled payments for remaining phases (if any)
+    // IMPORTANT: Create a scheduled payment for EACH enrollment to ensure proper balance tracking
     const scheduledPayments = [];
+    const enrollmentCount = data.enrollmentIds.length;
+    
     for (let i = 1; i < phases.length; i++) {
       const phase = phases[i];
-      const scheduledPayment = await this.storage.createScheduledPayment({
-        schoolId: schoolId,
-        enrollmentId: data.enrollmentIds[0], // Use first enrollment as primary reference
-        parentId: parentUser.id,
-        parentEmail: data.parentEmail,
-        amount: phase.amount,
-        currency: 'usd',
-        scheduledDate: phase.dueDate,
-        frequency: 'one_time' as const,
-        installmentNumber: phase.installmentNumber,
-        totalInstallments: phases.length,
-        status: 'pending' as const,
-        stripePaymentIntentId: null,
-        processedAt: null,
-        failureReason: null,
-        retryCount: 0,
-        metadata: {
-          enrollmentIds: data.enrollmentIds,
-          paymentPlan: data.paymentPlan,
-          description: phase.description
+      
+      // Split the phase amount proportionally across all enrollments
+      // This ensures each child's enrollment gets credited when payment is made
+      const baseAmountPerEnrollment = Math.floor(phase.amount / enrollmentCount);
+      const remainder = phase.amount % enrollmentCount;
+      
+      for (let j = 0; j < enrollmentCount; j++) {
+        const enrollmentId = data.enrollmentIds[j];
+        // Add remainder to first enrollment to ensure total matches exactly
+        const enrollmentAmount = baseAmountPerEnrollment + (j === 0 ? remainder : 0);
+        
+        const scheduledPayment = await this.storage.createScheduledPayment({
+          schoolId: schoolId,
+          enrollmentId: enrollmentId,
+          parentId: parentUser.id,
+          parentEmail: data.parentEmail,
+          amount: enrollmentAmount,
+          currency: 'usd',
+          scheduledDate: phase.dueDate,
+          frequency: 'one_time' as const,
+          installmentNumber: phase.installmentNumber,
+          totalInstallments: phases.length,
+          status: 'pending' as const,
+          stripePaymentIntentId: null,
+          processedAt: null,
+          failureReason: null,
+          retryCount: 0,
+          metadata: {
+            enrollmentIds: data.enrollmentIds,
+            paymentPlan: data.paymentPlan,
+            description: phase.description,
+            enrollmentIndex: j,
+            totalEnrollments: enrollmentCount,
+            isProportionalSplit: enrollmentCount > 1
+          }
+        });
+        scheduledPayments.push(scheduledPayment);
+        
+        if (enrollmentCount > 1) {
+          console.log(`📅 Scheduled payment ${phase.installmentNumber} for enrollment ${enrollmentId}: ${CurrencyUtils.toDisplay(enrollmentAmount)} due ${phase.dueDate.toLocaleDateString()}`);
         }
-      });
-      scheduledPayments.push(scheduledPayment);
-      console.log(`📅 Scheduled payment ${phase.installmentNumber}: ${CurrencyUtils.toDisplay(phase.amount)} due ${phase.dueDate.toLocaleDateString()}`);
+      }
+      
+      if (enrollmentCount === 1) {
+        console.log(`📅 Scheduled payment ${phase.installmentNumber}: ${CurrencyUtils.toDisplay(phase.amount)} due ${phase.dueDate.toLocaleDateString()}`);
+      } else {
+        console.log(`📅 Scheduled payment ${phase.installmentNumber}: ${CurrencyUtils.toDisplay(phase.amount)} split across ${enrollmentCount} enrollments`);
+      }
     }
 
     // Update enrollments with PaymentIntent reference
