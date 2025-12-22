@@ -24,6 +24,7 @@ import {
   EducatorLoadingState, 
   EducatorErrorState 
 } from '@/components/educator/EducatorErrorBoundary';
+import { AttendanceTracker } from '@/components/educator/AttendanceTracker';
 
 interface ClassSession {
   id: number;
@@ -286,6 +287,14 @@ function ActiveSessionContent({ sessionId }: { sessionId: number }) {
             )}
           </CardContent>
         </Card>
+      )}
+
+      {(isInProgress || isCompleted) && (
+        <AttendanceTracker 
+          sessionId={sessionId} 
+          isSessionActive={isInProgress}
+          schoolId={session.schoolId}
+        />
       )}
 
       <AlertDialog open={showEndDialog} onOpenChange={setShowEndDialog}>

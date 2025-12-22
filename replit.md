@@ -6,6 +6,27 @@ The ASA Learning Platform is an adaptive learning application for the American S
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 
+## Development Checklist
+
+### Pre-Development (Before Writing Code)
+1. **Check LSP errors** - Fix any existing diagnostics in affected files before adding new code
+2. **Read related files** - Study existing patterns in similar components/routes/storage methods
+3. **Trace the data flow** - Map the path: schema → storage → API → frontend
+4. **Identify reusables** - Look for existing components, utilities, and hooks before creating new ones
+5. **Verify types** - Ensure schema types in `shared/schema.ts` support the new feature
+
+### During Development
+1. **Follow existing patterns** - Match naming conventions, error handling, and code style
+2. **Build incrementally** - Complete one piece, verify it works, then add the next
+3. **Use proper typing** - Leverage Zod validation at API boundaries
+
+### Post-Development (Before Marking Complete)
+1. **Run architect review** - Use `include_git_diff: true` to review all changes
+2. **Run end-to-end tests** - Use testing tool for user-facing changes
+3. **Verify no regressions** - Check that related functionality still works
+4. **Clean up** - Remove any debugging code, console.logs, or commented-out code
+5. **Update documentation** - Add any new architectural decisions to this file
+
 ## System Architecture
 ### Core Design Principles
 The platform prioritizes scalability, security, and user experience, incorporating role-based access control, AI-driven content generation, a comprehensive payment system, and multi-tenant security for data isolation.
@@ -55,7 +76,19 @@ The platform prioritizes scalability, security, and user experience, incorporati
 -   **AI Smart Tutorial System**: Conversational AI guidance using Anthropic Claude that provides context-aware help to parents. Features rate limiting, conversation truncation, dynamic UI element highlighting, and page-specific suggestions.
 
 ### Educator Dashboard
-The Educator Dashboard provides educators/mentors with tools to manage their classes, track attendance, view lesson plans, and log their work hours. It integrates with the existing Daily Flow system for lesson planning. Key features include: Educator Session MVP (view classes, start/end sessions), Admin Tools & Planning (manage schedules, audit trail), Communication & Attendance (attendance tracking, parent messaging, notifications), Academic Features (gradebook, resource sharing), Scheduling & Integration (calendar, alerts), and Analytics & Security (dashboards, 2FA, compliance).
+The Educator Dashboard provides educators/mentors with tools to manage their classes, track attendance, view lesson plans, and log their work hours. It integrates with the existing Daily Flow system for lesson planning.
+
+**Completed Features:**
+- Educator Session MVP (view classes, start/end sessions, daily flow integration)
+- Admin Tools & Planning (manage schedules, audit trail, weekly calendar, my hours)
+- Session Attendance Tracking UI (mark students present/absent/late/excused, bulk actions, notes)
+
+**Planned Features:**
+- Class-specific parent messaging with admin approval
+- Notification system for educators
+- Academic features (gradebook, resource sharing)
+- Scheduling & Integration (calendar, alerts)
+- Analytics & Security (dashboards, 2FA, compliance)
 
 ## External Dependencies
 -   **Supabase**: Authentication (OAuth).
