@@ -447,19 +447,58 @@ router.post('/confirm', async (req: any, res) => {
 
     console.log(`📝 Confirming ${idsToConfirm.length} enrollments:`, idsToConfirm);
 
-    // Calculate payment per enrollment (proportional split)
     const paymentAmount = paymentIntent.amount;
-    const paymentPerEnrollment = Math.round(paymentAmount / idsToConfirm.length);
+    console.log(`💰 Payment amount: ${paymentAmount} cents`);
     
-    console.log(`💰 Payment amount: ${paymentAmount} cents, per enrollment: ${paymentPerEnrollment} cents`);
+    // Calculate proportional payment allocation based on each enrollment's outstanding balance
+    // This ensures larger balances get proportionally more of the payment
+    const totalOutstanding = enrollmentsToConfirm.reduce((sum: number, e: any) => {
+      const outstanding = Math.max(0, (e.totalCost || 0) - (e.totalPaid || 0));
+      return sum + outstanding;
+    }, 0);
+    
+    // Pre-calculate allocations to ensure they sum exactly to paymentAmount
+    const allocations: { enrollmentId: number; allocation: number }[] = [];
+    let allocatedTotal = 0;
+    
+    for (let i = 0; i < enrollmentsToConfirm.length; i++) {
+      const enrollment = enrollmentsToConfirm[i];
+      const outstanding = Math.max(0, (enrollment.totalCost || 0) - (enrollment.totalPaid || 0));
+      
+      let allocation: number;
+      if (totalOutstanding > 0) {
+        // Proportional allocation based on outstanding balance
+        allocation = Math.floor((outstanding / totalOutstanding) * paymentAmount);
+      } else if (enrollmentsToConfirm.length > 0) {
+        // If all enrollments are paid off, split evenly (edge case)
+        allocation = Math.floor(paymentAmount / enrollmentsToConfirm.length);
+      } else {
+        allocation = 0;
+      }
+      
+      allocations.push({ enrollmentId: enrollment.id, allocation });
+      allocatedTotal += allocation;
+    }
+    
+    // Distribute any remainder cents to the first enrollment(s) to ensure exact match
+    let remainder = paymentAmount - allocatedTotal;
+    for (let i = 0; remainder > 0 && i < allocations.length; i++) {
+      allocations[i].allocation += 1;
+      remainder -= 1;
+    }
+    
+    console.log(`📊 Payment allocations:`, allocations);
 
     // Update each enrollment with correct balance calculation
     // CRITICAL FIX: Don't blindly set remainingBalance to 0 - calculate correctly!
     await db.transaction(async (tx: any) => {
       for (const enrollment of enrollmentsToConfirm) {
+        const allocationRecord = allocations.find(a => a.enrollmentId === enrollment.id);
+        const paymentForThisEnrollment = allocationRecord?.allocation || 0;
+        
         const totalCost = enrollment.totalCost || 0;
         const currentPaid = enrollment.totalPaid || 0;
-        const newTotalPaid = currentPaid + paymentPerEnrollment;
+        const newTotalPaid = currentPaid + paymentForThisEnrollment;
         const newRemainingBalance = Math.max(0, totalCost - newTotalPaid);
         
         // Determine correct payment status based on actual balance
@@ -482,7 +521,7 @@ router.post('/confirm', async (req: any, res) => {
           })
           .where(eq(programEnrollments.id, enrollment.id));
         
-        console.log(`✅ Updated enrollment ${enrollment.id}: paid=${newTotalPaid}, remaining=${newRemainingBalance}, status=${newPaymentStatus}`);
+        console.log(`✅ Updated enrollment ${enrollment.id}: allocated=${paymentForThisEnrollment}, paid=${newTotalPaid}, remaining=${newRemainingBalance}, status=${newPaymentStatus}`);
       }
     });
 
