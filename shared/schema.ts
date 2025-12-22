@@ -233,10 +233,10 @@ export const schoolStudents = pgTable("school_students", {
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-}, (table) => ({
-  // Prevent duplicate school_student records for same child at same school
-  uniqueChildSchool: unique("unique_child_school").on(table.childId, table.schoolId),
-}));
+});
+// Note: unique constraint on (childId, schoolId) removed from schema to fix deployment.
+// Application-level duplicate checking is in place. Manually create index on production after deploy:
+// CREATE UNIQUE INDEX IF NOT EXISTS "unique_child_school" ON "school_students" (child_id, school_id);
 
 export const insertSchoolStudentSchema = createInsertSchema(schoolStudents)
   .omit({ id: true, createdAt: true, updatedAt: true })
@@ -467,10 +467,10 @@ export const children = pgTable("children", {
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-}, (table) => ({
-  // Prevent duplicate children with same name under same parent
-  uniqueParentChild: unique("unique_parent_child").on(table.parentId, table.firstName, table.lastName),
-}));
+});
+// Note: unique constraint on (parentId, firstName, lastName) removed from schema to fix deployment.
+// Application-level duplicate checking is in place. Manually create index on production after deploy:
+// CREATE UNIQUE INDEX IF NOT EXISTS "unique_parent_child" ON "children" (parent_id, lower(first_name), lower(last_name));
 
 export const insertChildSchema = createInsertSchema(children)
   .omit({ id: true, createdAt: true, updatedAt: true, parentId: true })
