@@ -262,10 +262,34 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
               isVariantPricedClass = true;
               
               if (item.variantId) {
+                // Client provided a variantId - validate it
                 const variant = schedule.variants.find((v: any) => v.id === item.variantId);
                 if (variant && typeof variant.price === 'number') {
                   authoritativePrice = variant.price;
                   variantFound = true;
+                }
+              } else {
+                // LEGACY SUPPORT: Enrollment has no variantId but class has variants
+                // First, try to find default-variant
+                const defaultVariant = schedule.variants.find((v: any) => v.id === 'default-variant');
+                if (defaultVariant && typeof defaultVariant.price === 'number') {
+                  authoritativePrice = defaultVariant.price;
+                  variantFound = true;
+                  console.log('🔄 Legacy enrollment: defaulting to default-variant price', {
+                    classId: item.classId,
+                    variantPrice: defaultVariant.price,
+                    variantName: defaultVariant.name
+                  });
+                } else if (schedule.variants[0] && typeof schedule.variants[0].price === 'number') {
+                  // Fall back to first variant if no default-variant exists
+                  authoritativePrice = schedule.variants[0].price;
+                  variantFound = true;
+                  console.log('🔄 Legacy enrollment: defaulting to first variant price', {
+                    classId: item.classId,
+                    variantId: schedule.variants[0].id,
+                    variantPrice: schedule.variants[0].price,
+                    variantName: schedule.variants[0].name
+                  });
                 }
               }
             }
