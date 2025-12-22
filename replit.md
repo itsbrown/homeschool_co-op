@@ -52,7 +52,7 @@ The platform prioritizes scalability, security, and user experience, incorporati
 -   **Multi-Role System**: Supports users holding multiple roles with dynamic, school-context-restricted role-switching.
 -   **School Branding System**: Allows school administrators to upload and display school logos.
 -   **Membership Management System**: Admin interface for managing annual membership fees and enrollment validation.
--   **Payment System**: Stripe-only system with subscription schedules, webhooks, smart cart logic, automated refunds, and payment reminders.
+-   **Payment System**: Stripe-only system with subscription schedules, webhooks, smart cart logic, automated refunds, and payment reminders. **SECURITY (Dec 2025)**: Server-side authoritative pricing - all payment amounts are calculated from database lookups, never trusted from client. Includes strict validation for class prices (variant-aware), membership fees (discount-aware), and unified validation blocking any total mismatch.
 -   **Cart System**: TanStack Query-based cart implementation with API-first state management and race condition prevention.
 -   **Discount Systems**: Database-managed Free After Threshold Discount System.
 -   **Free Enrollment Admin Approval**: Enrollments resulting in a $0 total require admin approval.

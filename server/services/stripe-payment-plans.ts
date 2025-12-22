@@ -206,25 +206,59 @@ export class StripePaymentPlanService {
 
     // Create scheduled payments for remaining phases (if any)
     // IMPORTANT: Create a scheduled payment for EACH enrollment to ensure proper balance tracking
+    // Split amounts proportionally based on each enrollment's actual cost (not evenly)
     const scheduledPayments = [];
     const enrollmentCount = data.enrollmentIds.length;
+    
+    // Fetch all enrollment data to calculate cost-weighted proportions
+    const enrollmentDataList: Array<{ id: number; totalCost: number }> = [];
+    let totalEnrollmentCost = 0;
+    
+    for (const enrollmentId of data.enrollmentIds) {
+      const enrollmentData = await this.storage.getEnrollmentById(enrollmentId);
+      if (enrollmentData) {
+        const cost = enrollmentData.totalCost || 0;
+        enrollmentDataList.push({ id: enrollmentId, totalCost: cost });
+        totalEnrollmentCost += cost;
+      }
+    }
+    
+    // Calculate each enrollment's proportion of the total cost
+    // If total is 0, fall back to equal split
+    const enrollmentProportions = enrollmentDataList.map(e => ({
+      id: e.id,
+      proportion: totalEnrollmentCost > 0 ? e.totalCost / totalEnrollmentCost : 1 / enrollmentCount,
+      totalCost: e.totalCost
+    }));
+    
+    console.log('📊 Enrollment cost proportions:', enrollmentProportions.map(e => ({
+      id: e.id,
+      totalCost: CurrencyUtils.toDisplay(e.totalCost),
+      proportion: `${(e.proportion * 100).toFixed(1)}%`
+    })));
     
     for (let i = 1; i < phases.length; i++) {
       const phase = phases[i];
       
-      // Split the phase amount proportionally across all enrollments
-      // This ensures each child's enrollment gets credited when payment is made
-      const baseAmountPerEnrollment = Math.floor(phase.amount / enrollmentCount);
-      const remainder = phase.amount % enrollmentCount;
+      // Split the phase amount proportionally based on each enrollment's cost share
+      let allocatedAmount = 0;
       
-      for (let j = 0; j < enrollmentCount; j++) {
-        const enrollmentId = data.enrollmentIds[j];
-        // Add remainder to first enrollment to ensure total matches exactly
-        const enrollmentAmount = baseAmountPerEnrollment + (j === 0 ? remainder : 0);
+      for (let j = 0; j < enrollmentProportions.length; j++) {
+        const enrollment = enrollmentProportions[j];
+        let enrollmentAmount: number;
+        
+        if (j === enrollmentProportions.length - 1) {
+          // Last enrollment gets the remainder to ensure exact total
+          enrollmentAmount = phase.amount - allocatedAmount;
+        } else {
+          // Calculate proportional amount and round
+          enrollmentAmount = Math.round(phase.amount * enrollment.proportion);
+          allocatedAmount += enrollmentAmount;
+        }
         
         const scheduledPayment = await this.storage.createScheduledPayment({
           schoolId: schoolId,
-          enrollmentId: enrollmentId,
+          enrollmentId: enrollment.id,
           parentId: parentUser.id,
           parentEmail: data.parentEmail,
           amount: enrollmentAmount,
@@ -244,20 +278,22 @@ export class StripePaymentPlanService {
             description: phase.description,
             enrollmentIndex: j,
             totalEnrollments: enrollmentCount,
-            isProportionalSplit: enrollmentCount > 1
+            isProportionalSplit: enrollmentCount > 1,
+            proportion: enrollment.proportion,
+            enrollmentTotalCost: enrollment.totalCost
           }
         });
         scheduledPayments.push(scheduledPayment);
         
         if (enrollmentCount > 1) {
-          console.log(`📅 Scheduled payment ${phase.installmentNumber} for enrollment ${enrollmentId}: ${CurrencyUtils.toDisplay(enrollmentAmount)} due ${phase.dueDate.toLocaleDateString()}`);
+          console.log(`📅 Scheduled payment ${phase.installmentNumber} for enrollment ${enrollment.id}: ${CurrencyUtils.toDisplay(enrollmentAmount)} (${(enrollment.proportion * 100).toFixed(1)}% of phase) due ${phase.dueDate.toLocaleDateString()}`);
         }
       }
       
       if (enrollmentCount === 1) {
         console.log(`📅 Scheduled payment ${phase.installmentNumber}: ${CurrencyUtils.toDisplay(phase.amount)} due ${phase.dueDate.toLocaleDateString()}`);
       } else {
-        console.log(`📅 Scheduled payment ${phase.installmentNumber}: ${CurrencyUtils.toDisplay(phase.amount)} split across ${enrollmentCount} enrollments`);
+        console.log(`📅 Scheduled payment ${phase.installmentNumber}: ${CurrencyUtils.toDisplay(phase.amount)} split proportionally across ${enrollmentCount} enrollments`);
       }
     }
 

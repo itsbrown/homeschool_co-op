@@ -6,6 +6,7 @@ import { supabaseAuth } from '../middleware/supabase-auth';
 import { requireSchoolContext } from '../middleware/require-school-context';
 import { getStripeClient, getStripePublishableKey } from '../config/stripe';
 import { calculateMembershipDiscount } from '../utils/membership';
+import { CurrencyUtils } from '@shared/currency-utils';
 
 const router = Router();
 
@@ -62,6 +63,134 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
       });
     }
 
+    // Server-calculated totals - AUTHORITATIVE values to be used for payment
+    // These will be populated from database lookups, not client-sent values
+    let authoritativeItemTotal = 0;
+    let authoritativeMembershipAmount = 0;
+    
+    // MEMBERSHIP VALIDATION: Look up authoritative membership fee from parent's school
+    // This runs ALWAYS (even for membership-only checkouts) to ensure server-side validation
+    // Do NOT trust client-sent membership - derive from authenticated user's school
+    // ALSO calculate applicable discounts to allow discounted payments
+    const parentForMembership = await storage.getUserByEmail(userEmail);
+    let authoritativeMembershipFull = 0; // Full price before discounts
+    let authoritativeMembershipDiscounted = 0; // Price after discounts (may equal full)
+    
+    // Calculate membership amounts whenever:
+    // 1. Membership is required by school (even if client didn't include it)
+    // 2. Client is claiming to pay membership (even if optional)
+    const clientClaimsMembership = (membership?.amount || 0) > 0;
+    
+    if (parentForMembership?.schoolId) {
+      const schoolForMembership = await storage.getSchool(parentForMembership.schoolId);
+      const membershipRequired = schoolForMembership?.membershipRequired || false;
+      
+      // Calculate amounts if membership is required OR if client wants to purchase
+      if (membershipRequired || clientClaimsMembership) {
+        // Check if parent already has active membership for this year
+        const existingMemberships = await storage.getMembershipEnrollmentsByParentId(parentForMembership.id);
+        const currentYear = new Date().getFullYear();
+        const hasActiveMembership = existingMemberships?.some((m: any) => 
+          m.membershipYear === currentYear && m.status === 'enrolled'
+        );
+        
+        // Only calculate fee if not already paid
+        if (!hasActiveMembership) {
+          // Check if fee is configured
+          if (!schoolForMembership?.membershipFeeAmount || schoolForMembership.membershipFeeAmount <= 0) {
+            // Only error if required - optional memberships without fee config are just skipped
+            if (membershipRequired) {
+              console.error('🚨 PAYMENT VALIDATION FAILED: Membership required but fee not configured', {
+                schoolId: parentForMembership.schoolId,
+                membershipRequired: true,
+                membershipFeeAmount: schoolForMembership?.membershipFeeAmount,
+                userEmail
+              });
+              return res.status(400).json({
+                message: 'Membership fee configuration error. Please contact the school administrator.',
+                error: 'MEMBERSHIP_FEE_NOT_CONFIGURED'
+              });
+            } else if (clientClaimsMembership) {
+              // Client claims membership but school has no fee configured
+              console.error('🚨 PAYMENT VALIDATION FAILED: Client claims membership but school has no fee', {
+                schoolId: parentForMembership.schoolId,
+                clientClaimedAmount: membership?.amount,
+                userEmail
+              });
+              return res.status(400).json({
+                message: 'This school does not have a membership fee configured.',
+                error: 'NO_MEMBERSHIP_FEE'
+              });
+            }
+          } else {
+            authoritativeMembershipFull = schoolForMembership.membershipFeeAmount;
+            
+            // Calculate applicable discounts server-side
+            const discountResult = await calculateMembershipDiscount(
+              parentForMembership.schoolId,
+              parentForMembership.id,
+              schoolForMembership.membershipFeeAmount
+            );
+            authoritativeMembershipDiscounted = discountResult.finalAmount;
+            
+            console.log('🎫 Membership discount calculation:', {
+              fullAmount: authoritativeMembershipFull,
+              discountedAmount: authoritativeMembershipDiscounted,
+              discountApplied: discountResult.appliedDiscounts.length > 0,
+              membershipRequired,
+              clientClaimsMembership,
+              userEmail
+            });
+          }
+        } else if (clientClaimsMembership) {
+          // Client claims membership but already has active one - this is invalid
+          console.warn('⚠️ Client claims membership but already has active membership', {
+            userEmail,
+            clientClaimedAmount: membership?.amount
+          });
+          // Don't error - just ignore the claim and set authoritative to 0
+          authoritativeMembershipFull = 0;
+          authoritativeMembershipDiscounted = 0;
+        }
+      }
+    }
+    
+    // Determine which authoritative amount to use based on what client is paying
+    // Client can pay EITHER full price OR discounted price (both are valid)
+    const clientMembershipClaim = membership?.amount || 0;
+    if (clientMembershipClaim > 0) {
+      // Client is claiming to pay membership - validate it matches either valid amount
+      if (clientMembershipClaim === authoritativeMembershipFull) {
+        authoritativeMembershipAmount = authoritativeMembershipFull;
+      } else if (clientMembershipClaim === authoritativeMembershipDiscounted) {
+        authoritativeMembershipAmount = authoritativeMembershipDiscounted;
+      } else {
+        // Client amount doesn't match either valid option
+        console.error('🚨 PAYMENT VALIDATION FAILED: Membership amount mismatch', {
+          clientMembershipClaim,
+          authoritativeMembershipFull,
+          authoritativeMembershipDiscounted,
+          userEmail
+        });
+        return res.status(400).json({
+          message: 'Membership fee amount does not match expected amount. Please refresh your cart.',
+          error: 'MEMBERSHIP_AMOUNT_MISMATCH'
+        });
+      }
+    } else if (authoritativeMembershipFull > 0) {
+      // Membership is required but client didn't include it - validation will fail later
+      // Set to full amount for logging purposes
+      authoritativeMembershipAmount = authoritativeMembershipFull;
+    }
+    
+    console.log('🎫 Authoritative membership amount calculated:', {
+      authoritativeMembershipAmount,
+      authoritativeMembershipFull,
+      authoritativeMembershipDiscounted,
+      clientSentMembership: clientMembershipClaim,
+      userEmail
+    });
+    
     // Fetch children for validation and later use (only if there are items)
     let children: any[] = [];
     if (hasItems) {
@@ -76,19 +205,125 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
         });
       }
       
-      // SERVER-SIDE TOTAL VALIDATION: Verify client total matches sum of item costs
-      // This prevents payment plan miscalculations from incorrect client-sent totals
-      const serverCalculatedItemTotal = items.reduce((sum: number, item: any) => {
-        const itemCost = item.totalCost || item.price || 0;
-        return sum + itemCost;
-      }, 0);
+      // SERVER-SIDE TOTAL VALIDATION: Look up ACTUAL prices from database
+      // Do NOT trust client-sent totalCost - they can be manipulated
+      let serverCalculatedItemTotal = 0;
+      const pricingMismatches: Array<{ classId: number; variantId: string | null; clientPrice: number; serverPrice: number }> = [];
       
-      const membershipAmount = membership?.amount || 0;
-      const serverCalculatedTotal = serverCalculatedItemTotal + membershipAmount;
-      const clientTotal = total + membershipAmount;
+      for (const item of items) {
+        const classData = await storage.getClassById(item.classId);
+        if (!classData) {
+          console.error('🚨 Class not found in database:', item.classId);
+          return res.status(400).json({
+            message: 'One or more classes in your cart are no longer available.',
+            error: 'CLASS_NOT_FOUND'
+          });
+        }
+        
+        // Get authoritative price from database
+        // Check if class uses variant pricing (has variants in schedule)
+        let authoritativePrice = 0;
+        let isVariantPricedClass = false;
+        let variantFound = false;
+        
+        if (classData.schedule) {
+          try {
+            const schedule = typeof classData.schedule === 'string' 
+              ? JSON.parse(classData.schedule) 
+              : classData.schedule;
+            
+            if (schedule.variants && Array.isArray(schedule.variants) && schedule.variants.length > 0) {
+              isVariantPricedClass = true;
+              
+              if (item.variantId) {
+                const variant = schedule.variants.find((v: any) => v.id === item.variantId);
+                if (variant && typeof variant.price === 'number') {
+                  authoritativePrice = variant.price;
+                  variantFound = true;
+                }
+              }
+            }
+          } catch (e) {
+            console.warn('⚠️ Failed to parse class schedule:', {
+              classId: item.classId,
+              error: e
+            });
+          }
+        }
+        
+        // For variant-priced classes, REQUIRE a valid variant match - don't fall back to base price
+        if (isVariantPricedClass && !variantFound) {
+          console.error('🚨 PAYMENT VALIDATION FAILED: Invalid or missing variant for variant-priced class', {
+            classId: item.classId,
+            clientVariantId: item.variantId,
+            className: classData.title,
+            userEmail
+          });
+          return res.status(400).json({
+            message: 'Invalid class variant selected. Please refresh your cart and select a valid time slot.',
+            error: 'INVALID_VARIANT'
+          });
+        }
+        
+        // Only use base class price if it's NOT a variant-priced class
+        if (!isVariantPricedClass) {
+          authoritativePrice = classData.price || 0;
+        }
+        
+        // CRITICAL: Reject if authoritative price is 0 or undefined for any class
+        // This prevents zero-priced enrollments from slipping through
+        if (authoritativePrice <= 0) {
+          console.error('🚨 PAYMENT VALIDATION FAILED: Class has no valid price in database', {
+            classId: item.classId,
+            isVariantPricedClass,
+            variantId: item.variantId,
+            className: classData.title,
+            basePriceInDb: classData.price,
+            userEmail
+          });
+          return res.status(400).json({
+            message: 'Unable to process payment. Class pricing is not configured correctly. Please contact support.',
+            error: 'INVALID_CLASS_PRICE'
+          });
+        }
+        
+        const clientSentPrice = item.totalCost || item.price || 0;
+        
+        // Log mismatches for investigation
+        const priceDifference = Math.abs(clientSentPrice - authoritativePrice);
+        const priceDiscrepancyPercent = authoritativePrice > 0 
+          ? (priceDifference / authoritativePrice) * 100 
+          : (clientSentPrice > 0 ? 100 : 0);
+        
+        if (priceDiscrepancyPercent > 5) {
+          pricingMismatches.push({
+            classId: item.classId,
+            variantId: item.variantId || null,
+            clientPrice: clientSentPrice,
+            serverPrice: authoritativePrice
+          });
+        }
+        
+        // Use the DATABASE price, not client-sent price
+        serverCalculatedItemTotal += authoritativePrice;
+      }
       
-      // Allow tolerance for discounts (client total should be <= server total)
-      // But flag if client total is significantly different (more than 1% above server total)
+      // Log pricing mismatches for investigation
+      if (pricingMismatches.length > 0) {
+        console.warn('⚠️ PRICING AUDIT: Client prices differ from database', {
+          mismatches: pricingMismatches,
+          userEmail,
+          note: 'Using database prices for validation - client prices logged for audit'
+        });
+      }
+      
+      // Use the already-calculated authoritativeMembershipAmount from earlier validation
+      // (Membership validation runs BEFORE item validation to ensure it covers membership-only checkouts)
+      const serverCalculatedTotal = serverCalculatedItemTotal + authoritativeMembershipAmount;
+      const clientTotal = total + (membership?.amount || 0);
+      
+      // CRITICAL: Validate client total against server-calculated total
+      // Prevents both overpayment attempts AND underpayment manipulation
       const discrepancy = clientTotal - serverCalculatedTotal;
       const discrepancyPercentage = serverCalculatedTotal > 0 
         ? Math.abs(discrepancy) / serverCalculatedTotal * 100 
@@ -114,26 +349,114 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
         });
       }
       
-      // Log if client total is significantly LESS than server total (heavy discounts applied)
-      if (discrepancy < 0 && discrepancyPercentage > 50) {
-        console.warn('⚠️ PAYMENT AUDIT: Large discount applied', {
+      // CRITICAL FIX: Block ANY underpayment manipulation (Erica Wilson bug)
+      // STRICT VALIDATION: Client total MUST match server total exactly
+      // Do NOT allow any tolerance - no discounts without explicit server-side discount validation
+      if (discrepancy < 0 && discrepancyPercentage > 0.01) {
+        // Block ANY underpayment - no exceptions
+        console.error('🚨 PAYMENT VALIDATION FAILED: Client total does not match server calculation', {
           clientTotal,
           serverCalculatedTotal,
-          discountApplied: Math.abs(discrepancy),
-          discrepancyPercentage: `${discrepancyPercentage.toFixed(2)}%`,
+          underpaymentAmount: Math.abs(discrepancy),
+          underpaymentPercentage: `${discrepancyPercentage.toFixed(2)}%`,
+          clientSentDiscounts: discounts, // Log for audit but do NOT trust
+          items: items.map((item: any) => ({ 
+            classId: item.classId, 
+            childName: item.childName, 
+            totalCost: item.totalCost 
+          })),
           userEmail,
-          discounts: discounts || {}
+          securityNote: 'STRICT validation - client total MUST match server total'
+        });
+        return res.status(400).json({
+          message: 'Payment total does not match expected amount. Please refresh your cart and try again.',
+          error: 'TOTAL_MISMATCH_UNDERPAYMENT'
         });
       }
       
-      console.log('✅ Payment total validated:', {
+      console.log('✅ Payment total validated (STRICT):', {
         clientTotal,
         serverCalculatedTotal,
         itemTotal: serverCalculatedItemTotal,
-        membershipAmount,
-        discountApplied: serverCalculatedTotal - clientTotal
+        membershipAmount: authoritativeMembershipAmount,
+        match: clientTotal === serverCalculatedTotal ? 'EXACT' : 'MINOR_ROUNDING'
+      });
+      
+      // CRITICAL: Store server-calculated values for use in payment creation
+      // These are the AUTHORITATIVE amounts that must be used, not client-sent values
+      authoritativeItemTotal = serverCalculatedItemTotal;
+      // authoritativeMembershipAmount is already set earlier (outside hasItems block)
+    } else {
+      // MEMBERSHIP-ONLY CHECKOUT: authoritativeItemTotal stays 0
+      // authoritativeMembershipAmount was already set at lines 74-113
+    }
+    
+    // ================================================================
+    // UNIFIED STRICT VALIDATION - Runs for ALL checkout paths
+    // This ensures no checkout path can bypass validation
+    // ================================================================
+    const finalClientTotal = total + (membership?.amount || 0);
+    const finalServerTotal = authoritativeItemTotal + authoritativeMembershipAmount;
+    const finalDiscrepancy = finalClientTotal - finalServerTotal;
+    
+    console.log('🔒 UNIFIED STRICT VALIDATION:', {
+      finalClientTotal,
+      finalServerTotal,
+      authoritativeItemTotal,
+      authoritativeMembershipAmount,
+      finalDiscrepancy,
+      hasItems,
+      userEmail
+    });
+    
+    // CASE 1: Server total is 0 but client claims non-zero
+    // This is suspicious - client is trying to charge for something server doesn't recognize
+    if (finalServerTotal === 0 && finalClientTotal !== 0) {
+      console.error('🚨 PAYMENT VALIDATION FAILED: Client claims non-zero but server calculates $0', {
+        finalClientTotal,
+        finalServerTotal,
+        clientSentTotal: total,
+        clientSentMembership: membership?.amount || 0,
+        userEmail,
+        securityNote: 'Server calculated $0 - rejecting non-zero client total'
+      });
+      return res.status(400).json({
+        message: 'Payment total does not match expected amount. Please refresh your cart and try again.',
+        error: 'ZERO_SERVER_TOTAL_MISMATCH'
       });
     }
+    
+    // CASE 2: Server total is non-zero - check for underpayment/overpayment
+    if (finalServerTotal > 0) {
+      const discrepancyPercentage = Math.abs(finalDiscrepancy) / finalServerTotal * 100;
+      
+      // Reject ANY significant discrepancy (> 0.01% covers minor floating point rounding)
+      if (discrepancyPercentage > 0.01) {
+        console.error('🚨 PAYMENT VALIDATION FAILED: Client total does not match server calculation', {
+          finalClientTotal,
+          finalServerTotal,
+          discrepancy: finalDiscrepancy,
+          discrepancyPercentage: `${discrepancyPercentage.toFixed(2)}%`,
+          authoritativeItemTotal,
+          authoritativeMembershipAmount,
+          clientSentTotal: total,
+          clientSentMembership: membership?.amount || 0,
+          userEmail,
+          securityNote: 'STRICT validation - client total MUST match server total exactly'
+        });
+        return res.status(400).json({
+          message: 'Payment total does not match expected amount. Please refresh your cart and try again.',
+          error: 'UNIFIED_TOTAL_MISMATCH'
+        });
+      }
+    }
+    
+    console.log('✅ UNIFIED STRICT VALIDATION PASSED:', {
+      finalClientTotal,
+      finalServerTotal,
+      match: finalClientTotal === finalServerTotal ? 'EXACT' : 'MINOR_ROUNDING',
+      hasItems
+    });
 
     // Create detailed description for payment
     const uniqueChildren = hasItems ? [...new Set(items.map((item: any) => item.childName))] : [];
@@ -371,10 +694,19 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
 
       console.log('✅ Using enrollments with IDs:', enrollmentIds);
 
-      // Validate membership request if present - use server-derived values only
-      // SECURITY: Do not trust client-provided schoolId/parentUserId - derive from authenticated session
-      const membershipAmount = membership?.amount || 0;
-      const totalWithMembership = total + membershipAmount;
+      // SECURITY: Use server-calculated AUTHORITATIVE values for payment
+      // NEVER use client-sent totals - they can be manipulated
+      const authoritativeTotal = authoritativeItemTotal + authoritativeMembershipAmount;
+      
+      console.log('💰 Using authoritative totals for payment:', {
+        authoritativeItemTotal,
+        authoritativeMembershipAmount,
+        authoritativeTotal,
+        clientSentTotal: total,
+        clientSentMembership: membership?.amount || 0
+      });
+      
+      const totalWithMembership = authoritativeTotal;
       
       // Build secure membership data from server-side validated parent info
       let serverMembership: { 
