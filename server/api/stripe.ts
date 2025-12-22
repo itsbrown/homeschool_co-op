@@ -91,9 +91,10 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
         const existingMemberships = await storage.getMembershipEnrollmentsByParentId(parentForMembership.id);
         const currentYear = new Date().getFullYear();
         
-        // Filter for memberships at the same school and current year with enrolled status
+        // Filter for memberships at the same school with enrolled status
+        // Allow current year OR next year to handle academic year memberships (e.g., 2025-2026 school year stored as "2026")
         const activeMembershipForThisSchool = existingMemberships?.find((m: any) => 
-          m.membershipYear === currentYear && 
+          (m.membershipYear === currentYear || m.membershipYear === currentYear + 1) && 
           m.status === 'enrolled' &&
           m.schoolId === parentForMembership.schoolId
         );
@@ -103,6 +104,7 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
           parentId: parentForMembership.id,
           schoolId: parentForMembership.schoolId,
           currentYear,
+          allowedYears: [currentYear, currentYear + 1],
           totalMemberships: existingMemberships?.length || 0,
           membershipsData: existingMemberships?.map((m: any) => ({
             id: m.id,
@@ -111,6 +113,10 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
             status: m.status
           })),
           hasActiveMembership,
+          activeMembershipFound: activeMembershipForThisSchool ? {
+            id: activeMembershipForThisSchool.id,
+            year: activeMembershipForThisSchool.membershipYear
+          } : null,
           userEmail
         });
         

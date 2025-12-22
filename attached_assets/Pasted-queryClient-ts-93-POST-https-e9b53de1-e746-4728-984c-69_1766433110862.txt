@@ -1,0 +1,193 @@
+queryClient.ts:93  POST https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/api/stripe/create-payment-intent 400 (Bad Request)
+apiRequest @ queryClient.ts:93
+createPaymentIntent @ CartCheckout.tsx:337
+(anonymous) @ CartCheckout.tsx:273
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=b49a287e:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=b49a287e:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=b49a287e:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=b49a287e:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=b49a287e:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=b49a287e:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=b49a287e:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=b49a287e:19416
+commitRoot @ chunk-NFC5BX5N.js?v=b49a287e:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=b49a287e:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=b49a287e:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=b49a287e:18627
+setTimeout
+scheduleFn @ @tanstack_react-query.js?v=b49a287e:555
+flush @ @tanstack_react-query.js?v=b49a287e:569
+batch @ @tanstack_react-query.js?v=b49a287e:587
+dispatch_fn @ @tanstack_react-query.js?v=b49a287e:996
+setData @ @tanstack_react-query.js?v=b49a287e:696
+onSuccess @ @tanstack_react-query.js?v=b49a287e:897
+resolve @ @tanstack_react-query.js?v=b49a287e:456
+Promise.then
+run @ @tanstack_react-query.js?v=b49a287e:498
+start @ @tanstack_react-query.js?v=b49a287e:536
+fetch @ @tanstack_react-query.js?v=b49a287e:926
+executeFetch_fn @ @tanstack_react-query.js?v=b49a287e:2211
+setOptions @ @tanstack_react-query.js?v=b49a287e:1955
+(anonymous) @ @tanstack_react-query.js?v=b49a287e:3032
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=b49a287e:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=b49a287e:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=b49a287e:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=b49a287e:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=b49a287e:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=b49a287e:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=b49a287e:19447
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=b49a287e:18868
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=b49a287e:9119
+commitRootImpl @ chunk-NFC5BX5N.js?v=b49a287e:19432
+commitRoot @ chunk-NFC5BX5N.js?v=b49a287e:19277
+finishConcurrentRender @ chunk-NFC5BX5N.js?v=b49a287e:18805
+performConcurrentWorkOnRoot @ chunk-NFC5BX5N.js?v=b49a287e:18718
+workLoop @ chunk-NFC5BX5N.js?v=b49a287e:197
+flushWork @ chunk-NFC5BX5N.js?v=b49a287e:176
+performWorkUntilDeadline @ chunk-NFC5BX5N.js?v=b49a287e:384Understand this error
+queryClient.ts:158 ❌ API 400: {"message":"Payment total does not match expected amount. Please refresh your cart and try again.","error":"TOTAL_MISMATCH_UNDERPAYMENT"}
+installHook.js:1 Error creating payment intent: Error: 400: {"message":"Payment total does not match expected amount. Please refresh your cart and try again.","error":"TOTAL_MISMATCH_UNDERPAYMENT"}
+    at throwIfResNotOk (queryClient.ts:7:11)
+    at async apiRequest (queryClient.ts:164:5)
+    at async createPaymentIntent (CartCheckout.tsx:337:24)
+overrideMethod @ installHook.js:1
+createPaymentIntent @ CartCheckout.tsx:405
+await in createPaymentIntent
+(anonymous) @ CartCheckout.tsx:273
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=b49a287e:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=b49a287e:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=b49a287e:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=b49a287e:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=b49a287e:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=b49a287e:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=b49a287e:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=b49a287e:19416
+commitRoot @ chunk-NFC5BX5N.js?v=b49a287e:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=b49a287e:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=b49a287e:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=b49a287e:18627
+setTimeout
+scheduleFn @ @tanstack_react-query.js?v=b49a287e:555
+flush @ @tanstack_react-query.js?v=b49a287e:569
+batch @ @tanstack_react-query.js?v=b49a287e:587
+dispatch_fn @ @tanstack_react-query.js?v=b49a287e:996
+setData @ @tanstack_react-query.js?v=b49a287e:696
+onSuccess @ @tanstack_react-query.js?v=b49a287e:897
+resolve @ @tanstack_react-query.js?v=b49a287e:456
+Promise.then
+run @ @tanstack_react-query.js?v=b49a287e:498
+start @ @tanstack_react-query.js?v=b49a287e:536
+fetch @ @tanstack_react-query.js?v=b49a287e:926
+executeFetch_fn @ @tanstack_react-query.js?v=b49a287e:2211
+setOptions @ @tanstack_react-query.js?v=b49a287e:1955
+(anonymous) @ @tanstack_react-query.js?v=b49a287e:3032
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=b49a287e:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=b49a287e:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=b49a287e:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=b49a287e:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=b49a287e:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=b49a287e:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=b49a287e:19447
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=b49a287e:18868
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=b49a287e:9119
+commitRootImpl @ chunk-NFC5BX5N.js?v=b49a287e:19432
+commitRoot @ chunk-NFC5BX5N.js?v=b49a287e:19277
+finishConcurrentRender @ chunk-NFC5BX5N.js?v=b49a287e:18805
+performConcurrentWorkOnRoot @ chunk-NFC5BX5N.js?v=b49a287e:18718
+workLoop @ chunk-NFC5BX5N.js?v=b49a287e:197
+flushWork @ chunk-NFC5BX5N.js?v=b49a287e:176
+performWorkUntilDeadline @ chunk-NFC5BX5N.js?v=b49a287e:384Understand this error
+CartCheckout.tsx:205 🛒 CartCheckout - cart data: {itemsCount: 1, items: Array(1), subtotal: 90000, discounts: {…}, total: 90000, …}
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 1 cart items: [{…}]
+installHook.js:1 🎯 ROLE_SWITCHER_DEBUG: {"canSwitchRoles":true,"roleCount":2,"isLoadingRoles":false,"activeRole":"parent","activeRoleId":35,"roles":[{"id":35,"role":"parent","schoolId":1},{"id":71,"role":"educator","schoolId":1}]} Error Component Stack
+    at RoleSwitcher (RoleSwitcher.tsx:26:103)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at CartProvider (CartContext.tsx:1106:73)
+    at ParentAppShell (ParentAppShell.tsx:83:42)
+    at CartCheckout (CartCheckout.tsx:149:91)
+    at Route (wouter.js?v=b49a287e:323:16)
+    at Switch (wouter.js?v=b49a287e:379:17)
+    at Router (App.tsx:288:55)
+    at Provider (chunk-XOUBXFGS.js?v=b49a287e:38:15)
+    at TooltipProvider (@radix-ui_react-tooltip.js?v=b49a287e:64:5)
+    at InteractiveTutorialProvider (InteractiveTutorial.tsx:49:47)
+    at CartProvider (CartContext.tsx:1106:73)
+    at AIStatusProvider (AIStatusContext.tsx:30:71)
+    at NotificationProvider (useNotifications.tsx:31:40)
+    at RoleProvider (RoleContext.tsx:45:61)
+    at SupabaseProvider (SupabaseProvider.tsx:41:3)
+    at QueryClientProvider (@tanstack_react-query.js?v=b49a287e:2805:3)
+    at App (<anonymous>)
+overrideMethod @ installHook.js:1
+RoleSwitcher @ RoleSwitcher.tsx:29
+renderWithHooks @ chunk-NFC5BX5N.js?v=b49a287e:11548
+updateFunctionComponent @ chunk-NFC5BX5N.js?v=b49a287e:14582
+beginWork @ chunk-NFC5BX5N.js?v=b49a287e:15924
+beginWork$1 @ chunk-NFC5BX5N.js?v=b49a287e:19753
+performUnitOfWork @ chunk-NFC5BX5N.js?v=b49a287e:19198
+workLoopSync @ chunk-NFC5BX5N.js?v=b49a287e:19137
+renderRootSync @ chunk-NFC5BX5N.js?v=b49a287e:19116
+performConcurrentWorkOnRoot @ chunk-NFC5BX5N.js?v=b49a287e:18678
+workLoop @ chunk-NFC5BX5N.js?v=b49a287e:197
+flushWork @ chunk-NFC5BX5N.js?v=b49a287e:176
+performWorkUntilDeadline @ chunk-NFC5BX5N.js?v=b49a287e:384Understand this warning
+RoleSwitcher.tsx:51 🎯 RoleSwitcher currentRoleData: {"id":35,"role":"parent","schoolId":1,"schoolName":"American Seekers Academy","isPrimary":true,"createdAt":"2025-11-20T18:27:58.448Z"}
+RoleSwitcher.tsx:66 🎯 RoleSwitcher render - activeRole: parent same-school roles: 2 of 2
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 1 cart items: [{…}]
+CartContext.tsx:1798 🛒 getItemCount called - current items: 1
+CartContext.tsx:1244 🛒 Skipping processEnrollmentsData - already processing
+CartContext.tsx:1158 🎫 User already has active membership, skipping auto-add
+CartCheckout.tsx:205 🛒 CartCheckout - cart data: {itemsCount: 1, items: Array(1), subtotal: 90000, discounts: {…}, total: 90000, …}
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 1 cart items: [{…}]
+installHook.js:1 🎯 ROLE_SWITCHER_DEBUG: {"canSwitchRoles":true,"roleCount":2,"isLoadingRoles":false,"activeRole":"parent","activeRoleId":35,"roles":[{"id":35,"role":"parent","schoolId":1},{"id":71,"role":"educator","schoolId":1}]} Error Component Stack
+    at RoleSwitcher (RoleSwitcher.tsx:26:103)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at CartProvider (CartContext.tsx:1106:73)
+    at ParentAppShell (ParentAppShell.tsx:83:42)
+    at CartCheckout (CartCheckout.tsx:149:91)
+    at Route (wouter.js?v=b49a287e:323:16)
+    at Switch (wouter.js?v=b49a287e:379:17)
+    at Router (App.tsx:288:55)
+    at Provider (chunk-XOUBXFGS.js?v=b49a287e:38:15)
+    at TooltipProvider (@radix-ui_react-tooltip.js?v=b49a287e:64:5)
+    at InteractiveTutorialProvider (InteractiveTutorial.tsx:49:47)
+    at CartProvider (CartContext.tsx:1106:73)
+    at AIStatusProvider (AIStatusContext.tsx:30:71)
+    at NotificationProvider (useNotifications.tsx:31:40)
+    at RoleProvider (RoleContext.tsx:45:61)
+    at SupabaseProvider (SupabaseProvider.tsx:41:3)
+    at QueryClientProvider (@tanstack_react-query.js?v=b49a287e:2805:3)
+    at App (<anonymous>)
+overrideMethod @ installHook.js:1
+RoleSwitcher @ RoleSwitcher.tsx:29
+renderWithHooks @ chunk-NFC5BX5N.js?v=b49a287e:11548
+updateFunctionComponent @ chunk-NFC5BX5N.js?v=b49a287e:14582
+beginWork @ chunk-NFC5BX5N.js?v=b49a287e:15924
+beginWork$1 @ chunk-NFC5BX5N.js?v=b49a287e:19753
+performUnitOfWork @ chunk-NFC5BX5N.js?v=b49a287e:19198
+workLoopSync @ chunk-NFC5BX5N.js?v=b49a287e:19137
+renderRootSync @ chunk-NFC5BX5N.js?v=b49a287e:19116
+performConcurrentWorkOnRoot @ chunk-NFC5BX5N.js?v=b49a287e:18678
+workLoop @ chunk-NFC5BX5N.js?v=b49a287e:197
+flushWork @ chunk-NFC5BX5N.js?v=b49a287e:176
+performWorkUntilDeadline @ chunk-NFC5BX5N.js?v=b49a287e:384Understand this warning
+RoleSwitcher.tsx:51 🎯 RoleSwitcher currentRoleData: {"id":35,"role":"parent","schoolId":1,"schoolName":"American Seekers Academy","isPrimary":true,"createdAt":"2025-11-20T18:27:58.448Z"}
+RoleSwitcher.tsx:66 🎯 RoleSwitcher render - activeRole: parent same-school roles: 2 of 2
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 1 cart items: [{…}]
+CartContext.tsx:1798 🛒 getItemCount called - current items: 1
+CartContext.tsx:1244 🛒 Skipping processEnrollmentsData - already processing
+CartContext.tsx:1257 🛒 Skipping processEnrollmentsData - data unchanged and membership already loaded
+CartContext.tsx:1158 🎫 User already has active membership, skipping auto-add
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 1 cart items: [{…}]
+CartButton.tsx:12 🛒 CartButton rendering - itemCount: 1 cart items: [{…}]
+CartContext.tsx:1798 🛒 getItemCount called - current items: 1
+CartContext.tsx:1257 🛒 Skipping processEnrollmentsData - data unchanged and membership already loaded
+2installHook.js:1 🎫 Membership fetch timed out after 3000 ms
