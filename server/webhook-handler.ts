@@ -134,10 +134,80 @@ export const webhookHandler = async (req: Request, res: Response) => {
           const items = JSON.parse(itemsJson);
           console.log('💰 Processing checkout payment enrollments:', items.length, 'items for', parentEmail);
           
-          // Calculate payment per item
-          const amountPerItem = Math.round(paymentIntent.amount / items.length);
+          // Check if membership was included in this payment
+          const hasMembership = paymentIntent.metadata.hasMembership === 'true';
+          const membershipAmount = hasMembership ? parseInt(paymentIntent.metadata.membershipAmount || '0') : 0;
           
-          // Update each enrollment in database
+          // CRITICAL FIX: Subtract membership from total before dividing among class enrollments
+          const amountForClasses = paymentIntent.amount - membershipAmount;
+          const amountPerItem = items.length > 0 ? Math.round(amountForClasses / items.length) : 0;
+          
+          console.log('💰 Payment allocation:', {
+            totalPayment: paymentIntent.amount,
+            membershipAmount,
+            amountForClasses,
+            amountPerItem,
+            itemCount: items.length
+          });
+          
+          // Process membership payment first (if included)
+          if (hasMembership && membershipAmount > 0) {
+            try {
+              const membershipParentUserId = parseInt(paymentIntent.metadata.membershipParentUserId || '0');
+              const membershipSchoolId = parseInt(paymentIntent.metadata.membershipSchoolId || '0');
+              const membershipYear = parseInt(paymentIntent.metadata.membershipYear || new Date().getFullYear().toString());
+              
+              console.log('🎫 Processing membership payment:', {
+                parentUserId: membershipParentUserId,
+                schoolId: membershipSchoolId,
+                amount: membershipAmount,
+                year: membershipYear
+              });
+              
+              // Find or create membership enrollment
+              const existingMemberships = await storage.getMembershipEnrollmentsByParentId(membershipParentUserId);
+              const membershipEnrollment = existingMemberships.find((m: any) => 
+                m.schoolId === membershipSchoolId && 
+                (m.membershipYear === membershipYear || m.membershipYear === membershipYear + 1)
+              );
+              
+              if (membershipEnrollment) {
+                // Update existing membership
+                const currentPaid = membershipEnrollment.amountPaid || 0;
+                const newPaid = currentPaid + membershipAmount;
+                const newBalance = Math.max(0, (membershipEnrollment.amount || 0) - newPaid);
+                
+                await storage.updateMembershipEnrollment(membershipEnrollment.id, {
+                  amountPaid: newPaid,
+                  remainingBalance: newBalance,
+                  balanceDue: newBalance,
+                  status: newBalance <= 0 ? 'enrolled' : membershipEnrollment.status
+                });
+                console.log(`✅ Updated membership enrollment ${membershipEnrollment.id}: paid=${newPaid}, remaining=${newBalance}`);
+              } else {
+                // Create new membership enrollment
+                const school = await storage.getSchool(membershipSchoolId);
+                await storage.createMembershipEnrollment({
+                  schoolId: membershipSchoolId,
+                  parentUserId: membershipParentUserId,
+                  membershipYear,
+                  membershipTier: 'basic',
+                  amount: school?.membershipFeeAmount || membershipAmount,
+                  amountPaid: membershipAmount,
+                  remainingBalance: Math.max(0, (school?.membershipFeeAmount || membershipAmount) - membershipAmount),
+                  totalAmount: school?.membershipFeeAmount || membershipAmount,
+                  balanceDue: Math.max(0, (school?.membershipFeeAmount || membershipAmount) - membershipAmount),
+                  status: 'enrolled',
+                  stripeCustomerId: (paymentIntent.customer as string) || null
+                });
+                console.log(`✅ Created new membership enrollment for parent ${membershipParentUserId}`);
+              }
+            } catch (membershipError) {
+              console.error('❌ Error processing membership payment:', membershipError);
+            }
+          }
+          
+          // Update each class enrollment in database
           const updatedEnrollments = [];
           for (const item of items) {
             try {
