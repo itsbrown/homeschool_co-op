@@ -447,19 +447,43 @@ router.post('/confirm', async (req: any, res) => {
 
     console.log(`📝 Confirming ${idsToConfirm.length} enrollments:`, idsToConfirm);
 
-    // Update enrollments to 'enrolled' status
+    // Calculate payment per enrollment (proportional split)
+    const paymentAmount = paymentIntent.amount;
+    const paymentPerEnrollment = Math.round(paymentAmount / idsToConfirm.length);
+    
+    console.log(`💰 Payment amount: ${paymentAmount} cents, per enrollment: ${paymentPerEnrollment} cents`);
+
+    // Update each enrollment with correct balance calculation
+    // CRITICAL FIX: Don't blindly set remainingBalance to 0 - calculate correctly!
     await db.transaction(async (tx: any) => {
-      const result = await tx
-        .update(programEnrollments)
-        .set({ 
-          status: 'enrolled',
-          remainingBalance: 0,
-          paymentStatus: 'completed'
-        })
-        .where(inArray(programEnrollments.id, idsToConfirm))
-        .returning({ id: programEnrollments.id });
-      
-      console.log(`✅ Updated ${result.length} enrollments to enrolled status`);
+      for (const enrollment of enrollmentsToConfirm) {
+        const totalCost = enrollment.totalCost || 0;
+        const currentPaid = enrollment.totalPaid || 0;
+        const newTotalPaid = currentPaid + paymentPerEnrollment;
+        const newRemainingBalance = Math.max(0, totalCost - newTotalPaid);
+        
+        // Determine correct payment status based on actual balance
+        let newPaymentStatus: string;
+        if (newRemainingBalance <= 0) {
+          newPaymentStatus = 'completed';
+        } else if (newTotalPaid > 0) {
+          newPaymentStatus = 'deposit_paid';
+        } else {
+          newPaymentStatus = 'pending';
+        }
+        
+        await tx
+          .update(programEnrollments)
+          .set({ 
+            status: 'enrolled',
+            totalPaid: newTotalPaid,
+            remainingBalance: newRemainingBalance,
+            paymentStatus: newPaymentStatus
+          })
+          .where(eq(programEnrollments.id, enrollment.id));
+        
+        console.log(`✅ Updated enrollment ${enrollment.id}: paid=${newTotalPaid}, remaining=${newRemainingBalance}, status=${newPaymentStatus}`);
+      }
     });
 
     console.log(`✅ Successfully confirmed ${idsToConfirm.length} enrollments for ${userEmail}`);
