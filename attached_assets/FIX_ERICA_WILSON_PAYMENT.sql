@@ -86,7 +86,7 @@ SELECT
     NULL as stripe_charge_id,
     NULL as stripe_refund_id,
     NULL as original_payment_id,
-    ARRAY[109, 110] as enrollment_ids,
+    '[109, 110]'::jsonb as enrollment_ids,
     jsonb_build_object(
         'fixType', 'manual_sql_fix',
         'scheduledPaymentId', 3,
