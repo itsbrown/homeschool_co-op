@@ -173,23 +173,8 @@ export class DatabaseStorage implements IStorage {
   // School Student methods
   async createSchoolStudent(schoolStudent: InsertSchoolStudent): Promise<SchoolStudent> {
     const db = await getDb();
-    // Use upsert to prevent duplicate school_student records for same child at same school
-    const result = await db.insert(schoolStudents).values({
-      ...schoolStudent,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    })
-    .onConflictDoNothing({
-      target: [schoolStudents.childId, schoolStudents.schoolId]
-    })
-    .returning();
     
-    // If insert succeeded, return the new record
-    if (result.length > 0) {
-      return result[0];
-    }
-    
-    // If conflict (duplicate), fetch and return the existing record
+    // Check for existing school_student record (application-level duplicate prevention)
     const [existingRecord] = await db
       .select()
       .from(schoolStudents)
@@ -200,11 +185,20 @@ export class DatabaseStorage implements IStorage {
         )
       );
     
-    if (!existingRecord) {
-      throw new Error('Failed to create or find school_student record');
+    // If already exists, return the existing record (idempotent)
+    if (existingRecord) {
+      console.log(`⚠️ School student record already exists for child ${schoolStudent.childId} at school ${schoolStudent.schoolId}, returning existing record`);
+      return existingRecord;
     }
     
-    return existingRecord;
+    // Create new school_student record
+    const [newRecord] = await db.insert(schoolStudents).values({
+      ...schoolStudent,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    }).returning();
+    
+    return newRecord;
   }
 
   async updateSchoolStudent(id: number, schoolStudent: Partial<InsertSchoolStudent>): Promise<SchoolStudent | undefined> {
