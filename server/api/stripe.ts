@@ -87,12 +87,32 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
       
       // Calculate amounts if membership is required OR if client wants to purchase
       if (membershipRequired || clientClaimsMembership) {
-        // Check if parent already has active membership for this year
+        // Check if parent already has active membership for this year at THIS school
         const existingMemberships = await storage.getMembershipEnrollmentsByParentId(parentForMembership.id);
         const currentYear = new Date().getFullYear();
-        const hasActiveMembership = existingMemberships?.some((m: any) => 
-          m.membershipYear === currentYear && m.status === 'enrolled'
+        
+        // Filter for memberships at the same school and current year with enrolled status
+        const activeMembershipForThisSchool = existingMemberships?.find((m: any) => 
+          m.membershipYear === currentYear && 
+          m.status === 'enrolled' &&
+          m.schoolId === parentForMembership.schoolId
         );
+        const hasActiveMembership = !!activeMembershipForThisSchool;
+        
+        console.log('🎫 Active membership check:', {
+          parentId: parentForMembership.id,
+          schoolId: parentForMembership.schoolId,
+          currentYear,
+          totalMemberships: existingMemberships?.length || 0,
+          membershipsData: existingMemberships?.map((m: any) => ({
+            id: m.id,
+            schoolId: m.schoolId,
+            membershipYear: m.membershipYear,
+            status: m.status
+          })),
+          hasActiveMembership,
+          userEmail
+        });
         
         // Only calculate fee if not already paid
         if (!hasActiveMembership) {
