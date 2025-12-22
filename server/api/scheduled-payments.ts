@@ -267,23 +267,64 @@ router.post('/pay', supabaseAuth, async (req: any, res) => {
       });
     }
 
-    // Create Stripe payment intent
+    // Get the enrollment to retrieve enrollmentIds and Stripe customer
+    const enrollment = scheduledPayment.enrollmentId 
+      ? await storage.getEnrollmentById(scheduledPayment.enrollmentId)
+      : null;
+    
+    // Build enrollmentIds array - use the enrollment from the scheduled payment
+    const enrollmentIds = enrollment ? [enrollment.id] : [];
+    
+    // Get existing Stripe customer ID from enrollment or parent user
+    let stripeCustomerId = enrollment?.stripeCustomerId || null;
+    
+    // If no customer ID on enrollment, try to find from parent user
+    if (!stripeCustomerId) {
+      const parentUser = await storage.getUserByEmail(userEmail);
+      stripeCustomerId = parentUser?.stripeCustomerId || null;
+    }
+    
+    console.log('💳 Processing scheduled payment with context:', {
+      paymentId,
+      enrollmentId: scheduledPayment.enrollmentId,
+      enrollmentIds,
+      stripeCustomerId,
+      amount
+    });
+
+    // Create Stripe payment intent with complete metadata
     const stripe = await getStripeClient();
-    const paymentIntent = await stripe.paymentIntents.create({
+    const paymentIntentParams: any = {
       amount: Math.round(amount), // Amount should be in cents
       currency: 'usd',
       metadata: {
         type: 'scheduled_payment',
+        paymentType: 'scheduled_payment',
         scheduledPaymentId: paymentId.toString(),
         parentEmail: userEmail,
-        description: description || `Scheduled Payment ${scheduledPayment.installmentNumber}`
+        description: description || `Scheduled Payment ${scheduledPayment.installmentNumber}`,
+        // CRITICAL: Include enrollmentIds so webhook can update balances
+        enrollmentIds: JSON.stringify(enrollmentIds),
+        enrollmentId: scheduledPayment.enrollmentId?.toString() || '',
+        installmentNumber: scheduledPayment.installmentNumber?.toString() || '1',
+        totalInstallments: scheduledPayment.totalInstallments?.toString() || '1',
+        createdBy: 'asa_payment_system',
+        version: 'v2_scheduled_payment'
       },
       automatic_payment_methods: {
         enabled: true
       }
-    });
+    };
+    
+    // CRITICAL: Reuse existing Stripe customer instead of creating guest
+    if (stripeCustomerId) {
+      paymentIntentParams.customer = stripeCustomerId;
+      console.log('👤 Using existing Stripe customer:', stripeCustomerId);
+    }
+    
+    const paymentIntent = await stripe.paymentIntents.create(paymentIntentParams);
 
-    console.log('✅ Created payment intent for scheduled payment:', paymentIntent.id);
+    console.log('✅ Created payment intent for scheduled payment:', paymentIntent.id, 'with enrollmentIds:', enrollmentIds);
 
     res.json({
       success: true,

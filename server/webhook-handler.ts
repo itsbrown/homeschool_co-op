@@ -321,38 +321,50 @@ export const webhookHandler = async (req: Request, res: Response) => {
             await storage.updateScheduledPaymentStatus(parseInt(scheduledPaymentId), 'completed');
             console.log(`✅ Marked scheduled payment ${scheduledPaymentId} as completed`);
             
-            // UPDATE ENROLLMENT BALANCES - This was missing!
-            console.log('💰 Updating enrollment balances for scheduled payment...');
-            const enrollmentIds = scheduledPayment.enrollmentIds || [];
-            const paymentAmountPerEnrollment = Math.round(paymentIntent.amount / enrollmentIds.length);
+            // UPDATE ENROLLMENT BALANCE
+            console.log('💰 Updating enrollment balance for scheduled payment...');
             
-            for (const enrollmentId of enrollmentIds) {
-              try {
-                // Get program enrollment from database
-                const enrollment = await storage.getProgramEnrollmentById(enrollmentId);
-                
-                if (enrollment) {
-                  const currentAmountPaid = enrollment.totalPaid || 0;
-                  const newAmountPaid = currentAmountPaid + paymentAmountPerEnrollment;
-                  const newBalance = Math.max(0, (enrollment.totalCost || 0) - newAmountPaid);
-                  
-                  // Update program enrollment in database
-                  const updatedEnrollment = await storage.updateProgramEnrollment(enrollmentId, {
-                    totalPaid: newAmountPaid,
-                    remainingBalance: newBalance,
-                    paymentStatus: newBalance <= 0 ? 'completed' : 'partial_payment'
-                  });
-                  
-                  if (updatedEnrollment) {
-                    console.log(`✅ Updated enrollment ${enrollmentId}: paid=${newAmountPaid}, balance=${newBalance}`);
-                  }
-                } else {
-                  console.error(`❌ Enrollment ${enrollmentId} not found for scheduled payment`);
-                }
-              } catch (error) {
-                console.error(`❌ Error updating enrollment ${enrollmentId}:`, error);
-              }
+            // CRITICAL: Each scheduled_payment row is for ONE enrollment with exact prorated amount
+            // Apply the ENTIRE payment amount to the single enrollment (no division needed)
+            const targetEnrollmentId = scheduledPayment.enrollmentId;
+            
+            if (!targetEnrollmentId) {
+              console.error(`❌ Cannot process scheduled payment ${scheduledPaymentId}: no enrollmentId found`);
+              console.error('⚠️ Payment recorded in Stripe but enrollment balance NOT updated - requires manual fix');
+              break;
             }
+            
+            console.log('📋 Target enrollment for scheduled payment:', targetEnrollmentId);
+            
+            try {
+              // Get program enrollment from database
+              const enrollment = await storage.getProgramEnrollmentById(targetEnrollmentId);
+              
+              if (enrollment) {
+                const currentAmountPaid = enrollment.totalPaid || 0;
+                // Apply FULL payment amount to this single enrollment (already prorated when scheduled)
+                const newAmountPaid = currentAmountPaid + paymentIntent.amount;
+                const newBalance = Math.max(0, (enrollment.totalCost || 0) - newAmountPaid);
+                
+                // Update program enrollment in database
+                const updatedEnrollment = await storage.updateProgramEnrollment(targetEnrollmentId, {
+                  totalPaid: newAmountPaid,
+                  remainingBalance: newBalance,
+                  paymentStatus: newBalance <= 0 ? 'completed' : 'partial_payment'
+                });
+                
+                if (updatedEnrollment) {
+                  console.log(`✅ Updated enrollment ${targetEnrollmentId}: paid=${newAmountPaid}, balance=${newBalance}`);
+                }
+              } else {
+                console.error(`❌ Enrollment ${targetEnrollmentId} not found for scheduled payment`);
+              }
+            } catch (error) {
+              console.error(`❌ Error updating enrollment ${targetEnrollmentId}:`, error);
+            }
+            
+            // For downstream compatibility, create enrollmentIds array from single target
+            const enrollmentIds = [targetEnrollmentId];
             
             // Create payment record for history in database
             const description = scheduledPayment.description || 'Payment';
@@ -372,7 +384,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
               currency: paymentIntent.currency || 'usd',
               status: 'completed' as const,
               stripePaymentIntentId: paymentIntent.id,
-              enrollmentIds: scheduledPayment.enrollmentIds || [],
+              enrollmentIds: enrollmentIds,
               metadata: {
                 scheduledPaymentId: scheduledPaymentId,
                 installmentNumber: scheduledPayment.installmentNumber,
@@ -393,7 +405,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
               description: `Scheduled payment ${scheduledPayment.installmentNumber} of ${scheduledPayment.totalInstallments} - ${payment.className}`,
               childName: payment.childName,
               className: payment.className,
-              enrollmentIds: scheduledPayment.enrollmentIds || []
+              enrollmentIds: enrollmentIds
             });
             
             // Send email receipt for scheduled payment

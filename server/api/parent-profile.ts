@@ -407,41 +407,17 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
     // Calculate summary statistics using FILTERED data only
     const totalAmountPaid = BillingCalculationService.calculateTotalPaid(paymentHistory);
     
-    // Calculate total amount due by summing actual remaining balances (using FILTERED enrollments)
-    // IMPROVED: Use enrollmentIds for precise matching, with childName as fallback for legacy data
+    // Calculate total amount due by summing ACTUAL remaining balances from enrollments
+    // CRITICAL FIX: Use remainingBalance field directly instead of recalculating from payments
+    // The remainingBalance field is the authoritative source updated by webhook handlers
     const classAmountDue = CurrencyUtils.sum(
-      filteredEnrollments.map(enrollment => {
-        const enrollmentPayments = paymentHistory.filter(payment => {
-          // Only consider completed payments
-          if (!['completed', 'succeeded'].includes(payment.status)) {
-            return false;
-          }
-          
-          // PRIMARY: Match by enrollmentIds array (most accurate)
-          const paymentEnrollmentIds = (payment as any).enrollmentIds;
-          if (paymentEnrollmentIds && Array.isArray(paymentEnrollmentIds) && paymentEnrollmentIds.length > 0) {
-            return paymentEnrollmentIds.includes(enrollment.id);
-          }
-          
-          // FALLBACK: Match by childName for legacy payments without enrollmentIds
-          return payment.childName === enrollment.childName;
-        });
-        const totalPaid = CurrencyUtils.sum(enrollmentPayments.map(p => p.amount || 0));
-        const totalCost = enrollment.totalCost || 0;
-        return CurrencyUtils.calculateBalance(totalCost, totalPaid);
-      })
+      filteredEnrollments.map(enrollment => enrollment.remainingBalance || 0)
     );
 
-    // Calculate membership amount due (using FILTERED memberships)
+    // Calculate membership amount due using ACTUAL remaining balances
+    // CRITICAL FIX: Use remainingBalance field directly instead of recalculating
     const membershipAmountDue = CurrencyUtils.sum(
-      membershipEnrollments.map(membership => {
-        const membershipPayments = paymentHistory.filter(payment => 
-          payment.description?.includes('Membership') &&
-          ['completed', 'succeeded'].includes(payment.status)
-        );
-        const totalPaid = CurrencyUtils.sum(membershipPayments.map(p => p.amount || 0));
-        return CurrencyUtils.calculateBalance(membership.amount, totalPaid);
-      })
+      membershipEnrollments.map(membership => membership.remainingBalance || 0)
     );
 
     // Total amount due includes both class and membership fees (FILTERED data only)
