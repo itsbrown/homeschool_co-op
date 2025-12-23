@@ -307,24 +307,53 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
     const stripeCustomerIds = await storage.getStripeCustomerIdsByParentEmail(parent.email);
     
     // Fetch PaymentIntents from Stripe for each customer ID
+    // NOTE: Guest customer IDs (gcus_) cannot be queried via paymentIntents.list - must use Search API
     const stripePaymentIntents: any[] = [];
-    if (stripeCustomerIds.length > 0) {
-      try {
-        const stripe = await getStripeClient();
-        for (const customerId of stripeCustomerIds) {
-          try {
-            const paymentIntents = await stripe.paymentIntents.list({
-              customer: customerId,
-              limit: 100
-            });
-            stripePaymentIntents.push(...paymentIntents.data);
-          } catch (stripeError: any) {
-            console.warn(`⚠️ Failed to fetch Stripe payments for customer ${customerId}:`, stripeError.message);
-          }
+    const hasGuestCustomerId = stripeCustomerIds.some(id => id.startsWith('gcus_'));
+    
+    try {
+      const stripe = await getStripeClient();
+      
+      // Query regular customer IDs (cus_) via list API
+      for (const customerId of stripeCustomerIds) {
+        if (customerId.startsWith('gcus_')) {
+          console.log(`⏩ Skipping guest customer ${customerId} - will use Search API`);
+          continue;
         }
-      } catch (stripeError: any) {
-        console.warn('⚠️ Failed to initialize Stripe client:', stripeError.message);
+        try {
+          const paymentIntents = await stripe.paymentIntents.list({
+            customer: customerId,
+            limit: 100
+          });
+          stripePaymentIntents.push(...paymentIntents.data);
+        } catch (stripeError: any) {
+          console.warn(`⚠️ Failed to fetch Stripe payments for customer ${customerId}:`, stripeError.message);
+        }
       }
+      
+      // For guest checkout payments, use Stripe Search API with email
+      if (hasGuestCustomerId) {
+        try {
+          console.log(`🔎 Using Stripe Search API for email: ${parent.email}`);
+          const searchResults = await stripe.paymentIntents.search({
+            query: `receipt_email:"${parent.email}"`,
+            limit: 100
+          });
+          console.log(`🔎 Stripe Search found ${searchResults.data.length} payments for ${parent.email}`);
+          
+          // Deduplicate - avoid adding payments we already have from customer list
+          const existingPiIds = new Set(stripePaymentIntents.map(pi => pi.id));
+          for (const pi of searchResults.data) {
+            if (!existingPiIds.has(pi.id)) {
+              stripePaymentIntents.push(pi);
+            }
+          }
+        } catch (searchError: any) {
+          console.warn(`⚠️ Stripe Search API failed:`, searchError.message);
+        }
+      }
+    } catch (stripeError: any) {
+      console.warn('⚠️ Failed to initialize Stripe client:', stripeError.message);
     }
     
     console.log(`💳 Found ${dbPayments.length} DB payments, ${stripePaymentIntents.length} Stripe PaymentIntents`);
