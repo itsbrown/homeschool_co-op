@@ -5282,7 +5282,9 @@ export class MemStorage implements IStorage {
       const db = await getDb();
       const { eq, and, inArray, isNotNull } = await import('drizzle-orm');
       
-      // Get enrollments with Stripe customer IDs for active statuses
+      const uniqueCustomerIds = new Set<string>();
+      
+      // Source 1: Program enrollments
       const activeStatuses = ['pending_payment', 'enrolled', 'completed'] as const;
       const enrollments = await db.select({
         stripeCustomerId: programEnrollments.stripeCustomerId
@@ -5296,12 +5298,52 @@ export class MemStorage implements IStorage {
         )
       );
       
-      // Deduplicate customer IDs using Set
-      const uniqueCustomerIds = new Set(
-        enrollments
-          .map(e => e.stripeCustomerId)
-          .filter((id): id is string => id !== null)
-      );
+      enrollments.forEach(e => {
+        if (e.stripeCustomerId) uniqueCustomerIds.add(e.stripeCustomerId);
+      });
+      
+      // Source 2: Users table (primary Stripe customer ID)
+      const userResult = await db.select({
+        stripeCustomerId: users.stripeCustomerId
+      })
+      .from(users)
+      .where(
+        and(
+          eq(users.email, parentEmail),
+          isNotNull(users.stripeCustomerId)
+        )
+      )
+      .limit(1);
+      
+      if (userResult.length > 0 && userResult[0].stripeCustomerId) {
+        uniqueCustomerIds.add(userResult[0].stripeCustomerId);
+      }
+      
+      // Source 3: Membership enrollments (via user lookup)
+      // First get user ID, then query membership enrollments
+      const userForMembership = await db.select({ id: users.id })
+        .from(users)
+        .where(eq(users.email, parentEmail))
+        .limit(1);
+      
+      if (userForMembership.length > 0) {
+        const membershipEnrollmentResults = await db.select({
+          stripeCustomerId: membershipEnrollments.stripeCustomerId
+        })
+        .from(membershipEnrollments)
+        .where(
+          and(
+            eq(membershipEnrollments.parentUserId, userForMembership[0].id),
+            isNotNull(membershipEnrollments.stripeCustomerId)
+          )
+        );
+        
+        membershipEnrollmentResults.forEach(m => {
+          if (m.stripeCustomerId) uniqueCustomerIds.add(m.stripeCustomerId);
+        });
+      }
+      
+      console.log(`💳 Found ${uniqueCustomerIds.size} unique Stripe customer IDs for ${parentEmail}`);
       
       return Array.from(uniqueCustomerIds);
     }
