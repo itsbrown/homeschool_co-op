@@ -331,25 +331,32 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
         }
       }
       
-      // For guest checkout payments, use Stripe Search API with email
+      // For guest checkout payments, retrieve PaymentIntent IDs from scheduled_payments table
+      // (Stripe Search API doesn't support receipt_email for PaymentIntents)
       if (hasGuestCustomerId) {
         try {
-          console.log(`🔎 Using Stripe Search API for email: ${parent.email}`);
-          const searchResults = await stripe.paymentIntents.search({
-            query: `receipt_email:"${parent.email}"`,
-            limit: 100
-          });
-          console.log(`🔎 Stripe Search found ${searchResults.data.length} payments for ${parent.email}`);
-          
-          // Deduplicate - avoid adding payments we already have from customer list
+          console.log(`🔎 Fetching guest checkout payments from scheduled_payments for: ${parent.email}`);
+          const scheduledPaymentsForGuest = await storage.getScheduledPaymentsByParentEmail(parent.email);
           const existingPiIds = new Set(stripePaymentIntents.map(pi => pi.id));
-          for (const pi of searchResults.data) {
-            if (!existingPiIds.has(pi.id)) {
+          
+          // Get PaymentIntent IDs from scheduled payments that aren't already fetched
+          const piIdsToFetch = scheduledPaymentsForGuest
+            .map(sp => sp.stripePaymentIntentId)
+            .filter((piId): piId is string => !!piId && !existingPiIds.has(piId));
+          
+          console.log(`🔎 Found ${piIdsToFetch.length} PaymentIntent IDs to fetch from scheduled_payments`);
+          
+          // Fetch each PaymentIntent individually
+          for (const piId of piIdsToFetch) {
+            try {
+              const pi = await stripe.paymentIntents.retrieve(piId);
               stripePaymentIntents.push(pi);
+            } catch (piError: any) {
+              console.warn(`⚠️ Failed to retrieve PaymentIntent ${piId}:`, piError.message);
             }
           }
-        } catch (searchError: any) {
-          console.warn(`⚠️ Stripe Search API failed:`, searchError.message);
+        } catch (fetchError: any) {
+          console.warn(`⚠️ Failed to fetch guest checkout payments:`, fetchError.message);
         }
       }
     } catch (stripeError: any) {
