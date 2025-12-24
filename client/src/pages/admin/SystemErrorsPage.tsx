@@ -11,7 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { AlertTriangle, Bug, RefreshCw, CheckCircle, Clock, Eye, XCircle, ChevronLeft, ChevronRight, Settings } from "lucide-react";
+import { AlertTriangle, Bug, RefreshCw, CheckCircle, Clock, Eye, XCircle, ChevronLeft, ChevronRight, Settings, Radio } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
@@ -92,19 +93,30 @@ export default function SystemErrorsPage() {
     return params.toString();
   };
 
+  // Auto-refresh configuration
+  const [autoRefresh, setAutoRefresh] = useState(true);
+  const REFRESH_INTERVAL = 10000; // 10 seconds
+
   const queryString = buildQueryString();
-  const { data: errorsData, isLoading: errorsLoading, refetch } = useQuery<{
+  const { data: errorsData, isLoading: errorsLoading, refetch, dataUpdatedAt } = useQuery<{
     errors: ErrorLog[];
     pagination: { total: number; limit: number; offset: number; hasMore: boolean };
   }>({
     queryKey: [`/api/telemetry/errors?${queryString}`],
     enabled: isAuthenticated,
+    refetchInterval: autoRefresh ? REFRESH_INTERVAL : false,
+    refetchIntervalInBackground: false,
   });
 
   const { data: summary } = useQuery<ErrorSummary>({
     queryKey: ['/api/telemetry/errors/summary'],
     enabled: isAuthenticated,
+    refetchInterval: autoRefresh ? REFRESH_INTERVAL : false,
+    refetchIntervalInBackground: false,
   });
+
+  // Format last updated time
+  const lastUpdated = dataUpdatedAt ? new Date(dataUpdatedAt) : null;
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, status, resolutionNotes }: { id: number; status: string; resolutionNotes?: string }) => {
@@ -176,15 +188,39 @@ export default function SystemErrorsPage() {
             <div className="flex items-center gap-3">
               <Settings className="h-8 w-8 text-primary" />
               <h1 className="text-3xl font-bold" data-testid="text-page-title">System Errors</h1>
+              {autoRefresh && (
+                <div className="flex items-center gap-1.5 text-green-600 dark:text-green-400">
+                  <Radio className="h-3 w-3 animate-pulse" />
+                  <span className="text-xs font-medium">Live</span>
+                </div>
+              )}
             </div>
             <p className="text-muted-foreground mt-1">
               Monitor and manage application errors across the platform
             </p>
+            {lastUpdated && (
+              <p className="text-xs text-muted-foreground mt-1">
+                Last updated: {format(lastUpdated, "h:mm:ss a")}
+              </p>
+            )}
           </div>
-          <Button onClick={() => refetch()} variant="outline" data-testid="button-refresh">
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Refresh
-          </Button>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Switch
+                id="auto-refresh"
+                checked={autoRefresh}
+                onCheckedChange={setAutoRefresh}
+                data-testid="switch-auto-refresh"
+              />
+              <Label htmlFor="auto-refresh" className="text-sm cursor-pointer">
+                Auto-refresh
+              </Label>
+            </div>
+            <Button onClick={() => refetch()} variant="outline" data-testid="button-refresh">
+              <RefreshCw className={`h-4 w-4 mr-2 ${errorsLoading ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+          </div>
         </div>
 
         {summary && (

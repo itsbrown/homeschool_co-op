@@ -1,5 +1,6 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 import { supabase } from "@/components/SupabaseProvider";
+import { captureApiError } from "@/lib/errorTracker";
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
@@ -153,11 +154,23 @@ export async function apiRequest(
   if (!response.ok) {
     // Clone the response so we can read it without consuming the original stream
     const responseClone = response.clone();
+    let errorText = '';
     try {
-      const text = await responseClone.text();
-      console.log(`❌ API ${response.status}: ${text}`);
+      errorText = await responseClone.text();
+      console.log(`❌ API ${response.status}: ${errorText}`);
     } catch (error) {
       console.log(`❌ API ${response.status}: Could not read response body`);
+    }
+    
+    // Capture API error in error tracking (don't capture telemetry endpoint errors to avoid loops)
+    if (!finalUrl.includes('/api/telemetry/')) {
+      captureApiError(
+        errorText || `API Error: ${response.statusText}`,
+        response.status,
+        finalUrl,
+        method,
+        { originalUrl: url }
+      );
     }
     
     // Now call throwIfResNotOk with the original response

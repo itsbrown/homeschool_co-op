@@ -4,9 +4,13 @@ import type {
   ToastActionElement,
   ToastProps,
 } from "@/components/ui/toast"
+import { errorTracker } from "@/lib/errorTracker"
 
 const TOAST_LIMIT = 1
 const TOAST_REMOVE_DELAY = 1000000
+
+// Track if we're currently showing a confirmation toast to prevent recursion
+let isShowingConfirmation = false
 
 type ToasterToast = ToastProps & {
   id: string
@@ -139,7 +143,48 @@ function dispatch(action: Action) {
 
 type Toast = Omit<ToasterToast, "id">
 
+// Helper to show confirmation toast
+function showAdminNotifiedConfirmation() {
+  if (isShowingConfirmation) return
+  isShowingConfirmation = true
+  
+  setTimeout(() => {
+    const id = genId()
+    dispatch({
+      type: "ADD_TOAST",
+      toast: {
+        id,
+        title: "Admin Notified",
+        description: "The admin has been notified of this error.",
+        variant: "default",
+        open: true,
+        onOpenChange: (open) => {
+          if (!open) dispatch({ type: "DISMISS_TOAST", toastId: id })
+        },
+      },
+    })
+    
+    // Reset flag after toast is shown
+    setTimeout(() => {
+      isShowingConfirmation = false
+    }, 1000)
+  }, 500) // Small delay after error toast
+}
+
+// Set up notification callback (will be done on first toast import)
+let callbackSetup = false
+function setupCallback() {
+  if (!callbackSetup) {
+    callbackSetup = true
+    errorTracker.setNotificationCallback(() => {
+      showAdminNotifiedConfirmation()
+    })
+  }
+}
+
 function toast({ ...props }: Toast) {
+  // Ensure callback is set up
+  setupCallback()
   const id = genId()
 
   const update = (props: ToasterToast) =>
@@ -160,6 +205,24 @@ function toast({ ...props }: Toast) {
       },
     },
   })
+
+  // If this is a destructive toast (error), capture it in error tracking
+  if (props.variant === "destructive" && !isShowingConfirmation) {
+    const titleText = typeof props.title === 'string' ? props.title : 'Error'
+    const descText = typeof props.description === 'string' ? props.description : ''
+    const message = descText ? `${titleText}: ${descText}` : titleText
+    
+    errorTracker.captureError({
+      message,
+      errorType: 'frontend',
+      severity: 'medium',
+      metadata: {
+        toastTitle: titleText,
+        toastDescription: descText,
+        source: 'toast',
+      },
+    })
+  }
 
   return {
     id: id,
