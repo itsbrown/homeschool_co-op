@@ -45,7 +45,8 @@ import {
   educatorSchedules, type EducatorSchedule, type InsertEducatorSchedule,
   auditLogs, type AuditLog, type InsertAuditLog,
   schoolClassEnrollments, type SchoolClassEnrollment, type InsertSchoolClassEnrollment,
-  sessionAttendance, type SessionAttendance, type InsertSessionAttendance
+  sessionAttendance, type SessionAttendance, type InsertSessionAttendance,
+  errorLogs, type ErrorLog, type InsertErrorLog
 } from "@shared/schema";
 import { eq, inArray } from 'drizzle-orm';
 import { getDb } from './db';
@@ -513,6 +514,36 @@ export interface IStorage {
   updateAttendance(id: number, attendance: Partial<InsertSessionAttendance>): Promise<SessionAttendance | undefined>;
   deleteAttendance(id: number): Promise<void>;
   upsertAttendance(attendance: InsertSessionAttendance): Promise<SessionAttendance>;
+
+  // Error Log methods
+  createErrorLog(errorLog: InsertErrorLog): Promise<ErrorLog>;
+  getErrorLogById(id: number): Promise<ErrorLog | undefined>;
+  getErrorLogs(filters?: { 
+    severity?: string; 
+    status?: string; 
+    errorType?: string;
+    startDate?: Date;
+    endDate?: Date;
+    limit?: number;
+    offset?: number;
+  }): Promise<ErrorLog[]>;
+  getErrorLogsCount(filters?: { 
+    severity?: string; 
+    status?: string; 
+    errorType?: string;
+    startDate?: Date;
+    endDate?: Date;
+  }): Promise<number>;
+  updateErrorLog(id: number, updates: Partial<InsertErrorLog>): Promise<ErrorLog | undefined>;
+  getUnnotifiedCriticalErrors(): Promise<ErrorLog[]>;
+  markErrorsNotified(ids: number[]): Promise<void>;
+  getErrorsSummary(startDate: Date, endDate: Date): Promise<{
+    total: number;
+    bySeverity: Record<string, number>;
+    byType: Record<string, number>;
+    byStatus: Record<string, number>;
+  }>;
+  cleanupOldErrors(olderThan: Date): Promise<number>;
 }
 
 export class MemStorage implements IStorage {
@@ -4423,6 +4454,133 @@ export class MemStorage implements IStorage {
     }
     return this.createAttendance(attendance);
   }
+
+  // Error Log methods (stub implementations - DB storage is used in production)
+  private errorLogsStore: Map<number, ErrorLog> = new Map();
+  private errorLogIdCounter: number = 1;
+
+  async createErrorLog(errorLog: InsertErrorLog): Promise<ErrorLog> {
+    const id = this.errorLogIdCounter++;
+    const newLog: ErrorLog = {
+      id,
+      ...errorLog,
+      errorType: errorLog.errorType ?? 'unknown',
+      severity: errorLog.severity ?? 'medium',
+      status: errorLog.status ?? 'new',
+      metadata: errorLog.metadata ?? {},
+      notificationSent: errorLog.notificationSent ?? false,
+      stackTrace: errorLog.stackTrace ?? null,
+      errorCode: errorLog.errorCode ?? null,
+      url: errorLog.url ?? null,
+      route: errorLog.route ?? null,
+      method: errorLog.method ?? null,
+      userId: errorLog.userId ?? null,
+      userEmail: errorLog.userEmail ?? null,
+      schoolId: errorLog.schoolId ?? null,
+      ipAddress: errorLog.ipAddress ?? null,
+      userAgent: errorLog.userAgent ?? null,
+      requestBody: errorLog.requestBody ?? null,
+      resolvedBy: errorLog.resolvedBy ?? null,
+      resolvedAt: null,
+      resolutionNotes: errorLog.resolutionNotes ?? null,
+      notificationSentAt: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.errorLogsStore.set(id, newLog);
+    return newLog;
+  }
+
+  async getErrorLogById(id: number): Promise<ErrorLog | undefined> {
+    return this.errorLogsStore.get(id);
+  }
+
+  async getErrorLogs(filters?: { 
+    severity?: string; 
+    status?: string; 
+    errorType?: string;
+    startDate?: Date;
+    endDate?: Date;
+    limit?: number;
+    offset?: number;
+  }): Promise<ErrorLog[]> {
+    let logs = Array.from(this.errorLogsStore.values());
+    if (filters?.severity) logs = logs.filter(l => l.severity === filters.severity);
+    if (filters?.status) logs = logs.filter(l => l.status === filters.status);
+    if (filters?.errorType) logs = logs.filter(l => l.errorType === filters.errorType);
+    if (filters?.startDate) logs = logs.filter(l => l.createdAt >= filters.startDate!);
+    if (filters?.endDate) logs = logs.filter(l => l.createdAt <= filters.endDate!);
+    logs.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    if (filters?.offset) logs = logs.slice(filters.offset);
+    if (filters?.limit) logs = logs.slice(0, filters.limit);
+    return logs;
+  }
+
+  async getErrorLogsCount(filters?: { 
+    severity?: string; 
+    status?: string; 
+    errorType?: string;
+    startDate?: Date;
+    endDate?: Date;
+  }): Promise<number> {
+    const logs = await this.getErrorLogs(filters);
+    return logs.length;
+  }
+
+  async updateErrorLog(id: number, updates: Partial<InsertErrorLog>): Promise<ErrorLog | undefined> {
+    const existing = this.errorLogsStore.get(id);
+    if (!existing) return undefined;
+    const updated = { ...existing, ...updates, updatedAt: new Date() };
+    this.errorLogsStore.set(id, updated);
+    return updated;
+  }
+
+  async getUnnotifiedCriticalErrors(): Promise<ErrorLog[]> {
+    return Array.from(this.errorLogsStore.values())
+      .filter(l => !l.notificationSent && (l.severity === 'critical' || l.severity === 'high'));
+  }
+
+  async markErrorsNotified(ids: number[]): Promise<void> {
+    for (const id of ids) {
+      const log = this.errorLogsStore.get(id);
+      if (log) {
+        this.errorLogsStore.set(id, { ...log, notificationSent: true, notificationSentAt: new Date() });
+      }
+    }
+  }
+
+  async getErrorsSummary(startDate: Date, endDate: Date): Promise<{
+    total: number;
+    bySeverity: Record<string, number>;
+    byType: Record<string, number>;
+    byStatus: Record<string, number>;
+  }> {
+    const logs = Array.from(this.errorLogsStore.values())
+      .filter(l => l.createdAt >= startDate && l.createdAt <= endDate);
+    
+    const bySeverity: Record<string, number> = {};
+    const byType: Record<string, number> = {};
+    const byStatus: Record<string, number> = {};
+
+    for (const log of logs) {
+      bySeverity[log.severity] = (bySeverity[log.severity] || 0) + 1;
+      byType[log.errorType] = (byType[log.errorType] || 0) + 1;
+      byStatus[log.status] = (byStatus[log.status] || 0) + 1;
+    }
+
+    return { total: logs.length, bySeverity, byType, byStatus };
+  }
+
+  async cleanupOldErrors(olderThan: Date): Promise<number> {
+    let count = 0;
+    for (const [id, log] of this.errorLogsStore.entries()) {
+      if (log.createdAt < olderThan && (log.status === 'resolved' || log.status === 'ignored')) {
+        this.errorLogsStore.delete(id);
+        count++;
+      }
+    }
+    return count;
+  }
 }
 
   import { DatabaseStorage } from "./dbStorage";
@@ -6604,6 +6762,62 @@ export class MemStorage implements IStorage {
 
       async upsertAttendance(attendance: InsertSessionAttendance): Promise<SessionAttendance> {
         return this.dbStorage.upsertAttendance(attendance);
+      }
+
+      // Error Log methods
+      async createErrorLog(errorLog: InsertErrorLog): Promise<ErrorLog> {
+        return this.dbStorage.createErrorLog(errorLog);
+      }
+
+      async getErrorLogById(id: number): Promise<ErrorLog | undefined> {
+        return this.dbStorage.getErrorLogById(id);
+      }
+
+      async getErrorLogs(filters?: { 
+        severity?: string; 
+        status?: string; 
+        errorType?: string;
+        startDate?: Date;
+        endDate?: Date;
+        limit?: number;
+        offset?: number;
+      }): Promise<ErrorLog[]> {
+        return this.dbStorage.getErrorLogs(filters);
+      }
+
+      async getErrorLogsCount(filters?: { 
+        severity?: string; 
+        status?: string; 
+        errorType?: string;
+        startDate?: Date;
+        endDate?: Date;
+      }): Promise<number> {
+        return this.dbStorage.getErrorLogsCount(filters);
+      }
+
+      async updateErrorLog(id: number, updates: Partial<InsertErrorLog>): Promise<ErrorLog | undefined> {
+        return this.dbStorage.updateErrorLog(id, updates);
+      }
+
+      async getUnnotifiedCriticalErrors(): Promise<ErrorLog[]> {
+        return this.dbStorage.getUnnotifiedCriticalErrors();
+      }
+
+      async markErrorsNotified(ids: number[]): Promise<void> {
+        return this.dbStorage.markErrorsNotified(ids);
+      }
+
+      async getErrorsSummary(startDate: Date, endDate: Date): Promise<{
+        total: number;
+        bySeverity: Record<string, number>;
+        byType: Record<string, number>;
+        byStatus: Record<string, number>;
+      }> {
+        return this.dbStorage.getErrorsSummary(startDate, endDate);
+      }
+
+      async cleanupOldErrors(olderThan: Date): Promise<number> {
+        return this.dbStorage.cleanupOldErrors(olderThan);
       }
 
       // Clear all data from storage (for testing)

@@ -45,7 +45,8 @@ import {
   ClassSession, InsertClassSession, classSessions,
   EducatorSchedule, InsertEducatorSchedule, educatorSchedules,
   AuditLog, InsertAuditLog, auditLogs,
-  SessionAttendance, InsertSessionAttendance, sessionAttendance
+  SessionAttendance, InsertSessionAttendance, sessionAttendance,
+  ErrorLog, InsertErrorLog, errorLogs
 } from '../shared/schema';
 
 /**
@@ -3459,5 +3460,173 @@ export class DatabaseStorage implements IStorage {
       return updated!;
     }
     return this.createAttendance(attendance);
+  }
+
+  // Error Log methods
+  async createErrorLog(errorLog: InsertErrorLog): Promise<ErrorLog> {
+    const db = await getDb();
+    const [newLog] = await db.insert(errorLogs).values(errorLog).returning();
+    return newLog;
+  }
+
+  async getErrorLogById(id: number): Promise<ErrorLog | undefined> {
+    const db = await getDb();
+    const [log] = await db.select().from(errorLogs).where(eq(errorLogs.id, id));
+    return log;
+  }
+
+  async getErrorLogs(filters?: {
+    severity?: string;
+    status?: string;
+    errorType?: string;
+    startDate?: Date;
+    endDate?: Date;
+    limit?: number;
+    offset?: number;
+  }): Promise<ErrorLog[]> {
+    const db = await getDb();
+    const conditions: any[] = [];
+
+    if (filters?.severity) {
+      conditions.push(eq(errorLogs.severity, filters.severity));
+    }
+    if (filters?.status) {
+      conditions.push(eq(errorLogs.status, filters.status));
+    }
+    if (filters?.errorType) {
+      conditions.push(eq(errorLogs.errorType, filters.errorType));
+    }
+    if (filters?.startDate) {
+      conditions.push(gte(errorLogs.createdAt, filters.startDate));
+    }
+    if (filters?.endDate) {
+      conditions.push(lte(errorLogs.createdAt, filters.endDate));
+    }
+
+    let query = db.select().from(errorLogs);
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions)) as typeof query;
+    }
+    query = query.orderBy(desc(errorLogs.createdAt)) as typeof query;
+
+    if (filters?.limit) {
+      query = query.limit(filters.limit) as typeof query;
+    }
+    if (filters?.offset) {
+      query = query.offset(filters.offset) as typeof query;
+    }
+
+    return query;
+  }
+
+  async getErrorLogsCount(filters?: {
+    severity?: string;
+    status?: string;
+    errorType?: string;
+    startDate?: Date;
+    endDate?: Date;
+  }): Promise<number> {
+    const db = await getDb();
+    const conditions: any[] = [];
+
+    if (filters?.severity) {
+      conditions.push(eq(errorLogs.severity, filters.severity));
+    }
+    if (filters?.status) {
+      conditions.push(eq(errorLogs.status, filters.status));
+    }
+    if (filters?.errorType) {
+      conditions.push(eq(errorLogs.errorType, filters.errorType));
+    }
+    if (filters?.startDate) {
+      conditions.push(gte(errorLogs.createdAt, filters.startDate));
+    }
+    if (filters?.endDate) {
+      conditions.push(lte(errorLogs.createdAt, filters.endDate));
+    }
+
+    let query = db.select({ count: sql<number>`count(*)::int` }).from(errorLogs);
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions)) as typeof query;
+    }
+
+    const [result] = await query;
+    return result?.count || 0;
+  }
+
+  async updateErrorLog(id: number, updates: Partial<InsertErrorLog>): Promise<ErrorLog | undefined> {
+    const db = await getDb();
+    const [updated] = await db.update(errorLogs)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(errorLogs.id, id))
+      .returning();
+    return updated;
+  }
+
+  async getUnnotifiedCriticalErrors(): Promise<ErrorLog[]> {
+    const db = await getDb();
+    return db.select().from(errorLogs)
+      .where(and(
+        eq(errorLogs.notificationSent, false),
+        or(
+          eq(errorLogs.severity, 'critical'),
+          eq(errorLogs.severity, 'high')
+        )
+      ))
+      .orderBy(desc(errorLogs.createdAt));
+  }
+
+  async markErrorsNotified(ids: number[]): Promise<void> {
+    if (ids.length === 0) return;
+    const db = await getDb();
+    await db.update(errorLogs)
+      .set({ notificationSent: true, notificationSentAt: new Date() })
+      .where(inArray(errorLogs.id, ids));
+  }
+
+  async getErrorsSummary(startDate: Date, endDate: Date): Promise<{
+    total: number;
+    bySeverity: Record<string, number>;
+    byType: Record<string, number>;
+    byStatus: Record<string, number>;
+  }> {
+    const db = await getDb();
+    
+    const logs = await db.select().from(errorLogs)
+      .where(and(
+        gte(errorLogs.createdAt, startDate),
+        lte(errorLogs.createdAt, endDate)
+      ));
+
+    const bySeverity: Record<string, number> = {};
+    const byType: Record<string, number> = {};
+    const byStatus: Record<string, number> = {};
+
+    for (const log of logs) {
+      bySeverity[log.severity] = (bySeverity[log.severity] || 0) + 1;
+      byType[log.errorType] = (byType[log.errorType] || 0) + 1;
+      byStatus[log.status] = (byStatus[log.status] || 0) + 1;
+    }
+
+    return {
+      total: logs.length,
+      bySeverity,
+      byType,
+      byStatus
+    };
+  }
+
+  async cleanupOldErrors(olderThan: Date): Promise<number> {
+    const db = await getDb();
+    const result = await db.delete(errorLogs)
+      .where(and(
+        lt(errorLogs.createdAt, olderThan),
+        or(
+          eq(errorLogs.status, 'resolved'),
+          eq(errorLogs.status, 'ignored')
+        )
+      ))
+      .returning({ id: errorLogs.id });
+    return result.length;
   }
 }
