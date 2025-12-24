@@ -237,12 +237,55 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
   
   const server = await registerRoutes(app);
 
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+  app.use(async (err: any, req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
 
     res.status(status).json({ message });
     console.error('❌ Error handled:', err.message, err.stack);
+
+    // Log error to database for tracking
+    try {
+      const { storage } = await import('./storage');
+      
+      // Determine severity based on status code
+      let severity: 'low' | 'medium' | 'high' | 'critical' = 'medium';
+      if (status >= 500) severity = 'high';
+      if (status === 500 && (message.includes('payment') || message.includes('stripe'))) severity = 'critical';
+      
+      // Determine error type
+      let errorType: 'frontend' | 'backend' | 'api' | 'database' | 'auth' | 'payment' | 'unknown' = 'api';
+      if (message.toLowerCase().includes('auth') || status === 401 || status === 403) errorType = 'auth';
+      if (message.toLowerCase().includes('payment') || message.toLowerCase().includes('stripe')) errorType = 'payment';
+      if (message.toLowerCase().includes('database') || message.toLowerCase().includes('sql')) errorType = 'database';
+
+      // Extract user info if available
+      const userEmail = (req as any).user?.email || (req as any).auth?.payload?.email;
+      const userId = (req as any).user?.id;
+      const schoolId = (req as any).user?.schoolId;
+
+      await storage.createErrorLog({
+        errorType,
+        severity,
+        message: message.substring(0, 500),
+        stackTrace: err.stack?.substring(0, 5000) || null,
+        errorCode: status.toString(),
+        url: req.originalUrl,
+        route: req.route?.path || req.path,
+        method: req.method,
+        userId: userId ?? null,
+        userEmail: userEmail ?? null,
+        schoolId: schoolId ?? null,
+        ipAddress: req.ip || req.headers['x-forwarded-for']?.toString() || null,
+        userAgent: req.headers['user-agent'] || null,
+        requestBody: null, // Don't log request body for security
+        metadata: {},
+        status: 'new',
+        notificationSent: false,
+      });
+    } catch (logError) {
+      console.error('Failed to log error to database:', logError);
+    }
     // Don't throw the error again - this was causing the server to crash
   });
 
