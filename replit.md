@@ -74,6 +74,7 @@ The platform prioritizes scalability, security, and user experience, incorporati
 -   **Interactive Onboarding Tour**: Custom-built guided tour for new parent accounts.
 -   **Subscription Status Toggle**: School admin-configurable toggle to control subscription status display during checkout.
 -   **AI Smart Tutorial System**: Conversational AI guidance using Anthropic Claude that provides context-aware help to parents. Features rate limiting, conversation truncation, dynamic UI element highlighting, and page-specific suggestions.
+-   **System Error Monitoring**: Comprehensive error tracking and notification system with database logging, severity levels (low/medium/high/critical), automatic email notifications for critical errors, daily summary emails at 8 AM, React Error Boundary for frontend errors, Express error middleware for backend errors, and admin dashboard at /admin/system-errors for viewing/filtering/resolving errors. Email notifications sent to errors@americanseekersacademy.com.
 
 ### Educator Dashboard
 The Educator Dashboard provides educators/mentors with tools to manage their classes, track attendance, view lesson plans, and log their work hours. It integrates with the existing Daily Flow system for lesson planning.

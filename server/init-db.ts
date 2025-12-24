@@ -1102,6 +1102,53 @@ async function runMigrations() {
     `);
     console.log('✅ Migration completed: events event_type constraint updated');
     
+    // Create error_logs table for system error tracking
+    console.log('Running migration: Creating error_logs table...');
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS error_logs (
+        id SERIAL PRIMARY KEY,
+        error_type TEXT NOT NULL,
+        severity TEXT NOT NULL,
+        message TEXT NOT NULL,
+        stack_trace TEXT,
+        error_code TEXT,
+        url TEXT,
+        route TEXT,
+        method TEXT,
+        user_id INTEGER,
+        user_email TEXT,
+        school_id INTEGER,
+        ip_address TEXT,
+        user_agent TEXT,
+        request_body JSONB,
+        metadata JSONB DEFAULT '{}',
+        status TEXT DEFAULT 'new',
+        resolution_notes TEXT,
+        resolved_by INTEGER,
+        resolved_at TIMESTAMP,
+        notification_sent BOOLEAN DEFAULT false,
+        notification_sent_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    await db.execute(sql`
+      ALTER TABLE error_logs ADD COLUMN IF NOT EXISTS notification_sent_at TIMESTAMP;
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_error_logs_severity ON error_logs(severity);
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_error_logs_status ON error_logs(status);
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_error_logs_created_at ON error_logs(created_at);
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_error_logs_error_type ON error_logs(error_type);
+    `);
+    console.log('✅ Migration completed: error_logs table created');
+    
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     
