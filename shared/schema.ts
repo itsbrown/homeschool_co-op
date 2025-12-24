@@ -2391,3 +2391,71 @@ export const sessionAttendanceRelations = relations(sessionAttendance, ({ one })
   school: one(schools, { fields: [sessionAttendance.schoolId], references: [schools.id] }),
   recorder: one(users, { fields: [sessionAttendance.recordedBy], references: [users.id] }),
 }));
+
+// ==========================================
+// ERROR TRACKING & TELEMETRY
+// ==========================================
+
+// Error Logs - Track application errors for debugging and monitoring
+export const errorLogs = pgTable("error_logs", {
+  id: serial("id").primaryKey(),
+  
+  // Error identification
+  errorType: text("error_type", { 
+    enum: ["frontend", "backend", "api", "database", "auth", "payment", "unknown"] 
+  }).default("unknown").notNull(),
+  severity: text("severity", { 
+    enum: ["low", "medium", "high", "critical"] 
+  }).default("medium").notNull(),
+  
+  // Error details
+  message: text("message").notNull(),
+  stackTrace: text("stack_trace"),
+  errorCode: text("error_code"), // HTTP status code or custom error code
+  
+  // Context
+  url: text("url"), // URL where error occurred
+  route: text("route"), // API route or page route
+  method: text("method"), // HTTP method (GET, POST, etc.)
+  
+  // User context (if authenticated)
+  userId: integer("user_id").references(() => users.id),
+  userEmail: text("user_email"),
+  schoolId: integer("school_id").references(() => schools.id),
+  
+  // Request metadata
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  requestBody: jsonb("request_body"), // Sanitized request body (no PII)
+  
+  // Additional context
+  metadata: jsonb("metadata").default({}).notNull(), // { componentStack, breadcrumbs, custom data }
+  
+  // Resolution tracking
+  status: text("status", { 
+    enum: ["new", "acknowledged", "investigating", "resolved", "ignored"] 
+  }).default("new").notNull(),
+  resolvedBy: integer("resolved_by").references(() => users.id),
+  resolvedAt: timestamp("resolved_at"),
+  resolutionNotes: text("resolution_notes"),
+  
+  // Notification tracking
+  notificationSent: boolean("notification_sent").default(false).notNull(),
+  notificationSentAt: timestamp("notification_sent_at"),
+  
+  // Timestamps
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertErrorLogSchema = createInsertSchema(errorLogs)
+  .omit({ id: true, createdAt: true, updatedAt: true, resolvedAt: true, notificationSentAt: true });
+export type InsertErrorLog = z.infer<typeof insertErrorLogSchema>;
+export type ErrorLog = typeof errorLogs.$inferSelect;
+
+// Error Logs relations
+export const errorLogsRelations = relations(errorLogs, ({ one }) => ({
+  user: one(users, { fields: [errorLogs.userId], references: [users.id] }),
+  school: one(schools, { fields: [errorLogs.schoolId], references: [schools.id] }),
+  resolver: one(users, { fields: [errorLogs.resolvedBy], references: [users.id] }),
+}));
