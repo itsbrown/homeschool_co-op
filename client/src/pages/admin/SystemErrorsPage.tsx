@@ -86,18 +86,18 @@ export default function SystemErrorsPage() {
     const params = new URLSearchParams();
     params.set("limit", limit.toString());
     params.set("offset", offset.toString());
-    if (filters.severity) params.set("severity", filters.severity);
-    if (filters.status) params.set("status", filters.status);
-    if (filters.errorType) params.set("errorType", filters.errorType);
+    if (filters.severity && filters.severity !== 'all') params.set("severity", filters.severity);
+    if (filters.status && filters.status !== 'all') params.set("status", filters.status);
+    if (filters.errorType && filters.errorType !== 'all') params.set("errorType", filters.errorType);
     return params.toString();
   };
 
+  const queryString = buildQueryString();
   const { data: errorsData, isLoading: errorsLoading, refetch } = useQuery<{
     errors: ErrorLog[];
     pagination: { total: number; limit: number; offset: number; hasMore: boolean };
   }>({
-    queryKey: ['/api/telemetry/errors', filters, offset],
-    queryFn: () => fetch(`/api/telemetry/errors?${buildQueryString()}`).then(r => r.json()),
+    queryKey: [`/api/telemetry/errors?${queryString}`],
     enabled: isAuthenticated,
   });
 
@@ -111,7 +111,7 @@ export default function SystemErrorsPage() {
       return apiRequest('PATCH', `/api/telemetry/errors/${id}`, { status, resolutionNotes });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/telemetry/errors'] });
+      refetch();
       queryClient.invalidateQueries({ queryKey: ['/api/telemetry/errors/summary'] });
       setSelectedError(null);
       setResolutionNotes("");
