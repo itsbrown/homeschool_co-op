@@ -1,7 +1,7 @@
 import express from "express";
 import { z } from "zod";
 import { storage } from '../storage';
-import { supabaseAuth } from '../supabase-auth';
+import { supabaseAuth } from '../middleware/supabase-auth';
 import { errorNotificationService } from '../services/error-notification';
 
 const router = express.Router();

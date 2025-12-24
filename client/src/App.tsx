@@ -59,6 +59,7 @@ import OrderConfirmationPage from "./pages/OrderConfirmationPage";
 import RolesAndPermissionsPage from "@/pages/admin/RolesAndPermissionsPage";
 import RoleManagementPage from "@/pages/admin/RoleManagementPage";
 import FeaturesOverviewPage from "@/pages/admin/FeaturesOverviewPage";
+import SystemErrorsPage from "@/pages/admin/SystemErrorsPage";
 import ChildRegistrationPage from "@/pages/ChildRegistrationPage";
 import ChildRegistrationConfirmation from "@/pages/ChildRegistrationConfirmation";
 import ChildRegistrationSuccess from "@/pages/ChildRegistrationSuccess";
@@ -699,6 +700,7 @@ function Router() {
       <Route path="/admin/roles" component={RolesAndPermissionsPage} />
       <Route path="/admin/role-management" component={RoleManagementPage} />
       <Route path="/admin/features" component={FeaturesOverviewPage} />
+      <Route path="/admin/system-errors" component={SystemErrorsPage} />
       <Route path="/admin/classes/edit/:id" component={ClassCreationPage} />
       <Route path="/admin/classes/:classId/enrollments" component={AdminClassEnrollmentsPage} />
       <Route path="/admin/programs" component={Dashboard} />
