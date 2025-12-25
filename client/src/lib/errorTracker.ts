@@ -8,7 +8,8 @@
  * - Correlation IDs: Links frontend → backend error chains
  * - Retry Queue: Retries failed logging attempts
  * - Severity Auto-detection: Payment/auth errors = critical, UI errors = low
- * - User context enrichment: Adds session, route, user info
+ * - Rich Context: Navigation breadcrumbs, user/school context, session metrics,
+ *                 network quality, form context, user action history
  */
 
 import { v4 as uuidv4 } from 'uuid';
@@ -43,6 +44,36 @@ interface QueuedError {
   correlationId: string;
 }
 
+interface BreadcrumbEntry {
+  url: string;
+  route: string;
+  title: string;
+  timestamp: number;
+  timeOnPage?: number;
+}
+
+interface UserAction {
+  type: 'click' | 'input' | 'submit' | 'navigation' | 'scroll';
+  target: string;
+  timestamp: number;
+  metadata?: Record<string, any>;
+}
+
+interface NetworkInfo {
+  effectiveType?: string;
+  downlink?: number;
+  rtt?: number;
+  saveData?: boolean;
+  type?: string;
+}
+
+interface FormContext {
+  formId?: string;
+  formName?: string;
+  fieldNames: string[];
+  hasValidationErrors: boolean;
+}
+
 // Configuration
 const CONFIG = {
   THROTTLE_WINDOW_MS: 60000, // 1 minute
@@ -52,6 +83,8 @@ const CONFIG = {
   MAX_RETRY_ATTEMPTS: 3,
   RETRY_DELAY_MS: 2000,
   BATCH_DELAY_MS: 1000, // Batch errors before sending
+  MAX_BREADCRUMBS: 5, // Last N pages visited
+  MAX_USER_ACTIONS: 10, // Last N user actions
 };
 
 // PII patterns to redact
@@ -64,6 +97,7 @@ const PII_PATTERNS = [
   { pattern: /credit[_-]?card["\s:=]+["']?\d+["']?/gi, replacement: 'credit_card: "[REDACTED]"' },
   { pattern: /\b\d{4}[- ]?\d{4}[- ]?\d{4}[- ]?\d{4}\b/g, replacement: '[REDACTED_CARD]' },
   { pattern: /ssn["\s:=]+["']?\d{3}-?\d{2}-?\d{4}["']?/gi, replacement: 'ssn: "[REDACTED]"' },
+  { pattern: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g, replacement: '[REDACTED_EMAIL]' },
 ];
 
 // Severity keywords for auto-detection
@@ -84,11 +118,184 @@ class ErrorTracker {
   private batchTimeout: ReturnType<typeof setTimeout> | null = null;
   private correlationId: string = '';
   private onNotificationCallback: ((message: string) => void) | null = null;
+  
+  // Enhanced tracking
+  private breadcrumbs: BreadcrumbEntry[] = [];
+  private userActions: UserAction[] = [];
+  private sessionErrorCount: number = 0;
+  private pageEntryTime: number = Date.now();
+  private currentFormContext: FormContext | null = null;
+  private lastScrollPosition: number = 0;
 
   constructor() {
     this.correlationId = this.generateCorrelationId();
     this.startRetryProcessor();
     this.startCacheCleanup();
+    this.initializeTracking();
+  }
+
+  /**
+   * Initialize page tracking and event listeners
+   */
+  private initializeTracking(): void {
+    if (typeof window === 'undefined') return;
+
+    // Track initial page
+    this.recordPageVisit();
+
+    // Track page visibility changes
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') {
+        this.updateCurrentBreadcrumbTimeOnPage();
+      }
+    });
+
+    // Track navigation
+    window.addEventListener('popstate', () => {
+      this.updateCurrentBreadcrumbTimeOnPage();
+      this.recordPageVisit();
+    });
+
+    // Track clicks (delegated)
+    document.addEventListener('click', (e) => {
+      const target = e.target as HTMLElement;
+      this.recordUserAction('click', this.getElementDescriptor(target));
+    }, { capture: true, passive: true });
+
+    // Track form inputs (without values)
+    document.addEventListener('input', (e) => {
+      const target = e.target as HTMLInputElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') {
+        this.recordUserAction('input', this.getElementDescriptor(target));
+        this.updateFormContext(target);
+      }
+    }, { capture: true, passive: true });
+
+    // Track form submissions
+    document.addEventListener('submit', (e) => {
+      const target = e.target as HTMLFormElement;
+      this.recordUserAction('submit', this.getElementDescriptor(target), {
+        formId: target.id,
+        formName: target.name,
+      });
+    }, { capture: true, passive: true });
+
+    // Track scroll (throttled)
+    let scrollTimeout: ReturnType<typeof setTimeout>;
+    window.addEventListener('scroll', () => {
+      clearTimeout(scrollTimeout);
+      scrollTimeout = setTimeout(() => {
+        const scrollPos = Math.round(window.scrollY / document.body.scrollHeight * 100);
+        if (Math.abs(scrollPos - this.lastScrollPosition) > 25) {
+          this.recordUserAction('scroll', `${scrollPos}%`);
+          this.lastScrollPosition = scrollPos;
+        }
+      }, 500);
+    }, { passive: true });
+  }
+
+  /**
+   * Get a descriptor for an element (type, id, class, data-testid)
+   */
+  private getElementDescriptor(element: HTMLElement): string {
+    const tag = element.tagName?.toLowerCase() || 'unknown';
+    const testId = element.getAttribute('data-testid');
+    if (testId) return `[data-testid="${testId}"]`;
+    
+    const id = element.id;
+    if (id) return `${tag}#${id}`;
+    
+    const className = element.className;
+    if (typeof className === 'string' && className) {
+      const firstClass = className.split(' ')[0];
+      return `${tag}.${firstClass}`;
+    }
+    
+    const type = (element as HTMLInputElement).type;
+    if (type) return `${tag}[type="${type}"]`;
+    
+    return tag;
+  }
+
+  /**
+   * Record a user action
+   */
+  private recordUserAction(type: UserAction['type'], target: string, metadata?: Record<string, any>): void {
+    this.userActions.push({
+      type,
+      target,
+      timestamp: Date.now(),
+      metadata,
+    });
+
+    // Keep only last N actions
+    if (this.userActions.length > CONFIG.MAX_USER_ACTIONS) {
+      this.userActions = this.userActions.slice(-CONFIG.MAX_USER_ACTIONS);
+    }
+  }
+
+  /**
+   * Record a page visit as a breadcrumb
+   */
+  recordPageVisit(url?: string, route?: string): void {
+    this.updateCurrentBreadcrumbTimeOnPage();
+    
+    const entry: BreadcrumbEntry = {
+      url: url || window.location.href,
+      route: route || window.location.pathname,
+      title: document.title || '',
+      timestamp: Date.now(),
+    };
+
+    this.breadcrumbs.push(entry);
+    this.pageEntryTime = Date.now();
+
+    // Keep only last N breadcrumbs
+    if (this.breadcrumbs.length > CONFIG.MAX_BREADCRUMBS) {
+      this.breadcrumbs = this.breadcrumbs.slice(-CONFIG.MAX_BREADCRUMBS);
+    }
+
+    // Record as navigation action
+    this.recordUserAction('navigation', entry.route);
+  }
+
+  /**
+   * Update time-on-page for current breadcrumb
+   */
+  private updateCurrentBreadcrumbTimeOnPage(): void {
+    if (this.breadcrumbs.length > 0) {
+      const current = this.breadcrumbs[this.breadcrumbs.length - 1];
+      current.timeOnPage = Date.now() - current.timestamp;
+    }
+  }
+
+  /**
+   * Update form context when interacting with form fields
+   */
+  private updateFormContext(element: HTMLElement): void {
+    const form = element.closest('form');
+    if (!form) {
+      this.currentFormContext = null;
+      return;
+    }
+
+    const fieldNames: string[] = [];
+    const inputs = form.querySelectorAll('input, textarea, select');
+    inputs.forEach((input) => {
+      const name = (input as HTMLInputElement).name || (input as HTMLInputElement).id;
+      if (name && !fieldNames.includes(name)) {
+        fieldNames.push(name);
+      }
+    });
+
+    const hasValidationErrors = form.querySelectorAll('[aria-invalid="true"], .error, .invalid').length > 0;
+
+    this.currentFormContext = {
+      formId: form.id || undefined,
+      formName: form.name || undefined,
+      fieldNames,
+      hasValidationErrors,
+    };
   }
 
   /**
@@ -148,7 +355,7 @@ class ErrorTracker {
     const redacted: Record<string, any> = {};
     for (const [key, value] of Object.entries(obj)) {
       const lowerKey = key.toLowerCase();
-      if (['password', 'token', 'secret', 'apikey', 'api_key', 'authorization', 'creditcard', 'ssn'].includes(lowerKey)) {
+      if (['password', 'token', 'secret', 'apikey', 'api_key', 'authorization', 'creditcard', 'ssn', 'email'].includes(lowerKey)) {
         redacted[key] = '[REDACTED]';
       } else {
         redacted[key] = this.redactObject(value, depth + 1);
@@ -238,25 +445,111 @@ class ErrorTracker {
   }
 
   /**
-   * Get user context for error enrichment
+   * Get network information
+   */
+  private getNetworkInfo(): NetworkInfo {
+    try {
+      const connection = (navigator as any).connection || (navigator as any).mozConnection || (navigator as any).webkitConnection;
+      if (connection) {
+        return {
+          effectiveType: connection.effectiveType, // '4g', '3g', '2g', 'slow-2g'
+          downlink: connection.downlink, // Mbps
+          rtt: connection.rtt, // Round-trip time in ms
+          saveData: connection.saveData, // User has data saver enabled
+          type: connection.type, // 'wifi', 'cellular', etc.
+        };
+      }
+    } catch {}
+    return {};
+  }
+
+  /**
+   * Get user and school context
+   */
+  private getUserSchoolContext(): Record<string, any> {
+    try {
+      // Try to get user context from localStorage/sessionStorage
+      const activeRole = localStorage.getItem('activeRole');
+      const selectedSchoolId = localStorage.getItem('selectedSchoolId');
+      const userId = sessionStorage.getItem('userId');
+      const userEmail = sessionStorage.getItem('userEmailHint'); // Only hint, not full email
+      
+      return {
+        userId: userId ? parseInt(userId) : null,
+        userEmailHint: userEmail ? userEmail.split('@')[0].slice(0, 3) + '***' : null,
+        schoolId: selectedSchoolId ? parseInt(selectedSchoolId) : null,
+        activeRole: activeRole || null,
+      };
+    } catch {
+      return {};
+    }
+  }
+
+  /**
+   * Get comprehensive user context for error enrichment
    */
   private getUserContext(): Record<string, any> {
     try {
       const token = localStorage.getItem('supabase_token');
-      const activeRole = localStorage.getItem('activeRole');
+      const userSchoolContext = this.getUserSchoolContext();
+      const networkInfo = this.getNetworkInfo();
+      
+      // Calculate time on current page
+      const timeOnCurrentPage = Date.now() - this.pageEntryTime;
       
       return {
+        // Session info
         hasSession: !!token,
-        activeRole: activeRole || null,
         correlationId: this.correlationId,
         sessionStart: sessionStorage.getItem('sessionStart') || new Date().toISOString(),
+        sessionErrorCount: this.sessionErrorCount,
+        
+        // User/School context
+        ...userSchoolContext,
+        
+        // Page context
         pageLoadTime: performance?.timing?.loadEventEnd - performance?.timing?.navigationStart || null,
+        timeOnCurrentPage,
+        
+        // Navigation breadcrumbs (last 5 pages)
+        breadcrumbs: this.breadcrumbs.map(b => ({
+          route: b.route,
+          title: b.title,
+          timeOnPage: b.timeOnPage,
+          timestamp: new Date(b.timestamp).toISOString(),
+        })),
+        
+        // Recent user actions (last 10)
+        recentActions: this.userActions.slice(-5).map(a => ({
+          type: a.type,
+          target: a.target,
+          secondsAgo: Math.round((Date.now() - a.timestamp) / 1000),
+        })),
+        
+        // Form context (if in a form)
+        formContext: this.currentFormContext ? {
+          formId: this.currentFormContext.formId,
+          formName: this.currentFormContext.formName,
+          fieldCount: this.currentFormContext.fieldNames.length,
+          hasValidationErrors: this.currentFormContext.hasValidationErrors,
+        } : null,
+        
+        // Network quality
+        network: Object.keys(networkInfo).length > 0 ? networkInfo : null,
+        
+        // Device/Browser info
         viewportWidth: window.innerWidth,
         viewportHeight: window.innerHeight,
         userAgent: navigator.userAgent,
         language: navigator.language,
         online: navigator.onLine,
         referrer: document.referrer || null,
+        
+        // Performance hints
+        memoryUsage: (performance as any).memory ? {
+          usedJSHeapSize: Math.round((performance as any).memory.usedJSHeapSize / 1024 / 1024),
+          totalJSHeapSize: Math.round((performance as any).memory.totalJSHeapSize / 1024 / 1024),
+        } : null,
       };
     } catch {
       return { correlationId: this.correlationId };
@@ -268,6 +561,9 @@ class ErrorTracker {
    */
   async captureError(context: ErrorContext): Promise<boolean> {
     try {
+      // Increment session error count
+      this.sessionErrorCount++;
+      
       // Redact PII from context
       const sanitizedContext: ErrorContext = {
         ...context,
@@ -451,12 +747,27 @@ class ErrorTracker {
   /**
    * Get current error stats (for debugging)
    */
-  getStats(): { cacheSize: number; queueSize: number; errorsThisMinute: number } {
+  getStats(): { cacheSize: number; queueSize: number; errorsThisMinute: number; sessionErrorCount: number } {
     return {
       cacheSize: this.errorCache.size,
       queueSize: this.retryQueue.length,
       errorsThisMinute: this.totalErrorsThisMinute,
+      sessionErrorCount: this.sessionErrorCount,
     };
+  }
+
+  /**
+   * Get current breadcrumbs (for debugging)
+   */
+  getBreadcrumbs(): BreadcrumbEntry[] {
+    return [...this.breadcrumbs];
+  }
+
+  /**
+   * Get recent actions (for debugging)
+   */
+  getRecentActions(): UserAction[] {
+    return [...this.userActions];
   }
 }
 

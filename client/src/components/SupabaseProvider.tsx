@@ -101,6 +101,18 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({
         userId: session?.user?.id
       });
 
+      // Store user context in sessionStorage for error tracking (privacy-safe hints)
+      if (session?.user) {
+        const email = session.user.email || '';
+        sessionStorage.setItem('userEmailHint', email.split('@')[0].slice(0, 3) + '***');
+        // We'll get the database userId from RoleContext, but store Supabase UUID for now
+        sessionStorage.setItem('supabaseUserId', session.user.id);
+      } else {
+        sessionStorage.removeItem('userEmailHint');
+        sessionStorage.removeItem('supabaseUserId');
+        sessionStorage.removeItem('userId');
+      }
+
       // Manage access token
       if (session?.access_token) {
         localStorage.setItem("supabase_token", session.access_token);
@@ -178,6 +190,11 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({
       setUser(null);
       setSession(null);
       setIsLoading(false);
+
+      // Clear error tracking session storage
+      sessionStorage.removeItem('userEmailHint');
+      sessionStorage.removeItem('supabaseUserId');
+      sessionStorage.removeItem('userId');
 
       // Sign out from Supabase (do this after clearing state)
       const { error } = await supabaseClient.auth.signOut({ scope: 'global' });
