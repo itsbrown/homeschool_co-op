@@ -143,6 +143,7 @@ userRolesRouter.get('/roles', supabaseAuth, async (req: AuthenticatedRequest, re
     const effectiveActiveRoleId = currentUser?.activeRoleId;
 
     const response = {
+      userId, // Include database user ID for error tracking and context
       roles: roles.map((r: any) => ({
         id: r.id,
         role: r.role,

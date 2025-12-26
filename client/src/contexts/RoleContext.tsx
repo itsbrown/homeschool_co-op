@@ -177,6 +177,17 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
     }
   }, [isSettingUpAccount, roleRetryCount, toast]);
 
+  // Store userId in sessionStorage for error tracking (always when rolesData changes)
+  useEffect(() => {
+    try {
+      if (rolesData?.userId) {
+        sessionStorage.setItem('userId', String(rolesData.userId));
+      }
+    } catch {
+      // Silently fail if sessionStorage unavailable
+    }
+  }, [rolesData?.userId]);
+
   const availableRoles: UserRole[] = rolesData?.roles || [];
 
   // Determine if user has multiple roles
@@ -214,6 +225,13 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
         localStorage.removeItem('selectedRole');
         localStorage.removeItem('userRole');
         localStorage.removeItem('activeRole');
+        
+        // Clear error tracking context from sessionStorage
+        try {
+          sessionStorage.removeItem('userId');
+        } catch {
+          // Silently fail if sessionStorage unavailable
+        }
         return;
       }
 

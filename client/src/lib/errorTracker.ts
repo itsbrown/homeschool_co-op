@@ -10,6 +10,8 @@
  * - Severity Auto-detection: Payment/auth errors = critical, UI errors = low
  * - Rich Context: Navigation breadcrumbs, user/school context, session metrics,
  *                 network quality, form context, user action history
+ * - Safe Event Listeners: All DOM event handlers wrapped in try-catch to prevent
+ *                         interference with application behavior
  */
 
 import { v4 as uuidv4 } from 'uuid';
@@ -136,101 +138,170 @@ class ErrorTracker {
 
   /**
    * Initialize page tracking and event listeners
+   * All event handlers are wrapped in try-catch to ensure they never
+   * interfere with normal application behavior
    */
   private initializeTracking(): void {
     if (typeof window === 'undefined') return;
 
-    // Track initial page
-    this.recordPageVisit();
+    // Track initial page (safe)
+    try {
+      this.recordPageVisit();
+    } catch {
+      // Silently fail - tracking is non-critical
+    }
 
     // Track page visibility changes
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'hidden') {
-        this.updateCurrentBreadcrumbTimeOnPage();
+      try {
+        if (document.visibilityState === 'hidden') {
+          this.updateCurrentBreadcrumbTimeOnPage();
+        }
+      } catch {
+        // Silently fail
       }
     });
 
     // Track navigation
     window.addEventListener('popstate', () => {
-      this.updateCurrentBreadcrumbTimeOnPage();
-      this.recordPageVisit();
+      try {
+        this.updateCurrentBreadcrumbTimeOnPage();
+        this.recordPageVisit();
+      } catch {
+        // Silently fail
+      }
     });
 
-    // Track clicks (delegated)
+    // Track clicks (delegated) - MUST NOT throw to avoid breaking clicks
     document.addEventListener('click', (e) => {
-      const target = e.target as HTMLElement;
-      this.recordUserAction('click', this.getElementDescriptor(target));
-    }, { capture: true, passive: true });
-
-    // Track form inputs (without values)
-    document.addEventListener('input', (e) => {
-      const target = e.target as HTMLInputElement;
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') {
-        this.recordUserAction('input', this.getElementDescriptor(target));
-        this.updateFormContext(target);
+      try {
+        const target = e.target;
+        if (target && typeof target === 'object') {
+          this.recordUserAction('click', this.getElementDescriptor(target as HTMLElement));
+        }
+      } catch {
+        // Silently fail - never interrupt user clicks
       }
     }, { capture: true, passive: true });
 
-    // Track form submissions
+    // Track form inputs (without values) - MUST NOT throw
+    document.addEventListener('input', (e) => {
+      try {
+        const target = e.target;
+        if (target && typeof target === 'object') {
+          const el = target as HTMLElement;
+          const tagName = el.tagName?.toUpperCase();
+          if (tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT') {
+            this.recordUserAction('input', this.getElementDescriptor(el));
+            this.updateFormContext(el);
+          }
+        }
+      } catch {
+        // Silently fail - never interrupt form inputs
+      }
+    }, { capture: true, passive: true });
+
+    // Track form submissions - MUST NOT throw
     document.addEventListener('submit', (e) => {
-      const target = e.target as HTMLFormElement;
-      this.recordUserAction('submit', this.getElementDescriptor(target), {
-        formId: target.id,
-        formName: target.name,
-      });
+      try {
+        const target = e.target;
+        if (target && typeof target === 'object') {
+          const form = target as HTMLFormElement;
+          this.recordUserAction('submit', this.getElementDescriptor(form), {
+            formId: form.id || undefined,
+            formName: form.name || undefined,
+          });
+        }
+      } catch {
+        // Silently fail - never interrupt form submissions
+      }
     }, { capture: true, passive: true });
 
     // Track scroll (throttled)
     let scrollTimeout: ReturnType<typeof setTimeout>;
     window.addEventListener('scroll', () => {
-      clearTimeout(scrollTimeout);
-      scrollTimeout = setTimeout(() => {
-        const scrollPos = Math.round(window.scrollY / document.body.scrollHeight * 100);
-        if (Math.abs(scrollPos - this.lastScrollPosition) > 25) {
-          this.recordUserAction('scroll', `${scrollPos}%`);
-          this.lastScrollPosition = scrollPos;
-        }
-      }, 500);
+      try {
+        clearTimeout(scrollTimeout);
+        scrollTimeout = setTimeout(() => {
+          try {
+            const bodyHeight = document.body?.scrollHeight || 1;
+            const scrollPos = Math.round(window.scrollY / bodyHeight * 100);
+            if (Math.abs(scrollPos - this.lastScrollPosition) > 25) {
+              this.recordUserAction('scroll', `${scrollPos}%`);
+              this.lastScrollPosition = scrollPos;
+            }
+          } catch {
+            // Silently fail
+          }
+        }, 500);
+      } catch {
+        // Silently fail
+      }
     }, { passive: true });
   }
 
   /**
    * Get a descriptor for an element (type, id, class, data-testid)
+   * Defensive: handles null, SVG, and other edge cases
    */
-  private getElementDescriptor(element: HTMLElement): string {
-    const tag = element.tagName?.toLowerCase() || 'unknown';
-    const testId = element.getAttribute('data-testid');
-    if (testId) return `[data-testid="${testId}"]`;
-    
-    const id = element.id;
-    if (id) return `${tag}#${id}`;
-    
-    const className = element.className;
-    if (typeof className === 'string' && className) {
-      const firstClass = className.split(' ')[0];
-      return `${tag}.${firstClass}`;
+  private getElementDescriptor(element: HTMLElement | null | undefined): string {
+    try {
+      if (!element) return 'unknown';
+      
+      // Handle SVG elements and other non-standard elements
+      const tag = element.tagName?.toLowerCase() || 'unknown';
+      
+      // Try data-testid first (most reliable)
+      try {
+        const testId = element.getAttribute?.('data-testid');
+        if (testId) return `[data-testid="${testId}"]`;
+      } catch {
+        // Continue to other methods
+      }
+      
+      // Try id
+      const id = element.id;
+      if (id && typeof id === 'string') return `${tag}#${id}`;
+      
+      // Try className (SVG elements may have className as SVGAnimatedString)
+      const className = element.className;
+      if (className && typeof className === 'string' && className.trim()) {
+        const firstClass = className.split(' ')[0];
+        if (firstClass) return `${tag}.${firstClass}`;
+      }
+      
+      // Try type for inputs
+      try {
+        const type = (element as HTMLInputElement).type;
+        if (type && typeof type === 'string') return `${tag}[type="${type}"]`;
+      } catch {
+        // Continue
+      }
+      
+      return tag;
+    } catch {
+      return 'unknown';
     }
-    
-    const type = (element as HTMLInputElement).type;
-    if (type) return `${tag}[type="${type}"]`;
-    
-    return tag;
   }
 
   /**
-   * Record a user action
+   * Record a user action - safe, never throws
    */
   private recordUserAction(type: UserAction['type'], target: string, metadata?: Record<string, any>): void {
-    this.userActions.push({
-      type,
-      target,
-      timestamp: Date.now(),
-      metadata,
-    });
+    try {
+      this.userActions.push({
+        type,
+        target: target || 'unknown',
+        timestamp: Date.now(),
+        metadata,
+      });
 
-    // Keep only last N actions
-    if (this.userActions.length > CONFIG.MAX_USER_ACTIONS) {
-      this.userActions = this.userActions.slice(-CONFIG.MAX_USER_ACTIONS);
+      // Keep only last N actions
+      if (this.userActions.length > CONFIG.MAX_USER_ACTIONS) {
+        this.userActions = this.userActions.slice(-CONFIG.MAX_USER_ACTIONS);
+      }
+    } catch {
+      // Silently fail
     }
   }
 
@@ -238,64 +309,106 @@ class ErrorTracker {
    * Record a page visit as a breadcrumb
    */
   recordPageVisit(url?: string, route?: string): void {
-    this.updateCurrentBreadcrumbTimeOnPage();
-    
-    const entry: BreadcrumbEntry = {
-      url: url || window.location.href,
-      route: route || window.location.pathname,
-      title: document.title || '',
-      timestamp: Date.now(),
-    };
+    try {
+      this.updateCurrentBreadcrumbTimeOnPage();
+      
+      const entry: BreadcrumbEntry = {
+        url: url || window.location?.href || '',
+        route: route || window.location?.pathname || '',
+        title: document?.title || '',
+        timestamp: Date.now(),
+      };
 
-    this.breadcrumbs.push(entry);
-    this.pageEntryTime = Date.now();
+      this.breadcrumbs.push(entry);
+      this.pageEntryTime = Date.now();
 
-    // Keep only last N breadcrumbs
-    if (this.breadcrumbs.length > CONFIG.MAX_BREADCRUMBS) {
-      this.breadcrumbs = this.breadcrumbs.slice(-CONFIG.MAX_BREADCRUMBS);
+      // Keep only last N breadcrumbs
+      if (this.breadcrumbs.length > CONFIG.MAX_BREADCRUMBS) {
+        this.breadcrumbs = this.breadcrumbs.slice(-CONFIG.MAX_BREADCRUMBS);
+      }
+
+      // Record as navigation action
+      this.recordUserAction('navigation', entry.route);
+    } catch {
+      // Silently fail
     }
-
-    // Record as navigation action
-    this.recordUserAction('navigation', entry.route);
   }
 
   /**
    * Update time-on-page for current breadcrumb
    */
   private updateCurrentBreadcrumbTimeOnPage(): void {
-    if (this.breadcrumbs.length > 0) {
-      const current = this.breadcrumbs[this.breadcrumbs.length - 1];
-      current.timeOnPage = Date.now() - current.timestamp;
+    try {
+      if (this.breadcrumbs.length > 0) {
+        const current = this.breadcrumbs[this.breadcrumbs.length - 1];
+        if (current) {
+          current.timeOnPage = Date.now() - current.timestamp;
+        }
+      }
+    } catch {
+      // Silently fail
     }
   }
 
   /**
    * Update form context when interacting with form fields
+   * Defensive: handles detached elements, null forms
    */
-  private updateFormContext(element: HTMLElement): void {
-    const form = element.closest('form');
-    if (!form) {
-      this.currentFormContext = null;
-      return;
-    }
-
-    const fieldNames: string[] = [];
-    const inputs = form.querySelectorAll('input, textarea, select');
-    inputs.forEach((input) => {
-      const name = (input as HTMLInputElement).name || (input as HTMLInputElement).id;
-      if (name && !fieldNames.includes(name)) {
-        fieldNames.push(name);
+  private updateFormContext(element: HTMLElement | null | undefined): void {
+    try {
+      if (!element) {
+        this.currentFormContext = null;
+        return;
       }
-    });
 
-    const hasValidationErrors = form.querySelectorAll('[aria-invalid="true"], .error, .invalid').length > 0;
+      // Safe check for closest method
+      if (typeof element.closest !== 'function') {
+        this.currentFormContext = null;
+        return;
+      }
 
-    this.currentFormContext = {
-      formId: form.id || undefined,
-      formName: form.name || undefined,
-      fieldNames,
-      hasValidationErrors,
-    };
+      const form = element.closest('form');
+      if (!form) {
+        this.currentFormContext = null;
+        return;
+      }
+
+      const fieldNames: string[] = [];
+      
+      // Safe querySelectorAll
+      try {
+        const inputs = form.querySelectorAll('input, textarea, select');
+        inputs.forEach((input) => {
+          try {
+            const el = input as HTMLInputElement;
+            const name = el.name || el.id;
+            if (name && typeof name === 'string' && !fieldNames.includes(name)) {
+              fieldNames.push(name);
+            }
+          } catch {
+            // Skip this input
+          }
+        });
+      } catch {
+        // Continue without field names
+      }
+
+      let hasValidationErrors = false;
+      try {
+        hasValidationErrors = form.querySelectorAll('[aria-invalid="true"], .error, .invalid').length > 0;
+      } catch {
+        // Default to false
+      }
+
+      this.currentFormContext = {
+        formId: form.id || undefined,
+        formName: form.name || undefined,
+        fieldNames,
+        hasValidationErrors,
+      };
+    } catch {
+      this.currentFormContext = null;
+    }
   }
 
   /**
@@ -327,17 +440,26 @@ class ErrorTracker {
    * Create a hash for error deduplication
    */
   private createErrorHash(context: ErrorContext): string {
-    const key = `${context.message}|${context.route || ''}|${context.component || ''}|${context.action || ''}`;
-    return btoa(encodeURIComponent(key)).slice(0, 32);
+    try {
+      const key = `${context.message}|${context.route || ''}|${context.component || ''}|${context.action || ''}`;
+      return btoa(encodeURIComponent(key)).slice(0, 32);
+    } catch {
+      return `${Date.now()}`;
+    }
   }
 
   /**
    * Redact PII from text
    */
   private redactPII(text: string): string {
+    if (!text || typeof text !== 'string') return text || '';
     let redacted = text;
     for (const { pattern, replacement } of PII_PATTERNS) {
-      redacted = redacted.replace(pattern, replacement);
+      try {
+        redacted = redacted.replace(pattern, replacement);
+      } catch {
+        // Continue with other patterns
+      }
     }
     return redacted;
   }
@@ -346,22 +468,26 @@ class ErrorTracker {
    * Redact PII from an object recursively
    */
   private redactObject(obj: any, depth = 0): any {
-    if (depth > 10) return '[MAX_DEPTH]';
-    if (obj === null || obj === undefined) return obj;
-    if (typeof obj === 'string') return this.redactPII(obj);
-    if (typeof obj !== 'object') return obj;
-    if (Array.isArray(obj)) return obj.map(item => this.redactObject(item, depth + 1));
-    
-    const redacted: Record<string, any> = {};
-    for (const [key, value] of Object.entries(obj)) {
-      const lowerKey = key.toLowerCase();
-      if (['password', 'token', 'secret', 'apikey', 'api_key', 'authorization', 'creditcard', 'ssn', 'email'].includes(lowerKey)) {
-        redacted[key] = '[REDACTED]';
-      } else {
-        redacted[key] = this.redactObject(value, depth + 1);
+    try {
+      if (depth > 10) return '[MAX_DEPTH]';
+      if (obj === null || obj === undefined) return obj;
+      if (typeof obj === 'string') return this.redactPII(obj);
+      if (typeof obj !== 'object') return obj;
+      if (Array.isArray(obj)) return obj.map(item => this.redactObject(item, depth + 1));
+      
+      const redacted: Record<string, any> = {};
+      for (const [key, value] of Object.entries(obj)) {
+        const lowerKey = key.toLowerCase();
+        if (['password', 'token', 'secret', 'apikey', 'api_key', 'authorization', 'creditcard', 'ssn', 'email'].includes(lowerKey)) {
+          redacted[key] = '[REDACTED]';
+        } else {
+          redacted[key] = this.redactObject(value, depth + 1);
+        }
       }
+      return redacted;
+    } catch {
+      return '[REDACTION_ERROR]';
     }
-    return redacted;
   }
 
   /**
@@ -370,18 +496,22 @@ class ErrorTracker {
   private detectSeverity(context: ErrorContext): 'low' | 'medium' | 'high' | 'critical' {
     if (context.severity) return context.severity;
 
-    const searchText = `${context.message} ${context.route || ''} ${context.component || ''} ${context.action || ''}`.toLowerCase();
+    try {
+      const searchText = `${context.message} ${context.route || ''} ${context.component || ''} ${context.action || ''}`.toLowerCase();
 
-    for (const [severity, keywords] of Object.entries(SEVERITY_KEYWORDS)) {
-      if (keywords.some(keyword => searchText.includes(keyword))) {
-        return severity as 'low' | 'medium' | 'high' | 'critical';
+      for (const [severity, keywords] of Object.entries(SEVERITY_KEYWORDS)) {
+        if (keywords.some(keyword => searchText.includes(keyword))) {
+          return severity as 'low' | 'medium' | 'high' | 'critical';
+        }
       }
-    }
 
-    // Default based on status code
-    if (context.statusCode) {
-      if (context.statusCode >= 500) return 'high';
-      if (context.statusCode >= 400) return 'medium';
+      // Default based on status code
+      if (context.statusCode) {
+        if (context.statusCode >= 500) return 'high';
+        if (context.statusCode >= 400) return 'medium';
+      }
+    } catch {
+      // Default to medium
     }
 
     return 'medium';
@@ -393,12 +523,16 @@ class ErrorTracker {
   private detectErrorType(context: ErrorContext): 'frontend' | 'backend' | 'api' | 'database' | 'auth' | 'payment' {
     if (context.errorType) return context.errorType;
 
-    const searchText = `${context.message} ${context.route || ''} ${context.action || ''}`.toLowerCase();
+    try {
+      const searchText = `${context.message} ${context.route || ''} ${context.action || ''}`.toLowerCase();
 
-    if (searchText.includes('payment') || searchText.includes('stripe') || searchText.includes('billing')) return 'payment';
-    if (searchText.includes('auth') || searchText.includes('login') || searchText.includes('session') || searchText.includes('401') || searchText.includes('403')) return 'auth';
-    if (searchText.includes('database') || searchText.includes('sql') || searchText.includes('query')) return 'database';
-    if (searchText.includes('api') || context.route?.includes('/api/')) return 'api';
+      if (searchText.includes('payment') || searchText.includes('stripe') || searchText.includes('billing')) return 'payment';
+      if (searchText.includes('auth') || searchText.includes('login') || searchText.includes('session') || searchText.includes('401') || searchText.includes('403')) return 'auth';
+      if (searchText.includes('database') || searchText.includes('sql') || searchText.includes('query')) return 'database';
+      if (searchText.includes('api') || context.route?.includes('/api/')) return 'api';
+    } catch {
+      // Default to frontend
+    }
     
     return 'frontend';
   }
@@ -407,27 +541,31 @@ class ErrorTracker {
    * Check if we should throttle this error
    */
   private shouldThrottle(errorHash: string): boolean {
-    // Reset counter every minute
-    const now = Date.now();
-    if (now - this.lastMinuteReset > CONFIG.THROTTLE_WINDOW_MS) {
-      this.totalErrorsThisMinute = 0;
-      this.lastMinuteReset = now;
-    }
+    try {
+      // Reset counter every minute
+      const now = Date.now();
+      if (now - this.lastMinuteReset > CONFIG.THROTTLE_WINDOW_MS) {
+        this.totalErrorsThisMinute = 0;
+        this.lastMinuteReset = now;
+      }
 
-    // Check total errors limit
-    if (this.totalErrorsThisMinute >= CONFIG.MAX_TOTAL_ERRORS_PER_MINUTE) {
-      console.warn('[ErrorTracker] Total errors per minute limit reached, throttling');
-      return true;
-    }
-
-    // Check per-error limit
-    const cached = this.errorCache.get(errorHash);
-    if (cached) {
-      const timeSinceFirst = now - cached.firstSeen.getTime();
-      if (timeSinceFirst < CONFIG.THROTTLE_WINDOW_MS && cached.count >= CONFIG.MAX_ERRORS_PER_MINUTE) {
-        console.warn(`[ErrorTracker] Error "${cached.context.message.slice(0, 50)}..." throttled (${cached.count} occurrences)`);
+      // Check total errors limit
+      if (this.totalErrorsThisMinute >= CONFIG.MAX_TOTAL_ERRORS_PER_MINUTE) {
+        console.warn('[ErrorTracker] Total errors per minute limit reached, throttling');
         return true;
       }
+
+      // Check per-error limit
+      const cached = this.errorCache.get(errorHash);
+      if (cached) {
+        const timeSinceFirst = now - cached.firstSeen.getTime();
+        if (timeSinceFirst < CONFIG.THROTTLE_WINDOW_MS && cached.count >= CONFIG.MAX_ERRORS_PER_MINUTE) {
+          console.warn(`[ErrorTracker] Error "${cached.context.message.slice(0, 50)}..." throttled (${cached.count} occurrences)`);
+          return true;
+        }
+      }
+    } catch {
+      // Don't throttle on error
     }
 
     return false;
@@ -437,11 +575,15 @@ class ErrorTracker {
    * Check if error is a duplicate within dedup window
    */
   private isDuplicate(errorHash: string): boolean {
-    const cached = this.errorCache.get(errorHash);
-    if (!cached) return false;
-    
-    const timeSinceLast = Date.now() - cached.lastSeen.getTime();
-    return timeSinceLast < CONFIG.DEDUP_WINDOW_MS;
+    try {
+      const cached = this.errorCache.get(errorHash);
+      if (!cached) return false;
+      
+      const timeSinceLast = Date.now() - cached.lastSeen.getTime();
+      return timeSinceLast < CONFIG.DEDUP_WINDOW_MS;
+    } catch {
+      return false;
+    }
   }
 
   /**
@@ -452,31 +594,32 @@ class ErrorTracker {
       const connection = (navigator as any).connection || (navigator as any).mozConnection || (navigator as any).webkitConnection;
       if (connection) {
         return {
-          effectiveType: connection.effectiveType, // '4g', '3g', '2g', 'slow-2g'
-          downlink: connection.downlink, // Mbps
-          rtt: connection.rtt, // Round-trip time in ms
-          saveData: connection.saveData, // User has data saver enabled
-          type: connection.type, // 'wifi', 'cellular', etc.
+          effectiveType: connection.effectiveType,
+          downlink: connection.downlink,
+          rtt: connection.rtt,
+          saveData: connection.saveData,
+          type: connection.type,
         };
       }
-    } catch {}
+    } catch {
+      // Return empty
+    }
     return {};
   }
 
   /**
-   * Get user and school context
+   * Get user and school context from session/local storage
    */
   private getUserSchoolContext(): Record<string, any> {
     try {
-      // Try to get user context from localStorage/sessionStorage
       const activeRole = localStorage.getItem('activeRole');
       const selectedSchoolId = localStorage.getItem('selectedSchoolId');
       const userId = sessionStorage.getItem('userId');
-      const userEmail = sessionStorage.getItem('userEmailHint'); // Only hint, not full email
+      const userEmail = sessionStorage.getItem('userEmailHint');
       
       return {
         userId: userId ? parseInt(userId) : null,
-        userEmailHint: userEmail ? userEmail.split('@')[0].slice(0, 3) + '***' : null,
+        userEmailHint: userEmail || null,
         schoolId: selectedSchoolId ? parseInt(selectedSchoolId) : null,
         activeRole: activeRole || null,
       };
@@ -519,7 +662,7 @@ class ErrorTracker {
           timestamp: new Date(b.timestamp).toISOString(),
         })),
         
-        // Recent user actions (last 10)
+        // Recent user actions (last 5)
         recentActions: this.userActions.slice(-5).map(a => ({
           type: a.type,
           target: a.target,
@@ -581,11 +724,13 @@ class ErrorTracker {
 
       // Check for duplicate
       if (this.isDuplicate(errorHash)) {
-        const cached = this.errorCache.get(errorHash)!;
-        cached.count++;
-        cached.lastSeen = new Date();
-        console.log(`[ErrorTracker] Deduplicated error (count: ${cached.count})`);
-        return cached.reported;
+        const cached = this.errorCache.get(errorHash);
+        if (cached) {
+          cached.count++;
+          cached.lastSeen = new Date();
+          console.log(`[ErrorTracker] Deduplicated error (count: ${cached.count})`);
+          return cached.reported;
+        }
       }
 
       // Check throttling
@@ -734,12 +879,16 @@ class ErrorTracker {
    */
   private startCacheCleanup(): void {
     setInterval(() => {
-      const now = Date.now();
-      for (const [hash, entry] of this.errorCache.entries()) {
-        // Remove entries older than 5 minutes
-        if (now - entry.lastSeen.getTime() > 5 * 60 * 1000) {
-          this.errorCache.delete(hash);
+      try {
+        const now = Date.now();
+        for (const [hash, entry] of this.errorCache.entries()) {
+          // Remove entries older than 5 minutes
+          if (now - entry.lastSeen.getTime() > 5 * 60 * 1000) {
+            this.errorCache.delete(hash);
+          }
         }
+      } catch {
+        // Silently fail
       }
     }, 60000); // Clean every minute
   }
@@ -808,9 +957,13 @@ export function captureApiError(
 
 // Set up correlation ID in session storage for page reloads
 if (typeof window !== 'undefined') {
-  const existingSessionStart = sessionStorage.getItem('sessionStart');
-  if (!existingSessionStart) {
-    sessionStorage.setItem('sessionStart', new Date().toISOString());
+  try {
+    const existingSessionStart = sessionStorage.getItem('sessionStart');
+    if (!existingSessionStart) {
+      sessionStorage.setItem('sessionStart', new Date().toISOString());
+    }
+  } catch {
+    // Silently fail if sessionStorage is not available
   }
 }
 
