@@ -955,6 +955,55 @@ export function captureApiError(
   });
 }
 
+// Helper for capturing 404 page not found errors
+export function capture404(
+  attemptedUrl: string,
+  metadata?: Record<string, any>
+): Promise<boolean> {
+  const referrer = typeof document !== 'undefined' ? document.referrer : '';
+  const previousPage = errorTracker.getBreadcrumbs().slice(-2, -1)[0]?.route || referrer || 'direct navigation';
+  
+  return errorTracker.captureError({
+    message: `404 Page Not Found: ${attemptedUrl}`,
+    statusCode: 404,
+    route: attemptedUrl,
+    url: typeof window !== 'undefined' ? window.location.href : attemptedUrl,
+    errorType: 'frontend',
+    severity: 'medium',
+    component: 'NotFound',
+    action: 'page_navigation',
+    metadata: {
+      ...metadata,
+      attemptedUrl,
+      referrer,
+      previousPage,
+      navigationSource: referrer ? 'referrer' : 'direct',
+    },
+  });
+}
+
+// Helper for capturing API 404 responses
+export function captureApi404(
+  endpoint: string,
+  method: string,
+  metadata?: Record<string, any>
+): Promise<boolean> {
+  return errorTracker.captureError({
+    message: `API 404: ${method} ${endpoint} - Resource not found`,
+    statusCode: 404,
+    route: endpoint,
+    method,
+    errorType: 'api',
+    severity: 'medium',
+    action: 'api_request',
+    metadata: {
+      ...metadata,
+      endpoint,
+      httpMethod: method,
+    },
+  });
+}
+
 // Set up correlation ID in session storage for page reloads
 if (typeof window !== 'undefined') {
   try {

@@ -1,6 +1,6 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 import { supabase } from "@/components/SupabaseProvider";
-import { captureApiError } from "@/lib/errorTracker";
+import { captureApiError, captureApi404 } from "@/lib/errorTracker";
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
@@ -164,13 +164,21 @@ export async function apiRequest(
     
     // Capture API error in error tracking (don't capture telemetry endpoint errors to avoid loops)
     if (!finalUrl.includes('/api/telemetry/')) {
-      captureApiError(
-        errorText || `API Error: ${response.statusText}`,
-        response.status,
-        finalUrl,
-        method,
-        { originalUrl: url }
-      );
+      // Use specific 404 tracker for not found responses
+      if (response.status === 404) {
+        captureApi404(finalUrl, method, { 
+          originalUrl: url,
+          responseBody: errorText?.slice(0, 200),
+        });
+      } else {
+        captureApiError(
+          errorText || `API Error: ${response.statusText}`,
+          response.status,
+          finalUrl,
+          method,
+          { originalUrl: url }
+        );
+      }
     }
     
     // Now call throwIfResNotOk with the original response
