@@ -35,7 +35,10 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
     
     console.log('💳 Creating payment intent for authenticated user:', userEmail);
 
-    const { items, subtotal, discounts, total, parentEmail, paymentPlan = 'full', paymentFrequency = 'one_time', membership } = req.body;
+    const { items, subtotal, discounts, total, parentEmail, paymentPlan = 'full', paymentFrequency = 'one_time', membership, promoCode } = req.body;
+    
+    // Log received promo code for debugging
+    console.log('🎟️ Received promoCode from client:', promoCode);
 
     // Validate required fields - either items OR membership must be present
     const hasItems = items && Array.isArray(items) && items.length > 0;
@@ -384,8 +387,9 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
         variantId: item.variantId
       }));
       
-      // Extract promo code from client-sent discounts (if any)
-      const appliedPromoCode = discounts?.appliedDiscounts?.find((d: any) => d.sourceType === 'promo')?.code || req.body.promoCode;
+      // Extract promo code - prefer explicitly passed promoCode, fallback to discounts structure
+      const appliedPromoCode = promoCode || discounts?.appliedDiscounts?.find((d: any) => d.sourceType === 'promo')?.code || null;
+      console.log('🎟️ Final appliedPromoCode for cart pricing:', appliedPromoCode);
       
       // Store cart pricing at handler level for later discount snapshot building
       cartPricingResult = await calculateCartPricing(
