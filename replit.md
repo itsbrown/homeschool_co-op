@@ -54,7 +54,19 @@ The platform prioritizes scalability, security, and user experience, incorporati
 -   **Membership Management System**: Admin interface for managing annual membership fees and enrollment validation.
 -   **Payment System**: Stripe-only system with subscription schedules, webhooks, smart cart logic, automated refunds, and payment reminders. **SECURITY (Dec 2025)**: Server-side authoritative pricing - all payment amounts are calculated from database lookups, never trusted from client. Includes strict validation for class prices (variant-aware), membership fees (discount-aware), and unified validation blocking any total mismatch.
 -   **Cart System**: TanStack Query-based cart implementation with API-first state management and race condition prevention.
--   **Discount Systems**: Database-managed Free After Threshold Discount System.
+-   **Discount Systems**: Database-managed comprehensive discount system supporting 19+ discount types:
+    - **Type-based**: percentage, fixed_amount, sibling discounts
+    - **Bundle discounts**: buy_x_get_y, bundle_percent, bundle_fixed
+    - **Application methods**: automatic, manual (promo codes), or both
+    - **Eligibility filters**: role-based (with any/all match logic), min order amount, max discount cap
+    - **Combinability**: priority-based stacking with combinableWithOthers flag
+    - **School-level settings**: Free After Threshold (e.g., 3rd child free), sibling discount rates
+-   **Server-Side Cart Pricing (Dec 2025)**: `server/utils/cart-pricing.ts` provides `calculateCartPricing()` for authoritative discount calculations:
+    - Mirrors frontend discount logic for consistency
+    - Called by `/api/cart/calculate` and `/api/cart/validate` endpoints
+    - Integrated into `create-payment-intent` for fraud prevention
+    - Tolerance checks: 1% for overpayment (fraud), 0.5% for underpayment (rounding)
+    - Per-item price validation still occurs before cart-level discount calculation
 -   **Free Enrollment Admin Approval**: Enrollments resulting in a $0 total require admin approval.
 -   **Enrollment Management**: Prevents duplicate enrollments, manages status workflows, and integrates with the cart-to-checkout flow.
 -   **Class Management**: School administrators can create, edit, and manage classes with multi-variant pricing and school isolation.
