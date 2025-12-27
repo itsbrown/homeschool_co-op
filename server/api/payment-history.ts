@@ -239,6 +239,22 @@ router.get('/history', supabaseAuth, async (req: any, res) => {
       .map(intent => {
         // Safely parse Stripe timestamp for created date
         const createdDate = safeStripeTimestampToISO(intent.created) || new Date().toISOString();
+        
+        // Parse discountSnapshot from Stripe metadata (stored as JSON string)
+        let discountSnapshot = null;
+        let subtotalAmount = null;
+        let discountTotal = null;
+        
+        if (intent.metadata?.discountSnapshot) {
+          try {
+            discountSnapshot = JSON.parse(intent.metadata.discountSnapshot);
+            subtotalAmount = discountSnapshot?.subtotal || null;
+            discountTotal = discountSnapshot?.discountTotal || null;
+          } catch (e) {
+            console.warn(`⚠️ Failed to parse discountSnapshot for payment ${intent.id}:`, e);
+          }
+        }
+        
         return {
           id: -1, // Synthetic ID (frontend should use stripePaymentIntentId as key)
           amount: intent.amount, // Send raw cents (number) - validated above
@@ -260,7 +276,11 @@ router.get('/history', supabaseAuth, async (req: any, res) => {
           stripeAmount: intent.amount || null,
           stripeCreated: createdDate,
           nextPaymentDate: null,
-          source: 'stripe' as const
+          source: 'stripe' as const,
+          // Discount tracking fields (extracted from Stripe metadata)
+          subtotalAmount,
+          discountTotal,
+          discountSnapshot
         };
       });
     
