@@ -28,6 +28,20 @@ export interface PaymentPlanData {
     originalAmount?: number;
     discountAmount?: number;
   };
+  // Discount tracking for payment dashboards
+  discountSnapshot?: {
+    subtotal: number; // Original subtotal before discounts (cents)
+    discountTotal: number; // Total discount applied (cents)
+    appliedDiscounts: Array<{
+      source: 'promo' | 'sibling' | 'free_after_threshold' | 'automatic' | 'bundle';
+      discountId?: number;
+      code?: string;
+      name: string;
+      type: string;
+      value: number;
+      amount: number; // Discount amount in cents
+    }>;
+  };
 }
 
 export interface PaymentPhase {
@@ -171,6 +185,18 @@ export class StripePaymentPlanService {
           year: data.membership.year,
           hasDiscount: !!data.membership.discountId,
           discountName: data.membership.discountName
+        });
+      }
+      
+      // Add discount snapshot metadata if present
+      if (data.discountSnapshot) {
+        paymentMetadata.discountSnapshot = JSON.stringify(data.discountSnapshot);
+        paymentMetadata.subtotalAmount = data.discountSnapshot.subtotal.toString();
+        paymentMetadata.discountTotal = data.discountSnapshot.discountTotal.toString();
+        console.log('💰 Adding discount snapshot to payment metadata:', {
+          subtotal: data.discountSnapshot.subtotal,
+          discountTotal: data.discountSnapshot.discountTotal,
+          discountsCount: data.discountSnapshot.appliedDiscounts.length
         });
       }
       

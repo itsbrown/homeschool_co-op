@@ -46,7 +46,8 @@ import {
   auditLogs, type AuditLog, type InsertAuditLog,
   schoolClassEnrollments, type SchoolClassEnrollment, type InsertSchoolClassEnrollment,
   sessionAttendance, type SessionAttendance, type InsertSessionAttendance,
-  errorLogs, type ErrorLog, type InsertErrorLog
+  errorLogs, type ErrorLog, type InsertErrorLog,
+  paymentDiscounts, type PaymentDiscount, type InsertPaymentDiscount
 } from "@shared/schema";
 import { eq, inArray } from 'drizzle-orm';
 import { getDb } from './db';
@@ -314,6 +315,10 @@ export interface IStorage {
   getStripePaymentHistoryByUserId(userId: number): Promise<StripePaymentHistory[]>;
   getStripePaymentsBySubscription(subscriptionId: string): Promise<StripePaymentHistory[]>;
   getStripePaymentByIntentId(paymentIntentId: string): Promise<StripePaymentHistory | undefined>;
+  
+  // Payment Discounts methods (for discount tracking/analytics)
+  createPaymentDiscount(discount: InsertPaymentDiscount): Promise<PaymentDiscount>;
+  getPaymentDiscountsByPaymentHistoryId(paymentHistoryId: number): Promise<PaymentDiscount[]>;
 
   // Scheduled Payment methods
   createScheduledPayment(payment: any): Promise<any>;
@@ -3104,6 +3109,19 @@ export class MemStorage implements IStorage {
     const db = await getDb();
     const result = await db.select().from(stripePaymentHistory).where(eq(stripePaymentHistory.paymentIntentId, paymentIntentId)).limit(1);
     return result[0];
+  }
+  
+  // Payment Discounts methods implementation
+  async createPaymentDiscount(discount: InsertPaymentDiscount): Promise<PaymentDiscount> {
+    const db = await getDb();
+    const result = await db.insert(paymentDiscounts).values(discount).returning();
+    return result[0];
+  }
+  
+  async getPaymentDiscountsByPaymentHistoryId(paymentHistoryId: number): Promise<PaymentDiscount[]> {
+    const db = await getDb();
+    const result = await db.select().from(paymentDiscounts).where(eq(paymentDiscounts.paymentHistoryId, paymentHistoryId));
+    return result;
   }
 
   private async initializePayments() {

@@ -852,6 +852,11 @@ export const stripePaymentHistory = pgTable("stripe_payment_history", {
   amount: integer("amount").notNull(),
   currency: text("currency").default("usd").notNull(),
   
+  // Discount tracking for payment dashboards
+  subtotalAmount: integer("subtotal_amount"), // Original price before discounts (cents)
+  discountTotal: integer("discount_total"), // Total discount applied (cents)
+  discountSnapshot: jsonb("discount_snapshot"), // Immutable snapshot of discounts at payment time
+  
   // Payment status from Stripe
   status: text("status", { 
     enum: ["succeeded", "pending", "failed", "canceled", "refunded"] 
@@ -873,9 +878,51 @@ export const insertStripePaymentHistorySchema = createInsertSchema(stripePayment
     subscriptionId: z.string().nullable().default(null),
     paymentMethod: z.string().nullable().default(null),
     description: z.string().nullable().default(null),
+    subtotalAmount: z.number().nullable().default(null),
+    discountTotal: z.number().nullable().default(null),
+    discountSnapshot: z.any().nullable().default(null),
   });
 export type InsertStripePaymentHistory = z.infer<typeof insertStripePaymentHistorySchema>;
 export type StripePaymentHistory = typeof stripePaymentHistory.$inferSelect;
+
+// Payment Discounts table - normalized discount breakdown per payment for reporting
+export const paymentDiscounts = pgTable("payment_discounts", {
+  id: serial("id").primaryKey(),
+  paymentHistoryId: integer("payment_history_id").notNull().references(() => stripePaymentHistory.id, { onDelete: 'cascade' }),
+  discountId: integer("discount_id").references(() => discounts.id), // Optional reference to discount record
+  
+  // Discount source type
+  source: text("source", {
+    enum: ["promo", "sibling", "free_after_threshold", "automatic", "bundle"]
+  }).notNull(),
+  
+  // Snapshot of discount details at time of payment (immutable)
+  codeSnapshot: text("code_snapshot"), // Promo code if applicable
+  nameSnapshot: text("name_snapshot"), // Discount name at time of payment
+  typeSnapshot: text("type_snapshot"), // percentage, fixed_amount, bundle
+  valueSnapshot: integer("value_snapshot"), // Discount value (percentage or fixed amount)
+  
+  // Amount applied (in cents)
+  amount: integer("amount").notNull(),
+  
+  // Link to specific enrollment if applicable
+  enrollmentId: integer("enrollment_id").references(() => schoolClassEnrollments.id),
+  
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertPaymentDiscountSchema = createInsertSchema(paymentDiscounts)
+  .omit({ id: true, createdAt: true })
+  .extend({
+    discountId: z.number().nullable().default(null),
+    codeSnapshot: z.string().nullable().default(null),
+    nameSnapshot: z.string().nullable().default(null),
+    typeSnapshot: z.string().nullable().default(null),
+    valueSnapshot: z.number().nullable().default(null),
+    enrollmentId: z.number().nullable().default(null),
+  });
+export type InsertPaymentDiscount = z.infer<typeof insertPaymentDiscountSchema>;
+export type PaymentDiscount = typeof paymentDiscounts.$inferSelect;
 
 // Define emergency contact relations
 export const emergencyContactsRelations = relations(emergencyContacts, ({ one }) => ({

@@ -1149,6 +1149,41 @@ async function runMigrations() {
     `);
     console.log('✅ Migration completed: error_logs table created');
     
+    // Add discount tracking columns to stripe_payment_history table
+    console.log('Running migration: Adding discount tracking columns to stripe_payment_history table...');
+    await db.execute(sql`
+      ALTER TABLE stripe_payment_history 
+      ADD COLUMN IF NOT EXISTS subtotal_amount INTEGER,
+      ADD COLUMN IF NOT EXISTS discount_total INTEGER,
+      ADD COLUMN IF NOT EXISTS discount_snapshot JSONB;
+    `);
+    console.log('✅ Migration completed: discount tracking columns added to stripe_payment_history table');
+    
+    // Create payment_discounts table for normalized discount breakdown
+    console.log('Running migration: Creating payment_discounts table...');
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS payment_discounts (
+        id SERIAL PRIMARY KEY,
+        payment_history_id INTEGER NOT NULL REFERENCES stripe_payment_history(id) ON DELETE CASCADE,
+        discount_id INTEGER REFERENCES discounts(id),
+        source TEXT NOT NULL,
+        code_snapshot TEXT,
+        name_snapshot TEXT,
+        type_snapshot TEXT,
+        value_snapshot INTEGER,
+        amount INTEGER NOT NULL,
+        enrollment_id INTEGER REFERENCES school_class_enrollments(id),
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_payment_discounts_payment_history_id ON payment_discounts(payment_history_id);
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_payment_discounts_discount_id ON payment_discounts(discount_id);
+    `);
+    console.log('✅ Migration completed: payment_discounts table created');
+    
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     

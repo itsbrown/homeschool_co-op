@@ -34,6 +34,22 @@ interface PaymentHistoryItem {
   childName?: string;
   className?: string;
   metadata?: any;
+  // Discount tracking fields
+  subtotalAmount?: number;
+  discountTotal?: number;
+  discountSnapshot?: {
+    subtotal: number;
+    discountTotal: number;
+    appliedDiscounts: Array<{
+      source: string;
+      discountId?: number;
+      code?: string;
+      name: string;
+      type: string;
+      value: number;
+      amount: number;
+    }>;
+  };
 }
 
 export default function PaymentHistoryPage() {
@@ -343,6 +359,40 @@ export default function PaymentHistoryPage() {
                             </span>
                           </div>
                         ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Discount Breakdown Section */}
+                  {payment.discountSnapshot && payment.discountSnapshot.discountTotal > 0 && (
+                    <div className="border-t pt-3 mt-3" data-testid={`discount-section-${payment.id}`}>
+                      <div className="text-sm font-medium text-gray-700 mb-2">
+                        Discounts Applied:
+                      </div>
+                      <div className="space-y-1 bg-green-50 p-2 rounded-md">
+                        <div className="flex justify-between items-center text-sm">
+                          <span className="text-gray-600">Subtotal</span>
+                          <span>{formatCurrency(payment.discountSnapshot.subtotal)}</span>
+                        </div>
+                        {payment.discountSnapshot.appliedDiscounts.map((discount, index) => (
+                          <div key={index} className="flex justify-between items-center text-sm text-green-700">
+                            <span className="flex items-center gap-1">
+                              <Badge variant="outline" className="text-xs bg-green-100 border-green-300">
+                                {discount.source === 'promo' ? 'Promo' : 
+                                 discount.source === 'sibling' ? 'Sibling' :
+                                 discount.source === 'free_after_threshold' ? 'Family' :
+                                 discount.source === 'bundle' ? 'Bundle' : 'Auto'}
+                              </Badge>
+                              {discount.name}
+                              {discount.code && <span className="text-xs text-gray-500">({discount.code})</span>}
+                            </span>
+                            <span className="font-medium">-{formatCurrency(discount.amount)}</span>
+                          </div>
+                        ))}
+                        <div className="flex justify-between items-center text-sm font-semibold border-t border-green-200 pt-1 mt-1">
+                          <span>Total Savings</span>
+                          <span className="text-green-700">-{formatCurrency(payment.discountSnapshot.discountTotal)}</span>
+                        </div>
                       </div>
                     </div>
                   )}

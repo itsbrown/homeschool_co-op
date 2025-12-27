@@ -875,6 +875,49 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
         });
       }
 
+      // Build discount snapshot for payment tracking/audit
+      // cartPricing is only available when hasItems is true
+      let discountSnapshot: {
+        subtotal: number;
+        discountTotal: number;
+        appliedDiscounts: Array<{
+          source: 'promo' | 'sibling' | 'free_after_threshold' | 'automatic' | 'bundle';
+          discountId?: number;
+          code?: string;
+          name: string;
+          type: string;
+          value: number;
+          amount: number;
+        }>;
+      } | undefined;
+      
+      // Check if cartPricing is defined (only exists when hasItems is true)
+      if (hasItems && typeof cartPricing !== 'undefined' && cartPricing.discounts.totalDiscountAmount > 0) {
+        // Map applied discounts to the snapshot format
+        const mappedDiscounts = cartPricing.discounts.appliedDiscounts.map((d: any) => ({
+          source: (d.sourceType || 'automatic') as 'promo' | 'sibling' | 'free_after_threshold' | 'automatic' | 'bundle',
+          discountId: d.discountId || d.id,
+          code: d.code,
+          name: d.name || d.discountName || 'Discount',
+          type: d.type || d.discountType || 'percentage',
+          value: d.value || d.discountValue || 0,
+          amount: d.discountAmount || d.amount || 0
+        }));
+        
+        discountSnapshot = {
+          subtotal: cartPricing.subtotal,
+          discountTotal: cartPricing.discounts.totalDiscountAmount,
+          appliedDiscounts: mappedDiscounts
+        };
+        
+        console.log('💰 Built discount snapshot for payment:', {
+          subtotal: discountSnapshot.subtotal,
+          discountTotal: discountSnapshot.discountTotal,
+          discountsCount: discountSnapshot.appliedDiscounts.length,
+          discountNames: discountSnapshot.appliedDiscounts.map(d => d.name)
+        });
+      }
+      
       // Use payment plan service for ALL payment plans
       // NOTE: CombinedStorage has all IStorage methods needed but doesn't formally implement the interface
       // See server/storage.ts TODO comment for full context on storage interface alignment
@@ -885,7 +928,8 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
         totalAmount: totalWithMembership, // Include membership fee in total
         paymentPlan: paymentPlan as 'deposit' | 'split' | 'biweekly' | 'full',
         paymentFrequency: paymentFrequency as 'weekly' | 'biweekly' | 'monthly' | 'one_time',
-        membership: serverMembership // Pass server-validated membership data
+        membership: serverMembership, // Pass server-validated membership data
+        discountSnapshot // Pass discount tracking data
       });
 
       console.log('✅ Payment plan created successfully:', {

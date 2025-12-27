@@ -308,6 +308,71 @@ async function handleDirectPaymentSuccess(paymentIntent: any) {
     await storage.createPayment(payment);
     console.log('✅ Payment record created for direct payment:', paymentIntent.id, 'Child:', childName, 'Class:', className);
     
+    // Parse and save discount snapshot to stripe_payment_history for dashboard display
+    try {
+      const parentUser = await storage.getUserByEmail(parentEmail);
+      if (parentUser) {
+        // Parse discount metadata
+        const discountSnapshotStr = paymentIntent.metadata.discountSnapshot;
+        const subtotalAmount = paymentIntent.metadata.subtotalAmount ? parseInt(paymentIntent.metadata.subtotalAmount) : null;
+        const discountTotal = paymentIntent.metadata.discountTotal ? parseInt(paymentIntent.metadata.discountTotal) : null;
+        
+        let discountSnapshot: any = null;
+        if (discountSnapshotStr) {
+          try {
+            discountSnapshot = JSON.parse(discountSnapshotStr);
+          } catch (e) {
+            console.warn('⚠️ Failed to parse discount snapshot:', e);
+          }
+        }
+        
+        // Create stripe_payment_history record with discount tracking
+        // Cast to any because CombinedStorage doesn't formally implement IStorage
+        const stripePaymentRecord = await (storage as any).saveStripePayment({
+          userId: parentUser.id,
+          paymentIntentId: paymentIntent.id,
+          customerId: paymentIntent.customer || `cus_unknown_${Date.now()}`,
+          subscriptionId: null,
+          amount: totalAmount,
+          currency: paymentIntent.currency || 'usd',
+          subtotalAmount: subtotalAmount || totalAmount,
+          discountTotal: discountTotal || 0,
+          discountSnapshot: discountSnapshot,
+          status: 'succeeded',
+          paymentMethod: paymentIntent.payment_method_types?.[0] || 'card',
+          description: `Direct payment for ${className}`,
+          stripeCreatedAt: new Date(paymentIntent.created * 1000)
+        });
+        
+        console.log('✅ Stripe payment history saved with discount tracking:', stripePaymentRecord.id);
+        
+        // Create normalized payment_discounts entries for analytics
+        if (discountSnapshot && discountSnapshot.appliedDiscounts && discountSnapshot.appliedDiscounts.length > 0) {
+          for (const discount of discountSnapshot.appliedDiscounts) {
+            try {
+              await (storage as any).createPaymentDiscount({
+                paymentHistoryId: stripePaymentRecord.id,
+                discountId: discount.discountId || null,
+                source: discount.source || 'automatic',
+                codeSnapshot: discount.code || null,
+                nameSnapshot: discount.name || 'Discount',
+                typeSnapshot: discount.type || 'percentage',
+                valueSnapshot: discount.value || 0,
+                amount: discount.amount || 0,
+                enrollmentId: null // Could be linked to specific enrollments if needed
+              });
+            } catch (discountInsertError) {
+              console.warn('⚠️ Error saving payment discount entry:', discountInsertError);
+            }
+          }
+          console.log(`✅ Created ${discountSnapshot.appliedDiscounts.length} payment_discounts entries for analytics`);
+        }
+      }
+    } catch (paymentHistoryError) {
+      console.error('⚠️ Error saving stripe payment history (non-blocking):', paymentHistoryError);
+      // Don't fail the webhook - this is secondary to enrollment updates
+    }
+    
   } catch (error) {
     console.error('❌ Error handling direct payment success:', error);
   }
