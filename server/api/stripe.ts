@@ -69,6 +69,9 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
     let authoritativeItemTotal = 0;
     let authoritativeMembershipAmount = 0;
     
+    // Store cart pricing result at handler level so it can be accessed for discount snapshot building
+    let cartPricingResult: Awaited<ReturnType<typeof calculateCartPricing>> | undefined;
+    
     // MEMBERSHIP VALIDATION: Look up authoritative membership fee from parent's school
     // This runs ALWAYS (even for membership-only checkouts) to ensure server-side validation
     // Do NOT trust client-sent membership - derive from authenticated user's school
@@ -384,7 +387,8 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
       // Extract promo code from client-sent discounts (if any)
       const appliedPromoCode = discounts?.appliedDiscounts?.find((d: any) => d.sourceType === 'promo')?.code || req.body.promoCode;
       
-      const cartPricing = await calculateCartPricing(
+      // Store cart pricing at handler level for later discount snapshot building
+      cartPricingResult = await calculateCartPricing(
         cartItems,
         parentForMembership?.id || 0,
         parentForMembership?.schoolId || 0,
@@ -392,23 +396,23 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
       );
       
       console.log('🧮 Server-side cart pricing with discounts:', {
-        subtotal: cartPricing.subtotal,
-        discounts: cartPricing.discounts,
-        total: cartPricing.total,
+        subtotal: cartPricingResult.subtotal,
+        discounts: cartPricingResult.discounts,
+        total: cartPricingResult.total,
         appliedPromoCode,
         userEmail
       });
       
       // The server-calculated total for items (with all discounts applied)
-      const serverCalculatedItemTotal_WithDiscounts = cartPricing.total;
+      const serverCalculatedItemTotal_WithDiscounts = cartPricingResult.total;
       
       console.log('💰 Server-calculated item total with discounts:', {
-        rawSubtotal: cartPricing.subtotal,
+        rawSubtotal: cartPricingResult.subtotal,
         discountedTotal: serverCalculatedItemTotal_WithDiscounts,
-        totalDiscountAmount: cartPricing.discounts.totalDiscountAmount,
-        appliedDiscountsCount: cartPricing.discounts.appliedDiscounts.length,
+        totalDiscountAmount: cartPricingResult.discounts.totalDiscountAmount,
+        appliedDiscountsCount: cartPricingResult.discounts.appliedDiscounts.length,
         membershipAmount: authoritativeMembershipAmount,
-        appliedDiscounts: cartPricing.discounts.appliedDiscounts.map((d: any) => ({
+        appliedDiscounts: cartPricingResult.discounts.appliedDiscounts.map((d: any) => ({
           name: d.name,
           type: d.type,
           amount: d.discountAmount
@@ -777,7 +781,7 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
         discountAmount?: number;
       } | undefined;
       
-      if (membership && membershipAmount > 0 && parent.schoolId) {
+      if (membership && authoritativeMembershipAmount > 0 && parent.schoolId) {
         // Validate that the requested school matches the parent's school
         if (membership.schoolId !== parent.schoolId) {
           console.error('🚨 SECURITY: Membership schoolId mismatch. Request:', membership.schoolId, 'Parent:', parent.schoolId);
@@ -809,11 +813,11 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
         
         // Validate that client's amount matches server-calculated amount
         // Allow either the original amount OR the discounted amount
-        const isValidAmount = membershipAmount === originalMembershipFee || 
-                             membershipAmount === discountResult.finalAmount;
+        const isValidAmount = authoritativeMembershipAmount === originalMembershipFee || 
+                             authoritativeMembershipAmount === discountResult.finalAmount;
         
         if (!isValidAmount) {
-          console.error('🚨 SECURITY: Membership amount mismatch. Request:', membershipAmount, 
+          console.error('🚨 SECURITY: Membership amount mismatch. Request:', authoritativeMembershipAmount, 
             'Original:', originalMembershipFee, 'Discounted:', discountResult.finalAmount);
           return res.status(403).json({
             message: 'Membership fee amount does not match expected amount',
@@ -821,17 +825,17 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
             details: {
               originalAmount: originalMembershipFee,
               discountedAmount: discountResult.finalAmount,
-              clientAmount: membershipAmount
+              clientAmount: authoritativeMembershipAmount
             }
           });
         }
         
         // Use the validated amount (either original or discounted)
-        const validatedMembershipAmount = membershipAmount;
+        const validatedMembershipAmount = authoritativeMembershipAmount;
         
         // Check if client is actually paying the discounted amount (not full price)
         const isPayingDiscountedAmount = discountResult.appliedDiscounts.length > 0 && 
-                                         membershipAmount === discountResult.finalAmount;
+                                         authoritativeMembershipAmount === discountResult.finalAmount;
         
         // Log discount application if applicable
         if (isPayingDiscountedAmount) {
@@ -845,7 +849,7 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
           console.log('ℹ️ Membership discount available but parent paying full price:', {
             originalAmount: originalMembershipFee,
             availableDiscount: discountResult.appliedDiscounts[0]?.discountName,
-            clientAmount: membershipAmount
+            clientAmount: authoritativeMembershipAmount
           });
         }
         
@@ -867,7 +871,7 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
         
         console.log('🎫 Membership fee included in payment (server-validated):', {
           enrollmentTotal: total,
-          membershipAmount,
+          membershipAmount: authoritativeMembershipAmount,
           totalWithMembership,
           membershipYear: serverMembership.year,
           parentUserId: serverMembership.parentUserId,
@@ -876,7 +880,7 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
       }
 
       // Build discount snapshot for payment tracking/audit
-      // cartPricing is only available when hasItems is true
+      // cartPricingResult is stored at handler level so it's accessible here
       let discountSnapshot: {
         subtotal: number;
         discountTotal: number;
@@ -891,10 +895,10 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
         }>;
       } | undefined;
       
-      // Check if cartPricing is defined (only exists when hasItems is true)
-      if (hasItems && typeof cartPricing !== 'undefined' && cartPricing.discounts.totalDiscountAmount > 0) {
+      // Check if cartPricingResult is defined (only exists when hasItems is true)
+      if (hasItems && cartPricingResult && cartPricingResult.discounts.totalDiscountAmount > 0) {
         // Map applied discounts to the snapshot format
-        const mappedDiscounts = cartPricing.discounts.appliedDiscounts.map((d: any) => ({
+        const mappedDiscounts = cartPricingResult.discounts.appliedDiscounts.map((d: any) => ({
           source: (d.sourceType || 'automatic') as 'promo' | 'sibling' | 'free_after_threshold' | 'automatic' | 'bundle',
           discountId: d.discountId || d.id,
           code: d.code,
@@ -905,8 +909,8 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
         }));
         
         discountSnapshot = {
-          subtotal: cartPricing.subtotal,
-          discountTotal: cartPricing.discounts.totalDiscountAmount,
+          subtotal: cartPricingResult.subtotal,
+          discountTotal: cartPricingResult.discounts.totalDiscountAmount,
           appliedDiscounts: mappedDiscounts
         };
         
@@ -1690,7 +1694,8 @@ router.post('/request-free-enrollment', supabaseAuth, async (req: any, res) => {
           content: `${parent.email} has requested a free enrollment (100% discount) for ${childNames} in ${classNames}. Please review and approve or reject this request.`,
           targetType: 'individual',
           targetData: { userId: admin.userId, enrollmentIds, discountCode },
-          scheduledFor: null
+          scheduledFor: null,
+          expiresAt: null
         });
         
         // Create recipient for the notification
@@ -1849,7 +1854,8 @@ router.post('/approve-enrollment/:enrollmentId', supabaseAuth, async (req: any, 
             content: `Your free enrollment request for ${enrollment.childName} in ${enrollment.className} has been approved. The enrollment is now active.`,
             targetType: 'individual',
             targetData: { userId: parentUser.id, enrollmentId },
-            scheduledFor: null
+            scheduledFor: null,
+            expiresAt: null
           });
           
           await storage.createNotificationRecipient({
@@ -1896,7 +1902,8 @@ router.post('/approve-enrollment/:enrollmentId', supabaseAuth, async (req: any, 
             content: `Your free enrollment request for ${enrollment.childName} in ${enrollment.className} was not approved. ${reason ? `Reason: ${reason}` : 'Please contact the school for more information.'}`,
             targetType: 'individual',
             targetData: { userId: parentUser.id, enrollmentId, reason },
-            scheduledFor: null
+            scheduledFor: null,
+            expiresAt: null
           });
           
           await storage.createNotificationRecipient({

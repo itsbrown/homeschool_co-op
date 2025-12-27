@@ -17,11 +17,7 @@ import { useCart } from '@/contexts/CartContext';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useRealTimeUpdates } from '@/hooks/useRealTimeUpdates';
 import { formatCurrency } from '@/utils/currency';
-import { stripePromise, STRIPE_PUBLISHABLE_KEY } from '@/config/stripe';
-
-// Stripe is initialized in config/stripe.ts with correct API version
-console.log('🔑 Stripe publishable key check:', STRIPE_PUBLISHABLE_KEY ? 'Present' : 'Missing');
-console.log('🔑 Stripe publishable key starts with:', STRIPE_PUBLISHABLE_KEY ? STRIPE_PUBLISHABLE_KEY.substring(0, 15) + '...' : 'N/A');
+import { stripePromise } from '@/config/stripe';
 
 // Simple payment form component
 function SimplePaymentForm({ onSuccess, onError }: { 
