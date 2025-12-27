@@ -9,7 +9,8 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { apiRequest, queryClient } from '@/lib/queryClient';
-import { CreditCard, AlertCircle, CheckCircle, DollarSign, Calendar, User, Loader2, History } from 'lucide-react';
+import { CreditCard, AlertCircle, CheckCircle, DollarSign, Calendar, User, Loader2, History, ChevronDown } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import ParentAppShell from '@/components/layout/ParentAppShell';
 import { useLocation } from 'wouter';
 import { useCart } from '@/contexts/CartContext';
@@ -484,38 +485,47 @@ function PaymentHistoryTab() {
               </div>
             </div>
             
-            {/* Discount Breakdown Section */}
+            {/* Discount Breakdown Section - Collapsible */}
             {payment.discountSnapshot && payment.discountSnapshot.discountTotal > 0 && (
-              <div className="mt-3 pt-3 border-t" data-testid={`discount-section-${payment.id}`}>
-                <div className="text-sm font-medium text-gray-700 mb-2">
-                  Discounts Applied:
-                </div>
-                <div className="space-y-1 bg-green-50 p-2 rounded-md">
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-gray-600">Subtotal</span>
-                    <span>{formatCurrency(payment.discountSnapshot.subtotal)}</span>
-                  </div>
-                  {payment.discountSnapshot.appliedDiscounts.map((discount: any, index: number) => (
-                    <div key={index} className="flex justify-between items-center text-sm text-green-700">
-                      <span className="flex items-center gap-1">
-                        <Badge variant="outline" className="text-xs bg-green-100 border-green-300">
-                          {discount.source === 'promo' ? 'Promo' : 
-                           discount.source === 'sibling' ? 'Sibling' :
-                           discount.source === 'free_after_threshold' ? 'Family' :
-                           discount.source === 'bundle' ? 'Bundle' : 'Auto'}
-                        </Badge>
-                        {discount.name}
-                        {discount.code && <span className="text-xs text-gray-500">({discount.code})</span>}
-                      </span>
-                      <span className="font-medium">-{formatCurrency(discount.amount)}</span>
+              <Collapsible className="mt-3 pt-3 border-t" data-testid={`discount-section-${payment.id}`}>
+                <CollapsibleTrigger className="flex items-center justify-between w-full text-sm font-medium text-green-700 hover:text-green-800 cursor-pointer">
+                  <span className="flex items-center gap-2">
+                    Discounts Applied
+                    <Badge variant="secondary" className="bg-green-100 text-green-800">
+                      -{formatCurrency(payment.discountSnapshot.discountTotal)}
+                    </Badge>
+                  </span>
+                  <ChevronDown className="h-4 w-4 transition-transform duration-200 [&[data-state=open]]:rotate-180" />
+                </CollapsibleTrigger>
+                <CollapsibleContent className="mt-2">
+                  <div className="space-y-1 bg-green-50 p-2 rounded-md">
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-gray-600">Subtotal</span>
+                      <span>{formatCurrency(payment.discountSnapshot.subtotal)}</span>
                     </div>
-                  ))}
-                  <div className="flex justify-between items-center text-sm font-semibold border-t border-green-200 pt-1 mt-1">
-                    <span>Total Savings</span>
-                    <span className="text-green-700">-{formatCurrency(payment.discountSnapshot.discountTotal)}</span>
+                    {payment.discountSnapshot.appliedDiscounts.map((discount: any, index: number) => (
+                      <div key={index} className="flex justify-between items-center text-sm text-green-700">
+                        <span className="flex items-center gap-1">
+                          <Badge variant="outline" className="text-xs bg-green-100 border-green-300">
+                            {discount.source === 'promo' ? 'Promo' : 
+                             discount.source === 'sibling' ? 'Sibling' :
+                             discount.source === 'free_after_threshold' ? 'Family' :
+                             discount.source === 'bundle' ? 'Bundle' :
+                             discount.source === 'automatic' ? 'Auto' : 'Discount'}
+                          </Badge>
+                          {discount.name}
+                          {discount.code && <span className="text-xs text-gray-500">({discount.code})</span>}
+                        </span>
+                        <span className="font-medium">-{formatCurrency(discount.amount)}</span>
+                      </div>
+                    ))}
+                    <div className="flex justify-between items-center text-sm font-semibold border-t border-green-200 pt-1 mt-1">
+                      <span>Total Savings</span>
+                      <span className="text-green-700">-{formatCurrency(payment.discountSnapshot.discountTotal)}</span>
+                    </div>
                   </div>
-                </div>
-              </div>
+                </CollapsibleContent>
+              </Collapsible>
             )}
           </Card>
         ))}
