@@ -365,6 +365,7 @@ export default function CartCheckout() {
             amount: cart.membership.amount, // Already in cents
             year: cart.membership.year,
           } : null,
+          promoCode: cart.appliedPromoCode?.code || null,
         }
       );
 
@@ -441,6 +442,7 @@ export default function CartCheckout() {
           },
           total: cart.total,
           parentEmail: user.email,
+          promoCode: cart.appliedPromoCode?.code || null,
         }
       );
       
