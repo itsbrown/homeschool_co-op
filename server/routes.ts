@@ -53,6 +53,7 @@ import smartTutorialRouter from "./api/smart-tutorial";
 import announcementsRouter from "./api/announcements";
 import calendarEventsRouter from "./api/calendar-events";
 import analyticsRouter from "./api/analytics";
+import cartRouter from "./api/cart";
 import archiver from 'archiver';
 import fs from 'fs';
 import path from 'path';
@@ -2095,6 +2096,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Register API routers
   app.use("/api/classes", classesRouter);
   app.use("/api/discounts", discountsRouter);
+  app.use("/api/cart", cartRouter);
   app.use("/api/ai", aiPricingRouter);
   app.use("/api/ai-insights", aiInsightsRouter);
   app.use("/api/smart-tutorial", smartTutorialRouter);

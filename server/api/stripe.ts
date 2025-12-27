@@ -6,6 +6,7 @@ import { supabaseAuth } from '../middleware/supabase-auth';
 import { requireSchoolContext } from '../middleware/require-school-context';
 import { getStripeClient, getStripePublishableKey } from '../config/stripe';
 import { calculateMembershipDiscount } from '../utils/membership';
+import { calculateCartPricing, CartItem } from '../utils/cart-pricing';
 import { CurrencyUtils } from '@shared/currency-utils';
 
 const router = Router();
@@ -367,74 +368,57 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
         });
       }
       
-      // Use the already-calculated authoritativeMembershipAmount from earlier validation
-      // (Membership validation runs BEFORE item validation to ensure it covers membership-only checkouts)
-      const serverCalculatedTotal = serverCalculatedItemTotal + authoritativeMembershipAmount;
-      const clientTotal = total + (membership?.amount || 0);
+      // ================================================================
+      // SERVER-SIDE DISCOUNT CALCULATION - Use cart-pricing utility
+      // This calculates ALL applicable discounts (promo codes, auto-apply, 
+      // sibling discounts, free-after-threshold) on the server side
+      // ================================================================
+      const cartItems: CartItem[] = items.map((item: any) => ({
+        id: item.id || `${item.classId}-${item.childId}`,
+        classId: item.classId,
+        childId: item.childId,
+        childName: item.childName || '',
+        variantId: item.variantId
+      }));
       
-      // CRITICAL: Validate client total against server-calculated total
-      // Prevents both overpayment attempts AND underpayment manipulation
-      const discrepancy = clientTotal - serverCalculatedTotal;
-      const discrepancyPercentage = serverCalculatedTotal > 0 
-        ? Math.abs(discrepancy) / serverCalculatedTotal * 100 
-        : 0;
+      // Extract promo code from client-sent discounts (if any)
+      const appliedPromoCode = discounts?.appliedDiscounts?.find((d: any) => d.sourceType === 'promo')?.code || req.body.promoCode;
       
-      if (discrepancy > 0 && discrepancyPercentage > 1) {
-        // Client is trying to pay MORE than items cost - suspicious
-        console.error('🚨 PAYMENT VALIDATION FAILED: Client total exceeds server calculation', {
-          clientTotal,
-          serverCalculatedTotal,
-          discrepancy,
-          discrepancyPercentage: `${discrepancyPercentage.toFixed(2)}%`,
-          items: items.map((item: any) => ({ 
-            classId: item.classId, 
-            childName: item.childName, 
-            totalCost: item.totalCost 
-          })),
-          userEmail
-        });
-        return res.status(400).json({
-          message: 'Payment total does not match cart items. Please refresh your cart and try again.',
-          error: 'TOTAL_MISMATCH'
-        });
-      }
+      const cartPricing = await calculateCartPricing(
+        cartItems,
+        parentForMembership?.id || 0,
+        parentForMembership?.schoolId || 0,
+        appliedPromoCode
+      );
       
-      // CRITICAL FIX: Block ANY underpayment manipulation (Erica Wilson bug)
-      // STRICT VALIDATION: Client total MUST match server total exactly
-      // Do NOT allow any tolerance - no discounts without explicit server-side discount validation
-      if (discrepancy < 0 && discrepancyPercentage > 0.01) {
-        // Block ANY underpayment - no exceptions
-        console.error('🚨 PAYMENT VALIDATION FAILED: Client total does not match server calculation', {
-          clientTotal,
-          serverCalculatedTotal,
-          underpaymentAmount: Math.abs(discrepancy),
-          underpaymentPercentage: `${discrepancyPercentage.toFixed(2)}%`,
-          clientSentDiscounts: discounts, // Log for audit but do NOT trust
-          items: items.map((item: any) => ({ 
-            classId: item.classId, 
-            childName: item.childName, 
-            totalCost: item.totalCost 
-          })),
-          userEmail,
-          securityNote: 'STRICT validation - client total MUST match server total'
-        });
-        return res.status(400).json({
-          message: 'Payment total does not match expected amount. Please refresh your cart and try again.',
-          error: 'TOTAL_MISMATCH_UNDERPAYMENT'
-        });
-      }
+      console.log('🧮 Server-side cart pricing with discounts:', {
+        subtotal: cartPricing.subtotal,
+        discounts: cartPricing.discounts,
+        total: cartPricing.total,
+        appliedPromoCode,
+        userEmail
+      });
       
-      console.log('✅ Payment total validated (STRICT):', {
-        clientTotal,
-        serverCalculatedTotal,
-        itemTotal: serverCalculatedItemTotal,
+      // The server-calculated total for items (with all discounts applied)
+      const serverCalculatedItemTotal_WithDiscounts = cartPricing.total;
+      
+      console.log('💰 Server-calculated item total with discounts:', {
+        rawSubtotal: cartPricing.subtotal,
+        discountedTotal: serverCalculatedItemTotal_WithDiscounts,
+        totalDiscountAmount: cartPricing.discounts.totalDiscountAmount,
+        appliedDiscountsCount: cartPricing.discounts.appliedDiscounts.length,
         membershipAmount: authoritativeMembershipAmount,
-        match: clientTotal === serverCalculatedTotal ? 'EXACT' : 'MINOR_ROUNDING'
+        appliedDiscounts: cartPricing.discounts.appliedDiscounts.map((d: any) => ({
+          name: d.name,
+          type: d.type,
+          amount: d.discountAmount
+        }))
       });
       
       // CRITICAL: Store server-calculated values for use in payment creation
       // These are the AUTHORITATIVE amounts that must be used, not client-sent values
-      authoritativeItemTotal = serverCalculatedItemTotal;
+      // Validation deferred to UNIFIED STRICT VALIDATION block below
+      authoritativeItemTotal = serverCalculatedItemTotal_WithDiscounts;
       // authoritativeMembershipAmount is already set earlier (outside hasItems block)
     } else {
       // MEMBERSHIP-ONLY CHECKOUT: authoritativeItemTotal stays 0
@@ -476,23 +460,46 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
       });
     }
     
-    // CASE 2: Server total is non-zero - check for underpayment/overpayment
-    if (finalServerTotal > 0) {
-      const discrepancyPercentage = Math.abs(finalDiscrepancy) / finalServerTotal * 100;
-      
-      // Reject ANY significant discrepancy (> 0.01% covers minor floating point rounding)
-      if (discrepancyPercentage > 0.01) {
-        console.error('🚨 PAYMENT VALIDATION FAILED: Client total does not match server calculation', {
+    // CASE 2: Server total is non-zero - check for overpayment
+    // Use strict 1% tolerance for overpayment (fraud prevention)
+    if (finalServerTotal > 0 && finalDiscrepancy > 0) {
+      const overpaymentPercentage = finalDiscrepancy / finalServerTotal * 100;
+      if (overpaymentPercentage > 1) {
+        console.error('🚨 PAYMENT VALIDATION FAILED: Client total exceeds server calculation', {
           finalClientTotal,
           finalServerTotal,
-          discrepancy: finalDiscrepancy,
-          discrepancyPercentage: `${discrepancyPercentage.toFixed(2)}%`,
+          overpayment: finalDiscrepancy,
+          overpaymentPercentage: `${overpaymentPercentage.toFixed(2)}%`,
+          authoritativeItemTotal,
+          authoritativeMembershipAmount,
+          userEmail,
+          securityNote: 'FRAUD PREVENTION - client attempting to overpay'
+        });
+        return res.status(400).json({
+          message: 'Payment total does not match expected amount. Please refresh your cart and try again.',
+          error: 'TOTAL_MISMATCH_OVERPAYMENT'
+        });
+      }
+    }
+    
+    // CASE 3: Server total is non-zero - check for underpayment
+    // Allow 0.5% tolerance for minor rounding differences in discount calculations
+    if (finalServerTotal > 0 && finalDiscrepancy < 0) {
+      const underpaymentPercentage = Math.abs(finalDiscrepancy) / finalServerTotal * 100;
+      
+      // Reject significant underpayment (> 0.5% after server-side discount calculation)
+      if (underpaymentPercentage > 0.5) {
+        console.error('🚨 PAYMENT VALIDATION FAILED: Client total less than server calculation', {
+          finalClientTotal,
+          finalServerTotal,
+          underpayment: Math.abs(finalDiscrepancy),
+          underpaymentPercentage: `${underpaymentPercentage.toFixed(2)}%`,
           authoritativeItemTotal,
           authoritativeMembershipAmount,
           clientSentTotal: total,
           clientSentMembership: membership?.amount || 0,
           userEmail,
-          securityNote: 'STRICT validation - client total MUST match server total exactly'
+          securityNote: 'Server-side discount validation - allows 0.5% tolerance for rounding'
         });
         return res.status(400).json({
           message: 'Payment total does not match expected amount. Please refresh your cart and try again.',
