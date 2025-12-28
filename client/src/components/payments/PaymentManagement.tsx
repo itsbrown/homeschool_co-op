@@ -951,7 +951,7 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
                           <TableRow className="bg-green-50 hover:bg-green-100" data-testid={`discount-row-${payment.id}`}>
                             <TableCell colSpan={6} className="py-2">
                               <Collapsible>
-                                <CollapsibleTrigger className="flex items-center gap-2 text-sm font-medium text-green-700 hover:text-green-800 cursor-pointer w-full">
+                                <CollapsibleTrigger className="flex items-center gap-2 text-sm font-medium text-green-700 hover:text-green-800 cursor-pointer w-full" data-testid={`collapsible-trigger-discount-${payment.id}`}>
                                   <ChevronDown className="h-4 w-4 transition-transform duration-200 [&[data-state=open]]:rotate-180" />
                                   <span>Discounts Applied: -{formatCurrency(payment.discountSnapshot.discountTotal)}</span>
                                 </CollapsibleTrigger>
