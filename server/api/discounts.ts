@@ -336,13 +336,13 @@ router.post('/apply', requireSchoolContext, async (req: any, res) => {
       appliedBy: null,
     });
 
-    // Increment usage counter
-    const newUsageCount = (discount.currentUsageCount ?? 0) + 1;
-    await storage.updateDiscount(discount.id, {
-      currentUsageCount: newUsageCount,
-    } as any);
+    // Increment usage counter atomically (prevents race conditions)
+    const incrementSuccess = await storage.incrementDiscountUsageAtomic(discount.id);
+    if (!incrementSuccess) {
+      console.warn(`⚠️ Discount ${discount.code} usage limit reached during atomic increment`);
+    }
 
-    console.log(`✅ Applied discount ${discount.code} to ${parentEmail}. Usage: ${newUsageCount}`);
+    console.log(`✅ Applied discount ${discount.code} to ${parentEmail} (atomic increment: ${incrementSuccess})`);
 
     res.json({
       success: true,
