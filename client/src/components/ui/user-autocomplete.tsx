@@ -50,7 +50,15 @@ export function UserAutocomplete({
       if (roleFilter) params.set("role", roleFilter);
       params.set("limit", "10");
 
-      const res = await fetch(`/api/user-search/search?${params}`);
+      const token = localStorage.getItem('supabase_token');
+      const activeRole = localStorage.getItem('activeRole');
+      const res = await fetch(`/api/user-search/search?${params}`, {
+        credentials: "include",
+        headers: {
+          ...(token && { Authorization: `Bearer ${token}` }),
+          ...(activeRole && { 'X-Active-Role': activeRole }),
+        },
+      });
       if (!res.ok) throw new Error("Failed to search users");
       return res.json();
     },
