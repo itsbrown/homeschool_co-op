@@ -30,17 +30,33 @@ export default function EducatorClassesPage() {
     queryKey: ["/api/educator/my-classes"],
   });
 
-  // Transform data to match the expected format
-  const transformedClasses = (classesData ?? []).map((classItem: any) => {
-    // Parse schedule from the legacy format
-    let scheduleStr = 'Schedule TBD';
-    if (classItem.schedule?.variants?.[0]) {
-      const variant = classItem.schedule.variants[0];
-      const days = variant.days?.join(', ') || '';
-      if (days && variant.startTime && variant.endTime) {
-        scheduleStr = `${days} ${variant.startTime}-${variant.endTime}`;
+  // Helper function to safely extract schedule string from schedule object
+  const formatScheduleString = (schedule: any): string => {
+    if (!schedule) return 'Schedule TBD';
+    
+    // If it's already a string, return it
+    if (typeof schedule === 'string') return schedule;
+    
+    // Handle object with variants array
+    if (schedule.variants && Array.isArray(schedule.variants) && schedule.variants.length > 0) {
+      const variant = schedule.variants[0];
+      if (variant) {
+        const days = Array.isArray(variant.days) ? variant.days.join(', ') : '';
+        const startTime = variant.startTime || '';
+        const endTime = variant.endTime || '';
+        if (days && startTime && endTime) {
+          return `${days} ${startTime}-${endTime}`;
+        }
       }
     }
+    
+    return 'Schedule TBD';
+  };
+
+  // Transform data to match the expected format
+  const transformedClasses = (classesData ?? []).map((classItem: any) => {
+    // Parse schedule from the legacy format using helper function
+    const scheduleStr = formatScheduleString(classItem.schedule);
     
     // Determine status based on dates
     const now = new Date();
@@ -133,7 +149,7 @@ export default function EducatorClassesPage() {
                         </div>
                         <div className="flex items-center gap-1 text-xs text-muted-foreground">
                           <Clock className="h-3 w-3" />
-                          {classItem.schedule || 'Schedule TBD'}
+                          {typeof classItem.schedule === 'string' ? classItem.schedule : 'Schedule TBD'}
                         </div>
                       </div>
                     </TableCell>
