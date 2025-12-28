@@ -33,10 +33,7 @@ export default function DailyFlowEducatorPage() {
 
   const completeEntryMutation = useMutation({
     mutationFn: async ({ entryId, notes }: { entryId: number; notes: string }) => {
-      return apiRequest(`/api/daily-flows/entries/${entryId}/complete`, {
-        method: 'PATCH',
-        body: JSON.stringify({ notes }),
-      });
+      return apiRequest('PATCH', `/api/daily-flows/entries/${entryId}/complete`, { notes });
     },
     onSuccess: () => {
       setCompletionNotes('');
@@ -46,16 +43,13 @@ export default function DailyFlowEducatorPage() {
 
   const updateEntryMutation = useMutation({
     mutationFn: async (entry: DailyFlowEntry) => {
-      return apiRequest(`/api/daily-flows/entries/${entry.id}`, {
-        method: 'PATCH',
-        body: JSON.stringify({
-          startTime: entry.startTime,
-          endTime: entry.endTime,
-          lessonTitle: entry.lessonTitle,
-          lessonDescription: entry.lessonDescription,
-          lessonLink: entry.lessonLink,
-          notes: entry.notes,
-        }),
+      return apiRequest('PATCH', `/api/daily-flows/entries/${entry.id}`, {
+        startTime: entry.startTime,
+        endTime: entry.endTime,
+        lessonTitle: entry.lessonTitle,
+        lessonDescription: entry.lessonDescription,
+        lessonLink: entry.lessonLink,
+        notes: entry.notes,
       });
     },
     onSuccess: () => {

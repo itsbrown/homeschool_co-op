@@ -13,6 +13,35 @@ import { Mail, Send, Clock, Users, MessageSquare, Bell } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
+interface ClassInfo {
+  id: number;
+  title: string;
+  schedule: string;
+  studentCount: number;
+  parentCount: number;
+}
+
+interface EducatorNotificationData {
+  classes: ClassInfo[];
+  totalParents: number;
+}
+
+interface NotificationHistoryItem {
+  id: number;
+  subject: string;
+  message: string;
+  sentAt: string;
+  recipientCount: number;
+}
+
+interface NotificationPayload {
+  subject: string;
+  message: string;
+  sendToAll: boolean;
+  classIds: string[];
+  senderEmail: string | undefined;
+}
+
 export default function EducatorNotificationsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -23,24 +52,21 @@ export default function EducatorNotificationsPage() {
   const [selectedClasses, setSelectedClasses] = useState<string[]>([]);
 
   // Get educator's classes and students for targeted notifications
-  const { data: educatorData, isLoading } = useQuery({
+  const { data: educatorData, isLoading } = useQuery<EducatorNotificationData>({
     queryKey: [`/api/educator/notification-data?email=${encodeURIComponent(user?.email || '')}`],
     enabled: !!user?.email,
   });
 
   // Get recent notifications sent by this educator
-  const { data: notificationHistory } = useQuery({
+  const { data: notificationHistory } = useQuery<NotificationHistoryItem[]>({
     queryKey: [`/api/educator/notifications/history?email=${encodeURIComponent(user?.email || '')}`],
     enabled: !!user?.email,
   });
 
   // Send notification mutation
   const sendNotificationMutation = useMutation({
-    mutationFn: async (notificationData: any) => {
-      return apiRequest('/api/educator/notifications/send', {
-        method: 'POST',
-        body: JSON.stringify(notificationData),
-      });
+    mutationFn: async (notificationData: NotificationPayload) => {
+      return apiRequest('POST', '/api/educator/notifications/send', notificationData);
     },
     onSuccess: () => {
       toast({

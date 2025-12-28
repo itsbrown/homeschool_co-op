@@ -21,19 +21,50 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDate } from "@/lib/utils";
 
+interface ClassData {
+  id: number;
+  title: string;
+  description?: string;
+  gradeLevel?: string;
+  location?: string;
+  schedule?: string;
+  status?: string;
+  category?: string;
+  price?: number;
+  startDate?: string;
+  endDate?: string;
+  enrollmentCount?: number;
+  capacity?: number;
+  maxStudents?: number;
+}
+
+interface StudentData {
+  id: number;
+  firstName: string;
+  lastName: string;
+  gradeLevel?: string;
+  enrollmentStatus?: string;
+  parentName?: string;
+  parentEmail?: string;
+}
+
+interface StudentsResponse {
+  students: StudentData[];
+}
+
 export default function EducatorClassDetailsPage() {
   const { user } = useAuth();
   const [match, params] = useRoute("/educator/classes/:id");
   const classId = params?.id;
 
   // Get class details using authenticated educator endpoint
-  const { data: classData, isLoading: classLoading } = useQuery({
+  const { data: classData, isLoading: classLoading } = useQuery<ClassData>({
     queryKey: [`/api/educator/classes/${classId}`],
     enabled: !!classId,
   });
 
   // Get enrolled students for this class using authenticated endpoint
-  const { data: studentsData, isLoading: studentsLoading } = useQuery({
+  const { data: studentsData, isLoading: studentsLoading } = useQuery<StudentsResponse>({
     queryKey: [`/api/educator/classes/${classId}/students`],
     enabled: !!classId,
   });
