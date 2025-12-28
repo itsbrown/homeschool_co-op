@@ -138,13 +138,23 @@ router.get('/my-classes', async (req, res) => {
       assignedClasses.map(async (cls) => {
         const enrollmentCount = await storage.getEnrollmentCountForClass(cls.id);
         return {
-          ...cls,
+          assignmentId: cls.id,
           classId: cls.id,
+          id: cls.id,
+          title: cls.title,
+          isPrimary: true,
+          canStartSession: true,
+          validFrom: null,
+          validTo: null,
           className: cls.title,
           classDescription: cls.description,
           classSchedule: cls.schedule,
+          schedule: cls.schedule,
           classLocation: cls.location,
-          enrollmentCount
+          location: cls.location,
+          capacity: cls.capacity,
+          enrollmentCount,
+          schoolId: cls.schoolId
         };
       })
     );

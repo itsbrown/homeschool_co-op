@@ -103,9 +103,15 @@ function MyHoursContent() {
   const { data: hoursData, isLoading, error, refetch } = useQuery<MyHoursData>({
     queryKey: ['/api/educator/my-hours', currentWeekStart, endDateStr],
     queryFn: async () => {
+      const token = localStorage.getItem('supabase_token');
       const response = await fetch(
         `/api/educator/my-hours?startDate=${currentWeekStart}&endDate=${endDateStr}`,
-        { credentials: 'include' }
+        { 
+          credentials: 'include',
+          headers: {
+            ...(token && { 'Authorization': `Bearer ${token}` }),
+          },
+        }
       );
       if (!response.ok) throw new Error('Failed to fetch hours');
       return response.json();
