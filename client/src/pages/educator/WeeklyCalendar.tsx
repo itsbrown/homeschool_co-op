@@ -60,12 +60,19 @@ interface BirthdayEvent {
 const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const DAY_ABBREV = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
+function formatDateLocal(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 function getWeekStartDate(date: Date): string {
   const d = new Date(date);
   const day = d.getDay();
   const diff = d.getDate() - day + (day === 0 ? -6 : 1);
   d.setDate(diff);
-  return d.toISOString().split('T')[0];
+  return formatDateLocal(d);
 }
 
 function formatTime(timeStr: string): string {
@@ -75,9 +82,13 @@ function formatTime(timeStr: string): string {
   return `${hour12}:${minutes.toString().padStart(2, '0')} ${period}`;
 }
 
+function parseDateLocal(dateStr: string): Date {
+  return new Date(dateStr + 'T12:00:00');
+}
+
 function calculateAgeOnDate(birthdate: string, targetDate: string): number {
-  const target = new Date(targetDate);
-  const bday = new Date(birthdate);
+  const target = parseDateLocal(targetDate);
+  const bday = parseDateLocal(birthdate);
   return target.getFullYear() - bday.getFullYear();
 }
 
@@ -100,15 +111,15 @@ function WeeklyCalendarContent({ showBirthdays = false, showQuickActions = true 
   });
 
   const goToPreviousWeek = () => {
-    const prev = new Date(currentWeekStart);
+    const prev = new Date(currentWeekStart + 'T12:00:00');
     prev.setDate(prev.getDate() - 7);
-    setCurrentWeekStart(prev.toISOString().split('T')[0]);
+    setCurrentWeekStart(formatDateLocal(prev));
   };
 
   const goToNextWeek = () => {
-    const next = new Date(currentWeekStart);
+    const next = new Date(currentWeekStart + 'T12:00:00');
     next.setDate(next.getDate() + 7);
-    setCurrentWeekStart(next.toISOString().split('T')[0]);
+    setCurrentWeekStart(formatDateLocal(next));
   };
 
   const goToCurrentWeek = () => {
@@ -117,17 +128,19 @@ function WeeklyCalendarContent({ showBirthdays = false, showQuickActions = true 
 
   const getWeekDates = () => {
     const dates = [];
-    const start = new Date(currentWeekStart);
+    const start = new Date(currentWeekStart + 'T12:00:00');
+    const todayStr = formatDateLocal(new Date());
     for (let i = 0; i < 7; i++) {
       const d = new Date(start);
       d.setDate(d.getDate() + i);
+      const dateStr = formatDateLocal(d);
       dates.push({
         dayIndex: i,
         dayName: DAYS_OF_WEEK[i],
         dayAbbrev: DAY_ABBREV[i],
-        date: d.toISOString().split('T')[0],
+        date: dateStr,
         dateNum: d.getDate(),
-        isToday: d.toISOString().split('T')[0] === new Date().toISOString().split('T')[0]
+        isToday: dateStr === todayStr
       });
     }
     return dates;
@@ -141,14 +154,14 @@ function WeeklyCalendarContent({ showBirthdays = false, showQuickActions = true 
   const getBirthdaysForDay = (dateStr: string): BirthdayEvent[] => {
     if (!showBirthdays || !studentsResponse?.students) return [];
     
-    const targetDate = new Date(dateStr);
+    const targetDate = parseDateLocal(dateStr);
     const targetMonth = targetDate.getMonth();
     const targetDay = targetDate.getDate();
     
     return studentsResponse.students
       .filter(student => {
         if (!student.birthdate) return false;
-        const bday = new Date(student.birthdate);
+        const bday = parseDateLocal(student.birthdate);
         return bday.getMonth() === targetMonth && bday.getDate() === targetDay;
       })
       .map(student => ({
@@ -174,9 +187,10 @@ function WeeklyCalendarContent({ showBirthdays = false, showQuickActions = true 
     );
   }
 
-  const weekEndDate = new Date(currentWeekStart);
+  const weekStartParsed = new Date(currentWeekStart + 'T12:00:00');
+  const weekEndDate = new Date(currentWeekStart + 'T12:00:00');
   weekEndDate.setDate(weekEndDate.getDate() + 6);
-  const weekRange = `${new Date(currentWeekStart).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${weekEndDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+  const weekRange = `${weekStartParsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${weekEndDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
 
   return (
     <div className="space-y-6">

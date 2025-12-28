@@ -59,12 +59,19 @@ interface MyHoursData {
   sessionsByDate: DailySession[];
 }
 
+function formatDateLocal(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 function getWeekStartDate(date: Date): string {
   const d = new Date(date);
   const day = d.getDay();
   const diff = d.getDate() - day + (day === 0 ? -6 : 1);
   d.setDate(diff);
-  return d.toISOString().split('T')[0];
+  return formatDateLocal(d);
 }
 
 function formatTime(timeStr: string): string {
@@ -96,24 +103,24 @@ function MyHoursContent() {
   const [, navigate] = useLocation();
   const [currentWeekStart, setCurrentWeekStart] = useState(() => getWeekStartDate(new Date()));
 
-  const weekEnd = new Date(currentWeekStart);
+  const weekEnd = new Date(currentWeekStart + 'T12:00:00');
   weekEnd.setDate(weekEnd.getDate() + 6);
-  const endDateStr = weekEnd.toISOString().split('T')[0];
+  const endDateStr = formatDateLocal(weekEnd);
 
   const { data: hoursData, isLoading, error, refetch } = useQuery<MyHoursData>({
     queryKey: [`/api/educator/my-hours?startDate=${currentWeekStart}&endDate=${endDateStr}`],
   });
 
   const goToPreviousWeek = () => {
-    const prev = new Date(currentWeekStart);
+    const prev = new Date(currentWeekStart + 'T12:00:00');
     prev.setDate(prev.getDate() - 7);
-    setCurrentWeekStart(prev.toISOString().split('T')[0]);
+    setCurrentWeekStart(formatDateLocal(prev));
   };
 
   const goToNextWeek = () => {
-    const next = new Date(currentWeekStart);
+    const next = new Date(currentWeekStart + 'T12:00:00');
     next.setDate(next.getDate() + 7);
-    setCurrentWeekStart(next.toISOString().split('T')[0]);
+    setCurrentWeekStart(formatDateLocal(next));
   };
 
   const goToCurrentWeek = () => {
@@ -133,7 +140,8 @@ function MyHoursContent() {
     );
   }
 
-  const weekRange = `${new Date(currentWeekStart).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${weekEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+  const weekStartParsed = new Date(currentWeekStart + 'T12:00:00');
+  const weekRange = `${weekStartParsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${weekEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
 
   const summary = hoursData?.summary || {
     totalScheduledMinutes: 0,
@@ -270,7 +278,7 @@ function MyHoursContent() {
                 <div key={day.date} className="space-y-2">
                   <h3 className="font-medium text-sm text-muted-foreground flex items-center gap-2">
                     <Calendar className="h-4 w-4" />
-                    {new Date(day.date).toLocaleDateString('en-US', { 
+                    {new Date(day.date + 'T12:00:00').toLocaleDateString('en-US', { 
                       weekday: 'long', 
                       month: 'short', 
                       day: 'numeric' 
