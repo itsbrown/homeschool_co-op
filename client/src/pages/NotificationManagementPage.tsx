@@ -28,6 +28,7 @@ import {
   Shield,
   Plus
 } from "lucide-react";
+import { UserLookup, type UserResult } from "@/components/ui/user-lookup";
 
 interface Notification {
   id: number;
@@ -444,9 +445,11 @@ function NotificationComposeDialog({
   onSendBroadcast: (data: any) => void;
   isLoading: boolean;
 }) {
+  const { toast } = useToast();
   const [targetType, setTargetType] = useState("individual");
   const [selectedLocations, setSelectedLocations] = useState<number[]>([]);
   const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
+  const [selectedUsers, setSelectedUsers] = useState<UserResult[]>([]);
   
   // Get user role for default delivery method
   const userRole = localStorage.getItem('activeRole') || 'parent';
@@ -457,6 +460,7 @@ function NotificationComposeDialog({
     setTargetType(newType);
     setSelectedLocations([]);
     setSelectedRoles([]);
+    setSelectedUsers([]);
   };
 
   const handleSubmit = (formData: FormData) => {
@@ -471,10 +475,15 @@ function NotificationComposeDialog({
 
     switch (targetType) {
       case "individual":
-        const userIds = (formData.get("userIds") as string)
-          .split(",")
-          .map(id => parseInt(id.trim()))
-          .filter(id => !isNaN(id));
+        const userIds = selectedUsers.map(u => u.id);
+        if (userIds.length === 0) {
+          toast({
+            title: "No recipients selected",
+            description: "Please select at least one user to send the notification to.",
+            variant: "destructive",
+          });
+          return;
+        }
         onSendIndividual({ ...baseData, userIds });
         break;
 
@@ -604,16 +613,24 @@ function NotificationComposeDialog({
 
               <TabsContent value="individual" className="space-y-4">
                 <div className="grid gap-2">
-                  <Label htmlFor="userIds">User IDs (comma-separated)</Label>
-                  <Input
-                    id="userIds"
-                    name="userIds"
-                    placeholder="1, 2, 3, 4"
-                    required={targetType === "individual"}
+                  <Label>Select Recipients</Label>
+                  <UserLookup
+                    value={selectedUsers}
+                    onChange={setSelectedUsers}
+                    placeholder="Search for users by name or email..."
+                    multiSelect={true}
+                    modalTitle="Select Notification Recipients"
                   />
-                  <p className="text-sm text-muted-foreground">
-                    Enter the user IDs of specific people to notify
-                  </p>
+                  {selectedUsers.length > 0 && (
+                    <p className="text-sm text-muted-foreground">
+                      {selectedUsers.length} recipient{selectedUsers.length !== 1 ? 's' : ''} selected
+                    </p>
+                  )}
+                  {selectedUsers.length === 0 && (
+                    <p className="text-sm text-muted-foreground">
+                      Search and select specific users to notify
+                    </p>
+                  )}
                 </div>
               </TabsContent>
 
