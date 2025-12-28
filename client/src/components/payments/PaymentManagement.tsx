@@ -44,7 +44,8 @@ import {
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { AlertCircle, CreditCard, DollarSign, Calendar, Check, Clock, FileText, Search } from "lucide-react";
+import { AlertCircle, CreditCard, DollarSign, Calendar, Check, Clock, FileText, Search, ChevronDown } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 interface Payment {
   id: string;
@@ -57,6 +58,22 @@ interface Payment {
   childName: string;
   receiptUrl?: string;
   dueDate?: string;
+  // Discount tracking fields
+  subtotalAmount?: number;
+  discountTotal?: number;
+  discountSnapshot?: {
+    subtotal: number;
+    discountTotal: number;
+    appliedDiscounts: Array<{
+      source: 'promo' | 'sibling' | 'free_after_threshold' | 'automatic' | 'bundle';
+      discountId?: number;
+      code?: string;
+      name: string;
+      type: string;
+      value: number;
+      amount: number;
+    }>;
+  };
 }
 
 interface PaymentManagementProps {
@@ -883,45 +900,98 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
                   </TableHeader>
                   <TableBody>
                     {filteredPayments.map((payment: Payment, index: number) => (
-                      <TableRow key={`payment-${payment.id}-${index}`}>
-                        <TableCell>{formatDate(payment.date)}</TableCell>
-                        <TableCell className="font-medium">{payment.description}</TableCell>
-                        <TableCell>{payment.childName}</TableCell>
-                        <TableCell className="text-right">{formatCurrency(payment.amount)}</TableCell>
-                        <TableCell>{getStatusBadge(payment.status)}</TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            {payment.status === 'pending' && (
-                              <Button 
-                                size="sm" 
-                                onClick={() => {
-                                  setSelectedPaymentForDialog({
-                                    id: payment.id,
-                                    amount: payment.amount,
-                                    description: payment.description,
-                                    programName: payment.programName,
-                                    childName: payment.childName,
-                                    dueDate: payment.dueDate || payment.date
-                                  });
-                                  setPaymentDialogOpen(true);
-                                }}
-                                data-testid={`button-pay-now-${payment.id}`}
-                              >
-                                Pay Now
-                              </Button>
+                      <React.Fragment key={`payment-${payment.id}-${index}`}>
+                        <TableRow>
+                          <TableCell>{formatDate(payment.date)}</TableCell>
+                          <TableCell className="font-medium">
+                            {payment.description}
+                            {payment.discountSnapshot && payment.discountSnapshot.discountTotal > 0 && (
+                              <Badge variant="secondary" className="ml-2 bg-green-100 text-green-800 text-xs">
+                                Discount Applied
+                              </Badge>
                             )}
-                            
-                            {payment.status === 'paid' && payment.receiptUrl && (
-                              <Button size="sm" variant="outline" asChild>
-                                <a href={payment.receiptUrl} target="_blank" rel="noopener noreferrer">
-                                  <FileText className="mr-2 h-4 w-4" />
-                                  Receipt
-                                </a>
-                              </Button>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
+                          </TableCell>
+                          <TableCell>{payment.childName}</TableCell>
+                          <TableCell className="text-right">{formatCurrency(payment.amount)}</TableCell>
+                          <TableCell>{getStatusBadge(payment.status)}</TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-2">
+                              {payment.status === 'pending' && (
+                                <Button 
+                                  size="sm" 
+                                  onClick={() => {
+                                    setSelectedPaymentForDialog({
+                                      id: payment.id,
+                                      amount: payment.amount,
+                                      description: payment.description,
+                                      programName: payment.programName,
+                                      childName: payment.childName,
+                                      dueDate: payment.dueDate || payment.date
+                                    });
+                                    setPaymentDialogOpen(true);
+                                  }}
+                                  data-testid={`button-pay-now-${payment.id}`}
+                                >
+                                  Pay Now
+                                </Button>
+                              )}
+                              
+                              {payment.status === 'paid' && payment.receiptUrl && (
+                                <Button size="sm" variant="outline" asChild>
+                                  <a href={payment.receiptUrl} target="_blank" rel="noopener noreferrer">
+                                    <FileText className="mr-2 h-4 w-4" />
+                                    Receipt
+                                  </a>
+                                </Button>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                        {payment.discountSnapshot && payment.discountSnapshot.discountTotal > 0 && (
+                          <TableRow className="bg-green-50 hover:bg-green-100" data-testid={`discount-row-${payment.id}`}>
+                            <TableCell colSpan={6} className="py-2">
+                              <Collapsible>
+                                <CollapsibleTrigger className="flex items-center gap-2 text-sm font-medium text-green-700 hover:text-green-800 cursor-pointer w-full">
+                                  <ChevronDown className="h-4 w-4 transition-transform duration-200 [&[data-state=open]]:rotate-180" />
+                                  <span>Discounts Applied: -{formatCurrency(payment.discountSnapshot.discountTotal)}</span>
+                                </CollapsibleTrigger>
+                                <CollapsibleContent className="mt-2 ml-6">
+                                  <div className="space-y-1 bg-green-100 p-3 rounded-md">
+                                    <div className="flex justify-between items-center text-sm">
+                                      <span className="text-gray-600">Original Subtotal</span>
+                                      <span>{formatCurrency(payment.discountSnapshot.subtotal)}</span>
+                                    </div>
+                                    {payment.discountSnapshot.appliedDiscounts.map((discount, discountIndex) => (
+                                      <div key={discountIndex} className="flex justify-between items-center text-sm text-green-700">
+                                        <span className="flex items-center gap-2">
+                                          <Badge variant="outline" className="text-xs bg-green-100 border-green-300">
+                                            {discount.source === 'promo' ? 'Promo' : 
+                                             discount.source === 'sibling' ? 'Sibling' :
+                                             discount.source === 'free_after_threshold' ? 'Family' :
+                                             discount.source === 'bundle' ? 'Bundle' :
+                                             discount.source === 'automatic' ? 'Auto' : 'Discount'}
+                                          </Badge>
+                                          {discount.name}
+                                          {discount.code && <span className="text-xs text-gray-500">({discount.code})</span>}
+                                        </span>
+                                        <span className="font-medium">-{formatCurrency(discount.amount)}</span>
+                                      </div>
+                                    ))}
+                                    <div className="flex justify-between items-center text-sm font-semibold border-t border-green-200 pt-2 mt-2">
+                                      <span>Total Savings</span>
+                                      <span className="text-green-700">-{formatCurrency(payment.discountSnapshot.discountTotal)}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center text-sm font-semibold">
+                                      <span>Amount Paid</span>
+                                      <span>{formatCurrency(payment.amount)}</span>
+                                    </div>
+                                  </div>
+                                </CollapsibleContent>
+                              </Collapsible>
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </React.Fragment>
                     ))}
                   </TableBody>
                 </Table>
