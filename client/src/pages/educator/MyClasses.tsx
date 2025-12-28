@@ -11,6 +11,29 @@ import {
   EducatorErrorState 
 } from '@/components/educator/EducatorErrorBoundary';
 
+// Helper function to safely extract schedule string from schedule object
+function formatScheduleString(schedule: any): string {
+  if (!schedule) return '';
+  
+  // If it's already a string, return it
+  if (typeof schedule === 'string') return schedule;
+  
+  // Handle object with variants array
+  if (schedule.variants && Array.isArray(schedule.variants) && schedule.variants.length > 0) {
+    const variant = schedule.variants[0];
+    if (variant) {
+      const days = Array.isArray(variant.days) ? variant.days.join(', ') : '';
+      const startTime = variant.startTime || '';
+      const endTime = variant.endTime || '';
+      if (days && startTime && endTime) {
+        return `${days} ${startTime}-${endTime}`;
+      }
+    }
+  }
+  
+  return '';
+}
+
 interface ClassAssignment {
   assignmentId: number;
   classId: number;
@@ -20,7 +43,7 @@ interface ClassAssignment {
   validTo?: string;
   className: string;
   classDescription?: string;
-  classSchedule?: string;
+  classSchedule?: any;
   classLocation?: string;
   capacity?: number;
   enrollmentCount: number;
@@ -95,10 +118,10 @@ function MyClassesContent() {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-                {classItem.classSchedule && (
+                {formatScheduleString(classItem.classSchedule) && (
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Calendar className="h-4 w-4" />
-                    <span>{classItem.classSchedule}</span>
+                    <span>{formatScheduleString(classItem.classSchedule)}</span>
                   </div>
                 )}
                 {classItem.classLocation && (
