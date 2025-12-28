@@ -286,6 +286,15 @@ router.get('/history', supabaseAuth, async (req: any, res) => {
     
     console.log(`🔍 Found ${stripeOnlyPayments.length} Stripe-only payments`);
     
+    // Debug: Log Stripe-only payments with discounts
+    const paymentsWithDiscounts = stripeOnlyPayments.filter(p => p.discountSnapshot);
+    console.log(`💰 Stripe-only payments with discounts: ${paymentsWithDiscounts.length}`);
+    if (paymentsWithDiscounts.length > 0) {
+      paymentsWithDiscounts.forEach(p => {
+        console.log(`  - Payment ${p.stripePaymentIntentId}: subtotal=${p.subtotalAmount}, discountTotal=${p.discountTotal}, snapshot=`, JSON.stringify(p.discountSnapshot));
+      });
+    }
+    
     // Step 6: Merge and sort all payments
     const allPayments = [...enrichedDbPayments, ...stripeOnlyPayments]
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());

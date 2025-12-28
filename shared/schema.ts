@@ -713,6 +713,23 @@ export const enrichedPaymentHistorySchema = z.object({
   // Future enhancement fields
   nextPaymentDate: z.string().nullable().optional(), // ISO date string
   source: z.enum(['database', 'stripe']).optional(), // Tag for Stripe-only payments
+  
+  // Discount tracking fields for payment history display
+  subtotalAmount: z.number().nullable().optional(), // Original subtotal before discounts (cents)
+  discountTotal: z.number().nullable().optional(), // Total discount applied (cents)
+  discountSnapshot: z.object({
+    subtotal: z.number(),
+    discountTotal: z.number(),
+    appliedDiscounts: z.array(z.object({
+      source: z.enum(['promo', 'sibling', 'free_after_threshold', 'automatic', 'bundle']),
+      discountId: z.number().optional(),
+      code: z.string().optional(),
+      name: z.string(),
+      type: z.string(),
+      value: z.number(),
+      amount: z.number(),
+    })),
+  }).nullable().optional(),
 });
 
 export type EnrichedPaymentHistory = z.infer<typeof enrichedPaymentHistorySchema>;
