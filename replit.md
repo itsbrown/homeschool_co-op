@@ -92,10 +92,19 @@ The platform prioritizes scalability, security, and user experience, incorporati
 ### Educator Dashboard
 The Educator Dashboard provides educators/mentors with tools to manage their classes, track attendance, view lesson plans, and log their work hours. It integrates with the existing Daily Flow system for lesson planning.
 
+**Architecture (Dec 2025):**
+- **EducatorAppShell** (`client/src/components/layout/EducatorAppShell.tsx`): Dedicated navigation shell for educator/mentor roles with emerald color scheme, featuring sidebar navigation (Dashboard, My Classes, Students, Schedule, My Hours, Notifications, Settings)
+- **Role-Specific Routing**: App.tsx detects educator/mentor roles and routes to EducatorAppShell instead of ParentAppShell, ensuring persona-specific navigation
+- **RoleSwitcher Case Normalization**: Role comparison uses lowercase normalization to handle database values like "Mentor" matching roleConfig keys like "mentor"
+- **Routing Pattern**: `/educator/*` routes use EducatorAppShell, admin routes use AppShell with AI tools, parent routes use ParentAppShell
+
 **Completed Features:**
+- Phase 0 Foundation (Dec 2025): Role switching fix, EducatorAppShell navigation, dedicated routing
 - Educator Session MVP (view classes, start/end sessions, daily flow integration)
 - Admin Tools & Planning (manage schedules, audit trail, weekly calendar, my hours)
 - Session Attendance Tracking UI (mark students present/absent/late/excused, bulk actions, notes)
+- Day at a Glance Dashboard (active session indicator, stats cards, today's schedule, quick actions)
+- Weekly Calendar with class schedules (fetches from `/api/educator/schedules/week`, supports recurring/one-time schedules, student birthdays)
 
 **Planned Features:**
 - Class-specific parent messaging with admin approval
