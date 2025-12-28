@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +11,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/components/SupabaseProvider";
 import { Mail, Send, Clock, Users, MessageSquare, Bell } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 
 export default function EducatorNotificationsPage() {
   const { user } = useAuth();
@@ -23,41 +24,23 @@ export default function EducatorNotificationsPage() {
 
   // Get educator's classes and students for targeted notifications
   const { data: educatorData, isLoading } = useQuery({
-    queryKey: ["/api/educator/notification-data", user?.email],
-    queryFn: async () => {
-      const response = await fetch(`/api/educator/notification-data?email=${user?.email}`, {
-        credentials: "include"
-      });
-      if (!response.ok) throw new Error("Failed to fetch notification data");
-      return response.json();
-    },
+    queryKey: [`/api/educator/notification-data?email=${encodeURIComponent(user?.email || '')}`],
     enabled: !!user?.email,
   });
 
   // Get recent notifications sent by this educator
   const { data: notificationHistory } = useQuery({
-    queryKey: ["/api/educator/notifications/history", user?.email],
-    queryFn: async () => {
-      const response = await fetch(`/api/educator/notifications/history?email=${user?.email}`, {
-        credentials: "include"
-      });
-      if (!response.ok) throw new Error("Failed to fetch notification history");
-      return response.json();
-    },
+    queryKey: [`/api/educator/notifications/history?email=${encodeURIComponent(user?.email || '')}`],
     enabled: !!user?.email,
   });
 
   // Send notification mutation
   const sendNotificationMutation = useMutation({
     mutationFn: async (notificationData: any) => {
-      const response = await fetch('/api/educator/notifications/send', {
+      return apiRequest('/api/educator/notifications/send', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify(notificationData),
       });
-      if (!response.ok) throw new Error('Failed to send notification');
-      return response.json();
     },
     onSuccess: () => {
       toast({

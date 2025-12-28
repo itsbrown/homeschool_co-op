@@ -101,21 +101,7 @@ function MyHoursContent() {
   const endDateStr = weekEnd.toISOString().split('T')[0];
 
   const { data: hoursData, isLoading, error, refetch } = useQuery<MyHoursData>({
-    queryKey: ['/api/educator/my-hours', currentWeekStart, endDateStr],
-    queryFn: async () => {
-      const token = localStorage.getItem('supabase_token');
-      const response = await fetch(
-        `/api/educator/my-hours?startDate=${currentWeekStart}&endDate=${endDateStr}`,
-        { 
-          credentials: 'include',
-          headers: {
-            ...(token && { 'Authorization': `Bearer ${token}` }),
-          },
-        }
-      );
-      if (!response.ok) throw new Error('Failed to fetch hours');
-      return response.json();
-    }
+    queryKey: [`/api/educator/my-hours?startDate=${currentWeekStart}&endDate=${endDateStr}`],
   });
 
   const goToPreviousWeek = () => {

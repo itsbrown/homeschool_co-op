@@ -91,18 +91,7 @@ function WeeklyCalendarContent({ showBirthdays = false, showQuickActions = true 
   const [currentWeekStart, setCurrentWeekStart] = useState(() => getWeekStartDate(new Date()));
 
   const { data: weekData, isLoading, error, refetch } = useQuery<WeekScheduleData>({
-    queryKey: ['/api/educator/schedules/week', currentWeekStart],
-    queryFn: async () => {
-      const token = localStorage.getItem('supabase_token');
-      const response = await fetch(`/api/educator/schedules/week?weekStart=${currentWeekStart}`, {
-        credentials: 'include',
-        headers: {
-          ...(token && { 'Authorization': `Bearer ${token}` }),
-        },
-      });
-      if (!response.ok) throw new Error('Failed to fetch schedule');
-      return response.json();
-    }
+    queryKey: [`/api/educator/schedules/week?weekStart=${currentWeekStart}`],
   });
 
   const { data: studentsResponse } = useQuery<{ students: Student[] }>({

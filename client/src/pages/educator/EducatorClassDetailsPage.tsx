@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useQuery } from "@tanstack/react-query";
-import { useAuth, supabase } from "@/components/SupabaseProvider";
+import { useAuth } from "@/components/SupabaseProvider";
 import { Link } from "wouter";
 import { 
   BookOpen, 
@@ -26,43 +26,15 @@ export default function EducatorClassDetailsPage() {
   const [match, params] = useRoute("/educator/classes/:id");
   const classId = params?.id;
 
-  // Helper to get the auth token
-  const getAuthToken = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    return session?.access_token;
-  };
-
   // Get class details using authenticated educator endpoint
   const { data: classData, isLoading: classLoading } = useQuery({
-    queryKey: ["/api/educator/classes", classId],
-    queryFn: async () => {
-      const token = await getAuthToken();
-      const response = await fetch(`/api/educator/classes/${classId}`, {
-        credentials: "include",
-        headers: {
-          ...(token && { Authorization: `Bearer ${token}` })
-        }
-      });
-      if (!response.ok) throw new Error("Failed to fetch class");
-      return response.json();
-    },
+    queryKey: [`/api/educator/classes/${classId}`],
     enabled: !!classId,
   });
 
   // Get enrolled students for this class using authenticated endpoint
   const { data: studentsData, isLoading: studentsLoading } = useQuery({
-    queryKey: ["/api/educator/classes", classId, "students"],
-    queryFn: async () => {
-      const token = await getAuthToken();
-      const response = await fetch(`/api/educator/classes/${classId}/students`, {
-        credentials: "include",
-        headers: {
-          ...(token && { Authorization: `Bearer ${token}` })
-        }
-      });
-      if (!response.ok) throw new Error("Failed to fetch students");
-      return response.json();
-    },
+    queryKey: [`/api/educator/classes/${classId}/students`],
     enabled: !!classId,
   });
 

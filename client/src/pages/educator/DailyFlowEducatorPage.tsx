@@ -1,5 +1,5 @@
-
-import React, { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,98 +8,69 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Calendar, Clock, CheckCircle, Edit, Link, FileText } from 'lucide-react';
 import { DailyFlowEntry } from '@shared/daily-flow-schema';
+import { apiRequest } from '@/lib/queryClient';
+
+interface ClassItem {
+  id: number;
+  title: string;
+}
 
 export default function DailyFlowEducatorPage() {
-  const [classes, setClasses] = useState([]);
-  const [selectedClass, setSelectedClass] = useState(null);
-  const [dailyFlows, setDailyFlows] = useState<DailyFlowEntry[]>([]);
+  const queryClient = useQueryClient();
+  const [selectedClass, setSelectedClass] = useState<ClassItem | null>(null);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [editingEntry, setEditingEntry] = useState<DailyFlowEntry | null>(null);
   const [completionNotes, setCompletionNotes] = useState('');
 
-  useEffect(() => {
-    fetchEducatorClasses();
-  }, []);
+  const { data: classes = [] } = useQuery<ClassItem[]>({
+    queryKey: ['/api/educator/classes'],
+  });
 
-  useEffect(() => {
-    if (selectedClass) {
-      fetchDailyFlows();
-    }
-  }, [selectedClass, selectedDate]);
+  const { data: dailyFlows = [] } = useQuery<DailyFlowEntry[]>({
+    queryKey: [`/api/daily-flows/entries?classId=${selectedClass?.id}&startDate=${selectedDate}&endDate=${selectedDate}`],
+    enabled: !!selectedClass,
+  });
 
-  const fetchEducatorClasses = async () => {
-    try {
-      const response = await fetch('/api/educator/classes', {
-        credentials: 'include'
-      });
-      const data = await response.json();
-      setClasses(data);
-    } catch (error) {
-      console.error('Error fetching educator classes:', error);
-    }
-  };
-
-  const fetchDailyFlows = async () => {
-    if (!selectedClass) return;
-
-    try {
-      const response = await fetch(`/api/daily-flows/entries?classId=${selectedClass.id}&startDate=${selectedDate}&endDate=${selectedDate}`, {
-        credentials: 'include'
-      });
-      const data = await response.json();
-      setDailyFlows(data);
-    } catch (error) {
-      console.error('Error fetching daily flows:', error);
-    }
-  };
-
-  const handleCompleteEntry = async (entryId: number) => {
-    try {
-      const response = await fetch(`/api/daily-flows/entries/${entryId}/complete`, {
+  const completeEntryMutation = useMutation({
+    mutationFn: async ({ entryId, notes }: { entryId: number; notes: string }) => {
+      return apiRequest(`/api/daily-flows/entries/${entryId}/complete`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({ notes: completionNotes })
+        body: JSON.stringify({ notes }),
       });
+    },
+    onSuccess: () => {
+      setCompletionNotes('');
+      queryClient.invalidateQueries({ queryKey: [`/api/daily-flows/entries?classId=${selectedClass?.id}&startDate=${selectedDate}&endDate=${selectedDate}`] });
+    },
+  });
 
-      if (response.ok) {
-        setCompletionNotes('');
-        fetchDailyFlows();
-      }
-    } catch (error) {
-      console.error('Error completing entry:', error);
-    }
-  };
-
-  const handleUpdateEntry = async () => {
-    if (!editingEntry) return;
-
-    try {
-      const response = await fetch(`/api/daily-flows/entries/${editingEntry.id}`, {
+  const updateEntryMutation = useMutation({
+    mutationFn: async (entry: DailyFlowEntry) => {
+      return apiRequest(`/api/daily-flows/entries/${entry.id}`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
         body: JSON.stringify({
-          startTime: editingEntry.startTime,
-          endTime: editingEntry.endTime,
-          lessonTitle: editingEntry.lessonTitle,
-          lessonDescription: editingEntry.lessonDescription,
-          lessonLink: editingEntry.lessonLink,
-          notes: editingEntry.notes
-        })
+          startTime: entry.startTime,
+          endTime: entry.endTime,
+          lessonTitle: entry.lessonTitle,
+          lessonDescription: entry.lessonDescription,
+          lessonLink: entry.lessonLink,
+          notes: entry.notes,
+        }),
       });
+    },
+    onSuccess: () => {
+      setEditingEntry(null);
+      queryClient.invalidateQueries({ queryKey: [`/api/daily-flows/entries?classId=${selectedClass?.id}&startDate=${selectedDate}&endDate=${selectedDate}`] });
+    },
+  });
 
-      if (response.ok) {
-        setEditingEntry(null);
-        fetchDailyFlows();
-      }
-    } catch (error) {
-      console.error('Error updating entry:', error);
-    }
+  const handleCompleteEntry = (entryId: number) => {
+    completeEntryMutation.mutate({ entryId, notes: completionNotes });
+  };
+
+  const handleUpdateEntry = () => {
+    if (!editingEntry) return;
+    updateEntryMutation.mutate(editingEntry);
   };
 
   return (
