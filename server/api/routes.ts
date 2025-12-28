@@ -4,7 +4,7 @@ import billingRoutes from './billing';
 import paymentHistoryRoutes from './payment-history';
 import scheduledPaymentsRoutes from './scheduled-payments';
 import stripeMigrationRoutes from './stripe-migration';
-import stripeWebhookRoutes from './stripe-webhook';
+// REMOVED: stripeWebhookRoutes - Consolidated into secure webhook-handler.ts
 import cartRoutes from './cart';
 import marketingRoutes from './marketing';
 import schoolRoutes from './school';
@@ -14,7 +14,7 @@ const router = express.Router();
 
 // Public routes (no auth required)
 router.use('/stripe', stripeRoutes);
-router.use('/stripe-webhooks', stripeWebhookRoutes);
+// REMOVED: /stripe-webhooks route - Consolidated into secure webhook-handler.ts
 router.use('/marketing', marketingRoutes);
 
 // Protected routes (require authentication)

@@ -53,6 +53,7 @@ The platform prioritizes scalability, security, and user experience, incorporati
 -   **School Branding System**: Allows school administrators to upload and display school logos.
 -   **Membership Management System**: Admin interface for managing annual membership fees and enrollment validation.
 -   **Payment System**: Stripe-only system with subscription schedules, webhooks, smart cart logic, automated refunds, and payment reminders. **SECURITY (Dec 2025)**: Server-side authoritative pricing - all payment amounts are calculated from database lookups, never trusted from client. Includes strict validation for class prices (variant-aware), membership fees (discount-aware), and unified validation blocking any total mismatch.
+-   **Webhook Security (Dec 2025)**: All Stripe webhooks consolidated into single secure endpoint `/api/stripe/webhook` with mandatory signature verification. Removed insecure `/api/stripe-webhooks/*` routes. Handlers extracted to `server/services/stripeWebhookHandlers.ts` for maintainability. Events handled: payment_intent.succeeded, payment_intent.payment_failed, charge.refunded, invoice.paid, invoice.payment_failed, customer.subscription.created/updated/deleted.
 -   **Cart System**: TanStack Query-based cart implementation with API-first state management and race condition prevention.
 -   **Discount Systems**: Database-managed comprehensive discount system supporting 19+ discount types:
     - **Type-based**: percentage, fixed_amount, sibling discounts

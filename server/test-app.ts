@@ -27,7 +27,7 @@ import accountImport from "./api/account-import";
 import dailyFlowsRoutes from "./api/daily-flows";
 import aiPricingRouter from "./api/ai-pricing";
 import stripeMigrationRouter from "./api/stripe-migration";
-import stripeWebhookRouter from "./api/stripe-webhook";
+// REMOVED: stripeWebhookRouter - Consolidated into secure webhook-handler.ts
 import adminEnrollmentPaymentRouter from "./api/admin-enrollment-payment";
 import membershipRouter from "./api/membership";
 import userManagementRouter from "./api/user-management";
@@ -86,7 +86,7 @@ export async function createTestApp(): Promise<Application> {
   app.use("/api/scheduled-payments", scheduledPaymentsRouter);
   app.use("/api/ai-pricing", aiPricingRouter);
   app.use("/api/stripe-migration", stripeMigrationRouter);
-  app.use("/api/stripe-webhooks", stripeWebhookRouter);
+  // REMOVED: /api/stripe-webhooks route - Consolidated into secure webhook-handler.ts
   app.use("/api/payment-import", paymentImport);
   app.use("/api/account-import", accountImport);
   app.use("/api/daily-flows", dailyFlowsRoutes);
