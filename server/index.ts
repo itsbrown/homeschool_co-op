@@ -23,7 +23,8 @@ import accountImport from "./api/account-import";
 import dailyFlowsRoutes from "./api/daily-flows";
 import aiPricingRouter from "./api/ai-pricing";
 import stripeMigrationRouter from "./api/stripe-migration";
-import stripeWebhookRouter from "./api/stripe-webhook";
+// REMOVED: stripeWebhookRouter - Insecure endpoint without signature verification
+// All webhook events are now handled through the secure /api/stripe/webhook endpoint
 import adminEnrollmentPaymentRouter from "./api/admin-enrollment-payment";
 import membershipRouter from "./api/membership";
 import { webhookHandler } from "./webhook-handler";
@@ -133,7 +134,8 @@ app.use("/api/billing", billingRouter);
 app.use("/api/scheduled-payments", scheduledPaymentsRouter);
 app.use("/api/ai-pricing", aiPricingRouter);
 app.use("/api/stripe-migration", stripeMigrationRouter);
-app.use("/api/stripe-webhooks", stripeWebhookRouter);
+// REMOVED: /api/stripe-webhooks route - Insecure endpoint without signature verification
+// All Stripe webhook events are now routed through /api/stripe/webhook with proper signature verification
 app.use("/api/payment-import", paymentImport);
 app.use("/api/account-import", accountImport);
 app.use("/api/daily-flows", dailyFlowsRoutes);
@@ -199,18 +201,28 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
         // Also create payment history record
         const scheduledPayment = (await storage.getScheduledPaymentsByParentEmail('tester@testing321.com')).find(p => p.id === id);
         if (scheduledPayment) {
+          // Get enrollment to build description
+          const enrollment = await storage.getProgramEnrollmentById(scheduledPayment.enrollmentId);
+          const childName = enrollment?.childName || 'Child';
+          const className = enrollment?.className || 'Unknown Class';
+          
           const paymentRecord = {
-            id: Date.now(),
+            schoolId: scheduledPayment.schoolId,
+            parentId: scheduledPayment.parentId || null,
             stripePaymentIntentId: `pi_test_dev_${id}`,
+            stripeChargeId: null,
+            stripeRefundId: null,
+            originalPaymentId: null,
             parentEmail: scheduledPayment.parentEmail,
-            childName: scheduledPayment.description?.split(' - ')[0] || 'Child',
-            className: scheduledPayment.description?.split(' - ')[1] || scheduledPayment.description || 'Unknown Class',
+            childName: childName,
+            className: className,
+            description: `Test payment for scheduled payment ${id}`,
             amount: scheduledPayment.amount,
             currency: scheduledPayment.currency || 'usd',
             status: 'completed' as const,
+            enrollmentIds: [scheduledPayment.enrollmentId],
             metadata: { testPayment: true, scheduledPaymentId: id },
-            createdAt: new Date(),
-            updatedAt: new Date()
+            paymentDate: new Date()
           };
           await storage.createPayment(paymentRecord);
           console.log('✅ Test: Created payment history record');

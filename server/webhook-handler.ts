@@ -4,6 +4,14 @@ import { storage } from './storage';
 import { sendPaymentReceipt } from './lib/email-service';
 import { getStripeClient } from './config/stripe';
 import { createReceiptFromPayment } from './services/receiptService';
+import {
+  handleDirectPaymentSuccess,
+  handleMembershipInvoicePaid,
+  handleMembershipPaymentFailed,
+  handleMembershipSubscriptionCreated,
+  handleMembershipSubscriptionUpdated,
+  handleMembershipSubscriptionDeleted
+} from './services/stripeWebhookHandlers';
 
 // Stripe client will be lazily initialized within the webhook handler
 
@@ -923,8 +931,37 @@ export const webhookHandler = async (req: Request, res: Response) => {
       }
       break;
 
-      default:
-        console.log('📦 Unhandled event type:', event.type, '- responding with 200 OK');
+    // ===== MEMBERSHIP SUBSCRIPTION EVENTS =====
+    // These were previously handled by insecure /api/stripe-webhooks/* endpoints
+    // Now consolidated here with proper signature verification
+    
+    case 'invoice.paid':
+      console.log('✅ Invoice paid for membership');
+      await handleMembershipInvoicePaid(event.data.object);
+      break;
+      
+    case 'invoice.payment_failed':
+      console.log('❌ Invoice payment failed for membership');
+      await handleMembershipPaymentFailed(event.data.object);
+      break;
+      
+    case 'customer.subscription.created':
+      console.log('🆕 Subscription created for membership');
+      await handleMembershipSubscriptionCreated(event.data.object);
+      break;
+      
+    case 'customer.subscription.updated':
+      console.log('🔄 Subscription updated for membership');
+      await handleMembershipSubscriptionUpdated(event.data.object);
+      break;
+      
+    case 'customer.subscription.deleted':
+      console.log('🗑️ Subscription deleted/cancelled for membership');
+      await handleMembershipSubscriptionDeleted(event.data.object);
+      break;
+
+    default:
+      console.log('📦 Unhandled event type:', event.type, '- responding with 200 OK');
         // Return 200 OK for unhandled events to prevent retries
         res.json({ received: true, event_type: event.type, handled: false });
         return;
