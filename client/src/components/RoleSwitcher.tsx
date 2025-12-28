@@ -9,7 +9,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { ChevronDown, User, School, GraduationCap, BookOpen, Shield } from "lucide-react";
 
-// Map role names to icons and labels
+// Map role names to icons and labels (lowercase keys for case-insensitive lookup)
 const roleConfig: Record<string, { icon: any; label: string }> = {
   parent: { icon: User, label: 'Parent' },
   educator: { icon: GraduationCap, label: 'Educator' },
@@ -17,10 +17,13 @@ const roleConfig: Record<string, { icon: any; label: string }> = {
   teacher: { icon: GraduationCap, label: 'Teacher' },
   learner: { icon: BookOpen, label: 'Learner' },
   student: { icon: BookOpen, label: 'Student' },
-  schoolAdmin: { icon: School, label: 'School Admin' },
+  schooladmin: { icon: School, label: 'School Admin' },
   admin: { icon: Shield, label: 'Admin' },
-  superAdmin: { icon: Shield, label: 'Super Admin' }
+  superadmin: { icon: Shield, label: 'Super Admin' }
 };
+
+// Helper function to normalize role casing for consistent lookup
+const normalizeRole = (role: string): string => role.toLowerCase();
 
 export default function RoleSwitcher() {
   const { activeRole, activeRoleId, availableRoles, canSwitchRoles, setActiveRole, isLoadingRoles } = useRole();
@@ -56,7 +59,7 @@ export default function RoleSwitcher() {
     return null;
   }
   
-  const currentRoleInfo = roleConfig[currentRoleData.role] || roleConfig.parent;
+  const currentRoleInfo = roleConfig[normalizeRole(currentRoleData.role)] || roleConfig.parent;
   const CurrentIcon = currentRoleInfo.icon;
   
   // SECURITY: Only show roles from the same school to prevent cross-school switching
@@ -90,7 +93,7 @@ export default function RoleSwitcher() {
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-72">
           {sameSchoolRoles.map((role) => {
-            const roleInfo = roleConfig[role.role] || roleConfig.parent;
+            const roleInfo = roleConfig[normalizeRole(role.role)] || roleConfig.parent;
             const RoleIcon = roleInfo.icon;
             const isActive = role.id === currentRoleData?.id;
             

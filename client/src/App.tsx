@@ -177,6 +177,7 @@ import ManualPaymentEntryPage from "./pages/ManualPaymentEntryPage";
 import MarketingLinksPage from '@/pages/MarketingLinksPage';
 import ParentDashboard from "./components/dashboards/ParentDashboard";
 import ParentAppShell from "./components/layout/ParentAppShell";
+import EducatorAppShell from "./components/layout/EducatorAppShell";
 import AIStatusProvider from "@/contexts/AIStatusContext";
 import RoleSelectionComponent from "@/components/RoleSelection";
 import EducatorDashboard from "./components/dashboards/EducatorDashboard";
@@ -245,8 +246,18 @@ function DashboardRouter() {
     );
   }
 
-  // For super admin, admin, educator, mentor - route to EducatorDashboard with AppShell and AI tools
-  if (['superAdmin', 'admin', 'educator', 'mentor'].includes(activeRole)) {
+  // For educator, mentor - route to EducatorDashboard with EducatorAppShell
+  if (['educator', 'mentor'].includes(activeRole)) {
+    console.log(`🎯 Routing ${activeRole} to EducatorDashboard with EducatorAppShell`);
+    return (
+      <EducatorAppShell key={`dashboard-${activeRole}`}>
+        <EducatorDashboard />
+      </EducatorAppShell>
+    );
+  }
+
+  // For super admin, admin - route to EducatorDashboard with AppShell and AI tools
+  if (['superAdmin', 'admin'].includes(activeRole)) {
     console.log(`🎯 Routing ${activeRole} to EducatorDashboard with AI tools`);
     return (
       <AppShell key={`dashboard-${activeRole}`}>
@@ -552,22 +563,23 @@ function Router() {
       <Route path="/parent/documents" component={MyDocumentsPage} />
       <Route path="/parent/documents/:id" component={DocumentDetailPage} />
 
-      {/* Educator routes */}
-      <Route path="/educator" component={() => <AppShell><EducatorDashboardPage /></AppShell>} />
-      <Route path="/educator/my-classes" component={() => <AppShell><MyClassesPage /></AppShell>} />
-      <Route path="/educator/session/:id" component={() => <AppShell><ActiveSessionPage /></AppShell>} />
-      <Route path="/educator/weekly-calendar" component={() => <AppShell><WeeklyCalendarPage /></AppShell>} />
-      <Route path="/educator/my-hours" component={() => <AppShell><MyHoursPage /></AppShell>} />
-      <Route path="/educator/classes" component={() => <AppShell><EducatorClassesPage /></AppShell>} />
-      <Route path="/educator/classes/:id" component={() => <AppShell><EducatorClassDetailsPage /></AppShell>} />
-      <Route path="/educator/students" component={() => <AppShell><EducatorStudentsPage /></AppShell>} />
-      <Route path="/educator/students/:id" component={() => <AppShell><EducatorStudentDetailPage /></AppShell>} />
-      <Route path="/educator/schedule" component={() => <AppShell><EducatorSchedulePage /></AppShell>} />
-      <Route path="/educator/settings" component={() => <AppShell><EducatorSettingsPage /></AppShell>} />
-      <Route path="/educator/notifications" component={() => <AppShell><EducatorNotificationsPage /></AppShell>} />
+      {/* Educator routes - using EducatorAppShell for dedicated navigation */}
+      <Route path="/educator" component={() => <EducatorAppShell><EducatorDashboardPage /></EducatorAppShell>} />
+      <Route path="/educator/dashboard" component={() => <EducatorAppShell><EducatorDashboardPage /></EducatorAppShell>} />
+      <Route path="/educator/my-classes" component={() => <EducatorAppShell><MyClassesPage /></EducatorAppShell>} />
+      <Route path="/educator/session/:id" component={() => <EducatorAppShell><ActiveSessionPage /></EducatorAppShell>} />
+      <Route path="/educator/weekly-calendar" component={() => <EducatorAppShell><WeeklyCalendarPage /></EducatorAppShell>} />
+      <Route path="/educator/my-hours" component={() => <EducatorAppShell><MyHoursPage /></EducatorAppShell>} />
+      <Route path="/educator/classes" component={() => <EducatorAppShell><EducatorClassesPage /></EducatorAppShell>} />
+      <Route path="/educator/classes/:id" component={() => <EducatorAppShell><EducatorClassDetailsPage /></EducatorAppShell>} />
+      <Route path="/educator/students" component={() => <EducatorAppShell><EducatorStudentsPage /></EducatorAppShell>} />
+      <Route path="/educator/students/:id" component={() => <EducatorAppShell><EducatorStudentDetailPage /></EducatorAppShell>} />
+      <Route path="/educator/schedule" component={() => <EducatorAppShell><EducatorSchedulePage /></EducatorAppShell>} />
+      <Route path="/educator/settings" component={() => <EducatorAppShell><EducatorSettingsPage /></EducatorAppShell>} />
+      <Route path="/educator/notifications" component={() => <EducatorAppShell><EducatorNotificationsPage /></EducatorAppShell>} />
       
       {/* Daily Flow routes */}
-      <Route path="/educator/daily-flows" component={() => <AppShell><DailyFlowsPage /></AppShell>} />
+      <Route path="/educator/daily-flows" component={() => <EducatorAppShell><DailyFlowsPage /></EducatorAppShell>} />
       <Route path="/schools/daily-flows/templates" component={() => <AppShell><DailyFlowsPage /></AppShell>} />
       <Route path="/schools/daily-flows/entries" component={() => <AppShell><DailyFlowsPage /></AppShell>} />
       <Route path="/schools/daily-flows/reports" component={() => <AppShell><DailyFlowsPage /></AppShell>} />
