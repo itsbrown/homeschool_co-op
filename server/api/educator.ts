@@ -518,6 +518,57 @@ router.get('/sessions', async (req, res) => {
   }
 });
 
+// GET /api/educator/sessions/:id - Get a single session by ID
+router.get('/sessions/:id', async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'User ID not found' });
+    }
+
+    const sessionId = parseInt(req.params.id);
+    if (isNaN(sessionId)) {
+      return res.status(400).json({ error: 'Invalid session ID' });
+    }
+
+    console.log('[EducatorDashboard] Fetching session:', sessionId, 'for user:', userId);
+
+    // Get the session
+    const session = await storage.getClassSessionById(sessionId);
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    // Verify educator owns this session or is substitute
+    if (session.educatorId !== userId && session.substituteEducatorId !== userId) {
+      return res.status(403).json({ 
+        error: 'You are not authorized to view this session',
+        code: 'NOT_AUTHORIZED'
+      });
+    }
+
+    // Enrich with class details
+    const classInfo = await storage.getClassById(session.classId);
+    if (!classInfo) {
+      console.log('[EducatorDashboard] Class not found for session:', sessionId, 'classId:', session.classId);
+      return res.status(404).json({ error: 'Associated class not found' });
+    }
+
+    const sessionWithDetails = {
+      ...session,
+      className: classInfo.title || 'Unknown Class',
+      classSchedule: formatScheduleString(classInfo.schedule),
+      classLocation: classInfo.location
+    };
+
+    console.log('[EducatorDashboard] Session fetched:', sessionId);
+    res.json(sessionWithDetails);
+  } catch (error) {
+    console.error('[EducatorDashboard] Error fetching session:', error);
+    res.status(500).json({ error: 'Failed to fetch session' });
+  }
+});
+
 // POST /api/educator/sessions - Create a new session
 const createSessionSchema = z.object({
   classId: z.number(),
