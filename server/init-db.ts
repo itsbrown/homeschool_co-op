@@ -1238,6 +1238,14 @@ async function runMigrations() {
     `);
     console.log('✅ Migration completed: payment_discounts table created');
     
+    // Add volunteer_waiver_id column to school_classes table
+    console.log('Running migration: Adding volunteer_waiver_id column to school_classes table...');
+    await db.execute(sql`
+      ALTER TABLE school_classes 
+      ADD COLUMN IF NOT EXISTS volunteer_waiver_id INTEGER REFERENCES school_documents(id);
+    `);
+    console.log('✅ Migration completed: volunteer_waiver_id column added to school_classes table');
+    
     // Create volunteer_credits table for tracking volunteer hours and credits
     console.log('Running migration: Creating volunteer_credits table...');
     await db.execute(sql`
