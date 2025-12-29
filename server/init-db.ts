@@ -1034,6 +1034,60 @@ async function runMigrations() {
     `);
     console.log('✅ Migration completed: session_attendance table created');
     
+    // Create signed_waivers table for tracking waiver signatures (Phase 2)
+    console.log('Running migration: Creating signed_waivers table...');
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS signed_waivers (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        school_id INTEGER NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+        document_id INTEGER NOT NULL REFERENCES school_documents(id),
+        signed_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        signatory_name TEXT NOT NULL,
+        ip_address TEXT,
+        user_agent TEXT,
+        expires_at TIMESTAMP,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_signed_waivers_user_id ON signed_waivers(user_id);
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_signed_waivers_school_id ON signed_waivers(school_id);
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_signed_waivers_document_id ON signed_waivers(document_id);
+    `);
+    console.log('✅ Migration completed: signed_waivers table created');
+    
+    // Create session_volunteers table for tracking volunteer assistance (Phase 2)
+    console.log('Running migration: Creating session_volunteers table...');
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS session_volunteers (
+        id SERIAL PRIMARY KEY,
+        session_id INTEGER NOT NULL REFERENCES class_sessions(id) ON DELETE CASCADE,
+        volunteer_id INTEGER NOT NULL REFERENCES users(id),
+        school_id INTEGER NOT NULL REFERENCES schools(id),
+        role TEXT NOT NULL DEFAULT 'volunteer' CHECK (role IN ('aide', 'volunteer', 'substitute')),
+        check_in_time TIMESTAMP,
+        check_out_time TIMESTAMP,
+        actual_minutes INTEGER,
+        signed_waiver_id INTEGER REFERENCES signed_waivers(id),
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_session_volunteers_session_id ON session_volunteers(session_id);
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_session_volunteers_volunteer_id ON session_volunteers(volunteer_id);
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_session_volunteers_school_id ON session_volunteers(school_id);
+    `);
+    console.log('✅ Migration completed: session_volunteers table created');
+    
     // NOTE: Unique constraints for children and school_students are managed manually on production
     // to avoid migration failures. The correct indexes should be created via SQL after deployment:
     // CREATE UNIQUE INDEX IF NOT EXISTS "unique_parent_child" ON "children" (parent_id, lower(first_name), lower(last_name));
@@ -1183,6 +1237,56 @@ async function runMigrations() {
       CREATE INDEX IF NOT EXISTS idx_payment_discounts_discount_id ON payment_discounts(discount_id);
     `);
     console.log('✅ Migration completed: payment_discounts table created');
+    
+    // Create volunteer_credits table for tracking volunteer hours and credits
+    console.log('Running migration: Creating volunteer_credits table...');
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS volunteer_credits (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        school_id INTEGER NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+        session_id INTEGER REFERENCES class_sessions(id),
+        session_volunteer_id INTEGER REFERENCES session_volunteers(id),
+        minutes_worked INTEGER NOT NULL,
+        credit_amount_cents INTEGER NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected', 'partially_used', 'used', 'expired')),
+        approved_by INTEGER REFERENCES users(id),
+        approved_at TIMESTAMP,
+        rejection_reason TEXT,
+        used_amount_cents INTEGER DEFAULT 0 NOT NULL,
+        expires_at TIMESTAMP,
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_volunteer_credits_user_id ON volunteer_credits(user_id);
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_volunteer_credits_school_id ON volunteer_credits(school_id);
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_volunteer_credits_status ON volunteer_credits(status);
+    `);
+    console.log('✅ Migration completed: volunteer_credits table created');
+    
+    // Create credit_usage_logs table for tracking when credits are applied to payments
+    console.log('Running migration: Creating credit_usage_logs table...');
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS credit_usage_logs (
+        id SERIAL PRIMARY KEY,
+        credit_id INTEGER NOT NULL REFERENCES volunteer_credits(id) ON DELETE CASCADE,
+        payment_history_id INTEGER REFERENCES stripe_payment_history(id),
+        amount_cents INTEGER NOT NULL,
+        description TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_credit_usage_logs_credit_id ON credit_usage_logs(credit_id);
+    `);
+    console.log('✅ Migration completed: credit_usage_logs table created');
     
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);

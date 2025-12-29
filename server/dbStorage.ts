@@ -48,7 +48,9 @@ import {
   SessionAttendance, InsertSessionAttendance, sessionAttendance,
   ErrorLog, InsertErrorLog, errorLogs,
   SignedWaiver, InsertSignedWaiver, signedWaivers,
-  SessionVolunteer, InsertSessionVolunteer, sessionVolunteers
+  SessionVolunteer, InsertSessionVolunteer, sessionVolunteers,
+  VolunteerCredit, InsertVolunteerCredit, volunteerCredits,
+  CreditUsageLog, InsertCreditUsageLog, creditUsageLogs
 } from '../shared/schema';
 
 /**
@@ -3714,5 +3716,177 @@ export class DatabaseStorage implements IStorage {
   async deleteSessionVolunteer(id: number): Promise<void> {
     const db = await getDb();
     await db.delete(sessionVolunteers).where(eq(sessionVolunteers.id, id));
+  }
+
+  // ==================== VOLUNTEER CREDITS (Phase 3) ====================
+  
+  async getVolunteerCreditById(id: number): Promise<VolunteerCredit | undefined> {
+    const db = await getDb();
+    const [credit] = await db.select().from(volunteerCredits).where(eq(volunteerCredits.id, id));
+    return credit;
+  }
+
+  async getVolunteerCreditsByUserId(userId: number): Promise<VolunteerCredit[]> {
+    const db = await getDb();
+    return db.select().from(volunteerCredits)
+      .where(eq(volunteerCredits.userId, userId))
+      .orderBy(desc(volunteerCredits.createdAt));
+  }
+
+  async getVolunteerCreditsBySchoolId(schoolId: number): Promise<VolunteerCredit[]> {
+    const db = await getDb();
+    return db.select().from(volunteerCredits)
+      .where(eq(volunteerCredits.schoolId, schoolId))
+      .orderBy(desc(volunteerCredits.createdAt));
+  }
+
+  async getPendingVolunteerCredits(schoolId: number): Promise<VolunteerCredit[]> {
+    const db = await getDb();
+    return db.select().from(volunteerCredits)
+      .where(and(
+        eq(volunteerCredits.schoolId, schoolId),
+        eq(volunteerCredits.status, 'pending')
+      ))
+      .orderBy(asc(volunteerCredits.createdAt));
+  }
+
+  async getAvailableVolunteerCredits(userId: number): Promise<VolunteerCredit[]> {
+    const db = await getDb();
+    const now = new Date();
+    return db.select().from(volunteerCredits)
+      .where(and(
+        eq(volunteerCredits.userId, userId),
+        or(
+          eq(volunteerCredits.status, 'approved'),
+          eq(volunteerCredits.status, 'partially_used')
+        ),
+        or(
+          isNull(volunteerCredits.expiresAt),
+          gt(volunteerCredits.expiresAt, now)
+        )
+      ))
+      .orderBy(asc(volunteerCredits.expiresAt));
+  }
+
+  async createVolunteerCredit(credit: InsertVolunteerCredit): Promise<VolunteerCredit> {
+    const db = await getDb();
+    const [newCredit] = await db.insert(volunteerCredits).values(credit).returning();
+    return newCredit;
+  }
+
+  async updateVolunteerCredit(id: number, credit: Partial<InsertVolunteerCredit>): Promise<VolunteerCredit | undefined> {
+    const db = await getDb();
+    const [updated] = await db.update(volunteerCredits)
+      .set({ ...credit, updatedAt: new Date() })
+      .where(eq(volunteerCredits.id, id))
+      .returning();
+    return updated;
+  }
+
+  async approveVolunteerCredit(id: number, approvedBy: number): Promise<VolunteerCredit | undefined> {
+    const db = await getDb();
+    // Calculate expiration date - 1 year from approval
+    const expiresAt = new Date();
+    expiresAt.setFullYear(expiresAt.getFullYear() + 1);
+    
+    const [updated] = await db.update(volunteerCredits)
+      .set({
+        status: 'approved',
+        approvedBy,
+        approvedAt: new Date(),
+        expiresAt,
+        updatedAt: new Date()
+      })
+      .where(eq(volunteerCredits.id, id))
+      .returning();
+    return updated;
+  }
+
+  async rejectVolunteerCredit(id: number, approvedBy: number, reason: string): Promise<VolunteerCredit | undefined> {
+    const db = await getDb();
+    const [updated] = await db.update(volunteerCredits)
+      .set({
+        status: 'rejected',
+        approvedBy,
+        approvedAt: new Date(),
+        rejectionReason: reason,
+        updatedAt: new Date()
+      })
+      .where(eq(volunteerCredits.id, id))
+      .returning();
+    return updated;
+  }
+
+  async useVolunteerCredits(
+    userId: number, 
+    amountCents: number, 
+    paymentHistoryId?: number, 
+    description?: string
+  ): Promise<{ usedCredits: CreditUsageLog[]; totalUsed: number }> {
+    const db = await getDb();
+    
+    // Get available credits ordered by expiration (FIFO - use soonest to expire first)
+    const availableCredits = await this.getAvailableVolunteerCredits(userId);
+    
+    let remainingAmount = amountCents;
+    const usedCredits: CreditUsageLog[] = [];
+    
+    for (const credit of availableCredits) {
+      if (remainingAmount <= 0) break;
+      
+      const availableFromCredit = credit.creditAmountCents - credit.usedAmountCents;
+      const amountToUse = Math.min(availableFromCredit, remainingAmount);
+      
+      if (amountToUse > 0) {
+        // Create usage log
+        const [usageLog] = await db.insert(creditUsageLogs)
+          .values({
+            creditId: credit.id,
+            paymentHistoryId: paymentHistoryId || null,
+            amountCents: amountToUse,
+            description: description || null
+          })
+          .returning();
+        
+        usedCredits.push(usageLog);
+        
+        // Update credit usage
+        const newUsedAmount = credit.usedAmountCents + amountToUse;
+        const newStatus = newUsedAmount >= credit.creditAmountCents ? 'used' : 'partially_used';
+        
+        await db.update(volunteerCredits)
+          .set({
+            usedAmountCents: newUsedAmount,
+            status: newStatus,
+            updatedAt: new Date()
+          })
+          .where(eq(volunteerCredits.id, credit.id));
+        
+        remainingAmount -= amountToUse;
+      }
+    }
+    
+    const totalUsed = amountCents - remainingAmount;
+    return { usedCredits, totalUsed };
+  }
+
+  // Credit Usage Log methods
+  async getCreditUsageLogById(id: number): Promise<CreditUsageLog | undefined> {
+    const db = await getDb();
+    const [log] = await db.select().from(creditUsageLogs).where(eq(creditUsageLogs.id, id));
+    return log;
+  }
+
+  async getCreditUsageLogsByCreditId(creditId: number): Promise<CreditUsageLog[]> {
+    const db = await getDb();
+    return db.select().from(creditUsageLogs)
+      .where(eq(creditUsageLogs.creditId, creditId))
+      .orderBy(desc(creditUsageLogs.createdAt));
+  }
+
+  async createCreditUsageLog(log: InsertCreditUsageLog): Promise<CreditUsageLog> {
+    const db = await getDb();
+    const [newLog] = await db.insert(creditUsageLogs).values(log).returning();
+    return newLog;
   }
 }

@@ -2596,3 +2596,74 @@ export const sessionVolunteersRelations = relations(sessionVolunteers, ({ one })
   school: one(schools, { fields: [sessionVolunteers.schoolId], references: [schools.id] }),
   signedWaiver: one(signedWaivers, { fields: [sessionVolunteers.signedWaiverId], references: [signedWaivers.id] }),
 }));
+
+// Volunteer Credits - Credits earned by volunteering that can be applied to account balances
+// Rate: $20/hr, non-cashable, 1-year expiration from approval date
+export const volunteerCredits = pgTable("volunteer_credits", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  schoolId: integer("school_id").notNull().references(() => schools.id, { onDelete: 'cascade' }),
+  
+  // Source of the credit
+  sessionId: integer("session_id").references(() => classSessions.id), // Optional - credits can be manually added
+  sessionVolunteerId: integer("session_volunteer_id").references(() => sessionVolunteers.id),
+  
+  // Hours and credit calculation ($20/hr rate)
+  minutesWorked: integer("minutes_worked").notNull(),
+  creditAmountCents: integer("credit_amount_cents").notNull(), // Calculated: Math.floor(minutes/60) * 2000 cents
+  
+  // Status workflow: pending -> approved/rejected
+  status: text("status", { enum: ["pending", "approved", "rejected", "partially_used", "used", "expired"] }).notNull().default("pending"),
+  
+  // Admin approval tracking
+  approvedBy: integer("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  rejectionReason: text("rejection_reason"),
+  
+  // Usage tracking
+  usedAmountCents: integer("used_amount_cents").default(0).notNull(), // Amount already applied to payments
+  
+  // Expiration - 1 year from approval date
+  expiresAt: timestamp("expires_at"),
+  
+  // Notes
+  notes: text("notes"), // Admin notes or description of the volunteer work
+  
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertVolunteerCreditSchema = createInsertSchema(volunteerCredits)
+  .omit({ id: true, createdAt: true, updatedAt: true, approvedAt: true, usedAmountCents: true });
+export type InsertVolunteerCredit = z.infer<typeof insertVolunteerCreditSchema>;
+export type VolunteerCredit = typeof volunteerCredits.$inferSelect;
+
+export const volunteerCreditsRelations = relations(volunteerCredits, ({ one }) => ({
+  user: one(users, { fields: [volunteerCredits.userId], references: [users.id] }),
+  school: one(schools, { fields: [volunteerCredits.schoolId], references: [schools.id] }),
+  session: one(classSessions, { fields: [volunteerCredits.sessionId], references: [classSessions.id] }),
+  sessionVolunteer: one(sessionVolunteers, { fields: [volunteerCredits.sessionVolunteerId], references: [sessionVolunteers.id] }),
+  approver: one(users, { fields: [volunteerCredits.approvedBy], references: [users.id] }),
+}));
+
+// Credit Usage Log - Tracks when credits are applied to payments
+export const creditUsageLogs = pgTable("credit_usage_logs", {
+  id: serial("id").primaryKey(),
+  creditId: integer("credit_id").notNull().references(() => volunteerCredits.id, { onDelete: 'cascade' }),
+  paymentHistoryId: integer("payment_history_id").references(() => stripePaymentHistory.id), // May be null if payment failed
+  
+  amountCents: integer("amount_cents").notNull(), // Amount of credit applied
+  description: text("description"), // What the credit was applied to
+  
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertCreditUsageLogSchema = createInsertSchema(creditUsageLogs)
+  .omit({ id: true, createdAt: true });
+export type InsertCreditUsageLog = z.infer<typeof insertCreditUsageLogSchema>;
+export type CreditUsageLog = typeof creditUsageLogs.$inferSelect;
+
+export const creditUsageLogsRelations = relations(creditUsageLogs, ({ one }) => ({
+  credit: one(volunteerCredits, { fields: [creditUsageLogs.creditId], references: [volunteerCredits.id] }),
+  paymentHistory: one(stripePaymentHistory, { fields: [creditUsageLogs.paymentHistoryId], references: [stripePaymentHistory.id] }),
+}));

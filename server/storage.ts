@@ -49,7 +49,9 @@ import {
   errorLogs, type ErrorLog, type InsertErrorLog,
   paymentDiscounts, type PaymentDiscount, type InsertPaymentDiscount,
   signedWaivers, type SignedWaiver, type InsertSignedWaiver,
-  sessionVolunteers, type SessionVolunteer, type InsertSessionVolunteer
+  sessionVolunteers, type SessionVolunteer, type InsertSessionVolunteer,
+  volunteerCredits, type VolunteerCredit, type InsertVolunteerCredit,
+  creditUsageLogs, type CreditUsageLog, type InsertCreditUsageLog
 } from "@shared/schema";
 import { eq, inArray } from 'drizzle-orm';
 import { getDb } from './db';
@@ -567,6 +569,23 @@ export interface IStorage {
   createSessionVolunteer(volunteer: InsertSessionVolunteer): Promise<SessionVolunteer>;
   updateSessionVolunteer(id: number, volunteer: Partial<InsertSessionVolunteer>): Promise<SessionVolunteer | undefined>;
   deleteSessionVolunteer(id: number): Promise<void>;
+
+  // Volunteer Credits methods (Phase 3 - Volunteer)
+  getVolunteerCreditById(id: number): Promise<VolunteerCredit | undefined>;
+  getVolunteerCreditsByUserId(userId: number): Promise<VolunteerCredit[]>;
+  getVolunteerCreditsBySchoolId(schoolId: number): Promise<VolunteerCredit[]>;
+  getPendingVolunteerCredits(schoolId: number): Promise<VolunteerCredit[]>;
+  getAvailableVolunteerCredits(userId: number): Promise<VolunteerCredit[]>;
+  createVolunteerCredit(credit: InsertVolunteerCredit): Promise<VolunteerCredit>;
+  updateVolunteerCredit(id: number, credit: Partial<InsertVolunteerCredit>): Promise<VolunteerCredit | undefined>;
+  approveVolunteerCredit(id: number, approvedBy: number): Promise<VolunteerCredit | undefined>;
+  rejectVolunteerCredit(id: number, approvedBy: number, reason: string): Promise<VolunteerCredit | undefined>;
+  useVolunteerCredits(userId: number, amountCents: number, paymentHistoryId?: number, description?: string): Promise<{ usedCredits: CreditUsageLog[]; totalUsed: number }>;
+  
+  // Credit Usage Log methods
+  getCreditUsageLogById(id: number): Promise<CreditUsageLog | undefined>;
+  getCreditUsageLogsByCreditId(creditId: number): Promise<CreditUsageLog[]>;
+  createCreditUsageLog(log: InsertCreditUsageLog): Promise<CreditUsageLog>;
 }
 
 export class MemStorage implements IStorage {
@@ -6904,6 +6923,60 @@ export class MemStorage implements IStorage {
 
       async deleteSessionVolunteer(id: number): Promise<void> {
         return this.dbStorage.deleteSessionVolunteer(id);
+      }
+
+      // Volunteer Credits methods (Phase 3)
+      async getVolunteerCreditById(id: number): Promise<VolunteerCredit | undefined> {
+        return this.dbStorage.getVolunteerCreditById(id);
+      }
+
+      async getVolunteerCreditsByUserId(userId: number): Promise<VolunteerCredit[]> {
+        return this.dbStorage.getVolunteerCreditsByUserId(userId);
+      }
+
+      async getVolunteerCreditsBySchoolId(schoolId: number): Promise<VolunteerCredit[]> {
+        return this.dbStorage.getVolunteerCreditsBySchoolId(schoolId);
+      }
+
+      async getPendingVolunteerCredits(schoolId: number): Promise<VolunteerCredit[]> {
+        return this.dbStorage.getPendingVolunteerCredits(schoolId);
+      }
+
+      async getAvailableVolunteerCredits(userId: number): Promise<VolunteerCredit[]> {
+        return this.dbStorage.getAvailableVolunteerCredits(userId);
+      }
+
+      async createVolunteerCredit(credit: InsertVolunteerCredit): Promise<VolunteerCredit> {
+        return this.dbStorage.createVolunteerCredit(credit);
+      }
+
+      async updateVolunteerCredit(id: number, credit: Partial<InsertVolunteerCredit>): Promise<VolunteerCredit | undefined> {
+        return this.dbStorage.updateVolunteerCredit(id, credit);
+      }
+
+      async approveVolunteerCredit(id: number, approvedBy: number): Promise<VolunteerCredit | undefined> {
+        return this.dbStorage.approveVolunteerCredit(id, approvedBy);
+      }
+
+      async rejectVolunteerCredit(id: number, approvedBy: number, reason: string): Promise<VolunteerCredit | undefined> {
+        return this.dbStorage.rejectVolunteerCredit(id, approvedBy, reason);
+      }
+
+      async useVolunteerCredits(userId: number, amountCents: number, paymentHistoryId?: number, description?: string): Promise<{ usedCredits: CreditUsageLog[]; totalUsed: number }> {
+        return this.dbStorage.useVolunteerCredits(userId, amountCents, paymentHistoryId, description);
+      }
+
+      // Credit Usage Log methods
+      async getCreditUsageLogById(id: number): Promise<CreditUsageLog | undefined> {
+        return this.dbStorage.getCreditUsageLogById(id);
+      }
+
+      async getCreditUsageLogsByCreditId(creditId: number): Promise<CreditUsageLog[]> {
+        return this.dbStorage.getCreditUsageLogsByCreditId(creditId);
+      }
+
+      async createCreditUsageLog(log: InsertCreditUsageLog): Promise<CreditUsageLog> {
+        return this.dbStorage.createCreditUsageLog(log);
       }
 
       // Clear all data from storage (for testing)
