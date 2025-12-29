@@ -3,6 +3,7 @@ import { storage } from "../storage";
 import { supabaseAuth, requireEducatorRole } from "../middleware/supabase-auth";
 import { z } from "zod";
 import type { InsertClassSession, ClassSession, EducatorClassAssignment, InsertAuditLog, InsertSessionAttendance, SessionAttendance } from "@shared/schema";
+import { formatScheduleString } from "../utils/schedule";
 
 const router = express.Router();
 
@@ -48,7 +49,7 @@ router.get('/dashboard', async (req, res) => {
           validTo: assignment.validTo,
           className: classInfo?.title || 'Unknown Class',
           classDescription: classInfo?.description,
-          classSchedule: classInfo?.schedule,
+          classSchedule: formatScheduleString(classInfo?.schedule),
           classLocation: classInfo?.location,
           capacity: classInfo?.capacity,
           enrollmentCount,
@@ -105,8 +106,8 @@ router.get('/my-classes', async (req, res) => {
             validTo: assignment.validTo,
             className: classInfo?.title || 'Unknown Class',
             classDescription: classInfo?.description,
-            classSchedule: classInfo?.schedule,
-            schedule: classInfo?.schedule,
+            classSchedule: formatScheduleString(classInfo?.schedule),
+            schedule: formatScheduleString(classInfo?.schedule),
             classLocation: classInfo?.location,
             location: classInfo?.location,
             capacity: classInfo?.capacity,
@@ -148,8 +149,8 @@ router.get('/my-classes', async (req, res) => {
           validTo: null,
           className: cls.title,
           classDescription: cls.description,
-          classSchedule: cls.schedule,
-          schedule: cls.schedule,
+          classSchedule: formatScheduleString(cls.schedule),
+          schedule: formatScheduleString(cls.schedule),
           classLocation: cls.location,
           location: cls.location,
           capacity: cls.capacity,
@@ -293,20 +294,8 @@ router.get('/classes/:id', async (req, res) => {
     // Get enrollment count
     const enrollmentCount = await storage.getEnrollmentCountForClass(classId);
     
-    // Format schedule for display
-    let scheduleStr = 'Schedule TBD';
-    if (classInfo.schedule && typeof classInfo.schedule === 'object' && 'variants' in classInfo.schedule) {
-      const variants = (classInfo.schedule as any).variants;
-      if (Array.isArray(variants) && variants[0]) {
-        const variant = variants[0];
-        const days = variant.days?.join(', ') || '';
-        if (days && variant.startTime && variant.endTime) {
-          scheduleStr = `${days} ${variant.startTime}-${variant.endTime}`;
-        }
-      }
-    } else if (typeof classInfo.schedule === 'string') {
-      scheduleStr = classInfo.schedule;
-    }
+    // Format schedule for display using shared helper
+    const scheduleStr = formatScheduleString(classInfo.schedule);
 
     // Determine status based on dates
     const now = new Date();
@@ -944,7 +933,7 @@ router.get('/active-session', async (req, res) => {
       activeSession: {
         ...activeSession,
         className: classInfo?.title || 'Unknown Class',
-        classSchedule: classInfo?.schedule,
+        classSchedule: formatScheduleString(classInfo?.schedule),
         classLocation: classInfo?.location
       }
     });

@@ -11,29 +11,6 @@ import {
   EducatorErrorState 
 } from '@/components/educator/EducatorErrorBoundary';
 
-// Helper function to safely extract schedule string from schedule object
-function formatScheduleString(schedule: any): string {
-  if (!schedule) return '';
-  
-  // If it's already a string, return it
-  if (typeof schedule === 'string') return schedule;
-  
-  // Handle object with variants array
-  if (schedule.variants && Array.isArray(schedule.variants) && schedule.variants.length > 0) {
-    const variant = schedule.variants[0];
-    if (variant) {
-      const days = Array.isArray(variant.days) ? variant.days.join(', ') : '';
-      const startTime = variant.startTime || '';
-      const endTime = variant.endTime || '';
-      if (days && startTime && endTime) {
-        return `${days} ${startTime}-${endTime}`;
-      }
-    }
-  }
-  
-  return '';
-}
-
 interface ClassAssignment {
   assignmentId: number;
   classId: number;
@@ -41,7 +18,7 @@ interface ClassAssignment {
   canStartSession: boolean;
   className: string;
   classDescription?: string;
-  classSchedule?: any;
+  classSchedule?: string;
   enrollmentCount: number;
   schoolId: number;
 }
@@ -214,9 +191,9 @@ function DashboardContent() {
                         <Badge variant="secondary" className="text-xs">Primary</Badge>
                       )}
                     </div>
-                    {formatScheduleString(classItem.classSchedule) && (
+                    {classItem.classSchedule && (
                       <p className="text-sm text-muted-foreground mt-1">
-                        {formatScheduleString(classItem.classSchedule)}
+                        {classItem.classSchedule}
                       </p>
                     )}
                     <div className="flex items-center gap-2 mt-2 text-sm text-muted-foreground">

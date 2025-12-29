@@ -30,33 +30,10 @@ export default function EducatorClassesPage() {
     queryKey: ["/api/educator/my-classes"],
   });
 
-  // Helper function to safely extract schedule string from schedule object
-  const formatScheduleString = (schedule: any): string => {
-    if (!schedule) return 'Schedule TBD';
-    
-    // If it's already a string, return it
-    if (typeof schedule === 'string') return schedule;
-    
-    // Handle object with variants array
-    if (schedule.variants && Array.isArray(schedule.variants) && schedule.variants.length > 0) {
-      const variant = schedule.variants[0];
-      if (variant) {
-        const days = Array.isArray(variant.days) ? variant.days.join(', ') : '';
-        const startTime = variant.startTime || '';
-        const endTime = variant.endTime || '';
-        if (days && startTime && endTime) {
-          return `${days} ${startTime}-${endTime}`;
-        }
-      }
-    }
-    
-    return 'Schedule TBD';
-  };
-
   // Transform data to match the expected format
   const transformedClasses = (classesData ?? []).map((classItem: any) => {
-    // Parse schedule from the legacy format using helper function
-    const scheduleStr = formatScheduleString(classItem.schedule);
+    // Schedule is now pre-formatted by the API
+    const scheduleStr = classItem.schedule || 'Schedule TBD';
     
     // Determine status based on dates
     const now = new Date();
