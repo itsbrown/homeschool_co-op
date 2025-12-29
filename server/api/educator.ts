@@ -385,7 +385,7 @@ router.get('/classes/:id/assignments', async (req, res) => {
     const enrichedAssignments = await Promise.all(
       allAssignments.map(async (assignment) => {
         const educator = await storage.getUser(assignment.educatorId);
-        const userRoles = await storage.getUserRoles(assignment.educatorId);
+        const userRoles = await storage.getUserRolesByUserId(assignment.educatorId);
         // Get the most relevant role (prioritize educator-type roles)
         const educatorRole = userRoles?.find(r => 
           ['educator', 'mentor', 'aide', 'assistant'].includes(r.role.toLowerCase())
@@ -2491,7 +2491,7 @@ router.get('/waivers/check-volunteer', async (req, res) => {
     }
 
     // Verify the volunteer has a role in this school
-    const volunteerRoles = await storage.getUserRoles(volunteerId);
+    const volunteerRoles = await storage.getUserRolesByUserId(volunteerId);
     const volunteerHasSchoolRole = volunteerRoles?.some(r => r.schoolId === schoolId);
     
     if (!volunteerHasSchoolRole) {
@@ -2554,7 +2554,7 @@ router.post('/waivers/sign', async (req, res) => {
     }
 
     // Verify user has a role in this school (they should be associated with the school to volunteer)
-    const userRoles = await storage.getUserRoles(currentUserId);
+    const userRoles = await storage.getUserRolesByUserId(currentUserId);
     const hasSchoolRole = userRoles?.some(r => r.schoolId === schoolId);
     
     if (!hasSchoolRole) {
