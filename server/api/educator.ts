@@ -1085,7 +1085,34 @@ const DAY_PATTERNS: Array<{ pattern: RegExp; dayName: string }> = [
 
 // Helper to parse string schedule like "Monday, Wednesday, Friday 9:00 AM-12:00 PM"
 // or "Mon/Wed 9 AM – 12 PM" or "Monday-Friday 9:00-10:00"
+// Also handles multi-block schedules like "Mon-Fri 9AM-12PM & Sat 10AM-12PM"
 function parseScheduleString(scheduleStr: string): Array<{ day: string; startTime: string; endTime: string }> {
+  const entries: Array<{ day: string; startTime: string; endTime: string }> = [];
+  
+  // Split on multi-block delimiters: "&", "and", ";"
+  // But only if the block has day information (to avoid splitting time ranges)
+  const blocks = scheduleStr.split(/\s*(?:&|;|\band\b)\s*/i).filter(b => b.trim());
+  
+  // If we have multiple blocks, parse each separately
+  if (blocks.length > 1) {
+    for (const block of blocks) {
+      // Check if block contains day information
+      const hasDayInfo = DAY_PATTERNS.some(({ pattern }) => pattern.test(block));
+      if (hasDayInfo) {
+        entries.push(...parseSingleScheduleBlock(block));
+      }
+    }
+    if (entries.length > 0) {
+      return entries;
+    }
+  }
+  
+  // Single block or fallback - parse as single schedule
+  return parseSingleScheduleBlock(scheduleStr);
+}
+
+// Parse a single schedule block (no multi-block delimiters)
+function parseSingleScheduleBlock(scheduleStr: string): Array<{ day: string; startTime: string; endTime: string }> {
   const entries: Array<{ day: string; startTime: string; endTime: string }> = [];
   
   // Extract time range from the string
@@ -1127,16 +1154,27 @@ function parseScheduleString(scheduleStr: string): Array<{ day: string; startTim
       const startHour = extractHour(startToken);
       const endHour = extractHour(endToken);
       
-      // If end is PM and start hour > end hour in 12-hour terms (e.g., 11:30-1 PM),
-      // then start is AM (morning to afternoon transition)
-      // Otherwise, propagate the same meridiem
-      if (endMeridiem === 'PM' && startHour > endHour && startHour >= 10 && endHour <= 6) {
-        // Likely a morning-to-afternoon transition (e.g., 11:30-1 PM)
-        startToken = startToken + ' AM';
-      } else {
-        // Same meridiem
-        startToken = startToken + ' ' + endMeridiem;
+      // Smart meridiem inference based on hour patterns:
+      // 1. "11:30-1 PM" → start > end (11 > 1), start is AM (morning-to-afternoon)
+      // 2. "10-12 PM" → end is 12 PM (noon), start is AM (morning-to-noon)
+      // 3. "4:00-5:30 PM" → start < end, both are PM (same period)
+      // 4. "11:30-12:30 PM" → end is 12, start is AM (11:30 AM - 12:30 PM)
+      let startMeridiem = endMeridiem;
+      
+      if (endMeridiem === 'PM') {
+        // End is PM - check if start should be AM
+        if (endHour === 12 && startHour >= 8 && startHour <= 11) {
+          // "10-12 PM" or "11:30-12:30 PM" → morning-to-noon, start is AM
+          startMeridiem = 'AM';
+        } else if (startHour > endHour && endHour >= 1 && endHour <= 6) {
+          // "11:30-1 PM" → start hour is bigger, morning-to-afternoon transition
+          startMeridiem = 'AM';
+        }
+        // Otherwise, both are PM (e.g., "4:00-5:30 PM")
       }
+      // If end is AM, start is also AM (both morning)
+      
+      startToken = startToken + ' ' + startMeridiem;
     } else if (startHasMeridiem && !endHasMeridiem && !isSpecialTime(endToken)) {
       // Start has AM/PM, propagate to end
       const meridiem = startToken.match(/AM|PM/i)?.[0] || '';
@@ -1145,6 +1183,24 @@ function parseScheduleString(scheduleStr: string): Array<{ day: string; startTim
     
     startTime = convertTo24Hour(startToken);
     endTime = convertTo24Hour(endToken);
+    
+    // Validate: if start > end, something went wrong with meridiem inference
+    // Common issue: "10 PM-12" where end becomes 12:00 (noon) instead of 00:00 (midnight)
+    const startMinutes = parseInt(startTime.split(':')[0], 10) * 60 + parseInt(startTime.split(':')[1], 10);
+    const endMinutes = parseInt(endTime.split(':')[0], 10) * 60 + parseInt(endTime.split(':')[1], 10);
+    
+    if (startMinutes > endMinutes) {
+      // Try to fix: if end is 12:00 and start is PM, end should be midnight (00:00)
+      if (endTime === '12:00' && startMinutes >= 720) {
+        // "10 PM-12" likely means 10 PM to midnight
+        endTime = '00:00';
+      } else {
+        // Fallback: assume both are same period and use reasonable defaults
+        // This prevents broken rendering while still showing the class
+        startTime = '09:00';
+        endTime = '10:00';
+      }
+    }
   } else if (timeMatches && timeMatches.length === 1) {
     // Single time - assume 1 hour duration
     startTime = convertTo24Hour(timeMatches[0].trim());
