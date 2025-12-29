@@ -5522,4 +5522,263 @@ router.get('/staff-hours', supabaseAuth, requireSchoolContext, async (req: any, 
   }
 });
 
+// ==================== VOLUNTEER CREDITS ADMIN ENDPOINTS ====================
+
+// GET /api/school-admin/volunteer-credits - Get all volunteer credits for school
+router.get('/volunteer-credits', async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'User ID not found' });
+    }
+
+    // Get school from user's role
+    const userRoles = await storage.getUserRolesByUserId(userId);
+    const adminRole = userRoles.find(r => 
+      ['schoolAdmin', 'admin', 'superAdmin'].includes(r.role.toLowerCase())
+    );
+    
+    if (!adminRole || !adminRole.schoolId) {
+      return res.status(403).json({ error: 'School admin access required' });
+    }
+
+    const { status } = req.query;
+    let credits = await storage.getVolunteerCreditsBySchoolId(adminRole.schoolId);
+    
+    if (status) {
+      credits = credits.filter(c => c.status === status);
+    }
+
+    // Enrich with user and session info
+    const enrichedCredits = await Promise.all(credits.map(async (credit) => {
+      const user = await storage.getUser(credit.userId);
+      let sessionInfo = null;
+      if (credit.sessionId) {
+        const session = await storage.getClassSessionById(credit.sessionId);
+        if (session) {
+          const classInfo = await storage.getClassById(session.classId);
+          sessionInfo = {
+            id: session.id,
+            scheduledDate: session.scheduledDate,
+            className: classInfo?.title || 'Unknown Class'
+          };
+        }
+      }
+      return {
+        ...credit,
+        userName: user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email : 'Unknown',
+        userEmail: user?.email || '',
+        session: sessionInfo
+      };
+    }));
+
+    res.json(enrichedCredits);
+  } catch (error) {
+    console.error('[VolunteerCredits] Error fetching credits:', error);
+    res.status(500).json({ error: 'Failed to fetch volunteer credits' });
+  }
+});
+
+// GET /api/school-admin/volunteer-credits/pending - Get pending credits count
+router.get('/volunteer-credits/pending', async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'User ID not found' });
+    }
+
+    const userRoles = await storage.getUserRolesByUserId(userId);
+    const adminRole = userRoles.find(r => 
+      ['schoolAdmin', 'admin', 'superAdmin'].includes(r.role.toLowerCase())
+    );
+    
+    if (!adminRole || !adminRole.schoolId) {
+      return res.status(403).json({ error: 'School admin access required' });
+    }
+
+    const pendingCredits = await storage.getPendingVolunteerCredits(adminRole.schoolId);
+    res.json({ count: pendingCredits.length, credits: pendingCredits });
+  } catch (error) {
+    console.error('[VolunteerCredits] Error fetching pending count:', error);
+    res.status(500).json({ error: 'Failed to fetch pending credits' });
+  }
+});
+
+// POST /api/school-admin/volunteer-credits/:id/approve - Approve a volunteer credit
+router.post('/volunteer-credits/:id/approve', async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'User ID not found' });
+    }
+
+    const creditId = parseInt(req.params.id);
+    const credit = await storage.getVolunteerCreditById(creditId);
+    
+    if (!credit) {
+      return res.status(404).json({ error: 'Credit not found' });
+    }
+
+    // Verify admin has access to this school
+    const userRoles = await storage.getUserRolesByUserId(userId);
+    const adminRole = userRoles.find(r => 
+      ['schoolAdmin', 'admin', 'superAdmin'].includes(r.role.toLowerCase()) &&
+      r.schoolId === credit.schoolId
+    );
+    
+    if (!adminRole) {
+      return res.status(403).json({ error: 'Not authorized to approve this credit' });
+    }
+
+    if (credit.status !== 'pending') {
+      return res.status(400).json({ error: 'Credit is not pending approval' });
+    }
+
+    const approvedCredit = await storage.approveVolunteerCredit(creditId, userId);
+    
+    // Create audit log
+    try {
+      await storage.createAuditLog({
+        actionType: 'volunteer_credit_approved',
+        severity: 'info',
+        actorId: userId,
+        actorRole: 'schoolAdmin',
+        actorEmail: req.user?.email,
+        targetType: 'volunteer_credit',
+        targetId: String(creditId),
+        schoolId: credit.schoolId,
+        metadata: {
+          context: 'Admin approved volunteer credit',
+          creditAmount: credit.creditAmountCents,
+          minutesWorked: credit.minutesWorked,
+          volunteerId: credit.userId
+        }
+      });
+    } catch (auditError) {
+      console.error('[VolunteerCredits] Failed to create audit log:', auditError);
+    }
+
+    console.log(`[VolunteerCredits] Credit ${creditId} approved by admin ${userId}`);
+    res.json(approvedCredit);
+  } catch (error) {
+    console.error('[VolunteerCredits] Error approving credit:', error);
+    res.status(500).json({ error: 'Failed to approve credit' });
+  }
+});
+
+// POST /api/school-admin/volunteer-credits/:id/reject - Reject a volunteer credit
+router.post('/volunteer-credits/:id/reject', async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'User ID not found' });
+    }
+
+    const creditId = parseInt(req.params.id);
+    const { reason } = req.body;
+    
+    if (!reason) {
+      return res.status(400).json({ error: 'Rejection reason is required' });
+    }
+
+    const credit = await storage.getVolunteerCreditById(creditId);
+    
+    if (!credit) {
+      return res.status(404).json({ error: 'Credit not found' });
+    }
+
+    // Verify admin has access to this school
+    const userRoles = await storage.getUserRolesByUserId(userId);
+    const adminRole = userRoles.find(r => 
+      ['schoolAdmin', 'admin', 'superAdmin'].includes(r.role.toLowerCase()) &&
+      r.schoolId === credit.schoolId
+    );
+    
+    if (!adminRole) {
+      return res.status(403).json({ error: 'Not authorized to reject this credit' });
+    }
+
+    if (credit.status !== 'pending') {
+      return res.status(400).json({ error: 'Credit is not pending approval' });
+    }
+
+    const rejectedCredit = await storage.rejectVolunteerCredit(creditId, userId, reason);
+    
+    // Create audit log
+    try {
+      await storage.createAuditLog({
+        actionType: 'volunteer_credit_rejected',
+        severity: 'info',
+        actorId: userId,
+        actorRole: 'schoolAdmin',
+        actorEmail: req.user?.email,
+        targetType: 'volunteer_credit',
+        targetId: String(creditId),
+        schoolId: credit.schoolId,
+        metadata: {
+          context: 'Admin rejected volunteer credit',
+          creditAmount: credit.creditAmountCents,
+          minutesWorked: credit.minutesWorked,
+          volunteerId: credit.userId,
+          rejectionReason: reason
+        }
+      });
+    } catch (auditError) {
+      console.error('[VolunteerCredits] Failed to create audit log:', auditError);
+    }
+
+    console.log(`[VolunteerCredits] Credit ${creditId} rejected by admin ${userId}`);
+    res.json(rejectedCredit);
+  } catch (error) {
+    console.error('[VolunteerCredits] Error rejecting credit:', error);
+    res.status(500).json({ error: 'Failed to reject credit' });
+  }
+});
+
+// POST /api/school-admin/volunteer-credits/bulk-approve - Bulk approve multiple credits
+router.post('/volunteer-credits/bulk-approve', async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'User ID not found' });
+    }
+
+    const { creditIds } = req.body;
+    if (!Array.isArray(creditIds) || creditIds.length === 0) {
+      return res.status(400).json({ error: 'creditIds array is required' });
+    }
+
+    const userRoles = await storage.getUserRolesByUserId(userId);
+    const adminRole = userRoles.find(r => 
+      ['schoolAdmin', 'admin', 'superAdmin'].includes(r.role.toLowerCase())
+    );
+    
+    if (!adminRole || !adminRole.schoolId) {
+      return res.status(403).json({ error: 'School admin access required' });
+    }
+
+    const results = { approved: [] as number[], failed: [] as number[] };
+
+    for (const creditId of creditIds) {
+      try {
+        const credit = await storage.getVolunteerCreditById(creditId);
+        if (credit && credit.schoolId === adminRole.schoolId && credit.status === 'pending') {
+          await storage.approveVolunteerCredit(creditId, userId);
+          results.approved.push(creditId);
+        } else {
+          results.failed.push(creditId);
+        }
+      } catch (err) {
+        results.failed.push(creditId);
+      }
+    }
+
+    console.log(`[VolunteerCredits] Bulk approved ${results.approved.length} credits by admin ${userId}`);
+    res.json(results);
+  } catch (error) {
+    console.error('[VolunteerCredits] Error bulk approving credits:', error);
+    res.status(500).json({ error: 'Failed to bulk approve credits' });
+  }
+});
+
 export default router;

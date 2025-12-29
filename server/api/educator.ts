@@ -746,6 +746,51 @@ router.post('/sessions/:id/end', async (req, res) => {
       console.error('[EducatorDashboard] Failed to create audit log:', auditError);
     }
 
+    // Auto-create pending volunteer credits for all volunteers in this session
+    try {
+      const sessionVolunteers = await storage.getSessionVolunteers(sessionId);
+      const HOURLY_RATE_CENTS = 2000; // $20/hr
+      
+      for (const volunteer of sessionVolunteers) {
+        // Calculate actual minutes worked (use check-in/out times if available, else use session times)
+        let minutesWorked = volunteer.actualMinutes || 0;
+        
+        if (!minutesWorked && volunteer.checkInTime && volunteer.checkOutTime) {
+          const checkIn = new Date(volunteer.checkInTime).getTime();
+          const checkOut = new Date(volunteer.checkOutTime).getTime();
+          minutesWorked = Math.round((checkOut - checkIn) / (1000 * 60));
+        } else if (!minutesWorked && session.actualStartTime && updatedSession?.actualEndTime) {
+          // Fallback to session times
+          const sessionStart = new Date(session.actualStartTime).getTime();
+          const sessionEnd = new Date(updatedSession.actualEndTime).getTime();
+          minutesWorked = Math.round((sessionEnd - sessionStart) / (1000 * 60));
+        }
+        
+        if (minutesWorked > 0) {
+          // Calculate credit amount: ($20/hr = 2000 cents/hr) / 60 min * minutesWorked
+          const hoursWorked = minutesWorked / 60;
+          const creditAmountCents = Math.round(hoursWorked * HOURLY_RATE_CENTS);
+          
+          // Create pending volunteer credit
+          await storage.createVolunteerCredit({
+            userId: volunteer.volunteerId,
+            schoolId: session.schoolId,
+            sessionId: sessionId,
+            minutesWorked: minutesWorked,
+            hourlyRateCents: HOURLY_RATE_CENTS,
+            creditAmountCents: creditAmountCents,
+            status: 'pending',
+            description: `Volunteer credit for ${hoursWorked.toFixed(2)} hours on ${new Date(session.scheduledDate).toLocaleDateString()}`
+          });
+          
+          console.log(`[VolunteerCredits] Created pending credit for volunteer ${volunteer.volunteerId}: ${creditAmountCents} cents (${hoursWorked.toFixed(2)} hours)`);
+        }
+      }
+    } catch (creditError) {
+      console.error('[EducatorDashboard] Failed to create volunteer credits:', creditError);
+      // Don't fail the session end if credit creation fails
+    }
+
     console.log('[EducatorDashboard] Session ended:', sessionId);
     res.json(updatedSession);
   } catch (error) {

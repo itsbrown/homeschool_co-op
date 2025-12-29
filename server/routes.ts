@@ -3047,6 +3047,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const scheduledPaymentsRouter = (await import("./api/scheduled-payments")).default;
   app.use("/api/scheduled-payments", scheduledPaymentsRouter);
 
+  // User-facing volunteer credits endpoints
+  app.get("/api/my-credits", supabaseAuth, async (req: any, res) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User ID not found' });
+      }
+
+      const credits = await storage.getVolunteerCreditsByUserId(userId);
+      res.json(credits);
+    } catch (error) {
+      console.error('[MyCredits] Error fetching credits:', error);
+      res.status(500).json({ error: 'Failed to fetch credits' });
+    }
+  });
+
+  // Get available credits balance for checkout
+  app.get("/api/my-credits/available", supabaseAuth, async (req: any, res) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User ID not found' });
+      }
+
+      const availableCredits = await storage.getAvailableVolunteerCredits(userId);
+      const totalAvailable = availableCredits.reduce(
+        (sum, c) => sum + (c.creditAmountCents - c.usedAmountCents), 
+        0
+      );
+      
+      res.json({
+        credits: availableCredits,
+        totalAvailableCents: totalAvailable
+      });
+    } catch (error) {
+      console.error('[MyCredits] Error fetching available credits:', error);
+      res.status(500).json({ error: 'Failed to fetch available credits' });
+    }
+  });
+
   // General enrollments endpoint for dashboard
   app.get("/api/enrollments", isAuthenticated, async (req: any, res) => {
     try {
