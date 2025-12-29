@@ -1,0 +1,67 @@
+2
+chunk-NFC5BX5N.js?v=9156224e:9934 Uncaught Error: Objects are not valid as a React child (found: object with keys {variants}). If you meant to render a collection of children, use an array instead.
+    at throwOnInvalidObjectType (chunk-NFC5BX5N.js?v=9156224e:9934:17)
+    at reconcileChildFibers2 (chunk-NFC5BX5N.js?v=9156224e:10564:15)
+    at reconcileChildren (chunk-NFC5BX5N.js?v=9156224e:14290:37)
+    at updateHostComponent (chunk-NFC5BX5N.js?v=9156224e:14807:11)
+    at beginWork (chunk-NFC5BX5N.js?v=9156224e:15935:22)
+    at HTMLUnknownElement.callCallback2 (chunk-NFC5BX5N.js?v=9156224e:3674:22)
+    at Object.invokeGuardedCallbackDev (chunk-NFC5BX5N.js?v=9156224e:3699:24)
+    at invokeGuardedCallback (chunk-NFC5BX5N.js?v=9156224e:3733:39)
+    at beginWork$1 (chunk-NFC5BX5N.js?v=9156224e:19765:15)
+    at performUnitOfWork (chunk-NFC5BX5N.js?v=9156224e:19198:20)
+installHook.js:1 The above error occurred in the <p> component:
+
+    at p
+    at div
+    at div
+    at div
+    at div
+    at _c9 (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/components/ui/card.tsx:114:12)
+    at div
+    at _c (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/components/ui/card.tsx:20:11)
+    at div
+    at DashboardContent (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/pages/educator/EducatorDashboard.tsx:32:24)
+    at div
+    at EducatorErrorBoundary (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/components/educator/EducatorErrorBoundary.tsx:23:5)
+    at EducatorDashboard
+    at main
+    at div
+    at div
+    at EducatorAppShell (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/components/layout/EducatorAppShell.tsx:294:44)
+    at component
+    at Route (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.…/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=9156224e:323:16)
+    at Switch (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.…/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=9156224e:379:17)
+    at Router (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/App.tsx?v=mSsK-BeWzm79yYx7QnxxO:372:55)
+    at Provider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.…unner/workspace/node_modules/.vite/deps/chunk-XOUBXFGS.js?v=9156224e:38:15)
+    at TooltipProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.…rkspace/node_modules/.vite/deps/@radix-ui_react-tooltip.js?v=9156224e:64:5)
+    at InteractiveTutorialProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/components/tutorials/InteractiveTutorial.tsx:34:47)
+    at CartProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/contexts/CartContext.tsx:711:32)
+    at AIStatusProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/contexts/AIStatusContext.tsx:31:36)
+    at NotificationProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/hooks/useNotifications.tsx:23:40)
+    at RoleProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/contexts/RoleContext.tsx:35:32)
+    at SupabaseProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/components/SupabaseProvider.tsx:37:3)
+    at QueryClientProvider (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.…rkspace/node_modules/.vite/deps/@tanstack_react-query.js?v=9156224e:2805:3)
+    at App
+    at ErrorBoundary (https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/src/components/ErrorBoundary.tsx?v=mSsK-BeWzm79yYx7QnxxO:31:5)
+
+React will try to recreate this component tree from scratch using the error boundary you provided, EducatorErrorBoundary.
+installHook.js:1 [EducatorDashboard] Error caught by boundary: Error: Objects are not valid as a React child (found: object with keys {variants}). If you meant to render a collection of children, use an array instead.
+ 
+Object
+ Error Component Stack
+    at EducatorErrorBoundary (EducatorErrorBoundary.tsx:19:5)
+    at EducatorDashboard (<anonymous>)
+    at main (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at EducatorAppShell (EducatorAppShell.tsx:191:44)
+    at component (<anonymous>)
+    at Router (App.tsx:303:55)
+    at InteractiveTutorialProvider (InteractiveTutorial.tsx:49:47)
+    at CartProvider (CartContext.tsx:1106:73)
+    at AIStatusProvider (AIStatusContext.tsx:30:71)
+    at NotificationProvider (useNotifications.tsx:31:40)
+    at RoleProvider (RoleContext.tsx:45:61)
+    at SupabaseProvider (SupabaseProvider.tsx:41:3)
+    at ErrorBoundary (ErrorBoundary.tsx:39:8)
