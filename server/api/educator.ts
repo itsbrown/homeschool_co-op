@@ -1326,12 +1326,46 @@ router.get('/schedules/week', async (req, res) => {
     const classSchedules: any[] = [];
     const schoolIds = new Set<number>();
     
-    for (const assignment of assignments) {
-      const classInfo = await storage.getClassById(assignment.classId);
-      if (!classInfo) continue;
-      
-      if (assignment.schoolId) {
-        schoolIds.add(assignment.schoolId);
+    // Build list of classes to process (either from assignments or instructor fallback)
+    let classesToProcess: Array<{ classInfo: any; assignmentId: number; schoolId: number | null }> = [];
+    
+    if (assignments.length > 0) {
+      // Use assignments
+      for (const assignment of assignments) {
+        const classInfo = await storage.getClassById(assignment.classId);
+        if (classInfo) {
+          classesToProcess.push({
+            classInfo,
+            assignmentId: assignment.id,
+            schoolId: assignment.schoolId
+          });
+        }
+      }
+    } else {
+      // Fallback: Look up classes by instructor email/name (legacy data)
+      console.log('[EducatorDashboard] No assignments found, falling back to instructor lookup for schedules');
+      const educator = await storage.getUser(userId);
+      if (educator) {
+        const allClasses = await storage.getAllClasses();
+        const assignedClasses = allClasses.filter(cls => 
+          cls.instructorId === educator.id ||
+          cls.instructorName === educator.name
+        );
+        console.log(`[EducatorDashboard] Fallback found ${assignedClasses.length} classes for educator schedules`);
+        
+        for (const cls of assignedClasses) {
+          classesToProcess.push({
+            classInfo: cls,
+            assignmentId: cls.id, // Use class ID as pseudo-assignment ID
+            schoolId: cls.schoolId
+          });
+        }
+      }
+    }
+    
+    for (const { classInfo, assignmentId, schoolId } of classesToProcess) {
+      if (schoolId) {
+        schoolIds.add(schoolId);
       }
       
       // Check if class is active during this week (startDate/endDate)
@@ -1409,11 +1443,11 @@ router.get('/schedules/week', async (req, res) => {
         if (classEndDate && calculatedDate > classEndDate) continue;
         
         classSchedules.push({
-          id: assignment.id,
+          id: assignmentId,
           type: 'class',
-          assignmentId: assignment.id,
+          assignmentId: assignmentId,
           educatorId: userId,
-          classId: assignment.classId,
+          classId: classInfo.id,
           className: classInfo.title || 'Unknown Class',
           classLocation: classInfo.location,
           classStartDate: classStartDate,
