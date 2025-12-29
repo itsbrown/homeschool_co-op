@@ -46,7 +46,9 @@ import {
   EducatorSchedule, InsertEducatorSchedule, educatorSchedules,
   AuditLog, InsertAuditLog, auditLogs,
   SessionAttendance, InsertSessionAttendance, sessionAttendance,
-  ErrorLog, InsertErrorLog, errorLogs
+  ErrorLog, InsertErrorLog, errorLogs,
+  SignedWaiver, InsertSignedWaiver, signedWaivers,
+  SessionVolunteer, InsertSessionVolunteer, sessionVolunteers
 } from '../shared/schema';
 
 /**
@@ -3628,5 +3630,89 @@ export class DatabaseStorage implements IStorage {
       ))
       .returning({ id: errorLogs.id });
     return result.length;
+  }
+
+  // Signed Waiver methods (Phase 2 - Volunteer)
+  async getSignedWaiverById(id: number): Promise<SignedWaiver | undefined> {
+    const db = await getDb();
+    const [waiver] = await db.select().from(signedWaivers).where(eq(signedWaivers.id, id));
+    return waiver;
+  }
+
+  async getSignedWaiversByUserId(userId: number): Promise<SignedWaiver[]> {
+    const db = await getDb();
+    return await db.select().from(signedWaivers).where(eq(signedWaivers.userId, userId));
+  }
+
+  async getSignedWaiverByUserAndDocument(userId: number, documentId: number): Promise<SignedWaiver | undefined> {
+    const db = await getDb();
+    const [waiver] = await db.select().from(signedWaivers)
+      .where(and(
+        eq(signedWaivers.userId, userId),
+        eq(signedWaivers.documentId, documentId)
+      ));
+    return waiver;
+  }
+
+  async getActiveSignedWaiver(userId: number, documentId: number): Promise<SignedWaiver | undefined> {
+    const db = await getDb();
+    const now = new Date();
+    const [waiver] = await db.select().from(signedWaivers)
+      .where(and(
+        eq(signedWaivers.userId, userId),
+        eq(signedWaivers.documentId, documentId),
+        or(
+          isNull(signedWaivers.expiresAt),
+          gt(signedWaivers.expiresAt, now)
+        )
+      ))
+      .orderBy(desc(signedWaivers.signedAt));
+    return waiver;
+  }
+
+  async createSignedWaiver(waiver: InsertSignedWaiver): Promise<SignedWaiver> {
+    const db = await getDb();
+    const [newWaiver] = await db.insert(signedWaivers).values(waiver).returning();
+    return newWaiver;
+  }
+
+  async updateSignedWaiver(id: number, waiver: Partial<InsertSignedWaiver>): Promise<SignedWaiver | undefined> {
+    const db = await getDb();
+    const [updated] = await db.update(signedWaivers).set(waiver).where(eq(signedWaivers.id, id)).returning();
+    return updated;
+  }
+
+  // Session Volunteer methods (Phase 2 - Volunteer)
+  async getSessionVolunteerById(id: number): Promise<SessionVolunteer | undefined> {
+    const db = await getDb();
+    const [volunteer] = await db.select().from(sessionVolunteers).where(eq(sessionVolunteers.id, id));
+    return volunteer;
+  }
+
+  async getSessionVolunteersBySessionId(sessionId: number): Promise<SessionVolunteer[]> {
+    const db = await getDb();
+    return await db.select().from(sessionVolunteers).where(eq(sessionVolunteers.sessionId, sessionId));
+  }
+
+  async getSessionVolunteersByVolunteerId(volunteerId: number): Promise<SessionVolunteer[]> {
+    const db = await getDb();
+    return await db.select().from(sessionVolunteers).where(eq(sessionVolunteers.volunteerId, volunteerId));
+  }
+
+  async createSessionVolunteer(volunteer: InsertSessionVolunteer): Promise<SessionVolunteer> {
+    const db = await getDb();
+    const [newVolunteer] = await db.insert(sessionVolunteers).values(volunteer).returning();
+    return newVolunteer;
+  }
+
+  async updateSessionVolunteer(id: number, volunteer: Partial<InsertSessionVolunteer>): Promise<SessionVolunteer | undefined> {
+    const db = await getDb();
+    const [updated] = await db.update(sessionVolunteers).set(volunteer).where(eq(sessionVolunteers.id, id)).returning();
+    return updated;
+  }
+
+  async deleteSessionVolunteer(id: number): Promise<void> {
+    const db = await getDb();
+    await db.delete(sessionVolunteers).where(eq(sessionVolunteers.id, id));
   }
 }

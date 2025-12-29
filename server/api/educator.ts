@@ -2355,4 +2355,225 @@ function parseTimeToMinutes(timeStr: string): number {
   return (hours || 0) * 60 + (minutes || 0);
 }
 
+// ==================== VOLUNTEER WAIVER ENDPOINTS ====================
+
+// GET /api/educator/waivers/check - Check if current user has signed a specific waiver
+// Security: Users can only check their own waiver status
+router.get('/waivers/check', async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'User ID not found' });
+    }
+
+    const documentIdParam = req.query.documentId as string;
+
+    if (!documentIdParam) {
+      return res.status(400).json({ error: 'Missing documentId' });
+    }
+
+    const documentId = parseInt(documentIdParam);
+
+    if (isNaN(documentId)) {
+      return res.status(400).json({ error: 'Invalid documentId' });
+    }
+
+    // Verify the document exists
+    const document = await storage.getSchoolDocumentById(documentId);
+    if (!document) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+
+    console.log(`[Waiver] Checking waiver for user ${userId} and document ${documentId}`);
+
+    // Check for an active signed waiver (user checks their own status)
+    const signedWaiver = await storage.getActiveSignedWaiver(userId, documentId);
+
+    if (signedWaiver) {
+      res.json({
+        signed: true,
+        signedAt: signedWaiver.signedAt,
+        expiresAt: signedWaiver.expiresAt
+      });
+    } else {
+      res.json({
+        signed: false
+      });
+    }
+  } catch (error) {
+    console.error('[Waiver] Error checking waiver status:', error);
+    res.status(500).json({ error: 'Failed to check waiver status' });
+  }
+});
+
+// GET /api/educator/waivers/check-volunteer - Check if a volunteer has signed a specific waiver (for session start)
+// Security: Educator must have assignments in the school where the document belongs
+router.get('/waivers/check-volunteer', async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'User ID not found' });
+    }
+
+    const volunteerIdParam = req.query.volunteerId as string;
+    const documentIdParam = req.query.documentId as string;
+
+    if (!volunteerIdParam || !documentIdParam) {
+      return res.status(400).json({ error: 'Missing volunteerId or documentId' });
+    }
+
+    const volunteerId = parseInt(volunteerIdParam);
+    const documentId = parseInt(documentIdParam);
+
+    if (isNaN(volunteerId) || isNaN(documentId)) {
+      return res.status(400).json({ error: 'Invalid volunteerId or documentId' });
+    }
+
+    // Verify the document exists and get its school
+    const document = await storage.getSchoolDocumentById(documentId);
+    if (!document) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+
+    const schoolId = document.schoolId;
+
+    // Verify educator has assignments in this school
+    const educatorAssignments = await storage.getEducatorClassAssignmentsByEducatorId(userId);
+    const hasSchoolAccess = educatorAssignments.some(a => a.schoolId === schoolId);
+    
+    if (!hasSchoolAccess) {
+      return res.status(403).json({ error: 'Not authorized to check waivers for this school' });
+    }
+
+    // Verify the volunteer has a role in this school
+    const volunteerRoles = await storage.getUserRoles(volunteerId);
+    const volunteerHasSchoolRole = volunteerRoles?.some(r => r.schoolId === schoolId);
+    
+    if (!volunteerHasSchoolRole) {
+      return res.status(403).json({ error: 'Volunteer is not associated with this school' });
+    }
+
+    console.log(`[Waiver] Educator ${userId} checking waiver for volunteer ${volunteerId} and document ${documentId}`);
+
+    // Check for an active signed waiver
+    const signedWaiver = await storage.getActiveSignedWaiver(volunteerId, documentId);
+
+    if (signedWaiver) {
+      res.json({
+        signed: true,
+        signedAt: signedWaiver.signedAt,
+        expiresAt: signedWaiver.expiresAt
+      });
+    } else {
+      res.json({
+        signed: false
+      });
+    }
+  } catch (error) {
+    console.error('[Waiver] Error checking volunteer waiver status:', error);
+    res.status(500).json({ error: 'Failed to check waiver status' });
+  }
+});
+
+// POST /api/educator/waivers/sign - Sign a waiver
+// Security: User can only sign waivers for themselves, schoolId derived from document
+router.post('/waivers/sign', async (req, res) => {
+  try {
+    const currentUserId = req.user?.id;
+    if (!currentUserId) {
+      return res.status(401).json({ error: 'User ID not found' });
+    }
+
+    const { documentId, signatureData } = req.body;
+
+    if (!documentId) {
+      return res.status(400).json({ error: 'Missing required field: documentId' });
+    }
+
+    // Users can only sign waivers for themselves
+    const volunteerId = currentUserId;
+
+    console.log(`[Waiver] Signing waiver for volunteer ${volunteerId}, document ${documentId}`);
+
+    // Verify the document exists - derive schoolId from document (authoritative source)
+    const document = await storage.getSchoolDocumentById(documentId);
+    if (!document) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+
+    const schoolId = document.schoolId;
+
+    // Verify the document is a waiver/form/policy type
+    if (!['form', 'policy', 'waiver'].includes(document.category || '')) {
+      return res.status(400).json({ error: 'Document is not a signable waiver' });
+    }
+
+    // Verify user has a role in this school (they should be associated with the school to volunteer)
+    const userRoles = await storage.getUserRoles(currentUserId);
+    const hasSchoolRole = userRoles?.some(r => r.schoolId === schoolId);
+    
+    if (!hasSchoolRole) {
+      return res.status(403).json({ error: 'You are not associated with this school' });
+    }
+
+    // Check if waiver is already signed
+    const existingWaiver = await storage.getActiveSignedWaiver(volunteerId, documentId);
+    if (existingWaiver) {
+      return res.status(400).json({ error: 'Waiver already signed and active', waiver: existingWaiver });
+    }
+
+    // Calculate expiration (1 year from now)
+    const expiresAt = new Date();
+    expiresAt.setFullYear(expiresAt.getFullYear() + 1);
+
+    // Create the signed waiver record
+    const signedWaiver = await storage.createSignedWaiver({
+      userId: volunteerId,
+      documentId,
+      schoolId,
+      signedAt: new Date(),
+      expiresAt,
+      signatureData: signatureData || null,
+      ipAddress: req.ip || null
+    });
+
+    console.log(`[Waiver] Waiver signed successfully, ID: ${signedWaiver.id}`);
+
+    res.status(201).json({
+      success: true,
+      waiver: signedWaiver
+    });
+  } catch (error) {
+    console.error('[Waiver] Error signing waiver:', error);
+    res.status(500).json({ error: 'Failed to sign waiver' });
+  }
+});
+
+// GET /api/educator/documents/:id - Get a specific school document (for waiver display)
+router.get('/documents/:id', async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'User ID not found' });
+    }
+
+    const documentId = parseInt(req.params.id);
+    if (isNaN(documentId)) {
+      return res.status(400).json({ error: 'Invalid document ID' });
+    }
+
+    const document = await storage.getSchoolDocumentById(documentId);
+    if (!document) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+
+    res.json(document);
+  } catch (error) {
+    console.error('[Document] Error fetching document:', error);
+    res.status(500).json({ error: 'Failed to fetch document' });
+  }
+});
+
+// ==================== END VOLUNTEER WAIVER ENDPOINTS ====================
+
 export default router;

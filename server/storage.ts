@@ -47,7 +47,9 @@ import {
   schoolClassEnrollments, type SchoolClassEnrollment, type InsertSchoolClassEnrollment,
   sessionAttendance, type SessionAttendance, type InsertSessionAttendance,
   errorLogs, type ErrorLog, type InsertErrorLog,
-  paymentDiscounts, type PaymentDiscount, type InsertPaymentDiscount
+  paymentDiscounts, type PaymentDiscount, type InsertPaymentDiscount,
+  signedWaivers, type SignedWaiver, type InsertSignedWaiver,
+  sessionVolunteers, type SessionVolunteer, type InsertSessionVolunteer
 } from "@shared/schema";
 import { eq, inArray } from 'drizzle-orm';
 import { getDb } from './db';
@@ -549,6 +551,22 @@ export interface IStorage {
     byStatus: Record<string, number>;
   }>;
   cleanupOldErrors(olderThan: Date): Promise<number>;
+
+  // Signed Waiver methods (Phase 2 - Volunteer)
+  getSignedWaiverById(id: number): Promise<SignedWaiver | undefined>;
+  getSignedWaiversByUserId(userId: number): Promise<SignedWaiver[]>;
+  getSignedWaiverByUserAndDocument(userId: number, documentId: number): Promise<SignedWaiver | undefined>;
+  getActiveSignedWaiver(userId: number, documentId: number): Promise<SignedWaiver | undefined>;
+  createSignedWaiver(waiver: InsertSignedWaiver): Promise<SignedWaiver>;
+  updateSignedWaiver(id: number, waiver: Partial<InsertSignedWaiver>): Promise<SignedWaiver | undefined>;
+
+  // Session Volunteer methods (Phase 2 - Volunteer)
+  getSessionVolunteerById(id: number): Promise<SessionVolunteer | undefined>;
+  getSessionVolunteersBySessionId(sessionId: number): Promise<SessionVolunteer[]>;
+  getSessionVolunteersByVolunteerId(volunteerId: number): Promise<SessionVolunteer[]>;
+  createSessionVolunteer(volunteer: InsertSessionVolunteer): Promise<SessionVolunteer>;
+  updateSessionVolunteer(id: number, volunteer: Partial<InsertSessionVolunteer>): Promise<SessionVolunteer | undefined>;
+  deleteSessionVolunteer(id: number): Promise<void>;
 }
 
 export class MemStorage implements IStorage {
@@ -6836,6 +6854,56 @@ export class MemStorage implements IStorage {
 
       async cleanupOldErrors(olderThan: Date): Promise<number> {
         return this.dbStorage.cleanupOldErrors(olderThan);
+      }
+
+      // Signed Waiver methods (Phase 2 - Volunteer)
+      async getSignedWaiverById(id: number): Promise<SignedWaiver | undefined> {
+        return this.dbStorage.getSignedWaiverById(id);
+      }
+
+      async getSignedWaiversByUserId(userId: number): Promise<SignedWaiver[]> {
+        return this.dbStorage.getSignedWaiversByUserId(userId);
+      }
+
+      async getSignedWaiverByUserAndDocument(userId: number, documentId: number): Promise<SignedWaiver | undefined> {
+        return this.dbStorage.getSignedWaiverByUserAndDocument(userId, documentId);
+      }
+
+      async getActiveSignedWaiver(userId: number, documentId: number): Promise<SignedWaiver | undefined> {
+        return this.dbStorage.getActiveSignedWaiver(userId, documentId);
+      }
+
+      async createSignedWaiver(waiver: InsertSignedWaiver): Promise<SignedWaiver> {
+        return this.dbStorage.createSignedWaiver(waiver);
+      }
+
+      async updateSignedWaiver(id: number, waiver: Partial<InsertSignedWaiver>): Promise<SignedWaiver | undefined> {
+        return this.dbStorage.updateSignedWaiver(id, waiver);
+      }
+
+      // Session Volunteer methods (Phase 2 - Volunteer)
+      async getSessionVolunteerById(id: number): Promise<SessionVolunteer | undefined> {
+        return this.dbStorage.getSessionVolunteerById(id);
+      }
+
+      async getSessionVolunteersBySessionId(sessionId: number): Promise<SessionVolunteer[]> {
+        return this.dbStorage.getSessionVolunteersBySessionId(sessionId);
+      }
+
+      async getSessionVolunteersByVolunteerId(volunteerId: number): Promise<SessionVolunteer[]> {
+        return this.dbStorage.getSessionVolunteersByVolunteerId(volunteerId);
+      }
+
+      async createSessionVolunteer(volunteer: InsertSessionVolunteer): Promise<SessionVolunteer> {
+        return this.dbStorage.createSessionVolunteer(volunteer);
+      }
+
+      async updateSessionVolunteer(id: number, volunteer: Partial<InsertSessionVolunteer>): Promise<SessionVolunteer | undefined> {
+        return this.dbStorage.updateSessionVolunteer(id, volunteer);
+      }
+
+      async deleteSessionVolunteer(id: number): Promise<void> {
+        return this.dbStorage.deleteSessionVolunteer(id);
       }
 
       // Clear all data from storage (for testing)
