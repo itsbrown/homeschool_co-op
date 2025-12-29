@@ -788,7 +788,7 @@ router.post('/sessions/:id/end', async (req, res) => {
 
     // Auto-create pending volunteer credits for all volunteers in this session
     try {
-      const sessionVolunteers = await storage.getSessionVolunteers(sessionId);
+      const sessionVolunteers = await storage.getSessionVolunteersBySessionId(sessionId);
       const HOURLY_RATE_CENTS = 2000; // $20/hr
       
       for (const volunteer of sessionVolunteers) {
@@ -1958,7 +1958,7 @@ router.get('/sessions/:sessionId/attendance', async (req, res) => {
     }
 
     // Verify the session exists
-    const session = await storage.getClassSession(sessionId);
+    const session = await storage.getClassSessionById(sessionId);
     if (!session) {
       return res.status(404).json({ error: 'Session not found' });
     }
@@ -2008,7 +2008,7 @@ router.get('/sessions/:sessionId/roster', async (req, res) => {
     }
 
     // Verify the session exists
-    const session = await storage.getClassSession(sessionId);
+    const session = await storage.getClassSessionById(sessionId);
     if (!session) {
       return res.status(404).json({ error: 'Session not found' });
     }
@@ -2075,7 +2075,7 @@ router.post('/attendance', async (req, res) => {
     const { sessionId, childId, status, checkInTime, checkOutTime, notes } = parseResult.data;
 
     // Verify the session exists
-    const session = await storage.getClassSession(sessionId);
+    const session = await storage.getClassSessionById(sessionId);
     if (!session) {
       return res.status(404).json({ error: 'Session not found' });
     }
@@ -2143,7 +2143,7 @@ router.post('/attendance/bulk', async (req, res) => {
     const { sessionId, attendance } = parseResult.data;
 
     // Verify the session exists
-    const session = await storage.getClassSession(sessionId);
+    const session = await storage.getClassSessionById(sessionId);
     if (!session) {
       return res.status(404).json({ error: 'Session not found' });
     }
@@ -2405,7 +2405,7 @@ router.get('/children/:childId/attendance', async (req, res) => {
     // Enrich with session and class info
     const attendanceWithDetails = await Promise.all(
       attendance.map(async (record: SessionAttendance) => {
-        const session = await storage.getClassSession(record.sessionId);
+        const session = await storage.getClassSessionById(record.sessionId);
         const classInfo = session ? await storage.getClassById(session.classId) : null;
         return {
           ...record,
