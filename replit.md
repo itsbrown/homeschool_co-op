@@ -88,6 +88,14 @@ The platform prioritizes scalability, security, and user experience, incorporati
 -   **Subscription Status Toggle**: School admin-configurable toggle to control subscription status display during checkout.
 -   **AI Smart Tutorial System**: Conversational AI guidance using Anthropic Claude that provides context-aware help to parents. Features rate limiting, conversation truncation, dynamic UI element highlighting, and page-specific suggestions.
 -   **System Error Monitoring**: Comprehensive error tracking and notification system with database logging, severity levels (low/medium/high/critical), automatic email notifications for critical errors, daily summary emails at 8 AM, React Error Boundary for frontend errors, Express error middleware for backend errors, and admin dashboard at /admin/system-errors for viewing/filtering/resolving errors. Email notifications sent to errors@americanseekersacademy.com.
+-   **Volunteer Credit System (Dec 2025)**: Complete volunteer tracking with credit earning and checkout integration:
+    - **Credit Earning**: Auto-generated pending credits when sessions end with volunteers ($20/hr = 2000 cents/hr, calculated from `minutesWorked` field)
+    - **Admin Approval**: Admin page at `/admin/volunteer-credits` for reviewing pending credits with approve/reject workflow
+    - **Credit Lifecycle**: pending → approved (sets 1-year expiration) → partially_used/used/expired
+    - **Checkout Integration**: User endpoints `/api/my-credits` and `/api/my-credits/available`, CartCheckout UI with toggle to apply credits
+    - **FIFO Consumption**: Credits with soonest expiration used first, validated at payment intent creation, consumed only after successful payment via webhook
+    - **Webhook Flow**: `handleDirectPaymentSuccess` in `stripeWebhookHandlers.ts` processes credit consumption with `updateVolunteerCredit` and `createCreditUsageLog`
+    - **Security**: Server-side credit validation at payment intent creation, credits reduce payment amount, stored in payment intent metadata
 
 ### Educator Dashboard
 The Educator Dashboard provides educators/mentors with tools to manage their classes, track attendance, view lesson plans, and log their work hours. It integrates with the existing Daily Flow system for lesson planning.

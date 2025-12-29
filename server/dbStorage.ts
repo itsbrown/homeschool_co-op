@@ -3774,10 +3774,10 @@ export class DatabaseStorage implements IStorage {
     return newCredit;
   }
 
-  async updateVolunteerCredit(id: number, credit: Partial<InsertVolunteerCredit>): Promise<VolunteerCredit | undefined> {
+  async updateVolunteerCredit(id: number, credit: Partial<InsertVolunteerCredit> & { usedAmountCents?: number }): Promise<VolunteerCredit | undefined> {
     const db = await getDb();
     const [updated] = await db.update(volunteerCredits)
-      .set({ ...credit, updatedAt: new Date() })
+      .set({ ...credit as any, updatedAt: new Date() })
       .where(eq(volunteerCredits.id, id))
       .returning();
     return updated;

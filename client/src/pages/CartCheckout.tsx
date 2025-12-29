@@ -190,6 +190,12 @@ export default function CartCheckout() {
   const [hasActiveSubscription, setHasActiveSubscription] = useState(false);
   const [subscriptionInfo, setSubscriptionInfo] = useState<any>(null);
   
+  // Volunteer credits state
+  const [availableCredits, setAvailableCredits] = useState<number>(0);
+  const [applyCredits, setApplyCredits] = useState(false);
+  const [creditsToApply, setCreditsToApply] = useState<number>(0);
+  const [loadingCredits, setLoadingCredits] = useState(false);
+  
   // Free enrollment state (for 100% discount requiring admin approval)
   const [freeEnrollmentRequested, setFreeEnrollmentRequested] = useState(false);
   const [requestingFreeEnrollment, setRequestingFreeEnrollment] = useState(false);
@@ -222,6 +228,36 @@ export default function CartCheckout() {
     // Split plan allows user to choose frequency (weekly/biweekly/monthly)
     // No automatic frequency change needed for split plan
   }, [selectedPaymentPlan]);
+
+  // Fetch available volunteer credits
+  useEffect(() => {
+    const fetchCredits = async () => {
+      if (!isAuthenticated) return;
+      setLoadingCredits(true);
+      try {
+        const response = await apiRequest('GET', '/api/my-credits/available');
+        const data = await response.json();
+        setAvailableCredits(data.totalAvailableCents || 0);
+        console.log('💰 Available volunteer credits:', data.totalAvailableCents);
+      } catch (err) {
+        console.error('Failed to fetch volunteer credits:', err);
+        setAvailableCredits(0);
+      } finally {
+        setLoadingCredits(false);
+      }
+    };
+    fetchCredits();
+  }, [isAuthenticated]);
+
+  // Calculate credits to apply based on cart total
+  useEffect(() => {
+    if (applyCredits && availableCredits > 0) {
+      const maxApplicable = Math.min(availableCredits, actualPayableAmount);
+      setCreditsToApply(maxApplicable);
+    } else {
+      setCreditsToApply(0);
+    }
+  }, [applyCredits, availableCredits, actualPayableAmount]);
 
   // Track if this is the initial load
   const [isInitialLoad, setIsInitialLoad] = useState(true);
@@ -326,6 +362,23 @@ export default function CartCheckout() {
     return () => clearTimeout(timeoutId);
   }, [selectedPaymentPlan, paymentFrequency])
 
+  // Effect to recreate payment intent when credits are toggled
+  useEffect(() => {
+    const hasCartContent = cart.items.length > 0 || cart.membership;
+    
+    if (!clientSecret || !isAuthenticated || !hasCartContent || isInitialLoad) {
+      return;
+    }
+    
+    const timeoutId = setTimeout(() => {
+      console.log('💳 Credits changed, recreating payment intent with creditsToApply:', creditsToApply);
+      setClientSecret('');
+      createPaymentIntent();
+    }, 300);
+    
+    return () => clearTimeout(timeoutId);
+  }, [creditsToApply]);
+
   const createPaymentIntent = async () => {
     try {
       setLoading(true);
@@ -366,6 +419,8 @@ export default function CartCheckout() {
             year: cart.membership.year,
           } : null,
           promoCode: cart.appliedPromoCode?.code || null,
+          // Volunteer credits to apply (in cents)
+          creditsToApply: creditsToApply,
         }
       );
 
@@ -776,10 +831,20 @@ export default function CartCheckout() {
                     </>
                   )}
 
+                  {creditsToApply > 0 && (
+                    <div className="flex justify-between text-sm text-amber-600">
+                      <span className="flex items-center gap-1">
+                        <Award className="h-3 w-3" />
+                        Volunteer Credits:
+                      </span>
+                      <span>-{formatCurrency(creditsToApply)}</span>
+                    </div>
+                  )}
+
                   <Separator />
                   <div className="flex justify-between font-medium text-lg">
                     <span>Total:</span>
-                    <span>{formatCurrency(cart.total + (cart.membership?.amount || 0))}</span>
+                    <span>{formatCurrency(Math.max(0, cart.total + (cart.membership?.amount || 0) - creditsToApply))}</span>
                   </div>
                 </div>
               </CardContent>
@@ -861,6 +926,52 @@ export default function CartCheckout() {
                 )}
               </CardContent>
             </Card>
+
+            {/* Volunteer Credits */}
+            {availableCredits > 0 && (
+              <Card data-testid="card-volunteer-credits">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Award className="h-4 w-4 text-amber-500" />
+                    Volunteer Credits
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium">Available Balance</p>
+                      <p className="text-lg font-bold text-amber-600">{formatCurrency(availableCredits)}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Label htmlFor="apply-credits" className="text-sm cursor-pointer">
+                        Apply to order
+                      </Label>
+                      <input
+                        type="checkbox"
+                        id="apply-credits"
+                        checked={applyCredits}
+                        onChange={(e) => setApplyCredits(e.target.checked)}
+                        className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                        data-testid="checkbox-apply-credits"
+                      />
+                    </div>
+                  </div>
+                  {applyCredits && creditsToApply > 0 && (
+                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-md">
+                      <div className="flex items-center gap-2">
+                        <Check className="h-4 w-4 text-amber-600" />
+                        <div>
+                          <p className="text-sm font-medium text-amber-800">Credits Applied</p>
+                          <p className="text-xs text-amber-600">
+                            Saving {formatCurrency(creditsToApply)}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
 
             {/* Discount Info */}
             {getUniqueChildrenCount() > 1 && (

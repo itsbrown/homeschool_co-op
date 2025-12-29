@@ -577,7 +577,7 @@ export interface IStorage {
   getPendingVolunteerCredits(schoolId: number): Promise<VolunteerCredit[]>;
   getAvailableVolunteerCredits(userId: number): Promise<VolunteerCredit[]>;
   createVolunteerCredit(credit: InsertVolunteerCredit): Promise<VolunteerCredit>;
-  updateVolunteerCredit(id: number, credit: Partial<InsertVolunteerCredit>): Promise<VolunteerCredit | undefined>;
+  updateVolunteerCredit(id: number, credit: Partial<InsertVolunteerCredit> & { usedAmountCents?: number }): Promise<VolunteerCredit | undefined>;
   approveVolunteerCredit(id: number, approvedBy: number): Promise<VolunteerCredit | undefined>;
   rejectVolunteerCredit(id: number, approvedBy: number, reason: string): Promise<VolunteerCredit | undefined>;
   useVolunteerCredits(userId: number, amountCents: number, paymentHistoryId?: number, description?: string): Promise<{ usedCredits: CreditUsageLog[]; totalUsed: number }>;
@@ -6950,7 +6950,7 @@ export class MemStorage implements IStorage {
         return this.dbStorage.createVolunteerCredit(credit);
       }
 
-      async updateVolunteerCredit(id: number, credit: Partial<InsertVolunteerCredit>): Promise<VolunteerCredit | undefined> {
+      async updateVolunteerCredit(id: number, credit: Partial<InsertVolunteerCredit> & { usedAmountCents?: number }): Promise<VolunteerCredit | undefined> {
         return this.dbStorage.updateVolunteerCredit(id, credit);
       }
 

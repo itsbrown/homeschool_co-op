@@ -293,6 +293,61 @@ export async function handleDirectPaymentSuccess(paymentIntent: Stripe.PaymentIn
       console.error('⚠️ Error saving stripe payment history (non-blocking):', paymentHistoryError);
     }
     
+    // Process volunteer credits consumption if applied
+    const volunteerCreditsApplied = paymentIntent.metadata.volunteerCreditsApplied 
+      ? parseInt(paymentIntent.metadata.volunteerCreditsApplied) 
+      : 0;
+    
+    if (volunteerCreditsApplied > 0 && parentEmail) {
+      try {
+        console.log('💰 Processing volunteer credits consumption:', { 
+          creditsToConsume: volunteerCreditsApplied, 
+          parentEmail 
+        });
+        
+        const parentUser = await storage.getUserByEmail(parentEmail);
+        if (parentUser) {
+          // Get available credits sorted by expiration date (FIFO - soonest to expire first)
+          const availableCredits = await storage.getAvailableVolunteerCredits(parentUser.id);
+          
+          let remainingToConsume = volunteerCreditsApplied;
+          
+          for (const credit of availableCredits) {
+            if (remainingToConsume <= 0) break;
+            
+            const availableInCredit = credit.creditAmountCents - credit.usedAmountCents;
+            const amountToUse = Math.min(remainingToConsume, availableInCredit);
+            
+            if (amountToUse > 0) {
+              // Update credit used amount
+              const newUsedAmount = credit.usedAmountCents + amountToUse;
+              const newStatus = newUsedAmount >= credit.creditAmountCents ? 'used' : 'partially_used';
+              
+              await storage.updateVolunteerCredit(credit.id, {
+                usedAmountCents: newUsedAmount,
+                status: newStatus
+              });
+              
+              // Log credit usage
+              await storage.createCreditUsageLog({
+                creditId: credit.id,
+                amountCents: amountToUse,
+                description: `Applied to enrollment payment ${paymentIntent.id}`,
+                paymentHistoryId: null  // Will be populated after payment history is saved
+              });
+              
+              remainingToConsume -= amountToUse;
+              console.log(`💰 Used ${amountToUse} cents from credit ${credit.id}, remaining: ${remainingToConsume}`);
+            }
+          }
+          
+          console.log('✅ Volunteer credits consumed successfully');
+        }
+      } catch (creditsError) {
+        console.error('⚠️ Error consuming volunteer credits (non-blocking):', creditsError);
+      }
+    }
+    
   } catch (error) {
     console.error('❌ Error handling direct payment success:', error);
   }

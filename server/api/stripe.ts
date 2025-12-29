@@ -35,10 +35,11 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
     
     console.log('💳 Creating payment intent for authenticated user:', userEmail);
 
-    const { items, subtotal, discounts, total, parentEmail, paymentPlan = 'full', paymentFrequency = 'one_time', membership, promoCode } = req.body;
+    const { items, subtotal, discounts, total, parentEmail, paymentPlan = 'full', paymentFrequency = 'one_time', membership, promoCode, creditsToApply = 0 } = req.body;
     
     // Log received promo code for debugging
     console.log('🎟️ Received promoCode from client:', promoCode);
+    console.log('💰 Received creditsToApply from client:', creditsToApply);
 
     // Validate required fields - either items OR membership must be present
     const hasItems = items && Array.isArray(items) && items.length > 0;
@@ -771,7 +772,37 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
         clientSentMembership: membership?.amount || 0
       });
       
-      const totalWithMembership = authoritativeTotal;
+      let totalWithMembership = authoritativeTotal;
+      
+      // VOLUNTEER CREDITS VALIDATION AND APPLICATION
+      // Credits can only reduce payment amount, not exceed it
+      let validatedCreditsToApply = 0;
+      if (creditsToApply > 0) {
+        // Validate user has enough available credits
+        const availableCredits = await storage.getAvailableVolunteerCredits(parent.id);
+        const totalAvailableCents = availableCredits.reduce(
+          (sum, c) => sum + (c.creditAmountCents - c.usedAmountCents), 
+          0
+        );
+        
+        // Cap credits at total amount or available balance (whichever is lower)
+        validatedCreditsToApply = Math.min(creditsToApply, totalWithMembership, totalAvailableCents);
+        
+        console.log('💰 Volunteer credits validation:', {
+          requestedCredits: creditsToApply,
+          availableCredits: totalAvailableCents,
+          validatedCredits: validatedCreditsToApply,
+          totalBeforeCredits: totalWithMembership
+        });
+        
+        if (validatedCreditsToApply > 0) {
+          totalWithMembership = totalWithMembership - validatedCreditsToApply;
+          console.log('💰 Applied volunteer credits:', {
+            creditsApplied: validatedCreditsToApply,
+            newTotal: totalWithMembership
+          });
+        }
+      }
       
       // Build secure membership data from server-side validated parent info
       let serverMembership: { 
@@ -933,11 +964,12 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
       const paymentPlanResult = await paymentPlanService.createEducationalPaymentPlan({
         parentEmail: userEmail,
         enrollmentIds,
-        totalAmount: totalWithMembership, // Include membership fee in total
+        totalAmount: totalWithMembership, // Include membership fee in total (already reduced by credits)
         paymentPlan: paymentPlan as 'deposit' | 'split' | 'biweekly' | 'full',
         paymentFrequency: paymentFrequency as 'weekly' | 'biweekly' | 'monthly' | 'one_time',
         membership: serverMembership, // Pass server-validated membership data
-        discountSnapshot // Pass discount tracking data
+        discountSnapshot, // Pass discount tracking data
+        volunteerCreditsApplied: validatedCreditsToApply // Pass credits for metadata storage
       });
 
       console.log('✅ Payment plan created successfully:', {
@@ -953,6 +985,8 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
         enrollmentIds,
         scheduledPayments: paymentPlanResult.scheduledPayments,
         paymentPlan,
+        // Include volunteer credits info
+        creditsApplied: validatedCreditsToApply,
         // Include Stripe subscription info for UI display
         hasActiveSubscription,
         subscriptionInfo: existingSubscription ? {

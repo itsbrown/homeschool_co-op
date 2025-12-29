@@ -42,6 +42,8 @@ export interface PaymentPlanData {
       amount: number; // Discount amount in cents
     }>;
   };
+  // Volunteer credits applied to this payment (in cents)
+  volunteerCreditsApplied?: number;
 }
 
 export interface PaymentPhase {
@@ -197,6 +199,14 @@ export class StripePaymentPlanService {
           subtotal: data.discountSnapshot.subtotal,
           discountTotal: data.discountSnapshot.discountTotal,
           discountsCount: data.discountSnapshot.appliedDiscounts.length
+        });
+      }
+      
+      // Add volunteer credits metadata if applied
+      if (data.volunteerCreditsApplied && data.volunteerCreditsApplied > 0) {
+        paymentMetadata.volunteerCreditsApplied = data.volunteerCreditsApplied.toString();
+        console.log('💰 Adding volunteer credits to payment metadata:', {
+          creditsApplied: data.volunteerCreditsApplied
         });
       }
       
