@@ -27,6 +27,7 @@ interface EducatorAssignment {
 
 interface StaffMember {
   id: number;
+  userId?: number; // Actual user ID from users table (id is role ID from user_roles)
   name?: string;
   firstName?: string;
   lastName?: string;
@@ -102,8 +103,12 @@ export function ClassEducatorAssignments({
   const handleAddEducator = () => {
     if (!selectedStaffId || !classId) return;
     
+    // Find the staff member to get the actual userId (not the role id)
+    const staff = staffMembers.find(s => String(s.id) === selectedStaffId);
+    const educatorUserId = staff?.userId || parseInt(selectedStaffId);
+    
     addAssignmentMutation.mutate({
-      educatorId: parseInt(selectedStaffId),
+      educatorId: educatorUserId,
       classId: classId,
       isPrimary: isPrimary
     });
@@ -113,8 +118,12 @@ export function ClassEducatorAssignments({
     removeAssignmentMutation.mutate(assignmentId);
   };
 
+  // Use userId for filtering since assignments use user IDs, not role IDs
   const assignedEducatorIds = assignments.map(a => a.educatorId);
-  const availableStaff = staffMembers.filter(s => !assignedEducatorIds.includes(s.id));
+  const availableStaff = staffMembers.filter(s => {
+    const userId = s.userId || s.id;
+    return !assignedEducatorIds.includes(userId);
+  });
 
   const getStaffDisplayName = (staff: StaffMember) => {
     return staff.name || `${staff.firstName || ''} ${staff.lastName || ''}`.trim() || 'Unknown';
