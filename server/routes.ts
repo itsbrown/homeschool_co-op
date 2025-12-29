@@ -2101,6 +2101,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/ai", aiPricingRouter);
   app.use("/api/ai-insights", aiInsightsRouter);
   app.use("/api/smart-tutorial", smartTutorialRouter);
+  // Register /api/admin/educators BEFORE /api/admin to ensure specific route matches first
+  // (admin-educators uses Supabase auth, while admin uses Auth0 auth)
+  app.use("/api/admin/educators", adminEducatorsRouter);
   app.use("/api/admin", adminRouter);
   app.use("/api/admin-classes", adminClassesRouter); // Add duplicate route for backwards compatibility
   app.use("/api/admin-enrollments", adminEnrollmentsRouter); // Admin enrollment management
@@ -2742,7 +2745,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/schools", schoolsRouter);
   app.use("/api/school-admin", schoolAdminRouter);
   app.use("/api/educator", educatorRouter);
-  app.use("/api/admin/educators", adminEducatorsRouter);
+  // Note: /api/admin/educators is registered earlier in the file (before /api/admin) to ensure specific route matching
   app.use("/api/parent", parentRouter);
   app.use("/api/custom-forms", customFormsRouter);
   app.use("/api/announcements", announcementsRouter);
