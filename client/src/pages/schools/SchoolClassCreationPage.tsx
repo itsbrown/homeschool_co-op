@@ -55,6 +55,7 @@ export default function SchoolClassCreationPage() {
   const [isEditMode, setIsEditMode] = useState(false);
   const formInitialized = React.useRef(false);
   const [selectedInclusions, setSelectedInclusions] = useState<number[]>([]);
+  const [volunteerWaiverId, setVolunteerWaiverId] = useState<number | null>(null);
   
   // Get schoolId from authenticated user
   const { schoolId } = useSchoolAdmin();
@@ -126,6 +127,12 @@ export default function SchoolClassCreationPage() {
   const { data: categoriesData = [], isLoading: categoriesLoading } = useQuery({
     queryKey: ["/api/school-admin/categories"],
     retry: false
+  });
+
+  // Fetch school documents for volunteer waiver selection
+  const { data: schoolDocuments = [] } = useQuery<any[]>({
+    queryKey: ["/api/school-admin/documents"],
+    enabled: !!schoolId,
   });
 
   // Stabilize categories and filter to only active ones
@@ -265,6 +272,11 @@ export default function SchoolClassCreationPage() {
       });
       
       console.log('📍 Form reset with locationId:', targetLocationId, 'from classData.locationId:', classData.locationId, 'or location:', classData.location);
+      
+      // Set volunteer waiver if present
+      if (classData.volunteerWaiverId) {
+        setVolunteerWaiverId(classData.volunteerWaiverId);
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [classData, classId, staffMembers, locations]);
@@ -308,7 +320,7 @@ export default function SchoolClassCreationPage() {
   // Create class mutation
   const createClassMutation = useMutation({
     mutationFn: (data: ClassFormValues) => {
-      return apiRequest("POST", "/school-admin/classes", data);
+      return apiRequest("POST", "/school-admin/classes", { ...data, volunteerWaiverId });
     },
     onSuccess: async (response: any) => {
       // Invalidate class caches immediately so the new class appears in lists
@@ -359,7 +371,7 @@ export default function SchoolClassCreationPage() {
   // Update class mutation
   const updateClassMutation = useMutation({
     mutationFn: (data: ClassFormValues) => {
-      return apiRequest("PUT", `/school-admin/classes/${classId}`, data);
+      return apiRequest("PUT", `/school-admin/classes/${classId}`, { ...data, volunteerWaiverId });
     },
     onSuccess: () => {
       toast({
@@ -740,6 +752,37 @@ export default function SchoolClassCreationPage() {
                   staffMembers={staffMembers}
                   staffLoading={staffLoading}
                 />
+
+                {/* Volunteer Waiver Section */}
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-lg">Volunteer Waiver</CardTitle>
+                    <CardDescription>
+                      Select a waiver document that volunteers must sign before assisting with this class
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <Select
+                      value={volunteerWaiverId?.toString() || "none"}
+                      onValueChange={(value) => setVolunteerWaiverId(value === "none" ? null : parseInt(value))}
+                    >
+                      <SelectTrigger data-testid="select-volunteer-waiver">
+                        <SelectValue placeholder="Select a waiver document (optional)" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">No waiver required</SelectItem>
+                        {schoolDocuments
+                          .filter((doc: any) => doc.category === 'form' || doc.category === 'policy')
+                          .map((doc: any) => (
+                            <SelectItem key={doc.id} value={doc.id.toString()}>
+                              {doc.title}
+                            </SelectItem>
+                          ))
+                        }
+                      </SelectContent>
+                    </Select>
+                  </CardContent>
+                </Card>
 
                 {/* Class Inclusions Section */}
                 <ClassInclusionsManager

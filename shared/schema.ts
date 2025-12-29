@@ -1495,6 +1495,9 @@ export const classes = pgTable("classes", {
   curriculumId: integer("curriculum_id").references(() => curricula.id),
   coverImage: text("cover_image"),
   materials: jsonb("materials"),
+  
+  // Volunteer waiver - document that volunteers must sign before assisting
+  volunteerWaiverId: integer("volunteer_waiver_id").references(() => schoolDocuments.id),
 });
 
 export const insertClassSchema = createInsertSchema(classes)
@@ -1552,6 +1555,9 @@ export const insertClassSchema = createInsertSchema(classes)
     curriculumId: z.number().optional(),
     coverImage: z.string().optional(),
     materials: z.any().optional(),
+    
+    // Volunteer waiver (optional)
+    volunteerWaiverId: z.number().nullable().optional(),
   });
 export type InsertClass = z.infer<typeof insertClassSchema>;
 export type Class = typeof classes.$inferSelect;
@@ -2522,4 +2528,71 @@ export const errorLogsRelations = relations(errorLogs, ({ one }) => ({
   user: one(users, { fields: [errorLogs.userId], references: [users.id] }),
   school: one(schools, { fields: [errorLogs.schoolId], references: [schools.id] }),
   resolver: one(users, { fields: [errorLogs.resolvedBy], references: [users.id] }),
+}));
+
+// ==================== VOLUNTEER MANAGEMENT (Phase 2) ====================
+
+// Signed Waivers - Tracks one-time volunteer waiver signatures
+export const signedWaivers = pgTable("signed_waivers", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  schoolId: integer("school_id").notNull().references(() => schools.id, { onDelete: 'cascade' }),
+  documentId: integer("document_id").notNull().references(() => schoolDocuments.id), // The waiver document
+  
+  // Signature details
+  signedAt: timestamp("signed_at").defaultNow().notNull(),
+  signatoryName: text("signatory_name").notNull(), // Legal name as signed
+  
+  // Metadata for audit
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  
+  // Expiration (waivers may need to be re-signed annually)
+  expiresAt: timestamp("expires_at"),
+  
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertSignedWaiverSchema = createInsertSchema(signedWaivers)
+  .omit({ id: true, createdAt: true, signedAt: true });
+export type InsertSignedWaiver = z.infer<typeof insertSignedWaiverSchema>;
+export type SignedWaiver = typeof signedWaivers.$inferSelect;
+
+export const signedWaiversRelations = relations(signedWaivers, ({ one }) => ({
+  user: one(users, { fields: [signedWaivers.userId], references: [users.id] }),
+  school: one(schools, { fields: [signedWaivers.schoolId], references: [schools.id] }),
+  document: one(schoolDocuments, { fields: [signedWaivers.documentId], references: [schoolDocuments.id] }),
+}));
+
+// Session Volunteers - Tracks which volunteers/aides assisted in a class session
+export const sessionVolunteers = pgTable("session_volunteers", {
+  id: serial("id").primaryKey(),
+  sessionId: integer("session_id").notNull().references(() => classSessions.id, { onDelete: 'cascade' }),
+  volunteerId: integer("volunteer_id").notNull().references(() => users.id),
+  schoolId: integer("school_id").notNull().references(() => schools.id),
+  
+  // Role for this session
+  role: text("role", { enum: ["aide", "volunteer", "substitute"] }).notNull().default("volunteer"),
+  
+  // Time tracking for volunteer hours
+  checkInTime: timestamp("check_in_time"),
+  checkOutTime: timestamp("check_out_time"),
+  actualMinutes: integer("actual_minutes"), // Calculated when they check out
+  
+  // Waiver reference - must have signed waiver before volunteering
+  signedWaiverId: integer("signed_waiver_id").references(() => signedWaivers.id),
+  
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertSessionVolunteerSchema = createInsertSchema(sessionVolunteers)
+  .omit({ id: true, createdAt: true });
+export type InsertSessionVolunteer = z.infer<typeof insertSessionVolunteerSchema>;
+export type SessionVolunteer = typeof sessionVolunteers.$inferSelect;
+
+export const sessionVolunteersRelations = relations(sessionVolunteers, ({ one }) => ({
+  session: one(classSessions, { fields: [sessionVolunteers.sessionId], references: [classSessions.id] }),
+  volunteer: one(users, { fields: [sessionVolunteers.volunteerId], references: [users.id] }),
+  school: one(schools, { fields: [sessionVolunteers.schoolId], references: [schools.id] }),
+  signedWaiver: one(signedWaivers, { fields: [sessionVolunteers.signedWaiverId], references: [signedWaivers.id] }),
 }));

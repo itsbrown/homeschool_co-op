@@ -1,11 +1,15 @@
 import { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useLocation, useParams } from 'wouter';
-import { PlayCircle, ArrowLeft, Clock, Users, AlertCircle } from 'lucide-react';
+import { PlayCircle, ArrowLeft, Clock, Users, AlertCircle, UserPlus, X, Search, Badge, UserCheck } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
+import { Skeleton } from '@/components/ui/skeleton';
 import { 
   EducatorErrorBoundary, 
   EducatorLoadingState, 
@@ -19,12 +23,30 @@ interface ClassInfo {
   location?: string;
   capacity?: number;
   enrollmentCount?: number;
+  volunteerWaiverId?: number;
 }
 
 interface CreatedSession {
   id: number;
   classId: number;
   status: string;
+}
+
+interface AssignedEducator {
+  id: number;
+  educatorId: number;
+  educatorName: string;
+  educatorEmail: string;
+  role: string;
+  isPrimary: boolean;
+}
+
+interface SelectedVolunteer {
+  userId: number;
+  name: string;
+  email: string;
+  role: 'aide' | 'volunteer';
+  isPreAssigned: boolean;
 }
 
 function formatDateLocal(date: Date): string {
@@ -44,10 +66,47 @@ function StartSessionContent({ classId }: { classId: number }) {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const [isStarting, setIsStarting] = useState(false);
+  const [showVolunteerSection, setShowVolunteerSection] = useState(false);
+  const [volunteerSearch, setVolunteerSearch] = useState('');
+  const [selectedVolunteers, setSelectedVolunteers] = useState<SelectedVolunteer[]>([]);
 
   const { data: classInfo, isLoading, error } = useQuery<ClassInfo>({
     queryKey: [`/api/educator/classes/${classId}`],
   });
+
+  // Fetch assigned aides/educators for this class (educator-accessible endpoint)
+  const { data: assignedEducators = [], isLoading: loadingAssignments } = useQuery<AssignedEducator[]>({
+    queryKey: [`/api/educator/classes/${classId}/assignments`],
+    enabled: !!classId,
+  });
+
+  // Filter assigned educators who are aides (non-primary) for pre-population
+  const preAssignedAides = assignedEducators.filter(
+    (e) => !e.isPrimary && (e.role?.toLowerCase() === 'aide' || e.role?.toLowerCase() === 'assistant')
+  );
+
+  // Initialize selected volunteers from pre-assigned aides
+  const handleTogglePreAssigned = (aide: AssignedEducator, checked: boolean) => {
+    if (checked) {
+      // Add to selected
+      if (!selectedVolunteers.find(v => v.userId === aide.educatorId)) {
+        setSelectedVolunteers([...selectedVolunteers, {
+          userId: aide.educatorId,
+          name: aide.educatorName,
+          email: aide.educatorEmail,
+          role: 'aide',
+          isPreAssigned: true
+        }]);
+      }
+    } else {
+      // Remove from selected
+      setSelectedVolunteers(selectedVolunteers.filter(v => v.userId !== aide.educatorId));
+    }
+  };
+
+  const handleRemoveVolunteer = (userId: number) => {
+    setSelectedVolunteers(selectedVolunteers.filter(v => v.userId !== userId));
+  };
 
   const createAndStartMutation = useMutation({
     mutationFn: async () => {
@@ -171,6 +230,109 @@ function StartSessionContent({ classId }: { classId: number }) {
                 </ul>
               </div>
             </div>
+          </div>
+
+          {/* Volunteer/Aide Selection Section */}
+          <div className="border rounded-lg p-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <UserPlus className="h-5 w-5 text-muted-foreground" />
+                <Label className="font-medium">Add Aides/Volunteers</Label>
+              </div>
+              <Switch
+                checked={showVolunteerSection}
+                onCheckedChange={setShowVolunteerSection}
+                data-testid="switch-show-volunteers"
+              />
+            </div>
+
+            {showVolunteerSection && (
+              <div className="space-y-4">
+                {/* Pre-assigned Aides */}
+                {loadingAssignments ? (
+                  <div className="space-y-2">
+                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-10 w-full" />
+                  </div>
+                ) : preAssignedAides.length > 0 && (
+                  <div className="space-y-2">
+                    <Label className="text-sm text-muted-foreground">Pre-assigned Aides</Label>
+                    {preAssignedAides.map((aide) => {
+                      const isSelected = selectedVolunteers.some(v => v.userId === aide.educatorId);
+                      return (
+                        <div
+                          key={aide.id}
+                          className="flex items-center justify-between p-3 rounded-lg border bg-muted/30"
+                          data-testid={`preassigned-aide-${aide.educatorId}`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <div className="h-8 w-8 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
+                              <UserCheck className="h-4 w-4 text-emerald-600" />
+                            </div>
+                            <div>
+                              <p className="font-medium text-sm">{aide.educatorName}</p>
+                              <p className="text-xs text-muted-foreground">{aide.role}</p>
+                            </div>
+                          </div>
+                          <Switch
+                            checked={isSelected}
+                            onCheckedChange={(checked) => handleTogglePreAssigned(aide, checked)}
+                            data-testid={`switch-aide-${aide.educatorId}`}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Selected Volunteers */}
+                {selectedVolunteers.length > 0 && (
+                  <div className="space-y-2">
+                    <Label className="text-sm text-muted-foreground">
+                      Volunteers for this session ({selectedVolunteers.length})
+                    </Label>
+                    <div className="flex flex-wrap gap-2">
+                      {selectedVolunteers.map((vol) => (
+                        <div
+                          key={vol.userId}
+                          className="flex items-center gap-2 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 px-3 py-1.5 rounded-full text-sm"
+                          data-testid={`selected-volunteer-${vol.userId}`}
+                        >
+                          <span>{vol.name}</span>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-4 w-4 p-0 hover:bg-emerald-200"
+                            onClick={() => handleRemoveVolunteer(vol.userId)}
+                            data-testid={`remove-volunteer-${vol.userId}`}
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Volunteer Search (placeholder for Phase 2.8) */}
+                <div className="space-y-2">
+                  <Label className="text-sm text-muted-foreground">Search for volunteers</Label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search by name or email..."
+                      value={volunteerSearch}
+                      onChange={(e) => setVolunteerSearch(e.target.value)}
+                      className="pl-9"
+                      data-testid="input-volunteer-search"
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Search for parents or other volunteers to add to this session
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-2 text-sm text-muted-foreground">

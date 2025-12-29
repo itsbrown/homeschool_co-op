@@ -336,11 +336,81 @@ router.get('/classes/:id', async (req, res) => {
       endDate: classInfo.endDate,
       status,
       instructorId: classInfo.instructorId,
-      instructorName: classInfo.instructorName
+      instructorName: classInfo.instructorName,
+      volunteerWaiverId: classInfo.volunteerWaiverId || null
     });
   } catch (error) {
     console.error('[EducatorDashboard] Error fetching class details:', error);
     res.status(500).json({ error: 'Failed to fetch class details' });
+  }
+});
+
+// GET /api/educator/classes/:id/assignments - Get educator/aide assignments for a class
+router.get('/classes/:id/assignments', async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'User ID not found' });
+    }
+
+    const classId = parseInt(req.params.id);
+    if (isNaN(classId)) {
+      return res.status(400).json({ error: 'Invalid class ID' });
+    }
+
+    console.log('[EducatorDashboard] Fetching class assignments for class:', classId, 'user:', userId);
+
+    // Verify educator has access to this class
+    const userAssignments = await storage.getEducatorClassAssignmentsByEducatorId(userId);
+    const isAssigned = userAssignments.some(a => a.classId === classId);
+    
+    if (!isAssigned) {
+      // Fallback: check if educator is the instructor
+      const classInfo = await storage.getClassById(classId);
+      const educator = await storage.getUser(userId);
+      const isInstructor = classInfo && educator && (
+        classInfo.instructorId === educator.id ||
+        classInfo.instructorName === educator.name
+      );
+      
+      if (!isInstructor) {
+        return res.status(403).json({ error: 'You do not have access to this class' });
+      }
+    }
+
+    // Get all assignments for this class
+    const allAssignments = await storage.getEducatorClassAssignmentsByClassId(classId);
+    
+    // Enrich with educator details
+    const enrichedAssignments = await Promise.all(
+      allAssignments.map(async (assignment) => {
+        const educator = await storage.getUser(assignment.educatorId);
+        const userRoles = await storage.getUserRoles(assignment.educatorId);
+        // Get the most relevant role (prioritize educator-type roles)
+        const educatorRole = userRoles?.find(r => 
+          ['educator', 'mentor', 'aide', 'assistant'].includes(r.role.toLowerCase())
+        );
+        
+        return {
+          id: assignment.id,
+          educatorId: assignment.educatorId,
+          classId: assignment.classId,
+          schoolId: assignment.schoolId,
+          isPrimary: assignment.isPrimary,
+          canStartSession: assignment.canStartSession,
+          validFrom: assignment.validFrom,
+          validTo: assignment.validTo,
+          educatorName: educator?.name || educator?.email?.split('@')[0] || 'Unknown',
+          educatorEmail: educator?.email || '',
+          role: educatorRole?.role || 'Staff'
+        };
+      })
+    );
+
+    res.json(enrichedAssignments);
+  } catch (error) {
+    console.error('[EducatorDashboard] Error fetching class assignments:', error);
+    res.status(500).json({ error: 'Failed to fetch class assignments' });
   }
 });
 
