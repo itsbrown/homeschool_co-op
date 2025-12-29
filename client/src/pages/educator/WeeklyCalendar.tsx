@@ -17,6 +17,13 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 import { 
   EducatorErrorBoundary, 
   EducatorLoadingState, 
@@ -121,8 +128,22 @@ interface WeeklyCalendarProps {
   showQuickActions?: boolean;
 }
 
+type SelectedItem = 
+  | { type: 'class'; data: ScheduleEntry }
+  | { type: 'event'; data: EventEntry }
+  | { type: 'holiday'; data: EventEntry }
+  | { type: 'birthday'; data: BirthdayEvent }
+  | null;
+
 function WeeklyCalendarContent({ showBirthdays = false, showQuickActions = true }: WeeklyCalendarProps) {
   const [, navigate] = useLocation();
+  const [selectedItem, setSelectedItem] = useState<SelectedItem>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+
+  const handleItemClick = (item: SelectedItem) => {
+    setSelectedItem(item);
+    setDialogOpen(true);
+  };
   const [currentWeekStart, setCurrentWeekStart] = useState(() => getWeekStartDate(new Date()));
 
   const { data: weekData, isLoading, error, refetch } = useQuery<WeekScheduleData>({
@@ -294,8 +315,9 @@ function WeeklyCalendarContent({ showBirthdays = false, showQuickActions = true 
                 {dayHolidays.map((holiday) => (
                   <div 
                     key={`holiday-${holiday.id}`}
-                    className="p-2 rounded-md bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200"
+                    className="p-2 rounded-md bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 cursor-pointer hover:bg-amber-200 dark:hover:bg-amber-900/50 transition-colors"
                     data-testid={`holiday-event-${holiday.id}`}
+                    onClick={() => handleItemClick({ type: 'holiday', data: holiday })}
                   >
                     <div className="flex items-start gap-2">
                       <Sun className="h-3 w-3 mt-0.5 shrink-0" />
@@ -313,8 +335,9 @@ function WeeklyCalendarContent({ showBirthdays = false, showQuickActions = true 
                 {dayEvents.map((event) => (
                   <div 
                     key={`event-${event.id}`}
-                    className="p-2 rounded-md bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-200"
+                    className="p-2 rounded-md bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-200 cursor-pointer hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors"
                     data-testid={`school-event-${event.id}`}
+                    onClick={() => handleItemClick({ type: 'event', data: event })}
                   >
                     <div className="flex items-start gap-2">
                       <PartyPopper className="h-3 w-3 mt-0.5 shrink-0" />
@@ -341,8 +364,9 @@ function WeeklyCalendarContent({ showBirthdays = false, showQuickActions = true 
                 {dayBirthdays.map((birthday) => (
                   <div 
                     key={`birthday-${birthday.studentId}`}
-                    className="p-2 rounded-md bg-pink-100 dark:bg-pink-900/30 text-pink-800 dark:text-pink-200"
+                    className="p-2 rounded-md bg-pink-100 dark:bg-pink-900/30 text-pink-800 dark:text-pink-200 cursor-pointer hover:bg-pink-200 dark:hover:bg-pink-900/50 transition-colors"
                     data-testid={`birthday-event-${birthday.studentId}`}
+                    onClick={() => handleItemClick({ type: 'birthday', data: birthday })}
                   >
                     <div className="flex items-start gap-2">
                       <Cake className="h-3 w-3 mt-0.5 shrink-0" />
@@ -359,7 +383,7 @@ function WeeklyCalendarContent({ showBirthdays = false, showQuickActions = true 
                   <div 
                     key={`class-${schedule.id}-${schedule.classId}`}
                     className="p-2 rounded-md bg-muted hover:bg-muted/80 cursor-pointer transition-colors"
-                    onClick={() => navigate(`/educator/classes/${schedule.classId}`)}
+                    onClick={() => handleItemClick({ type: 'class', data: schedule })}
                     data-testid={`schedule-item-${schedule.id}`}
                   >
                     <div className="flex items-start gap-2">
@@ -454,6 +478,152 @@ function WeeklyCalendarContent({ showBirthdays = false, showQuickActions = true 
           </CardContent>
         </Card>
       )}
+
+      {/* Detail Dialog */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-md" data-testid="schedule-item-dialog">
+          {selectedItem?.type === 'class' && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <BookOpen className="h-5 w-5 text-primary" />
+                  {selectedItem.data.className}
+                </DialogTitle>
+                <DialogDescription>Class Details</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 pt-4">
+                <div className="flex items-center gap-3">
+                  <Clock className="h-4 w-4 text-muted-foreground" />
+                  <span>{formatTime(selectedItem.data.startTime)} - {formatTime(selectedItem.data.endTime)}</span>
+                </div>
+                {selectedItem.data.classLocation && (
+                  <div className="flex items-center gap-3">
+                    <MapPin className="h-4 w-4 text-muted-foreground" />
+                    <span>{selectedItem.data.classLocation}</span>
+                  </div>
+                )}
+                {selectedItem.data.classStartDate && selectedItem.data.classEndDate && (
+                  <div className="flex items-center gap-3">
+                    <CalendarDays className="h-4 w-4 text-muted-foreground" />
+                    <span>
+                      {new Date(selectedItem.data.classStartDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })} - {new Date(selectedItem.data.classEndDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                    </span>
+                  </div>
+                )}
+                {selectedItem.data.notes && (
+                  <div className="pt-2 border-t">
+                    <p className="text-sm text-muted-foreground">{selectedItem.data.notes}</p>
+                  </div>
+                )}
+                <div className="pt-4 flex gap-2">
+                  <Button 
+                    onClick={() => {
+                      setDialogOpen(false);
+                      navigate(`/educator/classes/${selectedItem.data.classId}`);
+                    }}
+                    data-testid="button-view-class-details"
+                  >
+                    View Full Details
+                  </Button>
+                  <Button 
+                    variant="outline"
+                    onClick={() => {
+                      setDialogOpen(false);
+                      navigate(`/educator/start-session?classId=${selectedItem.data.classId}`);
+                    }}
+                    data-testid="button-start-session"
+                  >
+                    <PlayCircle className="h-4 w-4 mr-2" />
+                    Start Session
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
+
+          {selectedItem?.type === 'event' && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <PartyPopper className="h-5 w-5 text-purple-600" />
+                  {selectedItem.data.title}
+                </DialogTitle>
+                <DialogDescription>School Event</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 pt-4">
+                {!selectedItem.data.isAllDay && (
+                  <div className="flex items-center gap-3">
+                    <Clock className="h-4 w-4 text-muted-foreground" />
+                    <span>{new Date(selectedItem.data.startDate).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</span>
+                  </div>
+                )}
+                {selectedItem.data.isAllDay && (
+                  <div className="flex items-center gap-3">
+                    <Calendar className="h-4 w-4 text-muted-foreground" />
+                    <Badge variant="secondary">All Day Event</Badge>
+                  </div>
+                )}
+                {selectedItem.data.location && (
+                  <div className="flex items-center gap-3">
+                    <MapPin className="h-4 w-4 text-muted-foreground" />
+                    <span>{selectedItem.data.location}</span>
+                  </div>
+                )}
+                {selectedItem.data.description && (
+                  <div className="pt-2 border-t">
+                    <p className="text-sm text-muted-foreground">{selectedItem.data.description}</p>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+
+          {selectedItem?.type === 'holiday' && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Sun className="h-5 w-5 text-amber-600" />
+                  {selectedItem.data.title}
+                </DialogTitle>
+                <DialogDescription>Holiday / School Closure</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 pt-4">
+                <div className="flex items-center gap-3">
+                  <Calendar className="h-4 w-4 text-muted-foreground" />
+                  <span>{new Date(selectedItem.data.calculatedDate + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</span>
+                </div>
+                {selectedItem.data.description && (
+                  <div className="pt-2 border-t">
+                    <p className="text-sm text-muted-foreground">{selectedItem.data.description}</p>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+
+          {selectedItem?.type === 'birthday' && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Cake className="h-5 w-5 text-pink-600" />
+                  {selectedItem.data.studentName}
+                </DialogTitle>
+                <DialogDescription>Student Birthday</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 pt-4">
+                <div className="flex items-center gap-3">
+                  <Calendar className="h-4 w-4 text-muted-foreground" />
+                  <span>{new Date(selectedItem.data.date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <PartyPopper className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-lg font-medium">Turning {selectedItem.data.age} years old!</span>
+                </div>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
