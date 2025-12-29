@@ -9,7 +9,10 @@ import {
   MapPin,
   BookOpen,
   PlayCircle,
-  Cake
+  Cake,
+  CalendarDays,
+  PartyPopper,
+  Sun
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -23,11 +26,14 @@ import {
 
 interface ScheduleEntry {
   id: number;
+  type: 'class';
   assignmentId: number;
   educatorId: number;
   classId: number;
   className: string;
   classLocation?: string;
+  classStartDate?: string;
+  classEndDate?: string;
   scheduleType: 'recurring' | 'one_time' | 'adhoc';
   dayOfWeek?: number;
   scheduledDate?: string;
@@ -38,9 +44,27 @@ interface ScheduleEntry {
   notes?: string;
 }
 
+interface EventEntry {
+  id: number;
+  type: 'event' | 'holiday';
+  title: string;
+  description?: string;
+  location?: string;
+  startDate: string;
+  endDate: string;
+  isAllDay?: boolean;
+  eventType: string;
+  color?: string;
+  calculatedDate: string;
+  schoolId: number;
+}
+
 interface WeekScheduleData {
   weekStart: string;
+  weekEnd: string;
   schedules: ScheduleEntry[];
+  events: EventEntry[];
+  holidays: EventEntry[];
 }
 
 interface Student {
@@ -151,6 +175,16 @@ function WeeklyCalendarContent({ showBirthdays = false, showQuickActions = true 
     return weekData.schedules.filter(s => s.calculatedDate === dateStr);
   };
 
+  const getEventsForDay = (dateStr: string): EventEntry[] => {
+    if (!weekData?.events) return [];
+    return weekData.events.filter(e => e.calculatedDate === dateStr);
+  };
+
+  const getHolidaysForDay = (dateStr: string): EventEntry[] => {
+    if (!weekData?.holidays) return [];
+    return weekData.holidays.filter(h => h.calculatedDate === dateStr);
+  };
+
   const getBirthdaysForDay = (dateStr: string): BirthdayEvent[] => {
     if (!showBirthdays || !studentsResponse?.students) return [];
     
@@ -232,15 +266,19 @@ function WeeklyCalendarContent({ showBirthdays = false, showQuickActions = true 
       <div className="grid grid-cols-1 md:grid-cols-7 gap-4">
         {weekDates.map((day) => {
           const daySchedules = getSchedulesForDay(day.date);
+          const dayEvents = getEventsForDay(day.date);
+          const dayHolidays = getHolidaysForDay(day.date);
           const dayBirthdays = getBirthdaysForDay(day.date);
+          const isHoliday = dayHolidays.length > 0;
+          const hasContent = daySchedules.length > 0 || dayEvents.length > 0 || dayHolidays.length > 0 || dayBirthdays.length > 0;
           
           return (
             <Card 
               key={day.date} 
-              className={`${day.isToday ? 'border-primary border-2' : ''}`}
+              className={`${day.isToday ? 'border-primary border-2' : ''} ${isHoliday ? 'bg-amber-50 dark:bg-amber-900/10' : ''}`}
               data-testid={`calendar-day-${day.dayIndex}`}
             >
-              <CardHeader className={`pb-2 ${day.isToday ? 'bg-primary/10' : ''}`}>
+              <CardHeader className={`pb-2 ${day.isToday ? 'bg-primary/10' : ''} ${isHoliday ? 'bg-amber-100 dark:bg-amber-900/20' : ''}`}>
                 <CardTitle className="text-sm font-medium flex flex-col items-center">
                   <span className="text-xs text-muted-foreground">{day.dayAbbrev}</span>
                   <span className={`text-lg ${day.isToday ? 'text-primary font-bold' : ''}`}>
@@ -252,6 +290,54 @@ function WeeklyCalendarContent({ showBirthdays = false, showQuickActions = true 
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-2 space-y-2">
+                {/* Holidays */}
+                {dayHolidays.map((holiday) => (
+                  <div 
+                    key={`holiday-${holiday.id}`}
+                    className="p-2 rounded-md bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200"
+                    data-testid={`holiday-event-${holiday.id}`}
+                  >
+                    <div className="flex items-start gap-2">
+                      <Sun className="h-3 w-3 mt-0.5 shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-xs font-medium truncate">{holiday.title}</p>
+                        {holiday.description && (
+                          <p className="text-xs opacity-75 truncate">{holiday.description}</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                {/* Events */}
+                {dayEvents.map((event) => (
+                  <div 
+                    key={`event-${event.id}`}
+                    className="p-2 rounded-md bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-200"
+                    data-testid={`school-event-${event.id}`}
+                  >
+                    <div className="flex items-start gap-2">
+                      <PartyPopper className="h-3 w-3 mt-0.5 shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-xs font-medium truncate">{event.title}</p>
+                        {!event.isAllDay && (
+                          <div className="flex items-center gap-1 text-xs opacity-75">
+                            <Clock className="h-3 w-3" />
+                            <span>{new Date(event.startDate).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</span>
+                          </div>
+                        )}
+                        {event.location && (
+                          <div className="flex items-center gap-1 text-xs opacity-75 mt-0.5">
+                            <MapPin className="h-3 w-3" />
+                            <span className="truncate">{event.location}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                {/* Birthdays */}
                 {dayBirthdays.map((birthday) => (
                   <div 
                     key={`birthday-${birthday.studentId}`}
@@ -268,36 +354,45 @@ function WeeklyCalendarContent({ showBirthdays = false, showQuickActions = true 
                   </div>
                 ))}
                 
-                {daySchedules.length === 0 && dayBirthdays.length === 0 ? (
+                {/* Classes */}
+                {daySchedules.map((schedule) => (
+                  <div 
+                    key={`class-${schedule.id}-${schedule.classId}`}
+                    className="p-2 rounded-md bg-muted hover:bg-muted/80 cursor-pointer transition-colors"
+                    onClick={() => navigate(`/educator/classes/${schedule.classId}`)}
+                    data-testid={`schedule-item-${schedule.id}`}
+                  >
+                    <div className="flex items-start gap-2">
+                      <BookOpen className="h-3 w-3 mt-0.5 text-primary shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-xs font-medium truncate">{schedule.className}</p>
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <Clock className="h-3 w-3" />
+                          <span>{formatTime(schedule.startTime)} - {formatTime(schedule.endTime)}</span>
+                        </div>
+                        {schedule.classLocation && (
+                          <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
+                            <MapPin className="h-3 w-3" />
+                            <span className="truncate">{schedule.classLocation}</span>
+                          </div>
+                        )}
+                        {schedule.classStartDate && schedule.classEndDate && (
+                          <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
+                            <CalendarDays className="h-3 w-3" />
+                            <span className="truncate">
+                              {new Date(schedule.classStartDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - {new Date(schedule.classEndDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                {!hasContent && (
                   <p className="text-xs text-muted-foreground text-center py-2">
                     No events
                   </p>
-                ) : (
-                  daySchedules.map((schedule) => (
-                    <div 
-                      key={schedule.id}
-                      className="p-2 rounded-md bg-muted hover:bg-muted/80 cursor-pointer transition-colors"
-                      onClick={() => navigate(`/educator/classes/${schedule.classId}`)}
-                      data-testid={`schedule-item-${schedule.id}`}
-                    >
-                      <div className="flex items-start gap-2">
-                        <BookOpen className="h-3 w-3 mt-0.5 text-primary shrink-0" />
-                        <div className="min-w-0">
-                          <p className="text-xs font-medium truncate">{schedule.className}</p>
-                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                            <Clock className="h-3 w-3" />
-                            <span>{formatTime(schedule.startTime)}</span>
-                          </div>
-                          {schedule.classLocation && (
-                            <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
-                              <MapPin className="h-3 w-3" />
-                              <span className="truncate">{schedule.classLocation}</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))
                 )}
               </CardContent>
             </Card>
@@ -305,18 +400,26 @@ function WeeklyCalendarContent({ showBirthdays = false, showQuickActions = true 
         })}
       </div>
 
-      {showBirthdays && (
-        <div className="flex items-center gap-4 text-sm text-muted-foreground">
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 bg-muted rounded" />
-            <span>Classes</span>
-          </div>
+      <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 bg-muted rounded" />
+          <span>Classes</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 bg-purple-200 dark:bg-purple-900/30 rounded" />
+          <span>Events</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 bg-amber-200 dark:bg-amber-900/30 rounded" />
+          <span>Holidays</span>
+        </div>
+        {showBirthdays && (
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 bg-pink-200 dark:bg-pink-900/30 rounded" />
-            <span>Student Birthdays</span>
+            <span>Birthdays</span>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {showQuickActions && (
         <Card>

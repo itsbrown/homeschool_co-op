@@ -1065,7 +1065,185 @@ router.get('/schedules', async (req, res) => {
   }
 });
 
-// GET /api/educator/schedules/week - Get schedules for a specific week
+// Helper to map day names to day index (0=Monday, 6=Sunday)
+const DAY_NAME_TO_INDEX: Record<string, number> = {
+  'monday': 0, 'tuesday': 1, 'wednesday': 2, 'thursday': 3,
+  'friday': 4, 'saturday': 5, 'sunday': 6,
+  'mon': 0, 'tue': 1, 'wed': 2, 'thu': 3, 'fri': 4, 'sat': 5, 'sun': 6
+};
+
+// Day name mappings (full names, abbreviations, variants, plurals, dots)
+const DAY_PATTERNS: Array<{ pattern: RegExp; dayName: string }> = [
+  { pattern: /\bmon\.?(day)?s?\b/i, dayName: 'monday' },
+  { pattern: /\btue\.?s?(day)?s?\b/i, dayName: 'tuesday' },
+  { pattern: /\bwed\.?(nesday)?s?\b/i, dayName: 'wednesday' },
+  { pattern: /\bthu\.?(r|rs|rsday)?s?\b/i, dayName: 'thursday' },
+  { pattern: /\bfri\.?(day)?s?\b/i, dayName: 'friday' },
+  { pattern: /\bsat\.?(urday)?s?\b/i, dayName: 'saturday' },
+  { pattern: /\bsun\.?(day)?s?\b/i, dayName: 'sunday' },
+];
+
+// Helper to parse string schedule like "Monday, Wednesday, Friday 9:00 AM-12:00 PM"
+// or "Mon/Wed 9 AM – 12 PM" or "Monday-Friday 9:00-10:00"
+function parseScheduleString(scheduleStr: string): Array<{ day: string; startTime: string; endTime: string }> {
+  const entries: Array<{ day: string; startTime: string; endTime: string }> = [];
+  
+  // Extract time range from the string
+  // Only match actual times: must have colon OR AM/PM (not bare numbers like grade ranges)
+  // Handles: "9:00 AM-12:00 PM", "9AM-10:30AM", "9 AM – 12 PM", "09:00-12:00", "noon", "midnight"
+  
+  let startTime = '09:00';
+  let endTime = '10:00';
+  
+  // Time patterns that definitively look like times:
+  // 1. Numbers with colon: "9:00", "10:30"
+  // 2. Numbers with AM/PM: "9AM", "9 AM", "9:00 AM"
+  // 3. Special words: "noon", "midnight"
+  const timeTokenPattern = /\b(\d{1,2}:\d{2}\s*(?:AM|PM)?|\d{1,2}\s*(?:AM|PM)|noon|midnight)\b/gi;
+  const timeMatches = scheduleStr.match(timeTokenPattern);
+  
+  if (timeMatches && timeMatches.length >= 2) {
+    let startToken = timeMatches[0].trim();
+    let endToken = timeMatches[1].trim();
+    
+    // Check for special tokens that shouldn't get AM/PM appended
+    const isSpecialTime = (t: string) => /^(noon|midnight)$/i.test(t);
+    
+    // Extract hour from token for smart meridiem inference
+    const extractHour = (t: string): number => {
+      if (/^noon$/i.test(t)) return 12;
+      if (/^midnight$/i.test(t)) return 0;
+      const match = t.match(/^(\d{1,2})/);
+      return match ? parseInt(match[1], 10) : 0;
+    };
+    
+    // Propagate AM/PM if one token has it and the other doesn't (skip special tokens)
+    const startHasMeridiem = /AM|PM/i.test(startToken);
+    const endHasMeridiem = /AM|PM/i.test(endToken);
+    
+    if (!startHasMeridiem && endHasMeridiem && !isSpecialTime(startToken)) {
+      // End has AM/PM but start doesn't - use smart inference
+      const endMeridiem = endToken.match(/AM|PM/i)?.[0]?.toUpperCase() || '';
+      const startHour = extractHour(startToken);
+      const endHour = extractHour(endToken);
+      
+      // If end is PM and start hour > end hour in 12-hour terms (e.g., 11:30-1 PM),
+      // then start is AM (morning to afternoon transition)
+      // Otherwise, propagate the same meridiem
+      if (endMeridiem === 'PM' && startHour > endHour && startHour >= 10 && endHour <= 6) {
+        // Likely a morning-to-afternoon transition (e.g., 11:30-1 PM)
+        startToken = startToken + ' AM';
+      } else {
+        // Same meridiem
+        startToken = startToken + ' ' + endMeridiem;
+      }
+    } else if (startHasMeridiem && !endHasMeridiem && !isSpecialTime(endToken)) {
+      // Start has AM/PM, propagate to end
+      const meridiem = startToken.match(/AM|PM/i)?.[0] || '';
+      endToken = endToken + ' ' + meridiem;
+    }
+    
+    startTime = convertTo24Hour(startToken);
+    endTime = convertTo24Hour(endToken);
+  } else if (timeMatches && timeMatches.length === 1) {
+    // Single time - assume 1 hour duration
+    startTime = convertTo24Hour(timeMatches[0].trim());
+    const startHour = parseInt(startTime.split(':')[0], 10);
+    endTime = `${((startHour + 1) % 24).toString().padStart(2, '0')}:00`;
+  }
+  
+  // Extract all days - start with individual day names (full or abbreviated)
+  const foundDays = new Set<string>();
+  
+  for (const { pattern, dayName } of DAY_PATTERNS) {
+    if (pattern.test(scheduleStr)) {
+      foundDays.add(dayName);
+    }
+  }
+  
+  // Also check for day ranges like "Monday-Friday", "Mon-Fri", "Mon to Fri", "Monday through Friday"
+  // Supports: hyphen, dash, "to", "through", "thru"
+  const dayRangePattern = /\b(mon\.?(?:day)?s?|tue\.?s?(?:day)?s?|wed\.?(?:nesday)?s?|thu\.?(?:r|rs|rsday)?s?|fri\.?(?:day)?s?|sat\.?(?:urday)?s?|sun\.?(?:day)?s?)\s*(?:[-–]|to|through|thru)\s*(mon\.?(?:day)?s?|tue\.?s?(?:day)?s?|wed\.?(?:nesday)?s?|thu\.?(?:r|rs|rsday)?s?|fri\.?(?:day)?s?|sat\.?(?:urday)?s?|sun\.?(?:day)?s?)\b/i;
+  const rangeMatch = scheduleStr.match(dayRangePattern);
+  
+  if (rangeMatch) {
+    const startDayName = normalizeDayName(rangeMatch[1]);
+    const endDayName = normalizeDayName(rangeMatch[2]);
+    
+    const startIdx = DAY_NAME_TO_INDEX[startDayName];
+    const endIdx = DAY_NAME_TO_INDEX[endDayName];
+    
+    if (startIdx !== undefined && endIdx !== undefined && startIdx < endIdx) {
+      // Expand range and add all days
+      const dayOrder = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+      for (let i = startIdx; i <= endIdx; i++) {
+        foundDays.add(dayOrder[i]);
+      }
+    }
+  }
+  
+  for (const dayName of foundDays) {
+    entries.push({ day: dayName, startTime, endTime });
+  }
+  
+  return entries;
+}
+
+// Normalize day name abbreviations to full names
+function normalizeDayName(dayStr: string): string {
+  const lower = dayStr.toLowerCase();
+  for (const { pattern, dayName } of DAY_PATTERNS) {
+    if (pattern.test(lower)) {
+      return dayName;
+    }
+  }
+  return lower;
+}
+
+// Convert time string to 24-hour format
+// Handles: "9:00 AM", "9AM", "9 AM", "09:00", "9", "noon", "midnight"
+function convertTo24Hour(timeStr: string): string {
+  const cleaned = timeStr.replace(/\s+/g, '').toUpperCase();
+  
+  // Handle special keywords
+  if (cleaned === 'NOON') return '12:00';
+  if (cleaned === 'MIDNIGHT') return '00:00';
+  
+  // Try format with colon: "9:00AM" or "09:00"
+  let match = cleaned.match(/^(\d{1,2}):(\d{2})(AM|PM)?$/);
+  if (match) {
+    let hours = parseInt(match[1], 10);
+    const minutes = match[2];
+    const period = match[3];
+    
+    if (period === 'PM' && hours !== 12) {
+      hours += 12;
+    } else if (period === 'AM' && hours === 12) {
+      hours = 0;
+    }
+    
+    return `${hours.toString().padStart(2, '0')}:${minutes}`;
+  }
+  
+  // Try format without colon: "9AM" or "9"
+  match = cleaned.match(/^(\d{1,2})(AM|PM)?$/);
+  if (match) {
+    let hours = parseInt(match[1], 10);
+    const period = match[2];
+    
+    if (period === 'PM' && hours !== 12) {
+      hours += 12;
+    } else if (period === 'AM' && hours === 12) {
+      hours = 0;
+    }
+    
+    return `${hours.toString().padStart(2, '0')}:00`;
+  }
+  
+  return timeStr; // Return as-is if no pattern matches
+}
+
+// GET /api/educator/schedules/week - Get schedules for a specific week (classes, events, holidays)
 router.get('/schedules/week', async (req, res) => {
   try {
     const userId = req.user?.id;
@@ -1076,45 +1254,194 @@ router.get('/schedules/week', async (req, res) => {
     const { weekStart } = req.query;
     const weekStartDate = weekStart as string || getWeekStartDate(new Date());
     
-    console.log('[EducatorDashboard] Fetching week schedules for educator:', userId, 'week:', weekStartDate);
-
-    const schedules = await storage.getEducatorSchedulesForWeek(userId, weekStartDate);
-
-    // Enrich with class details and expand recurring schedules
-    const expandedSchedules = [];
+    // Calculate week end date
+    const weekStartObj = new Date(weekStartDate + 'T12:00:00');
+    const weekEndObj = new Date(weekStartObj);
+    weekEndObj.setDate(weekEndObj.getDate() + 6);
+    const weekEndDate = weekEndObj.toISOString().split('T')[0];
     
-    for (const schedule of schedules) {
+    console.log('[EducatorDashboard] Fetching week schedules for educator:', userId, 'week:', weekStartDate, 'to', weekEndDate);
+
+    // 1. Get educator's class assignments
+    const assignments = await storage.getEducatorClassAssignmentsByEducatorId(userId);
+    console.log('[EducatorDashboard] Found', assignments.length, 'class assignments');
+
+    // 2. Build class schedule entries from assignments
+    const classSchedules: any[] = [];
+    const schoolIds = new Set<number>();
+    
+    for (const assignment of assignments) {
+      const classInfo = await storage.getClassById(assignment.classId);
+      if (!classInfo) continue;
+      
+      if (assignment.schoolId) {
+        schoolIds.add(assignment.schoolId);
+      }
+      
+      // Check if class is active during this week (startDate/endDate)
+      const classStartDate = classInfo.startDate ? new Date(classInfo.startDate).toISOString().split('T')[0] : null;
+      const classEndDate = classInfo.endDate ? new Date(classInfo.endDate).toISOString().split('T')[0] : null;
+      
+      // Skip if class hasn't started or has ended
+      if (classStartDate && classStartDate > weekEndDate) continue;
+      if (classEndDate && classEndDate < weekStartDate) continue;
+      
+      // Parse the class schedule JSON
+      const scheduleData = classInfo.schedule as any;
+      if (!scheduleData) continue;
+      
+      // Handle different schedule formats
+      // Format 1: { variants: [{ days: ["Monday", "Wednesday"], startTime: "09:00", endTime: "12:00" }] }
+      // Format 2: [{ day: "Monday", time: "09:00" }]
+      // Format 3: string like "Monday, Wednesday, Friday 9:00 AM-12:00 PM"
+      // Format 4: { days: ["Monday", "Wednesday"], startTime, endTime }
+      
+      let scheduleEntries: Array<{ day: string; startTime: string; endTime: string }> = [];
+      
+      if (typeof scheduleData === 'string') {
+        // Format 3: String format like "Monday, Wednesday, Friday 9:00 AM-12:00 PM"
+        scheduleEntries = parseScheduleString(scheduleData);
+      } else if (Array.isArray(scheduleData)) {
+        // Format 2: Array of { day, time }
+        scheduleEntries = scheduleData.map((s: any) => ({
+          day: s.day,
+          startTime: s.time || s.startTime || '09:00',
+          endTime: s.endTime || '10:00'
+        }));
+      } else if (scheduleData.variants && Array.isArray(scheduleData.variants)) {
+        // Format 1: { variants: [...] }
+        for (const variant of scheduleData.variants) {
+          if (variant.days && Array.isArray(variant.days)) {
+            for (const day of variant.days) {
+              scheduleEntries.push({
+                day: day,
+                startTime: variant.startTime || '09:00',
+                endTime: variant.endTime || '10:00'
+              });
+            }
+          }
+        }
+      } else if (scheduleData.days && Array.isArray(scheduleData.days)) {
+        // Format 4: { days: ["Monday", "Wednesday"], startTime, endTime }
+        for (const day of scheduleData.days) {
+          scheduleEntries.push({
+            day: day,
+            startTime: scheduleData.startTime || '09:00',
+            endTime: scheduleData.endTime || '10:00'
+          });
+        }
+      } else if (typeof scheduleData === 'object' && scheduleData.day) {
+        // Single day object: { day: "Monday", startTime, endTime }
+        scheduleEntries.push({
+          day: scheduleData.day,
+          startTime: scheduleData.startTime || scheduleData.time || '09:00',
+          endTime: scheduleData.endTime || '10:00'
+        });
+      }
+      
+      // Expand each schedule entry to the specific dates in this week
+      for (const entry of scheduleEntries) {
+        const dayIndex = DAY_NAME_TO_INDEX[entry.day.toLowerCase()];
+        if (dayIndex === undefined) continue;
+        
+        const entryDate = new Date(weekStartObj);
+        entryDate.setDate(entryDate.getDate() + dayIndex);
+        const calculatedDate = entryDate.toISOString().split('T')[0];
+        
+        // Skip if outside class date range
+        if (classStartDate && calculatedDate < classStartDate) continue;
+        if (classEndDate && calculatedDate > classEndDate) continue;
+        
+        classSchedules.push({
+          id: assignment.id,
+          type: 'class',
+          assignmentId: assignment.id,
+          educatorId: userId,
+          classId: assignment.classId,
+          className: classInfo.title || 'Unknown Class',
+          classLocation: classInfo.location,
+          classStartDate: classStartDate,
+          classEndDate: classEndDate,
+          scheduleType: 'recurring',
+          dayOfWeek: dayIndex,
+          startTime: entry.startTime,
+          endTime: entry.endTime,
+          calculatedDate: calculatedDate,
+          isActive: true
+        });
+      }
+    }
+
+    // 3. Get educator schedules from the educator_schedules table (if any explicit overrides)
+    const explicitSchedules = await storage.getEducatorSchedulesForWeek(userId, weekStartDate);
+    for (const schedule of explicitSchedules) {
       const classInfo = await storage.getClassById(schedule.classId);
       const baseSchedule = {
         ...schedule,
+        type: 'class',
         className: classInfo?.title || 'Unknown Class',
-        classLocation: classInfo?.location
+        classLocation: classInfo?.location,
+        classStartDate: classInfo?.startDate ? new Date(classInfo.startDate).toISOString().split('T')[0] : null,
+        classEndDate: classInfo?.endDate ? new Date(classInfo.endDate).toISOString().split('T')[0] : null
       };
 
       if (schedule.scheduleType === 'recurring' && schedule.dayOfWeek !== null) {
-        // Calculate the date for this weekday
-        const weekStartObj = new Date(weekStartDate);
-        const dayOffset = schedule.dayOfWeek;
         const scheduleDate = new Date(weekStartObj);
-        scheduleDate.setDate(scheduleDate.getDate() + dayOffset);
-        
-        expandedSchedules.push({
+        scheduleDate.setDate(scheduleDate.getDate() + schedule.dayOfWeek);
+        classSchedules.push({
           ...baseSchedule,
           calculatedDate: scheduleDate.toISOString().split('T')[0]
         });
       } else if (schedule.scheduleType === 'one_time' && schedule.scheduledDate) {
-        expandedSchedules.push({
+        classSchedules.push({
           ...baseSchedule,
           calculatedDate: schedule.scheduledDate
         });
-      } else {
-        expandedSchedules.push(baseSchedule);
       }
     }
 
+    // 4. Get events and holidays for all schools the educator is assigned to
+    const events: any[] = [];
+    const holidays: any[] = [];
+    
+    for (const schoolId of schoolIds) {
+      const weekStartAsDate = new Date(weekStartDate + 'T00:00:00');
+      const weekEndAsDate = new Date(weekEndDate + 'T23:59:59');
+      
+      const schoolEvents = await storage.getEventsBySchoolAndDateRange(schoolId, weekStartAsDate, weekEndAsDate);
+      
+      for (const event of schoolEvents) {
+        const eventDate = new Date(event.startDate).toISOString().split('T')[0];
+        const eventEntry = {
+          id: event.id,
+          type: event.eventType === 'holiday' ? 'holiday' : 'event',
+          title: event.title,
+          description: event.description,
+          location: event.location,
+          startDate: event.startDate,
+          endDate: event.endDate,
+          isAllDay: event.isAllDay,
+          eventType: event.eventType,
+          color: event.color,
+          calculatedDate: eventDate,
+          schoolId: schoolId
+        };
+        
+        if (event.eventType === 'holiday') {
+          holidays.push(eventEntry);
+        } else {
+          events.push(eventEntry);
+        }
+      }
+    }
+
+    // 5. Combine and return all data
     res.json({
       weekStart: weekStartDate,
-      schedules: expandedSchedules
+      weekEnd: weekEndDate,
+      schedules: classSchedules,
+      events: events,
+      holidays: holidays
     });
   } catch (error) {
     console.error('[EducatorDashboard] Error fetching week schedules:', error);
