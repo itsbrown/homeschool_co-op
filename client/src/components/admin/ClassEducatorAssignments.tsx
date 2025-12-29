@@ -139,10 +139,10 @@ export function ClassEducatorAssignments({
         <CardHeader className="pb-3">
           <CardTitle className="text-lg flex items-center gap-2">
             <Users className="h-5 w-5" />
-            Assigned Educators
+            Class Instructors & Educators
           </CardTitle>
           <CardDescription>
-            Save the class first to assign educators
+            Save the class first to assign the lead instructor and other educators
           </CardDescription>
         </CardHeader>
       </Card>
@@ -154,10 +154,10 @@ export function ClassEducatorAssignments({
       <CardHeader className="pb-3">
         <CardTitle className="text-lg flex items-center gap-2">
           <Users className="h-5 w-5" />
-          Assigned Educators
+          Class Instructors & Educators
         </CardTitle>
         <CardDescription>
-          Manage educators, mentors, and aides assigned to this class
+          Assign educators to this class. The "Primary" educator is the main instructor.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -192,7 +192,7 @@ export function ClassEducatorAssignments({
                       {assignment.isPrimary && (
                         <Badge variant="default" className="bg-green-600">
                           <UserCheck className="h-3 w-3 mr-1" />
-                          Primary
+                          Lead Instructor
                         </Badge>
                       )}
                       <Button
@@ -252,7 +252,7 @@ export function ClassEducatorAssignments({
                     onCheckedChange={setIsPrimary}
                     data-testid="switch-is-primary"
                   />
-                  <Label htmlFor="is-primary" className="text-sm whitespace-nowrap">Primary</Label>
+                  <Label htmlFor="is-primary" className="text-sm whitespace-nowrap" title="The lead instructor for this class">Lead</Label>
                 </div>
 
                 <Button

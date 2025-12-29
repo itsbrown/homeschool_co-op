@@ -1304,6 +1304,53 @@ async function runMigrations() {
     `);
     console.log('✅ Migration completed: credit_usage_logs table created');
     
+    // Migrate legacy instructor data to educator_class_assignments
+    // This is a safe migration - copies data without deleting original
+    console.log('Running migration: Migrating legacy instructors to educator_class_assignments...');
+    await db.execute(sql`
+      DO $$
+      DECLARE
+        migrated_count INTEGER := 0;
+        class_record RECORD;
+      BEGIN
+        -- Loop through all classes with an instructor_id that don't already have a primary assignment
+        FOR class_record IN 
+          SELECT c.id as class_id, c.instructor_id, c.school_id
+          FROM classes c
+          WHERE c.instructor_id IS NOT NULL
+            AND c.school_id IS NOT NULL
+            AND NOT EXISTS (
+              SELECT 1 FROM educator_class_assignments eca 
+              WHERE eca.class_id = c.id 
+                AND eca.educator_id = c.instructor_id 
+                AND eca.is_primary = true
+            )
+            AND EXISTS (
+              SELECT 1 FROM users u WHERE u.id = c.instructor_id
+            )
+        LOOP
+          -- Insert as primary educator assignment
+          INSERT INTO educator_class_assignments (
+            educator_id, class_id, school_id, is_primary, can_start_session, created_at, updated_at
+          ) VALUES (
+            class_record.instructor_id,
+            class_record.class_id,
+            class_record.school_id,
+            true,
+            true,
+            NOW(),
+            NOW()
+          )
+          ON CONFLICT DO NOTHING;
+          
+          migrated_count := migrated_count + 1;
+        END LOOP;
+        
+        RAISE NOTICE 'Migrated % instructors to educator_class_assignments', migrated_count;
+      END $$;
+    `);
+    console.log('✅ Migration completed: legacy instructors migrated to educator_class_assignments');
+    
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     

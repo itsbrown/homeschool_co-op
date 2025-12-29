@@ -40,7 +40,7 @@ const classFormSchema = z.object({
   })).min(1, "At least one time option is required"),
   capacity: z.coerce.number().int().min(1, "Capacity must be at least 1"),
   locationId: z.coerce.number().int().min(1, "Location is required"),
-  instructorName: z.string().min(1, "Instructor name is required"),
+  instructorName: z.string().optional(), // Legacy field - educators now managed via ClassEducatorAssignments
   status: z.string().min(1, "Please select a status"),
   isAdminOnly: z.boolean().default(false),
 });
@@ -693,59 +693,7 @@ export default function SchoolClassCreationPage() {
                   />
                 </div>
 
-                <FormField
-                  control={form.control}
-                  name="instructorName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Instructor</FormLabel>
-                      <div className="flex gap-2">
-                        <Select 
-                          value={field.value || ""} 
-                          onValueChange={field.onChange}
-                          disabled={staffLoading}
-                        >
-                          <FormControl>
-                            <SelectTrigger className="flex-1">
-                              <SelectValue placeholder={staffLoading ? "Loading staff..." : "Select an instructor"} />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="no-instructor">No Instructor Assigned</SelectItem>
-                            {staffMembers.map((staff: any, index: number) => {
-                              const staffName = staff.name || `${staff.firstName} ${staff.lastName}`;
-                              return (
-                                <SelectItem 
-                                  key={`staff-${staff.id}`} 
-                                  value={staffName}
-                                >
-                                  {staffName}
-                                </SelectItem>
-                              );
-                            })}
-                          </SelectContent>
-                        </Select>
-                        {field.value && field.value !== "no-instructor" && (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="icon"
-                            onClick={() => field.onChange("no-instructor")}
-                            title="Clear instructor assignment"
-                          >
-                            ×
-                          </Button>
-                        )}
-                      </div>
-                      <FormDescription>
-                        Choose from available staff members or leave unassigned
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {/* Assigned Educators Section */}
+                {/* Assigned Educators Section - Primary educator is the main instructor */}
                 <ClassEducatorAssignments
                   classId={classId}
                   isEditMode={isEditMode}
