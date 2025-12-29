@@ -10,7 +10,9 @@ import {
   XCircle,
   Timer,
   TrendingUp,
-  ArrowLeft
+  ArrowLeft,
+  BookOpen,
+  UserCheck
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -47,9 +49,20 @@ interface HoursSummary {
   totalScheduledHours: number;
   totalActualMinutes: number;
   totalActualHours: number;
+  expectedScheduledMinutes: number;
+  expectedScheduledHours: number;
   completedSessions: number;
   cancelledSessions: number;
   totalSessions: number;
+}
+
+interface AssignedClass {
+  classId: number;
+  className: string;
+  isPrimary: boolean;
+  days: string[];
+  scheduledMinutes: number;
+  scheduledHours: number;
 }
 
 interface MyHoursData {
@@ -57,6 +70,7 @@ interface MyHoursData {
   endDate: string;
   summary: HoursSummary;
   sessionsByDate: DailySession[];
+  assignedClasses: AssignedClass[];
 }
 
 function formatDateLocal(date: Date): string {
@@ -148,13 +162,18 @@ function MyHoursContent() {
     totalScheduledHours: 0,
     totalActualMinutes: 0,
     totalActualHours: 0,
+    expectedScheduledMinutes: 0,
+    expectedScheduledHours: 0,
     completedSessions: 0,
     cancelledSessions: 0,
     totalSessions: 0
   };
 
-  const completionRate = summary.totalScheduledMinutes > 0 
-    ? Math.round((summary.totalActualMinutes / summary.totalScheduledMinutes) * 100)
+  const assignedClasses = hoursData?.assignedClasses || [];
+
+  // Completion rate: actual hours worked vs expected hours from class assignments
+  const completionRate = summary.expectedScheduledMinutes > 0 
+    ? Math.round((summary.totalActualMinutes / summary.expectedScheduledMinutes) * 100)
     : 0;
 
   return (
@@ -205,13 +224,13 @@ function MyHoursContent() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Scheduled Hours</CardTitle>
+            <CardTitle className="text-sm font-medium">Expected Hours</CardTitle>
             <Timer className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{summary.totalScheduledHours}h</div>
+            <div className="text-2xl font-bold">{summary.expectedScheduledHours}h</div>
             <p className="text-xs text-muted-foreground">
-              {formatMinutes(summary.totalScheduledMinutes)}
+              From {assignedClasses.length} assigned class{assignedClasses.length !== 1 ? 'es' : ''}
             </p>
           </CardContent>
         </Card>
@@ -255,6 +274,58 @@ function MyHoursContent() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Assigned Classes Section */}
+      {assignedClasses.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <BookOpen className="h-5 w-5" />
+              Assigned Classes
+            </CardTitle>
+            <CardDescription>
+              Your scheduled teaching hours for this week based on class assignments
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {assignedClasses.map((cls) => (
+                <div 
+                  key={cls.classId}
+                  className="flex items-center justify-between p-3 rounded-lg border bg-muted/30"
+                  data-testid={`assigned-class-${cls.classId}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+                      <BookOpen className="h-4 w-4 text-primary" />
+                    </div>
+                    <div>
+                      <div className="font-medium text-sm flex items-center gap-2">
+                        {cls.className}
+                        {cls.isPrimary && (
+                          <Badge variant="default" className="bg-green-600 text-xs">
+                            <UserCheck className="h-3 w-3 mr-1" />
+                            Primary
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {cls.days.join(', ')}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="font-bold text-primary">{cls.scheduledHours}h</div>
+                    <p className="text-xs text-muted-foreground">
+                      {formatMinutes(cls.scheduledMinutes)}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>

@@ -20,6 +20,7 @@ import { TimePicker } from "@/components/ui/time-picker";
 import { Loader2 } from "lucide-react";
 import { ClassVariants } from "@/components/admin/ClassVariants";
 import { ClassInclusionsManager } from "@/components/admin/ClassInclusionsManager";
+import { ClassEducatorAssignments } from "@/components/admin/ClassEducatorAssignments";
 
 // Form schema for class creation
 const classFormSchema = z.object({
@@ -730,6 +731,14 @@ export default function SchoolClassCreationPage() {
                       <FormMessage />
                     </FormItem>
                   )}
+                />
+
+                {/* Assigned Educators Section */}
+                <ClassEducatorAssignments
+                  classId={classId}
+                  isEditMode={isEditMode}
+                  staffMembers={staffMembers}
+                  staffLoading={staffLoading}
                 />
 
                 {/* Class Inclusions Section */}

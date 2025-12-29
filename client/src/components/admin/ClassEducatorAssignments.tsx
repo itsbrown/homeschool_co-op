@@ -1,0 +1,278 @@
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { useToast } from "@/hooks/use-toast";
+import { Users, Plus, X, GraduationCap, UserCheck, Loader2 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+
+interface EducatorAssignment {
+  id: number;
+  educatorId: number;
+  classId: number;
+  schoolId: number;
+  isPrimary: boolean;
+  canStartSession: boolean;
+  validFrom: string | null;
+  validTo: string | null;
+  educatorName: string;
+  educatorEmail: string;
+  role: string;
+}
+
+interface StaffMember {
+  id: number;
+  name?: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  role?: string;
+}
+
+interface ClassEducatorAssignmentsProps {
+  classId: number | undefined;
+  isEditMode: boolean;
+  staffMembers: StaffMember[];
+  staffLoading: boolean;
+}
+
+export function ClassEducatorAssignments({ 
+  classId, 
+  isEditMode, 
+  staffMembers = [],
+  staffLoading 
+}: ClassEducatorAssignmentsProps) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [selectedStaffId, setSelectedStaffId] = useState<string>("");
+  const [isPrimary, setIsPrimary] = useState(false);
+
+  const { data: assignments = [], isLoading: assignmentsLoading } = useQuery<EducatorAssignment[]>({
+    queryKey: ["/api/admin/educators/class-assignments", classId],
+    enabled: !!classId && isEditMode,
+  });
+
+  const addAssignmentMutation = useMutation({
+    mutationFn: async (data: { educatorId: number; classId: number; isPrimary: boolean }) => {
+      return apiRequest('POST', '/api/admin/educators/class-assignments', data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/educators/class-assignments", classId] });
+      setSelectedStaffId("");
+      setIsPrimary(false);
+      toast({
+        title: "Educator assigned",
+        description: "The educator has been assigned to this class.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to assign educator",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const removeAssignmentMutation = useMutation({
+    mutationFn: async (assignmentId: number) => {
+      return apiRequest('DELETE', `/api/admin/educators/class-assignments/${assignmentId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/educators/class-assignments", classId] });
+      toast({
+        title: "Educator removed",
+        description: "The educator has been removed from this class.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to remove educator",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleAddEducator = () => {
+    if (!selectedStaffId || !classId) return;
+    
+    addAssignmentMutation.mutate({
+      educatorId: parseInt(selectedStaffId),
+      classId: classId,
+      isPrimary: isPrimary
+    });
+  };
+
+  const handleRemoveEducator = (assignmentId: number) => {
+    removeAssignmentMutation.mutate(assignmentId);
+  };
+
+  const assignedEducatorIds = assignments.map(a => a.educatorId);
+  const availableStaff = staffMembers.filter(s => !assignedEducatorIds.includes(s.id));
+
+  const getStaffDisplayName = (staff: StaffMember) => {
+    return staff.name || `${staff.firstName || ''} ${staff.lastName || ''}`.trim() || 'Unknown';
+  };
+
+  const getRoleBadgeVariant = (role: string) => {
+    switch (role?.toLowerCase()) {
+      case 'educator':
+      case 'mentor':
+        return 'default';
+      case 'aide':
+      case 'assistant':
+        return 'secondary';
+      default:
+        return 'outline';
+    }
+  };
+
+  if (!isEditMode) {
+    return (
+      <Card className="border-dashed">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Users className="h-5 w-5" />
+            Assigned Educators
+          </CardTitle>
+          <CardDescription>
+            Save the class first to assign educators
+          </CardDescription>
+        </CardHeader>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-lg flex items-center gap-2">
+          <Users className="h-5 w-5" />
+          Assigned Educators
+        </CardTitle>
+        <CardDescription>
+          Manage educators, mentors, and aides assigned to this class
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {assignmentsLoading ? (
+          <div className="space-y-2">
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+          </div>
+        ) : (
+          <>
+            {assignments.length > 0 && (
+              <div className="space-y-2">
+                {assignments.map((assignment) => (
+                  <div 
+                    key={assignment.id}
+                    className="flex items-center justify-between p-3 rounded-lg border bg-muted/30"
+                    data-testid={`assignment-item-${assignment.id}`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+                        <GraduationCap className="h-4 w-4 text-primary" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-sm">{assignment.educatorName}</p>
+                        <p className="text-xs text-muted-foreground">{assignment.educatorEmail}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge variant={getRoleBadgeVariant(assignment.role)}>
+                        {assignment.role || 'Staff'}
+                      </Badge>
+                      {assignment.isPrimary && (
+                        <Badge variant="default" className="bg-green-600">
+                          <UserCheck className="h-3 w-3 mr-1" />
+                          Primary
+                        </Badge>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleRemoveEducator(assignment.id)}
+                        disabled={removeAssignmentMutation.isPending}
+                        data-testid={`remove-assignment-${assignment.id}`}
+                      >
+                        {removeAssignmentMutation.isPending ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <X className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {assignments.length === 0 && (
+              <div className="text-center py-4 text-muted-foreground text-sm">
+                No educators assigned yet
+              </div>
+            )}
+
+            <div className="border-t pt-4">
+              <Label className="text-sm font-medium mb-2 block">Add Educator</Label>
+              <div className="flex gap-2 flex-wrap">
+                <Select 
+                  value={selectedStaffId} 
+                  onValueChange={setSelectedStaffId}
+                  disabled={staffLoading || availableStaff.length === 0}
+                >
+                  <SelectTrigger className="flex-1 min-w-[200px]" data-testid="select-educator">
+                    <SelectValue placeholder={
+                      staffLoading ? "Loading staff..." : 
+                      availableStaff.length === 0 ? "No available staff" :
+                      "Select staff member"
+                    } />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableStaff.map((staff) => (
+                      <SelectItem key={staff.id} value={String(staff.id)}>
+                        {getStaffDisplayName(staff)}
+                        {staff.role && ` (${staff.role})`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                
+                <div className="flex items-center gap-2">
+                  <Switch 
+                    id="is-primary" 
+                    checked={isPrimary}
+                    onCheckedChange={setIsPrimary}
+                    data-testid="switch-is-primary"
+                  />
+                  <Label htmlFor="is-primary" className="text-sm whitespace-nowrap">Primary</Label>
+                </div>
+
+                <Button
+                  type="button"
+                  onClick={handleAddEducator}
+                  disabled={!selectedStaffId || addAssignmentMutation.isPending}
+                  data-testid="button-add-educator"
+                >
+                  {addAssignmentMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  ) : (
+                    <Plus className="h-4 w-4 mr-2" />
+                  )}
+                  Add
+                </Button>
+              </div>
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}

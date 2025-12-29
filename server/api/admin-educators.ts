@@ -370,6 +370,183 @@ router.get('/schedules', async (req: any, res) => {
 });
 
 // ============================================
+// Class Assignment Management
+// ============================================
+
+// GET /api/admin/educators/class-assignments/:classId - Get all educator assignments for a class
+router.get('/class-assignments/:classId', async (req: any, res) => {
+  try {
+    const schoolId = req.schoolId;
+    const classId = parseInt(req.params.classId);
+    
+    if (!schoolId) {
+      return res.status(400).json({ error: 'School context required' });
+    }
+
+    console.log('[AdminEducators] Fetching assignments for class:', classId);
+
+    // Get assignments for this class
+    const assignments = await storage.getEducatorClassAssignmentsByClassId(classId);
+    
+    // Filter to only this school's assignments
+    const schoolAssignments = assignments.filter(a => a.schoolId === parseInt(schoolId));
+
+    // Enrich with educator details
+    const assignmentsWithDetails = await Promise.all(
+      schoolAssignments.map(async (assignment) => {
+        const educator = await storage.getUser(assignment.educatorId);
+        // Get user roles to identify position (educator, mentor, aide)
+        const roles = await storage.getUserRolesByUserId(assignment.educatorId);
+        const schoolRole = roles.find((r: any) => r.schoolId === parseInt(schoolId));
+        
+        return {
+          ...assignment,
+          educatorName: educator?.name || 'Unknown',
+          educatorEmail: educator?.email || '',
+          role: schoolRole?.role || 'educator'
+        };
+      })
+    );
+
+    res.json(assignmentsWithDetails);
+  } catch (error) {
+    console.error('[AdminEducators] Error fetching class assignments:', error);
+    res.status(500).json({ error: 'Failed to fetch class assignments' });
+  }
+});
+
+// POST /api/admin/educators/class-assignments - Add educator to class
+router.post('/class-assignments', async (req: any, res) => {
+  try {
+    const schoolId = req.schoolId;
+    const actorId = req.user?.id;
+    
+    if (!schoolId) {
+      return res.status(400).json({ error: 'School context required' });
+    }
+
+    const assignmentSchema = z.object({
+      educatorId: z.number(),
+      classId: z.number(),
+      isPrimary: z.boolean().optional().default(false),
+      canStartSession: z.boolean().optional().default(true),
+      validFrom: z.string().nullable().optional(),
+      validTo: z.string().nullable().optional()
+    });
+
+    const validatedData = assignmentSchema.parse(req.body);
+    
+    console.log('[AdminEducators] Creating class assignment:', validatedData);
+
+    // Check if assignment already exists
+    const existingAssignments = await storage.getEducatorClassAssignmentsByClassId(validatedData.classId);
+    const alreadyAssigned = existingAssignments.some(a => 
+      a.educatorId === validatedData.educatorId && 
+      a.schoolId === parseInt(schoolId)
+    );
+
+    if (alreadyAssigned) {
+      return res.status(400).json({ error: 'Educator is already assigned to this class' });
+    }
+
+    // Create the assignment
+    const assignment = await storage.createEducatorClassAssignment({
+      educatorId: validatedData.educatorId,
+      classId: validatedData.classId,
+      schoolId: parseInt(schoolId),
+      isPrimary: validatedData.isPrimary,
+      canStartSession: validatedData.canStartSession,
+      validFrom: validatedData.validFrom || null,
+      validTo: validatedData.validTo || null
+    });
+
+    // Create audit log
+    const classInfo = await storage.getClassById(validatedData.classId);
+    const educator = await storage.getUser(validatedData.educatorId);
+    
+    const auditLog: InsertAuditLog = {
+      actionType: 'educator_class_assignment_created',
+      severity: 'info',
+      actorId: actorId,
+      actorRole: 'admin',
+      actorEmail: req.user?.email,
+      targetType: 'educator_class_assignment',
+      targetId: String(assignment.id),
+      schoolId: parseInt(schoolId),
+      metadata: {
+        context: `Admin assigned ${educator?.name} to ${classInfo?.title}`,
+        educatorId: validatedData.educatorId,
+        classId: validatedData.classId,
+        isPrimary: validatedData.isPrimary
+      }
+    };
+    await storage.createAuditLog(auditLog);
+
+    console.log('[AdminEducators] Assignment created:', assignment.id);
+    res.status(201).json(assignment);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ 
+        error: 'Invalid assignment data',
+        details: error.errors
+      });
+    }
+    console.error('[AdminEducators] Error creating class assignment:', error);
+    res.status(500).json({ error: 'Failed to create class assignment' });
+  }
+});
+
+// DELETE /api/admin/educators/class-assignments/:id - Remove educator from class
+router.delete('/class-assignments/:id', async (req: any, res) => {
+  try {
+    const schoolId = req.schoolId;
+    const actorId = req.user?.id;
+    const assignmentId = parseInt(req.params.id);
+    
+    if (!schoolId) {
+      return res.status(400).json({ error: 'School context required' });
+    }
+
+    console.log('[AdminEducators] Deleting class assignment:', assignmentId);
+
+    // Get existing assignment to verify school ownership
+    const existingAssignment = await storage.getEducatorClassAssignmentById(assignmentId);
+    if (!existingAssignment || existingAssignment.schoolId !== parseInt(schoolId)) {
+      return res.status(404).json({ error: 'Assignment not found in this school' });
+    }
+
+    // Get details for audit log before deletion
+    const classInfo = await storage.getClassById(existingAssignment.classId);
+    const educator = await storage.getUser(existingAssignment.educatorId);
+
+    await storage.deleteEducatorClassAssignment(assignmentId);
+
+    // Create audit log
+    const auditLog: InsertAuditLog = {
+      actionType: 'educator_class_assignment_deleted',
+      severity: 'warn',
+      actorId: actorId,
+      actorRole: 'admin',
+      actorEmail: req.user?.email,
+      targetType: 'educator_class_assignment',
+      targetId: String(assignmentId),
+      schoolId: parseInt(schoolId),
+      metadata: {
+        context: `Admin removed ${educator?.name} from ${classInfo?.title}`,
+        before: existingAssignment
+      }
+    };
+    await storage.createAuditLog(auditLog);
+
+    console.log('[AdminEducators] Assignment deleted:', assignmentId);
+    res.json({ message: 'Assignment deleted successfully' });
+  } catch (error) {
+    console.error('[AdminEducators] Error deleting class assignment:', error);
+    res.status(500).json({ error: 'Failed to delete class assignment' });
+  }
+});
+
+// ============================================
 // Audit Log Viewing (Phase 1b)
 // ============================================
 

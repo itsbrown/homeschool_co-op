@@ -1568,8 +1568,8 @@ router.get('/my-hours', async (req, res) => {
       return session.scheduledDate >= start && session.scheduledDate <= end;
     });
 
-    // Calculate hours
-    let totalScheduledMinutes = 0;
+    // Calculate hours from actual sessions
+    let totalSessionScheduledMinutes = 0;
     let totalActualMinutes = 0;
     const sessionsByDate: Record<string, any[]> = {};
 
@@ -1581,7 +1581,7 @@ router.get('/my-hours', async (req, res) => {
       const scheduledStart = parseTimeToMinutes(session.scheduledStartTime);
       const scheduledEnd = parseTimeToMinutes(session.scheduledEndTime);
       const scheduledDuration = scheduledEnd - scheduledStart;
-      totalScheduledMinutes += scheduledDuration;
+      totalSessionScheduledMinutes += scheduledDuration;
 
       // Calculate actual duration if completed
       let actualDuration = 0;
@@ -1612,6 +1612,100 @@ router.get('/my-hours', async (req, res) => {
       sessionsByDate[session.scheduledDate].push(sessionData);
     }
 
+    // Calculate expected scheduled hours from class assignments
+    let expectedScheduledMinutes = 0;
+    const assignedClasses: any[] = [];
+    
+    // Get educator's class assignments
+    const assignments = await storage.getEducatorClassAssignmentsByEducatorId(userId);
+    
+    // Day name to number mapping (Sunday = 0)
+    const dayNameToNumber: Record<string, number> = {
+      'sunday': 0, 'monday': 1, 'tuesday': 2, 'wednesday': 3,
+      'thursday': 4, 'friday': 5, 'saturday': 6
+    };
+
+    for (const assignment of assignments) {
+      // Check if assignment is valid for the date range
+      if (assignment.validFrom && assignment.validFrom > end) continue;
+      if (assignment.validTo && assignment.validTo < start) continue;
+
+      const classInfo = await storage.getClassById(assignment.classId);
+      if (!classInfo) continue;
+
+      // Check if class dates overlap with the date range
+      const classStart = classInfo.startDate;
+      const classEnd = classInfo.endDate;
+      if (classStart && classStart > end) continue;
+      if (classEnd && classEnd < start) continue;
+
+      // Parse variants to get schedule and calculate hours
+      // Variants are stored in the schedule JSON column
+      const schedule = classInfo.schedule as any;
+      const variants = schedule?.variants as any[];
+      if (!variants || !Array.isArray(variants)) continue;
+
+      let classMinutes = 0;
+      const classDays: string[] = [];
+
+      for (const variant of variants) {
+        const days = variant.days || [];
+        const startTime = variant.startTime;
+        const endTime = variant.endTime;
+
+        if (!startTime || !endTime) continue;
+
+        // Calculate duration for this variant
+        const variantStart = parseTimeToMinutes(startTime);
+        const variantEnd = parseTimeToMinutes(endTime);
+        const duration = variantEnd - variantStart;
+        
+        // Skip invalid/zero durations
+        if (duration <= 0) continue;
+
+        // Count how many times each day appears in the date range
+        const rangeStart = new Date(start + 'T12:00:00');
+        const rangeEnd = new Date(end + 'T12:00:00');
+
+        for (const dayName of days) {
+          const dayNum = dayNameToNumber[dayName.toLowerCase()];
+          if (dayNum === undefined) continue;
+
+          classDays.push(dayName);
+
+          // Count occurrences of this day in the range
+          let current = new Date(rangeStart);
+          while (current <= rangeEnd) {
+            if (current.getDay() === dayNum) {
+              // Check if this date is within class start/end dates
+              const currentStr = current.toISOString().split('T')[0];
+              const inClassRange = (!classStart || currentStr >= classStart) && 
+                                   (!classEnd || currentStr <= classEnd);
+              const inAssignmentRange = (!assignment.validFrom || currentStr >= assignment.validFrom) &&
+                                        (!assignment.validTo || currentStr <= assignment.validTo);
+              
+              if (inClassRange && inAssignmentRange) {
+                classMinutes += duration;
+                expectedScheduledMinutes += duration;
+              }
+            }
+            current.setDate(current.getDate() + 1);
+          }
+        }
+      }
+
+      if (classMinutes > 0) {
+        assignedClasses.push({
+          classId: classInfo.id,
+          className: classInfo.title,
+          isPrimary: assignment.isPrimary,
+          days: [...new Set(classDays)],
+          scheduledMinutes: classMinutes,
+          scheduledHours: Math.round(classMinutes / 60 * 10) / 10
+        });
+      }
+    }
+
     // Sort sessions by date
     const sortedDates = Object.keys(sessionsByDate).sort();
     const sessionsList = sortedDates.map(date => ({
@@ -1623,15 +1717,18 @@ router.get('/my-hours', async (req, res) => {
       startDate: start,
       endDate: end,
       summary: {
-        totalScheduledMinutes,
-        totalScheduledHours: Math.round(totalScheduledMinutes / 60 * 10) / 10,
+        totalScheduledMinutes: totalSessionScheduledMinutes,
+        totalScheduledHours: Math.round(totalSessionScheduledMinutes / 60 * 10) / 10,
         totalActualMinutes,
         totalActualHours: Math.round(totalActualMinutes / 60 * 10) / 10,
+        expectedScheduledMinutes,
+        expectedScheduledHours: Math.round(expectedScheduledMinutes / 60 * 10) / 10,
         completedSessions: sessionsInRange.filter((s: ClassSession) => s.status === 'completed').length,
         cancelledSessions: sessionsInRange.filter((s: ClassSession) => s.status === 'cancelled').length,
         totalSessions: sessionsInRange.length
       },
-      sessionsByDate: sessionsList
+      sessionsByDate: sessionsList,
+      assignedClasses
     });
   } catch (error) {
     console.error('[EducatorDashboard] Error fetching hours:', error);
