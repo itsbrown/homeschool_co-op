@@ -29,7 +29,8 @@ import {
   ClipboardList,
   Tag,
   FileText,
-  Megaphone
+  Megaphone,
+  Clock
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -66,6 +67,11 @@ const adminNavItems: NavItem[] = [
     title: 'Staff',
     href: '/schools/staff',
     icon: Users,
+  },
+  {
+    title: 'Staff Hours',
+    href: '/schools/staff/hours',
+    icon: Clock,
   },
   {
     title: 'Students',

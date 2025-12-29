@@ -5390,4 +5390,136 @@ router.post("/resend-welcome-email", supabaseAuth, async (req: any, res) => {
   }
 });
 
+// GET /api/school-admin/staff-hours - Get educator/mentor hours for the school
+router.get('/staff-hours', supabaseAuth, requireSchoolContext, async (req: any, res) => {
+  try {
+    const schoolId = req.schoolId;
+    const { startDate, endDate } = req.query;
+    
+    if (!startDate || !endDate) {
+      return res.status(400).json({ error: 'startDate and endDate are required' });
+    }
+
+    console.log('[StaffHours] Fetching hours for school:', schoolId, 'from', startDate, 'to', endDate);
+
+    // Get all sessions for the school in the date range
+    const sessions = await storage.getClassSessionsByDateRange(schoolId, startDate as string, endDate as string);
+    
+    // Get all educator assignments for the school
+    const assignments = await storage.getEducatorClassAssignmentsBySchoolId(schoolId);
+    
+    // Get unique educator IDs from assignments
+    const educatorIds = [...new Set(assignments.map(a => a.educatorId))];
+    
+    // Fetch educator details
+    const educators: any[] = [];
+    for (const educatorId of educatorIds) {
+      const user = await storage.getUser(educatorId);
+      if (user) {
+        educators.push({
+          id: user.id,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          email: user.email,
+          role: user.role
+        });
+      }
+    }
+
+    // Group sessions by educator and calculate hours
+    const educatorHours: Record<number, {
+      educator: typeof educators[0];
+      sessions: any[];
+      totalScheduledMinutes: number;
+      totalActualMinutes: number;
+      completedSessions: number;
+      pendingSessions: number;
+    }> = {};
+
+    for (const educator of educators) {
+      educatorHours[educator.id] = {
+        educator,
+        sessions: [],
+        totalScheduledMinutes: 0,
+        totalActualMinutes: 0,
+        completedSessions: 0,
+        pendingSessions: 0
+      };
+    }
+
+    for (const session of sessions) {
+      const educatorId = session.educatorId;
+      if (!educatorHours[educatorId]) continue;
+
+      // Calculate scheduled minutes
+      if (session.scheduledStartTime && session.scheduledEndTime) {
+        const [startH, startM] = session.scheduledStartTime.split(':').map(Number);
+        const [endH, endM] = session.scheduledEndTime.split(':').map(Number);
+        const scheduledMins = (endH * 60 + endM) - (startH * 60 + startM);
+        if (scheduledMins > 0) {
+          educatorHours[educatorId].totalScheduledMinutes += scheduledMins;
+        }
+      }
+
+      // Calculate actual minutes
+      if (session.actualStartTime && session.actualEndTime) {
+        const start = new Date(session.actualStartTime);
+        const end = new Date(session.actualEndTime);
+        const actualMins = Math.floor((end.getTime() - start.getTime()) / (1000 * 60));
+        if (actualMins > 0) {
+          educatorHours[educatorId].totalActualMinutes += actualMins;
+        }
+        educatorHours[educatorId].completedSessions++;
+      } else if (session.status === 'scheduled') {
+        educatorHours[educatorId].pendingSessions++;
+      }
+
+      // Get class info for session
+      const classInfo = await storage.getClassById(session.classId);
+      educatorHours[educatorId].sessions.push({
+        ...session,
+        className: classInfo?.title || 'Unknown Class'
+      });
+    }
+
+    // Convert to array and calculate hours
+    const staffHoursList = Object.values(educatorHours).map(entry => ({
+      educator: entry.educator,
+      totalScheduledHours: Math.round(entry.totalScheduledMinutes / 60 * 100) / 100,
+      totalActualHours: Math.round(entry.totalActualMinutes / 60 * 100) / 100,
+      completedSessions: entry.completedSessions,
+      pendingSessions: entry.pendingSessions,
+      sessions: entry.sessions.map(s => ({
+        id: s.id,
+        classId: s.classId,
+        className: s.className,
+        scheduledDate: s.scheduledDate,
+        scheduledStartTime: s.scheduledStartTime,
+        scheduledEndTime: s.scheduledEndTime,
+        actualStartTime: s.actualStartTime,
+        actualEndTime: s.actualEndTime,
+        status: s.status
+      }))
+    })).filter(e => e.sessions.length > 0 || e.totalActualHours > 0);
+
+    // Calculate totals
+    const summary = {
+      totalEducators: staffHoursList.length,
+      totalScheduledHours: staffHoursList.reduce((sum, e) => sum + e.totalScheduledHours, 0),
+      totalActualHours: staffHoursList.reduce((sum, e) => sum + e.totalActualHours, 0),
+      totalCompletedSessions: staffHoursList.reduce((sum, e) => sum + e.completedSessions, 0),
+      totalPendingSessions: staffHoursList.reduce((sum, e) => sum + e.pendingSessions, 0)
+    };
+
+    res.json({
+      summary,
+      staffHours: staffHoursList,
+      dateRange: { startDate, endDate }
+    });
+  } catch (error) {
+    console.error('[StaffHours] Error:', error);
+    res.status(500).json({ error: 'Failed to fetch staff hours' });
+  }
+});
+
 export default router;

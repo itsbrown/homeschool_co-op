@@ -113,6 +113,7 @@ import MyClassesPage from './pages/educator/MyClasses';
 import WeeklyCalendarPage from './pages/educator/WeeklyCalendar';
 import MyHoursPage from './pages/educator/MyHours';
 import ActiveSessionPage from './pages/educator/ActiveSession';
+import StartSessionPage from './pages/educator/StartSession';
 
 // Eagerly imported to avoid suspension errors with wouter's synchronous navigation
 import SchoolClassEnrollmentsPage from './pages/schools/ClassEnrollmentsPage';
@@ -163,6 +164,7 @@ import SchoolClassDetailsPage from "./pages/schools/SchoolClassDetailsPage";
 import ClassRosterPage from "./pages/schools/ClassRosterPage";
 import StaffPage from "./pages/schools/StaffPage";
 import EducatorManagementPage from "./pages/schools/EducatorManagementPage";
+import StaffHoursPage from "./pages/schools/StaffHoursPage";
 import StaffEditPage from "./pages/schools/StaffEditPage";
 import StudentsPage from "./pages/schools/StudentsPage";
 import StudentDetailPage from "./pages/schools/StudentDetailPage";
@@ -572,6 +574,7 @@ function Router() {
       <Route path="/educator/my-hours" component={() => <EducatorAppShell><MyHoursPage /></EducatorAppShell>} />
       <Route path="/educator/classes" component={() => <EducatorAppShell><EducatorClassesPage /></EducatorAppShell>} />
       <Route path="/educator/classes/:id" component={() => <EducatorAppShell><EducatorClassDetailsPage /></EducatorAppShell>} />
+      <Route path="/educator/classes/:id/start-session" component={() => <EducatorAppShell><StartSessionPage /></EducatorAppShell>} />
       <Route path="/educator/students" component={() => <EducatorAppShell><EducatorStudentsPage /></EducatorAppShell>} />
       <Route path="/educator/students/:id" component={() => <EducatorAppShell><EducatorStudentDetailPage /></EducatorAppShell>} />
       <Route path="/educator/schedule" component={() => <EducatorAppShell><EducatorSchedulePage /></EducatorAppShell>} />
@@ -636,6 +639,7 @@ function Router() {
       <Route path="/schools/classes/:id/enrollments" component={SchoolClassEnrollmentsPage} />
       <Route path="/schools/staff" component={StaffPage} />
       <Route path="/schools/staff/invite" component={StaffInvitePage} />
+      <Route path="/schools/staff/hours" component={() => <AppShell><StaffHoursPage /></AppShell>} />
       <Route path="/schools/educators" component={EducatorManagementPage} />
       <Route path="/schools/educators/:educatorId" component={EducatorManagementPage} />
       <Route path="/schools/staff/positions" component={StaffPositionsPage} />
