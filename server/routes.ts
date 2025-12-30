@@ -2120,8 +2120,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Also mount at /api/parent/enrollments for frontend compatibility
   app.use("/api/parent/enrollments", supabaseAuth, enrollmentsRouter.default);
 
-  // Add children enrollments endpoint
-  app.get("/api/children/:id/enrollments", async (req, res) => {
+  // Add children enrollments endpoint (protected - requires parent ownership)
+  app.get("/api/children/:id/enrollments", supabaseAuth, async (req: any, res) => {
     try {
       const childId = parseInt(req.params.id);
 
@@ -2129,14 +2129,71 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: 'Invalid child ID' });
       }
 
-      console.log(`📚 Fetching enrollments for child ID: ${childId}`);
+      // Verify the requesting user owns this child
+      const userEmail = req.user?.email;
+      if (!userEmail) {
+        return res.status(401).json({ message: 'Authentication required' });
+      }
+
+      // Get the child and verify ownership
+      const child = await storage.getChildById(childId);
+      if (!child) {
+        return res.status(404).json({ message: 'Child not found' });
+      }
+
+      // Check if the parent's email matches the child's parent
+      const parentChildren = await storage.getChildrenByParentEmail(userEmail);
+      const ownsChild = parentChildren.some(c => c.id === childId);
+      
+      if (!ownsChild) {
+        console.log(`❌ User ${userEmail} attempted to access child ${childId} enrollments without ownership`);
+        return res.status(403).json({ message: 'Access denied - you can only view your own children\'s enrollments' });
+      }
+
+      console.log(`📚 Fetching enrollments for child ID: ${childId} (verified parent: ${userEmail})`);
 
       // Get enrollments for this child
       const enrollments = await storage.getEnrollmentsByChildId(childId);
 
       console.log(`📚 Found ${enrollments.length} enrollments for child ${childId}:`, enrollments);
 
-      res.json(enrollments);
+      // Enrich enrollments with instructor contact info
+      const enrichedEnrollments = await Promise.all(
+        enrollments.map(async (enrollment: any) => {
+          try {
+            const classId = enrollment.classId || enrollment.programId;
+            if (!classId) return enrollment;
+
+            // Get educators assigned to this class
+            const assignments = await storage.getEducatorClassAssignmentsByClassId(classId);
+            
+            // Get user info for each educator
+            const instructors = await Promise.all(
+              assignments.map(async (assignment: any) => {
+                const user = await storage.getUser(assignment.educatorId);
+                if (!user) return null;
+                return {
+                  id: user.id,
+                  name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.name || 'Instructor',
+                  email: user.email,
+                  phone: user.phone || null,
+                  isPrimary: assignment.isPrimary
+                };
+              })
+            );
+
+            return {
+              ...enrollment,
+              instructors: instructors.filter(Boolean)
+            };
+          } catch (err) {
+            console.error(`Error fetching instructors for enrollment ${enrollment.id}:`, err);
+            return { ...enrollment, instructors: [] };
+          }
+        })
+      );
+
+      res.json(enrichedEnrollments);
     } catch (error) {
       console.error('Error fetching child enrollments:', error);
       res.status(500).json({ message: 'Failed to fetch enrollments' });

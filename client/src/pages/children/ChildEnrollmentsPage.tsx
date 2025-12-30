@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Plus, Calendar, Clock, MapPin, Trash2, CreditCard } from "lucide-react";
+import { ArrowLeft, Plus, Calendar, Clock, MapPin, Trash2, CreditCard, User, Mail, Phone } from "lucide-react";
 import { Link } from "wouter";
 import ParentAppShell from "@/components/layout/ParentAppShell";
 import { useToast } from "@/hooks/use-toast";
@@ -23,6 +23,14 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
+interface Instructor {
+  id: number;
+  name: string;
+  email: string;
+  phone: string | null;
+  isPrimary: boolean;
+}
+
 interface Enrollment {
   id?: number;
   childId: number;
@@ -37,6 +45,7 @@ interface Enrollment {
   paymentIntentId?: string;
   childName?: string;
   depositRequired?: number;
+  instructors?: Instructor[];
 }
 
 interface Child {
@@ -337,6 +346,55 @@ export default function ChildEnrollmentsPage() {
                           </div>
                         </div>
                       </div>
+                      
+                      {/* Instructor Contact Info */}
+                      {enrollment.instructors && enrollment.instructors.length > 0 && (
+                        <div className="mt-4 pt-4 border-t">
+                          <div className="flex items-center gap-2 mb-3">
+                            <User className="h-4 w-4 text-muted-foreground" />
+                            <p className="font-medium text-sm">
+                              {enrollment.instructors.length === 1 ? 'Instructor' : 'Instructors'}
+                            </p>
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            {enrollment.instructors.map((instructor) => (
+                              <div 
+                                key={instructor.id} 
+                                className="p-3 bg-muted/50 rounded-lg"
+                                data-testid={`instructor-card-${instructor.id}`}
+                              >
+                                <p className="font-medium text-sm flex items-center gap-1">
+                                  {instructor.name}
+                                  {instructor.isPrimary && (
+                                    <Badge variant="secondary" className="text-xs ml-1">Primary</Badge>
+                                  )}
+                                </p>
+                                <div className="mt-2 space-y-1">
+                                  <a 
+                                    href={`mailto:${instructor.email}`}
+                                    className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors"
+                                    data-testid={`instructor-email-${instructor.id}`}
+                                  >
+                                    <Mail className="h-3 w-3" />
+                                    {instructor.email}
+                                  </a>
+                                  {instructor.phone && (
+                                    <a 
+                                      href={`tel:${instructor.phone}`}
+                                      className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors"
+                                      data-testid={`instructor-phone-${instructor.id}`}
+                                    >
+                                      <Phone className="h-3 w-3" />
+                                      {instructor.phone}
+                                    </a>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      
                     <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t">
                       <div className="flex flex-col gap-3">
                         <p className="text-xs sm:text-sm text-muted-foreground">
