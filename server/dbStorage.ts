@@ -177,29 +177,10 @@ export class DatabaseStorage implements IStorage {
 
   async getParentsBySchoolId(schoolId: number): Promise<User[]> {
     const db = await getDb();
-    // Join users with user_roles to find users who have 'parent' role
-    // Filter by users.schoolId since parent roles may not have schoolId set in user_roles
-    const result = await db
-      .select({
-        id: users.id,
-        email: users.email,
-        name: users.name,
-        firstName: users.firstName,
-        lastName: users.lastName,
-        phoneNumber: users.phoneNumber,
-        avatar: users.avatar,
-        role: users.role,
-        schoolId: users.schoolId,
-        username: users.username,
-        password: users.password,
-        subscription: users.subscription,
-        supabaseUserId: users.supabaseUserId,
-        activeRoleId: users.activeRoleId,
-        hasCompletedOnboarding: users.hasCompletedOnboarding,
-        memberId: users.memberId,
-        createdAt: users.createdAt,
-        updatedAt: users.updatedAt
-      })
+    // Get distinct user IDs that have parent role in this school
+    // Use two-step query to avoid Drizzle schema serialization issues with joins
+    const userIdRows = await db
+      .selectDistinct({ userId: users.id })
       .from(users)
       .innerJoin(userRoles, eq(users.id, userRoles.userId))
       .where(
@@ -211,7 +192,17 @@ export class DatabaseStorage implements IStorage {
           )
         )
       );
-    return result;
+    
+    if (userIdRows.length === 0) {
+      return [];
+    }
+    
+    // Fetch full user records for those IDs
+    const userIds = userIdRows.map(r => r.userId);
+    return await db
+      .select()
+      .from(users)
+      .where(inArray(users.id, userIds));
   }
 
   // School Student methods

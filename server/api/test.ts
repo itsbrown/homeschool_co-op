@@ -318,6 +318,42 @@ router.get('/diagnose-user/:email', async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/test/debug-parents/:schoolId
+ * Debug endpoint to check parent lookup for a school
+ */
+router.get('/debug-parents/:schoolId', async (req: Request, res: Response) => {
+  try {
+    const schoolId = parseInt(req.params.schoolId);
+    if (isNaN(schoolId)) {
+      return res.status(400).json({ error: 'Invalid schoolId' });
+    }
+    
+    console.log(`[DEBUG] Testing getParentsBySchoolId for school ${schoolId}`);
+    const parents = await storage.getParentsBySchoolId(schoolId);
+    
+    res.json({
+      success: true,
+      schoolId,
+      parentCount: parents.length,
+      parents: parents.map((p: any) => ({
+        id: p.id,
+        email: p.email,
+        name: p.name,
+        firstName: p.firstName,
+        lastName: p.lastName,
+        schoolId: p.schoolId
+      }))
+    });
+  } catch (error) {
+    console.error('[DEBUG] Error testing parents lookup:', error);
+    res.status(500).json({ 
+      error: 'Failed to test parents lookup',
+      details: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+/**
  * POST /api/test/cleanup
  * Clears all test data from storage
  */
