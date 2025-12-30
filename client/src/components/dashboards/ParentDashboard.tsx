@@ -528,7 +528,7 @@ export default function ParentDashboard() {
                 </Button>
 
                 <Button asChild variant="outline" className="w-full justify-start h-auto p-4" data-tour="enrollments-btn" data-tutorial="enrollments-link" data-testid="btn-enrollments">
-                  <Link href="/enrollments">
+                  <Link href="/parent/programs/enrollments">
                     <BookOpen className="mr-3 h-5 w-5" />
                     <div className="text-left">
                       <div className="font-medium">Enrollments</div>
