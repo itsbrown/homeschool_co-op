@@ -492,13 +492,38 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
     }
     
     // CASE 3: Server total is non-zero - check for underpayment
-    // Allow 0.5% tolerance for minor rounding differences in discount calculations
+    // Allow 5% tolerance for discount calculation differences between frontend/backend
+    // The server-calculated amount is ALWAYS used for the actual Stripe charge
     if (finalServerTotal > 0 && finalDiscrepancy < 0) {
       const underpaymentPercentage = Math.abs(finalDiscrepancy) / finalServerTotal * 100;
       
-      // Reject significant underpayment (> 0.5% after server-side discount calculation)
-      if (underpaymentPercentage > 0.5) {
-        console.error('🚨 PAYMENT VALIDATION FAILED: Client total less than server calculation', {
+      // Log details for debugging when there's any discrepancy
+      if (underpaymentPercentage > 0.1) {
+        console.warn('⚠️ PAYMENT DISCREPANCY DETECTED:', {
+          finalClientTotal,
+          finalServerTotal,
+          discrepancyCents: Math.abs(finalDiscrepancy),
+          discrepancyPercent: `${underpaymentPercentage.toFixed(2)}%`,
+          breakdown: {
+            clientItemTotal: total,
+            clientMembership: membership?.amount || 0,
+            serverItemTotal: authoritativeItemTotal,
+            serverMembership: authoritativeMembershipAmount
+          },
+          discountsApplied: cartPricingResult?.discounts?.appliedDiscounts?.map((d: any) => ({
+            name: d.name,
+            type: d.type,
+            amount: d.discountAmount
+          })) || [],
+          userEmail,
+          note: 'Server-calculated amount will be used for payment (authoritative)'
+        });
+      }
+      
+      // Only reject extreme underpayment (> 5%) which likely indicates a bug or stale data
+      // Moderate discrepancies (0.1-5%) are logged but allowed since server price is authoritative
+      if (underpaymentPercentage > 5) {
+        console.error('🚨 PAYMENT VALIDATION FAILED: Significant underpayment detected', {
           finalClientTotal,
           finalServerTotal,
           underpayment: Math.abs(finalDiscrepancy),
@@ -508,10 +533,10 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
           clientSentTotal: total,
           clientSentMembership: membership?.amount || 0,
           userEmail,
-          securityNote: 'Server-side discount validation - allows 0.5% tolerance for rounding'
+          securityNote: 'Underpayment > 5% - likely stale cart data. User should refresh.'
         });
         return res.status(400).json({
-          message: 'Payment total does not match expected amount. Please refresh your cart and try again.',
+          message: 'Your cart prices may have changed. Please refresh your cart and try again.',
           error: 'UNIFIED_TOTAL_MISMATCH'
         });
       }
