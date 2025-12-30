@@ -3050,7 +3050,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const scheduledPaymentsRouter = (await import("./api/scheduled-payments")).default;
   app.use("/api/scheduled-payments", scheduledPaymentsRouter);
 
-  // User-facing volunteer credits endpoints
+  // User-facing credits endpoints - uses unified credit system
+  // GET /api/my-credits - Get all credits for the current user
   app.get("/api/my-credits", supabaseAuth, async (req: any, res) => {
     try {
       const userId = req.user?.id;
@@ -3058,15 +3059,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: 'User ID not found' });
       }
 
-      const credits = await storage.getVolunteerCreditsByUserId(userId);
-      res.json(credits);
+      const { creditType, status, includeExpired } = req.query;
+      
+      // Use unified credit system
+      const credits = await storage.getCredits({
+        userId,
+        creditType: creditType as any,
+        status: status as any,
+        includeExpired: includeExpired === 'true'
+      });
+      
+      // Format for frontend compatibility
+      const formattedCredits = credits.map(c => ({
+        ...c,
+        remainingAmount: c.creditAmountCents - c.usedAmountCents,
+        // Extract common metadata fields for backward compatibility
+        minutesWorked: (c.metadata as any)?.minutesWorked || null,
+        sessionId: (c.metadata as any)?.sessionId || null
+      }));
+      
+      res.json(formattedCredits);
     } catch (error) {
       console.error('[MyCredits] Error fetching credits:', error);
       res.status(500).json({ error: 'Failed to fetch credits' });
     }
   });
 
-  // Get available credits balance for checkout
+  // GET /api/my-credits/available - Get available credits balance for checkout
   app.get("/api/my-credits/available", supabaseAuth, async (req: any, res) => {
     try {
       const userId = req.user?.id;
@@ -3074,14 +3093,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: 'User ID not found' });
       }
 
-      const availableCredits = await storage.getAvailableVolunteerCredits(userId);
-      const totalAvailable = availableCredits.reduce(
-        (sum, c) => sum + (c.creditAmountCents - c.usedAmountCents), 
-        0
-      );
+      // Use unified credit system
+      const availableCredits = await storage.getAvailableCredits(userId);
+      const totalAvailable = await storage.getTotalAvailableCredits(userId);
+      
+      // Format for frontend compatibility
+      const formattedCredits = availableCredits.map(c => ({
+        ...c,
+        remainingAmount: c.creditAmountCents - c.usedAmountCents,
+        minutesWorked: (c.metadata as any)?.minutesWorked || null,
+        sessionId: (c.metadata as any)?.sessionId || null
+      }));
       
       res.json({
-        credits: availableCredits,
+        credits: formattedCredits,
         totalAvailableCents: totalAvailable
       });
     } catch (error) {

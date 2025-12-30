@@ -2667,3 +2667,90 @@ export const creditUsageLogsRelations = relations(creditUsageLogs, ({ one }) => 
   credit: one(volunteerCredits, { fields: [creditUsageLogs.creditId], references: [volunteerCredits.id] }),
   paymentHistory: one(stripePaymentHistory, { fields: [creditUsageLogs.paymentHistoryId], references: [stripePaymentHistory.id] }),
 }));
+
+// ==================== UNIFIED CREDIT SYSTEM ====================
+// Single ledger for all credit types: volunteer, referral, achievement, marketing, manual
+// Designed for extensibility - new credit types can be added without schema changes
+
+export const creditTypeEnum = ["volunteer", "referral", "achievement", "marketing", "manual"] as const;
+export type CreditType = typeof creditTypeEnum[number];
+
+export const creditStatusEnum = ["pending", "approved", "rejected", "partially_used", "used", "expired", "revoked"] as const;
+export type CreditStatus = typeof creditStatusEnum[number];
+
+export const credits = pgTable("credits", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  schoolId: integer("school_id").notNull().references(() => schools.id, { onDelete: 'cascade' }),
+  
+  // Credit type for filtering and extensibility
+  creditType: text("credit_type", { enum: creditTypeEnum }).notNull(),
+  
+  // Source tracking - links to origin record (session_volunteer, referral, achievement, etc.)
+  sourceType: text("source_type"), // 'session_volunteer', 'referral_signup', 'course_completion', 'manual_grant', etc.
+  sourceId: integer("source_id"), // FK to source record (polymorphic)
+  
+  // Credit amount
+  creditAmountCents: integer("credit_amount_cents").notNull(),
+  usedAmountCents: integer("used_amount_cents").default(0).notNull(),
+  
+  // Status workflow: pending → approved/rejected → partially_used/used/expired/revoked
+  status: text("status", { enum: creditStatusEnum }).notNull().default("pending"),
+  
+  // Admin approval tracking
+  approvedBy: integer("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  rejectionReason: text("rejection_reason"),
+  
+  // Expiration - set on approval (e.g., 1 year from approval date)
+  expiresAt: timestamp("expires_at"),
+  
+  // Display info
+  title: text("title"), // Human-readable title, e.g., "Volunteer Credit - Art Class Session"
+  description: text("description"), // Detailed description
+  
+  // Type-specific data stored as JSONB for flexibility
+  // For volunteer: { minutesWorked, hourlyRateCents, sessionId, sessionVolunteerId }
+  // For referral: { referredUserId, referralCode }
+  // For achievement: { achievementType, courseId, studentId }
+  metadata: jsonb("metadata"),
+  
+  // Admin notes
+  notes: text("notes"),
+  
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertCreditSchema = createInsertSchema(credits)
+  .omit({ id: true, createdAt: true, updatedAt: true, approvedAt: true, usedAmountCents: true });
+export type InsertCredit = z.infer<typeof insertCreditSchema>;
+export type Credit = typeof credits.$inferSelect;
+
+export const creditsRelations = relations(credits, ({ one }) => ({
+  user: one(users, { fields: [credits.userId], references: [users.id] }),
+  school: one(schools, { fields: [credits.schoolId], references: [schools.id] }),
+  approver: one(users, { fields: [credits.approvedBy], references: [users.id] }),
+}));
+
+// Unified Credit Usage Log - Tracks when any credit type is applied to payments
+export const unifiedCreditUsageLogs = pgTable("unified_credit_usage_logs", {
+  id: serial("id").primaryKey(),
+  creditId: integer("credit_id").notNull().references(() => credits.id, { onDelete: 'cascade' }),
+  paymentHistoryId: integer("payment_history_id").references(() => stripePaymentHistory.id),
+  
+  amountCents: integer("amount_cents").notNull(),
+  description: text("description"),
+  
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertUnifiedCreditUsageLogSchema = createInsertSchema(unifiedCreditUsageLogs)
+  .omit({ id: true, createdAt: true });
+export type InsertUnifiedCreditUsageLog = z.infer<typeof insertUnifiedCreditUsageLogSchema>;
+export type UnifiedCreditUsageLog = typeof unifiedCreditUsageLogs.$inferSelect;
+
+export const unifiedCreditUsageLogsRelations = relations(unifiedCreditUsageLogs, ({ one }) => ({
+  credit: one(credits, { fields: [unifiedCreditUsageLogs.creditId], references: [credits.id] }),
+  paymentHistory: one(stripePaymentHistory, { fields: [unifiedCreditUsageLogs.paymentHistoryId], references: [stripePaymentHistory.id] }),
+}));

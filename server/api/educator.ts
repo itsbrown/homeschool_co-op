@@ -787,6 +787,7 @@ router.post('/sessions/:id/end', async (req, res) => {
     }
 
     // Auto-create pending volunteer credits for all volunteers in this session
+    // Uses unified credit system with creditType='volunteer'
     try {
       const sessionVolunteers = await storage.getSessionVolunteersBySessionId(sessionId);
       const HOURLY_RATE_CENTS = 2000; // $20/hr
@@ -810,20 +811,29 @@ router.post('/sessions/:id/end', async (req, res) => {
           // Calculate credit amount: ($20/hr = 2000 cents/hr) / 60 min * minutesWorked
           const hoursWorked = minutesWorked / 60;
           const creditAmountCents = Math.round(hoursWorked * HOURLY_RATE_CENTS);
+          const dateStr = new Date(session.scheduledDate).toLocaleDateString();
           
-          // Create pending volunteer credit
-          await storage.createVolunteerCredit({
+          // Create pending credit in unified credit system
+          await storage.createCredit({
             userId: volunteer.volunteerId,
             schoolId: session.schoolId,
-            sessionId: sessionId,
-            minutesWorked: minutesWorked,
-            hourlyRateCents: HOURLY_RATE_CENTS,
+            creditType: 'volunteer',
+            sourceType: 'session_volunteer',
+            sourceId: volunteer.id,
             creditAmountCents: creditAmountCents,
             status: 'pending',
-            description: `Volunteer credit for ${hoursWorked.toFixed(2)} hours on ${new Date(session.scheduledDate).toLocaleDateString()}`
+            title: 'Volunteer Credit',
+            description: `Volunteer credit for ${hoursWorked.toFixed(2)} hours on ${dateStr}`,
+            metadata: {
+              minutesWorked: minutesWorked,
+              hourlyRateCents: HOURLY_RATE_CENTS,
+              sessionId: sessionId,
+              sessionVolunteerId: volunteer.id,
+              scheduledDate: session.scheduledDate
+            }
           });
           
-          console.log(`[VolunteerCredits] Created pending credit for volunteer ${volunteer.volunteerId}: ${creditAmountCents} cents (${hoursWorked.toFixed(2)} hours)`);
+          console.log(`[Credits] Created pending volunteer credit for user ${volunteer.volunteerId}: ${creditAmountCents} cents (${hoursWorked.toFixed(2)} hours)`);
         }
       }
     } catch (creditError) {

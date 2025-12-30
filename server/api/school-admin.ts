@@ -5781,4 +5781,370 @@ router.post('/volunteer-credits/bulk-approve', async (req, res) => {
   }
 });
 
+// ==================== UNIFIED CREDIT SYSTEM ADMIN ENDPOINTS ====================
+// New endpoints that work with all credit types (volunteer, referral, achievement, marketing, manual)
+
+// GET /api/school-admin/credits - Get all credits for school with optional filters
+router.get('/credits', async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'User ID not found' });
+    }
+
+    const userRoles = await storage.getUserRolesByUserId(userId);
+    const adminRole = userRoles.find(r => 
+      ['schoolAdmin', 'admin', 'superAdmin'].includes(r.role.toLowerCase())
+    );
+    
+    if (!adminRole || !adminRole.schoolId) {
+      return res.status(403).json({ error: 'School admin access required' });
+    }
+
+    const { status, creditType, includeExpired } = req.query;
+    
+    const credits = await storage.getCredits({
+      schoolId: adminRole.schoolId,
+      status: status as any,
+      creditType: creditType as any,
+      includeExpired: includeExpired === 'true'
+    });
+
+    // Enrich with user info and session info for volunteer credits
+    const enrichedCredits = await Promise.all(credits.map(async (credit) => {
+      const user = await storage.getUser(credit.userId);
+      let sessionInfo = null;
+      
+      // For volunteer credits, get session info from metadata
+      if (credit.creditType === 'volunteer' && credit.metadata) {
+        const meta = credit.metadata as { sessionId?: number };
+        if (meta.sessionId) {
+          const session = await storage.getClassSessionById(meta.sessionId);
+          if (session) {
+            const classInfo = await storage.getClassById(session.classId);
+            sessionInfo = {
+              id: session.id,
+              scheduledDate: session.scheduledDate,
+              className: classInfo?.title || 'Unknown Class'
+            };
+          }
+        }
+      }
+      
+      return {
+        ...credit,
+        userName: user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email : 'Unknown',
+        userEmail: user?.email || '',
+        session: sessionInfo,
+        remainingAmount: credit.creditAmountCents - credit.usedAmountCents
+      };
+    }));
+
+    res.json(enrichedCredits);
+  } catch (error) {
+    console.error('[Credits] Error fetching credits:', error);
+    res.status(500).json({ error: 'Failed to fetch credits' });
+  }
+});
+
+// GET /api/school-admin/credits/pending - Get pending credits count with optional type filter
+router.get('/credits/pending', async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'User ID not found' });
+    }
+
+    const userRoles = await storage.getUserRolesByUserId(userId);
+    const adminRole = userRoles.find(r => 
+      ['schoolAdmin', 'admin', 'superAdmin'].includes(r.role.toLowerCase())
+    );
+    
+    if (!adminRole || !adminRole.schoolId) {
+      return res.status(403).json({ error: 'School admin access required' });
+    }
+
+    const { creditType } = req.query;
+    const pendingCredits = await storage.getPendingCredits(
+      adminRole.schoolId, 
+      creditType as any
+    );
+    
+    res.json({ count: pendingCredits.length, credits: pendingCredits });
+  } catch (error) {
+    console.error('[Credits] Error fetching pending count:', error);
+    res.status(500).json({ error: 'Failed to fetch pending credits' });
+  }
+});
+
+// POST /api/school-admin/credits/:id/approve - Approve a credit (any type)
+router.post('/credits/:id/approve', async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'User ID not found' });
+    }
+
+    const creditId = parseInt(req.params.id);
+    const credit = await storage.getCreditById(creditId);
+    
+    if (!credit) {
+      return res.status(404).json({ error: 'Credit not found' });
+    }
+
+    const userRoles = await storage.getUserRolesByUserId(userId);
+    const adminRole = userRoles.find(r => 
+      ['schoolAdmin', 'admin', 'superAdmin'].includes(r.role.toLowerCase()) &&
+      r.schoolId === credit.schoolId
+    );
+    
+    if (!adminRole) {
+      return res.status(403).json({ error: 'Not authorized to approve this credit' });
+    }
+
+    if (credit.status !== 'pending') {
+      return res.status(400).json({ error: 'Credit is not pending approval' });
+    }
+
+    const approvedCredit = await storage.approveCredit(creditId, userId);
+    
+    // Create audit log
+    try {
+      const meta = credit.metadata as { minutesWorked?: number } | null;
+      await storage.createAuditLog({
+        actionType: 'credit_approved',
+        severity: 'info',
+        actorId: userId,
+        actorRole: 'schoolAdmin',
+        actorEmail: req.user?.email,
+        targetType: 'credit',
+        targetId: String(creditId),
+        schoolId: credit.schoolId,
+        metadata: {
+          context: `Admin approved ${credit.creditType} credit`,
+          creditType: credit.creditType,
+          creditAmount: credit.creditAmountCents,
+          minutesWorked: meta?.minutesWorked || null,
+          userId: credit.userId
+        }
+      });
+    } catch (auditError) {
+      console.error('[Credits] Failed to create audit log:', auditError);
+    }
+
+    console.log(`[Credits] Credit ${creditId} (${credit.creditType}) approved by admin ${userId}`);
+    res.json(approvedCredit);
+  } catch (error) {
+    console.error('[Credits] Error approving credit:', error);
+    res.status(500).json({ error: 'Failed to approve credit' });
+  }
+});
+
+// POST /api/school-admin/credits/:id/reject - Reject a credit (any type)
+router.post('/credits/:id/reject', async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'User ID not found' });
+    }
+
+    const creditId = parseInt(req.params.id);
+    const { reason } = req.body;
+    
+    if (!reason) {
+      return res.status(400).json({ error: 'Rejection reason is required' });
+    }
+
+    const credit = await storage.getCreditById(creditId);
+    
+    if (!credit) {
+      return res.status(404).json({ error: 'Credit not found' });
+    }
+
+    const userRoles = await storage.getUserRolesByUserId(userId);
+    const adminRole = userRoles.find(r => 
+      ['schoolAdmin', 'admin', 'superAdmin'].includes(r.role.toLowerCase()) &&
+      r.schoolId === credit.schoolId
+    );
+    
+    if (!adminRole) {
+      return res.status(403).json({ error: 'Not authorized to reject this credit' });
+    }
+
+    if (credit.status !== 'pending') {
+      return res.status(400).json({ error: 'Credit is not pending approval' });
+    }
+
+    const rejectedCredit = await storage.rejectCredit(creditId, userId, reason);
+    
+    // Create audit log
+    try {
+      const meta = credit.metadata as { minutesWorked?: number } | null;
+      await storage.createAuditLog({
+        actionType: 'credit_rejected',
+        severity: 'info',
+        actorId: userId,
+        actorRole: 'schoolAdmin',
+        actorEmail: req.user?.email,
+        targetType: 'credit',
+        targetId: String(creditId),
+        schoolId: credit.schoolId,
+        metadata: {
+          context: `Admin rejected ${credit.creditType} credit`,
+          creditType: credit.creditType,
+          creditAmount: credit.creditAmountCents,
+          minutesWorked: meta?.minutesWorked || null,
+          userId: credit.userId,
+          rejectionReason: reason
+        }
+      });
+    } catch (auditError) {
+      console.error('[Credits] Failed to create audit log:', auditError);
+    }
+
+    console.log(`[Credits] Credit ${creditId} (${credit.creditType}) rejected by admin ${userId}`);
+    res.json(rejectedCredit);
+  } catch (error) {
+    console.error('[Credits] Error rejecting credit:', error);
+    res.status(500).json({ error: 'Failed to reject credit' });
+  }
+});
+
+// POST /api/school-admin/credits/bulk-approve - Bulk approve multiple credits
+router.post('/credits/bulk-approve', async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'User ID not found' });
+    }
+
+    const { creditIds } = req.body;
+    if (!Array.isArray(creditIds) || creditIds.length === 0) {
+      return res.status(400).json({ error: 'creditIds array is required' });
+    }
+
+    const userRoles = await storage.getUserRolesByUserId(userId);
+    const adminRole = userRoles.find(r => 
+      ['schoolAdmin', 'admin', 'superAdmin'].includes(r.role.toLowerCase())
+    );
+    
+    if (!adminRole || !adminRole.schoolId) {
+      return res.status(403).json({ error: 'School admin access required' });
+    }
+
+    const results = { approved: [] as number[], failed: [] as number[] };
+
+    for (const creditId of creditIds) {
+      try {
+        const credit = await storage.getCreditById(creditId);
+        if (credit && credit.schoolId === adminRole.schoolId && credit.status === 'pending') {
+          await storage.approveCredit(creditId, userId);
+          results.approved.push(creditId);
+        } else {
+          results.failed.push(creditId);
+        }
+      } catch (err) {
+        results.failed.push(creditId);
+      }
+    }
+
+    console.log(`[Credits] Bulk approved ${results.approved.length} credits by admin ${userId}`);
+    res.json(results);
+  } catch (error) {
+    console.error('[Credits] Error bulk approving credits:', error);
+    res.status(500).json({ error: 'Failed to bulk approve credits' });
+  }
+});
+
+// POST /api/school-admin/credits/create - Create a manual credit (admin-granted)
+router.post('/credits/create', async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'User ID not found' });
+    }
+
+    const userRoles = await storage.getUserRolesByUserId(userId);
+    const adminRole = userRoles.find(r => 
+      ['schoolAdmin', 'admin', 'superAdmin'].includes(r.role.toLowerCase())
+    );
+    
+    if (!adminRole || !adminRole.schoolId) {
+      return res.status(403).json({ error: 'School admin access required' });
+    }
+
+    const { recipientUserId, creditAmountCents, creditType, title, description, notes, autoApprove } = req.body;
+    
+    if (!recipientUserId || !creditAmountCents || creditAmountCents <= 0) {
+      return res.status(400).json({ error: 'recipientUserId and positive creditAmountCents are required' });
+    }
+
+    // Verify recipient belongs to this school
+    const recipientRoles = await storage.getUserRolesByUserId(recipientUserId);
+    const recipientInSchool = recipientRoles.some(r => r.schoolId === adminRole.schoolId);
+    
+    if (!recipientInSchool) {
+      return res.status(400).json({ error: 'Recipient is not a member of your school' });
+    }
+
+    const newCredit = await storage.createCredit({
+      userId: recipientUserId,
+      schoolId: adminRole.schoolId,
+      creditType: creditType || 'manual',
+      sourceType: 'admin_grant',
+      sourceId: userId, // The admin who created it
+      creditAmountCents,
+      status: autoApprove ? 'approved' : 'pending',
+      title: title || 'Admin-Granted Credit',
+      description: description || null,
+      notes: notes || null,
+      metadata: {
+        grantedBy: userId,
+        grantedByEmail: req.user?.email,
+        grantedAt: new Date().toISOString()
+      }
+    });
+
+    // If auto-approved, set expiration
+    if (autoApprove) {
+      const expiresAt = new Date();
+      expiresAt.setFullYear(expiresAt.getFullYear() + 1);
+      await storage.updateCredit(newCredit.id, {
+        approvedBy: userId,
+        approvedAt: new Date(),
+        expiresAt
+      });
+    }
+
+    // Create audit log
+    try {
+      await storage.createAuditLog({
+        actionType: 'credit_created',
+        severity: 'info',
+        actorId: userId,
+        actorRole: 'schoolAdmin',
+        actorEmail: req.user?.email,
+        targetType: 'credit',
+        targetId: String(newCredit.id),
+        schoolId: adminRole.schoolId,
+        metadata: {
+          context: 'Admin created manual credit',
+          creditType: creditType || 'manual',
+          creditAmount: creditAmountCents,
+          recipientUserId,
+          autoApproved: autoApprove || false
+        }
+      });
+    } catch (auditError) {
+      console.error('[Credits] Failed to create audit log:', auditError);
+    }
+
+    console.log(`[Credits] Manual credit created for user ${recipientUserId} by admin ${userId}`);
+    res.json(newCredit);
+  } catch (error) {
+    console.error('[Credits] Error creating credit:', error);
+    res.status(500).json({ error: 'Failed to create credit' });
+  }
+});
+
 export default router;

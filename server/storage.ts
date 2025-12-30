@@ -51,7 +51,9 @@ import {
   signedWaivers, type SignedWaiver, type InsertSignedWaiver,
   sessionVolunteers, type SessionVolunteer, type InsertSessionVolunteer,
   volunteerCredits, type VolunteerCredit, type InsertVolunteerCredit,
-  creditUsageLogs, type CreditUsageLog, type InsertCreditUsageLog
+  creditUsageLogs, type CreditUsageLog, type InsertCreditUsageLog,
+  credits, type Credit, type InsertCredit, type CreditType, type CreditStatus,
+  unifiedCreditUsageLogs, type UnifiedCreditUsageLog, type InsertUnifiedCreditUsageLog
 } from "@shared/schema";
 import { eq, inArray } from 'drizzle-orm';
 import { getDb } from './db';
@@ -583,10 +585,48 @@ export interface IStorage {
   rejectVolunteerCredit(id: number, approvedBy: number, reason: string): Promise<VolunteerCredit | undefined>;
   useVolunteerCredits(userId: number, amountCents: number, paymentHistoryId?: number, description?: string): Promise<{ usedCredits: CreditUsageLog[]; totalUsed: number }>;
   
-  // Credit Usage Log methods
+  // Credit Usage Log methods (legacy)
   getCreditUsageLogById(id: number): Promise<CreditUsageLog | undefined>;
   getCreditUsageLogsByCreditId(creditId: number): Promise<CreditUsageLog[]>;
   createCreditUsageLog(log: InsertCreditUsageLog): Promise<CreditUsageLog>;
+
+  // ==================== UNIFIED CREDIT SYSTEM ====================
+  // Single ledger for all credit types: volunteer, referral, achievement, marketing, manual
+  
+  // Credit CRUD
+  getCreditById(id: number): Promise<Credit | undefined>;
+  getCredits(filters: {
+    userId?: number;
+    schoolId?: number;
+    creditType?: CreditType;
+    status?: CreditStatus;
+    includeExpired?: boolean;
+  }): Promise<Credit[]>;
+  createCredit(credit: InsertCredit): Promise<Credit>;
+  updateCredit(id: number, updates: Partial<InsertCredit> & { usedAmountCents?: number; status?: CreditStatus; approvedBy?: number; approvedAt?: Date; expiresAt?: Date }): Promise<Credit | undefined>;
+  
+  // Credit status management
+  approveCredit(id: number, approvedBy: number): Promise<Credit | undefined>;
+  rejectCredit(id: number, approvedBy: number, reason: string): Promise<Credit | undefined>;
+  revokeCredit(id: number, reason: string): Promise<Credit | undefined>;
+  
+  // Available credits for checkout (approved, not expired, has remaining balance)
+  getAvailableCredits(userId: number): Promise<Credit[]>;
+  getTotalAvailableCredits(userId: number): Promise<number>;
+  
+  // Pending credits for admin approval
+  getPendingCredits(schoolId: number, creditType?: CreditType): Promise<Credit[]>;
+  
+  // Credit consumption (FIFO by expiration date)
+  useCredits(userId: number, amountCents: number, paymentHistoryId?: number, description?: string): Promise<{ usedCredits: UnifiedCreditUsageLog[]; totalUsed: number }>;
+  
+  // Credit expiration management
+  expireCredits(): Promise<number>; // Returns count of expired credits
+  
+  // Unified Credit Usage Log methods
+  getUnifiedCreditUsageLogById(id: number): Promise<UnifiedCreditUsageLog | undefined>;
+  getUnifiedCreditUsageLogsByCreditId(creditId: number): Promise<UnifiedCreditUsageLog[]>;
+  createUnifiedCreditUsageLog(log: InsertUnifiedCreditUsageLog): Promise<UnifiedCreditUsageLog>;
 }
 
 export class MemStorage implements IStorage {
@@ -6991,6 +7031,73 @@ export class MemStorage implements IStorage {
 
       async createCreditUsageLog(log: InsertCreditUsageLog): Promise<CreditUsageLog> {
         return this.dbStorage.createCreditUsageLog(log);
+      }
+
+      // ==================== UNIFIED CREDIT SYSTEM ====================
+      async getCreditById(id: number): Promise<Credit | undefined> {
+        return this.dbStorage.getCreditById(id);
+      }
+
+      async getCredits(filters: {
+        userId?: number;
+        schoolId?: number;
+        creditType?: CreditType;
+        status?: CreditStatus;
+        includeExpired?: boolean;
+      }): Promise<Credit[]> {
+        return this.dbStorage.getCredits(filters);
+      }
+
+      async createCredit(credit: InsertCredit): Promise<Credit> {
+        return this.dbStorage.createCredit(credit);
+      }
+
+      async updateCredit(id: number, updates: Partial<InsertCredit> & { usedAmountCents?: number; status?: CreditStatus; approvedBy?: number; approvedAt?: Date; expiresAt?: Date }): Promise<Credit | undefined> {
+        return this.dbStorage.updateCredit(id, updates);
+      }
+
+      async approveCredit(id: number, approvedBy: number): Promise<Credit | undefined> {
+        return this.dbStorage.approveCredit(id, approvedBy);
+      }
+
+      async rejectCredit(id: number, approvedBy: number, reason: string): Promise<Credit | undefined> {
+        return this.dbStorage.rejectCredit(id, approvedBy, reason);
+      }
+
+      async revokeCredit(id: number, reason: string): Promise<Credit | undefined> {
+        return this.dbStorage.revokeCredit(id, reason);
+      }
+
+      async getAvailableCredits(userId: number): Promise<Credit[]> {
+        return this.dbStorage.getAvailableCredits(userId);
+      }
+
+      async getTotalAvailableCredits(userId: number): Promise<number> {
+        return this.dbStorage.getTotalAvailableCredits(userId);
+      }
+
+      async getPendingCredits(schoolId: number, creditType?: CreditType): Promise<Credit[]> {
+        return this.dbStorage.getPendingCredits(schoolId, creditType);
+      }
+
+      async useCredits(userId: number, amountCents: number, paymentHistoryId?: number, description?: string): Promise<{ usedCredits: UnifiedCreditUsageLog[]; totalUsed: number }> {
+        return this.dbStorage.useCredits(userId, amountCents, paymentHistoryId, description);
+      }
+
+      async expireCredits(): Promise<number> {
+        return this.dbStorage.expireCredits();
+      }
+
+      async getUnifiedCreditUsageLogById(id: number): Promise<UnifiedCreditUsageLog | undefined> {
+        return this.dbStorage.getUnifiedCreditUsageLogById(id);
+      }
+
+      async getUnifiedCreditUsageLogsByCreditId(creditId: number): Promise<UnifiedCreditUsageLog[]> {
+        return this.dbStorage.getUnifiedCreditUsageLogsByCreditId(creditId);
+      }
+
+      async createUnifiedCreditUsageLog(log: InsertUnifiedCreditUsageLog): Promise<UnifiedCreditUsageLog> {
+        return this.dbStorage.createUnifiedCreditUsageLog(log);
       }
 
       // Clear all data from storage (for testing)

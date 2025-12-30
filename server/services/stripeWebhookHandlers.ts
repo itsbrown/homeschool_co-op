@@ -293,58 +293,33 @@ export async function handleDirectPaymentSuccess(paymentIntent: Stripe.PaymentIn
       console.error('⚠️ Error saving stripe payment history (non-blocking):', paymentHistoryError);
     }
     
-    // Process volunteer credits consumption if applied
-    const volunteerCreditsApplied = paymentIntent.metadata.volunteerCreditsApplied 
+    // Process credits consumption if applied (uses unified credit system)
+    const creditsApplied = paymentIntent.metadata.volunteerCreditsApplied 
       ? parseInt(paymentIntent.metadata.volunteerCreditsApplied) 
       : 0;
     
-    if (volunteerCreditsApplied > 0 && parentEmail) {
+    if (creditsApplied > 0 && parentEmail) {
       try {
-        console.log('💰 Processing volunteer credits consumption:', { 
-          creditsToConsume: volunteerCreditsApplied, 
+        console.log('💰 Processing credits consumption (unified system):', { 
+          creditsToConsume: creditsApplied, 
           parentEmail 
         });
         
         const parentUser = await storage.getUserByEmail(parentEmail);
         if (parentUser) {
-          // Get available credits sorted by expiration date (FIFO - soonest to expire first)
-          const availableCredits = await storage.getAvailableVolunteerCredits(parentUser.id);
+          // Use unified credit system for atomic FIFO consumption
+          const { usedCredits, totalUsed } = await storage.useCredits(
+            parentUser.id, 
+            creditsApplied, 
+            null, // paymentHistoryId - could be populated if we want to link it
+            `Applied to enrollment payment ${paymentIntent.id}`
+          );
           
-          let remainingToConsume = volunteerCreditsApplied;
-          
-          for (const credit of availableCredits) {
-            if (remainingToConsume <= 0) break;
-            
-            const availableInCredit = credit.creditAmountCents - credit.usedAmountCents;
-            const amountToUse = Math.min(remainingToConsume, availableInCredit);
-            
-            if (amountToUse > 0) {
-              // Update credit used amount
-              const newUsedAmount = credit.usedAmountCents + amountToUse;
-              const newStatus = newUsedAmount >= credit.creditAmountCents ? 'used' : 'partially_used';
-              
-              await storage.updateVolunteerCredit(credit.id, {
-                usedAmountCents: newUsedAmount,
-                status: newStatus
-              });
-              
-              // Log credit usage
-              await storage.createCreditUsageLog({
-                creditId: credit.id,
-                amountCents: amountToUse,
-                description: `Applied to enrollment payment ${paymentIntent.id}`,
-                paymentHistoryId: null  // Will be populated after payment history is saved
-              });
-              
-              remainingToConsume -= amountToUse;
-              console.log(`💰 Used ${amountToUse} cents from credit ${credit.id}, remaining: ${remainingToConsume}`);
-            }
-          }
-          
-          console.log('✅ Volunteer credits consumed successfully');
+          console.log(`💰 Consumed ${totalUsed} cents across ${usedCredits.length} credits`);
+          console.log('✅ Credits consumed successfully via unified system');
         }
       } catch (creditsError) {
-        console.error('⚠️ Error consuming volunteer credits (non-blocking):', creditsError);
+        console.error('⚠️ Error consuming credits (non-blocking):', creditsError);
       }
     }
     

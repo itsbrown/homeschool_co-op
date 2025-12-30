@@ -331,6 +331,7 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
       const { MembershipStatusService } = await import('./services/membership-status-service.js');
       const { startEnrollmentReminderScheduler } = await import('./services/enrollmentReminderScheduler.js');
       const { startScheduledPaymentReminderJob } = await import('./services/scheduled-payment-reminders.js');
+      const { startCreditExpirationJob } = await import('./services/creditExpirationService.js');
       const { storage } = await import('./storage.js');
       
       // Initialize and start backup service
@@ -345,6 +346,9 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
       
       // Start scheduled payment reminder job (sends email reminders for upcoming/overdue payments)
       startScheduledPaymentReminderJob();
+      
+      // Start credit expiration job (marks expired credits every 12 hours)
+      startCreditExpirationJob();
       
       // Load notifications and notification recipients from JSON into database
       await storage.initializeNotifications();

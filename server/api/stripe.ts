@@ -774,21 +774,18 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
       
       let totalWithMembership = authoritativeTotal;
       
-      // VOLUNTEER CREDITS VALIDATION AND APPLICATION
+      // UNIFIED CREDITS VALIDATION AND APPLICATION
       // Credits can only reduce payment amount, not exceed it
+      // Uses unified credit system for all credit types (volunteer, referral, etc.)
       let validatedCreditsToApply = 0;
       if (creditsToApply > 0) {
-        // Validate user has enough available credits
-        const availableCredits = await storage.getAvailableVolunteerCredits(parent.id);
-        const totalAvailableCents = availableCredits.reduce(
-          (sum, c) => sum + (c.creditAmountCents - c.usedAmountCents), 
-          0
-        );
+        // Validate user has enough available credits using unified credit system
+        const totalAvailableCents = await storage.getTotalAvailableCredits(parent.id);
         
         // Cap credits at total amount or available balance (whichever is lower)
         validatedCreditsToApply = Math.min(creditsToApply, totalWithMembership, totalAvailableCents);
         
-        console.log('💰 Volunteer credits validation:', {
+        console.log('💰 Credits validation (unified system):', {
           requestedCredits: creditsToApply,
           availableCredits: totalAvailableCents,
           validatedCredits: validatedCreditsToApply,
@@ -797,7 +794,7 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
         
         if (validatedCreditsToApply > 0) {
           totalWithMembership = totalWithMembership - validatedCreditsToApply;
-          console.log('💰 Applied volunteer credits:', {
+          console.log('💰 Applied credits:', {
             creditsApplied: validatedCreditsToApply,
             newTotal: totalWithMembership
           });

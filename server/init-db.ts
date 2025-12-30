@@ -1351,6 +1351,131 @@ async function runMigrations() {
     `);
     console.log('✅ Migration completed: legacy instructors migrated to educator_class_assignments');
     
+    // Create unified credits table for extensible credit system
+    console.log('Running migration: Creating unified credits table...');
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS credits (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        school_id INTEGER NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+        credit_type TEXT NOT NULL,
+        source_type TEXT,
+        source_id INTEGER,
+        credit_amount_cents INTEGER NOT NULL,
+        used_amount_cents INTEGER NOT NULL DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'pending',
+        approved_by INTEGER REFERENCES users(id),
+        approved_at TIMESTAMP,
+        rejection_reason TEXT,
+        expires_at TIMESTAMP,
+        title TEXT,
+        description TEXT,
+        metadata JSONB,
+        notes TEXT,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_credits_user_id ON credits(user_id);
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_credits_school_id ON credits(school_id);
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_credits_credit_type ON credits(credit_type);
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_credits_status ON credits(status);
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_credits_expires_at ON credits(expires_at);
+    `);
+    console.log('✅ Migration completed: unified credits table created');
+    
+    // Create unified_credit_usage_logs table
+    console.log('Running migration: Creating unified_credit_usage_logs table...');
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS unified_credit_usage_logs (
+        id SERIAL PRIMARY KEY,
+        credit_id INTEGER NOT NULL REFERENCES credits(id) ON DELETE CASCADE,
+        payment_history_id INTEGER REFERENCES stripe_payment_history(id),
+        amount_cents INTEGER NOT NULL,
+        description TEXT,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_unified_credit_usage_logs_credit_id 
+      ON unified_credit_usage_logs(credit_id);
+    `);
+    console.log('✅ Migration completed: unified_credit_usage_logs table created');
+    
+    // Migrate existing volunteer_credits to unified credits table
+    console.log('Running migration: Migrating volunteer_credits to unified credits table...');
+    await db.execute(sql`
+      DO $$
+      DECLARE
+        migrated_count INTEGER := 0;
+        vc_record RECORD;
+      BEGIN
+        -- Check if volunteer_credits table exists and credits table is empty
+        IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'volunteer_credits') THEN
+          -- Only migrate if we haven't already migrated
+          IF NOT EXISTS (SELECT 1 FROM credits WHERE credit_type = 'volunteer' LIMIT 1) THEN
+            FOR vc_record IN 
+              SELECT 
+                id, user_id, school_id, session_id, session_volunteer_id,
+                minutes_worked, credit_amount_cents, status, approved_by, approved_at,
+                rejection_reason, used_amount_cents, expires_at, notes, created_at, updated_at
+              FROM volunteer_credits
+            LOOP
+              INSERT INTO credits (
+                user_id, school_id, credit_type, source_type, source_id,
+                credit_amount_cents, used_amount_cents, status,
+                approved_by, approved_at, rejection_reason, expires_at,
+                title, description, metadata, notes, created_at, updated_at
+              ) VALUES (
+                vc_record.user_id,
+                vc_record.school_id,
+                'volunteer',
+                'session_volunteer',
+                vc_record.session_volunteer_id,
+                vc_record.credit_amount_cents,
+                vc_record.used_amount_cents,
+                vc_record.status,
+                vc_record.approved_by,
+                vc_record.approved_at,
+                vc_record.rejection_reason,
+                vc_record.expires_at,
+                'Volunteer Credit',
+                NULL,
+                jsonb_build_object(
+                  'minutesWorked', vc_record.minutes_worked,
+                  'hourlyRateCents', 2000,
+                  'sessionId', vc_record.session_id,
+                  'sessionVolunteerId', vc_record.session_volunteer_id,
+                  'legacyVolunteerCreditId', vc_record.id
+                ),
+                vc_record.notes,
+                vc_record.created_at,
+                vc_record.updated_at
+              );
+              
+              migrated_count := migrated_count + 1;
+            END LOOP;
+            
+            RAISE NOTICE 'Migrated % volunteer_credits to unified credits table', migrated_count;
+          ELSE
+            RAISE NOTICE 'Unified credits table already has volunteer credits, skipping migration';
+          END IF;
+        ELSE
+          RAISE NOTICE 'volunteer_credits table does not exist, skipping migration';
+        END IF;
+      END $$;
+    `);
+    console.log('✅ Migration completed: volunteer_credits migrated to unified credits table');
+    
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     

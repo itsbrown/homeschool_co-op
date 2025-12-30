@@ -17,32 +17,46 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 
-interface VolunteerCredit {
+// Unified Credit type - supports all credit types (volunteer, referral, etc.)
+interface Credit {
   id: number;
   userId: number;
   schoolId: number;
-  sessionId: number | null;
-  minutesWorked: number;
-  hourlyRateCents: number;
+  creditType: 'volunteer' | 'referral' | 'achievement' | 'marketing' | 'manual';
+  sourceType: string | null;
+  sourceId: number | null;
   creditAmountCents: number;
-  status: 'pending' | 'approved' | 'rejected' | 'used' | 'partially_used' | 'expired';
+  usedAmountCents: number;
+  status: 'pending' | 'approved' | 'rejected' | 'used' | 'partially_used' | 'expired' | 'revoked';
   approvedBy: number | null;
   approvedAt: string | null;
-  expiresAt: string | null;
   rejectionReason: string | null;
-  usedAmountCents: number;
+  expiresAt: string | null;
+  title: string | null;
   description: string | null;
+  metadata: {
+    minutesWorked?: number;
+    hourlyRateCents?: number;
+    sessionId?: number;
+    sessionVolunteerId?: number;
+    [key: string]: any;
+  } | null;
   notes: string | null;
   createdAt: string;
   updatedAt: string;
+  // Enriched fields from API
   userName: string;
   userEmail: string;
+  remainingAmount: number;
   session: {
     id: number;
     scheduledDate: string;
     className: string;
   } | null;
 }
+
+// Backward compatible alias
+type VolunteerCredit = Credit;
 
 const statusConfig: Record<string, { label: string; color: string }> = {
   pending: { label: "Pending", color: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400" },
@@ -362,7 +376,7 @@ export default function VolunteerCreditsPage() {
                           <div>
                             <p className="text-gray-500 dark:text-gray-400">Hours Worked</p>
                             <p className="font-medium text-gray-900 dark:text-white">
-                              {formatHours(credit.minutesWorked)}
+                              {credit.metadata?.minutesWorked ? formatHours(credit.metadata.minutesWorked) : 'N/A'}
                             </p>
                           </div>
                           <div>
@@ -451,7 +465,7 @@ export default function VolunteerCreditsPage() {
                 <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
                   <p className="font-medium">{creditToReject.userName}</p>
                   <p className="text-sm text-gray-500">
-                    {formatHours(creditToReject.minutesWorked)} - {formatCurrency(creditToReject.creditAmountCents)}
+                    {creditToReject.metadata?.minutesWorked ? formatHours(creditToReject.metadata.minutesWorked) : ''} - {formatCurrency(creditToReject.creditAmountCents)}
                   </p>
                 </div>
               )}
