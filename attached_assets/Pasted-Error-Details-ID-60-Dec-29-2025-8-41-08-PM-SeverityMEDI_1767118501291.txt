@@ -1,0 +1,102 @@
+Error Details
+ID: 60 | Dec 29, 2025, 8:41:08 PM
+
+SeverityMEDIUM
+Type
+frontend
+
+Route
+/api/stripe/create-payment-intent
+
+Method
+N/A
+
+User
+Anonymous
+
+School ID
+N/A
+
+Message
+{"message":"Payment total does not match expected amount. Please refresh your cart and try again.","error":"UNIFIED_TOTAL_MISMATCH"}
+
+Metadata
+{
+  "online": true,
+  "userId": 48,
+  "network": null,
+  "language": "en-US",
+  "referrer": "https://99g30.r.sp1-brevo.net/",
+  "schoolId": null,
+  "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.2 Mobile/15E148 Safari/604.1",
+  "activeRole": null,
+  "hasSession": true,
+  "statusCode": 400,
+  "breadcrumbs": [
+    {
+      "route": "/login",
+      "title": "",
+      "timestamp": "2025-12-30T01:28:06.198Z",
+      "timeOnPage": 48958
+    },
+    {
+      "route": "/login",
+      "title": "",
+      "timestamp": "2025-12-30T01:28:55.156Z",
+      "timeOnPage": 2500
+    },
+    {
+      "route": "/dashboard",
+      "title": "",
+      "timestamp": "2025-12-30T01:28:57.656Z",
+      "timeOnPage": 1127
+    },
+    {
+      "route": "/dashboard",
+      "title": "",
+      "timestamp": "2025-12-30T01:28:58.783Z",
+      "timeOnPage": 300444
+    }
+  ],
+  "formContext": {
+    "fieldCount": 2,
+    "hasValidationErrors": false
+  },
+  "memoryUsage": null,
+  "originalUrl": "/api/stripe/create-payment-intent",
+  "pageLoadTime": 761,
+  "sessionStart": "2025-12-30T01:28:06.198Z",
+  "correlationId": "8fb8a682-d18b-4399-a820-5a8f4298b303",
+  "recentActions": [
+    {
+      "type": "scroll",
+      "target": "0%",
+      "secondsAgo": 36
+    },
+    {
+      "type": "click",
+      "target": "[data-testid=\"button-notifications-mobile\"]",
+      "secondsAgo": 32
+    },
+    {
+      "type": "click",
+      "target": "[data-testid=\"button-notifications-mobile\"]",
+      "secondsAgo": 31
+    },
+    {
+      "type": "click",
+      "target": "[data-testid=\"cart-button\"]",
+      "secondsAgo": 30
+    },
+    {
+      "type": "click",
+      "target": "button.inline-flex",
+      "secondsAgo": 2
+    }
+  ],
+  "userEmailHint": "cla***",
+  "viewportWidth": 393,
+  "viewportHeight": 695,
+  "sessionErrorCount": 3,
+  "timeOnCurrentPage": 729754
+}

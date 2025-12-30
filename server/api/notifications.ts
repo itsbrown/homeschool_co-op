@@ -25,6 +25,63 @@ const enhancedNotificationSchema = insertNotificationSchema.extend({
 router.get("/", async (req, res) => {
   console.log('🎯 GET /api/notifications - START');
   try {
+    const view = req.query.view as string;
+    
+    // Admin view: return all sent notifications for the admin's school
+    if (view === 'sent') {
+      console.log('📤 Admin view requested - verifying admin authorization');
+      
+      // Get user from auth
+      const email = (req as any).auth?.payload?.email || (req as any).auth?.email || (req as any).user?.email;
+      if (!email) {
+        console.log('❌ No email found in auth for admin view');
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      
+      const user = await storage.getUserByEmail(email);
+      if (!user) {
+        console.log('❌ User not found for admin view');
+        return res.status(401).json({ message: "User not found" });
+      }
+      
+      // Verify user has admin role and get their admin school IDs
+      const userRoles = await storage.getUserRolesByUserId(user.id);
+      const adminRoles = userRoles.filter(r => 
+        r.role?.toLowerCase() === 'admin' || 
+        r.role?.toLowerCase() === 'school_admin' ||
+        r.role?.toLowerCase() === 'schooladmin' ||
+        r.role?.toLowerCase() === 'superadmin'
+      );
+      
+      if (adminRoles.length === 0) {
+        console.log('❌ User does not have admin role for sent view');
+        return res.status(403).json({ message: "Admin role required to view all sent notifications" });
+      }
+      
+      // Check if superadmin (gets all notifications)
+      const isSuperAdmin = adminRoles.some(r => r.role?.toLowerCase() === 'superadmin');
+      
+      // Get all school IDs where user is admin (not from non-admin roles)
+      const adminSchoolIds = adminRoles
+        .filter(r => r.schoolId)
+        .map(r => r.schoolId!);
+      
+      console.log('📤 Returning sent notifications for admin, school IDs:', adminSchoolIds, 'isSuperAdmin:', isSuperAdmin);
+      
+      // Get all notifications
+      const allNotifications = await storage.getAllNotifications();
+      
+      // Superadmins see all notifications; regular admins see only their schools
+      const scopedNotifications = isSuperAdmin 
+        ? allNotifications
+        : allNotifications.filter(n => 
+            !n.schoolId || // Global notifications (no school)
+            adminSchoolIds.includes(n.schoolId) // Notifications from admin's schools
+          );
+      
+      return res.json(scopedNotifications);
+    }
+    
     let userId = req.query.userId ? parseInt(req.query.userId as string) : null;
     const role = req.query.role as string;
     console.log('📊 userId from query:', userId, 'role:', role);
@@ -46,8 +103,9 @@ router.get("/", async (req, res) => {
         console.log('👤 User found:', { id: user.id, email: user.email });
         userId = user.id;
       } else {
-        const allNotifications = await storage.getAllNotifications();
-        return res.json(allNotifications);
+        // No email and no userId - return empty for safety
+        console.log('❌ No user context available');
+        return res.json([]);
       }
     }
     

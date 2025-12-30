@@ -59,9 +59,9 @@ export default function NotificationManagementPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Fetch notifications
+  // Fetch all sent notifications (admin view)
   const { data: notifications = [], isLoading } = useQuery<Notification[]>({
-    queryKey: ["/api/notifications"],
+    queryKey: ["/api/notifications?view=sent"],
   });
 
   // Fetch locations for targeting
@@ -80,7 +80,7 @@ export default function NotificationManagementPage() {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications?view=sent"] });
       setIsComposeDialogOpen(false);
       toast({
         title: "Success",
@@ -107,7 +107,7 @@ export default function NotificationManagementPage() {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications?view=sent"] });
       setIsComposeDialogOpen(false);
       toast({
         title: "Success",
@@ -134,7 +134,7 @@ export default function NotificationManagementPage() {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications?view=sent"] });
       setIsComposeDialogOpen(false);
       toast({
         title: "Success",
@@ -161,7 +161,7 @@ export default function NotificationManagementPage() {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications?view=sent"] });
       setIsComposeDialogOpen(false);
       toast({
         title: "Success",
