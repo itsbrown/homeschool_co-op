@@ -1,15 +1,15 @@
 import { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useLocation, useParams } from 'wouter';
-import { PlayCircle, ArrowLeft, Clock, Users, AlertCircle, UserPlus, X, Search, Badge, UserCheck } from 'lucide-react';
+import { PlayCircle, ArrowLeft, Clock, Users, AlertCircle, UserPlus, X, UserCheck } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { Skeleton } from '@/components/ui/skeleton';
+import { UserAutocomplete, UserResult } from '@/components/ui/user-autocomplete';
 import { 
   EducatorErrorBoundary, 
   EducatorLoadingState, 
@@ -67,7 +67,6 @@ function StartSessionContent({ classId }: { classId: number }) {
   const { toast } = useToast();
   const [isStarting, setIsStarting] = useState(false);
   const [showVolunteerSection, setShowVolunteerSection] = useState(false);
-  const [volunteerSearch, setVolunteerSearch] = useState('');
   const [selectedVolunteers, setSelectedVolunteers] = useState<SelectedVolunteer[]>([]);
 
   const { data: classInfo, isLoading, error } = useQuery<ClassInfo>({
@@ -106,6 +105,18 @@ function StartSessionContent({ classId }: { classId: number }) {
 
   const handleRemoveVolunteer = (userId: number) => {
     setSelectedVolunteers(selectedVolunteers.filter(v => v.userId !== userId));
+  };
+
+  const handleSelectVolunteer = (user: UserResult) => {
+    if (!selectedVolunteers.find(v => v.userId === user.id)) {
+      setSelectedVolunteers([...selectedVolunteers, {
+        userId: user.id,
+        name: user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email,
+        email: user.email,
+        role: 'volunteer',
+        isPreAssigned: false
+      }]);
+    }
   };
 
   const createAndStartMutation = useMutation({
@@ -314,19 +325,14 @@ function StartSessionContent({ classId }: { classId: number }) {
                   </div>
                 )}
 
-                {/* Volunteer Search (placeholder for Phase 2.8) */}
+                {/* Volunteer Search */}
                 <div className="space-y-2">
                   <Label className="text-sm text-muted-foreground">Search for volunteers</Label>
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Search by name or email..."
-                      value={volunteerSearch}
-                      onChange={(e) => setVolunteerSearch(e.target.value)}
-                      className="pl-9"
-                      data-testid="input-volunteer-search"
-                    />
-                  </div>
+                  <UserAutocomplete
+                    onSelect={handleSelectVolunteer}
+                    placeholder="Search by name or email..."
+                    excludeIds={selectedVolunteers.map(v => v.userId)}
+                  />
                   <p className="text-xs text-muted-foreground">
                     Search for parents or other volunteers to add to this session
                   </p>
