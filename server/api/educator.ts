@@ -2661,4 +2661,99 @@ router.get('/documents/:id', async (req, res) => {
 
 // ==================== END VOLUNTEER WAIVER ENDPOINTS ====================
 
+// ==================== VOLUNTEER SEARCH ENDPOINTS ====================
+
+// GET /api/educator/volunteers/search - Search for potential volunteers (parents) in the educator's school
+router.get('/volunteers/search', async (req, res) => {
+  try {
+    const userEmail = req.user?.email;
+    const userId = req.user?.id;
+    
+    if (!userEmail || !userId) {
+      return res.status(401).json({ success: false, error: 'Not authenticated' });
+    }
+
+    // Verify educator role
+    const userRoles = await storage.getUserRolesByUserId(userId);
+    const educatorRoles = ['educator', 'mentor', 'teacher', 'instructor', 'aide', 'assistant'];
+    const hasEducatorRole = userRoles.some(r => 
+      educatorRoles.includes(r.role.toLowerCase())
+    );
+
+    if (!hasEducatorRole) {
+      return res.status(403).json({ success: false, error: 'Educator role required' });
+    }
+
+    // Get the educator's school from user record
+    const currentUser = await storage.getUserByEmail(userEmail);
+    if (!currentUser?.schoolId) {
+      return res.status(403).json({ success: false, error: 'No school context found' });
+    }
+
+    const schoolId = currentUser.schoolId;
+    const query = (req.query.query as string || '').toLowerCase().trim();
+    const limit = Math.min(parseInt(req.query.limit as string) || 10, 50);
+
+    // Get all users from this school who could be volunteers (parents)
+    const allUsers = await storage.getAllUsers();
+    
+    // Filter to school-scoped parents/potential volunteers
+    let filteredUsers = allUsers.filter((user: any) => {
+      // Must be in the same school
+      if (user.schoolId !== schoolId) return false;
+      
+      // Only include parents (potential volunteers)
+      if (user.role !== 'parent') return false;
+      
+      // Apply search query if provided
+      if (query) {
+        const nameMatch = (user.name || '').toLowerCase().includes(query);
+        const emailMatch = (user.email || '').toLowerCase().includes(query);
+        const firstNameMatch = (user.firstName || '').toLowerCase().includes(query);
+        const lastNameMatch = (user.lastName || '').toLowerCase().includes(query);
+        
+        if (!nameMatch && !emailMatch && !firstNameMatch && !lastNameMatch) {
+          return false;
+        }
+      }
+      
+      return true;
+    });
+
+    // Sort alphabetically by name
+    filteredUsers.sort((a: any, b: any) => {
+      const aName = (a.name || a.email || '').toLowerCase();
+      const bName = (b.name || b.email || '').toLowerCase();
+      return aName.localeCompare(bName);
+    });
+
+    // Limit results
+    const paginatedUsers = filteredUsers.slice(0, limit);
+
+    // Sanitize response (exclude sensitive fields)
+    const sanitizedUsers = paginatedUsers.map((user: any) => ({
+      id: user.id,
+      email: user.email,
+      name: user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      role: user.role,
+      schoolId: user.schoolId,
+    }));
+
+    console.log(`[VolunteerSearch] Educator ${userId} searched "${query}" - found ${sanitizedUsers.length} results`);
+
+    res.json({
+      success: true,
+      users: sanitizedUsers,
+      total: filteredUsers.length,
+    });
+  } catch (error: any) {
+    console.error('[VolunteerSearch] Error searching volunteers:', error);
+    res.status(500).json({ success: false, error: 'Failed to search volunteers' });
+  }
+});
+
+// ==================== END VOLUNTEER SEARCH ENDPOINTS ====================
+
 export default router;

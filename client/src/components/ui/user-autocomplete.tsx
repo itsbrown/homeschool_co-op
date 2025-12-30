@@ -24,6 +24,7 @@ interface UserAutocompleteProps {
   disabled?: boolean;
   roleFilter?: string;
   excludeIds?: number[];
+  endpoint?: string; // Custom endpoint URL (defaults to /api/user-search/search)
 }
 
 export function UserAutocomplete({
@@ -33,6 +34,7 @@ export function UserAutocomplete({
   disabled = false,
   roleFilter,
   excludeIds = [],
+  endpoint = "/api/user-search/search",
 }: UserAutocompleteProps) {
   const [query, setQuery] = useState("");
   const [isOpen, setIsOpen] = useState(false);
@@ -43,7 +45,7 @@ export function UserAutocomplete({
   const debouncedQuery = useDebounce(query, 300);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["/api/user-search/search", { query: debouncedQuery, role: roleFilter }],
+    queryKey: [endpoint, { query: debouncedQuery, role: roleFilter }],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (debouncedQuery) params.set("query", debouncedQuery);
@@ -52,7 +54,7 @@ export function UserAutocomplete({
 
       const token = localStorage.getItem('supabase_token');
       const activeRole = localStorage.getItem('activeRole');
-      const res = await fetch(`/api/user-search/search?${params}`, {
+      const res = await fetch(`${endpoint}?${params}`, {
         credentials: "include",
         headers: {
           ...(token && { Authorization: `Bearer ${token}` }),

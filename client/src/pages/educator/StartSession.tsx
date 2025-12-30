@@ -332,6 +332,7 @@ function StartSessionContent({ classId }: { classId: number }) {
                     onSelect={handleSelectVolunteer}
                     placeholder="Search by name or email..."
                     excludeIds={selectedVolunteers.map(v => v.userId)}
+                    endpoint="/api/educator/volunteers/search"
                   />
                   <p className="text-xs text-muted-foreground">
                     Search for parents or other volunteers to add to this session
