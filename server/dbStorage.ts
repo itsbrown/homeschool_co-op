@@ -175,6 +175,44 @@ export class DatabaseStorage implements IStorage {
     await db.delete(userRoles).where(eq(userRoles.userId, userId));
   }
 
+  async getParentsBySchoolId(schoolId: number): Promise<User[]> {
+    const db = await getDb();
+    // Join users with user_roles to find users who have 'parent' role in this school
+    const result = await db
+      .select({
+        id: users.id,
+        email: users.email,
+        name: users.name,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        phoneNumber: users.phoneNumber,
+        avatar: users.avatar,
+        role: users.role,
+        schoolId: users.schoolId,
+        username: users.username,
+        password: users.password,
+        subscription: users.subscription,
+        supabaseUserId: users.supabaseUserId,
+        activeRoleId: users.activeRoleId,
+        hasCompletedOnboarding: users.hasCompletedOnboarding,
+        memberId: users.memberId,
+        createdAt: users.createdAt,
+        updatedAt: users.updatedAt
+      })
+      .from(users)
+      .innerJoin(userRoles, eq(users.id, userRoles.userId))
+      .where(
+        and(
+          eq(userRoles.schoolId, schoolId),
+          or(
+            eq(userRoles.role, 'parent'),
+            eq(userRoles.role, 'Parent')
+          )
+        )
+      );
+    return result;
+  }
+
   // School Student methods
   async createSchoolStudent(schoolStudent: InsertSchoolStudent): Promise<SchoolStudent> {
     const db = await getDb();

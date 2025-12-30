@@ -14,6 +14,10 @@ Preferred communication style: Simple, everyday language.
 3. **Trace the data flow** - Map the path: schema → storage → API → frontend
 4. **Identify reusables** - Look for existing components, utilities, and hooks before creating new ones
 5. **Verify types** - Ensure schema types in `shared/schema.ts` support the new feature
+6. **Verify storage methods exist** - Before calling any storage method:
+   - Search `IStorage` interface in `server/storage.ts` to confirm method signature exists
+   - Verify `DatabaseStorage` in `server/dbStorage.ts` implements it
+   - If method doesn't exist, add it FIRST before using it in routes
 
 ### During Development
 1. **Follow existing patterns** - Match naming conventions, error handling, and code style
