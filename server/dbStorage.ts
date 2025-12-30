@@ -177,7 +177,8 @@ export class DatabaseStorage implements IStorage {
 
   async getParentsBySchoolId(schoolId: number): Promise<User[]> {
     const db = await getDb();
-    // Join users with user_roles to find users who have 'parent' role in this school
+    // Join users with user_roles to find users who have 'parent' role
+    // Filter by users.schoolId since parent roles may not have schoolId set in user_roles
     const result = await db
       .select({
         id: users.id,
@@ -203,7 +204,7 @@ export class DatabaseStorage implements IStorage {
       .innerJoin(userRoles, eq(users.id, userRoles.userId))
       .where(
         and(
-          eq(userRoles.schoolId, schoolId),
+          eq(users.schoolId, schoolId),
           or(
             eq(userRoles.role, 'parent'),
             eq(userRoles.role, 'Parent')
