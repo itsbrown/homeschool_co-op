@@ -94,7 +94,7 @@ export default function StaffPositionsPage() {
   const [editIsDefault, setEditIsDefault] = useState(false);
   
   // Get staff positions from API
-  const { data: positions, isLoading } = useQuery({
+  const { data: positions = [], isLoading } = useQuery<Position[]>({
     queryKey: ['/api/school-admin/staff-positions'],
   });
 

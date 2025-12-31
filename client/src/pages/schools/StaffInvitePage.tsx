@@ -15,6 +15,24 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage, FormDescription } from "@/components/ui/form";
 import { Loader2 } from "lucide-react";
 
+interface StaffPosition {
+  id: number;
+  title: string;
+  description?: string;
+  isDefault?: boolean;
+}
+
+interface Location {
+  id: number;
+  name: string;
+}
+
+interface ClassItem {
+  id: number;
+  title: string;
+  gradeLevel?: string;
+}
+
 // Form schema for staff invitation
 const inviteFormSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
@@ -34,7 +52,7 @@ export default function StaffInvitePage() {
   const queryClient = useQueryClient();
 
   // Fetch staff positions for dropdown with automatic updates
-  const { data: staffPositions = [] } = useQuery({
+  const { data: staffPositions = [] } = useQuery<StaffPosition[]>({
     queryKey: ['/api/school-admin/staff-positions'],
     refetchInterval: 5000,
   });
@@ -216,7 +234,7 @@ export default function StaffInvitePage() {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {staffPositions.map((position: any) => (
+                          {staffPositions.map((position) => (
                             <SelectItem key={position.id} value={position.title}>
                               {position.title}
                             </SelectItem>

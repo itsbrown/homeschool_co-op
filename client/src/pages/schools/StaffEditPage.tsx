@@ -49,6 +49,32 @@ interface StaffMember {
   classIds?: number[];
 }
 
+interface StaffPosition {
+  id: number;
+  title: string;
+  description?: string;
+  isDefault?: boolean;
+}
+
+interface Location {
+  id: number;
+  name: string;
+}
+
+interface ClassItem {
+  id: number;
+  title: string;
+  gradeLevel?: string;
+  schedule?: string;
+  location?: string;
+  status?: string;
+}
+
+interface ClassesResponse {
+  items: ClassItem[];
+  total?: number;
+}
+
 export default function StaffEditPage() {
   const { id } = useParams();
   const [, navigate] = useLocation();
@@ -80,12 +106,12 @@ export default function StaffEditPage() {
   });
 
   // Fetch staff positions
-  const { data: staffPositions } = useQuery({
+  const { data: staffPositions = [] } = useQuery<StaffPosition[]>({
     queryKey: ['/api/school-admin/staff-positions'],
   });
 
   // Fetch all locations
-  const { data: locations = [] } = useQuery({
+  const { data: locations = [] } = useQuery<Location[]>({
     queryKey: ['/api/locations']
   });
 
@@ -95,13 +121,13 @@ export default function StaffEditPage() {
   });
 
   // Fetch assigned classes for this staff member
-  const { data: assignedClasses = [], isLoading: classesLoading } = useQuery({
+  const { data: assignedClasses = [], isLoading: classesLoading } = useQuery<ClassItem[]>({
     queryKey: ['/api/school-admin/staff', id, 'classes'],
     enabled: !!id,
   });
 
   // Fetch all available classes for assignment
-  const { data: allClassesData } = useQuery({
+  const { data: allClassesData } = useQuery<ClassesResponse>({
     queryKey: ['/api/school-admin/classes']
   });
   
@@ -260,7 +286,7 @@ export default function StaffEditPage() {
   };
 
   // Get unassigned classes for assignment dialog
-  const assignedClassIds = assignedClasses.map((cls: any) => cls.id);
+  const assignedClassIds = assignedClasses.map((cls) => cls.id);
   const unassignedClasses = allClasses.filter((cls: any) => !assignedClassIds.includes(cls.id));
 
   if (isLoading) {
@@ -365,7 +391,7 @@ export default function StaffEditPage() {
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
-                                {staffPositions?.map((position: any) => (
+                                {staffPositions.map((position) => (
                                   <SelectItem key={position.id} value={position.title}>
                                     {position.title}
                                   </SelectItem>
@@ -390,7 +416,7 @@ export default function StaffEditPage() {
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
-                                {locations?.map((location: any) => (
+                                {locations.map((location) => (
                                   <SelectItem key={location.id} value={location.id.toString()}>
                                     {location.name}
                                   </SelectItem>
@@ -510,7 +536,7 @@ export default function StaffEditPage() {
                           <SelectValue placeholder="Select a class" />
                         </SelectTrigger>
                         <SelectContent>
-                          {unassignedClasses.map((cls: any) => (
+                          {unassignedClasses.map((cls) => (
                             <SelectItem key={cls.id} value={cls.id.toString()}>
                               {cls.title} - {cls.gradeLevel}
                             </SelectItem>
@@ -550,7 +576,7 @@ export default function StaffEditPage() {
                 </div>
               ) : assignedClasses.length > 0 ? (
                 <div className="space-y-3">
-                  {assignedClasses.map((cls: any) => (
+                  {assignedClasses.map((cls) => (
                     <div 
                       key={cls.id}
                       className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"

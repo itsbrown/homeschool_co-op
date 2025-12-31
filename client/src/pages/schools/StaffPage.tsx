@@ -42,8 +42,22 @@ export default function StaffPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  interface StaffMember {
+    id: number;
+    name: string;
+    email: string;
+    role: string;
+    status: string;
+    department?: string;
+    phone?: string;
+    avatar?: string;
+    joinDate?: string;
+    locationId?: number;
+    userId?: number;
+  }
+
   // Fetch staff data from API
-  const { data: staff, isLoading, error } = useQuery({
+  const { data: staff = [], isLoading, error } = useQuery<StaffMember[]>({
     queryKey: ['/api/school-admin/staff'],
     refetchInterval: 5000, // Reasonable refresh interval
     refetchIntervalInBackground: true,
