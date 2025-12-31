@@ -534,9 +534,13 @@ export default function CartCheckout() {
         membershipPayload: membershipPayload ? { amount: membershipPayload.amount } : null
       });
       
+      const token = localStorage.getItem('supabase_token');
       const response = await fetch('/api/stripe/create-payment-intent', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
         credentials: 'include',
         body: JSON.stringify({
           items: cart.items.map(item => ({
