@@ -191,7 +191,10 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
     
     // Determine which authoritative amount to use based on what client is paying
     // Client can pay EITHER full price OR discounted price (both are valid)
-    const clientMembershipClaim = membership?.amount || 0;
+    // Special case: discounted to $0 is also valid when authoritativeMembershipDiscounted === 0
+    const clientMembershipClaim = membership?.amount ?? -1; // Use -1 to distinguish "no membership sent" from "amount=0 sent"
+    const clientSentMembershipPayload = membership !== null && membership !== undefined;
+    
     if (clientMembershipClaim > 0) {
       // Client is claiming to pay membership - validate it matches either valid amount
       if (clientMembershipClaim === authoritativeMembershipFull) {
@@ -199,22 +202,56 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
       } else if (clientMembershipClaim === authoritativeMembershipDiscounted) {
         authoritativeMembershipAmount = authoritativeMembershipDiscounted;
       } else {
-        // Client amount doesn't match either valid option
+        // Client amount doesn't match either valid option - return 409 with authoritative values
         console.error('🚨 PAYMENT VALIDATION FAILED: Membership amount mismatch', {
           clientMembershipClaim,
           authoritativeMembershipFull,
           authoritativeMembershipDiscounted,
           userEmail
         });
-        return res.status(400).json({
-          message: 'Membership fee amount does not match expected amount. Please refresh your cart.',
-          error: 'MEMBERSHIP_AMOUNT_MISMATCH'
+        // Get school name for membership payload construction
+        const schoolForError = await storage.getSchool(parentForMembership?.schoolId || 0);
+        return res.status(409).json({
+          message: 'Membership fee amount does not match expected amount. Cart will be refreshed automatically.',
+          error: 'MEMBERSHIP_AMOUNT_MISMATCH',
+          authoritative: {
+            itemsTotal: 0, // Items haven't been validated yet
+            membershipAmount: authoritativeMembershipDiscounted,
+            membershipAlreadyPaid: false, // If we're in mismatch, it means membership is required and not paid
+            membershipRequired: true,
+            membershipSchoolId: parentForMembership?.schoolId || null,
+            membershipSchoolName: schoolForError?.name || 'School',
+            membershipYear: new Date().getFullYear(),
+            membershipFull: authoritativeMembershipFull,
+            grandTotal: authoritativeMembershipDiscounted,
+            discounts: null,
+            schoolSettings: null
+          }
         });
       }
-    } else if (authoritativeMembershipFull > 0) {
-      // Membership is required but client didn't include it - validation will fail later
-      // Set to full amount for logging purposes
-      authoritativeMembershipAmount = authoritativeMembershipFull;
+    } else if (clientMembershipClaim === 0 && clientSentMembershipPayload && authoritativeMembershipDiscounted === 0) {
+      // Client sent membership with amount=0, and server confirms discounted amount is $0
+      // This is a valid fully-discounted membership - accept it
+      console.log('✅ Accepting $0 discounted membership:', {
+        clientMembershipClaim,
+        authoritativeMembershipDiscounted,
+        authoritativeMembershipFull,
+        userEmail
+      });
+      authoritativeMembershipAmount = 0;
+    } else if (authoritativeMembershipFull > 0 && authoritativeMembershipDiscounted > 0) {
+      // Membership is required with a cost but client didn't include it or sent wrong amount
+      // Set to discounted amount (what they should pay)
+      authoritativeMembershipAmount = authoritativeMembershipDiscounted;
+    } else if (authoritativeMembershipFull > 0 && authoritativeMembershipDiscounted === 0 && !clientSentMembershipPayload) {
+      // Membership required but discounted to $0, client didn't send payload
+      // Accept this as valid since user owes nothing
+      console.log('✅ Membership fully discounted, no payload needed:', {
+        authoritativeMembershipFull,
+        authoritativeMembershipDiscounted,
+        userEmail
+      });
+      authoritativeMembershipAmount = 0;
     }
     
     console.log('🎫 Authoritative membership amount calculated:', {
@@ -535,9 +572,26 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
           userEmail,
           securityNote: 'Underpayment > 5% - likely stale cart data. User should refresh.'
         });
-        return res.status(400).json({
-          message: 'Your cart prices may have changed. Please refresh your cart and try again.',
-          error: 'UNIFIED_TOTAL_MISMATCH'
+        // Return 409 Conflict with authoritative values so client can auto-retry
+        // Include membershipAlreadyPaid flag to help frontend distinguish paid vs $0 discount
+        // Also include full membership metadata so client can construct proper payload on retry
+        const membershipAlreadyPaid = authoritativeMembershipFull > 0 && authoritativeMembershipAmount === 0;
+        const schoolForConflict = await storage.getSchool(parentForMembership?.schoolId || 0);
+        return res.status(409).json({
+          message: 'Your cart prices may have changed. Cart will be refreshed automatically.',
+          error: 'UNIFIED_TOTAL_MISMATCH',
+          authoritative: {
+            itemsTotal: authoritativeItemTotal,
+            membershipAmount: authoritativeMembershipAmount,
+            membershipAlreadyPaid: membershipAlreadyPaid,
+            membershipRequired: authoritativeMembershipFull > 0 && !membershipAlreadyPaid,
+            membershipSchoolId: parentForMembership?.schoolId || null,
+            membershipSchoolName: schoolForConflict?.name || 'School',
+            membershipYear: new Date().getFullYear(),
+            grandTotal: finalServerTotal,
+            discounts: cartPricingResult?.discounts || null,
+            schoolSettings: cartPricingResult?.schoolSettings || null
+          }
         });
       }
     }

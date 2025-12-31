@@ -202,6 +202,12 @@ export default function CartCheckout() {
   
   // Track if begin_checkout has been fired to prevent duplicates
   const [hasTrackedBeginCheckout, setHasTrackedBeginCheckout] = useState(false);
+  
+  // Cart snapshot state for server reconciliation
+  const [snapshotLoading, setSnapshotLoading] = useState(false);
+  const [snapshotId, setSnapshotId] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
+  const MAX_RETRIES = 1; // Only auto-retry once on 409
 
   // Calculate the ACTUAL total payable amount (class total + membership)
   // This is used to determine if we should show the payment form or free enrollment flow
@@ -306,7 +312,12 @@ export default function CartCheckout() {
       
       if (!clientSecret) {
         console.log('🛒 Creating initial payment intent with', cart.items.length, 'items and membership:', !!cart.membership);
-        createPaymentIntent();
+        // Fetch cart snapshot first to get authoritative pricing, then create payment intent
+        const initializeCheckout = async () => {
+          await fetchCartSnapshot();
+          createPaymentIntent();
+        };
+        initializeCheckout();
       }
     } else {
       // Cart is hydrated, not loading, and empty - redirect to programs
@@ -379,6 +390,85 @@ export default function CartCheckout() {
     return () => clearTimeout(timeoutId);
   }, [creditsToApply]);
 
+  // Cached authoritative values from server snapshot
+  // These override client values when creating payment intent
+  const [authoritativeData, setAuthoritativeData] = useState<{
+    itemsTotal: number;
+    membershipAmount: number;
+    membershipAlreadyPaid: boolean;
+    membershipRequired: boolean;
+    membershipSchoolId: number | null;
+    membershipSchoolName: string;
+    membershipYear: number;
+    discounts: any;
+    schoolSettings: any;
+  } | null>(null);
+
+  // Fetch cart snapshot from server to get authoritative pricing
+  const fetchCartSnapshot = async (): Promise<boolean> => {
+    if (cart.items.length === 0) return true; // No items to sync
+    
+    try {
+      setSnapshotLoading(true);
+      console.log('📸 Fetching cart snapshot from server...');
+      
+      const response = await apiRequest(
+        'POST',
+        '/api/cart/snapshot',
+        {
+          items: cart.items.map(item => ({
+            id: item.id,
+            classId: item.classId,
+            childId: item.childId,
+            childName: item.childName,
+            variantId: item.variantId
+          })),
+          appliedPromoCode: cart.appliedPromoCode?.code || null
+        }
+      );
+
+      const snapshot = await response.json();
+      
+      if (snapshot.snapshotId) {
+        setSnapshotId(snapshot.snapshotId);
+        console.log('📸 Cart snapshot received:', {
+          snapshotId: snapshot.snapshotId,
+          serverTotal: snapshot.totals.grandTotal,
+          clientTotal: cart.total + (cart.membership?.amount || 0),
+          membershipRequired: snapshot.membership.required,
+          membershipAmount: snapshot.membership.discountedAmount,
+          membershipAlreadyPaid: snapshot.membership.alreadyPaid,
+          availableCredits: snapshot.credits.available
+        });
+        
+        // Store authoritative data for payment intent creation
+        // Include membershipRequired and school info so we can construct payload even when cart.membership is null
+        setAuthoritativeData({
+          itemsTotal: snapshot.totals.itemsTotal,
+          membershipAmount: snapshot.membership.alreadyPaid ? 0 : snapshot.membership.discountedAmount,
+          membershipAlreadyPaid: snapshot.membership.alreadyPaid,
+          membershipRequired: snapshot.membership.required,
+          membershipSchoolId: snapshot.membership.schoolId || null,
+          membershipSchoolName: snapshot.membership.schoolName || 'School',
+          membershipYear: snapshot.membership.year || new Date().getFullYear(),
+          discounts: snapshot.pricing.discounts,
+          schoolSettings: snapshot.pricing.schoolSettings
+        });
+        
+        // Update available credits from snapshot
+        setAvailableCredits(snapshot.credits.available);
+        
+        return true;
+      }
+      return false;
+    } catch (err: any) {
+      console.warn('⚠️ Failed to fetch cart snapshot (will proceed with client values):', err);
+      return true; // Graceful degradation - proceed anyway
+    } finally {
+      setSnapshotLoading(false);
+    }
+  };
+
   const createPaymentIntent = async () => {
     try {
       setLoading(true);
@@ -387,10 +477,68 @@ export default function CartCheckout() {
       const selectedPlanAmount = getSelectedPlanAmount();
       // selectedPlanAmount is already in cents, no need to multiply by 100
       
-      const response = await apiRequest(
-        'POST',
-        '/api/stripe/create-payment-intent',
-        {
+      // Use authoritative data from snapshot if available, otherwise use client cart values
+      const useAuthData = authoritativeData !== null;
+      const itemsTotal = useAuthData ? authoritativeData.itemsTotal : cart.total;
+      const membershipAmount = useAuthData 
+        ? authoritativeData.membershipAmount 
+        : (cart.membership?.amount || 0);
+      const membershipAlreadyPaid = useAuthData ? authoritativeData.membershipAlreadyPaid : false;
+      const discounts = useAuthData 
+        ? authoritativeData.discounts 
+        : cart.discounts;
+      
+      // Build membership object using authoritative data when available
+      // Key cases:
+      // 1. membershipAlreadyPaid=true → null (no need to pay again)
+      // 2. membershipRequired=true AND !membershipAlreadyPaid → send with authoritative amount (even if 0)
+      //    (server needs to see explicit payload to recognize discounted membership)
+      // 3. cart.membership exists but no authoritative data → use cart.membership
+      // 4. No membership required → null
+      let membershipPayload = null;
+      if (useAuthData) {
+        // Using authoritative data - construct payload from it
+        if (membershipAlreadyPaid) {
+          // Already paid - don't send membership at all
+          membershipPayload = null;
+        } else if (authoritativeData.membershipRequired && authoritativeData.membershipSchoolId) {
+          // Membership required and not paid - ALWAYS send payload using authoritative data
+          // This handles the case where cart.membership is null (discounted to $0 on load)
+          // We use authoritative values because cart.membership may be stale or missing
+          membershipPayload = {
+            schoolId: authoritativeData.membershipSchoolId,
+            schoolName: authoritativeData.membershipSchoolName || cart.membership?.schoolName || 'School',
+            amount: membershipAmount, // Use authoritative amount (may be 0 for discounted)
+            year: authoritativeData.membershipYear,
+          };
+        } else if (cart.membership) {
+          // Cart has membership but server says not required (edge case) - use cart data
+          membershipPayload = {
+            schoolId: cart.membership.schoolId,
+            schoolName: cart.membership.schoolName,
+            amount: membershipAmount,
+            year: cart.membership.year,
+          };
+        }
+        // If membership not required and cart.membership doesn't exist, payload stays null
+      } else {
+        // No authoritative data yet - use client cart membership as-is
+        membershipPayload = cart.membership;
+      }
+      
+      console.log('💳 Creating payment intent with:', {
+        useAuthoritativeData: useAuthData,
+        itemsTotal,
+        membershipAmount,
+        membershipAlreadyPaid,
+        membershipPayload: membershipPayload ? { amount: membershipPayload.amount } : null
+      });
+      
+      const response = await fetch('/api/stripe/create-payment-intent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
           items: cart.items.map(item => ({
             ...item,
             // These values are already in cents, don't multiply by 100 again
@@ -402,32 +550,101 @@ export default function CartCheckout() {
           })),
           subtotal: cart.subtotal, // Already in cents
           discounts: {
-            siblingDiscount: cart.discounts.siblingDiscount, // Already in cents
-            freeAfterThree: cart.discounts.freeAfterThree, // Already in cents
-            appliedDiscounts: cart.discounts.appliedDiscounts || [],
-            totalDiscountAmount: cart.discounts.totalDiscountAmount || 0 // Already in cents
+            siblingDiscount: discounts.siblingDiscount || 0,
+            freeAfterThree: discounts.freeAfterThree || 0,
+            appliedDiscounts: discounts.appliedDiscounts || [],
+            totalDiscountAmount: discounts.totalDiscountAmount || 0
           },
-          total: cart.total, // ALWAYS send full cart total - backend calculates payment plan amounts
+          total: itemsTotal, // Use authoritative items total if available
           paymentPlan: selectedPaymentPlan, // Include payment plan info
           paymentFrequency: paymentFrequency, // Include payment frequency for date-based scheduling
           parentEmail: user?.email,
-          // Include membership fee if present in cart
-          membership: cart.membership ? {
-            schoolId: cart.membership.schoolId,
-            schoolName: cart.membership.schoolName,
-            amount: cart.membership.amount, // Already in cents
-            year: cart.membership.year,
-          } : null,
+          // Include membership fee - use authoritative amount or null if already paid
+          membership: membershipPayload,
           promoCode: cart.appliedPromoCode?.code || null,
           // Volunteer credits to apply (in cents)
           creditsToApply: creditsToApply,
+        })
+      });
+
+      // Handle 409 Conflict - server returned authoritative values
+      if (response.status === 409) {
+        const conflictData = await response.json();
+        console.warn('⚠️ Payment validation conflict - server returned authoritative values:', conflictData);
+        
+        // Auto-retry once by using authoritative values from 409 response
+        if (retryCount < MAX_RETRIES) {
+          setRetryCount(prev => prev + 1);
+          console.log('🔄 Auto-retrying with authoritative data from server (attempt', retryCount + 1, 'of', MAX_RETRIES, ')');
+          
+          toast({
+            title: "Refreshing Cart",
+            description: "Your cart has been updated with the latest prices. Retrying payment...",
+          });
+          
+          // Use authoritative data from 409 response - server now provides full membership metadata
+          if (conflictData.authoritative) {
+            // Use the server's membershipAlreadyPaid flag directly if provided
+            const membershipAlreadyPaid = conflictData.authoritative.membershipAlreadyPaid === true;
+            
+            // IMPORTANT: Preserve itemsTotal from snapshot if 409 response has zero/missing itemsTotal
+            // This happens when MEMBERSHIP_AMOUNT_MISMATCH returns before items are validated
+            const serverItemsTotal = conflictData.authoritative.itemsTotal;
+            const preservedItemsTotal = (serverItemsTotal && serverItemsTotal > 0) 
+              ? serverItemsTotal 
+              : (authoritativeData?.itemsTotal || cart.total);
+            
+            // Use membership metadata from 409 response directly - server now provides full context
+            setAuthoritativeData({
+              itemsTotal: preservedItemsTotal,
+              membershipAmount: conflictData.authoritative.membershipAmount || 0,
+              membershipAlreadyPaid: membershipAlreadyPaid,
+              // Use 409 response values directly - server now includes full metadata
+              membershipRequired: conflictData.authoritative.membershipRequired ?? authoritativeData?.membershipRequired ?? false,
+              membershipSchoolId: conflictData.authoritative.membershipSchoolId ?? authoritativeData?.membershipSchoolId ?? null,
+              membershipSchoolName: conflictData.authoritative.membershipSchoolName ?? authoritativeData?.membershipSchoolName ?? 'School',
+              membershipYear: conflictData.authoritative.membershipYear ?? authoritativeData?.membershipYear ?? new Date().getFullYear(),
+              discounts: conflictData.authoritative.discounts || authoritativeData?.discounts || cart.discounts,
+              schoolSettings: conflictData.authoritative.schoolSettings || authoritativeData?.schoolSettings || null
+            });
+            console.log('📝 Set authoritative data from 409:', {
+              serverItemsTotal,
+              preservedItemsTotal,
+              membershipAmount: conflictData.authoritative.membershipAmount,
+              membershipAlreadyPaid,
+              membershipRequired: conflictData.authoritative.membershipRequired,
+              membershipSchoolId: conflictData.authoritative.membershipSchoolId,
+              grandTotal: conflictData.authoritative.grandTotal
+            });
+          }
+          
+          // Small delay to let state update
+          await new Promise(resolve => setTimeout(resolve, 300));
+          // Recursive retry with authoritative data now set
+          return createPaymentIntent();
+        } else {
+          // Max retries exceeded - show error to user with clear guidance
+          const serverTotal = conflictData.authoritative?.grandTotal;
+          setError(`Cart prices have changed. Server total: ${serverTotal ? formatCurrency(serverTotal) : 'unknown'}. Please refresh the page and try again.`);
+          toast({
+            title: "Cart Updated",
+            description: conflictData.message || "Please refresh the page and try again.",
+            variant: "destructive",
+          });
+          return;
         }
-      );
+      }
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to create payment intent');
+      }
 
       const data = await response.json();
       
       if (data.clientSecret) {
         setClientSecret(data.clientSecret);
+        setRetryCount(0); // Reset retry count on success
         
         // Track begin_checkout event for GA4 only once per checkout session
         if (!hasTrackedBeginCheckout) {

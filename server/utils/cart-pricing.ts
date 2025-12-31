@@ -515,3 +515,133 @@ export async function validateCartTotal(
     result
   };
 }
+
+// Extended cart snapshot with membership and credits for checkout reconciliation
+export interface CartSnapshot {
+  // Unique identifier for this snapshot (hash of inputs)
+  snapshotId: string;
+  // Timestamp when snapshot was generated
+  generatedAt: number;
+  // Cart pricing result
+  pricing: CartPricingResult;
+  // Membership info
+  membership: {
+    required: boolean;
+    amount: number; // Full amount in cents
+    discountedAmount: number; // After any membership discounts
+    alreadyPaid: boolean;
+    schoolId: number; // For payload construction
+    schoolName: string; // For display and payload
+    year: number; // Current year for membership enrollment
+  };
+  // Available credits
+  credits: {
+    available: number; // Total available credits in cents
+  };
+  // Combined totals
+  totals: {
+    itemsTotal: number; // Cart items after discounts
+    membershipTotal: number; // Membership fee (0 if already paid or not required)
+    grandTotal: number; // Items + Membership
+  };
+}
+
+// Generate a snapshot ID from cart inputs for cache/version comparison
+function generateSnapshotId(
+  items: CartItem[],
+  userId: number,
+  schoolId: number,
+  appliedPromoCode?: string
+): string {
+  const payload = JSON.stringify({
+    items: items.map(i => ({ classId: i.classId, childId: i.childId, variantId: i.variantId })),
+    userId,
+    schoolId,
+    promoCode: appliedPromoCode || null,
+    timestamp: Math.floor(Date.now() / 60000) // 1-minute granularity for cache
+  });
+  
+  // Simple hash for comparison (not cryptographic, just for version tracking)
+  let hash = 0;
+  for (let i = 0; i < payload.length; i++) {
+    const char = payload.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32-bit integer
+  }
+  return `snap_${Math.abs(hash).toString(36)}_${Date.now().toString(36)}`;
+}
+
+// Calculate full cart snapshot including membership and credits
+export async function calculateCartSnapshot(
+  items: CartItem[],
+  userId: number,
+  schoolId: number,
+  appliedPromoCode?: string
+): Promise<CartSnapshot> {
+  // Calculate cart pricing
+  const pricing = await calculateCartPricing(items, userId, schoolId, appliedPromoCode);
+  
+  // Get membership info
+  const school = await storage.getSchool(schoolId);
+  const membershipRequired = school?.membershipRequired || false;
+  const membershipFeeAmount = school?.membershipFeeAmount || 0;
+  
+  // Check if user already has active membership
+  const existingMemberships = await storage.getMembershipEnrollmentsByParentId(userId);
+  const currentYear = new Date().getFullYear();
+  const activeMembership = existingMemberships?.find((m: any) => 
+    (m.membershipYear === currentYear || m.membershipYear === currentYear + 1) && 
+    m.status === 'enrolled' &&
+    m.schoolId === schoolId
+  );
+  const alreadyPaid = !!activeMembership;
+  
+  // Calculate membership discount if applicable
+  let discountedMembershipAmount = membershipFeeAmount;
+  if (!alreadyPaid && membershipFeeAmount > 0) {
+    try {
+      const { calculateMembershipDiscount } = await import('./membership');
+      const discountResult = await calculateMembershipDiscount(schoolId, userId, membershipFeeAmount);
+      discountedMembershipAmount = discountResult.finalAmount;
+    } catch (e) {
+      console.warn('Could not calculate membership discount:', e);
+    }
+  }
+  
+  // Get available credits
+  let availableCredits = 0;
+  try {
+    const credits = await storage.getAvailableCredits(userId);
+    availableCredits = credits.reduce((sum, c) => sum + (c.creditAmountCents - (c.usedAmountCents || 0)), 0);
+  } catch (e) {
+    console.warn('Could not fetch available credits:', e);
+  }
+  
+  // Calculate totals
+  const itemsTotal = pricing.total;
+  const membershipTotal = alreadyPaid ? 0 : discountedMembershipAmount;
+  const grandTotal = itemsTotal + membershipTotal;
+  
+  return {
+    snapshotId: generateSnapshotId(items, userId, schoolId, appliedPromoCode),
+    generatedAt: Date.now(),
+    pricing,
+    membership: {
+      required: membershipRequired,
+      amount: membershipFeeAmount,
+      discountedAmount: discountedMembershipAmount,
+      alreadyPaid,
+      schoolId: schoolId, // Include for client to construct membership payload
+      schoolName: school?.name || 'School', // Include for display and payload
+      year: new Date().getFullYear() // Current year for membership enrollment
+    },
+    credits: {
+      available: availableCredits
+    },
+    totals: {
+      itemsTotal,
+      membershipTotal,
+      grandTotal
+    }
+  };
+}

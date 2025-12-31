@@ -1,9 +1,77 @@
 import { Router } from 'express';
 import { supabaseAuth } from '../middleware/supabase-auth';
 import { storage } from '../storage';
-import { calculateCartPricing, validateCartTotal, CartItem } from '../utils/cart-pricing';
+import { calculateCartPricing, validateCartTotal, calculateCartSnapshot, CartItem } from '../utils/cart-pricing';
 
 const router = Router();
+
+// Full cart snapshot endpoint - returns authoritative pricing including membership and credits
+// Used by CartCheckout to reconcile client state with server before payment
+router.post('/snapshot', supabaseAuth, async (req: any, res) => {
+  try {
+    const userEmail = req.user.email;
+    const user = await storage.getUserByEmail(userEmail);
+    
+    if (!user) {
+      return res.status(401).json({ error: 'User not found' });
+    }
+
+    if (!user.schoolId) {
+      return res.status(400).json({ error: 'User is not associated with a school' });
+    }
+
+    const { items, appliedPromoCode } = req.body;
+
+    if (!items || !Array.isArray(items)) {
+      return res.status(400).json({ error: 'Items array is required' });
+    }
+
+    const children = await storage.getChildrenByParentEmail(userEmail);
+    const childIds = children.map(child => child.id);
+
+    const cartItems: CartItem[] = items.map((item: any) => ({
+      id: item.id || `${item.classId}-${item.childId}`,
+      classId: item.classId,
+      childId: item.childId,
+      childName: item.childName || '',
+      variantId: item.variantId
+    }));
+
+    for (const item of cartItems) {
+      if (!childIds.includes(item.childId)) {
+        return res.status(403).json({ 
+          error: 'UNAUTHORIZED_CHILDREN',
+          message: 'Cannot calculate pricing for children not owned by this parent'
+        });
+      }
+    }
+
+    const snapshot = await calculateCartSnapshot(
+      cartItems,
+      user.id,
+      user.schoolId,
+      appliedPromoCode
+    );
+
+    console.log('📸 Cart snapshot generated:', {
+      userEmail,
+      snapshotId: snapshot.snapshotId,
+      itemCount: cartItems.length,
+      itemsTotal: snapshot.totals.itemsTotal,
+      membershipTotal: snapshot.totals.membershipTotal,
+      grandTotal: snapshot.totals.grandTotal,
+      availableCredits: snapshot.credits.available
+    });
+
+    res.json(snapshot);
+  } catch (error: any) {
+    console.error('Error generating cart snapshot:', error);
+    res.status(500).json({ 
+      error: 'SNAPSHOT_ERROR',
+      message: error.message || 'Failed to generate cart snapshot'
+    });
+  }
+});
 
 router.post('/calculate', supabaseAuth, async (req: any, res) => {
   try {
