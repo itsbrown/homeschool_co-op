@@ -208,6 +208,10 @@ export default function CartCheckout() {
   const [snapshotId, setSnapshotId] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
   const MAX_RETRIES = 1; // Only auto-retry once on 409
+  
+  // Checkout conflict guard - prevents infinite loop when 409 errors occur
+  // When true, the initialization useEffect will not re-trigger createPaymentIntent
+  const [hasCheckoutConflict, setHasCheckoutConflict] = useState(false);
 
   // Calculate the ACTUAL total payable amount (class total + membership)
   // This is used to determine if we should show the payment form or free enrollment flow
@@ -310,6 +314,13 @@ export default function CartCheckout() {
         return;
       }
       
+      // Guard: Don't re-trigger if we already hit a checkout conflict (409 with max retries exceeded)
+      // This prevents infinite loops when the server rejects our cart prices
+      if (hasCheckoutConflict) {
+        console.log('🛒 Checkout conflict detected - not re-triggering payment intent creation');
+        return;
+      }
+      
       if (!clientSecret) {
         console.log('🛒 Creating initial payment intent with', cart.items.length, 'items and membership:', !!cart.membership);
         // Fetch cart snapshot first to get authoritative pricing, then create payment intent
@@ -324,7 +335,7 @@ export default function CartCheckout() {
       console.log('🛒 Cart hydrated, not loading, and empty - redirecting to programs');
       setLocation('/programs');
     }
-  }, [isAuthenticated, cartHydrated, cartLoading, cart.items.length, cart.membership, cart.total]); // Re-run when cart or loading status changes
+  }, [isAuthenticated, cartHydrated, cartLoading, cart.items.length, cart.membership, cart.total, hasCheckoutConflict]); // Re-run when cart or loading status changes
   
   // Separate effect to handle discount changes - recreate payment intent when cart total changes
   useEffect(() => {
@@ -332,7 +343,8 @@ export default function CartCheckout() {
     const hasCartContent = cart.items.length > 0 || cart.membership;
     
     // Don't recreate if we haven't created the initial payment intent yet or no cart content
-    if (!clientSecret || !isAuthenticated || !hasCartContent || isInitialLoad) {
+    // Also don't recreate if we have a checkout conflict (prevents infinite loop)
+    if (!clientSecret || !isAuthenticated || !hasCartContent || isInitialLoad || hasCheckoutConflict) {
       return;
     }
     
@@ -359,7 +371,8 @@ export default function CartCheckout() {
     const hasCartContent = cart.items.length > 0 || cart.membership;
     
     // Don't recreate if we haven't created the initial payment intent yet or no cart content
-    if (!clientSecret || !isAuthenticated || !hasCartContent || isInitialLoad) {
+    // Also don't recreate if we have a checkout conflict (prevents infinite loop)
+    if (!clientSecret || !isAuthenticated || !hasCartContent || isInitialLoad || hasCheckoutConflict) {
       return;
     }
     
@@ -377,7 +390,8 @@ export default function CartCheckout() {
   useEffect(() => {
     const hasCartContent = cart.items.length > 0 || cart.membership;
     
-    if (!clientSecret || !isAuthenticated || !hasCartContent || isInitialLoad) {
+    // Also don't recreate if we have a checkout conflict (prevents infinite loop)
+    if (!clientSecret || !isAuthenticated || !hasCartContent || isInitialLoad || hasCheckoutConflict) {
       return;
     }
     
@@ -627,12 +641,16 @@ export default function CartCheckout() {
           // Recursive retry with authoritative data now set
           return createPaymentIntent();
         } else {
-          // Max retries exceeded - show error to user with clear guidance
+          // Max retries exceeded - set conflict guard to prevent infinite loop
+          // This flag prevents the initialization useEffect from re-triggering createPaymentIntent
+          console.log('🚫 Max retries exceeded - setting checkout conflict guard');
+          setHasCheckoutConflict(true);
+          
           const serverTotal = conflictData.authoritative?.grandTotal;
           setError(`Cart prices have changed. Server total: ${serverTotal ? formatCurrency(serverTotal) : 'unknown'}. Please refresh the page and try again.`);
           toast({
             title: "Cart Updated",
-            description: conflictData.message || "Please refresh the page and try again.",
+            description: "Your cart prices have changed. Please refresh the page to continue.",
             variant: "destructive",
           });
           return;
