@@ -4,6 +4,7 @@ import { getDb } from "../db";
 import { programEnrollments } from "../../shared/schema";
 import { eq, inArray } from "drizzle-orm";
 import { getStripeClient } from "../config/stripe";
+import { StripePaymentPlanService } from "../services/stripe-payment-plans";
 
 const router = express.Router();
 
@@ -527,13 +528,30 @@ router.post('/confirm', async (req: any, res) => {
 
     console.log(`✅ Successfully confirmed ${idsToConfirm.length} enrollments for ${userEmail}`);
     
+    // Create scheduled payments from PaymentIntent metadata (post-confirmation)
+    // This ensures scheduled payments are only created for successful payments
+    let scheduledPaymentsResult = { created: 0, skipped: false };
+    try {
+      if (paymentIntent.metadata) {
+        const paymentPlanService = new StripePaymentPlanService(storage as any);
+        scheduledPaymentsResult = await paymentPlanService.createScheduledPaymentsFromConfirmedPayment(
+          paymentIntentId,
+          paymentIntent.metadata as Record<string, string>
+        );
+        console.log(`📅 Scheduled payments creation result:`, scheduledPaymentsResult);
+      }
+    } catch (scheduledPaymentError) {
+      console.error('⚠️ Error creating scheduled payments (non-blocking):', scheduledPaymentError);
+    }
+    
     res.json({ 
       success: true,
       message: `Successfully confirmed ${idsToConfirm.length} enrollment(s)`,
       confirmed: idsToConfirm.length,
       enrollmentIds: idsToConfirm,
       paymentIntentId,
-      paymentAmount: paymentIntent.amount
+      paymentAmount: paymentIntent.amount,
+      scheduledPayments: scheduledPaymentsResult
     });
   } catch (error) {
     console.error('Error confirming enrollments:', error);
