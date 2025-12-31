@@ -330,6 +330,7 @@ export interface IStorage {
   // Scheduled Payment methods
   createScheduledPayment(payment: any): Promise<any>;
   getScheduledPaymentsByParentEmail(parentEmail: string): Promise<any[]>;
+  getScheduledPaymentsByEnrollmentId(enrollmentId: number): Promise<any[]>;
   getAllScheduledPayments(): Promise<any[]>;
   updateScheduledPaymentStatus(id: number, status: string): Promise<any | undefined>;
   updateScheduledPaymentReminderCount(id: number, count: number): Promise<any | undefined>;
@@ -3329,6 +3330,11 @@ export class MemStorage implements IStorage {
     return filteredPayments;
   }
 
+  async getScheduledPaymentsByEnrollmentId(enrollmentId: number): Promise<ScheduledPayment[]> {
+    const allPayments = Array.from(this.scheduledPaymentsStore.values());
+    return allPayments.filter(payment => payment.enrollmentId === enrollmentId);
+  }
+
   async updateScheduledPaymentStatus(id: number, status: 'pending' | 'paid' | 'overdue' | 'cancelled'): Promise<ScheduledPayment | undefined> {
     const payment = this.scheduledPaymentsStore.get(id);
     if (!payment) return undefined;
@@ -5987,6 +5993,18 @@ export class MemStorage implements IStorage {
           }
         } catch (error) {
           return await this.fileStorage.getScheduledPaymentsByParentEmail(parentEmail);
+        }
+      }
+
+      async getScheduledPaymentsByEnrollmentId(enrollmentId: number): Promise<ScheduledPayment[]> {
+        try {
+          if (this.dbStorage && typeof this.dbStorage.getScheduledPaymentsByEnrollmentId === 'function') {
+            return await this.dbStorage.getScheduledPaymentsByEnrollmentId(enrollmentId);
+          } else {
+            return await this.fileStorage.getScheduledPaymentsByEnrollmentId(enrollmentId);
+          }
+        } catch (error) {
+          return await this.fileStorage.getScheduledPaymentsByEnrollmentId(enrollmentId);
         }
       }
 
