@@ -766,7 +766,6 @@ export default function CartCheckout() {
     
     const depositAmount = Math.round(totalAmount * 0.1); // 10% deposit
     const fullAmount = totalAmount;
-    const splitAmount = Math.round(totalAmount / 2); // 50% split payments
     const biweeklyAmount = Math.round(totalAmount / 4); // Estimated 4 payments
     
     return [
@@ -795,23 +794,6 @@ export default function CartCheckout() {
           'Priority class placement',
           'Full refund if cancelled 30 days before'
         ]
-      },
-      {
-        id: 'split',
-        name: 'Split Payment Plan',
-        description: 'Pay 50% now, 50% later',
-        amount: splitAmount,
-        features: [
-          'Pay half now, half in 30 days',
-          'Automatic payment reminders',
-          'No additional fees',
-          'Flexible payment dates'
-        ],
-        installments: {
-          count: 2,
-          frequency: 'monthly',
-          amounts: [splitAmount, splitAmount]
-        }
       },
       {
         id: 'biweekly',
@@ -1104,6 +1086,8 @@ export default function CartCheckout() {
                           setPromoError(result.error || 'Invalid promo code');
                         } else {
                           setPromoCode('');
+                          // Refresh cart snapshot to get server-calculated discounted totals
+                          await fetchCartSnapshot();
                         }
                       }}
                       disabled={!promoCode || validatingPromo}
@@ -1132,7 +1116,11 @@ export default function CartCheckout() {
                       </div>
                     </div>
                     <Button
-                      onClick={removePromoCode}
+                      onClick={async () => {
+                        removePromoCode();
+                        // Refresh cart snapshot to update totals without promo discount
+                        await fetchCartSnapshot();
+                      }}
                       variant="ghost"
                       size="sm"
                       className="text-red-600 hover:text-red-700 hover:bg-red-50"
@@ -1319,80 +1307,6 @@ export default function CartCheckout() {
               </Alert>
             )}
 
-            {/* Payment Frequency Selector - Only show for split payment plan and when there's a balance */}
-            {actualPayableAmount > 0 && ['split'].includes(selectedPaymentPlan) && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Calendar className="h-5 w-5" />
-                    Payment Frequency
-                  </CardTitle>
-                  <CardDescription>
-                    Choose how often you'd like to make payments
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <RadioGroup value={paymentFrequency} onValueChange={(value) => setPaymentFrequency(value as any)}>
-                    <div className="space-y-3">
-                      <div className="flex items-start space-x-3">
-                        <RadioGroupItem value="biweekly" id="biweekly" className="mt-1" />
-                        <Label htmlFor="biweekly" className="flex-1 cursor-pointer">
-                          <div className="flex justify-between items-start">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2">
-                                <h3 className="font-medium">Every 2 Weeks</h3>
-                                <Badge variant="secondary" className="bg-blue-100 text-blue-700 text-xs">
-                                  Recommended
-                                </Badge>
-                              </div>
-                              <p className="text-sm text-muted-foreground mt-1">
-                                Smaller payments spread evenly between class start and end dates
-                              </p>
-                            </div>
-                          </div>
-                        </Label>
-                      </div>
-
-                      <div className="flex items-start space-x-3">
-                        <RadioGroupItem value="weekly" id="weekly" className="mt-1" />
-                        <Label htmlFor="weekly" className="flex-1 cursor-pointer">
-                          <div className="flex justify-between items-start">
-                            <div className="flex-1">
-                              <h3 className="font-medium">Weekly</h3>
-                              <p className="text-sm text-muted-foreground mt-1">
-                                More frequent smaller payments for easier budgeting
-                              </p>
-                            </div>
-                          </div>
-                        </Label>
-                      </div>
-
-                      <div className="flex items-start space-x-3">
-                        <RadioGroupItem value="monthly" id="monthly" className="mt-1" />
-                        <Label htmlFor="monthly" className="flex-1 cursor-pointer">
-                          <div className="flex justify-between items-start">
-                            <div className="flex-1">
-                              <h3 className="font-medium">Monthly</h3>
-                              <p className="text-sm text-muted-foreground mt-1">
-                                Fewer, larger payments aligned with program duration
-                              </p>
-                            </div>
-                          </div>
-                        </Label>
-                      </div>
-                    </div>
-                  </RadioGroup>
-
-                  {/* Payment schedule preview */}
-                  <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-                    <p className="text-xs text-muted-foreground mb-2">
-                      <strong>Note:</strong> Payment dates are calculated based on your class start and end dates.
-                      The final payment will align with the program end date.
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
 
             {/* Payment Information or Free Enrollment */}
             {/* Use actualPayableAmount (class total + membership) to determine if payment is needed */}

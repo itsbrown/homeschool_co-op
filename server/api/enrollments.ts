@@ -1,10 +1,11 @@
 import express from "express";
 import { storage } from "../storage";
 import { getDb } from "../db";
-import { programEnrollments } from "../../shared/schema";
+import { programEnrollments, users } from "../../shared/schema";
 import { eq, inArray } from "drizzle-orm";
 import { getStripeClient } from "../config/stripe";
 import { StripePaymentPlanService } from "../services/stripe-payment-plans";
+import { generateMemberId } from "../utils/membership";
 
 const router = express.Router();
 
@@ -544,6 +545,123 @@ router.post('/confirm', async (req: any, res) => {
       console.error('⚠️ Error creating scheduled payments (non-blocking):', scheduledPaymentError);
     }
     
+    // Create membership from PaymentIntent metadata (post-confirmation)
+    // This ensures membership is recorded immediately on payment success, not just via webhook
+    let membershipCreated = false;
+    try {
+      const metadata = paymentIntent.metadata as Record<string, string>;
+      const hasMembership = metadata.hasMembership === 'true';
+      const membershipSchoolId = metadata.membershipSchoolId ? parseInt(metadata.membershipSchoolId) : null;
+      const membershipAmount = metadata.membershipAmount ? parseInt(metadata.membershipAmount) : 0;
+      const membershipYear = metadata.membershipYear ? parseInt(metadata.membershipYear) : new Date().getFullYear();
+      const parentUserId = metadata.membershipParentUserId ? parseInt(metadata.membershipParentUserId) : null;
+      
+      // Extract discount tracking metadata (mirrors webhook handler)
+      const membershipDiscountId = metadata.membershipDiscountId ? parseInt(metadata.membershipDiscountId) : null;
+      const membershipDiscountName = metadata.membershipDiscountName || null;
+      const membershipOriginalAmount = metadata.membershipOriginalAmount ? parseInt(metadata.membershipOriginalAmount) : null;
+      const membershipDiscountAmount = metadata.membershipDiscountAmount ? parseInt(metadata.membershipDiscountAmount) : 0;
+      
+      if (hasMembership && parentUserId && membershipSchoolId) {
+        console.log('🎫 Creating membership from confirm endpoint:', {
+          parentUserId,
+          membershipSchoolId,
+          membershipAmount,
+          membershipYear,
+          membershipDiscountId,
+          membershipDiscountAmount
+        });
+        
+        // Check if user already has member ID
+        const existingUser = await db
+          .select()
+          .from(users)
+          .where(eq(users.id, parentUserId))
+          .limit(1);
+        
+        if (existingUser.length > 0 && !existingUser[0].memberId) {
+          const newMemberId = generateMemberId();
+          
+          await db
+            .update(users)
+            .set({ memberId: newMemberId })
+            .where(eq(users.id, parentUserId));
+          
+          console.log(`🎫 ✅ Generated Member ID ${newMemberId} for user ${parentUserId}`);
+          
+          const startDate = new Date();
+          const expirationDate = new Date(startDate);
+          expirationDate.setFullYear(expirationDate.getFullYear() + 1);
+          
+          await storage.createMembershipEnrollment({
+            schoolId: membershipSchoolId,
+            parentUserId: parentUserId,
+            membershipYear: membershipYear,
+            membershipTier: 'basic',
+            amount: membershipAmount,
+            amountPaid: membershipAmount,
+            remainingBalance: 0,
+            totalAmount: membershipAmount,
+            balanceDue: 0,
+            status: 'enrolled',
+            stripeSubscriptionId: null,
+            stripeCustomerId: (paymentIntent.customer as string) || null,
+            startDate,
+            renewalDate: expirationDate,
+            dueDate: startDate,
+            endDate: expirationDate,
+            expirationDate,
+            gracePeriodEnd: null,
+            paymentMethod: 'other',
+            notes: `Stripe payment via cart checkout (${paymentIntent.id}) - confirmed via confirm endpoint${membershipDiscountName ? ` - Discount: ${membershipDiscountName}` : ''}`
+          });
+          
+          membershipCreated = true;
+          console.log(`🎫 ✅ Created membership enrollment for user ${parentUserId} in confirm endpoint`);
+          
+          // Track discount usage (mirrors webhook handler logic)
+          if (membershipDiscountId && membershipDiscountAmount > 0 && membershipSchoolId) {
+            try {
+              const schoolDiscounts = await storage.getDiscountsBySchoolId(membershipSchoolId);
+              const discount = schoolDiscounts.find(d => d.id === membershipDiscountId);
+              
+              if (!discount) {
+                console.error(`⚠️ Discount ${membershipDiscountId} not found for school ${membershipSchoolId} - skipping tracking`);
+              } else {
+                const incrementSuccess = await storage.incrementDiscountUsageAtomic(membershipDiscountId);
+                
+                if (!incrementSuccess) {
+                  console.log(`⚠️ Discount ${membershipDiscountName} has reached usage limit - atomic increment failed`);
+                } else {
+                  await storage.createDiscountApplication({
+                    discountId: membershipDiscountId,
+                    parentEmail: userEmail || '',
+                    childId: null,
+                    schoolEnrollmentId: null,
+                    programEnrollmentId: null,
+                    paymentId: null,
+                    classId: null,
+                    originalAmount: membershipOriginalAmount || membershipAmount + membershipDiscountAmount,
+                    discountAmount: membershipDiscountAmount,
+                    finalAmount: membershipAmount,
+                    applicationMethod: 'automatic',
+                    appliedBy: null,
+                  });
+                  console.log(`🎫 ✅ Tracked membership discount usage: ${membershipDiscountName}`);
+                }
+              }
+            } catch (discountTrackError) {
+              console.error('⚠️ Error tracking membership discount application:', discountTrackError);
+            }
+          }
+        } else if (existingUser.length > 0 && existingUser[0].memberId) {
+          console.log(`🎫 User ${parentUserId} already has Member ID: ${existingUser[0].memberId}`);
+        }
+      }
+    } catch (membershipError) {
+      console.error('⚠️ Error creating membership (non-blocking):', membershipError);
+    }
+    
     res.json({ 
       success: true,
       message: `Successfully confirmed ${idsToConfirm.length} enrollment(s)`,
@@ -551,7 +669,8 @@ router.post('/confirm', async (req: any, res) => {
       enrollmentIds: idsToConfirm,
       paymentIntentId,
       paymentAmount: paymentIntent.amount,
-      scheduledPayments: scheduledPaymentsResult
+      scheduledPayments: scheduledPaymentsResult,
+      membershipCreated
     });
   } catch (error) {
     console.error('Error confirming enrollments:', error);

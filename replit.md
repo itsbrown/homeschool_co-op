@@ -1,35 +1,10 @@
 # ASA Learning Platform
 
 ## Overview
-The ASA Learning Platform is an adaptive learning application for the American Seekers Academy. It provides a comprehensive educational experience through a full-stack web architecture, AI-powered content generation, and robust assessment tools. The platform aims to deliver personalized learning paths, efficient administrative capabilities, and a secure, user-friendly environment, positioning itself for significant market impact in adaptive learning.
+The ASA Learning Platform is an adaptive learning application for the American Seekers Academy. It offers a comprehensive educational experience through a full-stack web architecture, AI-powered content generation, and robust assessment tools. The platform aims to provide personalized learning paths, efficient administrative capabilities, and a secure, user-friendly environment, positioning itself for significant market impact in adaptive learning.
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
-
-## Development Checklist
-
-### Pre-Development (Before Writing Code)
-1. **Check LSP errors** - Fix any existing diagnostics in affected files before adding new code
-2. **Read related files** - Study existing patterns in similar components/routes/storage methods
-3. **Trace the data flow** - Map the path: schema → storage → API → frontend
-4. **Identify reusables** - Look for existing components, utilities, and hooks before creating new ones
-5. **Verify types** - Ensure schema types in `shared/schema.ts` support the new feature
-6. **Verify storage methods exist** - Before calling any storage method:
-   - Search `IStorage` interface in `server/storage.ts` to confirm method signature exists
-   - Verify `DatabaseStorage` in `server/dbStorage.ts` implements it
-   - If method doesn't exist, add it FIRST before using it in routes
-
-### During Development
-1. **Follow existing patterns** - Match naming conventions, error handling, and code style
-2. **Build incrementally** - Complete one piece, verify it works, then add the next
-3. **Use proper typing** - Leverage Zod validation at API boundaries
-
-### Post-Development (Before Marking Complete)
-1. **Run architect review** - Use `include_git_diff: true` to review all changes
-2. **Run end-to-end tests** - Use testing tool for user-facing changes
-3. **Verify no regressions** - Check that related functionality still works
-4. **Clean up** - Remove any debugging code, console.logs, or commented-out code
-5. **Update documentation** - Add any new architectural decisions to this file
 
 ## System Architecture
 ### Core Design Principles
@@ -52,28 +27,14 @@ The platform prioritizes scalability, security, and user experience, incorporati
 -   **Supabase**: Reserved exclusively for authentication (OAuth on frontend, auth admin operations on backend) and NOT for general data persistence.
 
 ### Key Features
--   **Authentication and Authorization**: Supabase-based secure authentication with role-based access control, JWT validation, multi-tenant security, and user metadata auto-sync. OAuth registration is blocked for users without prior school registration.
+-   **Authentication and Authorization**: Supabase-based secure authentication with role-based access control, JWT validation, multi-tenant security, user metadata auto-sync, and blocked OAuth registration for un-registered school users.
 -   **Multi-Role System**: Supports users holding multiple roles with dynamic, school-context-restricted role-switching.
 -   **School Branding System**: Allows school administrators to upload and display school logos.
 -   **Membership Management System**: Admin interface for managing annual membership fees and enrollment validation.
--   **Payment System**: Stripe-only system with subscription schedules, webhooks, smart cart logic, automated refunds, and payment reminders. **SECURITY (Dec 2025)**: Server-side authoritative pricing - all payment amounts are calculated from database lookups, never trusted from client. Includes strict validation for class prices (variant-aware), membership fees (discount-aware), and unified validation blocking any total mismatch.
--   **Webhook Security (Dec 2025)**: All Stripe webhooks consolidated into single secure endpoint `/api/stripe/webhook` with mandatory signature verification. Removed insecure `/api/stripe-webhooks/*` routes. Handlers extracted to `server/services/stripeWebhookHandlers.ts` for maintainability. Events handled: payment_intent.succeeded, payment_intent.payment_failed, charge.refunded, invoice.paid, invoice.payment_failed, customer.subscription.created/updated/deleted.
--   **Cart System**: TanStack Query-based cart implementation with API-first state management and race condition prevention.
--   **Discount Systems**: Database-managed comprehensive discount system supporting 19+ discount types:
-    - **Type-based**: percentage, fixed_amount, sibling discounts
-    - **Bundle discounts**: buy_x_get_y, bundle_percent, bundle_fixed
-    - **Application methods**: automatic, manual (promo codes), or both
-    - **Eligibility filters**: role-based (with any/all match logic), min order amount, max discount cap
-    - **Combinability**: priority-based stacking with combinableWithOthers flag
-    - **School-level settings**: Free After Threshold (e.g., 3rd child free), sibling discount rates
--   **Server-Side Cart Pricing (Dec 2025)**: `server/utils/cart-pricing.ts` provides `calculateCartPricing()` for authoritative discount calculations:
-    - Mirrors frontend discount logic for consistency
-    - Called by `/api/cart/calculate` and `/api/cart/validate` endpoints
-    - Integrated into `create-payment-intent` for fraud prevention
-    - Tolerance checks: 1% for overpayment (fraud), 0.5% for underpayment (rounding)
-    - Per-item price validation still occurs before cart-level discount calculation
--   **Free Enrollment Admin Approval**: Enrollments resulting in a $0 total require admin approval.
--   **Enrollment Management**: Prevents duplicate enrollments, manages status workflows, and integrates with the cart-to-checkout flow.
+-   **Payment System**: Stripe-only system with subscription schedules, webhooks, smart cart logic, automated refunds, payment reminders, and server-side authoritative pricing with strict validation. All Stripe webhooks are consolidated into a single secure endpoint `/api/stripe/webhook` with mandatory signature verification.
+-   **Cart System**: TanStack Query-based cart implementation with API-first state management and race condition prevention, including server-side authoritative discount calculations.
+-   **Discount Systems**: Database-managed comprehensive discount system supporting 19+ discount types (percentage, fixed, bundle, sibling) with various application methods (automatic, manual), eligibility filters (role-based, min order amount, max cap), and combinability rules.
+-   **Enrollment Management**: Prevents duplicate enrollments, manages status workflows, integrates with cart-to-checkout, and requires admin approval for $0 total enrollments.
 -   **Class Management**: School administrators can create, edit, and manage classes with multi-variant pricing and school isolation.
 -   **Registration Flow**: Two-tier registration with school code validation and transactional role creation.
 -   **AI Enrollment Assistant**: Provides personalized AI guidance.
@@ -83,55 +44,21 @@ The platform prioritizes scalability, security, and user experience, incorporati
 -   **Parent Profile Management**: Parent users can update profiles; school administrators view profiles with multi-tenant data isolation.
 -   **Content Management System**: Creation and management of knowledge bases, file uploads, and AI-powered content analysis/generation.
 -   **Product Order Form System**: Enhanced schema supporting variant configurations, descriptions, and dynamic pricing.
--   **Dedicated Detail/Edit Pages**: Specific pages for parent class details and editing child profiles.
 -   **Responsive UI Patterns**: Consistent mobile-responsive patterns across admin pages.
 -   **Student Management System**: Tracks students across schools, including auto-sync for existing children.
 -   **Notification System**: In-app notification system with PostgreSQL storage and real-time unread counts.
 -   **Category Management System**: School-level custom category system with dynamic dropdown integration and idempotent seeding of default categories.
 -   **Interactive Onboarding Tour**: Custom-built guided tour for new parent accounts.
 -   **Subscription Status Toggle**: School admin-configurable toggle to control subscription status display during checkout.
--   **AI Smart Tutorial System**: Conversational AI guidance using Anthropic Claude that provides context-aware help to parents. Features rate limiting, conversation truncation, dynamic UI element highlighting, and page-specific suggestions.
--   **System Error Monitoring**: Comprehensive error tracking and notification system with database logging, severity levels (low/medium/high/critical), automatic email notifications for critical errors, daily summary emails at 8 AM, React Error Boundary for frontend errors, Express error middleware for backend errors, and admin dashboard at /admin/system-errors for viewing/filtering/resolving errors. Email notifications sent to errors@americanseekersacademy.com.
--   **Unified Credit System (Dec 2025)**: Extensible multi-type credit system supporting volunteer, referral, achievement, marketing, and manual credits:
-    - **Schema**: Single `credits` table with `creditType` enum, `sourceType`/`sourceId` for polymorphic linking, `metadata` JSONB for type-specific data
-    - **Credit Types**: `volunteer` (session-based), `referral` (user referrals), `achievement` (milestone rewards), `marketing` (promotions), `manual` (admin-issued)
-    - **Credit Earning**: Auto-generated pending credits when sessions end with volunteers ($20/hr = 2000 cents/hr, stored in metadata)
-    - **Admin Approval**: Admin page at `/admin/volunteer-credits` for reviewing pending credits with approve/reject workflow
-    - **Credit Lifecycle**: pending → approved (sets 1-year expiration) → partially_used/used/expired/revoked
-    - **Checkout Integration**: User endpoints `/api/my-credits` and `/api/my-credits/available`, CartCheckout UI with toggle to apply credits
-    - **FIFO Consumption**: Credits ordered by `expiresAt` (soonest to expire first), validated at payment intent creation, consumed atomically after successful payment
-    - **Expiration Service**: `server/services/creditExpirationService.ts` runs every 12 hours to mark expired credits
-    - **Storage Methods**: Unified IStorage interface with `getCredits`, `getCreditsByType`, `getAvailableCredits`, `createCredit`, `approveCredit`, `rejectCredit`, `useCredits`, `expireCredits`
-    - **Webhook Flow**: `handleDirectPaymentSuccess` uses `storage.useCredits()` for atomic FIFO consumption
-    - **Security**: Server-side credit validation at payment intent creation, credits reduce payment amount, stored in payment intent metadata
-    - **Backward Compatibility**: Old `/api/school-admin/volunteer-credits` endpoints preserved alongside new unified endpoints
+-   **AI Smart Tutorial System**: Conversational AI guidance using Anthropic Claude with context-aware help, rate limiting, conversation truncation, dynamic UI element highlighting, and page-specific suggestions.
+-   **System Error Monitoring**: Comprehensive error tracking and notification system with database logging, severity levels, automatic email notifications for critical errors, daily summaries, React Error Boundary, Express error middleware, and an admin dashboard.
+-   **Unified Credit System**: Extensible multi-type credit system supporting volunteer, referral, achievement, marketing, and manual credits. Features a single `credits` table, admin approval workflow, FIFO consumption during checkout, and an expiration service.
 
 ### Educator Dashboard
-The Educator Dashboard provides educators/mentors with tools to manage their classes, track attendance, view lesson plans, and log their work hours. It integrates with the existing Daily Flow system for lesson planning.
-
-**Architecture (Dec 2025):**
-- **EducatorAppShell** (`client/src/components/layout/EducatorAppShell.tsx`): Dedicated navigation shell for educator/mentor roles with emerald color scheme, featuring sidebar navigation (Dashboard, My Classes, Students, Schedule, My Hours, Notifications, Settings)
-- **Role-Specific Routing**: App.tsx detects educator/mentor roles and routes to EducatorAppShell instead of ParentAppShell, ensuring persona-specific navigation
-- **RoleSwitcher Case Normalization**: Role comparison uses lowercase normalization to handle database values like "Mentor" matching roleConfig keys like "mentor"
-- **Routing Pattern**: `/educator/*` routes use EducatorAppShell, admin routes use AppShell with AI tools, parent routes use ParentAppShell
-
-**Completed Features:**
-- Phase 0 Foundation (Dec 2025): Role switching fix, EducatorAppShell navigation, dedicated routing
-- Educator Session MVP (view classes, start/end sessions, daily flow integration)
-- Admin Tools & Planning (manage schedules, audit trail, weekly calendar, my hours)
-- Session Attendance Tracking UI (mark students present/absent/late/excused, bulk actions, notes)
-- Day at a Glance Dashboard (active session indicator, stats cards, today's schedule, quick actions)
-- Weekly Calendar with class schedules (fetches from `/api/educator/schedules/week`, supports recurring/one-time schedules, student birthdays)
-
-**Planned Features:**
-- Class-specific parent messaging with admin approval
-- Notification system for educators
-- Academic features (gradebook, resource sharing)
-- Scheduling & Integration (calendar, alerts)
-- Analytics & Security (dashboards, 2FA, compliance)
+Provides educators/mentors with tools to manage classes, track attendance, view lesson plans, and log work hours. It integrates with the Daily Flow system and features a dedicated `EducatorAppShell` with role-specific routing and an emerald color scheme. Key features include session management, attendance tracking, and a weekly calendar.
 
 ## External Dependencies
--   **Supabase**: Authentication (OAuth).
+-   **Supabase**: Authentication.
 -   **Neon PostgreSQL**: Primary database.
 -   **Stripe**: Payment processing.
 -   **Anthropic Claude API**: AI content generation and analysis.

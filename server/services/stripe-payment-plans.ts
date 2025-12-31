@@ -14,7 +14,7 @@ export interface PaymentPlanData {
   parentEmail: string;
   enrollmentIds: number[];
   totalAmount: number; // In cents
-  paymentPlan: 'deposit' | 'split' | 'biweekly' | 'full';
+  paymentPlan: 'deposit' | 'biweekly' | 'full';
   paymentFrequency?: PaymentFrequency; // Optional: for date-based payment schedules
   // Membership data (optional) - derived server-side from authenticated user
   membership?: {
@@ -544,40 +544,6 @@ export class StripePaymentPlanService {
             dueDate: add30Days(now),
             installmentNumber: 2,
             description: 'Balance Payment'
-          }
-        ];
-
-      case 'split':
-        // 50% now, 50% in 30 days
-        // Ensure ALL payments meet Stripe's minimum
-        const calculatedFirstHalf = Math.round(totalAmount * 0.5);
-        const firstHalf = Math.max(calculatedFirstHalf, STRIPE_MINIMUM_AMOUNT);
-        const secondHalf = totalAmount - firstHalf;
-        
-        // Check if total amount is too small for split payments
-        if (totalAmount < STRIPE_MINIMUM_AMOUNT * 2 || secondHalf < STRIPE_MINIMUM_AMOUNT) {
-          // If total is less than $1.00 or second payment would be below minimum, use full payment
-          console.warn(`⚠️ Split plan not viable for amount ${CurrencyUtils.toDisplay(totalAmount)} - using full payment instead`);
-          return [{
-            amount: totalAmount, // Use exact total, validation already ensures it's >= $0.50
-            dueDate: now,
-            installmentNumber: 1,
-            description: 'Full Payment (amount below minimum for payment plans)'
-          }];
-        }
-        
-        return [
-          {
-            amount: firstHalf,
-            dueDate: now,
-            installmentNumber: 1,
-            description: 'First Payment (50%)'
-          },
-          {
-            amount: secondHalf,
-            dueDate: add30Days(now),
-            installmentNumber: 2,
-            description: 'Second Payment (50%)'
           }
         ];
 
