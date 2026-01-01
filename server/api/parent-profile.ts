@@ -508,13 +508,23 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
               if (!['completed', 'succeeded'].includes(payment.status)) {
                 return false;
               }
-              // Match by enrollmentIds array (most accurate)
+              // Match by enrollmentIds array (most accurate - prevents double counting)
               const paymentEnrollmentIds = (payment as any).enrollmentIds;
               if (paymentEnrollmentIds && Array.isArray(paymentEnrollmentIds) && paymentEnrollmentIds.length > 0) {
                 return paymentEnrollmentIds.includes(enrollment.id);
               }
-              // Fallback: match by childName for older payments
-              return payment.childName === enrollment.childName;
+              // Match by class name (specific, prevents double counting across enrollments)
+              const paymentClassName = (payment.className || '').toLowerCase().trim();
+              const enrollmentClassName = (classInfo?.title || '').toLowerCase().trim();
+              if (paymentClassName && enrollmentClassName && paymentClassName === enrollmentClassName) {
+                // Also verify childName matches to be extra safe
+                const paymentChildName = (payment.childName || '').toLowerCase().trim();
+                const enrollmentChildName = (enrollment.childName || '').toLowerCase().trim();
+                if (!paymentChildName || !enrollmentChildName || paymentChildName === enrollmentChildName) {
+                  return true;
+                }
+              }
+              return false;
             });
             
             const historyTotal = CurrencyUtils.sum(enrollmentPayments.map(p => p.amount || 0));
