@@ -1371,27 +1371,36 @@ export default function CartCheckout() {
                       </div>
                     </div>
                     <div className="text-right">
-                      {selectedPaymentPlan === 'biweekly' ? (
-                        <>
-                          <div className="text-xs text-blue-600 mb-1">
-                            Total: {formatCurrency(actualPayableAmount)}
-                          </div>
-                          <div className="text-lg font-bold text-blue-900">
-                            {formatCurrency(Math.ceil(actualPayableAmount / 4))} × 4 payments
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <div className="text-lg font-bold text-blue-900">
-                            {formatCurrency(getSelectedPlanAmount())}
-                          </div>
-                          {selectedPaymentPlan === 'deposit' && (
-                            <div className="text-xs text-blue-600">
-                              Remaining: {formatCurrency(actualPayableAmount - getSelectedPlanAmount())}
+                      {(() => {
+                        const payableAmount = authoritativeData?.payableAmount ?? actualPayableAmount;
+                        const selectedPlan = getPaymentPlanOptions().find(p => p.id === selectedPaymentPlan);
+                        
+                        if (selectedPaymentPlan === 'biweekly') {
+                          return (
+                            <>
+                              <div className="text-xs text-blue-600 mb-1">
+                                Total: {formatCurrency(payableAmount)}
+                              </div>
+                              <div className="text-lg font-bold text-blue-900">
+                                {formatCurrency(selectedPlan?.amount || Math.ceil(payableAmount / 4))} × 4 payments
+                              </div>
+                            </>
+                          );
+                        }
+                        
+                        return (
+                          <>
+                            <div className="text-lg font-bold text-blue-900">
+                              {formatCurrency(getSelectedPlanAmount())}
                             </div>
-                          )}
-                        </>
-                      )}
+                            {selectedPaymentPlan === 'deposit' && (
+                              <div className="text-xs text-blue-600">
+                                Remaining: {formatCurrency(payableAmount - getSelectedPlanAmount())}
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
                     </div>
                   </div>
                 </div>
