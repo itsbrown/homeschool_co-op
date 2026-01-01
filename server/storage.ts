@@ -7202,19 +7202,19 @@ export class MemStorage implements IStorage {
 
       // ==================== STRIPE PAYMENT HISTORY ====================
       async saveStripePayment(payment: InsertStripePaymentHistory): Promise<StripePaymentHistory> {
-        return this.dbStorage.saveStripePayment(payment);
+        return this.memStorage.saveStripePayment(payment);
       }
 
       async getStripePaymentHistoryByUserId(userId: number): Promise<StripePaymentHistory[]> {
-        return this.dbStorage.getStripePaymentHistoryByUserId(userId);
+        return this.memStorage.getStripePaymentHistoryByUserId(userId);
       }
 
       async getStripePaymentsBySubscription(subscriptionId: string): Promise<StripePaymentHistory[]> {
-        return this.dbStorage.getStripePaymentsBySubscription(subscriptionId);
+        return this.memStorage.getStripePaymentsBySubscription(subscriptionId);
       }
 
       async getStripePaymentByIntentId(paymentIntentId: string): Promise<StripePaymentHistory | undefined> {
-        return this.dbStorage.getStripePaymentByIntentId(paymentIntentId);
+        return this.memStorage.getStripePaymentByIntentId(paymentIntentId);
       }
 
       // Clear all data from storage (for testing)
