@@ -53,7 +53,8 @@ import {
   volunteerCredits, type VolunteerCredit, type InsertVolunteerCredit,
   creditUsageLogs, type CreditUsageLog, type InsertCreditUsageLog,
   credits, type Credit, type InsertCredit, type CreditType, type CreditStatus,
-  unifiedCreditUsageLogs, type UnifiedCreditUsageLog, type InsertUnifiedCreditUsageLog
+  unifiedCreditUsageLogs, type UnifiedCreditUsageLog, type InsertUnifiedCreditUsageLog,
+  paymentAllocations, type PaymentAllocation, type InsertPaymentAllocation
 } from "@shared/schema";
 import { eq, inArray } from 'drizzle-orm';
 import { getDb } from './db';
@@ -628,6 +629,16 @@ export interface IStorage {
   getUnifiedCreditUsageLogById(id: number): Promise<UnifiedCreditUsageLog | undefined>;
   getUnifiedCreditUsageLogsByCreditId(creditId: number): Promise<UnifiedCreditUsageLog[]>;
   createUnifiedCreditUsageLog(log: InsertUnifiedCreditUsageLog): Promise<UnifiedCreditUsageLog>;
+
+  // ==================== PAYMENT ALLOCATIONS ====================
+  // Source of truth for linking payments to enrollments
+  
+  getPaymentAllocationById(id: number): Promise<PaymentAllocation | undefined>;
+  getPaymentAllocationsByEnrollmentId(enrollmentId: number): Promise<PaymentAllocation[]>;
+  getPaymentAllocationsByPaymentHistoryId(paymentHistoryId: number): Promise<PaymentAllocation[]>;
+  createPaymentAllocation(allocation: InsertPaymentAllocation): Promise<PaymentAllocation>;
+  createPaymentAllocations(allocations: InsertPaymentAllocation[]): Promise<PaymentAllocation[]>;
+  getTotalPaidForEnrollment(enrollmentId: number): Promise<number>;
 }
 
 export class MemStorage implements IStorage {

@@ -941,6 +941,44 @@ export const insertPaymentDiscountSchema = createInsertSchema(paymentDiscounts)
 export type InsertPaymentDiscount = z.infer<typeof insertPaymentDiscountSchema>;
 export type PaymentDiscount = typeof paymentDiscounts.$inferSelect;
 
+// Payment Allocations table - links payments to enrollments for deriving totals
+// This is the source of truth for "how much has been paid toward each enrollment"
+export const paymentAllocations = pgTable("payment_allocations", {
+  id: serial("id").primaryKey(),
+  paymentHistoryId: integer("payment_history_id").notNull().references(() => stripePaymentHistory.id, { onDelete: 'cascade' }),
+  enrollmentId: integer("enrollment_id").notNull().references(() => schoolClassEnrollments.id, { onDelete: 'cascade' }),
+  
+  // Amount allocated to this enrollment (in cents)
+  // Positive for payments, negative for refunds
+  allocatedAmountCents: integer("allocated_amount_cents").notNull(),
+  
+  // Allocation type for audit trail
+  allocationType: text("allocation_type", {
+    enum: ["payment", "refund", "reallocation_out", "reallocation_in", "adjustment"]
+  }).notNull().default("payment"),
+  
+  // Optional reference to source allocation (for reallocations)
+  sourceAllocationId: integer("source_allocation_id"),
+  
+  // Admin comment for manual adjustments/reallocations
+  adminComment: text("admin_comment"),
+  
+  // Metadata for audit trail
+  metadata: jsonb("metadata"),
+  
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertPaymentAllocationSchema = createInsertSchema(paymentAllocations)
+  .omit({ id: true, createdAt: true })
+  .extend({
+    sourceAllocationId: z.number().nullable().default(null),
+    adminComment: z.string().nullable().default(null),
+    metadata: z.any().nullable().default(null),
+  });
+export type InsertPaymentAllocation = z.infer<typeof insertPaymentAllocationSchema>;
+export type PaymentAllocation = typeof paymentAllocations.$inferSelect;
+
 // Define emergency contact relations
 export const emergencyContactsRelations = relations(emergencyContacts, ({ one }) => ({
   user: one(users, { fields: [emergencyContacts.userId], references: [users.id] })

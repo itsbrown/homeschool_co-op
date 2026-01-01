@@ -1476,6 +1476,31 @@ async function runMigrations() {
     `);
     console.log('✅ Migration completed: volunteer_credits migrated to unified credits table');
     
+    // Create payment_allocations table for linking payments to enrollments
+    console.log('Running migration: Creating payment_allocations table...');
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS payment_allocations (
+        id SERIAL PRIMARY KEY,
+        payment_history_id INTEGER NOT NULL REFERENCES stripe_payment_history(id) ON DELETE CASCADE,
+        enrollment_id INTEGER NOT NULL REFERENCES school_class_enrollments(id) ON DELETE CASCADE,
+        allocated_amount_cents INTEGER NOT NULL,
+        allocation_type TEXT NOT NULL DEFAULT 'payment',
+        source_allocation_id INTEGER,
+        admin_comment TEXT,
+        metadata JSONB,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_payment_allocations_payment_history_id 
+      ON payment_allocations(payment_history_id);
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_payment_allocations_enrollment_id 
+      ON payment_allocations(enrollment_id);
+    `);
+    console.log('✅ Migration completed: payment_allocations table created');
+    
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     
