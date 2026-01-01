@@ -488,27 +488,48 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
         notes: child.notes,
         createdAt: child.createdAt
       })),
-      enrollments: filteredEnrollments.map(enrollment => {
+      enrollments: await Promise.all(filteredEnrollments.map(async enrollment => {
         const classInfo = (classes as any[]).find(c => c.id === enrollment.classId);
         
-        // Calculate actual payments made for this enrollment
-        // IMPROVED: Use enrollmentIds for precise matching, with childName as fallback
-        const enrollmentPayments = paymentHistory.filter(payment => {
-          if (!['completed', 'succeeded'].includes(payment.status)) {
-            return false;
-          }
-          
-          // PRIMARY: Match by enrollmentIds array (most accurate)
-          const paymentEnrollmentIds = (payment as any).enrollmentIds;
-          if (paymentEnrollmentIds && Array.isArray(paymentEnrollmentIds) && paymentEnrollmentIds.length > 0) {
-            return paymentEnrollmentIds.includes(enrollment.id);
-          }
-          
-          // FALLBACK: Match by childName for legacy payments without enrollmentIds
-          return payment.childName === enrollment.childName;
-        });
+        // Calculate totalPaid with three fallback levels:
+        // 1. Payment allocations ledger (source of truth for new payments)
+        // 2. Payment history matching (for legacy payments)
+        // 3. Cached totalPaid field (last resort)
+        let totalPaid = 0;
         
-        const totalPaid = CurrencyUtils.sum(enrollmentPayments.map(p => p.amount || 0));
+        try {
+          // LEVEL 1: Check payment_allocations ledger first (source of truth)
+          const allocationTotal = await storage.getTotalPaidForEnrollment(enrollment.id);
+          if (allocationTotal > 0) {
+            totalPaid = allocationTotal;
+          } else {
+            // LEVEL 2: For legacy enrollments, calculate from payment history
+            const enrollmentPayments = paymentHistory.filter(payment => {
+              if (!['completed', 'succeeded'].includes(payment.status)) {
+                return false;
+              }
+              // Match by enrollmentIds array (most accurate)
+              const paymentEnrollmentIds = (payment as any).enrollmentIds;
+              if (paymentEnrollmentIds && Array.isArray(paymentEnrollmentIds) && paymentEnrollmentIds.length > 0) {
+                return paymentEnrollmentIds.includes(enrollment.id);
+              }
+              // Fallback: match by childName for older payments
+              return payment.childName === enrollment.childName;
+            });
+            
+            const historyTotal = CurrencyUtils.sum(enrollmentPayments.map(p => p.amount || 0));
+            if (historyTotal > 0) {
+              totalPaid = historyTotal;
+            } else {
+              // LEVEL 3: Use cached totalPaid as last resort
+              totalPaid = enrollment.totalPaid || 0;
+            }
+          }
+        } catch (err) {
+          // On error, fall back to cached value
+          totalPaid = enrollment.totalPaid || 0;
+        }
+        
         const totalCost = enrollment.totalCost || 0;
         const actualRemainingBalance = CurrencyUtils.calculateBalance(totalCost, totalPaid);
         
@@ -527,7 +548,7 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
           remainingBalance: CurrencyUtils.toDisplay(actualRemainingBalance),
           paymentPlan: enrollment.paymentPlan
         };
-      }),
+      })),
       membershipEnrollments: membershipEnrollments.map(membership => {
         // Get school info for membership display
         const school = classes.find(c => c.schoolId === membership.schoolId) || { schoolId: membership.schoolId };
