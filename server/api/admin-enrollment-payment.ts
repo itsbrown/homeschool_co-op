@@ -479,12 +479,13 @@ router.post('/:enrollmentId/reallocate-payment', async (req: any, res) => {
       console.log(`✅ Transferred $${(amount / 100).toFixed(2)} from enrollment ${enrollmentId} to ${targetEnrollmentId}`);
       
       // Create payment allocations for reallocation (source of truth)
-      // Find payment history record via existing allocations for this enrollment
+      // Requires existing allocations to maintain ledger integrity
       try {
         const existingAllocations = await storage.getPaymentAllocationsByEnrollmentId(enrollmentId);
-        const paymentHistoryId = existingAllocations.length > 0 ? existingAllocations[0].paymentHistoryId : null;
         
-        if (paymentHistoryId) {
+        if (existingAllocations.length > 0) {
+          const paymentHistoryId = existingAllocations[0].paymentHistoryId;
+          
           // Create outgoing allocation from source
           await storage.createPaymentAllocation({
             paymentHistoryId,
@@ -508,7 +509,9 @@ router.post('/:enrollmentId/reallocate-payment', async (req: any, res) => {
           });
           console.log('✅ Created reallocation payment allocations');
         } else {
-          console.log('⚠️ No existing allocations found for enrollment, cannot create reallocation allocations');
+          // Pre-migration enrollment without allocations - still process via cached totals
+          // Allocations will be created when backfill runs
+          console.log('⚠️ Legacy enrollment without allocations - reallocation processed via cached totals only');
         }
       } catch (allocationError) {
         console.error('⚠️ Error creating reallocation allocations (non-blocking):', allocationError);
@@ -567,9 +570,9 @@ router.post('/:enrollmentId/reallocate-payment', async (req: any, res) => {
       // Create payment allocation for credit conversion (source of truth)
       try {
         const existingAllocations = await storage.getPaymentAllocationsByEnrollmentId(enrollmentId);
-        const paymentHistoryId = existingAllocations.length > 0 ? existingAllocations[0].paymentHistoryId : null;
         
-        if (paymentHistoryId) {
+        if (existingAllocations.length > 0) {
+          const paymentHistoryId = existingAllocations[0].paymentHistoryId;
           await storage.createPaymentAllocation({
             paymentHistoryId,
             enrollmentId: enrollmentId,
@@ -581,7 +584,7 @@ router.post('/:enrollmentId/reallocate-payment', async (req: any, res) => {
           });
           console.log('✅ Created credit conversion payment allocation');
         } else {
-          console.log('⚠️ No existing allocations found for enrollment, cannot create credit conversion allocation');
+          console.log('⚠️ Legacy enrollment without allocations - credit conversion processed via cached totals only');
         }
       } catch (allocationError) {
         console.error('⚠️ Error creating credit conversion allocation (non-blocking):', allocationError);
