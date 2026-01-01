@@ -265,14 +265,23 @@ export default function EnrollmentsAdminPage() {
     switch (status) {
       case "paid":
       case "active":
+      case "completed":
         return "default";
       case "pending_payment":
+      case "pending_admin_approval":
         return "secondary";
       case "overdue":
         return "destructive";
       default:
         return "outline";
     }
+  };
+
+  const getStatusDisplayText = (status: string, paymentStatus: string) => {
+    if (status === 'pending_admin_approval') {
+      return 'Pending Approval';
+    }
+    return paymentStatus;
   };
 
   const selectedPreviewData = paymentPlanDetails && selectedFrequency && paymentPlanDetails.frequencyPreviews[selectedFrequency];
@@ -349,6 +358,10 @@ export default function EnrollmentsAdminPage() {
                                 </span>
                               )}
                             </>
+                          ) : enrollment.status === 'pending_admin_approval' ? (
+                            <Badge variant="secondary" className="bg-amber-100 text-amber-800">
+                              Pending Approval
+                            </Badge>
                           ) : (
                             <Badge variant={getStatusBadgeVariant(enrollment.paymentStatus)}>
                               {enrollment.paymentStatus}
@@ -387,6 +400,18 @@ export default function EnrollmentsAdminPage() {
                                 >
                                   <CheckCircle2 className="h-4 w-4 mr-2" />
                                   Mark Enrolled
+                                </Button>
+                              )}
+                              {enrollment.status === 'pending_admin_approval' && (
+                                <Button
+                                  variant="default"
+                                  size="sm"
+                                  className="bg-green-600 hover:bg-green-700"
+                                  onClick={() => handleMarkAsEnrolled(enrollment)}
+                                  data-testid={`button-approve-${enrollment.id}`}
+                                >
+                                  <CheckCircle2 className="h-4 w-4 mr-2" />
+                                  Approve
                                 </Button>
                               )}
                             </>

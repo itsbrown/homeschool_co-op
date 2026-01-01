@@ -674,6 +674,38 @@ export default function CartCheckout() {
 
       const data = await response.json();
       
+      // Handle credit-only checkout (when credits fully cover the order)
+      if (data.creditOnlyCheckout) {
+        console.log('🎫 Credit-only checkout completed:', data);
+        setRetryCount(0);
+        
+        // Clear the cart since credits have been consumed
+        clearCart();
+        
+        // Track purchase event for GA4
+        trackBeginCheckout(
+          cart.items.map(item => ({
+            item_id: String(item.classId),
+            item_name: item.className,
+            price: item.price,
+            quantity: 1,
+            item_category: 'Class',
+            item_variant: item.childName,
+          })),
+          cart.total
+        );
+        
+        // Show success message and redirect
+        toast({
+          title: "Enrollment Submitted",
+          description: data.message || "Your enrollment has been submitted for admin approval. Your credits have been applied.",
+        });
+        
+        // Redirect to success/enrollments page
+        setLocation('/parent/programs/enrollments');
+        return;
+      }
+      
       if (data.clientSecret) {
         setClientSecret(data.clientSecret);
         setRetryCount(0); // Reset retry count on success
@@ -1067,7 +1099,7 @@ export default function CartCheckout() {
                     <div className="flex justify-between text-sm text-amber-600">
                       <span className="flex items-center gap-1">
                         <Award className="h-3 w-3" />
-                        Volunteer Credits:
+                        Credits:
                       </span>
                       <span>-{formatCurrency(creditsToApply)}</span>
                     </div>
@@ -1168,13 +1200,13 @@ export default function CartCheckout() {
               </CardContent>
             </Card>
 
-            {/* Volunteer Credits */}
+            {/* Credits */}
             {availableCredits > 0 && (
-              <Card data-testid="card-volunteer-credits">
+              <Card data-testid="card-credits">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-base">
                     <Award className="h-4 w-4 text-amber-500" />
-                    Volunteer Credits
+                    Credits
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">

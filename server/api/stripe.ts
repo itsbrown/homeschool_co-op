@@ -1033,6 +1033,181 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
         });
       }
       
+      // CREDIT-ONLY CHECKOUT: Handle $0 total after credits are applied
+      // When credits fully cover the order, skip Stripe and process directly with admin approval
+      if (totalWithMembership === 0 && validatedCreditsToApply > 0) {
+        console.log('🎫 CREDIT-ONLY CHECKOUT: Total is $0 after credits, skipping Stripe');
+        
+        // Consume credits using FIFO (existing pattern from dbStorage)
+        const creditUsageResult = await storage.useCredits(
+          parent.id,
+          validatedCreditsToApply,
+          undefined, // paymentHistoryId - will be created below
+          `Credit-only checkout for enrollments: ${enrollmentIds.join(', ')}`
+        );
+        
+        console.log('💰 Credits consumed:', {
+          totalUsed: creditUsageResult.totalUsed,
+          creditsCount: creditUsageResult.usedCredits.length
+        });
+        
+        // Update enrollments to pending_admin_approval status (requires school admin approval for $0 orders)
+        // Allocate credits proportionally based on cart pricing
+        // Use DISCOUNTED total for allocation, SUBTOTAL for proportions (they use same basis)
+        const discountedEnrollmentTotal = hasItems && cartPricingResult ? cartPricingResult.total : 0;
+        const rawEnrollmentSubtotal = hasItems && cartPricingResult ? cartPricingResult.subtotal : 0;
+        const membershipTotal = authoritativeMembershipAmount || 0;
+        
+        // Pre-calculate credit portions: enrollments get their discounted share, membership gets the rest
+        const enrollmentCreditsToAllocate = Math.min(discountedEnrollmentTotal, validatedCreditsToApply);
+        const membershipCreditsToAllocate = Math.min(membershipTotal, validatedCreditsToApply - enrollmentCreditsToAllocate);
+        
+        console.log('📊 Credit allocation plan:', {
+          totalCredits: validatedCreditsToApply,
+          enrollmentSubtotal: rawEnrollmentSubtotal,
+          enrollmentDiscountedTotal: discountedEnrollmentTotal,
+          membershipTotal,
+          enrollmentCredits: enrollmentCreditsToAllocate,
+          membershipCredits: membershipCreditsToAllocate
+        });
+        
+        const creditAllocationDetails: { enrollments: { id: number; credits: number; cost: number }[]; membership: { credits: number; cost: number } | null } = {
+          enrollments: [],
+          membership: null
+        };
+        
+        // Allocate enrollment credits proportionally across all enrollments
+        // Use running remainder approach to ensure exact reconciliation (no rounding drift)
+        let remainingEnrollmentCredits = enrollmentCreditsToAllocate;
+        const enrollmentCount = enrollmentIds.length;
+        let processedCount = 0;
+        
+        for (const enrollmentId of enrollmentIds) {
+          const enrollment = await storage.getProgramEnrollmentById(enrollmentId);
+          if (!enrollment) continue;
+          
+          processedCount++;
+          const isLastEnrollment = processedCount === enrollmentCount;
+          
+          const enrollmentCost = enrollment.totalCost || 0;
+          
+          let creditsForThisEnrollment: number;
+          let discountedEnrollmentCost: number;
+          
+          if (isLastEnrollment) {
+            // Last enrollment absorbs any remaining credits to ensure exact reconciliation
+            creditsForThisEnrollment = remainingEnrollmentCredits;
+            discountedEnrollmentCost = creditsForThisEnrollment; // In credit-only checkout, paid = cost
+          } else {
+            // Calculate proportional share for non-last enrollments
+            const proportion = rawEnrollmentSubtotal > 0 ? enrollmentCost / rawEnrollmentSubtotal : 0;
+            creditsForThisEnrollment = Math.round(enrollmentCreditsToAllocate * proportion);
+            // Clamp to remaining
+            creditsForThisEnrollment = Math.min(creditsForThisEnrollment, remainingEnrollmentCredits);
+            discountedEnrollmentCost = creditsForThisEnrollment; // In credit-only checkout, paid = cost
+          }
+          
+          remainingEnrollmentCredits -= creditsForThisEnrollment;
+          
+          creditAllocationDetails.enrollments.push({
+            id: enrollmentId,
+            credits: creditsForThisEnrollment,
+            cost: discountedEnrollmentCost // In credit-only, credits applied = cost covered
+          });
+          
+          await storage.updateProgramEnrollment(enrollmentId, {
+            status: 'pending_admin_approval',
+            paymentStatus: 'completed', // Paid via credits
+            totalPaid: creditsForThisEnrollment, // Record only this enrollment's portion
+            // In credit-only checkout, credits fully cover the order, so remainingBalance is always 0
+            remainingBalance: 0,
+            metadata: {
+              creditOnlyCheckout: true,
+              creditsAppliedToThisEnrollment: creditsForThisEnrollment,
+              discountedCost: discountedEnrollmentCost,
+              totalCreditsAppliedInCheckout: validatedCreditsToApply,
+              creditUsageDetails: creditUsageResult.usedCredits,
+              requiresAdminApproval: true,
+              checkoutDate: new Date().toISOString()
+            }
+          });
+          console.log(`✅ Enrollment ${enrollmentId} updated: credits applied ${creditsForThisEnrollment}, status pending_admin_approval`);
+        }
+        
+        // Create payment history record for credit-only checkout using saveStripePayment
+        const totalEnrollmentCredits = creditAllocationDetails.enrollments.reduce((sum, e) => sum + e.credits, 0);
+        
+        // Track membership credit allocation if applicable
+        // Use actual remaining credits after enrollment allocation for exact reconciliation
+        const actualMembershipCredits = validatedCreditsToApply - totalEnrollmentCredits;
+        if (actualMembershipCredits > 0) {
+          creditAllocationDetails.membership = {
+            credits: actualMembershipCredits,
+            cost: actualMembershipCredits // In credit-only checkout, credits = cost
+          };
+          console.log(`✅ Membership credit allocation: ${actualMembershipCredits} cents applied (absorbs any rounding from enrollment allocation)`);
+        }
+        
+        const totalMembershipCredits = creditAllocationDetails.membership?.credits || 0;
+        
+        // Reconciliation check: ensure allocated credits equal total credits (with 1 cent rounding tolerance)
+        const totalAllocatedCredits = totalEnrollmentCredits + totalMembershipCredits;
+        const allocationDifference = Math.abs(totalAllocatedCredits - validatedCreditsToApply);
+        if (allocationDifference > 1) {
+          console.error('🚨 Credit allocation reconciliation failed:', {
+            validatedCreditsToApply,
+            totalAllocatedCredits,
+            enrollmentCredits: totalEnrollmentCredits,
+            membershipCredits: totalMembershipCredits,
+            difference: allocationDifference
+          });
+        } else {
+          console.log('✅ Credit allocation reconciled:', {
+            total: validatedCreditsToApply,
+            allocated: totalAllocatedCredits,
+            enrollments: totalEnrollmentCredits,
+            membership: totalMembershipCredits
+          });
+        }
+        
+        const paymentHistoryEntry = await (storage as any).saveStripePayment({
+          userId: parent.id,
+          paymentIntentId: `credit_only_${Date.now()}`, // Unique ID for credit-only payments
+          amount: validatedCreditsToApply,
+          currency: 'usd',
+          status: 'succeeded',
+          metadata: {
+            creditOnlyCheckout: true,
+            enrollmentIds,
+            creditUsage: creditUsageResult.usedCredits,
+            checkoutType: 'credit_only',
+            creditsApplied: validatedCreditsToApply,
+            creditAllocation: {
+              enrollmentCredits: totalEnrollmentCredits,
+              membershipCredits: totalMembershipCredits,
+              details: creditAllocationDetails
+            }
+          }
+        });
+        
+        console.log('📝 Payment history created:', {
+          id: paymentHistoryEntry.id,
+          totalCredits: validatedCreditsToApply,
+          enrollmentCredits: totalEnrollmentCredits,
+          membershipCredits: totalMembershipCredits
+        });
+        
+        // Return success response for credit-only checkout
+        return res.json({
+          creditOnlyCheckout: true,
+          enrollmentIds,
+          creditsApplied: validatedCreditsToApply,
+          message: 'Enrollment submitted for admin approval. Your credits have been applied.',
+          paymentHistoryId: paymentHistoryEntry.id,
+          status: 'pending_admin_approval'
+        });
+      }
+      
       // Use payment plan service for ALL payment plans
       // NOTE: CombinedStorage has all IStorage methods needed but doesn't formally implement the interface
       // See server/storage.ts TODO comment for full context on storage interface alignment
