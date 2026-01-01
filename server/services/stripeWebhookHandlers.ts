@@ -332,6 +332,8 @@ export async function handleDirectPaymentSuccess(paymentIntent: Stripe.PaymentIn
               enrollmentId: enrollment.id,
               allocatedAmountCents: enrollmentAmounts.get(enrollment.id) || perEnrollmentAmount,
               allocationType: 'payment' as const,
+              sourceAllocationId: null,
+              adminComment: null,
               metadata: {
                 paymentIntentId: paymentIntent.id,
                 parentEmail,
@@ -390,7 +392,7 @@ export async function handleDirectPaymentSuccess(paymentIntent: Stripe.PaymentIn
           const { usedCredits, totalUsed } = await storage.useCredits(
             parentUser.id, 
             creditsApplied, 
-            null, // paymentHistoryId - could be populated if we want to link it
+            undefined, // paymentHistoryId - could be populated if we want to link it
             `Applied to enrollment payment ${paymentIntent.id}`
           );
           

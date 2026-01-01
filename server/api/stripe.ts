@@ -1237,7 +1237,7 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
         parentEmail: userEmail,
         enrollmentIds,
         totalAmount: totalWithMembership, // Include membership fee in total (already reduced by credits)
-        paymentPlan: paymentPlan as 'deposit' | 'split' | 'biweekly' | 'full',
+        paymentPlan: paymentPlan as 'deposit' | 'biweekly' | 'full',
         paymentFrequency: paymentFrequency as 'weekly' | 'biweekly' | 'monthly' | 'one_time',
         membership: serverMembership, // Pass server-validated membership data
         discountSnapshot, // Pass discount tracking data
