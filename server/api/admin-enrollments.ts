@@ -25,8 +25,8 @@ router.get('/enrollments/:id', async (req, res) => {
   }
 });
 
-// DELETE enrollment by ID
-router.delete('/enrollments/:id', async (req, res) => {
+// DELETE enrollment by ID (blocks if totalPaid > 0)
+router.delete('/enrollments/:id', async (req: any, res) => {
   try {
     const enrollmentId = parseInt(req.params.id);
     
@@ -34,13 +34,45 @@ router.delete('/enrollments/:id', async (req, res) => {
       return res.status(400).json({ message: 'Invalid enrollment ID' });
     }
     
-    console.log(`🗑️  Admin deleting enrollment ID: ${enrollmentId}`);
+    // Get authenticated user email
+    const userEmail = req.user?.email || req.auth?.email;
+    if (!userEmail) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    // Verify user is a school admin
+    const user = await storage.getUserByEmail(userEmail);
+    if (!user || user.role !== 'schoolAdmin') {
+      return res.status(403).json({ message: 'Only school administrators can delete enrollments' });
+    }
     
-    // Get enrollment details first for logging
+    console.log(`🗑️  Admin ${userEmail} attempting to delete enrollment ID: ${enrollmentId}`);
+    
+    // Get enrollment details first for validation and logging
     const enrollment = await storage.getProgramEnrollmentById(enrollmentId);
     
     if (!enrollment) {
       return res.status(404).json({ message: 'Enrollment not found' });
+    }
+
+    // Verify enrollment belongs to admin's school
+    if (enrollment.schoolId !== user.schoolId) {
+      return res.status(403).json({ message: 'Cannot delete enrollments from other schools' });
+    }
+
+    // Block deletion if there are payments - require reallocation first
+    const totalPaid = enrollment.totalPaid || 0;
+    if (totalPaid > 0) {
+      console.log(`⚠️ Cannot delete enrollment ${enrollmentId} - has $${(totalPaid / 100).toFixed(2)} in payments`);
+      return res.status(400).json({ 
+        message: 'Cannot delete enrollment with existing payments',
+        error: 'PAYMENTS_EXIST',
+        details: {
+          totalPaid: totalPaid,
+          totalPaidFormatted: `$${(totalPaid / 100).toFixed(2)}`,
+          hint: 'Please reallocate or refund the payments before unenrolling'
+        }
+      });
     }
     
     console.log(`📝 Deleting: ${enrollment.className} for ${enrollment.childName} (${enrollment.parentEmail})`);

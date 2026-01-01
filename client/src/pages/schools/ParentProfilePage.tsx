@@ -56,6 +56,7 @@ import {
   CheckCircle,
   Plus,
   Edit,
+  Pencil,
   Trash2,
   Award,
   Copy,
@@ -502,6 +503,22 @@ export default function ParentProfilePage() {
   const [addEnrollmentDialogOpen, setAddEnrollmentDialogOpen] = useState(false);
   const [membershipPaymentDialog, setMembershipPaymentDialog] = useState<{ open: boolean; membership: any }>({ open: false, membership: null });
   const [createMembershipDialog, setCreateMembershipDialog] = useState(false);
+  
+  // Enrollment management state
+  const [selectedEnrollment, setSelectedEnrollment] = useState<any>(null);
+  const [unenrollDialogOpen, setUnenrollDialogOpen] = useState(false);
+  const [reallocateDialogOpen, setReallocateDialogOpen] = useState(false);
+  const [reallocateType, setReallocateType] = useState<'enrollment' | 'credit' | 'refund'>('credit');
+  const [reallocateAmount, setReallocateAmount] = useState('');
+  const [reallocateTargetEnrollmentId, setReallocateTargetEnrollmentId] = useState('');
+  const [reallocateComment, setReallocateComment] = useState('');
+  
+  // Edit parent state
+  const [editParentDialogOpen, setEditParentDialogOpen] = useState(false);
+  const [editParentFirstName, setEditParentFirstName] = useState('');
+  const [editParentLastName, setEditParentLastName] = useState('');
+  const [editParentPhone, setEditParentPhone] = useState('');
+  
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { schoolId } = useSchoolAdmin();
@@ -722,6 +739,180 @@ export default function ParentProfilePage() {
     },
   });
 
+  // Unenroll mutation
+  const unenrollMutation = useMutation({
+    mutationFn: async (enrollmentId: number) => {
+      const response = await apiRequest("DELETE", `/api/admin/enrollments/${enrollmentId}`);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw errorData;
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Unenrolled",
+        description: "Enrollment has been deleted successfully."
+      });
+      queryClient.invalidateQueries({ queryKey: [`/api/parent-profile/${parentId}`] });
+      setUnenrollDialogOpen(false);
+      setSelectedEnrollment(null);
+    },
+    onError: (error: any) => {
+      if (error.error === 'PAYMENTS_EXIST') {
+        toast({
+          title: "Cannot Unenroll",
+          description: `This enrollment has ${error.details?.totalPaidFormatted} in payments. Please reallocate or refund the payments first.`,
+          variant: "destructive",
+        });
+        // Open reallocate dialog instead
+        setUnenrollDialogOpen(false);
+        setReallocateDialogOpen(true);
+        setReallocateAmount(String((error.details?.totalPaid || 0) / 100));
+      } else {
+        toast({
+          title: "Error",
+          description: error.message || "Failed to unenroll",
+          variant: "destructive",
+        });
+      }
+    },
+  });
+
+  // Reallocate payment mutation
+  const reallocatePaymentMutation = useMutation({
+    mutationFn: async ({ enrollmentId, targetType, amount, targetEnrollmentId, adminComment }: {
+      enrollmentId: number;
+      targetType: 'enrollment' | 'credit' | 'refund';
+      amount: number;
+      targetEnrollmentId?: number;
+      adminComment: string;
+    }) => {
+      const response = await apiRequest("POST", `/api/admin/enrollments/${enrollmentId}/reallocate-payment`, {
+        targetType,
+        amount: Math.round(amount * 100), // Convert to cents
+        targetEnrollmentId: targetEnrollmentId || undefined,
+        adminComment
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to reallocate payment');
+      }
+      return response.json();
+    },
+    onSuccess: (data) => {
+      let description = '';
+      if (data.targetType === 'enrollment') {
+        description = `Payment transferred to ${data.targetEnrollment?.className || 'another enrollment'}`;
+      } else if (data.targetType === 'credit') {
+        description = `$${(data.amount / 100).toFixed(2)} added as account credit`;
+      } else if (data.targetType === 'refund') {
+        description = `$${(data.amount / 100).toFixed(2)} refunded to original payment method`;
+      }
+      toast({
+        title: "Payment Reallocated",
+        description
+      });
+      queryClient.invalidateQueries({ queryKey: [`/api/parent-profile/${parentId}`] });
+      setReallocateDialogOpen(false);
+      setSelectedEnrollment(null);
+      resetReallocateForm();
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to reallocate payment",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const resetReallocateForm = () => {
+    setReallocateType('credit');
+    setReallocateAmount('');
+    setReallocateTargetEnrollmentId('');
+    setReallocateComment('');
+  };
+
+  // Edit parent mutation
+  const editParentMutation = useMutation({
+    mutationFn: async (data: { firstName: string; lastName: string; phone: string }) => {
+      const response = await apiRequest("PATCH", `/api/admin/parents/${parentId}`, data);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to update parent');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Parent Updated",
+        description: "Parent information has been updated successfully",
+      });
+      queryClient.invalidateQueries({ queryKey: [`/api/parent-profile/${parentId}`] });
+      setEditParentDialogOpen(false);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update parent",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleEditParentSubmit = () => {
+    if (!editParentFirstName.trim() || !editParentLastName.trim()) {
+      toast({
+        title: "Required Fields",
+        description: "First name and last name are required",
+        variant: "destructive",
+      });
+      return;
+    }
+    editParentMutation.mutate({
+      firstName: editParentFirstName.trim(),
+      lastName: editParentLastName.trim(),
+      phone: editParentPhone.trim()
+    });
+  };
+
+  const handleReallocateSubmit = () => {
+    if (!selectedEnrollment) return;
+    const amount = parseFloat(reallocateAmount);
+    if (isNaN(amount) || amount <= 0) {
+      toast({
+        title: "Invalid Amount",
+        description: "Please enter a valid amount",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!reallocateComment.trim()) {
+      toast({
+        title: "Comment Required",
+        description: "Please provide a reason for this reallocation",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (reallocateType === 'enrollment' && !reallocateTargetEnrollmentId) {
+      toast({
+        title: "Select Target",
+        description: "Please select a target enrollment",
+        variant: "destructive",
+      });
+      return;
+    }
+    reallocatePaymentMutation.mutate({
+      enrollmentId: selectedEnrollment.id,
+      targetType: reallocateType,
+      amount,
+      targetEnrollmentId: reallocateType === 'enrollment' ? parseInt(reallocateTargetEnrollmentId) : undefined,
+      adminComment: reallocateComment
+    });
+  };
+
   // Copy Member ID to clipboard
   const handleCopyMemberId = () => {
     if (profile?.parent.memberId) {
@@ -890,9 +1081,24 @@ export default function ParentProfilePage() {
                   <User className="h-6 w-6 text-primary" />
                 </div>
                 <div>
-                  <CardTitle className="text-2xl">
-                    {profile.parent.firstName} {profile.parent.lastName}
-                  </CardTitle>
+                  <div className="flex items-center gap-2">
+                    <CardTitle className="text-2xl">
+                      {profile.parent.firstName} {profile.parent.lastName}
+                    </CardTitle>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setEditParentFirstName(profile.parent.firstName || '');
+                        setEditParentLastName(profile.parent.lastName || '');
+                        setEditParentPhone(profile.parent.phone || '');
+                        setEditParentDialogOpen(true);
+                      }}
+                      data-testid="btn-edit-parent"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                  </div>
                   <CardDescription className="flex items-center space-x-4 mt-2">
                     <span className="flex items-center">
                       <Mail className="h-4 w-4 mr-1" />
@@ -1346,12 +1552,16 @@ export default function ParentProfilePage() {
                           <TableHead>Enrollment Date</TableHead>
                           <TableHead>Status</TableHead>
                           <TableHead>Total Cost</TableHead>
-                          <TableHead>Remaining Balance</TableHead>
+                          <TableHead>Paid</TableHead>
+                          <TableHead>Balance</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {profile.enrollments.map((enrollment) => (
-                          <TableRow key={enrollment.id}>
+                        {profile.enrollments.map((enrollment) => {
+                          const totalPaid = enrollment.totalCost - enrollment.remainingBalance;
+                          return (
+                          <TableRow key={enrollment.id} data-testid={`enrollment-row-${enrollment.id}`}>
                             <TableCell className="font-medium">
                               {enrollment.childName}
                             </TableCell>
@@ -1375,12 +1585,48 @@ export default function ParentProfilePage() {
                             </TableCell>
                             <TableCell>${enrollment.totalCost.toFixed(2)}</TableCell>
                             <TableCell>
+                              <span className={totalPaid > 0 ? 'text-green-600 font-medium' : ''}>
+                                ${totalPaid.toFixed(2)}
+                              </span>
+                            </TableCell>
+                            <TableCell>
                               <span className={enrollment.remainingBalance > 0 ? 'text-orange-600 font-medium' : 'text-green-600'}>
                                 ${enrollment.remainingBalance.toFixed(2)}
                               </span>
                             </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex justify-end gap-2">
+                                {totalPaid > 0 && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                      setSelectedEnrollment(enrollment);
+                                      setReallocateAmount(String(totalPaid));
+                                      setReallocateDialogOpen(true);
+                                    }}
+                                    data-testid={`btn-reallocate-${enrollment.id}`}
+                                  >
+                                    <DollarSign className="h-4 w-4 mr-1" />
+                                    Reallocate
+                                  </Button>
+                                )}
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  onClick={() => {
+                                    setSelectedEnrollment(enrollment);
+                                    setUnenrollDialogOpen(true);
+                                  }}
+                                  data-testid={`btn-unenroll-${enrollment.id}`}
+                                >
+                                  <Trash2 className="h-4 w-4 mr-1" />
+                                  Unenroll
+                                </Button>
+                              </div>
+                            </TableCell>
                           </TableRow>
-                        ))}
+                        )})}
                       </TableBody>
                     </Table>
                   </div>
@@ -1410,6 +1656,222 @@ export default function ParentProfilePage() {
                   }}
                   onCancel={() => setAddEnrollmentDialogOpen(false)}
                 />
+              </DialogContent>
+            </Dialog>
+
+            {/* Unenroll Confirmation Dialog */}
+            <AlertDialog open={unenrollDialogOpen} onOpenChange={setUnenrollDialogOpen}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Unenroll from Class</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Are you sure you want to unenroll {selectedEnrollment?.childName} from {selectedEnrollment?.className}?
+                    {selectedEnrollment && (selectedEnrollment.totalCost - selectedEnrollment.remainingBalance) > 0 && (
+                      <span className="block mt-2 text-amber-600 font-medium">
+                        Note: This enrollment has ${(selectedEnrollment.totalCost - selectedEnrollment.remainingBalance).toFixed(2)} in payments. 
+                        You may need to reallocate these funds first.
+                      </span>
+                    )}
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel onClick={() => {
+                    setUnenrollDialogOpen(false);
+                    setSelectedEnrollment(null);
+                  }}>
+                    Cancel
+                  </AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => selectedEnrollment && unenrollMutation.mutate(selectedEnrollment.id)}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    disabled={unenrollMutation.isPending}
+                    data-testid="btn-confirm-unenroll"
+                  >
+                    {unenrollMutation.isPending ? "Processing..." : "Unenroll"}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+
+            {/* Reallocate Payment Dialog */}
+            <Dialog open={reallocateDialogOpen} onOpenChange={(open) => {
+              setReallocateDialogOpen(open);
+              if (!open) {
+                setSelectedEnrollment(null);
+                resetReallocateForm();
+              }
+            }}>
+              <DialogContent className="max-w-lg">
+                <DialogHeader>
+                  <DialogTitle>Reallocate Payment</DialogTitle>
+                  <DialogDescription>
+                    Move payment from {selectedEnrollment?.className} ({selectedEnrollment?.childName}) to another destination.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div>
+                    <label className="text-sm font-medium block mb-2">Amount to Reallocate</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0.01"
+                        max={selectedEnrollment ? (selectedEnrollment.totalCost - selectedEnrollment.remainingBalance) : 0}
+                        value={reallocateAmount}
+                        onChange={(e) => setReallocateAmount(e.target.value)}
+                        className="w-full pl-8 p-2 border border-gray-300 rounded-md"
+                        placeholder="0.00"
+                        data-testid="input-reallocate-amount"
+                      />
+                    </div>
+                    {selectedEnrollment && (
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Available: ${(selectedEnrollment.totalCost - selectedEnrollment.remainingBalance).toFixed(2)}
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-medium block mb-2">Reallocation Type</label>
+                    <Select value={reallocateType} onValueChange={(v: 'enrollment' | 'credit' | 'refund') => setReallocateType(v)}>
+                      <SelectTrigger data-testid="select-reallocate-type">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="credit">Add as Account Credit</SelectItem>
+                        <SelectItem value="enrollment">Transfer to Another Enrollment</SelectItem>
+                        <SelectItem value="refund">Refund to Original Payment Method</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {reallocateType === 'enrollment' && (
+                    <div>
+                      <label className="text-sm font-medium block mb-2">Target Enrollment</label>
+                      <Select value={reallocateTargetEnrollmentId} onValueChange={setReallocateTargetEnrollmentId}>
+                        <SelectTrigger data-testid="select-target-enrollment">
+                          <SelectValue placeholder="Select target enrollment" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {profile.enrollments
+                            .filter(e => e.id !== selectedEnrollment?.id && e.remainingBalance > 0)
+                            .map(e => (
+                              <SelectItem key={e.id} value={String(e.id)}>
+                                {e.childName} - {e.className} (Balance: ${e.remainingBalance.toFixed(2)})
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                      {profile.enrollments.filter(e => e.id !== selectedEnrollment?.id && e.remainingBalance > 0).length === 0 && (
+                        <p className="text-sm text-amber-600 mt-1">No other enrollments with remaining balance available.</p>
+                      )}
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="text-sm font-medium block mb-2">Reason for Reallocation *</label>
+                    <textarea
+                      value={reallocateComment}
+                      onChange={(e) => setReallocateComment(e.target.value)}
+                      className="w-full p-2 border border-gray-300 rounded-md"
+                      rows={3}
+                      placeholder="Enter reason for this reallocation..."
+                      data-testid="input-reallocate-comment"
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" onClick={() => {
+                    setReallocateDialogOpen(false);
+                    setSelectedEnrollment(null);
+                    resetReallocateForm();
+                  }}>
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleReallocateSubmit}
+                    disabled={reallocatePaymentMutation.isPending}
+                    data-testid="btn-confirm-reallocate"
+                  >
+                    {reallocatePaymentMutation.isPending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      "Reallocate Payment"
+                    )}
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            {/* Edit Parent Dialog */}
+            <Dialog open={editParentDialogOpen} onOpenChange={setEditParentDialogOpen}>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Edit Parent Information</DialogTitle>
+                  <DialogDescription>
+                    Update the parent's name and contact information.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm font-medium block mb-2">First Name *</label>
+                      <input
+                        type="text"
+                        value={editParentFirstName}
+                        onChange={(e) => setEditParentFirstName(e.target.value)}
+                        className="w-full p-2 border border-gray-300 rounded-md"
+                        placeholder="First name"
+                        data-testid="input-edit-first-name"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium block mb-2">Last Name *</label>
+                      <input
+                        type="text"
+                        value={editParentLastName}
+                        onChange={(e) => setEditParentLastName(e.target.value)}
+                        className="w-full p-2 border border-gray-300 rounded-md"
+                        placeholder="Last name"
+                        data-testid="input-edit-last-name"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium block mb-2">Phone Number</label>
+                    <input
+                      type="tel"
+                      value={editParentPhone}
+                      onChange={(e) => setEditParentPhone(e.target.value)}
+                      className="w-full p-2 border border-gray-300 rounded-md"
+                      placeholder="Phone number"
+                      data-testid="input-edit-phone"
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" onClick={() => setEditParentDialogOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleEditParentSubmit}
+                    disabled={editParentMutation.isPending}
+                    data-testid="btn-confirm-edit-parent"
+                  >
+                    {editParentMutation.isPending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      "Save Changes"
+                    )}
+                  </Button>
+                </div>
               </DialogContent>
             </Dialog>
           </TabsContent>

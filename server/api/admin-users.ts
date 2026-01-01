@@ -683,4 +683,82 @@ router.get('/export/users-and-children', supabaseAuth, requireSchoolContext, asy
   }
 });
 
+// PATCH update parent information (name, phone, etc.)
+router.patch('/parents/:parentId', supabaseAuth, async (req: any, res) => {
+  try {
+    const parentId = parseInt(req.params.parentId);
+    const { firstName, lastName, phone } = req.body;
+
+    if (isNaN(parentId)) {
+      return res.status(400).json({ message: 'Invalid parent ID' });
+    }
+
+    // Get authenticated user email
+    const userEmail = req.user?.email || req.auth?.email;
+    if (!userEmail) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    // Verify user is a school admin
+    const adminUser = await storage.getUserByEmail(userEmail);
+    if (!adminUser || adminUser.role !== 'schoolAdmin') {
+      return res.status(403).json({ message: 'Only school administrators can update parent information' });
+    }
+
+    // Get the parent user
+    const parentUser = await storage.getUserById(parentId);
+    if (!parentUser) {
+      return res.status(404).json({ message: 'Parent not found' });
+    }
+
+    // Verify parent belongs to admin's school
+    if (parentUser.schoolId !== adminUser.schoolId) {
+      return res.status(403).json({ message: 'Cannot update parents from other schools' });
+    }
+
+    // Build update data
+    const updateData: any = {};
+    if (firstName !== undefined) updateData.firstName = firstName.trim();
+    if (lastName !== undefined) updateData.lastName = lastName.trim();
+    if (phone !== undefined) updateData.phone = phone.trim();
+
+    // Update the combined name field if both first and last are provided
+    if (firstName !== undefined || lastName !== undefined) {
+      const newFirstName = firstName !== undefined ? firstName.trim() : (parentUser.firstName || '');
+      const newLastName = lastName !== undefined ? lastName.trim() : (parentUser.lastName || '');
+      updateData.name = `${newFirstName} ${newLastName}`.trim();
+    }
+
+    if (Object.keys(updateData).length === 0) {
+      return res.status(400).json({ message: 'No valid fields to update' });
+    }
+
+    console.log(`📝 Admin ${userEmail} updating parent ${parentId}:`, updateData);
+
+    // Update the user
+    const updatedUser = await storage.updateUser(parentId, updateData);
+
+    if (!updatedUser) {
+      return res.status(500).json({ message: 'Failed to update parent' });
+    }
+
+    console.log(`✅ Successfully updated parent ${parentId}`);
+
+    res.json({
+      success: true,
+      parent: {
+        id: updatedUser.id,
+        firstName: updatedUser.firstName,
+        lastName: updatedUser.lastName,
+        name: updatedUser.name,
+        phone: updatedUser.phone,
+        email: updatedUser.email
+      }
+    });
+  } catch (error) {
+    console.error('Error updating parent:', error);
+    res.status(500).json({ message: 'Failed to update parent information' });
+  }
+});
+
 export default router;
