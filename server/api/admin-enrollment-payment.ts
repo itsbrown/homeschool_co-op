@@ -477,6 +477,42 @@ router.post('/:enrollmentId/reallocate-payment', async (req: any, res) => {
       });
 
       console.log(`✅ Transferred $${(amount / 100).toFixed(2)} from enrollment ${enrollmentId} to ${targetEnrollmentId}`);
+      
+      // Create payment allocations for reallocation (source of truth)
+      // Find payment history record for this enrollment
+      try {
+        const parentUser = await storage.getUserByEmail(sourceEnrollment.parentEmail);
+        if (parentUser) {
+          const paymentHistoryRecords = await (storage as any).getStripePaymentsByUserId?.(parentUser.id) || [];
+          const relevantPaymentHistory = paymentHistoryRecords.find((p: any) => p.status === 'succeeded');
+          
+          if (relevantPaymentHistory) {
+            // Create outgoing allocation from source
+            await storage.createPaymentAllocation({
+              paymentHistoryId: relevantPaymentHistory.id,
+              enrollmentId: enrollmentId,
+              allocatedAmountCents: -amount,
+              allocationType: 'reallocation_out',
+              adminComment,
+              metadata: { targetEnrollmentId, adminEmail: userEmail }
+            });
+            
+            // Create incoming allocation to target
+            await storage.createPaymentAllocation({
+              paymentHistoryId: relevantPaymentHistory.id,
+              enrollmentId: targetEnrollmentId,
+              allocatedAmountCents: amount,
+              allocationType: 'reallocation_in',
+              adminComment,
+              metadata: { sourceEnrollmentId: enrollmentId, adminEmail: userEmail }
+            });
+            console.log('✅ Created reallocation payment allocations');
+          }
+        }
+      } catch (allocationError) {
+        console.error('⚠️ Error creating reallocation allocations (non-blocking):', allocationError);
+      }
+      
       result.targetEnrollment = {
         id: targetEnrollmentId,
         childName: targetEnrollment.childName,
@@ -526,6 +562,27 @@ router.post('/:enrollmentId/reallocate-payment', async (req: any, res) => {
       });
 
       console.log(`✅ Created $${(amount / 100).toFixed(2)} credit for parent ${parentUser.email}`);
+      
+      // Create payment allocation for credit conversion (source of truth)
+      try {
+        const paymentHistoryRecords = await (storage as any).getStripePaymentsByUserId?.(parentUser.id) || [];
+        const relevantPaymentHistory = paymentHistoryRecords.find((p: any) => p.status === 'succeeded');
+        
+        if (relevantPaymentHistory) {
+          await storage.createPaymentAllocation({
+            paymentHistoryId: relevantPaymentHistory.id,
+            enrollmentId: enrollmentId,
+            allocatedAmountCents: -amount,
+            allocationType: 'reallocation_out',
+            adminComment: `Converted to credit: ${adminComment}`,
+            metadata: { creditId: credit.id, adminEmail: userEmail }
+          });
+          console.log('✅ Created credit conversion payment allocation');
+        }
+      } catch (allocationError) {
+        console.error('⚠️ Error creating credit conversion allocation (non-blocking):', allocationError);
+      }
+      
       result.credit = {
         id: credit.id,
         amount: credit.creditAmountCents,

@@ -4699,6 +4699,52 @@ export class MemStorage implements IStorage {
     }
     return count;
   }
+
+  // ==================== PAYMENT ALLOCATIONS ====================
+  private paymentAllocationsStore: Map<number, PaymentAllocation> = new Map();
+  private paymentAllocationIdCounter: number = 1;
+
+  async getPaymentAllocationById(id: number): Promise<PaymentAllocation | undefined> {
+    return this.paymentAllocationsStore.get(id);
+  }
+
+  async getPaymentAllocationsByEnrollmentId(enrollmentId: number): Promise<PaymentAllocation[]> {
+    return Array.from(this.paymentAllocationsStore.values())
+      .filter(a => a.enrollmentId === enrollmentId);
+  }
+
+  async getPaymentAllocationsByPaymentHistoryId(paymentHistoryId: number): Promise<PaymentAllocation[]> {
+    return Array.from(this.paymentAllocationsStore.values())
+      .filter(a => a.paymentHistoryId === paymentHistoryId);
+  }
+
+  async createPaymentAllocation(allocation: InsertPaymentAllocation): Promise<PaymentAllocation> {
+    const id = this.paymentAllocationIdCounter++;
+    const newAllocation: PaymentAllocation = {
+      ...allocation,
+      id,
+      allocationType: allocation.allocationType || 'payment',
+      sourceAllocationId: allocation.sourceAllocationId || null,
+      adminComment: allocation.adminComment || null,
+      metadata: allocation.metadata || null,
+      createdAt: new Date(),
+    };
+    this.paymentAllocationsStore.set(id, newAllocation);
+    return newAllocation;
+  }
+
+  async createPaymentAllocations(allocations: InsertPaymentAllocation[]): Promise<PaymentAllocation[]> {
+    const results: PaymentAllocation[] = [];
+    for (const allocation of allocations) {
+      results.push(await this.createPaymentAllocation(allocation));
+    }
+    return results;
+  }
+
+  async getTotalPaidForEnrollment(enrollmentId: number): Promise<number> {
+    const allocations = await this.getPaymentAllocationsByEnrollmentId(enrollmentId);
+    return allocations.reduce((sum, a) => sum + a.allocatedAmountCents, 0);
+  }
 }
 
   import { DatabaseStorage } from "./dbStorage";
@@ -7127,6 +7173,31 @@ export class MemStorage implements IStorage {
 
       async createUnifiedCreditUsageLog(log: InsertUnifiedCreditUsageLog): Promise<UnifiedCreditUsageLog> {
         return this.dbStorage.createUnifiedCreditUsageLog(log);
+      }
+
+      // ==================== PAYMENT ALLOCATIONS ====================
+      async getPaymentAllocationById(id: number): Promise<PaymentAllocation | undefined> {
+        return this.dbStorage.getPaymentAllocationById(id);
+      }
+
+      async getPaymentAllocationsByEnrollmentId(enrollmentId: number): Promise<PaymentAllocation[]> {
+        return this.dbStorage.getPaymentAllocationsByEnrollmentId(enrollmentId);
+      }
+
+      async getPaymentAllocationsByPaymentHistoryId(paymentHistoryId: number): Promise<PaymentAllocation[]> {
+        return this.dbStorage.getPaymentAllocationsByPaymentHistoryId(paymentHistoryId);
+      }
+
+      async createPaymentAllocation(allocation: InsertPaymentAllocation): Promise<PaymentAllocation> {
+        return this.dbStorage.createPaymentAllocation(allocation);
+      }
+
+      async createPaymentAllocations(allocations: InsertPaymentAllocation[]): Promise<PaymentAllocation[]> {
+        return this.dbStorage.createPaymentAllocations(allocations);
+      }
+
+      async getTotalPaidForEnrollment(enrollmentId: number): Promise<number> {
+        return this.dbStorage.getTotalPaidForEnrollment(enrollmentId);
       }
 
       // Clear all data from storage (for testing)

@@ -857,6 +857,32 @@ export const webhookHandler = async (req: Request, res: Response) => {
               
               console.log(`✅ Updated enrollment ${enrollment.id} via webhook refund: refunded=$${refundForThisEnrollment/100}, paid=$${newAmountPaid/100}, remaining=$${remainingBalance/100}`);
               
+              // Create negative payment allocation for refund (source of truth)
+              try {
+                // Find the original payment's stripe_payment_history record using proper storage method
+                const originalPaymentHistory = await storage.getStripePaymentByIntentId(paymentIntentId);
+                  
+                if (originalPaymentHistory) {
+                  await storage.createPaymentAllocation({
+                    paymentHistoryId: originalPaymentHistory.id,
+                    enrollmentId: enrollment.id,
+                    allocatedAmountCents: -refundForThisEnrollment, // Negative for refund
+                    allocationType: 'refund',
+                    adminComment: `Stripe refund ${latestRefund.id}`,
+                    metadata: {
+                      stripeRefundId: latestRefund.id,
+                      refundReason: latestRefund.reason || 'Refund processed',
+                      processedViaWebhook: true
+                    }
+                  });
+                  console.log(`✅ Created negative allocation for refund on enrollment ${enrollment.id}`);
+                } else {
+                  console.log(`⚠️ No payment history found for intent ${paymentIntentId}, cannot create allocation`);
+                }
+              } catch (allocationError) {
+                console.error('⚠️ Error creating refund allocation (non-blocking):', allocationError);
+              }
+              
               remainingRefund -= refundForThisEnrollment;
             }
             

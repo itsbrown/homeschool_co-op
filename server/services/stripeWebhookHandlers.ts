@@ -168,27 +168,64 @@ export async function handleDirectPaymentSuccess(paymentIntent: Stripe.PaymentIn
     
     const enrollments = [];
     
+    // First pass: collect enrollments
     for (const enrollmentId of enrollmentIdList) {
       try {
         const enrollment = await storage.getProgramEnrollmentById(enrollmentId);
         if (enrollment) {
           enrollments.push(enrollment);
-          
-          const currentPaid = enrollment.totalPaid || 0;
-          const newTotalPaid = currentPaid + perEnrollmentAmount;
-          const newBalance = Math.max(0, enrollment.totalCost - newTotalPaid);
-          
-          await storage.updateProgramEnrollment(enrollment.id, {
-            totalPaid: newTotalPaid,
-            remainingBalance: newBalance,
-            paymentStatus: newBalance === 0 ? 'completed' : 'stripe_managed',
-            paymentSystemVersion: 'v2_stripe',
-            status: 'enrolled'
-          });
-          console.log(`✅ Updated enrollment ${enrollmentId}: paid=${newTotalPaid}, balance=${newBalance}`);
         }
       } catch (error) {
-        console.error(`❌ Error updating enrollment ${enrollmentId}:`, error);
+        console.error(`❌ Error fetching enrollment ${enrollmentId}:`, error);
+      }
+    }
+    
+    // Calculate individual amounts for enrollments based on their costs
+    const enrollmentAmounts: Map<number, number> = new Map();
+    const totalEnrollmentCost = enrollments.reduce((sum, e) => sum + e.totalCost, 0);
+    
+    // Distribute payment proportionally based on enrollment costs
+    if (enrollments.length === 1) {
+      enrollmentAmounts.set(enrollments[0].id, enrollmentTotal);
+    } else if (totalEnrollmentCost > 0) {
+      let remainingAmount = enrollmentTotal;
+      for (let i = 0; i < enrollments.length; i++) {
+        const enrollment = enrollments[i];
+        if (i === enrollments.length - 1) {
+          // Last enrollment gets remainder to avoid rounding errors
+          enrollmentAmounts.set(enrollment.id, remainingAmount);
+        } else {
+          const proportion = enrollment.totalCost / totalEnrollmentCost;
+          const amount = Math.round(enrollmentTotal * proportion);
+          enrollmentAmounts.set(enrollment.id, amount);
+          remainingAmount -= amount;
+        }
+      }
+    } else {
+      // Equal distribution fallback
+      for (const enrollment of enrollments) {
+        enrollmentAmounts.set(enrollment.id, perEnrollmentAmount);
+      }
+    }
+    
+    // Second pass: update enrollment totals (cached values for backwards compatibility)
+    for (const enrollment of enrollments) {
+      try {
+        const enrollmentAmount = enrollmentAmounts.get(enrollment.id) || perEnrollmentAmount;
+        const currentPaid = enrollment.totalPaid || 0;
+        const newTotalPaid = currentPaid + enrollmentAmount;
+        const newBalance = Math.max(0, enrollment.totalCost - newTotalPaid);
+        
+        await storage.updateProgramEnrollment(enrollment.id, {
+          totalPaid: newTotalPaid,
+          remainingBalance: newBalance,
+          paymentStatus: newBalance === 0 ? 'completed' : 'stripe_managed',
+          paymentSystemVersion: 'v2_stripe',
+          status: 'enrolled'
+        });
+        console.log(`✅ Updated enrollment ${enrollment.id}: paid=${newTotalPaid}, balance=${newBalance}`);
+      } catch (error) {
+        console.error(`❌ Error updating enrollment ${enrollment.id}:`, error);
       }
     }
     
@@ -267,6 +304,30 @@ export async function handleDirectPaymentSuccess(paymentIntent: Stripe.PaymentIn
         });
         
         console.log('✅ Stripe payment history saved with discount tracking:', stripePaymentRecord.id);
+        
+        // Create payment allocations for each enrollment (source of truth for payments)
+        // Using the stripePaymentRecord.id which we just created - this is the reliable reference
+        if (stripePaymentRecord?.id && enrollments.length > 0) {
+          try {
+            const allocationsToCreate = enrollments.map(enrollment => ({
+              paymentHistoryId: stripePaymentRecord.id,
+              enrollmentId: enrollment.id,
+              allocatedAmountCents: enrollmentAmounts.get(enrollment.id) || perEnrollmentAmount,
+              allocationType: 'payment' as const,
+              metadata: {
+                paymentIntentId: paymentIntent.id,
+                parentEmail,
+                childName: enrollment.childName,
+                className: enrollment.className
+              }
+            }));
+            
+            await storage.createPaymentAllocations(allocationsToCreate);
+            console.log(`✅ Created ${allocationsToCreate.length} payment allocations for history ID ${stripePaymentRecord.id}`);
+          } catch (allocationError) {
+            console.error('⚠️ Error creating payment allocations (non-blocking):', allocationError);
+          }
+        }
         
         if (discountSnapshot && discountSnapshot.appliedDiscounts && discountSnapshot.appliedDiscounts.length > 0) {
           for (const discount of discountSnapshot.appliedDiscounts) {

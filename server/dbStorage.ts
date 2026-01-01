@@ -52,7 +52,8 @@ import {
   VolunteerCredit, InsertVolunteerCredit, volunteerCredits,
   CreditUsageLog, InsertCreditUsageLog, creditUsageLogs,
   Credit, InsertCredit, credits, CreditType, CreditStatus,
-  UnifiedCreditUsageLog, InsertUnifiedCreditUsageLog, unifiedCreditUsageLogs
+  UnifiedCreditUsageLog, InsertUnifiedCreditUsageLog, unifiedCreditUsageLogs,
+  PaymentAllocation, InsertPaymentAllocation, paymentAllocations
 } from '../shared/schema';
 
 /**
@@ -4175,5 +4176,48 @@ export class DatabaseStorage implements IStorage {
     const db = await getDb();
     const [newLog] = await db.insert(unifiedCreditUsageLogs).values(log).returning();
     return newLog;
+  }
+
+  // ==================== PAYMENT ALLOCATIONS ====================
+  async getPaymentAllocationById(id: number): Promise<PaymentAllocation | undefined> {
+    const db = await getDb();
+    const [allocation] = await db.select().from(paymentAllocations).where(eq(paymentAllocations.id, id));
+    return allocation;
+  }
+
+  async getPaymentAllocationsByEnrollmentId(enrollmentId: number): Promise<PaymentAllocation[]> {
+    const db = await getDb();
+    return db.select().from(paymentAllocations)
+      .where(eq(paymentAllocations.enrollmentId, enrollmentId))
+      .orderBy(asc(paymentAllocations.createdAt));
+  }
+
+  async getPaymentAllocationsByPaymentHistoryId(paymentHistoryId: number): Promise<PaymentAllocation[]> {
+    const db = await getDb();
+    return db.select().from(paymentAllocations)
+      .where(eq(paymentAllocations.paymentHistoryId, paymentHistoryId))
+      .orderBy(asc(paymentAllocations.createdAt));
+  }
+
+  async createPaymentAllocation(allocation: InsertPaymentAllocation): Promise<PaymentAllocation> {
+    const db = await getDb();
+    const [newAllocation] = await db.insert(paymentAllocations).values(allocation).returning();
+    return newAllocation;
+  }
+
+  async createPaymentAllocations(allocations: InsertPaymentAllocation[]): Promise<PaymentAllocation[]> {
+    if (allocations.length === 0) return [];
+    const db = await getDb();
+    return db.insert(paymentAllocations).values(allocations).returning();
+  }
+
+  async getTotalPaidForEnrollment(enrollmentId: number): Promise<number> {
+    const db = await getDb();
+    const result = await db.select({
+      total: sql<number>`COALESCE(SUM(${paymentAllocations.allocatedAmountCents}), 0)`
+    })
+    .from(paymentAllocations)
+    .where(eq(paymentAllocations.enrollmentId, enrollmentId));
+    return Number(result[0]?.total || 0);
   }
 }
