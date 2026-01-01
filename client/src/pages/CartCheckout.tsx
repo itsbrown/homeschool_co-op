@@ -416,15 +416,20 @@ export default function CartCheckout() {
     membershipYear: number;
     discounts: any;
     schoolSettings: any;
+    appliedPromoCode: string | null; // Store promo code to avoid stale closure issues
   } | null>(null);
 
   // Fetch cart snapshot from server to get authoritative pricing
-  const fetchCartSnapshot = async (): Promise<boolean> => {
+  // IMPORTANT: promoCodeOverride parameter is used to pass fresh promo code
+  // when called immediately after applyPromoCode (before React state updates)
+  const fetchCartSnapshot = async (promoCodeOverride?: string | null): Promise<boolean> => {
     if (cart.items.length === 0) return true; // No items to sync
     
     try {
       setSnapshotLoading(true);
-      console.log('📸 Fetching cart snapshot from server...');
+      // Use override if provided, otherwise fall back to cart state
+      const promoCode = promoCodeOverride !== undefined ? promoCodeOverride : (cart.appliedPromoCode?.code || null);
+      console.log('📸 Fetching cart snapshot from server with promoCode:', promoCode);
       
       const response = await apiRequest(
         'POST',
@@ -437,7 +442,7 @@ export default function CartCheckout() {
             childName: item.childName,
             variantId: item.variantId
           })),
-          appliedPromoCode: cart.appliedPromoCode?.code || null
+          appliedPromoCode: promoCode
         }
       );
 
@@ -457,6 +462,7 @@ export default function CartCheckout() {
         
         // Store authoritative data for payment intent creation
         // Include membershipRequired and school info so we can construct payload even when cart.membership is null
+        // Also store the promo code to avoid stale closure issues when createPaymentIntent runs
         setAuthoritativeData({
           itemsTotal: snapshot.totals.itemsTotal,
           membershipAmount: snapshot.membership.alreadyPaid ? 0 : snapshot.membership.discountedAmount,
@@ -466,7 +472,8 @@ export default function CartCheckout() {
           membershipSchoolName: snapshot.membership.schoolName || 'School',
           membershipYear: snapshot.membership.year || new Date().getFullYear(),
           discounts: snapshot.pricing.discounts,
-          schoolSettings: snapshot.pricing.schoolSettings
+          schoolSettings: snapshot.pricing.schoolSettings,
+          appliedPromoCode: promoCode // Store the promo code used for this snapshot
         });
         
         // Update available credits from snapshot
@@ -579,7 +586,8 @@ export default function CartCheckout() {
           parentEmail: user?.email,
           // Include membership fee - use authoritative amount or null if already paid
           membership: membershipPayload,
-          promoCode: cart.appliedPromoCode?.code || null,
+          // Use promo code from authoritative data if available, otherwise fall back to cart state
+          promoCode: useAuthData ? authoritativeData.appliedPromoCode : (cart.appliedPromoCode?.code || null),
           // Volunteer credits to apply (in cents)
           creditsToApply: creditsToApply,
         })
@@ -623,7 +631,9 @@ export default function CartCheckout() {
               membershipSchoolName: conflictData.authoritative.membershipSchoolName ?? authoritativeData?.membershipSchoolName ?? 'School',
               membershipYear: conflictData.authoritative.membershipYear ?? authoritativeData?.membershipYear ?? new Date().getFullYear(),
               discounts: conflictData.authoritative.discounts || authoritativeData?.discounts || cart.discounts,
-              schoolSettings: conflictData.authoritative.schoolSettings || authoritativeData?.schoolSettings || null
+              schoolSettings: conflictData.authoritative.schoolSettings || authoritativeData?.schoolSettings || null,
+              // Preserve existing promo code from authoritativeData
+              appliedPromoCode: authoritativeData?.appliedPromoCode ?? (cart.appliedPromoCode?.code || null)
             });
             console.log('📝 Set authoritative data from 409:', {
               serverItemsTotal,
@@ -736,7 +746,8 @@ export default function CartCheckout() {
           },
           total: cart.total,
           parentEmail: user.email,
-          promoCode: cart.appliedPromoCode?.code || null,
+          // Use promo code from authoritative data if available (avoids stale closure)
+          promoCode: authoritativeData?.appliedPromoCode ?? (cart.appliedPromoCode?.code || null),
         }
       );
       
@@ -1103,9 +1114,11 @@ export default function CartCheckout() {
                         if (!result.success) {
                           setPromoError(result.error || 'Invalid promo code');
                         } else {
+                          const appliedCode = promoCode; // Capture before clearing
                           setPromoCode('');
-                          // Refresh cart snapshot to get server-calculated discounted totals
-                          await fetchCartSnapshot();
+                          // Refresh cart snapshot with the newly applied promo code
+                          // Pass explicitly to avoid stale closure issue (React state is async)
+                          await fetchCartSnapshot(appliedCode);
                         }
                       }}
                       disabled={!promoCode || validatingPromo}
@@ -1137,7 +1150,8 @@ export default function CartCheckout() {
                       onClick={async () => {
                         removePromoCode();
                         // Refresh cart snapshot to update totals without promo discount
-                        await fetchCartSnapshot();
+                        // Pass null explicitly since state won't be updated yet
+                        await fetchCartSnapshot(null);
                       }}
                       variant="ghost"
                       size="sm"
