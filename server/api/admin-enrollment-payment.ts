@@ -737,4 +737,86 @@ router.post('/:enrollmentId/reallocate-payment', async (req: any, res) => {
   }
 });
 
+/**
+ * DELETE /api/admin/enrollments/:id
+ * Delete/unenroll an enrollment (requires zero balance or prior reallocation)
+ * Requires school admin role - auth middleware applied at router registration
+ */
+router.delete('/:enrollmentId', async (req: any, res) => {
+  try {
+    const enrollmentId = parseInt(req.params.enrollmentId);
+    
+    if (isNaN(enrollmentId)) {
+      return res.status(400).json({ message: 'Invalid enrollment ID' });
+    }
+    
+    const userEmail = req.user?.email || req.auth?.email;
+    if (!userEmail) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    const user = await storage.getUserByEmail(userEmail);
+    if (!user || (user.role !== 'schoolAdmin' && user.role !== 'admin' && user.role !== 'superAdmin')) {
+      return res.status(403).json({ message: 'Only administrators can delete enrollments' });
+    }
+    
+    console.log(`🗑️  Admin ${userEmail} attempting to delete enrollment ID: ${enrollmentId}`);
+    
+    const enrollment = await storage.getProgramEnrollmentById(enrollmentId);
+    
+    if (!enrollment) {
+      return res.status(404).json({ message: 'Enrollment not found' });
+    }
+
+    if (enrollment.schoolId !== user.schoolId && user.role === 'schoolAdmin') {
+      return res.status(403).json({ message: 'Cannot delete enrollments from other schools' });
+    }
+
+    const totalPaid = enrollment.totalPaid || 0;
+    if (totalPaid > 0) {
+      console.log(`⚠️ Cannot delete enrollment ${enrollmentId} - has $${(totalPaid / 100).toFixed(2)} in payments`);
+      return res.status(400).json({ 
+        message: 'Cannot delete enrollment with existing payments',
+        error: 'PAYMENTS_EXIST',
+        details: {
+          totalPaid: totalPaid,
+          totalPaidFormatted: `$${(totalPaid / 100).toFixed(2)}`,
+          hint: 'Please reallocate or refund the payments before unenrolling'
+        }
+      });
+    }
+    
+    console.log(`📝 Deleting: ${enrollment.className} for ${enrollment.childName} (${enrollment.parentEmail})`);
+    
+    try {
+      const scheduledPayments = await storage.getScheduledPaymentsByEnrollmentId(enrollmentId);
+      const pendingPayments = scheduledPayments.filter((p: any) => p.status === 'pending');
+      
+      for (const payment of pendingPayments) {
+        await storage.updateScheduledPaymentStatus(payment.id, 'cancelled');
+        console.log(`🗑️ Cancelled scheduled payment ${payment.id} for enrollment ${enrollmentId}`);
+      }
+    } catch (scheduleError) {
+      console.error('Error cancelling scheduled payments:', scheduleError);
+    }
+    
+    await storage.deleteProgramEnrollment(enrollmentId);
+    
+    console.log(`✅ Successfully deleted enrollment ID ${enrollmentId}`);
+    
+    res.json({ 
+      message: 'Enrollment deleted successfully',
+      deletedEnrollment: {
+        id: enrollmentId,
+        className: enrollment.className,
+        childName: enrollment.childName,
+        parentEmail: enrollment.parentEmail
+      }
+    });
+  } catch (error) {
+    console.error('Error deleting enrollment:', error);
+    res.status(500).json({ message: 'Failed to delete enrollment' });
+  }
+});
+
 export default router;
