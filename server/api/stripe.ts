@@ -1212,6 +1212,27 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
       // NOTE: CombinedStorage has all IStorage methods needed but doesn't formally implement the interface
       // See server/storage.ts TODO comment for full context on storage interface alignment
       const paymentPlanService = new StripePaymentPlanService(storage as any);
+      
+      // Calculate credit allocation for regular Stripe payments (simpler than credit-only)
+      // Credits are applied: enrollments first, then membership
+      let creditAllocationForPayment: { enrollmentCredits: number; membershipCredits: number } | undefined;
+      if (validatedCreditsToApply > 0) {
+        const discountedEnrollmentTotal = hasItems && cartPricingResult ? cartPricingResult.total : 0;
+        const membershipCost = authoritativeMembershipAmount || 0;
+        
+        // Enrollments absorb credits first, up to their discounted total
+        const enrollmentCredits = Math.min(discountedEnrollmentTotal, validatedCreditsToApply);
+        // Remaining credits go to membership
+        const membershipCredits = Math.min(membershipCost, validatedCreditsToApply - enrollmentCredits);
+        
+        creditAllocationForPayment = {
+          enrollmentCredits,
+          membershipCredits
+        };
+        
+        console.log('📊 Credit allocation for Stripe payment:', creditAllocationForPayment);
+      }
+      
       const paymentPlanResult = await paymentPlanService.createEducationalPaymentPlan({
         parentEmail: userEmail,
         enrollmentIds,
@@ -1220,7 +1241,8 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
         paymentFrequency: paymentFrequency as 'weekly' | 'biweekly' | 'monthly' | 'one_time',
         membership: serverMembership, // Pass server-validated membership data
         discountSnapshot, // Pass discount tracking data
-        volunteerCreditsApplied: validatedCreditsToApply // Pass credits for metadata storage
+        volunteerCreditsApplied: validatedCreditsToApply, // Pass credits for metadata storage
+        creditAllocation: creditAllocationForPayment // Pass credit breakdown for payment history
       });
 
       console.log('✅ Payment plan created successfully:', {

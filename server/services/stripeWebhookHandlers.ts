@@ -287,6 +287,20 @@ export async function handleDirectPaymentSuccess(paymentIntent: Stripe.PaymentIn
           }
         }
         
+        // Extract credits metadata for payment history display
+        const creditsApplied = paymentIntent.metadata.volunteerCreditsApplied 
+          ? parseInt(paymentIntent.metadata.volunteerCreditsApplied) 
+          : 0;
+        
+        let creditAllocation: any = null;
+        if (paymentIntent.metadata.creditAllocation) {
+          try {
+            creditAllocation = JSON.parse(paymentIntent.metadata.creditAllocation);
+          } catch (e) {
+            console.warn('⚠️ Failed to parse credit allocation:', e);
+          }
+        }
+        
         const stripePaymentRecord = await (storage as any).saveStripePayment({
           userId: parentUser.id,
           paymentIntentId: paymentIntent.id,
@@ -300,7 +314,11 @@ export async function handleDirectPaymentSuccess(paymentIntent: Stripe.PaymentIn
           status: 'succeeded',
           paymentMethod: paymentIntent.payment_method_types?.[0] || 'card',
           description: `Direct payment for ${className}`,
-          stripeCreatedAt: new Date(paymentIntent.created * 1000)
+          stripeCreatedAt: new Date(paymentIntent.created * 1000),
+          metadata: creditsApplied > 0 ? {
+            creditsApplied,
+            creditAllocation
+          } : undefined
         });
         
         console.log('✅ Stripe payment history saved with discount tracking:', stripePaymentRecord.id);
