@@ -516,6 +516,15 @@ export async function validateCartTotal(
   };
 }
 
+// Payment plan option returned from server
+export interface PaymentPlanOption {
+  id: string;
+  name: string;
+  description: string;
+  amount: number; // Amount to pay now in cents
+  features: string[];
+}
+
 // Extended cart snapshot with membership and credits for checkout reconciliation
 export interface CartSnapshot {
   // Unique identifier for this snapshot (hash of inputs)
@@ -537,13 +546,17 @@ export interface CartSnapshot {
   // Available credits
   credits: {
     available: number; // Total available credits in cents
+    applied: number; // Credits applied to this order
   };
   // Combined totals
   totals: {
     itemsTotal: number; // Cart items after discounts
     membershipTotal: number; // Membership fee (0 if already paid or not required)
     grandTotal: number; // Items + Membership
+    payableAmount: number; // Grand total minus applied credits (what user actually pays)
   };
+  // Server-calculated payment plan options based on payableAmount
+  paymentPlans: PaymentPlanOption[];
 }
 
 // Generate a snapshot ID from cart inputs for cache/version comparison
@@ -571,12 +584,56 @@ function generateSnapshotId(
   return `snap_${Math.abs(hash).toString(36)}_${Date.now().toString(36)}`;
 }
 
+// Calculate payment plan options based on payable amount
+function calculatePaymentPlans(payableAmount: number): PaymentPlanOption[] {
+  if (payableAmount <= 0) {
+    return [];
+  }
+
+  const depositAmount = Math.round(payableAmount * 0.1); // 10% deposit
+  const biweeklyAmount = Math.round(payableAmount / 4); // Estimated 4 payments
+
+  return [
+    {
+      id: 'deposit',
+      name: 'Pay Deposit Only',
+      description: 'Secure your spot with a 10% deposit',
+      amount: depositAmount,
+      features: [
+        'Immediate enrollment confirmation',
+        'Remaining balance due before class starts'
+      ]
+    },
+    {
+      id: 'full',
+      name: 'Pay in Full',
+      description: 'Complete payment now',
+      amount: payableAmount,
+      features: [
+        'No additional fees',
+        'No future payment worries'
+      ]
+    },
+    {
+      id: 'biweekly',
+      name: 'Biweekly Payment Plan',
+      description: 'Automatic payments every 2 weeks until class ends',
+      amount: biweeklyAmount,
+      features: [
+        'Pay every 2 weeks based on class schedule',
+        'Payments automatically calculated from class start to end date'
+      ]
+    }
+  ];
+}
+
 // Calculate full cart snapshot including membership and credits
 export async function calculateCartSnapshot(
   items: CartItem[],
   userId: number,
   schoolId: number,
-  appliedPromoCode?: string
+  appliedPromoCode?: string,
+  creditsToApply?: number
 ): Promise<CartSnapshot> {
   // Calculate cart pricing
   const pricing = await calculateCartPricing(items, userId, schoolId, appliedPromoCode);
@@ -622,6 +679,13 @@ export async function calculateCartSnapshot(
   const membershipTotal = alreadyPaid ? 0 : discountedMembershipAmount;
   const grandTotal = itemsTotal + membershipTotal;
   
+  // Calculate applied credits (capped at available and grand total)
+  const appliedCredits = Math.min(creditsToApply || 0, availableCredits, grandTotal);
+  const payableAmount = Math.max(0, grandTotal - appliedCredits);
+  
+  // Calculate payment plans based on payable amount
+  const paymentPlans = calculatePaymentPlans(payableAmount);
+  
   return {
     snapshotId: generateSnapshotId(items, userId, schoolId, appliedPromoCode),
     generatedAt: Date.now(),
@@ -636,12 +700,15 @@ export async function calculateCartSnapshot(
       year: new Date().getFullYear() // Current year for membership enrollment
     },
     credits: {
-      available: availableCredits
+      available: availableCredits,
+      applied: appliedCredits
     },
     totals: {
       itemsTotal,
       membershipTotal,
-      grandTotal
-    }
+      grandTotal,
+      payableAmount
+    },
+    paymentPlans
   };
 }

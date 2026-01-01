@@ -386,7 +386,7 @@ export default function CartCheckout() {
     return () => clearTimeout(timeoutId);
   }, [selectedPaymentPlan, paymentFrequency])
 
-  // Effect to recreate payment intent when credits are toggled
+  // Effect to recreate payment intent and refresh snapshot when credits are toggled
   useEffect(() => {
     const hasCartContent = cart.items.length > 0 || cart.membership;
     
@@ -395,14 +395,26 @@ export default function CartCheckout() {
       return;
     }
     
-    const timeoutId = setTimeout(() => {
-      console.log('💳 Credits changed, recreating payment intent with creditsToApply:', creditsToApply);
+    const timeoutId = setTimeout(async () => {
+      console.log('💳 Credits changed, refreshing snapshot and payment intent with creditsToApply:', creditsToApply);
+      // First refresh snapshot to get updated payment plans
+      await fetchCartSnapshot(undefined, creditsToApply);
+      // Then recreate payment intent
       setClientSecret('');
       createPaymentIntent();
     }, 300);
     
     return () => clearTimeout(timeoutId);
   }, [creditsToApply]);
+
+  // Payment plan option from server
+  interface PaymentPlanOption {
+    id: string;
+    name: string;
+    description: string;
+    amount: number;
+    features: string[];
+  }
 
   // Cached authoritative values from server snapshot
   // These override client values when creating payment intent
@@ -417,19 +429,23 @@ export default function CartCheckout() {
     discounts: any;
     schoolSettings: any;
     appliedPromoCode: string | null; // Store promo code to avoid stale closure issues
+    payableAmount: number; // Grand total minus applied credits
+    paymentPlans: PaymentPlanOption[]; // Server-calculated payment plans
   } | null>(null);
 
   // Fetch cart snapshot from server to get authoritative pricing
   // IMPORTANT: promoCodeOverride parameter is used to pass fresh promo code
   // when called immediately after applyPromoCode (before React state updates)
-  const fetchCartSnapshot = async (promoCodeOverride?: string | null): Promise<boolean> => {
+  const fetchCartSnapshot = async (promoCodeOverride?: string | null, creditsOverride?: number): Promise<boolean> => {
     if (cart.items.length === 0) return true; // No items to sync
     
     try {
       setSnapshotLoading(true);
       // Use override if provided, otherwise fall back to cart state
       const promoCode = promoCodeOverride !== undefined ? promoCodeOverride : (cart.appliedPromoCode?.code || null);
-      console.log('📸 Fetching cart snapshot from server with promoCode:', promoCode);
+      // Use credits override if provided, otherwise use current state
+      const creditsAmount = creditsOverride !== undefined ? creditsOverride : (applyCredits ? creditsToApply : 0);
+      console.log('📸 Fetching cart snapshot from server with promoCode:', promoCode, 'creditsToApply:', creditsAmount);
       
       const response = await apiRequest(
         'POST',
@@ -442,7 +458,8 @@ export default function CartCheckout() {
             childName: item.childName,
             variantId: item.variantId
           })),
-          appliedPromoCode: promoCode
+          appliedPromoCode: promoCode,
+          creditsToApply: creditsAmount
         }
       );
 
@@ -473,7 +490,9 @@ export default function CartCheckout() {
           membershipYear: snapshot.membership.year || new Date().getFullYear(),
           discounts: snapshot.pricing.discounts,
           schoolSettings: snapshot.pricing.schoolSettings,
-          appliedPromoCode: promoCode // Store the promo code used for this snapshot
+          appliedPromoCode: promoCode, // Store the promo code used for this snapshot
+          payableAmount: snapshot.totals.payableAmount,
+          paymentPlans: snapshot.paymentPlans || []
         });
         
         // Update available credits from snapshot
@@ -633,7 +652,10 @@ export default function CartCheckout() {
               discounts: conflictData.authoritative.discounts || authoritativeData?.discounts || cart.discounts,
               schoolSettings: conflictData.authoritative.schoolSettings || authoritativeData?.schoolSettings || null,
               // Preserve existing promo code from authoritativeData
-              appliedPromoCode: authoritativeData?.appliedPromoCode ?? (cart.appliedPromoCode?.code || null)
+              appliedPromoCode: authoritativeData?.appliedPromoCode ?? (cart.appliedPromoCode?.code || null),
+              // Preserve payable amount and payment plans from previous snapshot
+              payableAmount: conflictData.authoritative.payableAmount ?? authoritativeData?.payableAmount ?? actualPayableAmount,
+              paymentPlans: conflictData.authoritative.paymentPlans ?? authoritativeData?.paymentPlans ?? []
             });
             console.log('📝 Set authoritative data from 409:', {
               serverItemsTotal,
@@ -821,9 +843,25 @@ export default function CartCheckout() {
                     (cart.discounts.appliedDiscounts && cart.discounts.appliedDiscounts.length > 0);
 
   const getPaymentPlanOptions = () => {
-    // Use actualPayableAmount (class total + membership) for all payment plan calculations
-    // This ensures membership is included in payment plan amounts
-    const totalAmount = actualPayableAmount;
+    // Use server-provided payment plans when available (authoritative pricing)
+    // This ensures payment plans correctly reflect applied credits
+    if (authoritativeData?.paymentPlans && authoritativeData.paymentPlans.length > 0) {
+      // Map server plans to client format with additional UI properties
+      return authoritativeData.paymentPlans.map(plan => ({
+        id: plan.id,
+        name: plan.name,
+        description: plan.description,
+        amount: plan.amount,
+        popular: plan.id === 'deposit',
+        features: plan.features,
+        dueDate: plan.id === 'deposit' ? 'Remaining balance due 2 weeks before class start' : undefined,
+        installments: plan.id === 'biweekly' ? { frequency: 'biweekly' } : undefined
+      }));
+    }
+
+    // Fallback to client calculation if no server data (should rarely happen)
+    // Use payable amount from authoritative data if available, otherwise calculate from cart
+    const totalAmount = authoritativeData?.payableAmount ?? actualPayableAmount;
     
     const depositAmount = Math.round(totalAmount * 0.1); // 10% deposit
     const fullAmount = totalAmount;
@@ -876,23 +914,29 @@ export default function CartCheckout() {
   };
 
   const getSelectedPlanAmount = () => {
+    // Use server-provided payable amount when available
+    const payableAmount = authoritativeData?.payableAmount ?? actualPayableAmount;
+    
     // For biweekly plans, send the FULL payable amount to backend
     // The backend will calculate the payment schedule and divide it properly
     if (selectedPaymentPlan === 'biweekly') {
-      return actualPayableAmount;
+      return payableAmount;
     }
     
-    // For other plans, return the calculated plan amount (already includes membership via actualPayableAmount)
+    // For other plans, return the calculated plan amount (already includes membership via payableAmount)
     const plans = getPaymentPlanOptions();
     const selectedPlan = plans.find(plan => plan.id === selectedPaymentPlan);
-    return selectedPlan ? selectedPlan.amount : actualPayableAmount;
+    return selectedPlan ? selectedPlan.amount : payableAmount;
   };
 
   // Get the amount to display on the Pay button (first payment amount)
   const getButtonDisplayAmount = () => {
+    // Use server-provided payable amount when available
+    const payableAmount = authoritativeData?.payableAmount ?? actualPayableAmount;
+    
     // For biweekly plans, show the FIRST payment amount (total divided by 4)
     if (selectedPaymentPlan === 'biweekly') {
-      return Math.ceil(actualPayableAmount / 4);
+      return Math.ceil(payableAmount / 4);
     }
     
     // For all other plans, show the full selected plan amount

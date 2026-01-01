@@ -20,7 +20,7 @@ router.post('/snapshot', supabaseAuth, async (req: any, res) => {
       return res.status(400).json({ error: 'User is not associated with a school' });
     }
 
-    const { items, appliedPromoCode } = req.body;
+    const { items, appliedPromoCode, creditsToApply } = req.body;
 
     if (!items || !Array.isArray(items)) {
       return res.status(400).json({ error: 'Items array is required' });
@@ -50,7 +50,8 @@ router.post('/snapshot', supabaseAuth, async (req: any, res) => {
       cartItems,
       user.id,
       user.schoolId,
-      appliedPromoCode
+      appliedPromoCode,
+      creditsToApply
     );
 
     console.log('📸 Cart snapshot generated:', {
