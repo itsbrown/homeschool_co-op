@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
-import { PlusCircle, User, Calendar, BookOpen, Clock, DollarSign, Users, UserPlus, CreditCard, RefreshCw, FileText, FolderOpen, Loader2, Award, CheckCircle, AlertCircle, XCircle, Copy, Edit2, Save, X } from "lucide-react";
+import { PlusCircle, User, Calendar, BookOpen, Clock, DollarSign, Users, UserPlus, CreditCard, RefreshCw, FileText, FolderOpen, Loader2, Award, CheckCircle, AlertCircle, XCircle, Copy, Edit2, Save, X, Coins } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/components/SupabaseProvider";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -308,6 +308,49 @@ export default function ParentDashboard() {
     retry: 1,
   });
 
+  // Fetch parent credits balance (with refetching)
+  interface CreditsResponse {
+    success: boolean;
+    totalAvailableCents: number;
+    totalAvailableFormatted: string;
+    creditsByType: Record<string, { count: number; totalCents: number }>;
+    credits: Array<{
+      id: number;
+      creditType: string;
+      title: string | null;
+      creditAmountCents: number;
+      usedAmountCents: number;
+      remainingCents: number;
+      status: string;
+      expiresAt: string | null;
+      createdAt: string;
+    }>;
+  }
+
+  const { data: creditsData, isLoading: creditsLoading } = useQuery<CreditsResponse>({
+    queryKey: ["/api/parent/credits"],
+    queryFn: async () => {
+      const token = localStorage.getItem('supabase_token');
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+      
+      const response = await fetch("/api/parent/credits", {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch credits: ${response.status}`);
+      }
+      return response.json();
+    },
+    enabled: !!user && !!session,
+    refetchInterval: 30000,
+  });
+
   // Helper function to get membership status display info
   const getMembershipStatusInfo = (status: string) => {
     switch (status) {
@@ -428,7 +471,7 @@ export default function ParentDashboard() {
 
         <TabsContent value="overview" className="space-y-6">
           {/* Stats Cards Row */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">My Children</CardTitle>
@@ -472,6 +515,19 @@ export default function ParentDashboard() {
                   {enrollmentsData?.filter((e: any) => e.paymentStatus !== 'completed').length || 0}
                 </div>
                 <p className="text-xs text-muted-foreground">Unpaid enrollments</p>
+              </CardContent>
+            </Card>
+
+            <Card data-testid="card-credits-balance">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Credits</CardTitle>
+                <Coins className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-green-600">
+                  {creditsLoading ? '...' : creditsData?.totalAvailableFormatted || '$0.00'}
+                </div>
+                <p className="text-xs text-muted-foreground">Available balance</p>
               </CardContent>
             </Card>
           </div>
@@ -563,6 +619,20 @@ export default function ParentDashboard() {
                     </div>
                   </div>
                 </Button>
+
+                {(creditsData?.totalAvailableCents ?? 0) > 0 && (
+                  <Button asChild variant="outline" className="w-full justify-start h-auto p-4 border-green-200 bg-green-50 hover:bg-green-100" data-testid="btn-view-credits">
+                    <Link href="/payments">
+                      <Coins className="mr-3 h-5 w-5 text-green-600" />
+                      <div className="text-left">
+                        <div className="font-medium text-green-700">My Credits</div>
+                        <div className="text-sm text-green-600">
+                          {creditsData?.totalAvailableFormatted} available
+                        </div>
+                      </div>
+                    </Link>
+                  </Button>
+                )}
               </CardContent>
             </Card>
           </div>

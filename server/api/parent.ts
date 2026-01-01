@@ -853,6 +853,78 @@ router.get('/school-documents', jwtCheck, async (req: any, res) => {
   }
 });
 
+// Get parent's available credits balance
+router.get('/credits', jwtCheck, async (req: any, res) => {
+  try {
+    console.log('💰 Get parent credits API called');
+
+    const userEmail = req.auth?.email || req.user?.email;
+    
+    if (!userEmail) {
+      return res.status(401).json({ 
+        message: 'Authentication required',
+        error: 'NO_USER_EMAIL'
+      });
+    }
+
+    const user = await storage.getUserByEmail(userEmail);
+    if (!user) {
+      return res.status(404).json({ 
+        message: 'User not found',
+        error: 'USER_NOT_FOUND'
+      });
+    }
+
+    // Get available credits for this user
+    const availableCredits = await storage.getAvailableCredits(user.id);
+    
+    // Calculate total available balance (approved credits minus used amounts)
+    const totalAvailableCents = availableCredits.reduce((sum, credit) => {
+      const remaining = (credit.creditAmountCents || 0) - (credit.usedAmountCents || 0);
+      return sum + Math.max(0, remaining);
+    }, 0);
+
+    // Group credits by type for display
+    const creditsByType: Record<string, { count: number; totalCents: number }> = {};
+    for (const credit of availableCredits) {
+      const remaining = (credit.creditAmountCents || 0) - (credit.usedAmountCents || 0);
+      if (remaining > 0) {
+        if (!creditsByType[credit.creditType]) {
+          creditsByType[credit.creditType] = { count: 0, totalCents: 0 };
+        }
+        creditsByType[credit.creditType].count++;
+        creditsByType[credit.creditType].totalCents += remaining;
+      }
+    }
+
+    console.log(`💰 Found ${availableCredits.length} credits totaling $${(totalAvailableCents / 100).toFixed(2)} for ${userEmail}`);
+
+    return res.status(200).json({
+      success: true,
+      totalAvailableCents,
+      totalAvailableFormatted: `$${(totalAvailableCents / 100).toFixed(2)}`,
+      creditsByType,
+      credits: availableCredits.map(c => ({
+        id: c.id,
+        creditType: c.creditType,
+        title: c.title,
+        creditAmountCents: c.creditAmountCents,
+        usedAmountCents: c.usedAmountCents,
+        remainingCents: (c.creditAmountCents || 0) - (c.usedAmountCents || 0),
+        status: c.status,
+        expiresAt: c.expiresAt,
+        createdAt: c.createdAt
+      }))
+    });
+  } catch (error: any) {
+    console.error('❌ Error getting credits:', error);
+    return res.status(500).json({ 
+      message: 'Failed to get credits',
+      error: error.message || 'GET_CREDITS_ERROR'
+    });
+  }
+});
+
 // Get payment receipts for the parent
 router.get('/payment-receipts', jwtCheck, async (req: any, res) => {
   try {
