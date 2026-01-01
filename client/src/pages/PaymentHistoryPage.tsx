@@ -406,6 +406,65 @@ export default function PaymentHistoryPage() {
                       </CollapsibleContent>
                     </Collapsible>
                   )}
+                  
+                  {/* Credits Applied Section - Collapsible */}
+                  {payment.metadata?.creditsApplied && payment.metadata.creditsApplied > 0 && (
+                    <Collapsible className="border-t pt-3 mt-3" data-testid={`credits-section-${payment.id}`}>
+                      <CollapsibleTrigger className="flex items-center justify-between w-full text-sm font-medium text-purple-700 hover:text-purple-800 cursor-pointer">
+                        <span className="flex items-center gap-2">
+                          Credits Applied
+                          <Badge variant="secondary" className="bg-purple-100 text-purple-800">
+                            -{formatCurrency(payment.metadata.creditsApplied)}
+                          </Badge>
+                          {payment.metadata.creditOnlyCheckout && (
+                            <Badge variant="outline" className="text-xs bg-purple-50 border-purple-300">
+                              Credit-Only
+                            </Badge>
+                          )}
+                        </span>
+                        <ChevronDown className="h-4 w-4 transition-transform duration-200 [&[data-state=open]]:rotate-180" />
+                      </CollapsibleTrigger>
+                      <CollapsibleContent className="mt-2">
+                        <div className="space-y-1 bg-purple-50 p-2 rounded-md">
+                          {payment.metadata.creditAllocation ? (
+                            <>
+                              {payment.metadata.creditAllocation.enrollmentCredits > 0 && (
+                                <div className="flex justify-between items-center text-sm text-purple-700">
+                                  <span className="flex items-center gap-1">
+                                    <Badge variant="outline" className="text-xs bg-purple-100 border-purple-300">
+                                      Classes
+                                    </Badge>
+                                    Enrollment Credits
+                                  </span>
+                                  <span className="font-medium">-{formatCurrency(payment.metadata.creditAllocation.enrollmentCredits)}</span>
+                                </div>
+                              )}
+                              {payment.metadata.creditAllocation.membershipCredits > 0 && (
+                                <div className="flex justify-between items-center text-sm text-purple-700">
+                                  <span className="flex items-center gap-1">
+                                    <Badge variant="outline" className="text-xs bg-purple-100 border-purple-300">
+                                      Membership
+                                    </Badge>
+                                    Membership Fee
+                                  </span>
+                                  <span className="font-medium">-{formatCurrency(payment.metadata.creditAllocation.membershipCredits)}</span>
+                                </div>
+                              )}
+                              <div className="flex justify-between items-center text-sm font-semibold border-t border-purple-200 pt-1 mt-1">
+                                <span>Total Credits Used</span>
+                                <span className="text-purple-700">-{formatCurrency(payment.metadata.creditsApplied)}</span>
+                              </div>
+                            </>
+                          ) : (
+                            <div className="flex justify-between items-center text-sm font-semibold">
+                              <span>Credits Used</span>
+                              <span className="text-purple-700">-{formatCurrency(payment.metadata.creditsApplied)}</span>
+                            </div>
+                          )}
+                        </div>
+                      </CollapsibleContent>
+                    </Collapsible>
+                  )}
                 </div>
               ))}
             </div>
