@@ -2792,3 +2792,40 @@ export const unifiedCreditUsageLogsRelations = relations(unifiedCreditUsageLogs,
   credit: one(credits, { fields: [unifiedCreditUsageLogs.creditId], references: [credits.id] }),
   paymentHistory: one(stripePaymentHistory, { fields: [unifiedCreditUsageLogs.paymentHistoryId], references: [stripePaymentHistory.id] }),
 }));
+
+// ==================== CREDIT HOLDS ====================
+// Reserve-then-finalize pattern: credits are held (reserved) during checkout,
+// then finalized (converted to usage) on success or released on failure/expiration
+
+export const creditHoldStatusEnum = ["pending", "finalized", "released", "expired"] as const;
+export type CreditHoldStatus = typeof creditHoldStatusEnum[number];
+
+export const creditHolds = pgTable("credit_holds", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  creditId: integer("credit_id").notNull().references(() => credits.id, { onDelete: 'cascade' }),
+  
+  amountCents: integer("amount_cents").notNull(),
+  
+  checkoutSessionId: text("checkout_session_id").notNull(),
+  
+  status: text("status", { enum: creditHoldStatusEnum }).notNull().default("pending"),
+  
+  expiresAt: timestamp("expires_at").notNull(),
+  finalizedAt: timestamp("finalized_at"),
+  releasedAt: timestamp("released_at"),
+  
+  description: text("description"),
+  
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertCreditHoldSchema = createInsertSchema(creditHolds)
+  .omit({ id: true, createdAt: true, finalizedAt: true, releasedAt: true });
+export type InsertCreditHold = z.infer<typeof insertCreditHoldSchema>;
+export type CreditHold = typeof creditHolds.$inferSelect;
+
+export const creditHoldsRelations = relations(creditHolds, ({ one }) => ({
+  user: one(users, { fields: [creditHolds.userId], references: [users.id] }),
+  credit: one(credits, { fields: [creditHolds.creditId], references: [credits.id] }),
+}));

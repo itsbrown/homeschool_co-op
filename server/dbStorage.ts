@@ -53,7 +53,8 @@ import {
   CreditUsageLog, InsertCreditUsageLog, creditUsageLogs,
   Credit, InsertCredit, credits, CreditType, CreditStatus,
   UnifiedCreditUsageLog, InsertUnifiedCreditUsageLog, unifiedCreditUsageLogs,
-  PaymentAllocation, InsertPaymentAllocation, paymentAllocations
+  PaymentAllocation, InsertPaymentAllocation, paymentAllocations,
+  CreditHold, InsertCreditHold, creditHolds, CreditHoldStatus
 } from '../shared/schema';
 
 /**
@@ -4259,5 +4260,214 @@ export class DatabaseStorage implements IStorage {
     .from(paymentAllocations)
     .where(eq(paymentAllocations.enrollmentId, enrollmentId));
     return Number(result[0]?.total || 0);
+  }
+
+  // ==================== CREDIT HOLDS (Reserve-then-Finalize Pattern) ====================
+  
+  async createCreditHolds(
+    userId: number,
+    amountCents: number,
+    checkoutSessionId: string,
+    description?: string,
+    expiresInMinutes: number = 30
+  ): Promise<{ holds: CreditHold[]; totalHeld: number }> {
+    const db = await getDb();
+    const holds: CreditHold[] = [];
+    let remainingAmount = amountCents;
+    
+    console.log(`🔒 Creating credit holds for user ${userId}: ${amountCents} cents`);
+    
+    const availableCredits = await db.select().from(credits)
+      .where(and(
+        eq(credits.userId, userId),
+        or(
+          eq(credits.status, 'approved'),
+          eq(credits.status, 'partially_used')
+        ),
+        or(
+          gt(credits.expiresAt, new Date()),
+          sql`${credits.expiresAt} IS NULL`
+        )
+      ))
+      .orderBy(asc(credits.expiresAt), asc(credits.createdAt));
+    
+    const expiresAt = new Date(Date.now() + expiresInMinutes * 60 * 1000);
+    
+    for (const credit of availableCredits) {
+      if (remainingAmount <= 0) break;
+      
+      const existingHoldsResult = await db.select({
+        total: sql<number>`COALESCE(SUM(${creditHolds.amountCents}), 0)`
+      })
+      .from(creditHolds)
+      .where(and(
+        eq(creditHolds.creditId, credit.id),
+        eq(creditHolds.status, 'pending')
+      ));
+      
+      const heldAmount = Number(existingHoldsResult[0]?.total || 0);
+      const availableAmount = credit.creditAmountCents - credit.usedAmountCents - heldAmount;
+      
+      if (availableAmount <= 0) continue;
+      
+      const holdAmount = Math.min(availableAmount, remainingAmount);
+      
+      const [hold] = await db.insert(creditHolds).values({
+        userId,
+        creditId: credit.id,
+        amountCents: holdAmount,
+        checkoutSessionId,
+        status: 'pending',
+        expiresAt,
+        description
+      }).returning();
+      
+      holds.push(hold);
+      remainingAmount -= holdAmount;
+      
+      console.log(`   🔒 Held ${holdAmount} cents from credit #${credit.id}`);
+    }
+    
+    const totalHeld = amountCents - remainingAmount;
+    console.log(`🔒 Created ${holds.length} holds, total: ${totalHeld} cents`);
+    
+    return { holds, totalHeld };
+  }
+
+  async finalizeCreditHolds(
+    checkoutSessionId: string,
+    paymentHistoryId?: number,
+    description?: string
+  ): Promise<{ finalizedCount: number; totalFinalized: number; usageLogs: UnifiedCreditUsageLog[] }> {
+    const db = await getDb();
+    const usageLogs: UnifiedCreditUsageLog[] = [];
+    let totalFinalized = 0;
+    
+    console.log(`✅ Finalizing credit holds for session: ${checkoutSessionId}`);
+    
+    const pendingHolds = await db.select().from(creditHolds)
+      .where(and(
+        eq(creditHolds.checkoutSessionId, checkoutSessionId),
+        eq(creditHolds.status, 'pending')
+      ));
+    
+    for (const hold of pendingHolds) {
+      const [credit] = await db.select().from(credits).where(eq(credits.id, hold.creditId));
+      
+      if (!credit) {
+        console.error(`   ❌ Credit #${hold.creditId} not found for hold #${hold.id}`);
+        continue;
+      }
+      
+      const newUsedAmount = credit.usedAmountCents + hold.amountCents;
+      const newStatus: CreditStatus = newUsedAmount >= credit.creditAmountCents ? 'used' : 'partially_used';
+      
+      await db.update(credits)
+        .set({
+          usedAmountCents: newUsedAmount,
+          status: newStatus,
+          updatedAt: new Date()
+        })
+        .where(eq(credits.id, credit.id));
+      
+      const [usageLog] = await db.insert(unifiedCreditUsageLogs).values({
+        creditId: hold.creditId,
+        paymentHistoryId,
+        amountCents: hold.amountCents,
+        description: description || hold.description || `Credit applied from hold #${hold.id}`
+      }).returning();
+      
+      usageLogs.push(usageLog);
+      
+      await db.update(creditHolds)
+        .set({
+          status: 'finalized' as CreditHoldStatus,
+          finalizedAt: new Date()
+        })
+        .where(eq(creditHolds.id, hold.id));
+      
+      totalFinalized += hold.amountCents;
+      console.log(`   ✅ Finalized hold #${hold.id}: ${hold.amountCents} cents from credit #${credit.id}`);
+    }
+    
+    console.log(`✅ Finalized ${pendingHolds.length} holds, total: ${totalFinalized} cents`);
+    
+    return { finalizedCount: pendingHolds.length, totalFinalized, usageLogs };
+  }
+
+  async releaseCreditHolds(checkoutSessionId: string): Promise<{ releasedCount: number; totalReleased: number }> {
+    const db = await getDb();
+    let totalReleased = 0;
+    
+    console.log(`🔓 Releasing credit holds for session: ${checkoutSessionId}`);
+    
+    const pendingHolds = await db.select().from(creditHolds)
+      .where(and(
+        eq(creditHolds.checkoutSessionId, checkoutSessionId),
+        eq(creditHolds.status, 'pending')
+      ));
+    
+    for (const hold of pendingHolds) {
+      await db.update(creditHolds)
+        .set({
+          status: 'released' as CreditHoldStatus,
+          releasedAt: new Date()
+        })
+        .where(eq(creditHolds.id, hold.id));
+      
+      totalReleased += hold.amountCents;
+      console.log(`   🔓 Released hold #${hold.id}: ${hold.amountCents} cents`);
+    }
+    
+    console.log(`🔓 Released ${pendingHolds.length} holds, total: ${totalReleased} cents`);
+    
+    return { releasedCount: pendingHolds.length, totalReleased };
+  }
+
+  async getActiveHoldsForUser(userId: number): Promise<CreditHold[]> {
+    const db = await getDb();
+    return db.select().from(creditHolds)
+      .where(and(
+        eq(creditHolds.userId, userId),
+        eq(creditHolds.status, 'pending'),
+        gt(creditHolds.expiresAt, new Date())
+      ))
+      .orderBy(asc(creditHolds.createdAt));
+  }
+
+  async getTotalHeldCreditsForUser(userId: number): Promise<number> {
+    const db = await getDb();
+    const result = await db.select({
+      total: sql<number>`COALESCE(SUM(${creditHolds.amountCents}), 0)`
+    })
+    .from(creditHolds)
+    .where(and(
+      eq(creditHolds.userId, userId),
+      eq(creditHolds.status, 'pending'),
+      gt(creditHolds.expiresAt, new Date())
+    ));
+    return Number(result[0]?.total || 0);
+  }
+
+  async expireStaleHolds(): Promise<number> {
+    const db = await getDb();
+    const now = new Date();
+    
+    const expiredHolds = await db.update(creditHolds)
+      .set({
+        status: 'expired' as CreditHoldStatus,
+        releasedAt: now
+      })
+      .where(and(
+        eq(creditHolds.status, 'pending'),
+        lt(creditHolds.expiresAt, now)
+      ))
+      .returning();
+    
+    if (expiredHolds.length > 0) {
+      console.log(`🕐 Expired ${expiredHolds.length} stale credit holds`);
+    }
+    
+    return expiredHolds.length;
   }
 }

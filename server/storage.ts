@@ -54,7 +54,8 @@ import {
   creditUsageLogs, type CreditUsageLog, type InsertCreditUsageLog,
   credits, type Credit, type InsertCredit, type CreditType, type CreditStatus,
   unifiedCreditUsageLogs, type UnifiedCreditUsageLog, type InsertUnifiedCreditUsageLog,
-  paymentAllocations, type PaymentAllocation, type InsertPaymentAllocation
+  paymentAllocations, type PaymentAllocation, type InsertPaymentAllocation,
+  creditHolds, type CreditHold, type InsertCreditHold, type CreditHoldStatus
 } from "@shared/schema";
 import { eq, inArray } from 'drizzle-orm';
 import { getDb } from './db';
@@ -622,11 +623,20 @@ export interface IStorage {
   // Credit consumption (FIFO by expiration date)
   useCredits(userId: number, amountCents: number, paymentHistoryId?: number, description?: string): Promise<{ usedCredits: UnifiedCreditUsageLog[]; totalUsed: number }>;
   
-  // Credit restoration (rollback on failed checkout)
+  // Credit restoration (rollback on failed checkout) - DEPRECATED: Use credit holds pattern instead
   restoreCredits(usageLogs: UnifiedCreditUsageLog[]): Promise<{ restoredCount: number; totalRestored: number }>;
   
   // Credit expiration management
   expireCredits(): Promise<number>; // Returns count of expired credits
+  
+  // ==================== CREDIT HOLDS (Reserve-then-Finalize Pattern) ====================
+  // Hold credits before payment processing, finalize after success, release on failure
+  createCreditHolds(userId: number, amountCents: number, checkoutSessionId: string, description?: string, expiresInMinutes?: number): Promise<{ holds: CreditHold[]; totalHeld: number }>;
+  finalizeCreditHolds(checkoutSessionId: string, paymentHistoryId?: number, description?: string): Promise<{ finalizedCount: number; totalFinalized: number; usageLogs: UnifiedCreditUsageLog[] }>;
+  releaseCreditHolds(checkoutSessionId: string): Promise<{ releasedCount: number; totalReleased: number }>;
+  getActiveHoldsForUser(userId: number): Promise<CreditHold[]>;
+  getTotalHeldCreditsForUser(userId: number): Promise<number>;
+  expireStaleHolds(): Promise<number>;
   
   // Unified Credit Usage Log methods
   getUnifiedCreditUsageLogById(id: number): Promise<UnifiedCreditUsageLog | undefined>;
@@ -7168,6 +7178,31 @@ export class MemStorage implements IStorage {
 
       async expireCredits(): Promise<number> {
         return this.dbStorage.expireCredits();
+      }
+
+      // Credit Hold methods (Reserve-then-Finalize Pattern)
+      async createCreditHolds(userId: number, amountCents: number, checkoutSessionId: string, description?: string, expiresInMinutes: number = 30): Promise<{ holds: CreditHold[]; totalHeld: number }> {
+        return this.dbStorage.createCreditHolds(userId, amountCents, checkoutSessionId, description, expiresInMinutes);
+      }
+
+      async finalizeCreditHolds(checkoutSessionId: string, paymentHistoryId?: number, description?: string): Promise<{ finalizedCount: number; totalFinalized: number; usageLogs: UnifiedCreditUsageLog[] }> {
+        return this.dbStorage.finalizeCreditHolds(checkoutSessionId, paymentHistoryId, description);
+      }
+
+      async releaseCreditHolds(checkoutSessionId: string): Promise<{ releasedCount: number; totalReleased: number }> {
+        return this.dbStorage.releaseCreditHolds(checkoutSessionId);
+      }
+
+      async getActiveHoldsForUser(userId: number): Promise<CreditHold[]> {
+        return this.dbStorage.getActiveHoldsForUser(userId);
+      }
+
+      async getTotalHeldCreditsForUser(userId: number): Promise<number> {
+        return this.dbStorage.getTotalHeldCreditsForUser(userId);
+      }
+
+      async expireStaleHolds(): Promise<number> {
+        return this.dbStorage.expireStaleHolds();
       }
 
       async getUnifiedCreditUsageLogById(id: number): Promise<UnifiedCreditUsageLog | undefined> {
