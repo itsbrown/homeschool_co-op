@@ -1038,23 +1038,40 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
       if (totalWithMembership === 0 && validatedCreditsToApply > 0) {
         console.log('🎫 CREDIT-ONLY CHECKOUT: Total is $0 after credits, skipping Stripe');
         
-        // Consume credits using FIFO (existing pattern from dbStorage)
-        // Credits are consumed first, then we attempt to complete the checkout
-        // If anything fails after credit consumption, we restore the credits
-        const creditUsageResult = await storage.useCredits(
+        // Generate a unique checkout session ID for credit hold tracking
+        const checkoutSessionId = `credit_only_${Date.now()}_${parent.id}`;
+        
+        // RESERVE-THEN-FINALIZE PATTERN:
+        // 1. Create credit holds (reserve credits without consuming them)
+        // 2. Process enrollment updates
+        // 3. On success: finalize holds (convert to actual usage)
+        // 4. On failure: release holds (credits automatically become available again)
+        
+        const creditHoldResult = await storage.createCreditHolds(
           parent.id,
           validatedCreditsToApply,
-          undefined, // paymentHistoryId - will be created below
-          `Credit-only checkout for enrollments: ${enrollmentIds.join(', ')}`
+          checkoutSessionId,
+          `Credit-only checkout for enrollments: ${enrollmentIds.join(', ')}`,
+          30 // 30 minute expiration
         );
         
-        console.log('💰 Credits consumed:', {
-          totalUsed: creditUsageResult.totalUsed,
-          creditsCount: creditUsageResult.usedCredits.length
+        console.log('🔒 Credits held (reserved):', {
+          totalHeld: creditHoldResult.totalHeld,
+          holdsCount: creditHoldResult.holds.length
         });
         
+        // Validate we held enough credits
+        if (creditHoldResult.totalHeld < validatedCreditsToApply) {
+          // Not enough credits available - release any partial holds
+          await storage.releaseCreditHolds(checkoutSessionId);
+          return res.status(400).json({
+            message: 'Insufficient credits available. Some credits may be held by other checkouts.',
+            error: 'INSUFFICIENT_CREDITS'
+          });
+        }
+        
         // Track original enrollment states for rollback on failure
-        const originalEnrollmentStates: { id: number; status: string; paymentStatus: string; totalPaid: number; remainingBalance: number; metadata: any }[] = [];
+        const originalEnrollmentStates: Map<number, { status: string; paymentStatus: string; totalPaid: number; remainingBalance: number | null; metadata: any }> = new Map();
         
         try {
         // Update enrollments to pending_admin_approval status (requires school admin approval for $0 orders)
@@ -1092,13 +1109,12 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
           const enrollment = await storage.getProgramEnrollmentById(enrollmentId);
           if (!enrollment) continue;
           
-          // Capture original state for rollback (use ?? to preserve zero values)
-          originalEnrollmentStates.push({
-            id: enrollmentId,
-            status: enrollment.status,
-            paymentStatus: enrollment.paymentStatus ?? 'pending',
-            totalPaid: enrollment.totalPaid ?? 0,
-            remainingBalance: enrollment.remainingBalance ?? enrollment.totalCost ?? 0,
+          // Store original state for rollback on failure
+          originalEnrollmentStates.set(enrollmentId, {
+            status: enrollment.status || 'pending',
+            paymentStatus: enrollment.paymentStatus || 'pending',
+            totalPaid: enrollment.totalPaid || 0,
+            remainingBalance: enrollment.remainingBalance,
             metadata: enrollment.metadata
           });
           
@@ -1142,7 +1158,7 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
               creditsAppliedToThisEnrollment: creditsForThisEnrollment,
               discountedCost: discountedEnrollmentCost,
               totalCreditsAppliedInCheckout: validatedCreditsToApply,
-              creditUsageDetails: creditUsageResult.usedCredits,
+              checkoutSessionId,
               requiresAdminApproval: true,
               checkoutDate: new Date().toISOString()
             }
@@ -1188,14 +1204,14 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
         
         const paymentHistoryEntry = await (storage as any).saveStripePayment({
           userId: parent.id,
-          paymentIntentId: `credit_only_${Date.now()}`, // Unique ID for credit-only payments
+          paymentIntentId: checkoutSessionId, // Use the checkout session ID for tracking
           amount: validatedCreditsToApply,
           currency: 'usd',
           status: 'succeeded',
           metadata: {
             creditOnlyCheckout: true,
             enrollmentIds,
-            creditUsage: creditUsageResult.usedCredits,
+            checkoutSessionId,
             checkoutType: 'credit_only',
             creditsApplied: validatedCreditsToApply,
             creditAllocation: {
@@ -1213,6 +1229,18 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
           membershipCredits: totalMembershipCredits
         });
         
+        // FINALIZE: Convert credit holds to actual usage now that payment history is created
+        const finalizeResult = await storage.finalizeCreditHolds(
+          checkoutSessionId,
+          paymentHistoryEntry.id,
+          `Credit-only checkout for enrollments: ${enrollmentIds.join(', ')}`
+        );
+        
+        console.log('✅ Credits finalized:', {
+          finalizedCount: finalizeResult.finalizedCount,
+          totalFinalized: finalizeResult.totalFinalized
+        });
+        
         // Return success response for credit-only checkout
         return res.json({
           creditOnlyCheckout: true,
@@ -1223,35 +1251,38 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
           status: 'pending_admin_approval'
         });
         } catch (creditCheckoutError: any) {
-          // ROLLBACK: Restore consumed credits AND enrollment states if checkout fails
-          console.error('❌ Credit-only checkout failed after consuming credits, restoring...', creditCheckoutError);
+          // RELEASE: Release the credit holds (credits become available again)
+          console.error('❌ Credit-only checkout failed, rolling back and releasing credit holds...', creditCheckoutError);
           
-          // 1. Rollback enrollments to their original state
-          try {
-            for (const original of originalEnrollmentStates) {
-              await storage.updateProgramEnrollment(original.id, {
-                status: original.status,
-                paymentStatus: original.paymentStatus,
-                totalPaid: original.totalPaid,
-                remainingBalance: original.remainingBalance,
-                metadata: original.metadata
-              });
-              console.log(`✅ Enrollment ${original.id} reverted to status: ${original.status}`);
+          // First, rollback any enrollment updates that were made
+          if (originalEnrollmentStates.size > 0) {
+            console.log(`🔄 Rolling back ${originalEnrollmentStates.size} enrollment(s) to original state...`);
+            for (const [enrollmentId, originalState] of originalEnrollmentStates.entries()) {
+              try {
+                await storage.updateProgramEnrollment(enrollmentId, {
+                  status: originalState.status as any,
+                  paymentStatus: originalState.paymentStatus,
+                  totalPaid: originalState.totalPaid,
+                  remainingBalance: originalState.remainingBalance,
+                  metadata: originalState.metadata
+                });
+                console.log(`   🔄 Rolled back enrollment ${enrollmentId}`);
+              } catch (rollbackError) {
+                console.error(`   ⚠️ Failed to rollback enrollment ${enrollmentId}:`, rollbackError);
+              }
             }
-            console.log(`✅ Reverted ${originalEnrollmentStates.length} enrollments to original state`);
-          } catch (enrollmentRollbackError) {
-            console.error('🚨 CRITICAL: Failed to rollback enrollments after failed checkout:', enrollmentRollbackError);
           }
           
-          // 2. Restore consumed credits
+          // Then release credit holds
           try {
-            const restoreResult = await storage.restoreCredits(creditUsageResult.usedCredits);
-            console.log('✅ Credits restored after failed checkout:', {
-              restoredCount: restoreResult.restoredCount,
-              totalRestored: restoreResult.totalRestored
+            const releaseResult = await storage.releaseCreditHolds(checkoutSessionId);
+            console.log('🔓 Credit holds released after failed checkout:', {
+              releasedCount: releaseResult.releasedCount,
+              totalReleased: releaseResult.totalReleased
             });
-          } catch (restoreError) {
-            console.error('🚨 CRITICAL: Failed to restore credits after failed checkout:', restoreError);
+          } catch (releaseError) {
+            console.error('🚨 CRITICAL: Failed to release credit holds after failed checkout:', releaseError);
+            // Holds will auto-expire after 30 minutes if release fails
           }
           
           throw creditCheckoutError; // Re-throw to be caught by outer error handler

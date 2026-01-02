@@ -18,10 +18,11 @@ let expirationInterval: NodeJS.Timeout | null = null;
  * - expiresAt is not null AND has passed
  * - status is 'approved' or 'partially_used' (not already expired/used/rejected)
  */
-export async function expireCredits(): Promise<{ expiredCount: number }> {
+export async function expireCredits(): Promise<{ expiredCount: number; expiredHoldsCount: number }> {
   try {
     console.log('🕐 Running credit expiration check...');
     
+    // Expire credits that have passed their expiration date
     const expiredCount = await storage.expireCredits();
     
     if (expiredCount > 0) {
@@ -30,7 +31,24 @@ export async function expireCredits(): Promise<{ expiredCount: number }> {
       console.log('✅ No credits needed expiration');
     }
     
-    return { expiredCount };
+    // Also expire stale credit holds (abandoned checkouts)
+    let expiredHoldsCount = 0;
+    try {
+      expiredHoldsCount = await storage.expireStaleHolds();
+      
+      if (expiredHoldsCount > 0) {
+        console.log(`🔓 Released ${expiredHoldsCount} expired credit holds`);
+      }
+    } catch (holdsError: any) {
+      // Table might not exist yet - gracefully handle
+      if (holdsError.message?.includes('relation "credit_holds" does not exist')) {
+        console.log('⏭️ Skipping credit holds expiration - table not yet created');
+      } else {
+        throw holdsError;
+      }
+    }
+    
+    return { expiredCount, expiredHoldsCount };
   } catch (error) {
     console.error('❌ Error during credit expiration check:', error);
     throw error;

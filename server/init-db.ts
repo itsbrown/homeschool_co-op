@@ -1501,6 +1501,34 @@ async function runMigrations() {
     `);
     console.log('✅ Migration completed: payment_allocations table created');
     
+    // Create credit_holds table for reserve-then-finalize credit pattern
+    console.log('Running migration: Creating credit_holds table...');
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS credit_holds (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        credit_id INTEGER NOT NULL REFERENCES credits(id) ON DELETE CASCADE,
+        amount_cents INTEGER NOT NULL,
+        checkout_session_id TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'finalized', 'released', 'expired')),
+        expires_at TIMESTAMP NOT NULL,
+        finalized_at TIMESTAMP,
+        released_at TIMESTAMP,
+        description TEXT,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_credit_holds_user_id ON credit_holds(user_id);
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_credit_holds_checkout_session_id ON credit_holds(checkout_session_id);
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_credit_holds_status ON credit_holds(status);
+    `);
+    console.log('✅ Migration completed: credit_holds table created');
+    
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     

@@ -52,7 +52,7 @@ The platform prioritizes scalability, security, and user experience, incorporati
 -   **Subscription Status Toggle**: School admin-configurable toggle to control subscription status display during checkout.
 -   **AI Smart Tutorial System**: Conversational AI guidance using Anthropic Claude with context-aware help, rate limiting, conversation truncation, dynamic UI element highlighting, and page-specific suggestions.
 -   **System Error Monitoring**: Comprehensive error tracking and notification system with database logging, severity levels, automatic email notifications for critical errors, daily summaries, React Error Boundary, Express error middleware, and an admin dashboard.
--   **Unified Credit System**: Extensible multi-type credit system supporting volunteer, referral, achievement, marketing, and manual credits. Features a single `credits` table, admin approval workflow, FIFO consumption during checkout, and an expiration service.
+-   **Unified Credit System**: Extensible multi-type credit system supporting volunteer, referral, achievement, marketing, and manual credits. Features a single `credits` table, admin approval workflow, FIFO consumption during checkout, an expiration service, and a reserve-then-finalize pattern for credit consumption using `credit_holds` table (credits are held during checkout, finalized on success, released on failure).
 
 ### Educator Dashboard
 Provides educators/mentors with tools to manage classes, track attendance, view lesson plans, and log work hours. It integrates with the Daily Flow system and features a dedicated `EducatorAppShell` with role-specific routing and an emerald color scheme. Key features include session management, attendance tracking, and a weekly calendar.

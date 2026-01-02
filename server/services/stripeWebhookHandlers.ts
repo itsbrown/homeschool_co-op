@@ -375,6 +375,9 @@ export async function handleDirectPaymentSuccess(paymentIntent: Stripe.PaymentIn
     }
     
     // Process credits consumption if applied (uses unified credit system)
+    // NOTE: For Stripe payments, we use direct consumption (not reserve-then-finalize)
+    // because Stripe already gates the transaction - this webhook only fires on successful payment.
+    // Credit-only checkouts use the reserve-then-finalize pattern since they have no Stripe transaction.
     const creditsApplied = paymentIntent.metadata.volunteerCreditsApplied 
       ? parseInt(paymentIntent.metadata.volunteerCreditsApplied) 
       : 0;
