@@ -4136,6 +4136,46 @@ export class DatabaseStorage implements IStorage {
     return { usedCredits, totalUsed };
   }
 
+  async restoreCredits(usageLogs: UnifiedCreditUsageLog[]): Promise<{ restoredCount: number; totalRestored: number }> {
+    const db = await getDb();
+    let totalRestored = 0;
+    let restoredCount = 0;
+    
+    console.log('🔄 Restoring credits from', usageLogs.length, 'usage logs');
+    
+    for (const log of usageLogs) {
+      try {
+        const [credit] = await db.select().from(credits).where(eq(credits.id, log.creditId));
+        
+        if (credit) {
+          const newUsedAmount = Math.max(0, credit.usedAmountCents - log.amountCents);
+          const newStatus: CreditStatus = newUsedAmount === 0 ? 'approved' : 
+                                          newUsedAmount < credit.creditAmountCents ? 'partially_used' : 'used';
+          
+          await db.update(credits)
+            .set({
+              usedAmountCents: newUsedAmount,
+              status: newStatus,
+              updatedAt: new Date()
+            })
+            .where(eq(credits.id, credit.id));
+          
+          await db.delete(unifiedCreditUsageLogs).where(eq(unifiedCreditUsageLogs.id, log.id));
+          
+          totalRestored += log.amountCents;
+          restoredCount++;
+          
+          console.log(`   ✅ Restored ${log.amountCents} cents to credit #${credit.id}`);
+        }
+      } catch (error) {
+        console.error(`   ❌ Failed to restore credit log #${log.id}:`, error);
+      }
+    }
+    
+    console.log(`🔄 Credit restoration complete: ${restoredCount} logs, $${(totalRestored / 100).toFixed(2)} restored`);
+    return { restoredCount, totalRestored };
+  }
+
   async expireCredits(): Promise<number> {
     const db = await getDb();
     const now = new Date();

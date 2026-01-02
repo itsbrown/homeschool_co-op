@@ -875,8 +875,20 @@ router.get('/credits', jwtCheck, async (req: any, res) => {
       });
     }
 
-    // Get available credits for this user
+    // Get available credits for this user from unified credit system
     const availableCredits = await storage.getAvailableCredits(user.id);
+    
+    // Detailed logging for debugging
+    console.log(`💰 [DEBUG] Raw credits from getAvailableCredits for user ${user.id}:`, 
+      availableCredits.map(c => ({
+        id: c.id,
+        type: c.creditType,
+        amount: c.creditAmountCents,
+        used: c.usedAmountCents,
+        remaining: c.creditAmountCents - c.usedAmountCents,
+        status: c.status
+      }))
+    );
     
     // Calculate total available balance (approved credits minus used amounts)
     const totalAvailableCents = availableCredits.reduce((sum, credit) => {

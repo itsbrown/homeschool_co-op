@@ -622,6 +622,9 @@ export interface IStorage {
   // Credit consumption (FIFO by expiration date)
   useCredits(userId: number, amountCents: number, paymentHistoryId?: number, description?: string): Promise<{ usedCredits: UnifiedCreditUsageLog[]; totalUsed: number }>;
   
+  // Credit restoration (rollback on failed checkout)
+  restoreCredits(usageLogs: UnifiedCreditUsageLog[]): Promise<{ restoredCount: number; totalRestored: number }>;
+  
   // Credit expiration management
   expireCredits(): Promise<number>; // Returns count of expired credits
   
@@ -7157,6 +7160,10 @@ export class MemStorage implements IStorage {
 
       async useCredits(userId: number, amountCents: number, paymentHistoryId?: number, description?: string): Promise<{ usedCredits: UnifiedCreditUsageLog[]; totalUsed: number }> {
         return this.dbStorage.useCredits(userId, amountCents, paymentHistoryId, description);
+      }
+
+      async restoreCredits(usageLogs: UnifiedCreditUsageLog[]): Promise<{ restoredCount: number; totalRestored: number }> {
+        return this.dbStorage.restoreCredits(usageLogs);
       }
 
       async expireCredits(): Promise<number> {

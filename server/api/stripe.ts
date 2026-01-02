@@ -1039,6 +1039,8 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
         console.log('🎫 CREDIT-ONLY CHECKOUT: Total is $0 after credits, skipping Stripe');
         
         // Consume credits using FIFO (existing pattern from dbStorage)
+        // Credits are consumed first, then we attempt to complete the checkout
+        // If anything fails after credit consumption, we restore the credits
         const creditUsageResult = await storage.useCredits(
           parent.id,
           validatedCreditsToApply,
@@ -1051,6 +1053,10 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
           creditsCount: creditUsageResult.usedCredits.length
         });
         
+        // Track original enrollment states for rollback on failure
+        const originalEnrollmentStates: { id: number; status: string; paymentStatus: string; totalPaid: number; remainingBalance: number; metadata: any }[] = [];
+        
+        try {
         // Update enrollments to pending_admin_approval status (requires school admin approval for $0 orders)
         // Allocate credits proportionally based on cart pricing
         // Use DISCOUNTED total for allocation, SUBTOTAL for proportions (they use same basis)
@@ -1085,6 +1091,16 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
         for (const enrollmentId of enrollmentIds) {
           const enrollment = await storage.getProgramEnrollmentById(enrollmentId);
           if (!enrollment) continue;
+          
+          // Capture original state for rollback (use ?? to preserve zero values)
+          originalEnrollmentStates.push({
+            id: enrollmentId,
+            status: enrollment.status,
+            paymentStatus: enrollment.paymentStatus ?? 'pending',
+            totalPaid: enrollment.totalPaid ?? 0,
+            remainingBalance: enrollment.remainingBalance ?? enrollment.totalCost ?? 0,
+            metadata: enrollment.metadata
+          });
           
           processedCount++;
           const isLastEnrollment = processedCount === enrollmentCount;
@@ -1206,6 +1222,40 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
           paymentHistoryId: paymentHistoryEntry.id,
           status: 'pending_admin_approval'
         });
+        } catch (creditCheckoutError: any) {
+          // ROLLBACK: Restore consumed credits AND enrollment states if checkout fails
+          console.error('❌ Credit-only checkout failed after consuming credits, restoring...', creditCheckoutError);
+          
+          // 1. Rollback enrollments to their original state
+          try {
+            for (const original of originalEnrollmentStates) {
+              await storage.updateProgramEnrollment(original.id, {
+                status: original.status,
+                paymentStatus: original.paymentStatus,
+                totalPaid: original.totalPaid,
+                remainingBalance: original.remainingBalance,
+                metadata: original.metadata
+              });
+              console.log(`✅ Enrollment ${original.id} reverted to status: ${original.status}`);
+            }
+            console.log(`✅ Reverted ${originalEnrollmentStates.length} enrollments to original state`);
+          } catch (enrollmentRollbackError) {
+            console.error('🚨 CRITICAL: Failed to rollback enrollments after failed checkout:', enrollmentRollbackError);
+          }
+          
+          // 2. Restore consumed credits
+          try {
+            const restoreResult = await storage.restoreCredits(creditUsageResult.usedCredits);
+            console.log('✅ Credits restored after failed checkout:', {
+              restoredCount: restoreResult.restoredCount,
+              totalRestored: restoreResult.totalRestored
+            });
+          } catch (restoreError) {
+            console.error('🚨 CRITICAL: Failed to restore credits after failed checkout:', restoreError);
+          }
+          
+          throw creditCheckoutError; // Re-throw to be caught by outer error handler
+        }
       }
       
       // Use payment plan service for ALL payment plans
