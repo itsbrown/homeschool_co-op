@@ -373,6 +373,7 @@ const fetchApplicableDiscounts = async (items: CartItem[], subtotal: number, get
       if (!discount.isActive) return false;
       if (discount.applicationMethod !== 'automatic' && discount.applicationMethod !== 'both') return false;
       if (discount.siblingDiscount) return false; // Skip sibling discounts - handled separately
+      if (discount.appliesToMembership) return false; // Skip membership-only discounts - they apply to membership fees, not cart items
       
       // Role eligibility check
       const userRolesList = userRoles || [];
