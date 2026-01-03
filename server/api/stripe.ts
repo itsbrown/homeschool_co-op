@@ -569,8 +569,16 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
           authoritativeMembershipAmount,
           clientSentTotal: total,
           clientSentMembership: membership?.amount || 0,
+          clientSentPromoCode: promoCode || null,
+          serverAppliedDiscounts: cartPricingResult?.discounts?.appliedDiscounts?.map((d: any) => ({
+            name: d.name,
+            type: d.type,
+            amount: d.discountAmount,
+            sourceType: d.sourceType
+          })) || [],
+          serverTotalDiscountAmount: cartPricingResult?.discounts?.totalDiscountAmount || 0,
           userEmail,
-          securityNote: 'Underpayment > 5% - likely stale cart data. User should refresh.'
+          securityNote: 'Underpayment > 5% - likely stale cart data or promo code mismatch. User should refresh.'
         });
         // Return 409 Conflict with authoritative values so client can auto-retry
         // Include membershipAlreadyPaid flag to help frontend distinguish paid vs $0 discount
