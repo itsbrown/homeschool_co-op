@@ -4063,9 +4063,13 @@ export class DatabaseStorage implements IStorage {
 
   async getTotalAvailableCredits(userId: number): Promise<number> {
     const availableCredits = await this.getAvailableCredits(userId);
-    return availableCredits.reduce((total, credit) => {
+    const totalUnused = availableCredits.reduce((total, credit) => {
       return total + (credit.creditAmountCents - credit.usedAmountCents);
     }, 0);
+    
+    // Subtract held credits (reserved in active checkouts) from available balance
+    const heldCredits = await this.getTotalHeldCreditsForUser(userId);
+    return Math.max(0, totalUnused - heldCredits);
   }
 
   async getPendingCredits(schoolId: number, creditType?: CreditType): Promise<Credit[]> {
