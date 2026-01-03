@@ -978,13 +978,26 @@ export default function ParentProfilePage() {
       
       setDeleteDialogOpen(false);
       setChildToDelete(null);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to delete child:", error);
+      
+      // Check if this is a blocking reference error (409 Conflict)
+      let errorMessage = "Failed to delete child. Please try again.";
+      
+      if (error?.message) {
+        // The apiRequest throws with the server message
+        errorMessage = error.message;
+      }
+      
       toast({
-        title: "Error",
-        description: "Failed to delete child. Please try again.",
+        title: "Cannot Delete Child",
+        description: errorMessage,
         variant: "destructive",
       });
+      
+      // Close dialog so user can see the error
+      setDeleteDialogOpen(false);
+      setChildToDelete(null);
     }
   };
 

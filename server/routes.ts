@@ -2820,31 +2820,73 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: 'Invalid child ID' });
       }
 
-      console.log('🗑️ Deleting child with ID:', childId);
+      console.log('🗑️ Attempting to delete child with ID:', childId);
 
-      // First, get the child data before deleting
+      // First, get the child data
       const child = await storage.getChild(childId);
       
       if (!child) {
         return res.status(404).json({ message: 'Child not found' });
       }
 
-      // Now delete the child record
-      await storage.deleteChild(childId);
+      // Check for blocking references before attempting deletion
+      const blockingReasons: string[] = [];
 
-      // Also delete the corresponding school student record
+      // 1. Check for program enrollments
+      const allEnrollments = await storage.getProgramEnrollments();
+      const childEnrollments = allEnrollments.filter(e => e.childId === childId);
+      if (childEnrollments.length > 0) {
+        const activeCount = childEnrollments.filter(e => 
+          e.status === 'enrolled' || e.status === 'pending' || e.status === 'confirmed' || e.status === 'pending_payment'
+        ).length;
+        if (activeCount > 0) {
+          blockingReasons.push(`${activeCount} active enrollment${activeCount > 1 ? 's' : ''}`);
+        } else {
+          blockingReasons.push(`${childEnrollments.length} enrollment record${childEnrollments.length > 1 ? 's' : ''}`);
+        }
+      }
+
+      // 2. Check for discount applications
+      try {
+        const discountApplications = await storage.getDiscountApplicationsByChild(childId);
+        if (discountApplications && discountApplications.length > 0) {
+          blockingReasons.push(`${discountApplications.length} discount application${discountApplications.length > 1 ? 's' : ''}`);
+        }
+      } catch (discountErr) {
+        // If method doesn't exist, skip this check
+        console.log('⚠️ Could not check discount applications:', discountErr);
+      }
+
+      // If there are blocking references, return error with details
+      if (blockingReasons.length > 0) {
+        const childName = `${child.firstName} ${child.lastName}`;
+        const reasonsList = blockingReasons.join(', ');
+        console.log(`❌ Cannot delete ${childName}: has ${reasonsList}`);
+        
+        return res.status(409).json({
+          success: false,
+          message: `Cannot delete ${childName}. Please remove the following first: ${reasonsList}.`,
+          blockingReasons,
+          childId,
+          childName
+        });
+      }
+
+      // First delete the school student record (if exists)
       try {
         const schoolStudents = await storage.getAllSchoolStudents();
         const schoolStudent = schoolStudents.find(ss => ss.childId === childId);
         
         if (schoolStudent) {
           await storage.deleteSchoolStudent(schoolStudent.id);
-          console.log('✅ Also deleted school student record with ID:', schoolStudent.id);
+          console.log('✅ Deleted school student record with ID:', schoolStudent.id);
         }
       } catch (schoolStudentError) {
         console.warn('⚠️ Failed to delete school student record:', schoolStudentError);
-        // Don't fail the entire operation if school student deletion fails
       }
+
+      // Now delete the child record
+      await storage.deleteChild(childId);
 
       console.log('✅ Child deleted successfully:', child.firstName, child.lastName);
 

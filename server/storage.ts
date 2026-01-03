@@ -429,6 +429,7 @@ export interface IStorage {
   getAllDiscountApplications(): Promise<DiscountApplication[]>;
   getDiscountApplicationsBySchoolId(schoolId: number): Promise<DiscountApplication[]>;
   getDiscountApplicationsByDiscountId(discountId: number): Promise<DiscountApplication[]>;
+  getDiscountApplicationsByChild(childId: number): Promise<DiscountApplication[]>;
   createDiscountApplication(application: InsertDiscountApplication): Promise<DiscountApplication>;
   updateDiscountApplication(id: number, application: Partial<InsertDiscountApplication>): Promise<DiscountApplication | undefined>;
 
@@ -6569,6 +6570,10 @@ export class MemStorage implements IStorage {
 
       async getDiscountApplicationsByDiscountId(discountId: number): Promise<DiscountApplication[]> {
         return this.dbStorage.getDiscountApplicationsByDiscountId(discountId);
+      }
+
+      async getDiscountApplicationsByChild(childId: number): Promise<DiscountApplication[]> {
+        return this.dbStorage.getDiscountApplicationsByChild(childId);
       }
 
       async createDiscountApplication(application: InsertDiscountApplication): Promise<DiscountApplication> {

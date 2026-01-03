@@ -2782,6 +2782,11 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(discountApplications).where(eq(discountApplications.discountId, discountId));
   }
 
+  async getDiscountApplicationsByChild(childId: number): Promise<DiscountApplication[]> {
+    const db = await getDb();
+    return await db.select().from(discountApplications).where(eq(discountApplications.childId, childId));
+  }
+
   async createDiscountApplication(application: InsertDiscountApplication): Promise<DiscountApplication> {
     const db = await getDb();
     const [newApplication] = await db.insert(discountApplications).values({
