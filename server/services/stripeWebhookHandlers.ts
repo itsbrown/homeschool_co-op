@@ -287,9 +287,9 @@ export async function handleDirectPaymentSuccess(paymentIntent: Stripe.PaymentIn
           }
         }
         
-        // Extract credits metadata for payment history display
-        const creditsApplied = paymentIntent.metadata.volunteerCreditsApplied 
-          ? parseInt(paymentIntent.metadata.volunteerCreditsApplied) 
+        // Extract credits metadata for payment history display (unified credit system)
+        const creditsApplied = paymentIntent.metadata.creditsAppliedCents 
+          ? parseInt(paymentIntent.metadata.creditsAppliedCents) 
           : 0;
         
         let creditAllocation: any = null;
@@ -378,14 +378,14 @@ export async function handleDirectPaymentSuccess(paymentIntent: Stripe.PaymentIn
     // NOTE: For Stripe payments, we use direct consumption (not reserve-then-finalize)
     // because Stripe already gates the transaction - this webhook only fires on successful payment.
     // Credit-only checkouts use the reserve-then-finalize pattern since they have no Stripe transaction.
-    const creditsApplied = paymentIntent.metadata.volunteerCreditsApplied 
-      ? parseInt(paymentIntent.metadata.volunteerCreditsApplied) 
+    const creditsAppliedForConsumption = paymentIntent.metadata.creditsAppliedCents 
+      ? parseInt(paymentIntent.metadata.creditsAppliedCents) 
       : 0;
     
-    if (creditsApplied > 0 && parentEmail) {
+    if (creditsAppliedForConsumption > 0 && parentEmail) {
       try {
         console.log('💰 Processing credits consumption (unified system):', { 
-          creditsToConsume: creditsApplied, 
+          creditsToConsume: creditsAppliedForConsumption, 
           parentEmail 
         });
         
@@ -394,7 +394,7 @@ export async function handleDirectPaymentSuccess(paymentIntent: Stripe.PaymentIn
           // Use unified credit system for atomic FIFO consumption
           const { usedCredits, totalUsed } = await storage.useCredits(
             parentUser.id, 
-            creditsApplied, 
+            creditsAppliedForConsumption, 
             undefined, // paymentHistoryId - could be populated if we want to link it
             `Applied to enrollment payment ${paymentIntent.id}`
           );

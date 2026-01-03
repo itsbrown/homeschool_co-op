@@ -668,8 +668,8 @@ router.post('/confirm', async (req: any, res) => {
     let creditsConsumed = 0;
     try {
       const metadata = paymentIntent.metadata as Record<string, string>;
-      const creditsApplied = metadata.volunteerCreditsApplied 
-        ? parseInt(metadata.volunteerCreditsApplied) 
+      const creditsApplied = metadata.creditsAppliedCents 
+        ? parseInt(metadata.creditsAppliedCents) 
         : 0;
       
       if (creditsApplied > 0) {

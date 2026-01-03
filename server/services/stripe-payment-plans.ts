@@ -42,8 +42,8 @@ export interface PaymentPlanData {
       amount: number; // Discount amount in cents
     }>;
   };
-  // Volunteer credits applied to this payment (in cents)
-  volunteerCreditsApplied?: number;
+  // Credits applied to this payment (in cents) - unified credit system
+  creditsAppliedCents?: number;
   // Credit allocation breakdown for payment history tracking
   creditAllocation?: {
     enrollmentCredits: number;
@@ -226,17 +226,17 @@ export class StripePaymentPlanService {
         });
       }
       
-      // Add volunteer credits metadata if applied
-      if (data.volunteerCreditsApplied && data.volunteerCreditsApplied > 0) {
-        paymentMetadata.volunteerCreditsApplied = data.volunteerCreditsApplied.toString();
+      // Add credits metadata if applied (unified credit system)
+      if (data.creditsAppliedCents && data.creditsAppliedCents > 0) {
+        paymentMetadata.creditsAppliedCents = data.creditsAppliedCents.toString();
         
         // Also store credit allocation breakdown if available
         if (data.creditAllocation) {
           paymentMetadata.creditAllocation = JSON.stringify(data.creditAllocation);
         }
         
-        console.log('💰 Adding volunteer credits to payment metadata:', {
-          creditsApplied: data.volunteerCreditsApplied,
+        console.log('💰 Adding credits to payment metadata:', {
+          creditsAppliedCents: data.creditsAppliedCents,
           creditAllocation: data.creditAllocation
         });
       }

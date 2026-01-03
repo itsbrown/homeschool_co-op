@@ -1322,7 +1322,7 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
         paymentFrequency: paymentFrequency as 'weekly' | 'biweekly' | 'monthly' | 'one_time',
         membership: serverMembership, // Pass server-validated membership data
         discountSnapshot, // Pass discount tracking data
-        volunteerCreditsApplied: validatedCreditsToApply, // Pass credits for metadata storage
+        creditsAppliedCents: validatedCreditsToApply, // Pass credits for metadata storage (unified credit system)
         creditAllocation: creditAllocationForPayment // Pass credit breakdown for payment history
       });
 
