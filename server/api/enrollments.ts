@@ -662,6 +662,37 @@ router.post('/confirm', async (req: any, res) => {
       console.error('⚠️ Error creating membership (non-blocking):', membershipError);
     }
     
+    // Process credits consumption for mixed payments (credits + Stripe)
+    // For Stripe payments, we use direct consumption (not reserve-then-finalize)
+    // because Stripe already gates the transaction - this only runs after payment confirmation
+    let creditsConsumed = 0;
+    try {
+      const metadata = paymentIntent.metadata as Record<string, string>;
+      const creditsApplied = metadata.volunteerCreditsApplied 
+        ? parseInt(metadata.volunteerCreditsApplied) 
+        : 0;
+      
+      if (creditsApplied > 0) {
+        console.log('💰 Processing credits consumption for mixed payment:', { 
+          creditsToConsume: creditsApplied, 
+          userEmail 
+        });
+        
+        // Use unified credit system for atomic FIFO consumption
+        const { usedCredits, totalUsed } = await storage.useCredits(
+          userId, 
+          creditsApplied, 
+          undefined, // paymentHistoryId - could be populated if we want to link it
+          `Applied to enrollment payment ${paymentIntentId}`
+        );
+        
+        creditsConsumed = totalUsed;
+        console.log(`💰 ✅ Consumed ${totalUsed} cents across ${usedCredits.length} credits for mixed payment`);
+      }
+    } catch (creditsError) {
+      console.error('⚠️ Error consuming credits (non-blocking):', creditsError);
+    }
+    
     res.json({ 
       success: true,
       message: `Successfully confirmed ${idsToConfirm.length} enrollment(s)`,
@@ -670,7 +701,8 @@ router.post('/confirm', async (req: any, res) => {
       paymentIntentId,
       paymentAmount: paymentIntent.amount,
       scheduledPayments: scheduledPaymentsResult,
-      membershipCreated
+      membershipCreated,
+      creditsConsumed
     });
   } catch (error) {
     console.error('Error confirming enrollments:', error);
