@@ -28,6 +28,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
 import { format } from 'date-fns';
+import { ImageUpload } from '@/components/ImageUpload';
 
 interface FundraiserCampaign {
   id: number;
@@ -750,13 +751,10 @@ export default function FundraiserManagementPage() {
               />
             </div>
             <div>
-              <Label htmlFor="product-image">Image URL</Label>
-              <Input
-                id="product-image"
+              <Label>Product Image</Label>
+              <ImageUpload
                 value={productForm.imageUrl}
-                onChange={(e) => setProductForm({ ...productForm, imageUrl: e.target.value })}
-                placeholder="https://example.com/image.jpg"
-                data-testid="input-product-image"
+                onChange={(url) => setProductForm({ ...productForm, imageUrl: url })}
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -833,12 +831,10 @@ export default function FundraiserManagementPage() {
               />
             </div>
             <div>
-              <Label htmlFor="edit-product-image">Image URL</Label>
-              <Input
-                id="edit-product-image"
+              <Label>Product Image</Label>
+              <ImageUpload
                 value={productForm.imageUrl}
-                onChange={(e) => setProductForm({ ...productForm, imageUrl: e.target.value })}
-                data-testid="input-edit-product-image"
+                onChange={(url) => setProductForm({ ...productForm, imageUrl: url })}
               />
             </div>
             <div className="grid grid-cols-2 gap-4">

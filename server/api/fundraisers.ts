@@ -4,6 +4,9 @@ import { supabaseAuth } from '../middleware/supabase-auth';
 import { requireSchoolContext } from '../middleware/require-school-context';
 import { z } from 'zod';
 import { getStripeClient } from '../config/stripe';
+import path from 'path';
+import fs from 'fs';
+import { UploadedFile } from 'express-fileupload';
 
 const router = Router();
 
@@ -751,6 +754,107 @@ router.get('/my-credits', supabaseAuth, async (req: any, res) => {
   } catch (error: any) {
     console.error('Error fetching parent fundraiser credits:', error);
     res.status(500).json({ error: 'Failed to fetch fundraiser credits' });
+  }
+});
+
+// ==================== PRODUCT IMAGE UPLOAD ====================
+
+// Upload product image
+router.post('/upload/product-image', supabaseAuth, async (req: any, res) => {
+  try {
+    // Check for uploaded file
+    if (!req.files || !req.files.image) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'No image file uploaded' 
+      });
+    }
+    
+    const imageFile = req.files.image as UploadedFile;
+    
+    // Validate file type (images only)
+    const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedMimeTypes.includes(imageFile.mimetype)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Only image files are allowed (JPEG, PNG, GIF, WebP)'
+      });
+    }
+    
+    // Validate file size (5MB limit)
+    const maxSize = 5 * 1024 * 1024;
+    if (imageFile.size > maxSize) {
+      return res.status(400).json({
+        success: false,
+        message: 'File too large. Maximum size is 5MB.'
+      });
+    }
+    
+    // Create uploads directory if it doesn't exist
+    const uploadDir = path.join(process.cwd(), 'uploads', 'fundraiser-products');
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    
+    // Generate unique filename with sanitization
+    const timestamp = Date.now();
+    const randomSuffix = Math.random().toString(36).substring(2, 8);
+    const ext = path.extname(imageFile.name).toLowerCase();
+    const filename = `product-${timestamp}-${randomSuffix}${ext}`;
+    const filepath = path.join(uploadDir, filename);
+    
+    // Save the file
+    await imageFile.mv(filepath);
+    
+    // Generate the URL for the uploaded file
+    const imageUrl = `/uploads/fundraiser-products/${filename}`;
+    
+    console.log('📸 Fundraiser product image uploaded:', filename);
+    
+    res.json({
+      success: true,
+      imageUrl,
+      filename,
+      size: imageFile.size,
+      mimetype: imageFile.mimetype
+    });
+  } catch (error: any) {
+    console.error('Error uploading fundraiser product image:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to upload image',
+      error: error.message
+    });
+  }
+});
+
+// Delete product image
+router.delete('/upload/product-image', supabaseAuth, async (req: any, res) => {
+  try {
+    const { imageUrl } = req.body;
+    
+    if (!imageUrl || !imageUrl.startsWith('/uploads/fundraiser-products/')) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid image URL'
+      });
+    }
+    
+    const filename = path.basename(imageUrl);
+    const filepath = path.join(process.cwd(), 'uploads', 'fundraiser-products', filename);
+    
+    if (fs.existsSync(filepath)) {
+      fs.unlinkSync(filepath);
+      console.log('🗑️ Fundraiser product image deleted:', filename);
+    }
+    
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('Error deleting fundraiser product image:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete image'
+    });
   }
 });
 
