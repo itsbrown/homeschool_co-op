@@ -301,6 +301,19 @@ export async function calculateCartPricing(
   }, {} as Record<number, number>);
   const uniqueChildren = Object.keys(childrenWithClasses).length;
 
+  // Enhanced logging for debugging price mismatches
+  console.log('🧒 Cart pricing - Children analysis:', {
+    childrenWithClasses,
+    uniqueChildrenCount: uniqueChildren,
+    childIds: Object.keys(childrenWithClasses).map(Number),
+    schoolSettings: {
+      freeAfterThreeEnabled,
+      freeAfterThreshold,
+      siblingDiscountRate: siblingDiscountRate * 100 + '%',
+      siblingDiscountConfigured: !!siblingDiscountSetting
+    }
+  });
+
   let freeAfterThreeDiscount = 0;
   let freeItemIds: string[] = [];
 
@@ -351,6 +364,22 @@ export async function calculateCartPricing(
       
       return sum;
     }, 0);
+    
+    console.log('💰 Sibling discount calculated:', {
+      siblingDiscount,
+      discountedChildIds,
+      siblingDiscountRate: siblingDiscountRate * 100 + '%'
+    });
+  }
+
+  // Log freeAfterThree discount if applicable
+  if (freeAfterThreeDiscount > 0) {
+    console.log('🎁 Free After Threshold discount applied:', {
+      freeAfterThreeDiscount,
+      freeItemIds,
+      threshold: freeAfterThreshold,
+      uniqueChildren
+    });
   }
 
   const appliedDiscounts: AppliedDiscount[] = [];

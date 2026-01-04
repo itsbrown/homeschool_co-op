@@ -516,14 +516,65 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
     if (finalServerTotal > 0 && finalDiscrepancy > 0) {
       const overpaymentPercentage = finalDiscrepancy / finalServerTotal * 100;
       if (overpaymentPercentage > 1) {
+        // Extract child IDs from cart items for debugging
+        const cartChildIds = hasItems ? [...new Set(items.map((item: any) => item.childId))] : [];
+        const cartChildNames = hasItems ? [...new Set(items.map((item: any) => item.childName))] : [];
+        
         console.error('🚨 PAYMENT VALIDATION FAILED: Client total exceeds server calculation', {
+          // Basic totals
           finalClientTotal,
           finalServerTotal,
           overpayment: finalDiscrepancy,
           overpaymentPercentage: `${overpaymentPercentage.toFixed(2)}%`,
+          
+          // Breakdown
           authoritativeItemTotal,
           authoritativeMembershipAmount,
+          clientSentItemTotal: total,
+          clientSentMembership: membership?.amount || 0,
+          
+          // Client-sent discounts
+          clientDiscounts: {
+            siblingDiscount: discounts?.siblingDiscount || 0,
+            freeAfterThree: discounts?.freeAfterThree || 0,
+            totalDiscountAmount: discounts?.totalDiscountAmount || 0,
+            appliedDiscounts: discounts?.appliedDiscounts?.map((d: any) => ({
+              name: d.name,
+              type: d.type,
+              amount: d.discountAmount
+            })) || []
+          },
+          
+          // Server-calculated discounts
+          serverDiscounts: cartPricingResult ? {
+            siblingDiscount: cartPricingResult.discounts.siblingDiscount,
+            freeAfterThree: cartPricingResult.discounts.freeAfterThree,
+            totalDiscountAmount: cartPricingResult.discounts.totalDiscountAmount,
+            appliedDiscounts: cartPricingResult.discounts.appliedDiscounts.map((d: any) => ({
+              name: d.name,
+              type: d.type,
+              amount: d.discountAmount,
+              sourceType: d.sourceType
+            })),
+            discountedChildIds: cartPricingResult.discounts.discountedChildIds,
+            freeItemIds: cartPricingResult.discounts.freeItemIds
+          } : null,
+          
+          // School settings used for calculation
+          serverSchoolSettings: cartPricingResult?.schoolSettings || null,
+          
+          // Cart items info
+          cartItemCount: hasItems ? items.length : 0,
+          cartChildIds,
+          cartChildNames,
+          uniqueChildrenCount: cartChildIds.length,
+          
+          // Promo code info
+          clientPromoCode: promoCode || null,
+          
           userEmail,
+          userId: parentForMembership?.id,
+          schoolId: parentForMembership?.schoolId,
           securityNote: 'FRAUD PREVENTION - client attempting to overpay'
         });
         return res.status(400).json({
