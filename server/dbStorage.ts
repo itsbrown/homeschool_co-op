@@ -185,14 +185,15 @@ export class DatabaseStorage implements IStorage {
   async getParentsBySchoolId(schoolId: number): Promise<User[]> {
     const db = await getDb();
     // Get distinct user IDs that have parent role in this school
-    // Use two-step query to avoid Drizzle schema serialization issues with joins
+    // Use user_roles.schoolId to find parents associated with this school
+    // (users.schoolId may be null or different for multi-role users)
     const userIdRows = await db
       .selectDistinct({ userId: users.id })
       .from(users)
       .innerJoin(userRoles, eq(users.id, userRoles.userId))
       .where(
         and(
-          eq(users.schoolId, schoolId),
+          eq(userRoles.schoolId, schoolId),
           or(
             eq(userRoles.role, 'parent'),
             eq(userRoles.role, 'Parent')
