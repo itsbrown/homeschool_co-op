@@ -70,3 +70,111 @@ Provides educators/mentors with tools to manage classes, track attendance, view 
 -   **Brevo SMTP**: Email service.
 -   **SendGrid**: Email service.
 -   **Twilio**: SMS service.
+
+## Known Issues & Patterns to Avoid
+
+### Past Bugs - Do Not Repeat
+| Issue | Root Cause | Prevention |
+|-------|-----------|------------|
+| **UNIFIED_TOTAL_MISMATCH** | Client calculated prices differently than server | Server-authoritative pricing - NEVER trust client-side price calculations. Always validate totals server-side before processing payments. |
+| **Foreign key deletion failures** | Complex table dependencies (25+ tables reference users) | Check foreign key relationships before deletions. Delete in correct dependency order: child tables first, parent tables last. |
+| **Column naming confusion** | PostgreSQL uses snake_case (first_name), TypeScript uses camelCase (firstName) | Always reference `shared/schema.ts` for correct column names. Never guess. |
+| **Stale cache bugs** | Forgetting to invalidate TanStack Query cache after mutations | Always call `queryClient.invalidateQueries({ queryKey: [...] })` after every mutation. |
+| **Multi-tenant data leaks** | Missing schoolId filters on queries | EVERY database query MUST include schoolId scoping. No exceptions. |
+| **ID column type changes** | Changing serial to varchar or vice versa breaks migrations | NEVER change primary key ID column types. Match existing schema exactly. |
+
+### Dangerous Patterns
+- **Don't calculate prices client-side** for checkout - always fetch from server
+- **Don't delete user records** without checking all 25+ dependent tables
+- **Don't use `npm run db:push`** without checking existing schema first
+- **Don't assume column names** - always verify in schema.ts
+- **Don't skip cache invalidation** - stale data causes mysterious bugs
+
+### Required Validation Steps
+1. **Before payments**: Server must validate all prices, discounts, credits
+2. **Before deletions**: Map all foreign key dependencies
+3. **Before schema changes**: Check existing database structure
+4. **Before completing features**: Test multi-tenant isolation (schoolId filtering)
+5. **After mutations**: Invalidate relevant TanStack Query cache keys
+
+## Development Checklist (Per Feature)
+
+### Schema & Data Layer
+- [ ] Define tables in `shared/schema.ts` with insert/select schemas using `drizzle-zod`
+- [ ] Add foreign keys to schools/locations for multi-tenant isolation
+- [ ] Update `IStorage` interface in `server/storage.ts` with typed CRUD methods
+- [ ] Run `npm run db:push` to sync schema (use `--force` if needed)
+
+### API Endpoints
+- [ ] Create routes in `server/api/` with `supabaseAuth` + `requireSchoolContext` middleware
+- [ ] Validate ALL request bodies with Zod schemas before storage calls
+- [ ] Enforce `schoolId` scoping on EVERY query - no exceptions
+- [ ] Add role checks (educator/admin/parent) where needed
+- [ ] Log errors to `errorLogs` via `storage.createErrorLog`
+- [ ] Return consistent error responses with status codes
+
+### Frontend
+- [ ] Use TanStack Query v5 (object form only): `useQuery({ queryKey: [...] })`
+- [ ] Use shadcn forms with `zodResolver` for validation
+- [ ] Add `data-testid` to ALL interactive and display elements
+- [ ] Show loading/skeleton states during queries (`.isLoading`)
+- [ ] Show pending states during mutations (`.isPending`)
+- [ ] Toast feedback for all mutations (success and error)
+- [ ] Invalidate cache after EVERY mutation
+
+### Testing Requirements
+- [ ] Integration tests for each endpoint using supertest
+- [ ] Test multi-tenant isolation (verify schoolId filtering works)
+- [ ] Test 0-result scenarios (empty states)
+- [ ] Test permission boundaries (parents can't see other families' data)
+- [ ] For pricing features: Add regression tests to prevent UNIFIED_TOTAL_MISMATCH
+
+### Security Checklist
+- [ ] Parents can ONLY see their own children's data
+- [ ] Educators scoped to their assigned locations
+- [ ] Admins scoped to their school only
+- [ ] Sanitize all file upload inputs
+- [ ] PDF/export endpoints verify ownership (prevent IDOR attacks)
+- [ ] Rate limit expensive operations (AI, exports, uploads)
+
+### Performance
+- [ ] Use SQL views for heavy report aggregations
+- [ ] Paginate large result sets
+- [ ] Use proper TanStack Query cache keys for efficient caching
+- [ ] Consider materialized views for expensive nightly reports
+
+## Upcoming Features Roadmap
+
+### Reporting & Assessment System (In Progress)
+**Financial Reports:**
+- Payment Status (paid/partial/unpaid)
+- Expected Revenue (from payment schedules)
+- Late Payments (aging buckets: 7/14/30/60+ days)
+- Credits Dashboard (household balances, expiring, usage)
+
+**Student Progress Tracking (Database Tables Created Jan 2026):**
+- ✅ `assessment_types` table: School-scoped assessment categories (McCall-Crabbs, Phonograms, Math, etc.) with flexible scoring formats (numeric, fraction, level, percentage, letter_grade)
+- ✅ `curriculum_books` table: Book-based curricula tracking for assessment types with lesson counts
+- ✅ `student_assessments` table: Individual student progress records with school/location scoping, curriculum book references, and score tracking
+- 🔲 API endpoints for CRUD operations (pending)
+- 🔲 Admin UI for managing assessment types (pending)
+- 🔲 Location-based views and comparisons (pending)
+- 🔲 AI-powered assessment upload with smart column mapping (pending)
+
+**Documents:**
+- Report Card generator with PDF export
+- Transcript generator with PDF export
+
+## Pricing Tiers (Planned)
+
+| | **Free** | **Starter** | **Growth** | **Enterprise** |
+|---|----------|-------------|------------|----------------|
+| **Students** | Up to 25 | Up to 50 | Up to 200 | Unlimited |
+| **Staff** | 1 admin | 3 staff | 10 staff | Unlimited |
+| **Locations** | 1 | 1 | 1 | Multiple |
+| **Classes** | 3 | Unlimited | Unlimited | Unlimited |
+| **Payments** | No | Yes | Yes | Yes |
+| **AI Features** | No | No | Basic | Full |
+| **Marketing Hub** | No | No | No | Yes |
+| **Credit System** | No | No | Yes | Yes |
+| **Extensions** | Purchase | Purchase | Purchase | Included |

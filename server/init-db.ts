@@ -1541,6 +1541,101 @@ async function runMigrations() {
     console.log('Migration note:', errorMessage);
     // Continue even if migration fails (column might already exist)
   }
+  
+  // Assessment tables - run in separate try-catch to ensure they're created even if earlier migrations fail
+  try {
+    const db = await getDb();
+    
+    // Create assessment_types table for tracking different types of assessments
+    console.log('Running migration: Creating assessment_types table...');
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS assessment_types (
+        id SERIAL PRIMARY KEY,
+        school_id INTEGER NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        description TEXT,
+        category TEXT NOT NULL DEFAULT 'custom',
+        score_format TEXT NOT NULL DEFAULT 'numeric',
+        max_score INTEGER,
+        level_options TEXT[],
+        has_curriculum_books BOOLEAN NOT NULL DEFAULT false,
+        is_active BOOLEAN NOT NULL DEFAULT true,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_assessment_types_school_id ON assessment_types(school_id);
+    `);
+    try {
+      await db.execute(sql`
+        ALTER TABLE assessment_types 
+        ADD CONSTRAINT assessment_types_school_id_name_unique UNIQUE (school_id, name);
+      `);
+    } catch (constraintError) {
+      // Constraint already exists
+    }
+    console.log('✅ Migration completed: assessment_types table created');
+    
+    // Create curriculum_books table for assessment types with book-based curricula
+    console.log('Running migration: Creating curriculum_books table...');
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS curriculum_books (
+        id SERIAL PRIMARY KEY,
+        assessment_type_id INTEGER NOT NULL REFERENCES assessment_types(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        description TEXT,
+        total_lessons INTEGER,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        is_active BOOLEAN NOT NULL DEFAULT true,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_curriculum_books_assessment_type_id ON curriculum_books(assessment_type_id);
+    `);
+    console.log('✅ Migration completed: curriculum_books table created');
+    
+    // Create student_assessments table for recording student progress
+    console.log('Running migration: Creating student_assessments table...');
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS student_assessments (
+        id SERIAL PRIMARY KEY,
+        school_id INTEGER NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+        location_id INTEGER REFERENCES locations(id),
+        child_id INTEGER NOT NULL REFERENCES children(id) ON DELETE CASCADE,
+        assessment_type_id INTEGER NOT NULL REFERENCES assessment_types(id),
+        curriculum_book_id INTEGER REFERENCES curriculum_books(id),
+        assessment_date TIMESTAMP NOT NULL,
+        score TEXT NOT NULL,
+        lesson INTEGER,
+        notes TEXT,
+        recorded_by INTEGER NOT NULL REFERENCES users(id),
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_student_assessments_child_id ON student_assessments(child_id);
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_student_assessments_school_id ON student_assessments(school_id);
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_student_assessments_location_id ON student_assessments(location_id);
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_student_assessments_assessment_type_id ON student_assessments(assessment_type_id);
+    `);
+    console.log('✅ Migration completed: student_assessments table created');
+  } catch (assessmentError) {
+    const errorMessage = assessmentError instanceof Error ? assessmentError.message : String(assessmentError);
+    if (!errorMessage.includes('Database connection not available')) {
+      console.log('Assessment tables migration note:', errorMessage);
+    }
+  }
 }
 
 // Initialize database tables

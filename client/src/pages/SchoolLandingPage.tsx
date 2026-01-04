@@ -15,8 +15,10 @@ import {
   Users, 
   Calendar,
   GraduationCap,
-  ArrowRight
+  ArrowRight,
+  LogIn
 } from "lucide-react";
+import { Link } from "wouter";
 
 interface School {
   id: number;
@@ -257,6 +259,18 @@ export default function SchoolLandingPage() {
               <p className="text-sm text-muted-foreground mt-4">
                 Registration Code: <span className="font-mono font-bold">{school.registrationCode}</span>
               </p>
+              
+              <div className="mt-6 pt-4 border-t border-gray-200">
+                <p className="text-sm text-muted-foreground">
+                  Already have an account?{" "}
+                  <Link href="/login">
+                    <Button variant="link" className="p-0 h-auto text-primary" data-testid="link-login">
+                      <LogIn className="h-4 w-4 mr-1" />
+                      Sign in
+                    </Button>
+                  </Link>
+                </p>
+              </div>
             </CardContent>
           </Card>
         </div>

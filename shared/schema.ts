@@ -2829,3 +2829,114 @@ export const creditHoldsRelations = relations(creditHolds, ({ one }) => ({
   user: one(users, { fields: [creditHolds.userId], references: [users.id] }),
   credit: one(credits, { fields: [creditHolds.creditId], references: [credits.id] }),
 }));
+
+// ==================== ASSESSMENT & STUDENT PROGRESS TRACKING ====================
+
+// Score format options for different assessment types
+export const scoreFormatEnum = ["numeric", "fraction", "level", "percentage", "letter_grade"] as const;
+export type ScoreFormat = typeof scoreFormatEnum[number];
+
+// Assessment category for grouping
+export const assessmentCategoryEnum = ["reading", "math", "phonics", "writing", "science", "history", "custom"] as const;
+export type AssessmentCategory = typeof assessmentCategoryEnum[number];
+
+// Assessment Types - defines different assessment tools like McCall-Crabbs, Phonograms, Math Levels
+export const assessmentTypes = pgTable("assessment_types", {
+  id: serial("id").primaryKey(),
+  schoolId: integer("school_id").notNull().references(() => schools.id),
+  name: text("name").notNull(),
+  description: text("description"),
+  category: text("category", { enum: assessmentCategoryEnum }).notNull().default("custom"),
+  scoreFormat: text("score_format", { enum: scoreFormatEnum }).notNull().default("numeric"),
+  maxScore: integer("max_score"),
+  levelOptions: text("level_options").array(),
+  hasCurriculumBooks: boolean("has_curriculum_books").default(false).notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  sortOrder: integer("sort_order").default(0).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  uniqueSchoolAssessmentType: unique("assessment_types_school_id_name_unique").on(table.schoolId, table.name)
+}));
+
+export const insertAssessmentTypeSchema = createInsertSchema(assessmentTypes)
+  .omit({ id: true, createdAt: true, updatedAt: true })
+  .extend({
+    description: z.string().nullable().default(null),
+    maxScore: z.number().nullable().default(null),
+    levelOptions: z.array(z.string()).nullable().default(null),
+  });
+export type InsertAssessmentType = z.infer<typeof insertAssessmentTypeSchema>;
+export type AssessmentType = typeof assessmentTypes.$inferSelect;
+
+// Curriculum Books - for structured curricula like McCall-Crabbs Books A, B, C, D, E, F
+export const curriculumBooks = pgTable("curriculum_books", {
+  id: serial("id").primaryKey(),
+  assessmentTypeId: integer("assessment_type_id").notNull().references(() => assessmentTypes.id, { onDelete: 'cascade' }),
+  name: text("name").notNull(),
+  description: text("description"),
+  totalLessons: integer("total_lessons"),
+  sortOrder: integer("sort_order").default(0).notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertCurriculumBookSchema = createInsertSchema(curriculumBooks)
+  .omit({ id: true, createdAt: true, updatedAt: true })
+  .extend({
+    description: z.string().nullable().default(null),
+    totalLessons: z.number().nullable().default(null),
+  });
+export type InsertCurriculumBook = z.infer<typeof insertCurriculumBookSchema>;
+export type CurriculumBook = typeof curriculumBooks.$inferSelect;
+
+// Student Assessments - individual assessment records with location support
+export const studentAssessments = pgTable("student_assessments", {
+  id: serial("id").primaryKey(),
+  schoolId: integer("school_id").notNull().references(() => schools.id),
+  locationId: integer("location_id").references(() => locations.id),
+  childId: integer("child_id").notNull().references(() => children.id, { onDelete: 'cascade' }),
+  assessmentTypeId: integer("assessment_type_id").notNull().references(() => assessmentTypes.id),
+  curriculumBookId: integer("curriculum_book_id").references(() => curriculumBooks.id),
+  assessmentDate: timestamp("assessment_date").notNull(),
+  score: text("score").notNull(),
+  lesson: integer("lesson"),
+  notes: text("notes"),
+  recordedBy: integer("recorded_by").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertStudentAssessmentSchema = createInsertSchema(studentAssessments)
+  .omit({ id: true, createdAt: true, updatedAt: true })
+  .extend({
+    locationId: z.number().nullable().default(null),
+    curriculumBookId: z.number().nullable().default(null),
+    lesson: z.number().nullable().default(null),
+    notes: z.string().nullable().default(null),
+    assessmentDate: z.union([z.string(), z.date()]).transform((val) => typeof val === 'string' ? new Date(val) : val),
+  });
+export type InsertStudentAssessment = z.infer<typeof insertStudentAssessmentSchema>;
+export type StudentAssessment = typeof studentAssessments.$inferSelect;
+
+// Relations for assessment tables
+export const assessmentTypesRelations = relations(assessmentTypes, ({ one, many }) => ({
+  school: one(schools, { fields: [assessmentTypes.schoolId], references: [schools.id] }),
+  curriculumBooks: many(curriculumBooks),
+  studentAssessments: many(studentAssessments),
+}));
+
+export const curriculumBooksRelations = relations(curriculumBooks, ({ one, many }) => ({
+  assessmentType: one(assessmentTypes, { fields: [curriculumBooks.assessmentTypeId], references: [assessmentTypes.id] }),
+  studentAssessments: many(studentAssessments),
+}));
+
+export const studentAssessmentsRelations = relations(studentAssessments, ({ one }) => ({
+  school: one(schools, { fields: [studentAssessments.schoolId], references: [schools.id] }),
+  location: one(locations, { fields: [studentAssessments.locationId], references: [locations.id] }),
+  child: one(children, { fields: [studentAssessments.childId], references: [children.id] }),
+  assessmentType: one(assessmentTypes, { fields: [studentAssessments.assessmentTypeId], references: [assessmentTypes.id] }),
+  curriculumBook: one(curriculumBooks, { fields: [studentAssessments.curriculumBookId], references: [curriculumBooks.id] }),
+  recorder: one(users, { fields: [studentAssessments.recordedBy], references: [users.id] }),
+}));
