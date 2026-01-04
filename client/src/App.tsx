@@ -52,6 +52,7 @@ import FormEditorPage from "./pages/schooladmin/FormEditorPage";
 import PreviewFormPage from "./pages/schooladmin/PreviewFormPage";
 import SubmissionsPage from "./pages/schooladmin/SubmissionsPage";
 import DocumentManagementPage from "./pages/schooladmin/DocumentManagementPage";
+import AssessmentManagementPage from "./pages/schooladmin/AssessmentManagementPage";
 import DynamicFormPage from "./pages/DynamicFormPage";
 import ProductOrderFormPage from "./pages/ProductOrderFormPage";
 import ProductOrderPaymentPage from "./pages/ProductOrderPaymentPage";
@@ -651,6 +652,7 @@ function Router() {
       <Route path="/school-admin/forms/:id/preview" component={PreviewFormPage} />
       <Route path="/school-admin/forms/:id/submissions" component={SubmissionsPage} />
       <Route path="/school-admin/documents" component={DocumentManagementPage} />
+      <Route path="/school-admin/assessments" component={AssessmentManagementPage} />
       <Route path="/forms/:slug" component={DynamicFormPage} />
       <Route path="/product-order/:slug" component={ProductOrderFormPage} />
       <Route path="/payment/:submissionId" component={ProductOrderPaymentPage} />
