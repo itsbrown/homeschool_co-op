@@ -31,7 +31,8 @@ import {
   FileText,
   Megaphone,
   Clock,
-  Coins
+  Coins,
+  Gift
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -108,6 +109,11 @@ const adminNavItems: NavItem[] = [
     title: 'Credits',
     href: '/school-admin/credits',
     icon: Coins,
+  },
+  {
+    title: 'Fundraisers',
+    href: '/school-admin/fundraisers',
+    icon: Gift,
   },
   {
     title: 'Manual Payments',

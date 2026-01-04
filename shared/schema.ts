@@ -2710,7 +2710,7 @@ export const creditUsageLogsRelations = relations(creditUsageLogs, ({ one }) => 
 // Single ledger for all credit types: volunteer, referral, achievement, marketing, manual
 // Designed for extensibility - new credit types can be added without schema changes
 
-export const creditTypeEnum = ["volunteer", "referral", "achievement", "marketing", "manual"] as const;
+export const creditTypeEnum = ["volunteer", "referral", "achievement", "marketing", "manual", "fundraiser"] as const;
 export type CreditType = typeof creditTypeEnum[number];
 
 export const creditStatusEnum = ["pending", "approved", "rejected", "partially_used", "used", "expired", "revoked"] as const;
@@ -2939,4 +2939,153 @@ export const studentAssessmentsRelations = relations(studentAssessments, ({ one 
   assessmentType: one(assessmentTypes, { fields: [studentAssessments.assessmentTypeId], references: [assessmentTypes.id] }),
   curriculumBook: one(curriculumBooks, { fields: [studentAssessments.curriculumBookId], references: [curriculumBooks.id] }),
   recorder: one(users, { fields: [studentAssessments.recordedBy], references: [users.id] }),
+}));
+
+// ==================== FUNDRAISER SYSTEM ====================
+// Campaigns, products, family links, and order tracking with automatic credit generation
+
+export const fundraiserCampaigns = pgTable("fundraiser_campaigns", {
+  id: serial("id").primaryKey(),
+  schoolId: integer("school_id").notNull().references(() => schools.id, { onDelete: 'cascade' }),
+  name: text("name").notNull(),
+  description: text("description"),
+  startDate: timestamp("start_date").notNull(),
+  endDate: timestamp("end_date").notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertFundraiserCampaignSchema = createInsertSchema(fundraiserCampaigns)
+  .omit({ id: true, createdAt: true, updatedAt: true })
+  .extend({
+    description: z.string().nullable().default(null),
+    startDate: z.union([z.string(), z.date()]).transform((val) => typeof val === 'string' ? new Date(val) : val),
+    endDate: z.union([z.string(), z.date()]).transform((val) => typeof val === 'string' ? new Date(val) : val),
+  });
+export type InsertFundraiserCampaign = z.infer<typeof insertFundraiserCampaignSchema>;
+export type FundraiserCampaign = typeof fundraiserCampaigns.$inferSelect;
+
+export const fundraiserProducts = pgTable("fundraiser_products", {
+  id: serial("id").primaryKey(),
+  campaignId: integer("campaign_id").notNull().references(() => fundraiserCampaigns.id, { onDelete: 'cascade' }),
+  name: text("name").notNull(),
+  description: text("description"),
+  imageUrl: text("image_url"),
+  priceCents: integer("price_cents").notNull(),
+  creditAmountCents: integer("credit_amount_cents").notNull(),
+  stockQuantity: integer("stock_quantity"),
+  isActive: boolean("is_active").default(true).notNull(),
+  sortOrder: integer("sort_order").default(0).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertFundraiserProductSchema = createInsertSchema(fundraiserProducts)
+  .omit({ id: true, createdAt: true, updatedAt: true })
+  .extend({
+    description: z.string().nullable().default(null),
+    imageUrl: z.string().nullable().default(null),
+    stockQuantity: z.number().nullable().default(null),
+  });
+export type InsertFundraiserProduct = z.infer<typeof insertFundraiserProductSchema>;
+export type FundraiserProduct = typeof fundraiserProducts.$inferSelect;
+
+export const fundraiserFamilyLinks = pgTable("fundraiser_family_links", {
+  id: serial("id").primaryKey(),
+  campaignId: integer("campaign_id").notNull().references(() => fundraiserCampaigns.id, { onDelete: 'cascade' }),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  slug: text("slug").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  uniqueSlugPerCampaign: unique().on(table.campaignId, table.slug),
+}));
+
+export const insertFundraiserFamilyLinkSchema = createInsertSchema(fundraiserFamilyLinks)
+  .omit({ id: true, createdAt: true });
+export type InsertFundraiserFamilyLink = z.infer<typeof insertFundraiserFamilyLinkSchema>;
+export type FundraiserFamilyLink = typeof fundraiserFamilyLinks.$inferSelect;
+
+export const fundraiserOrderStatusEnum = ["pending", "paid", "fulfilled", "cancelled", "refunded"] as const;
+export type FundraiserOrderStatus = typeof fundraiserOrderStatusEnum[number];
+
+export const fundraiserOrders = pgTable("fundraiser_orders", {
+  id: serial("id").primaryKey(),
+  campaignId: integer("campaign_id").notNull().references(() => fundraiserCampaigns.id),
+  familyLinkId: integer("family_link_id").references(() => fundraiserFamilyLinks.id),
+  sellerUserId: integer("seller_user_id").references(() => users.id),
+  
+  customerName: text("customer_name").notNull(),
+  customerEmail: text("customer_email").notNull(),
+  customerPhone: text("customer_phone"),
+  
+  totalCents: integer("total_cents").notNull(),
+  creditEarnedCents: integer("credit_earned_cents").notNull(),
+  
+  status: text("status", { enum: fundraiserOrderStatusEnum }).default("pending").notNull(),
+  stripePaymentIntentId: text("stripe_payment_intent_id"),
+  stripeSessionId: text("stripe_session_id"),
+  
+  creditId: integer("credit_id").references(() => credits.id),
+  
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertFundraiserOrderSchema = createInsertSchema(fundraiserOrders)
+  .omit({ id: true, createdAt: true, updatedAt: true })
+  .extend({
+    customerPhone: z.string().nullable().default(null),
+    familyLinkId: z.number().nullable().default(null),
+    sellerUserId: z.number().nullable().default(null),
+    stripePaymentIntentId: z.string().nullable().default(null),
+    stripeSessionId: z.string().nullable().default(null),
+    creditId: z.number().nullable().default(null),
+  });
+export type InsertFundraiserOrder = z.infer<typeof insertFundraiserOrderSchema>;
+export type FundraiserOrder = typeof fundraiserOrders.$inferSelect;
+
+export const fundraiserOrderItems = pgTable("fundraiser_order_items", {
+  id: serial("id").primaryKey(),
+  orderId: integer("order_id").notNull().references(() => fundraiserOrders.id, { onDelete: 'cascade' }),
+  productId: integer("product_id").notNull().references(() => fundraiserProducts.id),
+  quantity: integer("quantity").notNull(),
+  priceCents: integer("price_cents").notNull(),
+  creditAmountCents: integer("credit_amount_cents").notNull(),
+});
+
+export const insertFundraiserOrderItemSchema = createInsertSchema(fundraiserOrderItems)
+  .omit({ id: true });
+export type InsertFundraiserOrderItem = z.infer<typeof insertFundraiserOrderItemSchema>;
+export type FundraiserOrderItem = typeof fundraiserOrderItems.$inferSelect;
+
+// Fundraiser relations
+export const fundraiserCampaignsRelations = relations(fundraiserCampaigns, ({ one, many }) => ({
+  school: one(schools, { fields: [fundraiserCampaigns.schoolId], references: [schools.id] }),
+  products: many(fundraiserProducts),
+  familyLinks: many(fundraiserFamilyLinks),
+  orders: many(fundraiserOrders),
+}));
+
+export const fundraiserProductsRelations = relations(fundraiserProducts, ({ one }) => ({
+  campaign: one(fundraiserCampaigns, { fields: [fundraiserProducts.campaignId], references: [fundraiserCampaigns.id] }),
+}));
+
+export const fundraiserFamilyLinksRelations = relations(fundraiserFamilyLinks, ({ one, many }) => ({
+  campaign: one(fundraiserCampaigns, { fields: [fundraiserFamilyLinks.campaignId], references: [fundraiserCampaigns.id] }),
+  user: one(users, { fields: [fundraiserFamilyLinks.userId], references: [users.id] }),
+  orders: many(fundraiserOrders),
+}));
+
+export const fundraiserOrdersRelations = relations(fundraiserOrders, ({ one, many }) => ({
+  campaign: one(fundraiserCampaigns, { fields: [fundraiserOrders.campaignId], references: [fundraiserCampaigns.id] }),
+  familyLink: one(fundraiserFamilyLinks, { fields: [fundraiserOrders.familyLinkId], references: [fundraiserFamilyLinks.id] }),
+  seller: one(users, { fields: [fundraiserOrders.sellerUserId], references: [users.id] }),
+  credit: one(credits, { fields: [fundraiserOrders.creditId], references: [credits.id] }),
+  items: many(fundraiserOrderItems),
+}));
+
+export const fundraiserOrderItemsRelations = relations(fundraiserOrderItems, ({ one }) => ({
+  order: one(fundraiserOrders, { fields: [fundraiserOrderItems.orderId], references: [fundraiserOrders.id] }),
+  product: one(fundraiserProducts, { fields: [fundraiserOrderItems.productId], references: [fundraiserProducts.id] }),
 }));

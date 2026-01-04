@@ -121,7 +121,83 @@ export const webhookHandler = async (req: Request, res: Response) => {
       console.log('🛒 Checkout session completed:', session.id);
       
       try {
-        // Get the payment intent from the session
+        // Check if this is a fundraiser order (uses session metadata directly)
+        if (session.metadata?.type === 'fundraiser_order') {
+          console.log('🎁 Processing fundraiser order:', session.id);
+          
+          const campaignId = parseInt(session.metadata.campaignId);
+          const familyLinkId = parseInt(session.metadata.familyLinkId);
+          const userId = parseInt(session.metadata.userId);
+          const customerName = session.metadata.customerName;
+          const customerEmail = session.metadata.customerEmail;
+          const customerPhone = session.metadata.customerPhone || null;
+          const totalCents = parseInt(session.metadata.totalCents);
+          const creditEarnedCents = parseInt(session.metadata.creditEarnedCents);
+          const items = JSON.parse(session.metadata.items || '[]');
+          
+          // Get campaign and family link for school context
+          const campaign = await storage.getFundraiserCampaignById(campaignId);
+          const familyLink = await storage.getFundraiserFamilyLinkById(familyLinkId);
+          
+          if (!campaign || !familyLink) {
+            console.error('❌ Fundraiser order error: Campaign or family link not found');
+            break;
+          }
+          
+          // Create the fundraiser order
+          const order = await storage.createFundraiserOrder({
+            campaignId,
+            familyLinkId,
+            sellerUserId: userId,
+            customerName,
+            customerEmail,
+            customerPhone,
+            totalCents,
+            creditEarnedCents,
+            stripeSessionId: session.id,
+            stripePaymentIntentId: session.payment_intent as string,
+            status: 'paid',
+          });
+          
+          console.log('✅ Created fundraiser order:', order.id);
+          
+          // Create order items
+          for (const item of items) {
+            await storage.createFundraiserOrderItem({
+              orderId: order.id,
+              productId: item.productId,
+              quantity: item.quantity,
+              priceCents: item.unitPriceCents,
+              creditAmountCents: item.creditAmountCents,
+            });
+          }
+          
+          console.log(`✅ Created ${items.length} order items for order ${order.id}`);
+          
+          // Create credit for the seller
+          if (creditEarnedCents > 0) {
+            const credit = await storage.createCredit({
+              schoolId: campaign.schoolId,
+              userId: userId,
+              creditType: 'fundraiser',
+              creditAmountCents: creditEarnedCents,
+              status: 'approved', // Auto-approve fundraiser credits
+              title: `Fundraiser: ${campaign.name}`,
+              notes: `Order #${order.id}`,
+            });
+            
+            // Update the order with the linked credit
+            await storage.updateFundraiserOrder(order.id, { creditId: credit.id });
+            
+            console.log(`✅ Created fundraiser credit ${credit.id} for ${creditEarnedCents} cents to user ${userId}`);
+          }
+          
+          console.log(`✅ Fundraiser order ${order.id} processed successfully`);
+          
+          break;
+        }
+        
+        // Get the payment intent from the session (for non-fundraiser orders)
         const paymentIntent = await stripe.paymentIntents.retrieve(session.payment_intent as string);
         console.log('💳 Retrieved payment intent from session:', paymentIntent.id);
         

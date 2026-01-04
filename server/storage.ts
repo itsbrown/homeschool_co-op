@@ -58,7 +58,12 @@ import {
   creditHolds, type CreditHold, type InsertCreditHold, type CreditHoldStatus,
   assessmentTypes, type AssessmentType, type InsertAssessmentType,
   curriculumBooks, type CurriculumBook, type InsertCurriculumBook,
-  studentAssessments, type StudentAssessment, type InsertStudentAssessment
+  studentAssessments, type StudentAssessment, type InsertStudentAssessment,
+  fundraiserCampaigns, type FundraiserCampaign, type InsertFundraiserCampaign,
+  fundraiserProducts, type FundraiserProduct, type InsertFundraiserProduct,
+  fundraiserFamilyLinks, type FundraiserFamilyLink, type InsertFundraiserFamilyLink,
+  fundraiserOrders, type FundraiserOrder, type InsertFundraiserOrder,
+  fundraiserOrderItems, type FundraiserOrderItem, type InsertFundraiserOrderItem
 } from "@shared/schema";
 import { eq, inArray } from 'drizzle-orm';
 import { getDb } from './db';
@@ -681,6 +686,43 @@ export interface IStorage {
   createStudentAssessment(assessment: InsertStudentAssessment): Promise<StudentAssessment>;
   updateStudentAssessment(id: number, assessment: Partial<InsertStudentAssessment>): Promise<StudentAssessment | undefined>;
   deleteStudentAssessment(id: number): Promise<void>;
+  
+  // ==================== FUNDRAISER SYSTEM ====================
+  // Campaigns
+  getFundraiserCampaignById(id: number): Promise<FundraiserCampaign | undefined>;
+  getFundraiserCampaignsBySchoolId(schoolId: number): Promise<FundraiserCampaign[]>;
+  getActiveFundraiserCampaignsBySchoolId(schoolId: number): Promise<FundraiserCampaign[]>;
+  createFundraiserCampaign(campaign: InsertFundraiserCampaign): Promise<FundraiserCampaign>;
+  updateFundraiserCampaign(id: number, campaign: Partial<InsertFundraiserCampaign>): Promise<FundraiserCampaign | undefined>;
+  deleteFundraiserCampaign(id: number): Promise<void>;
+  
+  // Products
+  getFundraiserProductById(id: number): Promise<FundraiserProduct | undefined>;
+  getFundraiserProductsByCampaignId(campaignId: number): Promise<FundraiserProduct[]>;
+  createFundraiserProduct(product: InsertFundraiserProduct): Promise<FundraiserProduct>;
+  updateFundraiserProduct(id: number, product: Partial<InsertFundraiserProduct>): Promise<FundraiserProduct | undefined>;
+  deleteFundraiserProduct(id: number): Promise<void>;
+  
+  // Family Links
+  getFundraiserFamilyLinkById(id: number): Promise<FundraiserFamilyLink | undefined>;
+  getFundraiserFamilyLinkBySlug(campaignId: number, slug: string): Promise<FundraiserFamilyLink | undefined>;
+  getFundraiserFamilyLinksByUserId(userId: number): Promise<FundraiserFamilyLink[]>;
+  getFundraiserFamilyLinksByCampaignId(campaignId: number): Promise<FundraiserFamilyLink[]>;
+  createFundraiserFamilyLink(link: InsertFundraiserFamilyLink): Promise<FundraiserFamilyLink>;
+  getOrCreateFundraiserFamilyLink(campaignId: number, userId: number, userName: string): Promise<FundraiserFamilyLink>;
+  
+  // Orders
+  getFundraiserOrderById(id: number): Promise<FundraiserOrder | undefined>;
+  getFundraiserOrdersByFamilyLinkId(familyLinkId: number): Promise<FundraiserOrder[]>;
+  getFundraiserOrdersByCampaignId(campaignId: number): Promise<FundraiserOrder[]>;
+  getFundraiserOrderByStripeSessionId(sessionId: string): Promise<FundraiserOrder | undefined>;
+  createFundraiserOrder(order: InsertFundraiserOrder): Promise<FundraiserOrder>;
+  updateFundraiserOrder(id: number, order: Partial<InsertFundraiserOrder>): Promise<FundraiserOrder | undefined>;
+  
+  // Order Items
+  getFundraiserOrderItemsByOrderId(orderId: number): Promise<FundraiserOrderItem[]>;
+  createFundraiserOrderItem(item: InsertFundraiserOrderItem): Promise<FundraiserOrderItem>;
+  createFundraiserOrderItems(items: InsertFundraiserOrderItem[]): Promise<FundraiserOrderItem[]>;
 }
 
 export class MemStorage implements IStorage {
@@ -4941,6 +4983,34 @@ export class MemStorage implements IStorage {
   async deleteStudentAssessment(id: number): Promise<void> {
     this.studentAssessmentsStore.delete(id);
   }
+  
+  // ==================== FUNDRAISER SYSTEM (MemStorage stubs) ====================
+  async getFundraiserCampaignById(id: number): Promise<FundraiserCampaign | undefined> { return undefined; }
+  async getFundraiserCampaignsBySchoolId(schoolId: number): Promise<FundraiserCampaign[]> { return []; }
+  async getActiveFundraiserCampaignsBySchoolId(schoolId: number): Promise<FundraiserCampaign[]> { return []; }
+  async createFundraiserCampaign(campaign: InsertFundraiserCampaign): Promise<FundraiserCampaign> { throw new Error('Not implemented'); }
+  async updateFundraiserCampaign(id: number, campaign: Partial<InsertFundraiserCampaign>): Promise<FundraiserCampaign | undefined> { return undefined; }
+  async deleteFundraiserCampaign(id: number): Promise<void> {}
+  async getFundraiserProductById(id: number): Promise<FundraiserProduct | undefined> { return undefined; }
+  async getFundraiserProductsByCampaignId(campaignId: number): Promise<FundraiserProduct[]> { return []; }
+  async createFundraiserProduct(product: InsertFundraiserProduct): Promise<FundraiserProduct> { throw new Error('Not implemented'); }
+  async updateFundraiserProduct(id: number, product: Partial<InsertFundraiserProduct>): Promise<FundraiserProduct | undefined> { return undefined; }
+  async deleteFundraiserProduct(id: number): Promise<void> {}
+  async getFundraiserFamilyLinkById(id: number): Promise<FundraiserFamilyLink | undefined> { return undefined; }
+  async getFundraiserFamilyLinkBySlug(campaignId: number, slug: string): Promise<FundraiserFamilyLink | undefined> { return undefined; }
+  async getFundraiserFamilyLinksByUserId(userId: number): Promise<FundraiserFamilyLink[]> { return []; }
+  async getFundraiserFamilyLinksByCampaignId(campaignId: number): Promise<FundraiserFamilyLink[]> { return []; }
+  async createFundraiserFamilyLink(link: InsertFundraiserFamilyLink): Promise<FundraiserFamilyLink> { throw new Error('Not implemented'); }
+  async getOrCreateFundraiserFamilyLink(campaignId: number, userId: number, userName: string): Promise<FundraiserFamilyLink> { throw new Error('Not implemented'); }
+  async getFundraiserOrderById(id: number): Promise<FundraiserOrder | undefined> { return undefined; }
+  async getFundraiserOrdersByFamilyLinkId(familyLinkId: number): Promise<FundraiserOrder[]> { return []; }
+  async getFundraiserOrdersByCampaignId(campaignId: number): Promise<FundraiserOrder[]> { return []; }
+  async getFundraiserOrderByStripeSessionId(sessionId: string): Promise<FundraiserOrder | undefined> { return undefined; }
+  async createFundraiserOrder(order: InsertFundraiserOrder): Promise<FundraiserOrder> { throw new Error('Not implemented'); }
+  async updateFundraiserOrder(id: number, order: Partial<InsertFundraiserOrder>): Promise<FundraiserOrder | undefined> { return undefined; }
+  async getFundraiserOrderItemsByOrderId(orderId: number): Promise<FundraiserOrderItem[]> { return []; }
+  async createFundraiserOrderItem(item: InsertFundraiserOrderItem): Promise<FundraiserOrderItem> { throw new Error('Not implemented'); }
+  async createFundraiserOrderItems(items: InsertFundraiserOrderItem[]): Promise<FundraiserOrderItem[]> { return []; }
 }
 
 import { DatabaseStorage } from "./dbStorage";
@@ -7517,6 +7587,86 @@ import { DatabaseStorage } from "./dbStorage";
 
       async deleteStudentAssessment(id: number): Promise<void> {
         return this.dbStorage.deleteStudentAssessment(id);
+      }
+      
+      // ==================== FUNDRAISER SYSTEM ====================
+      async getFundraiserCampaignById(id: number): Promise<FundraiserCampaign | undefined> {
+        return this.dbStorage.getFundraiserCampaignById(id);
+      }
+      async getFundraiserCampaignsBySchoolId(schoolId: number): Promise<FundraiserCampaign[]> {
+        return this.dbStorage.getFundraiserCampaignsBySchoolId(schoolId);
+      }
+      async getActiveFundraiserCampaignsBySchoolId(schoolId: number): Promise<FundraiserCampaign[]> {
+        return this.dbStorage.getActiveFundraiserCampaignsBySchoolId(schoolId);
+      }
+      async createFundraiserCampaign(campaign: InsertFundraiserCampaign): Promise<FundraiserCampaign> {
+        return this.dbStorage.createFundraiserCampaign(campaign);
+      }
+      async updateFundraiserCampaign(id: number, campaign: Partial<InsertFundraiserCampaign>): Promise<FundraiserCampaign | undefined> {
+        return this.dbStorage.updateFundraiserCampaign(id, campaign);
+      }
+      async deleteFundraiserCampaign(id: number): Promise<void> {
+        return this.dbStorage.deleteFundraiserCampaign(id);
+      }
+      async getFundraiserProductById(id: number): Promise<FundraiserProduct | undefined> {
+        return this.dbStorage.getFundraiserProductById(id);
+      }
+      async getFundraiserProductsByCampaignId(campaignId: number): Promise<FundraiserProduct[]> {
+        return this.dbStorage.getFundraiserProductsByCampaignId(campaignId);
+      }
+      async createFundraiserProduct(product: InsertFundraiserProduct): Promise<FundraiserProduct> {
+        return this.dbStorage.createFundraiserProduct(product);
+      }
+      async updateFundraiserProduct(id: number, product: Partial<InsertFundraiserProduct>): Promise<FundraiserProduct | undefined> {
+        return this.dbStorage.updateFundraiserProduct(id, product);
+      }
+      async deleteFundraiserProduct(id: number): Promise<void> {
+        return this.dbStorage.deleteFundraiserProduct(id);
+      }
+      async getFundraiserFamilyLinkById(id: number): Promise<FundraiserFamilyLink | undefined> {
+        return this.dbStorage.getFundraiserFamilyLinkById(id);
+      }
+      async getFundraiserFamilyLinkBySlug(campaignId: number, slug: string): Promise<FundraiserFamilyLink | undefined> {
+        return this.dbStorage.getFundraiserFamilyLinkBySlug(campaignId, slug);
+      }
+      async getFundraiserFamilyLinksByUserId(userId: number): Promise<FundraiserFamilyLink[]> {
+        return this.dbStorage.getFundraiserFamilyLinksByUserId(userId);
+      }
+      async getFundraiserFamilyLinksByCampaignId(campaignId: number): Promise<FundraiserFamilyLink[]> {
+        return this.dbStorage.getFundraiserFamilyLinksByCampaignId(campaignId);
+      }
+      async createFundraiserFamilyLink(link: InsertFundraiserFamilyLink): Promise<FundraiserFamilyLink> {
+        return this.dbStorage.createFundraiserFamilyLink(link);
+      }
+      async getOrCreateFundraiserFamilyLink(campaignId: number, userId: number, userName: string): Promise<FundraiserFamilyLink> {
+        return this.dbStorage.getOrCreateFundraiserFamilyLink(campaignId, userId, userName);
+      }
+      async getFundraiserOrderById(id: number): Promise<FundraiserOrder | undefined> {
+        return this.dbStorage.getFundraiserOrderById(id);
+      }
+      async getFundraiserOrdersByFamilyLinkId(familyLinkId: number): Promise<FundraiserOrder[]> {
+        return this.dbStorage.getFundraiserOrdersByFamilyLinkId(familyLinkId);
+      }
+      async getFundraiserOrdersByCampaignId(campaignId: number): Promise<FundraiserOrder[]> {
+        return this.dbStorage.getFundraiserOrdersByCampaignId(campaignId);
+      }
+      async getFundraiserOrderByStripeSessionId(sessionId: string): Promise<FundraiserOrder | undefined> {
+        return this.dbStorage.getFundraiserOrderByStripeSessionId(sessionId);
+      }
+      async createFundraiserOrder(order: InsertFundraiserOrder): Promise<FundraiserOrder> {
+        return this.dbStorage.createFundraiserOrder(order);
+      }
+      async updateFundraiserOrder(id: number, order: Partial<InsertFundraiserOrder>): Promise<FundraiserOrder | undefined> {
+        return this.dbStorage.updateFundraiserOrder(id, order);
+      }
+      async getFundraiserOrderItemsByOrderId(orderId: number): Promise<FundraiserOrderItem[]> {
+        return this.dbStorage.getFundraiserOrderItemsByOrderId(orderId);
+      }
+      async createFundraiserOrderItem(item: InsertFundraiserOrderItem): Promise<FundraiserOrderItem> {
+        return this.dbStorage.createFundraiserOrderItem(item);
+      }
+      async createFundraiserOrderItems(items: InsertFundraiserOrderItem[]): Promise<FundraiserOrderItem[]> {
+        return this.dbStorage.createFundraiserOrderItems(items);
       }
 
       // Clear all data from storage (for testing)

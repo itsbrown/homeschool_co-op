@@ -54,6 +54,9 @@ import SubmissionsPage from "./pages/schooladmin/SubmissionsPage";
 import DocumentManagementPage from "./pages/schooladmin/DocumentManagementPage";
 import AssessmentManagementPage from "./pages/schooladmin/AssessmentManagementPage";
 import CreditManagementPage from "./pages/schooladmin/CreditManagementPage";
+import FundraiserManagementPage from "./pages/schooladmin/FundraiserManagementPage";
+import FundraiserStorePage from "./pages/FundraiserStorePage";
+import FundraiserSuccessPage from "./pages/FundraiserSuccessPage";
 import DynamicFormPage from "./pages/DynamicFormPage";
 import ProductOrderFormPage from "./pages/ProductOrderFormPage";
 import ProductOrderPaymentPage from "./pages/ProductOrderPaymentPage";
@@ -607,6 +610,9 @@ function Router() {
       <Route path="/school-admin/documents" component={DocumentManagementPage} />
       <Route path="/school-admin/assessments" component={AssessmentManagementPage} />
       <Route path="/school-admin/credits" component={CreditManagementPage} />
+      <Route path="/school-admin/fundraisers" component={FundraiserManagementPage} />
+      <Route path="/fundraiser/:campaignId/:familySlug" component={FundraiserStorePage} />
+      <Route path="/fundraiser/success" component={FundraiserSuccessPage} />
       <Route path="/forms/:slug" component={DynamicFormPage} />
       <Route path="/product-order/:slug" component={ProductOrderFormPage} />
       <Route path="/payment/:submissionId" component={ProductOrderPaymentPage} />

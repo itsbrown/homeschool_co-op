@@ -57,7 +57,12 @@ import {
   CreditHold, InsertCreditHold, creditHolds, CreditHoldStatus,
   AssessmentType, InsertAssessmentType, assessmentTypes,
   CurriculumBook, InsertCurriculumBook, curriculumBooks,
-  StudentAssessment, InsertStudentAssessment, studentAssessments
+  StudentAssessment, InsertStudentAssessment, studentAssessments,
+  FundraiserCampaign, InsertFundraiserCampaign, fundraiserCampaigns,
+  FundraiserProduct, InsertFundraiserProduct, fundraiserProducts,
+  FundraiserFamilyLink, InsertFundraiserFamilyLink, fundraiserFamilyLinks,
+  FundraiserOrder, InsertFundraiserOrder, fundraiserOrders,
+  FundraiserOrderItem, InsertFundraiserOrderItem, fundraiserOrderItems
 } from '../shared/schema';
 
 /**
@@ -4615,5 +4620,222 @@ export class DatabaseStorage implements IStorage {
   async deleteStudentAssessment(id: number): Promise<void> {
     const db = await getDb();
     await db.delete(studentAssessments).where(eq(studentAssessments.id, id));
+  }
+  
+  // ==================== FUNDRAISER SYSTEM ====================
+  async getFundraiserCampaignById(id: number): Promise<FundraiserCampaign | undefined> {
+    const db = await getDb();
+    const [campaign] = await db.select().from(fundraiserCampaigns).where(eq(fundraiserCampaigns.id, id));
+    return campaign;
+  }
+  
+  async getFundraiserCampaignsBySchoolId(schoolId: number): Promise<FundraiserCampaign[]> {
+    const db = await getDb();
+    return await db.select().from(fundraiserCampaigns).where(eq(fundraiserCampaigns.schoolId, schoolId));
+  }
+  
+  async getActiveFundraiserCampaignsBySchoolId(schoolId: number): Promise<FundraiserCampaign[]> {
+    const db = await getDb();
+    const now = new Date();
+    return await db.select().from(fundraiserCampaigns).where(
+      and(
+        eq(fundraiserCampaigns.schoolId, schoolId),
+        eq(fundraiserCampaigns.isActive, true),
+        lte(fundraiserCampaigns.startDate, now),
+        gte(fundraiserCampaigns.endDate, now)
+      )
+    );
+  }
+  
+  async createFundraiserCampaign(campaign: InsertFundraiserCampaign): Promise<FundraiserCampaign> {
+    const db = await getDb();
+    const [newCampaign] = await db.insert(fundraiserCampaigns).values({
+      ...campaign,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    }).returning();
+    return newCampaign;
+  }
+  
+  async updateFundraiserCampaign(id: number, campaign: Partial<InsertFundraiserCampaign>): Promise<FundraiserCampaign | undefined> {
+    const db = await getDb();
+    const [updated] = await db.update(fundraiserCampaigns)
+      .set({ ...campaign, updatedAt: new Date() })
+      .where(eq(fundraiserCampaigns.id, id))
+      .returning();
+    return updated;
+  }
+  
+  async deleteFundraiserCampaign(id: number): Promise<void> {
+    const db = await getDb();
+    await db.delete(fundraiserCampaigns).where(eq(fundraiserCampaigns.id, id));
+  }
+  
+  async getFundraiserProductById(id: number): Promise<FundraiserProduct | undefined> {
+    const db = await getDb();
+    const [product] = await db.select().from(fundraiserProducts).where(eq(fundraiserProducts.id, id));
+    return product;
+  }
+  
+  async getFundraiserProductsByCampaignId(campaignId: number): Promise<FundraiserProduct[]> {
+    const db = await getDb();
+    return await db.select().from(fundraiserProducts)
+      .where(eq(fundraiserProducts.campaignId, campaignId))
+      .orderBy(fundraiserProducts.sortOrder);
+  }
+  
+  async createFundraiserProduct(product: InsertFundraiserProduct): Promise<FundraiserProduct> {
+    const db = await getDb();
+    const [newProduct] = await db.insert(fundraiserProducts).values({
+      ...product,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    }).returning();
+    return newProduct;
+  }
+  
+  async updateFundraiserProduct(id: number, product: Partial<InsertFundraiserProduct>): Promise<FundraiserProduct | undefined> {
+    const db = await getDb();
+    const [updated] = await db.update(fundraiserProducts)
+      .set({ ...product, updatedAt: new Date() })
+      .where(eq(fundraiserProducts.id, id))
+      .returning();
+    return updated;
+  }
+  
+  async deleteFundraiserProduct(id: number): Promise<void> {
+    const db = await getDb();
+    await db.delete(fundraiserProducts).where(eq(fundraiserProducts.id, id));
+  }
+  
+  async getFundraiserFamilyLinkById(id: number): Promise<FundraiserFamilyLink | undefined> {
+    const db = await getDb();
+    const [link] = await db.select().from(fundraiserFamilyLinks).where(eq(fundraiserFamilyLinks.id, id));
+    return link;
+  }
+  
+  async getFundraiserFamilyLinkBySlug(campaignId: number, slug: string): Promise<FundraiserFamilyLink | undefined> {
+    const db = await getDb();
+    const [link] = await db.select().from(fundraiserFamilyLinks).where(
+      and(
+        eq(fundraiserFamilyLinks.campaignId, campaignId),
+        eq(fundraiserFamilyLinks.slug, slug)
+      )
+    );
+    return link;
+  }
+  
+  async getFundraiserFamilyLinksByUserId(userId: number): Promise<FundraiserFamilyLink[]> {
+    const db = await getDb();
+    return await db.select().from(fundraiserFamilyLinks).where(eq(fundraiserFamilyLinks.userId, userId));
+  }
+  
+  async getFundraiserFamilyLinksByCampaignId(campaignId: number): Promise<FundraiserFamilyLink[]> {
+    const db = await getDb();
+    return await db.select().from(fundraiserFamilyLinks).where(eq(fundraiserFamilyLinks.campaignId, campaignId));
+  }
+  
+  async createFundraiserFamilyLink(link: InsertFundraiserFamilyLink): Promise<FundraiserFamilyLink> {
+    const db = await getDb();
+    const [newLink] = await db.insert(fundraiserFamilyLinks).values({
+      ...link,
+      createdAt: new Date()
+    }).returning();
+    return newLink;
+  }
+  
+  async getOrCreateFundraiserFamilyLink(campaignId: number, userId: number, userName: string): Promise<FundraiserFamilyLink> {
+    const db = await getDb();
+    // Check if link already exists for this user and campaign
+    const [existing] = await db.select().from(fundraiserFamilyLinks).where(
+      and(
+        eq(fundraiserFamilyLinks.campaignId, campaignId),
+        eq(fundraiserFamilyLinks.userId, userId)
+      )
+    );
+    if (existing) return existing;
+    
+    // Generate slug from user name
+    const baseSlug = userName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    let slug = baseSlug;
+    let counter = 1;
+    
+    // Ensure unique slug
+    while (true) {
+      const [existingSlug] = await db.select().from(fundraiserFamilyLinks).where(
+        and(
+          eq(fundraiserFamilyLinks.campaignId, campaignId),
+          eq(fundraiserFamilyLinks.slug, slug)
+        )
+      );
+      if (!existingSlug) break;
+      slug = `${baseSlug}-${counter++}`;
+    }
+    
+    const [newLink] = await db.insert(fundraiserFamilyLinks).values({
+      campaignId,
+      userId,
+      slug,
+      createdAt: new Date()
+    }).returning();
+    return newLink;
+  }
+  
+  async getFundraiserOrderById(id: number): Promise<FundraiserOrder | undefined> {
+    const db = await getDb();
+    const [order] = await db.select().from(fundraiserOrders).where(eq(fundraiserOrders.id, id));
+    return order;
+  }
+  
+  async getFundraiserOrdersByFamilyLinkId(familyLinkId: number): Promise<FundraiserOrder[]> {
+    const db = await getDb();
+    return await db.select().from(fundraiserOrders).where(eq(fundraiserOrders.familyLinkId, familyLinkId));
+  }
+  
+  async getFundraiserOrdersByCampaignId(campaignId: number): Promise<FundraiserOrder[]> {
+    const db = await getDb();
+    return await db.select().from(fundraiserOrders).where(eq(fundraiserOrders.campaignId, campaignId));
+  }
+  
+  async getFundraiserOrderByStripeSessionId(sessionId: string): Promise<FundraiserOrder | undefined> {
+    const db = await getDb();
+    const [order] = await db.select().from(fundraiserOrders).where(eq(fundraiserOrders.stripeSessionId, sessionId));
+    return order;
+  }
+  
+  async createFundraiserOrder(order: InsertFundraiserOrder): Promise<FundraiserOrder> {
+    const db = await getDb();
+    const [newOrder] = await db.insert(fundraiserOrders).values({
+      ...order,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    }).returning();
+    return newOrder;
+  }
+  
+  async updateFundraiserOrder(id: number, order: Partial<InsertFundraiserOrder>): Promise<FundraiserOrder | undefined> {
+    const db = await getDb();
+    const [updated] = await db.update(fundraiserOrders)
+      .set({ ...order, updatedAt: new Date() })
+      .where(eq(fundraiserOrders.id, id))
+      .returning();
+    return updated;
+  }
+  
+  async getFundraiserOrderItemsByOrderId(orderId: number): Promise<FundraiserOrderItem[]> {
+    const db = await getDb();
+    return await db.select().from(fundraiserOrderItems).where(eq(fundraiserOrderItems.orderId, orderId));
+  }
+  
+  async createFundraiserOrderItem(item: InsertFundraiserOrderItem): Promise<FundraiserOrderItem> {
+    const db = await getDb();
+    const [newItem] = await db.insert(fundraiserOrderItems).values(item).returning();
+    return newItem;
+  }
+  
+  async createFundraiserOrderItems(items: InsertFundraiserOrderItem[]): Promise<FundraiserOrderItem[]> {
+    const db = await getDb();
+    if (items.length === 0) return [];
+    return await db.insert(fundraiserOrderItems).values(items).returning();
   }
 }

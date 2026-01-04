@@ -1636,6 +1636,121 @@ async function runMigrations() {
       console.log('Assessment tables migration note:', errorMessage);
     }
   }
+  
+  // Create fundraiser tables
+  try {
+    const db = await getDb();
+    
+    console.log('Running migration: Creating fundraiser_campaigns table...');
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS fundraiser_campaigns (
+        id SERIAL PRIMARY KEY,
+        school_id INTEGER NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        description TEXT,
+        start_date TIMESTAMP NOT NULL,
+        end_date TIMESTAMP NOT NULL,
+        is_active BOOLEAN NOT NULL DEFAULT true,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_fundraiser_campaigns_school_id ON fundraiser_campaigns(school_id);
+    `);
+    console.log('✅ Migration completed: fundraiser_campaigns table created');
+    
+    console.log('Running migration: Creating fundraiser_products table...');
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS fundraiser_products (
+        id SERIAL PRIMARY KEY,
+        campaign_id INTEGER NOT NULL REFERENCES fundraiser_campaigns(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        description TEXT,
+        image_url TEXT,
+        price_cents INTEGER NOT NULL,
+        credit_amount_cents INTEGER NOT NULL,
+        stock_quantity INTEGER,
+        is_active BOOLEAN NOT NULL DEFAULT true,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_fundraiser_products_campaign_id ON fundraiser_products(campaign_id);
+    `);
+    console.log('✅ Migration completed: fundraiser_products table created');
+    
+    console.log('Running migration: Creating fundraiser_family_links table...');
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS fundraiser_family_links (
+        id SERIAL PRIMARY KEY,
+        campaign_id INTEGER NOT NULL REFERENCES fundraiser_campaigns(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        slug TEXT NOT NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        UNIQUE(campaign_id, slug)
+      );
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_fundraiser_family_links_campaign_id ON fundraiser_family_links(campaign_id);
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_fundraiser_family_links_user_id ON fundraiser_family_links(user_id);
+    `);
+    console.log('✅ Migration completed: fundraiser_family_links table created');
+    
+    console.log('Running migration: Creating fundraiser_orders table...');
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS fundraiser_orders (
+        id SERIAL PRIMARY KEY,
+        campaign_id INTEGER NOT NULL REFERENCES fundraiser_campaigns(id),
+        family_link_id INTEGER REFERENCES fundraiser_family_links(id),
+        seller_user_id INTEGER REFERENCES users(id),
+        customer_name TEXT NOT NULL,
+        customer_email TEXT NOT NULL,
+        customer_phone TEXT,
+        total_cents INTEGER NOT NULL,
+        credit_earned_cents INTEGER NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        stripe_payment_intent_id TEXT,
+        stripe_session_id TEXT,
+        credit_id INTEGER REFERENCES credits(id),
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_fundraiser_orders_campaign_id ON fundraiser_orders(campaign_id);
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_fundraiser_orders_family_link_id ON fundraiser_orders(family_link_id);
+    `);
+    console.log('✅ Migration completed: fundraiser_orders table created');
+    
+    console.log('Running migration: Creating fundraiser_order_items table...');
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS fundraiser_order_items (
+        id SERIAL PRIMARY KEY,
+        order_id INTEGER NOT NULL REFERENCES fundraiser_orders(id) ON DELETE CASCADE,
+        product_id INTEGER NOT NULL REFERENCES fundraiser_products(id),
+        quantity INTEGER NOT NULL,
+        price_cents INTEGER NOT NULL,
+        credit_amount_cents INTEGER NOT NULL
+      );
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_fundraiser_order_items_order_id ON fundraiser_order_items(order_id);
+    `);
+    console.log('✅ Migration completed: fundraiser_order_items table created');
+    
+  } catch (fundraiserError) {
+    const errorMessage = fundraiserError instanceof Error ? fundraiserError.message : String(fundraiserError);
+    if (!errorMessage.includes('Database connection not available')) {
+      console.log('Fundraiser tables migration note:', errorMessage);
+    }
+  }
 }
 
 // Initialize database tables

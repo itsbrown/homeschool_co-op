@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
-import { PlusCircle, User, Calendar, BookOpen, Clock, DollarSign, Users, UserPlus, CreditCard, RefreshCw, FileText, FolderOpen, Loader2, Award, CheckCircle, AlertCircle, XCircle, Copy, Edit2, Save, X, Coins } from "lucide-react";
+import { PlusCircle, User, Calendar, BookOpen, Clock, DollarSign, Users, UserPlus, CreditCard, RefreshCw, FileText, FolderOpen, Loader2, Award, CheckCircle, AlertCircle, XCircle, Copy, Edit2, Save, X, Coins, Gift, ExternalLink, Share2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/components/SupabaseProvider";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -13,6 +13,219 @@ import { useCart } from "@/contexts/CartContext";
 import OnboardingTour from "@/components/onboarding/OnboardingTour";
 import { Input } from "@/components/ui/input";
 import ParentCalendarView from "@/components/calendar/ParentCalendarView";
+import { format } from "date-fns";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+
+interface FundraiserLink {
+  id: number;
+  campaignId: number;
+  slug: string;
+  campaignName: string;
+  campaignDescription: string | null;
+  campaignEndDate: string;
+  isActive: boolean;
+  storeUrl: string;
+  totalSalesCents: number;
+  totalCreditsEarnedCents: number;
+  orderCount: number;
+}
+
+interface FundraiserOrder {
+  id: number;
+  customerName: string;
+  totalCents: number;
+  creditEarnedCents: number;
+  status: string;
+  createdAt: string;
+  campaignName: string;
+  itemCount: number;
+}
+
+function formatCents(cents: number): string {
+  return `$${(cents / 100).toFixed(2)}`;
+}
+
+function FundraiserSection() {
+  const { toast } = useToast();
+  const { session } = useAuth();
+
+  const { data: fundraiserLinks, isLoading: linksLoading } = useQuery<FundraiserLink[]>({
+    queryKey: ["/api/fundraisers/my-links"],
+    enabled: !!session,
+  });
+
+  const { data: fundraiserOrders, isLoading: ordersLoading } = useQuery<FundraiserOrder[]>({
+    queryKey: ["/api/fundraisers/my-orders"],
+    enabled: !!session,
+  });
+
+  const copyLink = (url: string) => {
+    const fullUrl = `${window.location.origin}${url}`;
+    navigator.clipboard.writeText(fullUrl);
+    toast({
+      title: "Link Copied!",
+      description: "Share this link with friends and family to earn credits.",
+    });
+  };
+
+  const activeLinks = fundraiserLinks?.filter(l => l.isActive) || [];
+  const totalEarned = fundraiserLinks?.reduce((sum, l) => sum + l.totalCreditsEarnedCents, 0) || 0;
+  const totalOrders = fundraiserLinks?.reduce((sum, l) => sum + l.orderCount, 0) || 0;
+
+  if (linksLoading || ordersLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Active Campaigns</CardTitle>
+            <Gift className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold" data-testid="stat-active-campaigns">{activeLinks.length}</div>
+            <p className="text-xs text-muted-foreground">Share your links to earn credits</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold" data-testid="stat-total-orders">{totalOrders}</div>
+            <p className="text-xs text-muted-foreground">From all your fundraiser links</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Credits Earned</CardTitle>
+            <Coins className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-600" data-testid="stat-credits-earned">
+              {formatCents(totalEarned)}
+            </div>
+            <p className="text-xs text-muted-foreground">Available for future enrollments</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {activeLinks.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Share2 className="h-5 w-5" />
+              Your Fundraiser Links
+            </CardTitle>
+            <CardDescription>
+              Share these links with friends and family. You earn credits for every order!
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {activeLinks.map((link) => (
+                <div 
+                  key={link.id} 
+                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-muted/50 rounded-lg"
+                  data-testid={`fundraiser-link-${link.id}`}
+                >
+                  <div className="space-y-1">
+                    <h4 className="font-semibold">{link.campaignName}</h4>
+                    <p className="text-sm text-muted-foreground">
+                      Ends {format(new Date(link.campaignEndDate), 'MMM d, yyyy')}
+                    </p>
+                    <div className="flex items-center gap-4 text-sm">
+                      <span>{link.orderCount} orders</span>
+                      <span className="text-green-600 font-medium">
+                        {formatCents(link.totalCreditsEarnedCents)} earned
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => copyLink(link.storeUrl)}
+                      data-testid={`button-copy-link-${link.id}`}
+                    >
+                      <Copy className="h-4 w-4 mr-2" />
+                      Copy Link
+                    </Button>
+                    <Button 
+                      variant="secondary" 
+                      size="sm" 
+                      asChild
+                    >
+                      <Link href={link.storeUrl} data-testid={`button-view-store-${link.id}`}>
+                        <ExternalLink className="h-4 w-4 mr-2" />
+                        View Store
+                      </Link>
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {(!fundraiserLinks || fundraiserLinks.length === 0) && (
+        <Card>
+          <CardContent className="py-12 text-center">
+            <Gift className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+            <h3 className="text-lg font-semibold mb-2">No Active Fundraisers</h3>
+            <p className="text-muted-foreground">
+              When your school starts a fundraiser, your unique link will appear here.
+              Share it with friends and family to earn credits!
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {fundraiserOrders && fundraiserOrders.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent Orders</CardTitle>
+            <CardDescription>Orders from customers who used your links</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Customer</TableHead>
+                  <TableHead>Campaign</TableHead>
+                  <TableHead>Items</TableHead>
+                  <TableHead>Total</TableHead>
+                  <TableHead>Credit Earned</TableHead>
+                  <TableHead>Date</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {fundraiserOrders.slice(0, 10).map((order) => (
+                  <TableRow key={order.id} data-testid={`order-row-${order.id}`}>
+                    <TableCell className="font-medium">{order.customerName}</TableCell>
+                    <TableCell>{order.campaignName}</TableCell>
+                    <TableCell>{order.itemCount}</TableCell>
+                    <TableCell>{formatCents(order.totalCents)}</TableCell>
+                    <TableCell className="text-green-600">{formatCents(order.creditEarnedCents)}</TableCell>
+                    <TableCell>{format(new Date(order.createdAt), 'MMM d, yyyy')}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
 
 
 export default function ParentDashboard() {
@@ -462,11 +675,12 @@ export default function ParentDashboard() {
       </div>
 
       <Tabs defaultValue="overview" onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="children">Children</TabsTrigger>
           <TabsTrigger value="enrollments">Enrollments</TabsTrigger>
           <TabsTrigger value="schedule">Schedule</TabsTrigger>
+          <TabsTrigger value="fundraisers" data-testid="tab-fundraisers">Fundraisers</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
@@ -1120,6 +1334,10 @@ export default function ParentDashboard() {
 
         <TabsContent value="schedule" className="space-y-4">
           <ParentCalendarView />
+        </TabsContent>
+
+        <TabsContent value="fundraisers" className="space-y-6">
+          <FundraiserSection />
         </TabsContent>
       </Tabs>
       </div>

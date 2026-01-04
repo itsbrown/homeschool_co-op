@@ -58,6 +58,7 @@ import cartRouter from "./api/cart";
 import userSearchRouter from "./api/user-search";
 import assessmentsRouter from "./api/assessments";
 import assessmentUploadRouter from "./api/assessment-upload";
+import fundraisersRouter from "./api/fundraisers";
 import archiver from 'archiver';
 import fs from 'fs';
 import path from 'path';
@@ -2815,6 +2816,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/user-search", userSearchRouter);
   app.use("/api/assessments", assessmentsRouter);
   app.use("/api/assessment-upload", assessmentUploadRouter);
+  app.use("/api/fundraisers", fundraisersRouter);
   
   // School Admin Child Management endpoints (with JWT auth for school admins)
   // Delete child as school admin
