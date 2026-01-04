@@ -239,13 +239,20 @@ export default function CreditManagementPage() {
       return;
     }
     
+    let expiresAtISO: string | undefined;
+    if (creditForm.expiresAt) {
+      const expiresDate = new Date(creditForm.expiresAt);
+      expiresDate.setHours(23, 59, 59, 999);
+      expiresAtISO = expiresDate.toISOString();
+    }
+    
     createCreditMutation.mutate({
       userId: selectedParent.id,
       creditAmountCents: amountCents,
       title: creditForm.title.trim(),
       description: creditForm.description.trim() || undefined,
       notes: creditForm.notes.trim() || undefined,
-      expiresAt: creditForm.expiresAt || undefined,
+      expiresAt: expiresAtISO,
       autoApprove: creditForm.autoApprove,
     });
   }
