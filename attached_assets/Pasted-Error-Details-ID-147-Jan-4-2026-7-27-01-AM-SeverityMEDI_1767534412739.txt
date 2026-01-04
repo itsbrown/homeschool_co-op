@@ -1,0 +1,82 @@
+Error Details
+ID: 147 | Jan 4, 2026, 7:27:01 AM
+
+SeverityMEDIUM
+Type
+frontend
+
+Route
+/api/stripe/create-payment-intent
+
+Method
+N/A
+
+User
+Anonymous
+
+School ID
+N/A
+
+Message
+{"message":"Your cart prices may have changed. Cart will be refreshed automatically.","error":"UNIFIED_TOTAL_MISMATCH","authoritative":{"itemsTotal":171000,"membershipAmount":10000,"membershipAlreadyPaid":false,"membershipRequired":true,"membershipSchoolId":2,"membershipSchoolName":"American Seekers Academy","membershipYear":2026,"grandTotal":181000,"discounts":{"siblingDiscount":9000,"freeAfterThree":0,"appliedDiscounts":[],"totalDiscountAmount":9000,"discountedChildIds":[15],"freeItemIds":[]},"schoolSettings":{"freeAfterThresholdEnabled":true,"freeAfterThreshold":3,"siblingDiscountRate":0.1}}}
+
+Metadata
+{
+  "online": true,
+  "userId": 12,
+  "network": null,
+  "language": "en-US",
+  "referrer": "https://99g30.r.sp1-brevo.net/",
+  "schoolId": null,
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
+  "activeRole": null,
+  "hasSession": true,
+  "statusCode": 409,
+  "breadcrumbs": [
+    {
+      "route": "/login",
+      "title": "",
+      "timestamp": "2026-01-03T21:21:24.952Z",
+      "timeOnPage": 121609
+    }
+  ],
+  "formContext": null,
+  "memoryUsage": {
+    "usedJSHeapSize": 20,
+    "totalJSHeapSize": 22
+  },
+  "originalUrl": "/api/stripe/create-payment-intent",
+  "pageLoadTime": 2786,
+  "sessionStart": "2026-01-03T21:21:24.952Z",
+  "correlationId": "44b9c0e4-2563-471c-a217-b2fa48dd2f01",
+  "recentActions": [
+    {
+      "type": "navigation",
+      "target": "/login",
+      "secondsAgo": 54336
+    },
+    {
+      "type": "click",
+      "target": "[data-testid=\"cart-button\"]",
+      "secondsAgo": 54329
+    },
+    {
+      "type": "click",
+      "target": "div.border-t",
+      "secondsAgo": 54315
+    },
+    {
+      "type": "click",
+      "target": "button.inline-flex",
+      "secondsAgo": 54314
+    }
+  ],
+  "userEmailHint": "den***",
+  "viewportWidth": 1200,
+  "viewportHeight": 690,
+  "sessionErrorCount": 2,
+  "timeOnCurrentPage": 54336420
+}
+Update Status
+New
+Resolution Notes
