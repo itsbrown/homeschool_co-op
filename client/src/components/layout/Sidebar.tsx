@@ -27,7 +27,8 @@ import {
   Bell,
   Clock,
   Percent,
-  ClipboardList
+  ClipboardList,
+  Coins
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -120,6 +121,11 @@ const schoolNavItems: {
     title: 'Discounts',
     href: '/schools/discounts',
     icon: Percent,
+  },
+  {
+    title: 'Credits',
+    href: '/school-admin/credits',
+    icon: Coins,
   },
   {
     title: 'Settings',

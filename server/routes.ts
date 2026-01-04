@@ -45,6 +45,7 @@ import paymentCleanupRouter from "./api/payment-cleanup";
 import { uploadKnowledgeBaseFiles, getProcessingStatus, getProcessingStats } from "./api/knowledge-base-upload";
 import customFormsRouter from "./api/custom-forms";
 import discountsRouter from "./api/discounts";
+import creditsRouter from "./api/credits";
 import enrollmentConflictsRouter from "./api/enrollment-conflicts";
 import classInclusionsRouter from "./api/class-inclusions";
 import onboardingRouter from "./api/onboarding";
@@ -2099,6 +2100,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Register API routers
   app.use("/api/classes", classesRouter);
   app.use("/api/discounts", discountsRouter);
+  app.use("/api/credits", creditsRouter);
   app.use("/api/cart", cartRouter);
   app.use("/api/ai", aiPricingRouter);
   app.use("/api/ai-insights", aiInsightsRouter);
