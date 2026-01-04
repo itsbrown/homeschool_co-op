@@ -332,3 +332,35 @@ export const requireEducatorRole = async (
     return res.status(500).json({ error: 'Failed to verify educator access' });
   }
 };
+
+/**
+ * Middleware to require school context
+ * Ensures the authenticated user has a schoolId in their context
+ * Used for multi-tenant isolation of data
+ */
+export const requireSchoolContext = async (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    if (!req.user?.id) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    
+    const schoolId = (req.user as any).schoolId;
+    
+    if (!schoolId) {
+      console.warn('[requireSchoolContext] No school context for user:', req.user?.email);
+      return res.status(403).json({ 
+        error: 'School context required',
+        code: 'SCHOOL_CONTEXT_REQUIRED'
+      });
+    }
+    
+    next();
+  } catch (error) {
+    console.error('[requireSchoolContext] Error:', error);
+    return res.status(500).json({ error: 'Failed to verify school context' });
+  }
+};

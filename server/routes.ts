@@ -55,6 +55,7 @@ import calendarEventsRouter from "./api/calendar-events";
 import analyticsRouter from "./api/analytics";
 import cartRouter from "./api/cart";
 import userSearchRouter from "./api/user-search";
+import assessmentsRouter from "./api/assessments";
 import archiver from 'archiver';
 import fs from 'fs';
 import path from 'path';
@@ -2809,6 +2810,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/calendar-events", calendarEventsRouter);
   app.use("/api/analytics", analyticsRouter);
   app.use("/api/user-search", userSearchRouter);
+  app.use("/api/assessments", assessmentsRouter);
   
   // School Admin Child Management endpoints (with JWT auth for school admins)
   // Delete child as school admin

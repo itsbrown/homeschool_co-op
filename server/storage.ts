@@ -55,7 +55,10 @@ import {
   credits, type Credit, type InsertCredit, type CreditType, type CreditStatus,
   unifiedCreditUsageLogs, type UnifiedCreditUsageLog, type InsertUnifiedCreditUsageLog,
   paymentAllocations, type PaymentAllocation, type InsertPaymentAllocation,
-  creditHolds, type CreditHold, type InsertCreditHold, type CreditHoldStatus
+  creditHolds, type CreditHold, type InsertCreditHold, type CreditHoldStatus,
+  assessmentTypes, type AssessmentType, type InsertAssessmentType,
+  curriculumBooks, type CurriculumBook, type InsertCurriculumBook,
+  studentAssessments, type StudentAssessment, type InsertStudentAssessment
 } from "@shared/schema";
 import { eq, inArray } from 'drizzle-orm';
 import { getDb } from './db';
@@ -653,6 +656,29 @@ export interface IStorage {
   createPaymentAllocation(allocation: InsertPaymentAllocation): Promise<PaymentAllocation>;
   createPaymentAllocations(allocations: InsertPaymentAllocation[]): Promise<PaymentAllocation[]>;
   getTotalPaidForEnrollment(enrollmentId: number): Promise<number>;
+  
+  // ==================== ASSESSMENT TRACKING ====================
+  // Assessment Types
+  getAssessmentTypeById(id: number): Promise<AssessmentType | undefined>;
+  getAssessmentTypesBySchoolId(schoolId: number): Promise<AssessmentType[]>;
+  createAssessmentType(assessmentType: InsertAssessmentType): Promise<AssessmentType>;
+  updateAssessmentType(id: number, assessmentType: Partial<InsertAssessmentType>): Promise<AssessmentType | undefined>;
+  deleteAssessmentType(id: number): Promise<void>;
+  
+  // Curriculum Books
+  getCurriculumBookById(id: number): Promise<CurriculumBook | undefined>;
+  getCurriculumBooksByAssessmentTypeId(assessmentTypeId: number): Promise<CurriculumBook[]>;
+  createCurriculumBook(book: InsertCurriculumBook): Promise<CurriculumBook>;
+  updateCurriculumBook(id: number, book: Partial<InsertCurriculumBook>): Promise<CurriculumBook | undefined>;
+  deleteCurriculumBook(id: number): Promise<void>;
+  
+  // Student Assessments
+  getStudentAssessmentById(id: number): Promise<StudentAssessment | undefined>;
+  getStudentAssessmentsByChildId(childId: number): Promise<StudentAssessment[]>;
+  getStudentAssessmentsBySchoolId(schoolId: number, filters?: { locationId?: number; assessmentTypeId?: number; childId?: number }): Promise<StudentAssessment[]>;
+  createStudentAssessment(assessment: InsertStudentAssessment): Promise<StudentAssessment>;
+  updateStudentAssessment(id: number, assessment: Partial<InsertStudentAssessment>): Promise<StudentAssessment | undefined>;
+  deleteStudentAssessment(id: number): Promise<void>;
 }
 
 export class MemStorage implements IStorage {
@@ -4759,9 +4785,153 @@ export class MemStorage implements IStorage {
     const allocations = await this.getPaymentAllocationsByEnrollmentId(enrollmentId);
     return allocations.reduce((sum, a) => sum + a.allocatedAmountCents, 0);
   }
+
+  // ==================== ASSESSMENT TRACKING ====================
+  private assessmentTypesStore: Map<number, AssessmentType> = new Map();
+  private assessmentTypeIdCounter: number = 1;
+  private curriculumBooksStore: Map<number, CurriculumBook> = new Map();
+  private curriculumBookIdCounter: number = 1;
+  private studentAssessmentsStore: Map<number, StudentAssessment> = new Map();
+  private studentAssessmentIdCounter: number = 1;
+
+  async getAssessmentTypeById(id: number): Promise<AssessmentType | undefined> {
+    return this.assessmentTypesStore.get(id);
+  }
+
+  async getAssessmentTypesBySchoolId(schoolId: number): Promise<AssessmentType[]> {
+    return Array.from(this.assessmentTypesStore.values())
+      .filter(t => t.schoolId === schoolId)
+      .sort((a, b) => a.sortOrder - b.sortOrder);
+  }
+
+  async createAssessmentType(assessmentType: InsertAssessmentType): Promise<AssessmentType> {
+    const id = this.assessmentTypeIdCounter++;
+    const newType: AssessmentType = {
+      ...assessmentType,
+      id,
+      description: assessmentType.description ?? null,
+      maxScore: assessmentType.maxScore ?? null,
+      levelOptions: assessmentType.levelOptions ?? null,
+      hasCurriculumBooks: assessmentType.hasCurriculumBooks ?? false,
+      isActive: assessmentType.isActive ?? true,
+      sortOrder: assessmentType.sortOrder ?? 0,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.assessmentTypesStore.set(id, newType);
+    return newType;
+  }
+
+  async updateAssessmentType(id: number, assessmentType: Partial<InsertAssessmentType>): Promise<AssessmentType | undefined> {
+    const existing = this.assessmentTypesStore.get(id);
+    if (!existing) return undefined;
+    const updated: AssessmentType = { ...existing, ...assessmentType, updatedAt: new Date() };
+    this.assessmentTypesStore.set(id, updated);
+    return updated;
+  }
+
+  async deleteAssessmentType(id: number): Promise<void> {
+    this.assessmentTypesStore.delete(id);
+  }
+
+  async getCurriculumBookById(id: number): Promise<CurriculumBook | undefined> {
+    return this.curriculumBooksStore.get(id);
+  }
+
+  async getCurriculumBooksByAssessmentTypeId(assessmentTypeId: number): Promise<CurriculumBook[]> {
+    return Array.from(this.curriculumBooksStore.values())
+      .filter(b => b.assessmentTypeId === assessmentTypeId)
+      .sort((a, b) => a.sortOrder - b.sortOrder);
+  }
+
+  async createCurriculumBook(book: InsertCurriculumBook): Promise<CurriculumBook> {
+    const id = this.curriculumBookIdCounter++;
+    const newBook: CurriculumBook = {
+      ...book,
+      id,
+      description: book.description ?? null,
+      totalLessons: book.totalLessons ?? null,
+      sortOrder: book.sortOrder ?? 0,
+      isActive: book.isActive ?? true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.curriculumBooksStore.set(id, newBook);
+    return newBook;
+  }
+
+  async updateCurriculumBook(id: number, book: Partial<InsertCurriculumBook>): Promise<CurriculumBook | undefined> {
+    const existing = this.curriculumBooksStore.get(id);
+    if (!existing) return undefined;
+    const updated: CurriculumBook = { ...existing, ...book, updatedAt: new Date() };
+    this.curriculumBooksStore.set(id, updated);
+    return updated;
+  }
+
+  async deleteCurriculumBook(id: number): Promise<void> {
+    this.curriculumBooksStore.delete(id);
+  }
+
+  async getStudentAssessmentById(id: number): Promise<StudentAssessment | undefined> {
+    return this.studentAssessmentsStore.get(id);
+  }
+
+  async getStudentAssessmentsByChildId(childId: number): Promise<StudentAssessment[]> {
+    return Array.from(this.studentAssessmentsStore.values())
+      .filter(a => a.childId === childId)
+      .sort((a, b) => b.assessmentDate.getTime() - a.assessmentDate.getTime());
+  }
+
+  async getStudentAssessmentsBySchoolId(schoolId: number, filters?: { locationId?: number; assessmentTypeId?: number; childId?: number }): Promise<StudentAssessment[]> {
+    return Array.from(this.studentAssessmentsStore.values())
+      .filter(a => {
+        if (a.schoolId !== schoolId) return false;
+        if (filters?.locationId && a.locationId !== filters.locationId) return false;
+        if (filters?.assessmentTypeId && a.assessmentTypeId !== filters.assessmentTypeId) return false;
+        if (filters?.childId && a.childId !== filters.childId) return false;
+        return true;
+      })
+      .sort((a, b) => b.assessmentDate.getTime() - a.assessmentDate.getTime());
+  }
+
+  async createStudentAssessment(assessment: InsertStudentAssessment): Promise<StudentAssessment> {
+    const id = this.studentAssessmentIdCounter++;
+    const newAssessment: StudentAssessment = {
+      ...assessment,
+      id,
+      locationId: assessment.locationId ?? null,
+      curriculumBookId: assessment.curriculumBookId ?? null,
+      lesson: assessment.lesson ?? null,
+      notes: assessment.notes ?? null,
+      assessmentDate: assessment.assessmentDate instanceof Date ? assessment.assessmentDate : new Date(assessment.assessmentDate),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.studentAssessmentsStore.set(id, newAssessment);
+    return newAssessment;
+  }
+
+  async updateStudentAssessment(id: number, assessment: Partial<InsertStudentAssessment>): Promise<StudentAssessment | undefined> {
+    const existing = this.studentAssessmentsStore.get(id);
+    if (!existing) return undefined;
+    const updated: StudentAssessment = { 
+      ...existing, 
+      ...assessment,
+      assessmentDate: assessment.assessmentDate 
+        ? (assessment.assessmentDate instanceof Date ? assessment.assessmentDate : new Date(assessment.assessmentDate))
+        : existing.assessmentDate,
+      updatedAt: new Date() 
+    };
+    this.studentAssessmentsStore.set(id, updated);
+    return updated;
+  }
+
+  async deleteStudentAssessment(id: number): Promise<void> {
+    this.studentAssessmentsStore.delete(id);
+  }
 }
 
-  import { DatabaseStorage } from "./dbStorage";
+import { DatabaseStorage } from "./dbStorage";
   import { supabaseStorage, SupabaseStorage } from './supabase-storage';
 
   // Create a shared MemStorage instance to ensure consistency
@@ -7262,6 +7432,71 @@ export class MemStorage implements IStorage {
 
       async getStripePaymentByIntentId(paymentIntentId: string): Promise<StripePaymentHistory | undefined> {
         return this.memStorage.getStripePaymentByIntentId(paymentIntentId);
+      }
+
+      // ==================== ASSESSMENT TRACKING ====================
+      async getAssessmentTypeById(id: number): Promise<AssessmentType | undefined> {
+        return this.dbStorage.getAssessmentTypeById(id);
+      }
+
+      async getAssessmentTypesBySchoolId(schoolId: number): Promise<AssessmentType[]> {
+        return this.dbStorage.getAssessmentTypesBySchoolId(schoolId);
+      }
+
+      async createAssessmentType(assessmentType: InsertAssessmentType): Promise<AssessmentType> {
+        return this.dbStorage.createAssessmentType(assessmentType);
+      }
+
+      async updateAssessmentType(id: number, assessmentType: Partial<InsertAssessmentType>): Promise<AssessmentType | undefined> {
+        return this.dbStorage.updateAssessmentType(id, assessmentType);
+      }
+
+      async deleteAssessmentType(id: number): Promise<void> {
+        return this.dbStorage.deleteAssessmentType(id);
+      }
+
+      async getCurriculumBookById(id: number): Promise<CurriculumBook | undefined> {
+        return this.dbStorage.getCurriculumBookById(id);
+      }
+
+      async getCurriculumBooksByAssessmentTypeId(assessmentTypeId: number): Promise<CurriculumBook[]> {
+        return this.dbStorage.getCurriculumBooksByAssessmentTypeId(assessmentTypeId);
+      }
+
+      async createCurriculumBook(book: InsertCurriculumBook): Promise<CurriculumBook> {
+        return this.dbStorage.createCurriculumBook(book);
+      }
+
+      async updateCurriculumBook(id: number, book: Partial<InsertCurriculumBook>): Promise<CurriculumBook | undefined> {
+        return this.dbStorage.updateCurriculumBook(id, book);
+      }
+
+      async deleteCurriculumBook(id: number): Promise<void> {
+        return this.dbStorage.deleteCurriculumBook(id);
+      }
+
+      async getStudentAssessmentById(id: number): Promise<StudentAssessment | undefined> {
+        return this.dbStorage.getStudentAssessmentById(id);
+      }
+
+      async getStudentAssessmentsByChildId(childId: number): Promise<StudentAssessment[]> {
+        return this.dbStorage.getStudentAssessmentsByChildId(childId);
+      }
+
+      async getStudentAssessmentsBySchoolId(schoolId: number, filters?: { locationId?: number; assessmentTypeId?: number; childId?: number }): Promise<StudentAssessment[]> {
+        return this.dbStorage.getStudentAssessmentsBySchoolId(schoolId, filters);
+      }
+
+      async createStudentAssessment(assessment: InsertStudentAssessment): Promise<StudentAssessment> {
+        return this.dbStorage.createStudentAssessment(assessment);
+      }
+
+      async updateStudentAssessment(id: number, assessment: Partial<InsertStudentAssessment>): Promise<StudentAssessment | undefined> {
+        return this.dbStorage.updateStudentAssessment(id, assessment);
+      }
+
+      async deleteStudentAssessment(id: number): Promise<void> {
+        return this.dbStorage.deleteStudentAssessment(id);
       }
 
       // Clear all data from storage (for testing)

@@ -54,7 +54,10 @@ import {
   Credit, InsertCredit, credits, CreditType, CreditStatus,
   UnifiedCreditUsageLog, InsertUnifiedCreditUsageLog, unifiedCreditUsageLogs,
   PaymentAllocation, InsertPaymentAllocation, paymentAllocations,
-  CreditHold, InsertCreditHold, creditHolds, CreditHoldStatus
+  CreditHold, InsertCreditHold, creditHolds, CreditHoldStatus,
+  AssessmentType, InsertAssessmentType, assessmentTypes,
+  CurriculumBook, InsertCurriculumBook, curriculumBooks,
+  StudentAssessment, InsertStudentAssessment, studentAssessments
 } from '../shared/schema';
 
 /**
@@ -4478,5 +4481,124 @@ export class DatabaseStorage implements IStorage {
     }
     
     return expiredHolds.length;
+  }
+
+  // ==================== ASSESSMENT TRACKING ====================
+  async getAssessmentTypeById(id: number): Promise<AssessmentType | undefined> {
+    const db = await getDb();
+    const [result] = await db.select().from(assessmentTypes).where(eq(assessmentTypes.id, id));
+    return result;
+  }
+
+  async getAssessmentTypesBySchoolId(schoolId: number): Promise<AssessmentType[]> {
+    const db = await getDb();
+    return db.select().from(assessmentTypes)
+      .where(eq(assessmentTypes.schoolId, schoolId))
+      .orderBy(asc(assessmentTypes.sortOrder));
+  }
+
+  async createAssessmentType(assessmentType: InsertAssessmentType): Promise<AssessmentType> {
+    const db = await getDb();
+    const [result] = await db.insert(assessmentTypes).values(assessmentType).returning();
+    return result;
+  }
+
+  async updateAssessmentType(id: number, assessmentType: Partial<InsertAssessmentType>): Promise<AssessmentType | undefined> {
+    const db = await getDb();
+    const [result] = await db.update(assessmentTypes)
+      .set({ ...assessmentType, updatedAt: new Date() })
+      .where(eq(assessmentTypes.id, id))
+      .returning();
+    return result;
+  }
+
+  async deleteAssessmentType(id: number): Promise<void> {
+    const db = await getDb();
+    await db.delete(assessmentTypes).where(eq(assessmentTypes.id, id));
+  }
+
+  async getCurriculumBookById(id: number): Promise<CurriculumBook | undefined> {
+    const db = await getDb();
+    const [result] = await db.select().from(curriculumBooks).where(eq(curriculumBooks.id, id));
+    return result;
+  }
+
+  async getCurriculumBooksByAssessmentTypeId(assessmentTypeId: number): Promise<CurriculumBook[]> {
+    const db = await getDb();
+    return db.select().from(curriculumBooks)
+      .where(eq(curriculumBooks.assessmentTypeId, assessmentTypeId))
+      .orderBy(asc(curriculumBooks.sortOrder));
+  }
+
+  async createCurriculumBook(book: InsertCurriculumBook): Promise<CurriculumBook> {
+    const db = await getDb();
+    const [result] = await db.insert(curriculumBooks).values(book).returning();
+    return result;
+  }
+
+  async updateCurriculumBook(id: number, book: Partial<InsertCurriculumBook>): Promise<CurriculumBook | undefined> {
+    const db = await getDb();
+    const [result] = await db.update(curriculumBooks)
+      .set({ ...book, updatedAt: new Date() })
+      .where(eq(curriculumBooks.id, id))
+      .returning();
+    return result;
+  }
+
+  async deleteCurriculumBook(id: number): Promise<void> {
+    const db = await getDb();
+    await db.delete(curriculumBooks).where(eq(curriculumBooks.id, id));
+  }
+
+  async getStudentAssessmentById(id: number): Promise<StudentAssessment | undefined> {
+    const db = await getDb();
+    const [result] = await db.select().from(studentAssessments).where(eq(studentAssessments.id, id));
+    return result;
+  }
+
+  async getStudentAssessmentsByChildId(childId: number): Promise<StudentAssessment[]> {
+    const db = await getDb();
+    return db.select().from(studentAssessments)
+      .where(eq(studentAssessments.childId, childId))
+      .orderBy(desc(studentAssessments.assessmentDate));
+  }
+
+  async getStudentAssessmentsBySchoolId(schoolId: number, filters?: { locationId?: number; assessmentTypeId?: number; childId?: number }): Promise<StudentAssessment[]> {
+    const db = await getDb();
+    const conditions = [eq(studentAssessments.schoolId, schoolId)];
+    
+    if (filters?.locationId) {
+      conditions.push(eq(studentAssessments.locationId, filters.locationId));
+    }
+    if (filters?.assessmentTypeId) {
+      conditions.push(eq(studentAssessments.assessmentTypeId, filters.assessmentTypeId));
+    }
+    if (filters?.childId) {
+      conditions.push(eq(studentAssessments.childId, filters.childId));
+    }
+    
+    return db.select().from(studentAssessments)
+      .where(and(...conditions))
+      .orderBy(desc(studentAssessments.assessmentDate));
+  }
+
+  async createStudentAssessment(assessment: InsertStudentAssessment): Promise<StudentAssessment> {
+    const db = await getDb();
+    const [result] = await db.insert(studentAssessments).values(assessment).returning();
+    return result;
+  }
+
+  async updateStudentAssessment(id: number, assessment: Partial<InsertStudentAssessment>): Promise<StudentAssessment | undefined> {
+    const db = await getDb();
+    const [result] = await db.update(studentAssessments)
+      .set({ ...assessment, updatedAt: new Date() })
+      .where(eq(studentAssessments.id, id))
+      .returning();
+    return result;
+  }
+
+  async deleteStudentAssessment(id: number): Promise<void> {
+    const db = await getDb();
+    await db.delete(studentAssessments).where(eq(studentAssessments.id, id));
   }
 }
