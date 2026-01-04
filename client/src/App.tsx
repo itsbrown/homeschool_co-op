@@ -211,19 +211,6 @@ function DashboardRouter() {
   console.log(`🚀 DashboardRouter called!`);
   console.log(`🔍 DashboardRouter - showRoleSelection:`, showRoleSelection, 'user email:', user?.email, 'activeRole:', activeRole);
 
-  // Special handling for corey@americanseekersacademy.com - directly route to superAdmin dashboard
-  if (user?.email === 'corey@americanseekersacademy.com') {
-    console.log(`🏠 Routing superAdmin to EducatorDashboard with AppShell`);
-    return (
-      <AppShell key={`dashboard-superAdmin`}>
-        <div className="mb-6">
-          <AIStatusPanel />
-        </div>
-        <EducatorDashboard />
-      </AppShell>
-    );
-  }
-
   // Show role selection screen if user needs to pick a role
   if (user?.email === 'coreycreates@gmail.com' && (!activeRole || showRoleSelection)) {
     console.log(`✅ Showing role selection for ${user.email}`);
