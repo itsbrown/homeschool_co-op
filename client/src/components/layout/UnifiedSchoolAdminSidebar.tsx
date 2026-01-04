@@ -30,7 +30,8 @@ import {
   Tag,
   FileText,
   Megaphone,
-  Clock
+  Clock,
+  Coins
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -102,6 +103,11 @@ const adminNavItems: NavItem[] = [
     title: 'Discounts',
     href: '/schools/discounts',
     icon: Target,
+  },
+  {
+    title: 'Credits',
+    href: '/school-admin/credits',
+    icon: Coins,
   },
   {
     title: 'Manual Payments',

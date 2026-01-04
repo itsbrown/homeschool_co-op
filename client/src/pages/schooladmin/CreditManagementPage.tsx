@@ -9,10 +9,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
+import { UserAutocomplete } from '@/components/ui/user-autocomplete';
 import { 
   Plus, 
   Loader2,
@@ -23,7 +23,6 @@ import {
   AlertTriangle,
   Users,
   History,
-  Search,
   Gift
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -69,11 +68,13 @@ interface CreditRecord {
   rejectionReason: string | null;
 }
 
-interface ParentOption {
+interface SelectedUser {
   id: number;
-  name: string;
   email: string;
-  availableCreditsCents: number;
+  name: string;
+  firstName?: string;
+  lastName?: string;
+  role: string;
 }
 
 const creditTypeLabels: Record<string, string> = {
@@ -108,8 +109,7 @@ export default function CreditManagementPage() {
   const [selectedCredit, setSelectedCredit] = useState<CreditRecord | null>(null);
   const [isRejectDialogOpen, setIsRejectDialogOpen] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
-  const [parentSearch, setParentSearch] = useState('');
-  const [selectedParent, setSelectedParent] = useState<ParentOption | null>(null);
+  const [selectedParent, setSelectedParent] = useState<SelectedUser | null>(null);
   
   const [creditForm, setCreditForm] = useState({
     userId: 0,
@@ -139,11 +139,6 @@ export default function CreditManagementPage() {
   const { data: creditHistory = [], isLoading: historyLoading } = useQuery<CreditRecord[]>({
     queryKey: ['/api/credits/history'],
     enabled: !!user?.email,
-  });
-
-  const { data: parents = [] } = useQuery<ParentOption[]>({
-    queryKey: ['/api/credits/parents', parentSearch],
-    enabled: !!user?.email && parentSearch.length >= 2,
   });
 
   const createCreditMutation = useMutation({
@@ -225,7 +220,6 @@ export default function CreditManagementPage() {
       autoApprove: true,
     });
     setSelectedParent(null);
-    setParentSearch('');
   }
 
   function handleSubmitCredit() {
@@ -610,42 +604,8 @@ export default function CreditManagementPage() {
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label>Select Parent</Label>
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search by name or email..."
-                    value={parentSearch}
-                    onChange={(e) => setParentSearch(e.target.value)}
-                    className="pl-10"
-                    data-testid="input-parent-search"
-                  />
-                </div>
-                {parents.length > 0 && !selectedParent && (
-                  <div className="border rounded-md max-h-48 overflow-y-auto">
-                    {parents.map((parent) => (
-                      <button
-                        key={parent.id}
-                        className="w-full px-3 py-2 text-left hover:bg-accent flex justify-between items-center"
-                        onClick={() => {
-                          setSelectedParent(parent);
-                          setCreditForm(prev => ({ ...prev, userId: parent.id }));
-                          setParentSearch('');
-                        }}
-                        data-testid={`option-parent-${parent.id}`}
-                      >
-                        <div>
-                          <p className="font-medium text-sm">{parent.name}</p>
-                          <p className="text-xs text-muted-foreground">{parent.email}</p>
-                        </div>
-                        <span className="text-xs text-green-600">
-                          {formatCents(parent.availableCreditsCents)} available
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-                {selectedParent && (
-                  <div className="flex items-center justify-between bg-accent p-2 rounded-md">
+                {selectedParent ? (
+                  <div className="flex items-center justify-between bg-accent p-3 rounded-md">
                     <div>
                       <p className="font-medium text-sm">{selectedParent.name}</p>
                       <p className="text-xs text-muted-foreground">{selectedParent.email}</p>
@@ -659,6 +619,15 @@ export default function CreditManagementPage() {
                       Change
                     </Button>
                   </div>
+                ) : (
+                  <UserAutocomplete
+                    onSelect={(user) => {
+                      setSelectedParent(user);
+                      setCreditForm(prev => ({ ...prev, userId: user.id }));
+                    }}
+                    placeholder="Search by name or email..."
+                    roleFilter="parent"
+                  />
                 )}
               </div>
 
