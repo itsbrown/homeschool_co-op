@@ -211,22 +211,7 @@ function DashboardRouter() {
   console.log(`🚀 DashboardRouter called!`);
   console.log(`🔍 DashboardRouter - showRoleSelection:`, showRoleSelection, 'user email:', user?.email, 'activeRole:', activeRole);
 
-  // Show role selection screen if user needs to pick a role
-  if (user?.email === 'coreycreates@gmail.com' && (!activeRole || showRoleSelection)) {
-    console.log(`✅ Showing role selection for ${user.email}`);
-    return (
-      <RoleSelectionComponent
-        onRoleSelect={(role: string) => {
-          // RoleSelection expects a string role, but setActiveRole expects a number roleId
-          // For this special hardcoded case, just log the role name
-          console.log(`Role selected: ${role}`);
-        }}
-        userEmail={user.email}
-      />
-    );
-  }
-
-  // Show dashboard based on selected role
+  // Show dashboard based on selected role (roles come from database via RoleContext)
   console.log(`🏠 Dashboard routing - activeRole:`, activeRole);
 
   // For parent - route to ParentDashboard with ParentAppShell
@@ -405,28 +390,6 @@ function Router() {
     });
     window.location.href = '/login';
     return <div>Logging out...</div>;
-  }
-
-  // Force role selection for multi-role users only on dashboard-related paths
-  const multiRoleEmails = ['coreycreates@gmail.com', 'corey@americanseekersacademy.com'];
-  if (isAuthenticated && user?.email && multiRoleEmails.includes(user.email) && showRoleSelection &&
-      (location === '/' || location === '/dashboard' || location.startsWith('/admin') || location.startsWith('/programs'))) {
-    console.log(`🎯 Forcing role selection for multi-role user at location: ${location}`);
-    return (
-      <div>
-        <div style={{ position: 'absolute', top: '10px', right: '10px' }}>
-          <a href="/emergency-logout" style={{ color: 'red', textDecoration: 'underline' }}>Emergency Logout</a>
-        </div>
-        <RoleSelectionComponent
-          onRoleSelect={(role: string) => {
-            // RoleSelection expects a string role, but setActiveRole expects a number roleId
-            // For this special hardcoded case, just log the role name
-            console.log(`Role selected: ${role}`);
-          }}
-          userEmail={user.email}
-        />
-      </div>
-    );
   }
 
   return (

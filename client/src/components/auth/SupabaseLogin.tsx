@@ -18,32 +18,12 @@ export const SupabaseLogin: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   // Handle redirect after successful authentication
+  // RoleContext handles role selection for multi-role users
   useEffect(() => {
     if (isAuthenticated && user) {
-      // Don't auto-redirect for multi-role users - let role selection handle it
-      if (user.email === 'coreycreates@gmail.com') {
-        console.log('👤 Multi-role user logged in - staying on home page for role selection');
-        // Don't redirect - stay on current page to show role selection
-        return;
-      }
-      
-      const userRole = user.user_metadata?.role || 'parent';
-      console.log('👤 Single-role user logged in with role:', userRole);
-      
-      switch (userRole) {
-        case 'schoolAdmin':
-          setLocation('/schools');
-          break;
-        case 'educator':
-          setLocation('/educator/dashboard');
-          break;
-        case 'learner':
-          setLocation('/learner/dashboard');
-          break;
-        case 'parent':
-        default:
-          setLocation('/dashboard');
-      }
+      // Redirect to dashboard - RoleContext will handle role-based routing
+      console.log('👤 User logged in, redirecting to dashboard');
+      setLocation('/dashboard');
     }
   }, [isAuthenticated, user, setLocation]);
 

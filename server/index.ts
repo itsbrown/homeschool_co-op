@@ -145,6 +145,66 @@ app.use("/api/telemetry/errors", errorTelemetryRouter);
 // Initialize error notification service (daily summary scheduler)
 errorNotificationService.scheduleDailySummary();
 
+// Ensure critical admin users have proper database roles (removes need for hardcoded email checks)
+async function ensureAdminRoles() {
+  try {
+    const { getDb } = await import('./db');
+    const { users, userRoles } = await import('@shared/schema');
+    const { eq, and } = await import('drizzle-orm');
+    const db = await getDb();
+    
+    // Admin accounts that need superAdmin + parent roles
+    const adminEmails = [
+      'corey@americanseekersacademy.com',
+      'superadmin@americanseekersacademy.com',
+    ];
+    
+    for (const email of adminEmails) {
+      const [user] = await db.select().from(users).where(eq(users.email, email)).limit(1);
+      if (!user) {
+        console.log(`⚠️ Admin user not found: ${email}`);
+        continue;
+      }
+      
+      // Check if superAdmin role exists
+      const [superAdminRole] = await db.select()
+        .from(userRoles)
+        .where(and(eq(userRoles.userId, user.id), eq(userRoles.role, 'superAdmin')))
+        .limit(1);
+      
+      if (!superAdminRole) {
+        await db.insert(userRoles).values({
+          userId: user.id,
+          role: 'superAdmin',
+          schoolId: user.schoolId,
+          isPrimary: true,
+        });
+        console.log(`✅ Added superAdmin role for ${email}`);
+      }
+      
+      // Check if parent role exists (for multi-role capability)
+      const [parentRole] = await db.select()
+        .from(userRoles)
+        .where(and(eq(userRoles.userId, user.id), eq(userRoles.role, 'parent')))
+        .limit(1);
+      
+      if (!parentRole) {
+        await db.insert(userRoles).values({
+          userId: user.id,
+          role: 'parent',
+          schoolId: user.schoolId,
+          isPrimary: false,
+        });
+        console.log(`✅ Added parent role for ${email}`);
+      }
+    }
+    
+    console.log('✅ Admin roles verification complete');
+  } catch (error) {
+    console.error('❌ Failed to ensure admin roles:', error);
+  }
+}
+
 // Test endpoints for development
 if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
   // Manually trigger enrollment reminder check
@@ -320,6 +380,10 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
     reusePort: true,
   }, async () => {
     log(`serving on port ${port}`);
+    
+    // Ensure critical admin users have proper database roles (runs in all environments)
+    // This is idempotent and only adds missing roles
+    await ensureAdminRoles();
 
     // Background jobs and data loading only run in development
     // Autoscale deployments don't support persistent background tasks

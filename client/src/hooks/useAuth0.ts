@@ -44,6 +44,7 @@ export function useAuth() {
 
   const getUserRole = (user: any) => {
     // For Supabase, check user metadata for roles first
+    // Actual role assignment comes from the database via RoleContext
     const metadata = user?.user_metadata || user?.app_metadata || {};
     let role = metadata.role || metadata.roles?.[0];
 
@@ -51,20 +52,8 @@ export function useAuth() {
     console.log('🔍 getUserRole - metadata:', metadata);
     console.log('🔍 getUserRole - extracted role:', role);
 
-    // Super admin role assignment for super admin emails
-    if (user?.email === 'superadmin@americanseekersacademy.com' || user?.email === 'corey@americanseekersacademy.com') {
-      role = 'superAdmin';
-      console.log('🚀 Applied superAdmin role for super admin email');
-    }
-    // School admin role assignment for known admin emails
-    else if (user?.email === 'contact.americanseekersacademy@gmail.com') {
-      role = 'schoolAdmin';
-      console.log('🏫 Applied schoolAdmin role for known admin email');
-    }
-
-    console.log('🔍 getUserRole - final role:', role);
-
-    // Default to parent role for all users unless they have an invitation
+    // Default to parent role - actual roles are managed in the database via user_roles table
+    // and fetched by RoleContext from /api/user/roles
     return role || 'parent';
   };
 
