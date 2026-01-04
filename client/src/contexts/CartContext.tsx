@@ -1808,7 +1808,9 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const applyPromoCode = async (code: string): Promise<{ success: boolean; error?: string; discount?: any }> => {
     try {
-      console.log('🎟️ Validating promo code:', code, 'for cart total:', state.cart.total);
+      // CRITICAL FIX: Send subtotal (not discounted total) to match server-side promo calculation
+      // Server calculates promo discounts on raw subtotal, so we must do the same
+      console.log('🎟️ Validating promo code:', code, 'for cart subtotal:', state.cart.subtotal);
       
       const response = await fetch('/api/discounts/validate', {
         method: 'POST',
@@ -1818,7 +1820,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         },
         body: JSON.stringify({
           code,
-          cartTotal: state.cart.total,
+          cartTotal: state.cart.subtotal, // Use subtotal to match server calculation
         }),
       });
 
@@ -1834,7 +1836,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         discountAmount: data.discountAmount,
         type: data.discount.type,
         value: data.discount.value,
-        cartTotal: state.cart.total,
+        cartSubtotal: state.cart.subtotal,
         isNaN: isNaN(data.discountAmount)
       });
 
