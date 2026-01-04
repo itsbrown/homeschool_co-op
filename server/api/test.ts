@@ -354,6 +354,63 @@ router.get('/debug-parents/:schoolId', async (req: Request, res: Response) => {
 });
 
 /**
+ * POST /api/test/simulate-409
+ * Simulates a 409 conflict response to test checkout retry logic
+ * 
+ * This endpoint mimics what happens when the server detects a price mismatch
+ * and returns authoritative data for the client to retry with.
+ * 
+ * Used to verify:
+ * - Retry count increments correctly (using ref, not state)
+ * - After MAX_RETRIES, hasCheckoutConflict flag is set
+ * - No infinite loop occurs
+ */
+router.post('/simulate-409', async (req: Request, res: Response) => {
+  try {
+    const { attemptNumber = 1 } = req.body;
+    
+    console.log(`🧪 [Test] Simulating 409 conflict - attempt ${attemptNumber}`);
+    
+    // Return 409 with authoritative data, simulating UNIFIED_TOTAL_MISMATCH
+    res.status(409).json({
+      error: 'UNIFIED_TOTAL_MISMATCH',
+      message: 'Cart total mismatch detected. Please refresh your cart.',
+      details: {
+        clientTotal: 10000,
+        serverTotal: 12500,
+        difference: 2500,
+        reason: 'test_simulation'
+      },
+      authoritative: {
+        itemsTotal: 12500,
+        membershipAmount: 0,
+        membershipAlreadyPaid: true,
+        membershipRequired: false,
+        membershipSchoolId: null,
+        membershipSchoolName: 'Test School',
+        membershipYear: new Date().getFullYear(),
+        grandTotal: 12500,
+        discounts: {
+          siblingDiscount: 0,
+          freeAfterThree: 0,
+          appliedDiscounts: [],
+          totalDiscountAmount: 0
+        },
+        schoolSettings: null,
+        payableAmount: 12500,
+        paymentPlans: []
+      }
+    });
+  } catch (error) {
+    console.error('[Test] Error simulating 409:', error);
+    res.status(500).json({ 
+      error: 'Failed to simulate 409',
+      details: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+/**
  * POST /api/test/cleanup
  * Clears all test data from storage
  */
