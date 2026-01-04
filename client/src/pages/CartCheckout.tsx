@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useCart } from '@/contexts/CartContext';
 import { useAuth } from '@/components/SupabaseProvider';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -207,6 +207,8 @@ export default function CartCheckout() {
   const [snapshotLoading, setSnapshotLoading] = useState(false);
   const [snapshotId, setSnapshotId] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
+  // Use ref to track retry count for recursive calls (avoids stale closure)
+  const retryCountRef = useRef(0);
   const MAX_RETRIES = 1; // Only auto-retry once on 409
   
   // Checkout conflict guard - prevents infinite loop when 409 errors occur
@@ -618,9 +620,11 @@ export default function CartCheckout() {
         console.warn('⚠️ Payment validation conflict - server returned authoritative values:', conflictData);
         
         // Auto-retry once by using authoritative values from 409 response
-        if (retryCount < MAX_RETRIES) {
-          setRetryCount(prev => prev + 1);
-          console.log('🔄 Auto-retrying with authoritative data from server (attempt', retryCount + 1, 'of', MAX_RETRIES, ')');
+        // Use ref to avoid stale closure - state updates are async and cause infinite loops
+        if (retryCountRef.current < MAX_RETRIES) {
+          retryCountRef.current += 1;
+          setRetryCount(retryCountRef.current); // Keep state in sync for UI
+          console.log('🔄 Auto-retrying with authoritative data from server (attempt', retryCountRef.current, 'of', MAX_RETRIES, ')');
           
           toast({
             title: "Refreshing Cart",
@@ -699,6 +703,7 @@ export default function CartCheckout() {
       // Handle credit-only checkout (when credits fully cover the order)
       if (data.creditOnlyCheckout) {
         console.log('🎫 Credit-only checkout completed:', data);
+        retryCountRef.current = 0;
         setRetryCount(0);
         
         // Clear the cart since credits have been consumed
@@ -730,6 +735,7 @@ export default function CartCheckout() {
       
       if (data.clientSecret) {
         setClientSecret(data.clientSecret);
+        retryCountRef.current = 0; // Reset ref for future checkouts
         setRetryCount(0); // Reset retry count on success
         
         // Track begin_checkout event for GA4 only once per checkout session
