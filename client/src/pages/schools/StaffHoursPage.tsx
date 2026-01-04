@@ -4,6 +4,7 @@ import { Clock, Users, Calendar, ChevronLeft, ChevronRight, ChevronDown, Chevron
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
 import {
   Collapsible,
   CollapsibleContent,
@@ -138,28 +139,32 @@ export default function StaffHoursPage() {
 
   if (isLoading) {
     return (
-      <div className="container mx-auto p-4 md:p-6 max-w-6xl">
-        <div className="animate-pulse space-y-4">
-          <div className="h-8 bg-muted rounded w-48" />
-          <div className="h-32 bg-muted rounded" />
-          <div className="h-64 bg-muted rounded" />
+      <SchoolAdminLayout pageTitle="Staff Hours">
+        <div className="max-w-6xl mx-auto">
+          <div className="animate-pulse space-y-4">
+            <div className="h-8 bg-muted rounded w-48" />
+            <div className="h-32 bg-muted rounded" />
+            <div className="h-64 bg-muted rounded" />
+          </div>
         </div>
-      </div>
+      </SchoolAdminLayout>
     );
   }
 
   if (error) {
     return (
-      <div className="container mx-auto p-4 md:p-6 max-w-6xl">
-        <Card className="border-red-200 bg-red-50">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-2 text-red-600">
-              <AlertCircle className="h-5 w-5" />
-              <span>Failed to load staff hours. Please try again.</span>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <SchoolAdminLayout pageTitle="Staff Hours">
+        <div className="max-w-6xl mx-auto">
+          <Card className="border-red-200 bg-red-50">
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-2 text-red-600">
+                <AlertCircle className="h-5 w-5" />
+                <span>Failed to load staff hours. Please try again.</span>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </SchoolAdminLayout>
     );
   }
 
@@ -172,18 +177,13 @@ export default function StaffHoursPage() {
   };
 
   return (
-    <div className="container mx-auto p-4 md:p-6 max-w-6xl">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2" data-testid="text-page-title">
-            <Clock className="h-6 w-6 text-primary" />
-            Staff Hours
-          </h1>
+    <SchoolAdminLayout pageTitle="Staff Hours">
+      <div className="max-w-6xl mx-auto">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
           <p className="text-muted-foreground">
             Track educator and mentor hours for your school
           </p>
         </div>
-      </div>
 
       <Card className="mb-6">
         <CardHeader className="pb-3">
@@ -398,6 +398,7 @@ export default function StaffHoursPage() {
           )}
         </CardContent>
       </Card>
-    </div>
+      </div>
+    </SchoolAdminLayout>
   );
 }

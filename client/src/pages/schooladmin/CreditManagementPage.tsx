@@ -26,7 +26,7 @@ import {
   Gift
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import AppShell from '@/components/layout/AppShell';
+import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
 import { format } from 'date-fns';
 
 interface CreditSummary {
@@ -275,13 +275,10 @@ export default function CreditManagementPage() {
   }
 
   return (
-    <AppShell>
-      <div className="p-6 max-w-7xl mx-auto">
+    <SchoolAdminLayout pageTitle="Credit Management">
+      <div className="max-w-7xl mx-auto">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-          <div>
-            <h1 className="text-2xl font-bold" data-testid="text-page-title">Credit Management</h1>
-            <p className="text-muted-foreground">Manage household credits, approve requests, and track usage</p>
-          </div>
+          <p className="text-muted-foreground">Manage household credits, approve requests, and track usage</p>
           <Button onClick={() => setIsAddCreditOpen(true)} data-testid="button-add-credit">
             <Plus className="h-4 w-4 mr-2" />
             Add Credit
@@ -633,7 +630,7 @@ export default function CreditManagementPage() {
                       setCreditForm(prev => ({ ...prev, userId: user.id }));
                     }}
                     placeholder="Search by name or email..."
-                    roleFilter="parent"
+                    endpoint="/api/credits/parents"
                   />
                 )}
               </div>
@@ -761,6 +758,6 @@ export default function CreditManagementPage() {
           </DialogContent>
         </Dialog>
       </div>
-    </AppShell>
+    </SchoolAdminLayout>
   );
 }

@@ -356,7 +356,7 @@ router.post('/reject', requireSchoolContext, async (req: any, res) => {
 router.get('/parents', requireSchoolContext, async (req: any, res) => {
   try {
     const schoolId = parseInt(req.schoolId);
-    const search = (req.query.search as string) || '';
+    const search = (req.query.query as string) || (req.query.search as string) || '';
     
     const parents = await storage.getParentsBySchoolId(schoolId);
     
@@ -376,12 +376,13 @@ router.get('/parents', requireSchoolContext, async (req: any, res) => {
           id: parent.id,
           name: `${parent.firstName} ${parent.lastName}`,
           email: parent.email,
+          role: 'parent',
           availableCreditsCents: totalAvailable,
         };
       })
     );
     
-    res.json(parentsWithCredits);
+    res.json({ users: parentsWithCredits, total: parentsWithCredits.length });
   } catch (error: any) {
     console.error('Error fetching parents for credits:', error);
     res.status(500).json({ error: 'Failed to fetch parents' });
