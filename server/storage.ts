@@ -190,6 +190,8 @@ export interface IStorage {
 
   // Child methods
   getChildById(id: number): Promise<Child | undefined>;
+  getChildByIdAndSchoolId(childId: number, schoolId: number): Promise<Child | undefined>;
+  getChildrenBySchoolId(schoolId: number): Promise<Child[]>;
   getChildrenByParentId(parentId: number): Promise<Child[]>;
   getChildrenByParentEmail(parentEmail: string): Promise<Child[]>;
   getAllChildren(): Promise<Child[]>;
@@ -1459,6 +1461,16 @@ export class MemStorage implements IStorage {
   // Child methods
   async getChildById(id: number): Promise<Child | undefined> {
     return this.childrenStore.get(id);
+  }
+
+  async getChildByIdAndSchoolId(childId: number, schoolId: number): Promise<Child | undefined> {
+    const child = this.childrenStore.get(childId);
+    if (!child || child.schoolId !== schoolId) return undefined;
+    return child;
+  }
+
+  async getChildrenBySchoolId(schoolId: number): Promise<Child[]> {
+    return Array.from(this.childrenStore.values()).filter(child => child.schoolId === schoolId);
   }
 
   async getChildrenByParentId(parentId: number): Promise<Child[]> {
@@ -5569,6 +5581,14 @@ import { DatabaseStorage } from "./dbStorage";
     async getChildById(id: number): Promise<Child | undefined> {
       // Use dbStorage for child retrieval to get data from database
       return this.dbStorage.getChildById(id);
+    }
+
+    async getChildByIdAndSchoolId(childId: number, schoolId: number): Promise<Child | undefined> {
+      return this.dbStorage.getChildByIdAndSchoolId(childId, schoolId);
+    }
+
+    async getChildrenBySchoolId(schoolId: number): Promise<Child[]> {
+      return this.dbStorage.getChildrenBySchoolId(schoolId);
     }
 
     async getChildrenByParentId(parentId: number): Promise<Child[]> {

@@ -80,8 +80,9 @@ Provides educators/mentors with tools to manage classes, track attendance, view 
 | **Foreign key deletion failures** | Complex table dependencies (25+ tables reference users) | Check foreign key relationships before deletions. Delete in correct dependency order: child tables first, parent tables last. |
 | **Column naming confusion** | PostgreSQL uses snake_case (first_name), TypeScript uses camelCase (firstName) | Always reference `shared/schema.ts` for correct column names. Never guess. |
 | **Stale cache bugs** | Forgetting to invalidate TanStack Query cache after mutations | Always call `queryClient.invalidateQueries({ queryKey: [...] })` after every mutation. |
-| **Multi-tenant data leaks** | Missing schoolId filters on queries | EVERY database query MUST include schoolId scoping. No exceptions. |
+| **Multi-tenant data leaks** | Missing schoolId filters on queries | EVERY database query MUST include schoolId scoping. No exceptions. Use `getChildrenBySchoolId(schoolId)` not `getAllChildren()`. |
 | **ID column type changes** | Changing serial to varchar or vice versa breaks migrations | NEVER change primary key ID column types. Match existing schema exactly. |
+| **Bulk upload cross-tenant injection** | Using getAllChildren() exposed all tenant's child IDs | Always use school-scoped storage methods (e.g., `getChildrenBySchoolId`). Never expose global lists to tenant-scoped code paths. |
 
 ### Dangerous Patterns
 - **Don't calculate prices client-side** for checkout - always fetch from server

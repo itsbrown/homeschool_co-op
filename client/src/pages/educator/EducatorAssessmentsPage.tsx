@@ -33,6 +33,8 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import AssessmentBulkUpload from '@/components/educator/AssessmentBulkUpload';
+import { Upload } from 'lucide-react';
 
 interface AssessmentType {
   id: number;
@@ -254,6 +256,10 @@ export default function EducatorAssessmentsPage() {
               <ClipboardCheck className="h-4 w-4" />
               Recent Assessments
             </TabsTrigger>
+            <TabsTrigger value="bulk" className="flex items-center gap-2" data-testid="tab-bulk-upload">
+              <Upload className="h-4 w-4" />
+              Bulk Upload
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="record" className="mt-4">
@@ -391,6 +397,10 @@ export default function EducatorAssessmentsPage() {
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="bulk" className="mt-4">
+            <AssessmentBulkUpload />
           </TabsContent>
         </Tabs>
 
