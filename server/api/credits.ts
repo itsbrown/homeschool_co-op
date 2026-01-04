@@ -30,7 +30,7 @@ const rejectCreditSchema = z.object({
 
 router.get('/summary', requireSchoolContext, async (req: any, res) => {
   try {
-    const schoolId = req.schoolId;
+    const schoolId = parseInt(req.schoolId);
     
     const allCredits = await storage.getCredits({ schoolId });
     const pendingCredits = await storage.getPendingCredits(schoolId);
@@ -75,7 +75,7 @@ router.get('/summary', requireSchoolContext, async (req: any, res) => {
 
 router.get('/households', requireSchoolContext, async (req: any, res) => {
   try {
-    const schoolId = req.schoolId;
+    const schoolId = parseInt(req.schoolId);
     
     const allCredits = await storage.getCredits({ schoolId });
     
@@ -138,7 +138,7 @@ router.get('/households', requireSchoolContext, async (req: any, res) => {
 
 router.get('/pending', requireSchoolContext, async (req: any, res) => {
   try {
-    const schoolId = req.schoolId;
+    const schoolId = parseInt(req.schoolId);
     const creditType = req.query.type as CreditType | undefined;
     
     const pendingCredits = await storage.getPendingCredits(schoolId, creditType);
@@ -163,7 +163,7 @@ router.get('/pending', requireSchoolContext, async (req: any, res) => {
 
 router.get('/history', requireSchoolContext, async (req: any, res) => {
   try {
-    const schoolId = req.schoolId;
+    const schoolId = parseInt(req.schoolId);
     const { userId, creditType, status, limit = 50 } = req.query;
     
     const filters: {
@@ -205,7 +205,7 @@ router.get('/history', requireSchoolContext, async (req: any, res) => {
 
 router.get('/user/:userId', requireSchoolContext, async (req: any, res) => {
   try {
-    const schoolId = req.schoolId;
+    const schoolId = parseInt(req.schoolId);
     const userId = parseInt(req.params.userId);
     
     if (isNaN(userId)) {
@@ -239,7 +239,7 @@ router.get('/user/:userId', requireSchoolContext, async (req: any, res) => {
 
 router.post('/manual', requireSchoolContext, async (req: any, res) => {
   try {
-    const schoolId = req.schoolId;
+    const schoolId = parseInt(req.schoolId);
     const adminUserId = req.user.id;
     
     const validation = createManualCreditSchema.safeParse(req.body);
@@ -285,7 +285,7 @@ router.post('/manual', requireSchoolContext, async (req: any, res) => {
 
 router.post('/approve', requireSchoolContext, async (req: any, res) => {
   try {
-    const schoolId = req.schoolId;
+    const schoolId = parseInt(req.schoolId);
     const adminUserId = req.user.id;
     
     const validation = approveCreditSchema.safeParse(req.body);
@@ -320,7 +320,7 @@ router.post('/approve', requireSchoolContext, async (req: any, res) => {
 
 router.post('/reject', requireSchoolContext, async (req: any, res) => {
   try {
-    const schoolId = req.schoolId;
+    const schoolId = parseInt(req.schoolId);
     const adminUserId = req.user.id;
     
     const validation = rejectCreditSchema.safeParse(req.body);
@@ -355,7 +355,7 @@ router.post('/reject', requireSchoolContext, async (req: any, res) => {
 
 router.get('/parents', requireSchoolContext, async (req: any, res) => {
   try {
-    const schoolId = req.schoolId;
+    const schoolId = parseInt(req.schoolId);
     const search = (req.query.search as string) || '';
     
     const parents = await storage.getParentsBySchoolId(schoolId);
