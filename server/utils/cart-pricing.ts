@@ -439,11 +439,27 @@ export async function calculateCartPricing(
       );
 
       if (promoDiscount) {
-        const canApplyPromo = appliedDiscounts.length === 0 || 
+        // Check if sibling discount is applied and not combinable with other discounts
+        const siblingDiscountAllowsCombining = siblingDiscount === 0 || 
+          (siblingDiscountSetting?.combinableWithOthers !== false);
+        
+        const canApplyPromo = siblingDiscountAllowsCombining && (
+          appliedDiscounts.length === 0 || 
           appliedDiscounts.every(d => {
             const originalDiscount = schoolDiscounts.find(sd => sd.id === d.id);
             return originalDiscount?.combinableWithOthers;
+          })
+        );
+
+        if (!canApplyPromo) {
+          console.log('⚠️ Promo code blocked due to non-combinable discounts:', {
+            promoCode: appliedPromoCode,
+            siblingDiscount,
+            siblingDiscountAllowsCombining,
+            siblingDiscountCombinable: siblingDiscountSetting?.combinableWithOthers,
+            appliedDiscountsCount: appliedDiscounts.length
           });
+        }
 
         if (canApplyPromo && checkRoleEligibility(userRolesList, promoDiscount.requiredRoles, promoDiscount.roleMatchLogic)) {
           const itemsForDiscount = itemPrices.map(ip => ({

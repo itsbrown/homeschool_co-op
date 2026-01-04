@@ -1821,6 +1821,11 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         body: JSON.stringify({
           code,
           cartTotal: state.cart.subtotal, // Use subtotal to match server calculation
+          items: state.cart.items.map(item => ({
+            childId: item.childId,
+            classId: item.classId,
+            price: item.price
+          })), // Send items for sibling discount combinability check
         }),
       });
 

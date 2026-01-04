@@ -188,6 +188,57 @@ router.post('/validate', requireSchoolContext, async (req: any, res) => {
       });
     }
 
+    // Check if sibling discount would block this promo code
+    // Sibling discount only applies when:
+    // 1. Multiple unique children in cart AND
+    // 2. freeAfterThreshold is NOT enabled OR children count <= threshold
+    const userId = req.user?.id;
+    if (userId && items && Array.isArray(items) && items.length > 0) {
+      // Count unique children in cart items
+      const uniqueChildIds = new Set(items.map((item: any) => item.childId));
+      const uniqueChildrenCount = uniqueChildIds.size;
+
+      if (uniqueChildrenCount > 1) {
+        // Check if freeAfterThreshold would supersede sibling discount
+        const school = await storage.getSchool(Number(schoolId));
+        const freeAfterThreeEnabled = school?.freeAfterThresholdEnabled || false;
+        const freeAfterThreshold = school?.freeAfterThreshold || 3;
+        
+        // Sibling discount only applies when freeAfterThreshold doesn't
+        const siblingDiscountWouldApply = !freeAfterThreeEnabled || uniqueChildrenCount <= freeAfterThreshold;
+        
+        if (siblingDiscountWouldApply) {
+          // User would get sibling discount - check if it's combinable
+          const siblingDiscountSetting = allDiscounts.find(
+            (d) => String(d.schoolId) === schoolId && 
+                   d.isActive && 
+                   d.siblingDiscount === true
+          );
+          
+          // Only block if sibling discount is configured with a non-zero value AND not combinable
+          const siblingDiscountRate = siblingDiscountSetting ? siblingDiscountSetting.value / 100 : 0;
+
+          if (siblingDiscountSetting && siblingDiscountRate > 0 && siblingDiscountSetting.combinableWithOthers === false) {
+            console.log('🚫 Promo code blocked by non-combinable sibling discount:', {
+              promoCode: code,
+              siblingDiscountId: siblingDiscountSetting.id,
+              siblingDiscountCombinable: siblingDiscountSetting.combinableWithOthers,
+              uniqueChildrenInCart: uniqueChildrenCount,
+              freeAfterThreeEnabled,
+              freeAfterThreshold,
+              siblingDiscountWouldApply
+            });
+            return res.status(400).json({
+              success: false,
+              error: 'This promo code cannot be combined with the sibling discount already applied to your cart',
+              valid: false,
+              blockedBy: 'sibling_discount',
+            });
+          }
+        }
+      }
+    }
+
     // Calculate discount amount
     console.log('💰 Discount raw data from DB:', {
       id: discount.id,
