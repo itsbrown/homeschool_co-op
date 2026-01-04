@@ -116,6 +116,7 @@ import WeeklyCalendarPage from './pages/educator/WeeklyCalendar';
 import MyHoursPage from './pages/educator/MyHours';
 import ActiveSessionPage from './pages/educator/ActiveSession';
 import StartSessionPage from './pages/educator/StartSession';
+import EducatorAssessmentsPage from './pages/educator/EducatorAssessmentsPage';
 
 // Eagerly imported to avoid suspension errors with wouter's synchronous navigation
 import SchoolClassEnrollmentsPage from './pages/schools/ClassEnrollmentsPage';
@@ -582,6 +583,7 @@ function Router() {
       <Route path="/educator/schedule" component={() => <EducatorAppShell><EducatorSchedulePage /></EducatorAppShell>} />
       <Route path="/educator/settings" component={() => <EducatorAppShell><EducatorSettingsPage /></EducatorAppShell>} />
       <Route path="/educator/notifications" component={() => <EducatorAppShell><EducatorNotificationsPage /></EducatorAppShell>} />
+      <Route path="/educator/assessments" component={() => <EducatorAppShell><EducatorAssessmentsPage /></EducatorAppShell>} />
       
       {/* Daily Flow routes */}
       <Route path="/educator/daily-flows" component={() => <EducatorAppShell><DailyFlowsPage /></EducatorAppShell>} />

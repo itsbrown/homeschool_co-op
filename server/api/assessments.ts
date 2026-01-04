@@ -89,7 +89,9 @@ router.patch('/types/:id', supabaseAuth, requireSchoolContext, async (req: Reque
       return res.status(403).json({ message: 'Access denied' });
     }
     
-    const updated = await storage.updateAssessmentType(id, req.body);
+    const { schoolId: _, id: __, createdAt: ___, ...safeData } = req.body;
+    
+    const updated = await storage.updateAssessmentType(id, safeData);
     res.json(updated);
   } catch (error) {
     console.error('Error updating assessment type:', error);
@@ -200,7 +202,9 @@ router.patch('/books/:id', supabaseAuth, requireSchoolContext, async (req: Reque
       return res.status(403).json({ message: 'Access denied' });
     }
     
-    const updated = await storage.updateCurriculumBook(id, req.body);
+    const { id: _, assessmentTypeId: __, createdAt: ___, ...safeData } = req.body;
+    
+    const updated = await storage.updateCurriculumBook(id, safeData);
     res.json(updated);
   } catch (error) {
     console.error('Error updating curriculum book:', error);
@@ -277,8 +281,10 @@ router.post('/students', supabaseAuth, requireSchoolContext, async (req: Request
       return res.status(403).json({ message: 'Only educators and administrators can record assessments' });
     }
     
+    const { schoolId: _, recordedBy: __, ...clientData } = req.body;
+    
     const validatedData = insertStudentAssessmentSchema.parse({
-      ...req.body,
+      ...clientData,
       schoolId,
       recordedBy
     });
@@ -317,7 +323,9 @@ router.patch('/students/:id', supabaseAuth, requireSchoolContext, async (req: Re
       return res.status(403).json({ message: 'Access denied' });
     }
     
-    const updated = await storage.updateStudentAssessment(id, req.body);
+    const { schoolId: _, recordedBy: __, id: ___, createdAt: ____, childId: _____, ...safeData } = req.body;
+    
+    const updated = await storage.updateStudentAssessment(id, safeData);
     res.json(updated);
   } catch (error) {
     console.error('Error updating student assessment:', error);
