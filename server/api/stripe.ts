@@ -99,11 +99,13 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
         const existingMemberships = await storage.getMembershipEnrollmentsByParentId(parentForMembership.id);
         const currentYear = new Date().getFullYear();
         
-        // Filter for memberships at the same school with enrolled status
+        // Filter for memberships at the same school with valid paid status
         // Allow current year OR next year to handle academic year memberships (e.g., 2025-2026 school year stored as "2026")
+        // CRITICAL: Recognize multiple valid "paid" statuses - 'enrolled', 'active', 'paid'
+        const VALID_PAID_MEMBERSHIP_STATUSES = ['enrolled', 'active', 'paid'];
         const activeMembershipForThisSchool = existingMemberships?.find((m: any) => 
           (m.membershipYear === currentYear || m.membershipYear === currentYear + 1) && 
-          m.status === 'enrolled' &&
+          VALID_PAID_MEMBERSHIP_STATUSES.includes(m.status) &&
           m.schoolId === parentForMembership.schoolId
         );
         const hasActiveMembership = !!activeMembershipForThisSchool;
@@ -113,17 +115,20 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
           schoolId: parentForMembership.schoolId,
           currentYear,
           allowedYears: [currentYear, currentYear + 1],
+          validPaidStatuses: VALID_PAID_MEMBERSHIP_STATUSES,
           totalMemberships: existingMemberships?.length || 0,
           membershipsData: existingMemberships?.map((m: any) => ({
             id: m.id,
             schoolId: m.schoolId,
             membershipYear: m.membershipYear,
-            status: m.status
+            status: m.status,
+            statusRecognized: VALID_PAID_MEMBERSHIP_STATUSES.includes(m.status)
           })),
           hasActiveMembership,
           activeMembershipFound: activeMembershipForThisSchool ? {
             id: activeMembershipForThisSchool.id,
-            year: activeMembershipForThisSchool.membershipYear
+            year: activeMembershipForThisSchool.membershipYear,
+            status: activeMembershipForThisSchool.status
           } : null,
           userEmail
         });

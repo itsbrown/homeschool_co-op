@@ -157,10 +157,13 @@ export async function calculateMembershipDiscount(
     // This prevents cross-tenant data exposure
     const schoolDiscounts = await storage.getDiscountsBySchoolId(schoolId);
     
-    // Filter to membership-applicable, active discounts
+    // Filter to membership-applicable, active discounts that can be auto-applied
+    // CRITICAL: Only apply discounts with applicationMethod 'automatic' or 'both'
+    // Manual-only discounts (like promo codes) should NOT be auto-applied
     const membershipDiscounts = schoolDiscounts.filter(d => 
       d.isActive &&
-      d.appliesToMembership === true
+      d.appliesToMembership === true &&
+      (d.applicationMethod === 'automatic' || d.applicationMethod === 'both')
     );
     
     console.log(`🎫 Found ${membershipDiscounts.length} membership discounts for school ${schoolId}`);
