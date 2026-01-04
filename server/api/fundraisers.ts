@@ -760,7 +760,7 @@ router.get('/my-credits', supabaseAuth, async (req: any, res) => {
 // ==================== PRODUCT IMAGE UPLOAD ====================
 
 // Upload product image
-router.post('/upload/product-image', supabaseAuth, async (req: any, res) => {
+router.post('/upload/product-image', supabaseAuth, requireSchoolContext, async (req: any, res) => {
   try {
     // Check for uploaded file
     if (!req.files || !req.files.image) {
@@ -829,7 +829,7 @@ router.post('/upload/product-image', supabaseAuth, async (req: any, res) => {
 });
 
 // Delete product image
-router.delete('/upload/product-image', supabaseAuth, async (req: any, res) => {
+router.delete('/upload/product-image', supabaseAuth, requireSchoolContext, async (req: any, res) => {
   try {
     const { imageUrl } = req.body;
     

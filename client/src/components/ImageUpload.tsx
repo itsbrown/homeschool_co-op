@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { Upload, X, Loader2, Image as ImageIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -23,6 +23,11 @@ export function ImageUpload({
   const { toast } = useToast();
   const [isUploading, setIsUploading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(value || null);
+
+  // Sync preview with value prop changes (e.g., when editing existing products)
+  useEffect(() => {
+    setPreviewUrl(value || null);
+  }, [value]);
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     if (acceptedFiles.length === 0) return;
