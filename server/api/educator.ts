@@ -2033,7 +2033,7 @@ router.get('/sessions/:sessionId/roster', async (req, res) => {
 
     // Get enrollments for this class
     const enrollments = await storage.getEnrollmentsByClassId(session.classId);
-    const activeEnrollments = enrollments.filter(e => e.status === 'active');
+    const activeEnrollments = enrollments.filter(e => e.status === 'enrolled');
 
     // Get existing attendance for this session
     const existingAttendance = await storage.getAttendanceBySessionId(sessionId);
@@ -2099,7 +2099,7 @@ router.post('/attendance', async (req, res) => {
 
     // Verify child is enrolled in the class
     const enrollments = await storage.getEnrollmentsByClassId(session.classId);
-    const childEnrolled = enrollments.some(e => e.childId === childId && e.status === 'active');
+    const childEnrolled = enrollments.some(e => e.childId === childId && e.status === 'enrolled');
     if (!childEnrolled) {
       return res.status(400).json({ error: 'Child is not enrolled in this class' });
     }
@@ -2400,7 +2400,7 @@ router.get('/children/:childId/attendance', async (req, res) => {
     let isTeachingChild = false;
     for (const classId of classIds) {
       const enrollments = await storage.getEnrollmentsByClassId(classId);
-      if (enrollments.some(e => e.childId === childId && e.status === 'active')) {
+      if (enrollments.some(e => e.childId === childId && e.status === 'enrolled')) {
         isTeachingChild = true;
         break;
       }
