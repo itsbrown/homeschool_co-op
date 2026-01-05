@@ -946,7 +946,7 @@ router.get('/daily-flow/:classId', async (req, res) => {
     }
 
     // Get daily flow entries and filter by class and date
-    const allDailyFlowEntries = await storage.getDailyFlowEntries({ classId, date: targetDate });
+    const allDailyFlowEntries = await storage.getDailyFlowEntries({ classId, startDate: targetDate, endDate: targetDate });
     const dailyFlowEntry = allDailyFlowEntries.find((entry: any) => 
       entry.classId === classId && entry.date === targetDate
     );
@@ -2109,9 +2109,9 @@ router.post('/attendance', async (req, res) => {
       childId,
       schoolId: session.schoolId,
       status,
-      recordedById: userId,
-      checkInTime: checkInTime || null,
-      checkOutTime: checkOutTime || null,
+      recordedBy: userId,
+      checkInTime: checkInTime ? new Date(checkInTime) : null,
+      checkOutTime: checkOutTime ? new Date(checkOutTime) : null,
       notes: notes || null
     };
 
@@ -2119,15 +2119,22 @@ router.post('/attendance', async (req, res) => {
     const record = await storage.upsertAttendance(attendanceData);
 
     // Create audit log
-    await storage.createAuditLog({
-      action: 'attendance_recorded',
-      targetType: 'session_attendance',
-      targetId: record.id,
-      actorId: userId,
-      schoolId: session.schoolId,
-      metadata: { sessionId, childId, status, classId: session.classId },
-      severity: 'info'
-    });
+    try {
+      const auditLog: InsertAuditLog = {
+        actionType: 'attendance_recorded',
+        severity: 'info',
+        actorId: userId,
+        actorRole: 'educator',
+        actorEmail: req.user?.email,
+        targetType: 'session_attendance',
+        targetId: String(record.id),
+        schoolId: session.schoolId,
+        metadata: { sessionId, childId, status, classId: session.classId }
+      };
+      await storage.createAuditLog(auditLog);
+    } catch (auditError) {
+      console.error('[Attendance] Failed to create audit log:', auditError);
+    }
 
     console.log(`[Attendance] Created/updated attendance for child ${childId} in session ${sessionId}: ${status}`);
     res.status(201).json(record);
@@ -2176,9 +2183,9 @@ router.post('/attendance/bulk', async (req, res) => {
           childId: item.childId,
           schoolId: session.schoolId,
           status: item.status,
-          recordedById: userId,
-          checkInTime: item.checkInTime || null,
-          checkOutTime: item.checkOutTime || null,
+          recordedBy: userId,
+          checkInTime: item.checkInTime ? new Date(item.checkInTime) : null,
+          checkOutTime: item.checkOutTime ? new Date(item.checkOutTime) : null,
           notes: item.notes || null
         };
 
@@ -2191,21 +2198,28 @@ router.post('/attendance/bulk', async (req, res) => {
     }
 
     // Create audit log for bulk operation
-    await storage.createAuditLog({
-      action: 'attendance_bulk_recorded',
-      targetType: 'class_session',
-      targetId: sessionId,
-      actorId: userId,
-      schoolId: session.schoolId,
-      metadata: { 
-        sessionId, 
-        classId: session.classId,
-        successCount: results.length,
-        errorCount: errors.length,
-        statuses: attendance.map(a => ({ childId: a.childId, status: a.status }))
-      },
-      severity: errors.length > 0 ? 'warning' : 'info'
-    });
+    try {
+      const auditLog: InsertAuditLog = {
+        actionType: 'attendance_bulk_recorded',
+        severity: errors.length > 0 ? 'warn' : 'info',
+        actorId: userId,
+        actorRole: 'educator',
+        actorEmail: req.user?.email,
+        targetType: 'class_session',
+        targetId: String(sessionId),
+        schoolId: session.schoolId,
+        metadata: { 
+          sessionId, 
+          classId: session.classId,
+          successCount: results.length,
+          errorCount: errors.length,
+          statuses: attendance.map(a => ({ childId: a.childId, status: a.status }))
+        }
+      };
+      await storage.createAuditLog(auditLog);
+    } catch (auditError) {
+      console.error('[Attendance] Failed to create audit log:', auditError);
+    }
 
     console.log(`[Attendance] Bulk recorded ${results.length} attendance records for session ${sessionId}`);
     
@@ -2277,22 +2291,33 @@ router.patch('/attendance/:id', async (req, res) => {
 
     const updateData: Partial<InsertSessionAttendance> = {};
     if (parseResult.data.status !== undefined) updateData.status = parseResult.data.status;
-    if (parseResult.data.checkInTime !== undefined) updateData.checkInTime = parseResult.data.checkInTime;
-    if (parseResult.data.checkOutTime !== undefined) updateData.checkOutTime = parseResult.data.checkOutTime;
+    if (parseResult.data.checkInTime !== undefined) {
+      updateData.checkInTime = parseResult.data.checkInTime ? new Date(parseResult.data.checkInTime) : null;
+    }
+    if (parseResult.data.checkOutTime !== undefined) {
+      updateData.checkOutTime = parseResult.data.checkOutTime ? new Date(parseResult.data.checkOutTime) : null;
+    }
     if (parseResult.data.notes !== undefined) updateData.notes = parseResult.data.notes;
 
     const updated = await storage.updateAttendance(attendanceId, updateData);
 
     // Create audit log
-    await storage.createAuditLog({
-      action: 'attendance_updated',
-      targetType: 'session_attendance',
-      targetId: attendanceId,
-      actorId: userId,
-      schoolId: session.schoolId,
-      metadata: { changes: updateData, sessionId: session.id, classId: session.classId },
-      severity: 'info'
-    });
+    try {
+      const auditLog: InsertAuditLog = {
+        actionType: 'attendance_updated',
+        severity: 'info',
+        actorId: userId,
+        actorRole: 'educator',
+        actorEmail: req.user?.email,
+        targetType: 'session_attendance',
+        targetId: String(attendanceId),
+        schoolId: session.schoolId,
+        metadata: { changes: updateData, sessionId: session.id, classId: session.classId }
+      };
+      await storage.createAuditLog(auditLog);
+    } catch (auditError) {
+      console.error('[Attendance] Failed to create audit log:', auditError);
+    }
 
     console.log(`[Attendance] Updated attendance record ${attendanceId}`);
     res.json(updated);
@@ -2355,15 +2380,22 @@ router.delete('/attendance/:id', async (req, res) => {
     await storage.deleteAttendance(attendanceId);
 
     // Create audit log
-    await storage.createAuditLog({
-      action: 'attendance_deleted',
-      targetType: 'session_attendance',
-      targetId: attendanceId,
-      actorId: userId,
-      schoolId: session.schoolId,
-      metadata: { childId: existingRecord.childId, status: existingRecord.status, sessionId: session.id, classId: session.classId },
-      severity: 'warning'
-    });
+    try {
+      const auditLog: InsertAuditLog = {
+        actionType: 'attendance_deleted',
+        severity: 'warn',
+        actorId: userId,
+        actorRole: 'educator',
+        actorEmail: req.user?.email,
+        targetType: 'session_attendance',
+        targetId: String(attendanceId),
+        schoolId: session.schoolId,
+        metadata: { childId: existingRecord.childId, status: existingRecord.status, sessionId: session.id, classId: session.classId }
+      };
+      await storage.createAuditLog(auditLog);
+    } catch (auditError) {
+      console.error('[Attendance] Failed to create audit log:', auditError);
+    }
 
     console.log(`[Attendance] Deleted attendance record ${attendanceId}`);
     res.status(204).send();
@@ -2579,7 +2611,7 @@ router.post('/waivers/sign', async (req, res) => {
       return res.status(401).json({ error: 'User ID not found' });
     }
 
-    const { documentId, signatureData } = req.body;
+    const { documentId, signatureData, signatoryName } = req.body;
 
     if (!documentId) {
       return res.status(400).json({ error: 'Missing required field: documentId' });
@@ -2622,14 +2654,15 @@ router.post('/waivers/sign', async (req, res) => {
     expiresAt.setFullYear(expiresAt.getFullYear() + 1);
 
     // Create the signed waiver record
+    // Note: signatureData would need schema update to persist - currently just validates acceptance
     const signedWaiver = await storage.createSignedWaiver({
       userId: volunteerId,
       documentId,
       schoolId,
-      signedAt: new Date(),
+      signatoryName: signatoryName || req.user?.email || 'Unknown',
       expiresAt,
-      signatureData: signatureData || null,
-      ipAddress: req.ip || null
+      ipAddress: req.ip || null,
+      userAgent: req.headers['user-agent'] || null
     });
 
     console.log(`[Waiver] Waiver signed successfully, ID: ${signedWaiver.id}`);
