@@ -529,7 +529,7 @@ function WeeklyCalendarContent({ showBirthdays = false, showQuickActions = true 
                     variant="outline"
                     onClick={() => {
                       setDialogOpen(false);
-                      navigate(`/educator/start-session?classId=${selectedItem.data.classId}`);
+                      navigate(`/educator/classes/${selectedItem.data.classId}/start-session`);
                     }}
                     data-testid="button-start-session"
                   >

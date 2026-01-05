@@ -68,6 +68,17 @@ export function AttendanceTracker({ sessionId, isSessionActive, schoolId }: Atte
 
   const { data: roster, isLoading, error, refetch } = useQuery<RosterStudent[]>({
     queryKey: ['/api/educator/sessions', sessionId, 'roster'],
+    select: (data: any[]) => data.map((item) => ({
+      childId: item.childId,
+      firstName: item.childFirstName || item.firstName || '',
+      lastName: item.childLastName || item.lastName || '',
+      gradeLevel: item.gradeLevel,
+      attendanceId: item.attendance?.id,
+      status: item.attendance?.status,
+      checkInTime: item.attendance?.checkInTime,
+      checkOutTime: item.attendance?.checkOutTime,
+      notes: item.attendance?.notes,
+    })),
   });
 
   const bulkAttendanceMutation = useMutation({
