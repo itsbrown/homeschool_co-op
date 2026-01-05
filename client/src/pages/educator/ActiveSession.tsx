@@ -319,7 +319,10 @@ function ActiveSessionContent({ sessionId }: { sessionId: number }) {
           <AlertDialogFooter>
             <AlertDialogCancel data-testid="button-cancel-end">Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => endSessionMutation.mutate()}
+              onClick={() => {
+                setShowEndDialog(false);
+                endSessionMutation.mutate();
+              }}
               className="bg-red-600 hover:bg-red-700"
               disabled={endSessionMutation.isPending}
               data-testid="button-confirm-end"
