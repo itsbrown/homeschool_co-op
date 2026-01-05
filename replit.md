@@ -62,3 +62,16 @@ Provides educators/mentors with tools to manage classes, track attendance, view 
 -   **Brevo SMTP**: Email service.
 -   **SendGrid**: Email service.
 -   **Twilio**: SMS service.
+
+## Future Improvements
+
+### Server-Authoritative Pricing (High Priority)
+**Problem:** Client-side discount calculations duplicate server logic, causing payment mismatches when rules change.
+
+**Solution:** Make the server the single source of truth for all pricing:
+1. Create `/api/cart/calculate` endpoint returning complete pricing breakdown
+2. Update CartContext to fetch prices from server instead of calculating locally
+3. Remove duplicate discount logic from frontend
+4. Add E2E tests for discount combinations (sibling + promo, free-after-threshold, etc.)
+
+**Impact:** Eliminates TOTAL_MISMATCH payment errors permanently.

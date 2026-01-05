@@ -1003,7 +1003,7 @@ async function runMigrations() {
         session_id INTEGER NOT NULL REFERENCES class_sessions(id) ON DELETE CASCADE,
         child_id INTEGER NOT NULL REFERENCES children(id) ON DELETE CASCADE,
         school_id INTEGER NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
-        status TEXT NOT NULL DEFAULT 'present' CHECK (status IN ('present', 'absent', 'tardy', 'excused', 'early_departure')),
+        status TEXT NOT NULL DEFAULT 'present' CHECK (status IN ('present', 'absent', 'late', 'excused', 'early_departure')),
         check_in_time TIMESTAMP,
         check_out_time TIMESTAMP,
         tardy_minutes INTEGER,
@@ -1033,6 +1033,27 @@ async function runMigrations() {
       ON session_attendance(session_id, child_id);
     `);
     console.log('✅ Migration completed: session_attendance table created');
+    
+    // Migration: Update session_attendance status constraint to use 'late' instead of 'tardy'
+    console.log('Running migration: Updating session_attendance status constraint...');
+    try {
+      // First, update any existing 'tardy' values to 'late'
+      await db.execute(sql`
+        UPDATE session_attendance SET status = 'late' WHERE status = 'tardy';
+      `);
+      // Drop old constraint
+      await db.execute(sql`
+        ALTER TABLE session_attendance DROP CONSTRAINT IF EXISTS session_attendance_status_check;
+      `);
+      // Add new constraint with 'late' instead of 'tardy'
+      await db.execute(sql`
+        ALTER TABLE session_attendance ADD CONSTRAINT session_attendance_status_check 
+        CHECK (status IN ('present', 'absent', 'late', 'excused', 'early_departure'));
+      `);
+      console.log('✅ Migration completed: session_attendance status constraint updated (tardy → late)');
+    } catch (constraintError) {
+      console.log('Note: session_attendance constraint migration error:', constraintError);
+    }
     
     // Create signed_waivers table for tracking waiver signatures (Phase 2)
     console.log('Running migration: Creating signed_waivers table...');

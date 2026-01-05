@@ -2465,7 +2465,7 @@ export const sessionAttendance = pgTable("session_attendance", {
   
   // Attendance status
   status: text("status", { 
-    enum: ["present", "absent", "tardy", "excused", "early_departure"] 
+    enum: ["present", "absent", "late", "excused", "early_departure"] 
   }).default("present").notNull(),
   
   // Timestamps

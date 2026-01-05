@@ -74,8 +74,7 @@ export function AttendanceTracker({ sessionId, isSessionActive, schoolId }: Atte
     mutationFn: async (records: { childId: number; status: AttendanceStatus; notes?: string }[]) => {
       return apiRequest('POST', '/api/educator/attendance/bulk', {
         sessionId,
-        schoolId,
-        records,
+        attendance: records,
       });
     },
     onSuccess: () => {
