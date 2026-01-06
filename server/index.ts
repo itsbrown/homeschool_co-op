@@ -31,6 +31,8 @@ import { webhookHandler } from "./webhook-handler";
 import userRolesRouter from "./api/user-roles";
 import errorTelemetryRouter from "./api/error-telemetry";
 import { errorNotificationService } from "./services/error-notification";
+import { registerObjectStorageRoutes } from "./replit_integrations/object_storage";
+import unifiedUploadsRouter from "./api/unified-uploads";
 
 // 🔒 PRODUCTION SAFETY: Verify NODE_ENV is set and log startup environment
 const currentEnv = process.env.NODE_ENV || 'development';
@@ -141,6 +143,10 @@ app.use("/api/account-import", accountImport);
 app.use("/api/daily-flows", dailyFlowsRoutes);
 app.use("/api/user", userRolesRouter); // Multi-role management endpoints
 app.use("/api/telemetry/errors", errorTelemetryRouter);
+app.use("/api/unified-uploads", unifiedUploadsRouter);
+
+// Register object storage routes for serving uploaded files
+registerObjectStorageRoutes(app);
 
 // Initialize error notification service (daily summary scheduler)
 errorNotificationService.scheduleDailySummary();

@@ -1,0 +1,106 @@
+this is a clear bug and the fix is straightforward. Recommended path: implement Option A (store signatures), but do it safely and efficiently by storing the signature image in object storage (Supabase Storage or S3) and saving a URL (and metadata) in the DB — not as large base64 text columns unless you have a strong reason to keep everything in a single table.
+
+Below I’ll explain the tradeoffs and give a concrete, safe implementation plan you can apply immediately, including migration SQL and example server code (TypeScript) to receive, validate, store, and record signatures. I’ll also include rollout and testing steps and notes about compliance / retention.
+
+High-level recommendation
+
+Use Option A (store signature images).
+Store the image in object storage (Supabase Storage or S3). Save a small column in the signed_waivers table such as signature_url (TEXT) plus metadata columns like signature_mime_type, signature_size_bytes, signature_uploaded_at.
+Benefits: smaller DB rows, cheaper, easier to serve and view in admin UI, easier to enforce ACLs and retention.
+If you absolutely must store the raw base64 inside the DB, you can add signature_data TEXT (base64) or a bytea column, but object storage is more robust.
+Planned DB schema changes
+
+Add columns to signed_waivers:
+signature_url TEXT NULL
+signature_mime_type TEXT NULL
+signature_size_bytes INTEGER NULL
+signature_uploaded_at TIMESTAMP WITH TIME ZONE NULL
+Example migration SQL (Supabase/Postgres) — create a new migration file:
+
+2026-01-06_add_signature_columns_to_signed_waivers.sql
+v1
+ALTER TABLE public.signed_waivers
+  ADD COLUMN signature_url TEXT,
+  ADD COLUMN signature_mime_type TEXT,
+  ADD COLUMN signature_size_bytes INTEGER,
+  ADD COLUMN signature_uploaded_at TIMESTAMPTZ;
+
+(If you prefer to store base64 directly:)
+
+2026-01-06_add_signature_data_to_signed_waivers.sql
+ALTER TABLE public.signed_waivers
+  ADD COLUMN signature_data TEXT; -- base64-encoded PNG/SVG
+
+Server: upload flow (recommended — Supabase Storage / S3)
+
+Client should send either:
+a Blob / File via multipart/form-data to an endpoint, or
+base64 image data (if easier) — server decodes to Buffer before upload.
+Server validates size and MIME type and uploads to storage, then updates signed_waivers with the URL and metadata. Also ensure idempotency (only attach once for a given waiver record).
+Example Node/TypeScript handler (Express) using Supabase Storage:
+
+server/api/signature-upload.ts
+import { Router } from 'express';
+import { createClient } from '@supabase/supabase-js';
+import multer from 'multer';
+import { v4 as uuidv4 } from 'uuid';
+
+// Configure Supabase client (use env vars)
+If you must accept base64 from client, decode and upload:
+
+server/lib/upload-base64-signature.ts
+import { createClient } from '@supabase/supabase-js';
+import { v4 as uuidv4 } from 'uuid';
+
+const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_KEY!);
+
+export async function uploadBase64Signature(waiverId: number, base64Data: string, mimetype = 'image/png') {
+Client-side changes
+
+If you use a signature pad library (signature_pad or similar), send the image as:
+Preferred: FormData file via fetch POST to /waivers/:waiverId/signature
+Alternative: base64 string to a JSON endpoint; server decodes/upload
+On success show confirmation and store the returned signature_url for audit display.
+Admin UI
+
+Add a small admin page to view signed waivers and show the signature image thumbnail.
+Ensure links require admin auth and that storage ACL prevents public leaking (you may use signed URLs for admins).
+Edge-cases & validation
+
+Size limit: 1–2 MB per signature is more than enough; enforce on client and server.
+MIME types: accept PNG/JPEG/SVG only.
+Idempotency: once signature_url exists, block or require replace confirmation.
+Audit trail: log IP, timestamp (you already do), and also record signature_uploaded_at and uploader ID.
+Retention/compliance: if signatures are legally sensitive, set retention policy and restrict access. Consider encryption at rest (Supabase/S3 can handle server-side encryption).
+Historical data: signatures already lost cannot be recovered. If proof is required, have volunteers re-sign or add an “I agree” checkbox plus a re-sign campaign.
+Testing plan
+
+Unit test upload and DB update function.
+Integration test: use a test bucket and a sample PNG to simulate upload and DB change.
+Reproduce prior bug by uploading multiple signatures for same waiverId and ensure idempotency check works.
+Test webhooks / retries: verify duplicate POSTs do not duplicate or overwrite without explicit permission.
+Rollout steps (minimal risk)
+
+Add migration to create new columns and deploy migration.
+Create storage bucket (signed-waivers) with correct ACLs.
+Add API endpoint and unit tests — keep protected behind auth.
+Deploy server code to staging; test client uploads and admin viewing.
+Once validated, deploy to production, then enable client-side signature pad.
+Communicate to staff that historical signatures are not recoverable: decide whether to ask volunteers to re-sign.
+If you still prefer base64-in-DB (quick but not optimal)
+
+Migration: add signature_data TEXT
+Server: store base64 string in signature_data and optionally keep signature_mime_type and signature_size_bytes.
+Downsides: table bloat, slower queries, backups grow large, and harder to serve images efficiently.
+Security & privacy notes
+
+Treat signatures as PII in many jurisdictions.
+Limit who can view/download signature images.
+Use HTTPS everywhere.
+Store minimal metadata and rotate keys regularly.
+Consider legal counsel about whether images are allowed to be stored and for how long.
+Want me to:
+
+create the exact migration file and a PR that adds server upload handler and small admin viewer? (I can produce the migration + API route + a minimal admin page code sample)
+or produce the base64-in-db migration + handler if you prefer the simpler-integration route?
+Pick which storage approach you prefer (Supabase Storage recommended, or S3), and I will generate the exact migration and code changes as a PR-ready patch.

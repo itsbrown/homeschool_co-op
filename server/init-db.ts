@@ -1082,6 +1082,17 @@ async function runMigrations() {
     `);
     console.log('✅ Migration completed: signed_waivers table created');
     
+    // Add signature storage columns to signed_waivers table
+    console.log('Running migration: Adding signature storage columns to signed_waivers...');
+    await db.execute(sql`
+      ALTER TABLE signed_waivers 
+      ADD COLUMN IF NOT EXISTS signature_url TEXT,
+      ADD COLUMN IF NOT EXISTS signature_mime_type TEXT,
+      ADD COLUMN IF NOT EXISTS signature_size_bytes INTEGER,
+      ADD COLUMN IF NOT EXISTS signature_uploaded_at TIMESTAMP WITH TIME ZONE;
+    `);
+    console.log('✅ Migration completed: signature storage columns added to signed_waivers');
+    
     // Create session_volunteers table for tracking volunteer assistance (Phase 2)
     console.log('Running migration: Creating session_volunteers table...');
     await db.execute(sql`

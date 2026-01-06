@@ -2581,6 +2581,12 @@ export const signedWaivers = pgTable("signed_waivers", {
   signedAt: timestamp("signed_at").defaultNow().notNull(),
   signatoryName: text("signatory_name").notNull(), // Legal name as signed
   
+  // Signature image storage (object storage)
+  signatureUrl: text("signature_url"),
+  signatureMimeType: text("signature_mime_type"),
+  signatureSizeBytes: integer("signature_size_bytes"),
+  signatureUploadedAt: timestamp("signature_uploaded_at"),
+  
   // Metadata for audit
   ipAddress: text("ip_address"),
   userAgent: text("user_agent"),
