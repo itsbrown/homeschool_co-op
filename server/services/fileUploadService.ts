@@ -188,6 +188,75 @@ class FileUploadService {
     }
   }
 
+  async uploadBuffer(
+    buffer: Buffer,
+    options: {
+      category: UploadCategory;
+      originalFilename: string;
+      mimeType: string;
+      userId?: number;
+      schoolId?: number;
+      metadata?: Record<string, string>;
+    }
+  ): Promise<UploadResult> {
+    const uploadOptions: UploadOptions = {
+      category: options.category,
+      filename: options.originalFilename,
+      contentType: options.mimeType,
+      sizeBytes: buffer.length,
+      userId: options.userId,
+      schoolId: options.schoolId,
+      metadata: options.metadata,
+    };
+
+    const validation = this.validateUpload(uploadOptions);
+    if (!validation.valid) {
+      throw new Error(validation.error || "Validation failed");
+    }
+
+    const categoryConfig = uploadCategories[options.category];
+    const objectId = randomUUID();
+    const ext = this.getExtension(options.originalFilename);
+    const storagePath = this.buildStoragePath(uploadOptions, objectId, ext);
+
+    const privateObjectDir = this.objectStorageService.getPrivateObjectDir();
+    const fullPath = categoryConfig.public
+      ? `${this.getPublicBasePath()}/${storagePath}`
+      : `${privateObjectDir}/${storagePath}`;
+
+    const { bucketName, objectName } = this.parseObjectPath(fullPath);
+    
+    const bucket = objectStorageClient.bucket(bucketName);
+    const file = bucket.file(objectName);
+    
+    await file.save(buffer, {
+      contentType: options.mimeType,
+      metadata: {
+        ...options.metadata,
+        originalFilename: options.originalFilename,
+        uploadedBy: options.userId?.toString() || 'system',
+      },
+    });
+
+    const objectPath = categoryConfig.public
+      ? `/public/${storagePath}`
+      : `/objects/${storagePath}`;
+
+    if (options.userId) {
+      await this.setObjectAcl(objectPath, options.userId.toString(), categoryConfig.public);
+    }
+
+    return {
+      url: categoryConfig.public ? this.getPublicUrl(objectPath) : objectPath,
+      objectPath,
+      mimeType: options.mimeType,
+      sizeBytes: buffer.length,
+      uploadedAt: new Date(),
+      category: options.category,
+      filename: options.originalFilename,
+    };
+  }
+
   getPublicUrl(objectPath: string): string {
     if (objectPath.startsWith("/public/")) {
       return objectPath;

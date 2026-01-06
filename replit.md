@@ -49,8 +49,44 @@ The platform prioritizes scalability, security, and user experience, incorporati
 ### Educator Dashboard
 Provides educators/mentors with tools to manage classes, track attendance, view lesson plans, and log work hours. It integrates with the Daily Flow system and features a dedicated `EducatorAppShell` with role-specific routing.
 
+### Unified File Upload System
+Production-grade file upload system using Replit App Storage (Object Storage) for secure, scalable file handling.
+
+**Architecture:**
+-   **Backend Service**: `server/services/fileUploadService.ts` - Category-based validation, presigned URLs, direct buffer uploads
+-   **API Endpoints**: `server/api/unified-uploads.ts` - REST endpoints for upload URL generation and file management
+-   **Frontend Client**: `client/src/lib/uploadClient.ts` - Progress tracking, error handling, typed API wrapper
+-   **Object Storage**: Replit App Storage for production-grade persistence across deployments
+
+**Supported Upload Categories:**
+-   `signatures` - Digital signature images from waiver signing (private, 1MB max, PNG/JPEG)
+-   `logos` - School branding logos (public, 2MB max, images)
+-   `documents` - School documents and waivers (private, 10MB max, PDF/Word/images)
+-   `knowledge-base` - Course materials and attachments (private, 50MB max, various formats)
+-   `fundraiser-products` - Product images for fundraiser campaigns (public, 5MB max, images)
+-   `assessments` - Assessment attachments and submissions (private, 20MB max, various formats)
+-   `profile-photos` - User profile pictures (public, 2MB max, images)
+
+**Adding New Upload Categories:**
+1. Add config entry to `uploadCategories` in `server/services/fileUploadService.ts`:
+   ```typescript
+   'new-category': {
+     folder: 'new-category',
+     allowedTypes: ['image/png', 'application/pdf'],
+     maxSizeBytes: 5 * 1024 * 1024,
+     public: false,
+   }
+   ```
+2. No additional code changes needed - validation, paths, and URLs are auto-configured
+
+**Usage Patterns:**
+-   **Frontend (Uppy)**: Use `ObjectUploader` component for drag-and-drop uploads with progress
+-   **Server-side**: Use `fileUploadService.uploadBuffer()` for programmatic uploads (e.g., signature images)
+-   **Signed URLs**: Use `fileUploadService.getUploadUrl()` for client-side direct uploads
+
 ## External Dependencies
 -   **Supabase**: Authentication.
+-   **Replit App Storage**: Object storage for file uploads (signatures, logos, documents, media).
 -   **Neon PostgreSQL**: Primary database.
 -   **Stripe**: Payment processing.
 -   **Anthropic Claude API**: AI content generation and analysis.

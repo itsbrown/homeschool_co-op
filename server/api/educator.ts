@@ -4,6 +4,7 @@ import { supabaseAuth, requireEducatorRole } from "../middleware/supabase-auth";
 import { z } from "zod";
 import type { InsertClassSession, ClassSession, EducatorClassAssignment, InsertAuditLog, InsertSessionAttendance, SessionAttendance } from "@shared/schema";
 import { formatScheduleString } from "../utils/schedule";
+import { fileUploadService } from "../services/fileUploadService";
 
 const router = express.Router();
 
@@ -2653,19 +2654,65 @@ router.post('/waivers/sign', async (req, res) => {
     const expiresAt = new Date();
     expiresAt.setFullYear(expiresAt.getFullYear() + 1);
 
-    // Create the signed waiver record
-    // Note: signatureData would need schema update to persist - currently just validates acceptance
+    // Handle signature image upload if provided
+    let signatureUrl: string | null = null;
+    let signatureMimeType: string | null = null;
+    let signatureSizeBytes: number | null = null;
+    let signatureUploadedAt: Date | null = null;
+
+    if (signatureData) {
+      try {
+        // signatureData is expected to be a base64 data URL (e.g., "data:image/png;base64,...")
+        const base64Match = signatureData.match(/^data:([^;]+);base64,(.+)$/);
+        if (base64Match) {
+          const mimeType = base64Match[1];
+          const base64Content = base64Match[2];
+          const buffer = Buffer.from(base64Content, 'base64');
+          
+          // Upload signature image to object storage
+          const uploadResult = await fileUploadService.uploadBuffer(buffer, {
+            category: 'signatures',
+            originalFilename: `signature-user${volunteerId}-doc${documentId}.png`,
+            mimeType,
+            userId: volunteerId,
+            metadata: {
+              documentId: documentId.toString(),
+              schoolId: schoolId.toString(),
+              signatoryName: signatoryName || req.user?.email || 'Unknown'
+            }
+          });
+
+          signatureUrl = uploadResult.url;
+          signatureMimeType = mimeType;
+          signatureSizeBytes = buffer.length;
+          signatureUploadedAt = new Date();
+          
+          console.log(`[Waiver] Signature image uploaded: ${signatureUrl}`);
+        } else {
+          console.warn('[Waiver] Invalid signature data format, skipping upload');
+        }
+      } catch (uploadError) {
+        console.error('[Waiver] Failed to upload signature image:', uploadError);
+        // Continue without signature image - the waiver signature is still valid
+      }
+    }
+
+    // Create the signed waiver record with signature metadata
     const signedWaiver = await storage.createSignedWaiver({
       userId: volunteerId,
       documentId,
       schoolId,
       signatoryName: signatoryName || req.user?.email || 'Unknown',
+      signatureUrl,
+      signatureMimeType,
+      signatureSizeBytes,
+      signatureUploadedAt,
       expiresAt,
       ipAddress: req.ip || null,
       userAgent: req.headers['user-agent'] || null
     });
 
-    console.log(`[Waiver] Waiver signed successfully, ID: ${signedWaiver.id}`);
+    console.log(`[Waiver] Waiver signed successfully, ID: ${signedWaiver.id}${signatureUrl ? ' with signature image' : ''}`);
 
     res.status(201).json({
       success: true,
