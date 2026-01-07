@@ -1749,9 +1749,16 @@ router.put("/staff/:id", supabaseAuth, async (req: any, res) => {
       return res.status(400).json({ message: "Invalid staff ID format" });
     }
 
-    const { name, email, phone, role, locationId } = req.body;
+    const { name, email, phone, role, locationId: rawLocationId } = req.body;
+    
+    // Normalize locationId: convert string to number, empty string/null to null
+    let locationId: number | null = null;
+    if (rawLocationId !== '' && rawLocationId !== null && rawLocationId !== undefined) {
+      const parsed = typeof rawLocationId === 'string' ? parseInt(rawLocationId, 10) : rawLocationId;
+      locationId = isNaN(parsed) ? null : parsed;
+    }
 
-    console.log(`🔄 Updating staff member with role ID ${roleId}:`, { name, email, phone, role, locationId });
+    console.log(`🔄 Updating staff member with role ID ${roleId}:`, { name, email, phone, role, locationId, rawLocationId });
 
     // Get role record from user_roles
     const db = await getDb();
@@ -1827,7 +1834,7 @@ router.put("/staff/:id", supabaseAuth, async (req: any, res) => {
       
       // Create new user_locations record if locationId is set and doesn't exist
       if (locationId !== null) {
-        const hasExistingRecord = userLocationsAtThisSchool.some(ul => ul.locationId === locationId);
+        const hasExistingRecord = userLocationsAtThisSchool.some((ul: { locationId: number }) => ul.locationId === locationId);
         if (!hasExistingRecord) {
           console.log(`📍 Creating user_locations record for user ${user.id} at location ${locationId}`);
           await db.insert(userLocations).values({

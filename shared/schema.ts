@@ -370,6 +370,7 @@ export const insertSchoolClassSchema = createInsertSchema(schoolClasses)
     teacherId: z.number().nullable().default(null),
     semester: z.string().nullable().default(null),
     location: z.string().nullable().default(null),
+    locationId: z.number().nullable().default(null), // Multi-location support
     curriculumId: z.number().nullable().default(null),
   });
 export type InsertSchoolClass = z.infer<typeof insertSchoolClassSchema>;
