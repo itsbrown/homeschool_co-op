@@ -9,6 +9,7 @@ import { createClient } from '@supabase/supabase-js';
 import { parse as parseCSV } from 'csv-parse';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
+import { z } from 'zod';
 import { sendAccountInviteEmail, sendStaffInvitationEmail, sendPasswordResetEmail } from '../lib/email-service';
 import { supabaseAuth } from '../middleware/supabase-auth';
 import { requireSchoolContext } from '../middleware/require-school-context';
@@ -3450,6 +3451,150 @@ router.get("/user-locations/my-permissions", async (req, res) => {
   } catch (error) {
     console.error("❌ Error fetching user location permissions:", error);
     res.status(500).json({ message: "Failed to fetch location permissions" });
+  }
+});
+
+// Zod schema for user location permission updates
+const userLocationPermissionUpdateSchema = z.object({
+  accessLevel: z.enum(['view', 'manage', 'admin']).optional(),
+  canViewReports: z.boolean().optional(),
+  canManageStaff: z.boolean().optional(),
+  canManageClasses: z.boolean().optional(),
+  canManageStudents: z.boolean().optional(),
+  canSendNotifications: z.boolean().optional(),
+  canViewParentContacts: z.boolean().optional(),
+  isActive: z.boolean().optional(),
+}).refine(data => Object.keys(data).length > 0, {
+  message: "At least one field must be provided",
+});
+
+// Get staff members with permissions for a specific location
+router.get("/user-locations/:locationId", supabaseAuth, requireSchoolContext, async (req: any, res) => {
+  try {
+    const locationId = parseInt(req.params.locationId);
+    
+    if (isNaN(locationId)) {
+      return res.status(400).json({ message: "Invalid location ID" });
+    }
+
+    console.log(`👥 Fetching staff permissions for location ${locationId}`);
+
+    // Get the location and verify it belongs to the user's school (multi-tenant security)
+    const location = await storage.getLocationById(locationId);
+    
+    if (!location) {
+      return res.status(404).json({ message: "Location not found" });
+    }
+    
+    // Verify the location belongs to the user's school context
+    if (location.schoolId !== req.schoolId) {
+      return res.status(403).json({ message: "Access denied: location does not belong to your school" });
+    }
+
+    // Get all user locations for this location
+    const userLocations = await storage.getUserLocationsByLocationId(locationId);
+    
+    const permissionsWithUserDetails = await Promise.all(
+      userLocations.map(async (ul) => {
+        const user = await storage.getUser(ul.userId);
+        return {
+          id: ul.id,
+          userId: ul.userId,
+          userName: user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email : 'Unknown User',
+          userEmail: user?.email || '',
+          locationId: ul.locationId,
+          locationName: location?.name || '',
+          accessLevel: ul.accessLevel,
+          canViewReports: ul.canViewReports,
+          canManageStaff: ul.canManageStaff,
+          canManageClasses: ul.canManageClasses,
+          canManageStudents: ul.canManageStudents,
+          canSendNotifications: ul.canSendNotifications,
+          canViewParentContacts: ul.canViewParentContacts,
+          isActive: ul.isActive,
+        };
+      })
+    );
+
+    // Sort by user name
+    permissionsWithUserDetails.sort((a, b) => a.userName.localeCompare(b.userName));
+
+    console.log(`✅ Found ${permissionsWithUserDetails.length} staff members at location ${locationId}`);
+    res.json(permissionsWithUserDetails);
+
+  } catch (error) {
+    console.error("❌ Error fetching staff permissions for location:", error);
+    res.status(500).json({ message: "Failed to fetch staff permissions" });
+  }
+});
+
+// Update user location permissions
+router.patch("/user-locations/:id", supabaseAuth, requireSchoolContext, async (req: any, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    
+    if (isNaN(id)) {
+      return res.status(400).json({ message: "Invalid user location ID" });
+    }
+
+    // Validate request body with Zod schema
+    const parseResult = userLocationPermissionUpdateSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      return res.status(400).json({ 
+        message: "Validation error", 
+        errors: parseResult.error.errors 
+      });
+    }
+
+    const updateData = parseResult.data;
+    console.log(`🔧 Updating user location ${id} permissions:`, updateData);
+
+    // First fetch the existing user_location to verify tenant ownership BEFORE updating
+    const existingUserLocation = await storage.getUserLocationById(id);
+    if (!existingUserLocation) {
+      return res.status(404).json({ message: "User location not found" });
+    }
+    
+    // Verify the record's location belongs to the user's school (multi-tenant security)
+    const location = await storage.getLocationById(existingUserLocation.locationId);
+    if (!location || location.schoolId !== req.schoolId) {
+      console.error(`⚠️ Security: User tried to update user_location for different school`);
+      return res.status(403).json({ message: "Access denied: record does not belong to your school" });
+    }
+
+    // Now perform the update after authorization check
+    const updated = await storage.updateUserLocation(id, updateData);
+
+    if (!updated) {
+      return res.status(500).json({ message: "Failed to update user location" });
+    }
+
+    // Return enriched response
+    const user = await storage.getUser(updated.userId);
+
+    const response = {
+      id: updated.id,
+      userId: updated.userId,
+      userName: user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email : 'Unknown User',
+      userEmail: user?.email || '',
+      locationId: updated.locationId,
+      locationName: location?.name || '',
+      accessLevel: updated.accessLevel,
+      canViewReports: updated.canViewReports,
+      canManageStaff: updated.canManageStaff,
+      canManageClasses: updated.canManageClasses,
+      canManageStudents: updated.canManageStudents,
+      canSendNotifications: updated.canSendNotifications,
+      canViewParentContacts: updated.canViewParentContacts,
+      isActive: updated.isActive,
+    };
+
+    console.log(`✅ Updated user location ${id} permissions`);
+    res.json(response);
+
+  } catch (error) {
+    console.error("❌ Error updating user location permissions:", error);
+    res.status(500).json({ message: "Failed to update permissions" });
   }
 });
 
