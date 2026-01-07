@@ -334,6 +334,7 @@ export interface IStorage {
   getStripePaymentHistoryByUserId(userId: number): Promise<StripePaymentHistory[]>;
   getStripePaymentsBySubscription(subscriptionId: string): Promise<StripePaymentHistory[]>;
   getStripePaymentByIntentId(paymentIntentId: string): Promise<StripePaymentHistory | undefined>;
+  getPaymentByIdempotencyKey(idempotencyKey: string): Promise<StripePaymentHistory | undefined>;
   
   // Payment Discounts methods (for discount tracking/analytics)
   createPaymentDiscount(discount: InsertPaymentDiscount): Promise<PaymentDiscount>;
@@ -3297,6 +3298,12 @@ export class MemStorage implements IStorage {
   async getStripePaymentByIntentId(paymentIntentId: string): Promise<StripePaymentHistory | undefined> {
     const db = await getDb();
     const result = await db.select().from(stripePaymentHistory).where(eq(stripePaymentHistory.paymentIntentId, paymentIntentId)).limit(1);
+    return result[0];
+  }
+
+  async getPaymentByIdempotencyKey(idempotencyKey: string): Promise<StripePaymentHistory | undefined> {
+    const db = await getDb();
+    const result = await db.select().from(stripePaymentHistory).where(eq(stripePaymentHistory.idempotencyKey, idempotencyKey)).limit(1);
     return result[0];
   }
   
@@ -7522,6 +7529,10 @@ import { DatabaseStorage } from "./dbStorage";
 
       async getStripePaymentByIntentId(paymentIntentId: string): Promise<StripePaymentHistory | undefined> {
         return this.memStorage.getStripePaymentByIntentId(paymentIntentId);
+      }
+
+      async getPaymentByIdempotencyKey(idempotencyKey: string): Promise<StripePaymentHistory | undefined> {
+        return this.dbStorage.getPaymentByIdempotencyKey(idempotencyKey);
       }
 
       // ==================== ASSESSMENT TRACKING ====================
