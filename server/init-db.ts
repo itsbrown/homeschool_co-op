@@ -1777,6 +1777,43 @@ async function runMigrations() {
     `);
     console.log('✅ Migration completed: fundraiser_order_items table created');
     
+    // Add can_view_parent_contacts column to user_locations if it doesn't exist
+    console.log('Running migration: Adding can_view_parent_contacts column to user_locations...');
+    await db.execute(sql`
+      ALTER TABLE user_locations 
+      ADD COLUMN IF NOT EXISTS can_view_parent_contacts BOOLEAN NOT NULL DEFAULT FALSE;
+    `);
+    console.log('✅ Migration completed: can_view_parent_contacts column added');
+    
+    // Create pii_access_logs table for audit trail
+    console.log('Running migration: Creating pii_access_logs table...');
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS pii_access_logs (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        location_id INTEGER REFERENCES locations(id),
+        school_id INTEGER REFERENCES schools(id),
+        access_type TEXT NOT NULL CHECK (access_type IN ('view_parent_contacts', 'export_parent_contacts', 'view_student_details', 'view_enrollment_details')),
+        resource_type TEXT NOT NULL CHECK (resource_type IN ('enrollment', 'student', 'parent', 'location')),
+        resource_ids INTEGER[],
+        record_count INTEGER NOT NULL DEFAULT 0,
+        ip_address TEXT,
+        user_agent TEXT,
+        request_path TEXT,
+        accessed_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_pii_access_logs_user_id ON pii_access_logs(user_id);
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_pii_access_logs_location_id ON pii_access_logs(location_id);
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_pii_access_logs_accessed_at ON pii_access_logs(accessed_at);
+    `);
+    console.log('✅ Migration completed: pii_access_logs table created');
+    
   } catch (fundraiserError) {
     const errorMessage = fundraiserError instanceof Error ? fundraiserError.message : String(fundraiserError);
     if (!errorMessage.includes('Database connection not available')) {

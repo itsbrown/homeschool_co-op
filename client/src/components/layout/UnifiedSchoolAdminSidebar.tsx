@@ -32,7 +32,9 @@ import {
   Megaphone,
   Clock,
   Coins,
-  Gift
+  Gift,
+  Shield,
+  Phone
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -134,6 +136,16 @@ const adminNavItems: NavItem[] = [
     title: 'Locations',
     href: '/schools/locations',
     icon: MapPin,
+  },
+  {
+    title: 'Staff Permissions',
+    href: '/school-admin/staff-permissions',
+    icon: Shield,
+  },
+  {
+    title: 'Location Enrollments',
+    href: '/school-admin/location-enrollments',
+    icon: Phone,
   },
   {
     title: 'Categories',

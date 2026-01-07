@@ -1711,6 +1711,7 @@ export const userLocations = pgTable("user_locations", {
   canManageClasses: boolean("can_manage_classes").default(false).notNull(),
   canManageStudents: boolean("can_manage_students").default(false).notNull(),
   canSendNotifications: boolean("can_send_notifications").default(false).notNull(),
+  canViewParentContacts: boolean("can_view_parent_contacts").default(false).notNull(),
   isActive: boolean("is_active").default(true).notNull(),
   assignedAt: timestamp("assigned_at").defaultNow().notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -3106,4 +3107,42 @@ export const fundraiserOrdersRelations = relations(fundraiserOrders, ({ one, man
 export const fundraiserOrderItemsRelations = relations(fundraiserOrderItems, ({ one }) => ({
   order: one(fundraiserOrders, { fields: [fundraiserOrderItems.orderId], references: [fundraiserOrders.id] }),
   product: one(fundraiserProducts, { fields: [fundraiserOrderItems.productId], references: [fundraiserProducts.id] }),
+}));
+
+// PII Access Logs - Audit trail for accessing sensitive parent contact information
+export const piiAccessLogs = pgTable("pii_access_logs", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id),
+  locationId: integer("location_id").references(() => locations.id),
+  schoolId: integer("school_id").references(() => schools.id),
+  accessType: text("access_type", {
+    enum: ["view_parent_contacts", "export_parent_contacts", "view_student_details", "view_enrollment_details"]
+  }).notNull(),
+  resourceType: text("resource_type", {
+    enum: ["enrollment", "student", "parent", "location"]
+  }).notNull(),
+  resourceIds: integer("resource_ids").array(), // IDs of records accessed
+  recordCount: integer("record_count").notNull().default(0), // Number of records accessed
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  requestPath: text("request_path"),
+  accessedAt: timestamp("accessed_at").defaultNow().notNull(),
+});
+
+export const insertPiiAccessLogSchema = createInsertSchema(piiAccessLogs)
+  .omit({ id: true, accessedAt: true })
+  .extend({
+    resourceIds: z.array(z.number()).nullable().default(null),
+    ipAddress: z.string().nullable().default(null),
+    userAgent: z.string().nullable().default(null),
+    requestPath: z.string().nullable().default(null),
+  });
+export type InsertPiiAccessLog = z.infer<typeof insertPiiAccessLogSchema>;
+export type PiiAccessLog = typeof piiAccessLogs.$inferSelect;
+
+// PII Access Logs relations
+export const piiAccessLogsRelations = relations(piiAccessLogs, ({ one }) => ({
+  user: one(users, { fields: [piiAccessLogs.userId], references: [users.id] }),
+  location: one(locations, { fields: [piiAccessLogs.locationId], references: [locations.id] }),
+  school: one(schools, { fields: [piiAccessLogs.schoolId], references: [schools.id] }),
 }));

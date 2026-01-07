@@ -3130,6 +3130,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   app.use("/api/locations", supabaseAuth, locationsRouter);
   
+  // Location enrollments with parent contacts (for location coordinators)
+  const locationEnrollmentsRouter = (await import("./api/location-enrollments")).default;
+  app.use("/api/location-enrollments", supabaseAuth, locationEnrollmentsRouter);
+  
   const notificationsRouter = (await import("./api/notifications")).default;
   app.use("/api/notifications", supabaseAuth, notificationsRouter);
 

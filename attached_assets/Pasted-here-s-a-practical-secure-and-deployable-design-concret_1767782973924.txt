@@ -1,0 +1,90 @@
+here's a practical, secure, and deployable design + concrete SQL/TS examples you can drop into the repo to grant scoped role permissions (e.g., Location Coordinator can view all students and their parents' contact info at a location). Recommendation: combine application-level checks (UX/filters) with Postgres Row-Level Security (RLS) for strong enforced access control (Supabase-friendly). Also add audit logging and admin role management.
+
+What you get below
+
+A recommended schema for scoped roles (role_assignments).
+RLS policy examples that enforce access in the DB (students + view that includes parent contact info).
+Migration SQL files to create role tables and audit log.
+A TypeScript API endpoint example that returns students + parent contacts for the current coordinator.
+Guidance on rollout, testing, and privacy.
+Key design decisions (short)
+
+Role assignments are scoped (role + scope_type + scope_id). Example: role='location_coordinator', scope_type='location', scope_id=42.
+Enforce with DB RLS so even if a bug in the app occurs, unauthorized users cannot read protected rows.
+Provide server-side convenience endpoints that call the DB but rely on RLS for enforcement.
+Audit all accesses of PII (who asked for what and when).
+Admin UI + API to manage role assignments (assign/revoke).
+Migration: role_assignments + access_logs
+migrations/2026-01-09_add_role_assignments_and_audit.sql
+-- Create role_assignments to scope roles to objects (location, school, etc.)
+CREATE TABLE IF NOT EXISTS public.role_assignments (
+  id BIGSERIAL PRIMARY KEY,
+  user_id UUID NOT NULL, -- matches auth.uid()
+  role TEXT NOT NULL, -- e.g. 'location_coordinator', 'school_admin', 'teacher'
+  scope_type TEXT NOT NULL, -- e.g. 'location', 'school'
+Create view that joins students + parents (so we can apply RLS to the view)
+migrations/2026-01-09_create_students_parents_view.sql
+-- Adjust table/column names if your schema differs
+CREATE OR REPLACE VIEW public.students_with_parents AS
+SELECT
+  s.id AS student_id,
+  s.first_name AS student_first_name,
+  s.last_name AS student_last_name,
+RLS policies (enable RLS on underlying tables/views)
+Approach: enable RLS on the view students_with_parents and create a policy that permits access to:
+admins (global)
+the user themself (if users can be parents)
+users with role_assignments scope matching the student's location (location_coordinator)
+migrations/2026-01-09_rls_students_with_parents.sql
+-- Enable RLS (Supabase-style environment: uses auth.uid() to get current user UUID)
+ALTER TABLE public.students_with_parents WITH NO DATA; -- view, but ensure policy below references table-like name
+
+-- Note: For Supabase you typically enable RLS on the underlying tables. For a view, ensure the underlying refs are protected.
+-- Example policies on base tables (students or enrollments) to allow SELECT only when role_assignment applies.
+
+Notes on RLS: adapt the policies to your schema. If Supabase is used, auth.uid() will contain the JWT sub. If you use a different auth model, adjust accordingly.
+
+Example: assign a user as a Location Coordinator
+scripts/2026-01-09_assign_location_coordinator.sql
+-- Replace user UUID and location id
+INSERT INTO public.role_assignments (user_id, role, scope_type, scope_id, created_by)
+VALUES ('11111111-2222-3333-4444-555555555555', 'location_coordinator', 'location', 42, 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');
+
+TypeScript: server API endpoint example (reads students_with_parents view)
+server/api/locationCoordinator.ts
+import { Router } from 'express';
+import { Pool } from 'pg';
+
+const router = Router();
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+
+Admin UI & APIs to manage role assignments
+Provide endpoints:
+POST /admin/roles/assign { userId, role, scope_type, scope_id }
+POST /admin/roles/revoke { assignmentId } or DELETE
+GET /admin/roles?userId=...
+Ensure only admins can call these endpoints. Audit role assignment changes in access_logs (or dedicated role_change_logs).
+Tests to add
+Unit:
+permission-check helper functions (if you implement an app-level check).
+Integration:
+Simulate a user without a role querying students_with_parents returns zero rows.
+Simulate a user with a role and correct scope returns expected rows.
+Verify access_logs entry is created after each allowed view.
+RLS tests:
+Use separate DB connections with different JWTs (Supabase provides testing approach) to ensure policies enforced.
+Privacy & compliance considerations
+Limit returned PII fields. Only include the minimal parent contact fields required.
+Log access to PII (we added access_logs).
+Consider short-lived signed URLs or masking phone/email in some UIs if full contact not needed.
+Add retention rules for access_logs (e.g., purge older than X years if required).
+Train coordinators about acceptable use of PII and add audit-review process.
+Rollout strategy (safe)
+Step 1: Add role_assignments and access_logs tables + admin UI to assign roles. Keep RLS off initially.
+Step 2: Implement app-level checks in endpoints (like the example above) and enforce who can view data at the app level. Deploy and let coordinators use it.
+Step 3: Add RLS policies carefully in staging. Test all flows and admin tasks. Ensure your admin user(s) still have access.
+Step 4: Enable RLS in production and remove app-level bypasses (or keep them as UX checks). RLS should be final safety net.
+Step 5: Audit logs review after rollout.
+Practical notes for Supabase
+If you host DB on Supabase, you can similarly add policies that use auth.uid() to match role_assignments.user_id.
+You can also add computed JWT claims (custom claims) to include role in tokens to allow simpler policies (but scope-based claims can be large; better to keep role_assignments table and policies referencing it).
