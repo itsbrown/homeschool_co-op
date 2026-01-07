@@ -54,6 +54,37 @@ export function isPaymentProcessorEnabled(): boolean {
 }
 
 /**
+ * Check if the new schema columns are available.
+ * Returns false if the database doesn't have the new columns yet.
+ */
+let schemaCheckResult: boolean | null = null;
+export async function checkSchemaReady(): Promise<boolean> {
+  if (schemaCheckResult !== null) {
+    return schemaCheckResult;
+  }
+  
+  try {
+    // Try to query with the new columns - if they don't exist, this will fail
+    const testPayment = await storage.getPaymentByIdempotencyKey('__schema_check__');
+    schemaCheckResult = true;
+    console.log('✅ PaymentProcessor: Schema check passed - new columns available');
+    return true;
+  } catch (err) {
+    // If the query fails due to missing columns, disable the processor
+    console.warn('⚠️ PaymentProcessor: Schema check failed - new columns not yet migrated', err);
+    schemaCheckResult = false;
+    return false;
+  }
+}
+
+/**
+ * Reset schema check cache (for testing)
+ */
+export function resetSchemaCheck(): void {
+  schemaCheckResult = null;
+}
+
+/**
  * Shadow mode - logs checksum verification results without blocking.
  * Use this during rollout to monitor for mismatches.
  */

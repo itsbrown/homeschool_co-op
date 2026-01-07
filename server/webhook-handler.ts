@@ -12,6 +12,13 @@ import {
   handleMembershipSubscriptionUpdated,
   handleMembershipSubscriptionDeleted
 } from './services/stripeWebhookHandlers';
+import {
+  isPaymentProcessorEnabled,
+  processPayment,
+  generateIdempotencyKey,
+  checkSchemaReady,
+  type PaymentSource,
+} from './services/PaymentProcessorService';
 
 // Stripe client will be lazily initialized within the webhook handler
 
@@ -403,6 +410,66 @@ export const webhookHandler = async (req: Request, res: Response) => {
         if (existingPayment) {
           console.log('⚠️ Payment already processed, skipping:', paymentIntent.id);
           break;
+        }
+        
+        // PaymentProcessor integration (dual-write mode during rollout)
+        if (isPaymentProcessorEnabled() && await checkSchemaReady()) {
+          const parentEmail = paymentIntent.metadata.parentEmail;
+          const enrollmentIdsStr = paymentIntent.metadata.enrollmentIds;
+          const parentUser = parentEmail ? await storage.getUserByEmail(parentEmail) : null;
+          
+          if (parentUser && enrollmentIdsStr) {
+            try {
+              const enrollmentIds = JSON.parse(enrollmentIdsStr);
+              const idempotencyKey = generateIdempotencyKey('stripe', paymentIntent.id);
+              
+              console.log('💳 PaymentProcessor: Processing via unified service', {
+                idempotencyKey,
+                paymentIntentId: paymentIntent.id,
+                enrollmentCount: enrollmentIds.length,
+              });
+              
+              const result = await processPayment({
+                idempotencyKey,
+                source: 'stripe' as PaymentSource,
+                userId: parentUser.id,
+                stripePaymentIntentId: paymentIntent.id,
+                stripeCustomerId: paymentIntent.customer as string | undefined,
+                amountCents: paymentIntent.amount,
+                currency: paymentIntent.currency || 'usd',
+                enrollmentIds,
+                description: `Stripe payment ${paymentIntent.id}`,
+                paymentMethod: 'card',
+                stripeCreatedAt: new Date(paymentIntent.created * 1000),
+                metadata: paymentIntent.metadata,
+              });
+              
+              if (result.success && !result.wasIdempotentHit) {
+                console.log('✅ PaymentProcessor: Payment processed successfully - skipping legacy code', {
+                  paymentId: result.paymentId,
+                  allocations: result.allocations?.length,
+                });
+                
+                // PaymentProcessor handled everything - skip legacy code to prevent duplication
+                // Still send receipts and real-time updates (handled separately after the switch)
+                break;
+              } else if (result.success && result.wasIdempotentHit) {
+                console.log('⚠️ PaymentProcessor: Idempotent hit - payment already processed, skipping', {
+                  paymentId: result.paymentId,
+                });
+                break;
+              } else {
+                console.error('❌ PaymentProcessor: Payment processing failed - falling back to legacy code', {
+                  error: result.error,
+                  idempotencyKey,
+                });
+                // Fall through to legacy code on failure
+              }
+            } catch (processorError) {
+              console.error('❌ PaymentProcessor: Exception during processing - falling back to legacy code', processorError);
+              // Fall through to legacy code on error
+            }
+          }
         }
         
         if (paymentType === 'scheduled_payment') {

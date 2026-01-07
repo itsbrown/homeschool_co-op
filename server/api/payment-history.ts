@@ -6,6 +6,13 @@ import { CurrencyUtils, BillingCalculationService } from '../../shared/currency-
 import { MembershipService } from '../services/membership-service';
 import { enrichedPaymentHistoryListResponseSchema, type EnrichedPaymentHistory } from '../../shared/schema';
 import { getStripeClient } from '../config/stripe';
+import {
+  isPaymentProcessorEnabled,
+  processPayment,
+  generateIdempotencyKey,
+  checkSchemaReady,
+  type PaymentSource,
+} from '../services/PaymentProcessorService';
 
 const router = Router();
 
@@ -480,21 +487,22 @@ router.post('/manual', supabaseAuth, async (req: any, res) => {
       });
     }
 
-    // Create payment record using unified currency system
+    // Build payment data (but don't create yet - PaymentProcessor may handle it)
+    const manualPaymentIntentId = `manual_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const paymentData = {
-      stripePaymentIntentId: `manual_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      stripePaymentIntentId: manualPaymentIntentId,
       parentEmail,
       childName,
       className,
-      amount: amountInCents, // Already converted to cents
+      amount: amountInCents,
       currency,
-      status: 'completed' as const, // Manual payments are immediately completed
+      status: 'completed' as const,
       description: description || `Manual payment for ${childName} - ${className}`,
       schoolId: user.schoolId || 0,
       parentId: user.id,
       stripeChargeId: null,
       stripeRefundId: null,
-      enrollmentIds: [],
+      enrollmentIds: [] as number[],
       originalPaymentId: null,
       paymentDate: paymentDate ? new Date(paymentDate) : new Date(),
       metadata: {
@@ -507,42 +515,92 @@ router.post('/manual', supabaseAuth, async (req: any, res) => {
       }
     };
 
-    const payment = await storage.createPayment(paymentData);
-    
-    console.log('✅ Manual payment created:', payment.id);
+    // Determine which path to use: PaymentProcessor or legacy
+    let payment: any = null;
+    let usedPaymentProcessor = false;
 
-    // Update enrollment balances if matching enrollment found
-    try {
-      const allEnrollments = await storage.getAllEnrollments();
-      
-      // Find matching enrollments by parent email, child name, and class name
-      const matchingEnrollments = allEnrollments.filter((enrollment: any) => {
-        return enrollment.parentEmail === parentEmail &&
-               enrollment.childName === childName &&
-               enrollment.className === className;
-      });
-
-      console.log(`🔍 Found ${matchingEnrollments.length} matching enrollments for manual payment`);
-
-      if (matchingEnrollments.length > 0) {
-        // Apply payment to the most recent matching enrollment using unified billing service
-        const enrollment = matchingEnrollments[0] as any;
-        
-        // Update enrollment using centralized billing logic
-        const updatedEnrollment = BillingCalculationService.applyPaymentToEnrollment(enrollment, amountInCents);
-        
-        // Add payment tracking info
-        updatedEnrollment.paymentIntentId = payment.stripePaymentIntentId;
-        
-        await storage.updateProgramEnrollment(updatedEnrollment.id, updatedEnrollment);
-        
-        console.log(`✅ Updated enrollment ${updatedEnrollment.id}: paid=${CurrencyUtils.format(updatedEnrollment.amountPaid)}, remaining=${CurrencyUtils.format(updatedEnrollment.remainingBalance)}, status=${updatedEnrollment.status}`);
-      } else {
-        console.log(`ℹ️ No matching enrollment found for manual payment - payment recorded as general payment`);
+    // Try PaymentProcessor if enabled
+    if (isPaymentProcessorEnabled() && await checkSchemaReady()) {
+      try {
+        const parentUser = await storage.getUserByEmail(parentEmail);
+        if (parentUser) {
+          // Find matching enrollments
+          const allEnrollments = await storage.getAllEnrollments();
+          const matchingEnrollmentIds = allEnrollments
+            .filter((e: any) => e.parentEmail === parentEmail && e.childName === childName && e.className === className)
+            .map((e: any) => e.id);
+          
+          const idempotencyKey = generateIdempotencyKey('manual', undefined, parentUser.id, Date.now());
+          
+          console.log('💳 PaymentProcessor: Processing manual payment via unified service', {
+            idempotencyKey,
+            enrollmentCount: matchingEnrollmentIds.length,
+          });
+          
+          const result = await processPayment({
+            idempotencyKey,
+            source: 'manual' as PaymentSource,
+            userId: parentUser.id,
+            stripePaymentIntentId: manualPaymentIntentId,
+            amountCents: amountInCents,
+            currency,
+            enrollmentIds: matchingEnrollmentIds,
+            description: paymentData.description,
+            paymentMethod: paymentMethod,
+            metadata: paymentData.metadata,
+          });
+          
+          if (result.success) {
+            console.log('✅ PaymentProcessor: Manual payment processed successfully', {
+              paymentId: result.paymentId,
+              wasIdempotentHit: result.wasIdempotentHit,
+              allocations: result.allocations?.length,
+            });
+            usedPaymentProcessor = true;
+            // Get the payment record created by PaymentProcessor
+            payment = await storage.getPaymentByStripeId(manualPaymentIntentId);
+          } else {
+            console.error('❌ PaymentProcessor: Failed - falling back to legacy', { error: result.error });
+          }
+        }
+      } catch (processorError) {
+        console.error('❌ PaymentProcessor: Exception - falling back to legacy', processorError);
       }
-    } catch (enrollmentError) {
-      console.error('❌ Failed to update enrollment for manual payment:', enrollmentError);
-      // Don't fail the payment creation if enrollment update fails
+    }
+
+    // Fallback to legacy payment creation if PaymentProcessor didn't handle it
+    if (!usedPaymentProcessor) {
+      payment = await storage.createPayment(paymentData);
+      console.log('✅ Legacy manual payment created:', payment.id);
+
+      // Legacy enrollment update
+      try {
+        const allEnrollments = await storage.getAllEnrollments();
+        const matchingEnrollments = allEnrollments.filter((enrollment: any) => {
+          return enrollment.parentEmail === parentEmail &&
+                 enrollment.childName === childName &&
+                 enrollment.className === className;
+        });
+
+        console.log(`🔍 Found ${matchingEnrollments.length} matching enrollments for manual payment`);
+
+        if (matchingEnrollments.length > 0) {
+          const enrollment = matchingEnrollments[0] as any;
+          const updatedEnrollment = BillingCalculationService.applyPaymentToEnrollment(enrollment, amountInCents);
+          updatedEnrollment.paymentIntentId = payment.stripePaymentIntentId;
+          await storage.updateProgramEnrollment(updatedEnrollment.id, updatedEnrollment);
+          console.log(`✅ Updated enrollment ${updatedEnrollment.id}: paid=${CurrencyUtils.format(updatedEnrollment.amountPaid)}, remaining=${CurrencyUtils.format(updatedEnrollment.remainingBalance)}, status=${updatedEnrollment.status}`);
+        } else {
+          console.log(`ℹ️ No matching enrollment found for manual payment - payment recorded as general payment`);
+        }
+      } catch (enrollmentError) {
+        console.error('❌ Failed to update enrollment for manual payment:', enrollmentError);
+      }
+    }
+
+    // Ensure we have a payment record
+    if (!payment) {
+      throw new Error('Failed to create payment record');
     }
 
     // Send email receipt
