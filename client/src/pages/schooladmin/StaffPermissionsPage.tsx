@@ -90,7 +90,7 @@ export default function StaffPermissionsPage() {
   });
 
   const { data: permissions, isLoading: permissionsLoading } = useQuery<UserLocationPermission[]>({
-    queryKey: ['/api/user-locations', selectedLocationId],
+    queryKey: ['/api/school-admin/user-locations', selectedLocationId],
     enabled: !!selectedLocationId,
   });
 
@@ -104,12 +104,12 @@ export default function StaffPermissionsPage() {
       permission: string; 
       value: boolean;
     }) => {
-      return apiRequest('PATCH', `/api/user-locations/${userLocationId}`, {
+      return apiRequest('PATCH', `/api/school-admin/user-locations/${userLocationId}`, {
         [permission]: value,
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/user-locations'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/school-admin/user-locations'] });
       toast({
         title: 'Permission updated',
         description: 'Staff permissions have been updated successfully.',
