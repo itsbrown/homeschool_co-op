@@ -13,8 +13,8 @@ import { sendAccountInviteEmail, sendStaffInvitationEmail, sendPasswordResetEmai
 import { supabaseAuth } from '../middleware/supabase-auth';
 import { requireSchoolContext } from '../middleware/require-school-context';
 import { getDb } from '../db';
-import { sql, eq } from 'drizzle-orm';
-import { users, schools, userRoles, type InsertSchool, type UserRole } from '@shared/schema';
+import { sql, eq, and } from 'drizzle-orm';
+import { users, schools, userRoles, userLocations, locations, type InsertSchool, type UserRole } from '@shared/schema';
 
 const router = Router();
 
@@ -1749,9 +1749,9 @@ router.put("/staff/:id", supabaseAuth, async (req: any, res) => {
       return res.status(400).json({ message: "Invalid staff ID format" });
     }
 
-    const { name, email, phone, role } = req.body;
+    const { name, email, phone, role, locationId } = req.body;
 
-    console.log(`🔄 Updating staff member with role ID ${roleId}:`, { name, email, phone, role });
+    console.log(`🔄 Updating staff member with role ID ${roleId}:`, { name, email, phone, role, locationId });
 
     // Get role record from user_roles
     const db = await getDb();
@@ -1790,6 +1790,68 @@ router.put("/staff/:id", supabaseAuth, async (req: any, res) => {
       await db.update(userRoles)
         .set({ role })
         .where(eq(userRoles.id, roleId));
+    }
+
+    // Sync locationId to user_locations table for permissions system
+    if (locationId !== undefined) {
+      // Get all locations for this school to validate ownership
+      const schoolLocations = await db
+        .select()
+        .from(locations)
+        .where(eq(locations.schoolId, schoolId));
+      const schoolLocationIds = schoolLocations.map((loc: { id: number }) => loc.id);
+      
+      // Validate that locationId belongs to the authenticated school (if not null)
+      if (locationId !== null && !schoolLocationIds.includes(locationId)) {
+        return res.status(400).json({ message: 'Invalid location - location does not belong to this school' });
+      }
+      
+      // Get all user_locations for this user at this school's locations
+      const existingUserLocationsForSchool = await db
+        .select()
+        .from(userLocations)
+        .where(eq(userLocations.userId, user.id));
+      
+      // Filter to only this school's locations
+      const userLocationsAtThisSchool = existingUserLocationsForSchool.filter(
+        (ul: { id: number; locationId: number }) => schoolLocationIds.includes(ul.locationId)
+      );
+      
+      // Remove old user_locations records for this school (when location changes or clears)
+      for (const oldLocation of userLocationsAtThisSchool) {
+        if (oldLocation.locationId !== locationId) {
+          console.log(`🗑️ Removing old user_locations record for user ${user.id} at location ${oldLocation.locationId}`);
+          await db.delete(userLocations).where(eq(userLocations.id, oldLocation.id));
+        }
+      }
+      
+      // Create new user_locations record if locationId is set and doesn't exist
+      if (locationId !== null) {
+        const hasExistingRecord = userLocationsAtThisSchool.some(ul => ul.locationId === locationId);
+        if (!hasExistingRecord) {
+          console.log(`📍 Creating user_locations record for user ${user.id} at location ${locationId}`);
+          await db.insert(userLocations).values({
+            userId: user.id,
+            locationId: locationId,
+            accessLevel: 'view',
+            canViewReports: false,
+            canManageStaff: false,
+            canManageClasses: false,
+            canManageStudents: false,
+            canSendNotifications: false,
+            canViewParentContacts: false,
+            isActive: true,
+          });
+          console.log(`✅ Created user_locations record for user ${user.id} at location ${locationId}`);
+        }
+      }
+      
+      // Also update school_staff table for dual-write support
+      const schoolStaffRecords = await storage.getSchoolStaffBySchoolId(schoolId);
+      const existingStaffRecord = schoolStaffRecords.find((s: any) => s.userId === user.id);
+      if (existingStaffRecord) {
+        await storage.updateSchoolStaff(existingStaffRecord.id, { locationId });
+      }
     }
 
     // Get updated user details

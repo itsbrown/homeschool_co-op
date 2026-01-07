@@ -599,7 +599,7 @@ function Router() {
       <Route path="/schools/classes/:id/enrollments" component={SchoolClassEnrollmentsPage} />
       <Route path="/schools/staff" component={StaffPage} />
       <Route path="/schools/staff/invite" component={StaffInvitePage} />
-      <Route path="/schools/staff/hours" component={() => <AppShell><StaffHoursPage /></AppShell>} />
+      <Route path="/schools/staff/hours" component={StaffHoursPage} />
       <Route path="/schools/educators" component={EducatorManagementPage} />
       <Route path="/schools/educators/:educatorId" component={EducatorManagementPage} />
       <Route path="/schools/staff/positions" component={StaffPositionsPage} />
