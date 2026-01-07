@@ -1,0 +1,194 @@
+Project context
+
+Repository: itsbrown/homeschool_co-op
+Problem to fix: calculateCartSnapshot() has no tests, uses unsafe rounding (Math.round) and silent fallbacks, lacks server-side authoritative pricing validation, and has no integrity checksum tying the snapshot to the PaymentIntent. These cause TOTAL_MISMATCH_OVERPAYMENT and other reconciliation issues.
+Goal: Make calculateCartSnapshot deterministic, server-authoritative, integer-cents-only, tested, and verifiable by the payment processor. Add snapshot checksum and store snapshot metadata. Add unit/integration tests and safe wiring into PaymentProcessorService.
+High-level objectives
+
+Enforce integer cents everywhere and remove Math.round on aggregates.
+Implement deterministic split utility (floor + remainder).
+Replace calculateCartSnapshot with a canonical, server-validated implementation that:
+derives authoritative per-item prices from DB
+applies business rules deterministically (sibling discounts, bundles)
+returns canonical snapshot JSON and totalCents
+throws on missing/invalid prices (no silent $0 fallback)
+Add snapshot HMAC checksum and persist snapshot_json + snapshot_checksum on payment creation.
+Verify checksum in PaymentProcessorService before allocations.
+Add unit & integration tests around snapshot, split, and end-to-end flow.
+Add a DB migration to store snapshot_json / snapshot_checksum.
+Wire changes into PaymentIntent creation and webhook processing in a non-destructive way.
+Add CI test gating and document run/revert instructions.
+Constraints and rules
+
+Money MUST be integer cents everywhere (no floats).
+Deterministic allocation: use floor + remainder distribution.
+All new code in TypeScript, with types and strictness preserved.
+Do not commit any secrets. Use ENV vars and document them.
+Add tests (Jest) and ensure npm test passes.
+Ordered tasks for the assistant (implement in this order)
+
+Add deterministic split utility
+File: server/lib/splitIntegerEvenly.ts
+Purpose: split totalCents into N integer shares that sum exactly to totalCents
+Template (use exactly or equivalent)
+
+ts
+// server/lib/splitIntegerEvenly.ts
+export function splitIntegerEvenly(total: number, parts: number): number[] {
+  if (!Number.isInteger(total) || total < 0) throw new Error('total must be non-negative integer');
+  if (!Number.isInteger(parts) || parts <= 0) throw new Error('parts must be positive integer');
+
+  const base = Math.floor(total / parts);
+  let remainder = total % parts;
+  const result: number[] = [];
+  for (let i = 0; i < parts; i++) {
+    result.push(remainder > 0 ? base + 1 : base);
+    if (remainder > 0) remainder -= 1;
+  }
+  const sum = result.reduce((s, v) => s + v, 0);
+  if (sum !== total) throw new Error(`split mismatch: ${sum} !== ${total}`);
+  return result;
+}
+Implement canonical calculateCartSnapshot (server-side authoritative)
+File: server/lib/calculateCartSnapshot.ts
+Purpose: produce canonical snapshot JSON (items with unitPriceCents, totalCostCents) and totalCents, applying business rules and validations
+Requirements:
+For each cart item, lookup the canonical unit price from DB/storage (do not trust client price).
+If lookup fails or price is invalid, throw a 4xx error (do not fallback to $0).
+Apply deterministic business rules (sibling discounts, bundle frees). Document rule order in code comments.
+Return { items: CanonicalItem[], totalCents: number, version: '1' } where CanonicalItem includes enrollmentId/classId/childId, unitPriceCents, quantity, totalCostCents.
+Provide a deterministic canonical JSON serialization helper used for checksum.
+Example function outline (fill in DB calls via storage adapter):
+
+ts
+// server/lib/calculateCartSnapshot.ts
+import storage from '../storage';
+import { splitIntegerEvenly } from './splitIntegerEvenly';
+import crypto from 'crypto';
+
+export type CartItemInput = { classId: number; childId?: number; quantity?: number; /* client hints ignored */ };
+
+export function canonicalizeItems(items: CartItemInput[], lookupPrice: (classId:number)=>number) {
+  return items.map(it => {
+    const unitPriceCents = lookupPrice(it.classId);
+    if (!Number.isInteger(unitPriceCents) || unitPriceCents < 0) throw new Error(`Missing price for class ${it.classId}`);
+    const qty = Math.max(1, it.quantity || 1);
+    return { classId: it.classId, childId: it.childId || null, quantity: qty, unitPriceCents, totalCostCents: unitPriceCents * qty };
+  });
+}
+
+export function applyBusinessRules(items: any[]) {
+  // Implement sibling discounts, bundles, thresholds deterministically
+  // Return adjusted items (do not change ids)
+  return items;
+}
+
+export async function calculateCartSnapshot(inputs: CartItemInput[]) {
+  const lookup = (classId:number) => storage.getCanonicalPriceCentsForClass(classId); // implement in storage adapter
+  let canonical = canonicalizeItems(inputs, lookup);
+  canonical = applyBusinessRules(canonical);
+
+  const totalCents = canonical.reduce((s, it) => s + it.totalCostCents, 0);
+  return { items: canonical, totalCents, version: '1' };
+}
+
+export function canonicalizeSnapshotForChecksum(snapshot: any): string {
+  // deterministically sort keys and stringify
+  return JSON.stringify(snapshot); // implement stable sort for production
+}
+
+export function computeSnapshotChecksum(snapshot: any, secret: string) {
+  const canonical = canonicalizeSnapshotForChecksum(snapshot);
+  return crypto.createHmac('sha256', secret).update(canonical).digest('hex');
+}
+Add DB migration to store snapshots
+File: migrations/2026-01-08_add_snapshot_to_payments.sql
+SQL
+ALTER TABLE public.payments
+  ADD COLUMN snapshot_json JSONB,
+  ADD COLUMN snapshot_checksum TEXT;
+Also add index if needed. Document rollback.
+Compute & persist snapshot/checksum when creating PaymentIntent
+Locate file that creates the PaymentIntent (client creates PI or server endpoint?). Update server-side code that creates PaymentIntent to:
+call calculateCartSnapshot(inputs)
+verify server-side totalCents
+compute checksum via computeSnapshotChecksum(snapshot, process.env.PAYMENT_SNAPSHOT_SECRET)
+create PaymentIntent.amount = totalCents and include metadata.snapshotChecksum = checksum (or save snapshot_json/checksum in payments table on insert)
+persist snapshot_json and snapshot_checksum in payments record (or separate table) before returning PaymentIntent client secret
+Important: If client currently builds PaymentIntent client-side without server, you must switch to server-side creation or at least have server verify before confirming.
+
+Verify checksum in PaymentProcessorService during processPayment
+In server/services/paymentProcessor.ts (or the PR skeleton already added earlier), before applying allocations:
+load persisted snapshot_json and snapshot_checksum from payments table
+recompute checksum and ensure it matches PaymentIntent.metadata.snapshotChecksum (or persisted snapshot_checksum). If mismatch, mark payment suspicious and do not apply allocations automatically.
+If the PaymentProcessor skeleton from the PR work exists, integrate verification there.
+Add unit & integration tests
+Add tests for splitIntegerEvenly (already done in previous PR skeleton).
+Add tests for calculateCartSnapshot:
+price lookup success path
+missing class price -> throws
+sibling discount test case
+bundle/free threshold test
+odd-cent distribution scenarios
+Add integration test that simulates:
+server calculateCartSnapshot -> compute checksum -> create (mock) PaymentIntent metadata
+PaymentProcessor.processPayment verifies checksum and applies allocations
+Duplicate processing (idempotency) does not double-apply
+File: tests/calculateCartSnapshot.test.ts (and update package.json test script if needed)
+Test templates (examples)
+
+tests/calculateCartSnapshot.test.ts should include:
+test('throws on missing price', ...)
+test('applies sibling discount', ...)
+test('computes totalCents deterministically', ...)
+Implement / adapt storage adapter helpers used by calculateCartSnapshot
+Add functions to server/storage.ts:
+getCanonicalPriceCentsForClass(classId): number
+(existing functions used by PaymentProcessor should be left in place or adapted)
+If repo already has server/storage.ts, add thin wrappers to call existing DB queries.
+Wire non-destructively into checkout & webhook flows
+Checkout flow (server endpoint creating PI):
+Before creating PI, call calculateCartSnapshot and only allow creating PI if snapshot.totalCents === requestedTotalCents (or compute server-side totalCents and override).
+Persist snapshot + checksum in payments table or include checksum in PaymentIntent metadata if creating PI server-side.
+Webhook handler (server/webhook-handler.ts):
+On payment_intent.succeeded, before allocations, verify checksum (if checksum missing, log and flag).
+If checksum matches, call PaymentProcessor.processPayment as usual.
+If checksum mismatch, mark payment as suspicious and do not auto-apply; create an admin notice / manual review job.
+Add CI gating and documentation
+Ensure jest tests are included in existing CI pipeline.
+Add a small README section: docs/checkout-snapshot.md describing the snapshot, checksum, and troubleshooting steps for TOTAL_MISMATCH.
+Ensure env var PAYMENT_SNAPSHOT_SECRET is documented.
+Acceptance criteria (must pass before merging)
+
+splitIntegerEvenly unit tests pass.
+calculateCartSnapshot unit tests pass, including sibling/bundle edge cases.
+Integration test demonstrates: server-side snapshot -> checksum stored -> processor verifies checksum and applies allocations.
+The server rejects snapshot creation when canonical price missing or invalid (no silent $0).
+No secrets committed.
+Branch: feature/payment-snapshot-fixes with clear commits and a PR description listing changes, migrations, env vars, and manual test steps.
+Run instructions for developer
+
+npm install
+Run tests: npm test
+Apply migration: psql $DATABASE_URL -f migrations/2026-01-08_add_snapshot_to_payments.sql
+Start server and test checkout flow:
+POST sample cart to checkout endpoint -> server should compute snapshot, return PaymentIntent (or simulate)
+Simulate webhook: send payment_intent.succeeded payload (with metadata.snapshotChecksum) to webhook and observe allocations applied
+Notes & guidance for Replit AI
+
+Use existing project conventions (TypeScript, tsconfig, existing storage layer). If function/DB names differ, adapt adapter.
+Keep business rules deterministic and documented in comments.
+Add TODOs where human review of business rules is required (e.g., sibling discount specifics).
+Keep all new modules small and well-typed. Use defensive programming: validate inputs and throw readable errors.
+If the repo currently creates PaymentIntent exclusively on the client, flag and propose a minimal safe migration to server-side creation or server verification prior to allocation.
+Deliverables for the PR
+
+Added files:
+server/lib/splitIntegerEvenly.ts
+server/lib/calculateCartSnapshot.ts
+migrations/2026-01-08_add_snapshot_to_payments.sql
+tests/calculateCartSnapshot.test.ts
+adapted PaymentProcessor changes to verify snapshot checksum
+server/storage.ts helper additions (or adapter updates)
+docs/checkout-snapshot.md
+PR description summarizing the rationale, run steps, env vars, and rollback steps.

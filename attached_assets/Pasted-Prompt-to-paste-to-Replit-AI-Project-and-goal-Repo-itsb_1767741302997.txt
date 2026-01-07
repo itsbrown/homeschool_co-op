@@ -1,0 +1,594 @@
+Prompt to paste to Replit AI
+
+Project and goal
+
+
+
+
+
+Repo: itsbrown/homeschool_co-op (https://github.com/itsbrown/homeschool_co-op)
+
+
+
+Goal: Implement Option B — a unified PaymentProcessorService (ledger-first, idempotent, transactional) to replace the split code paths for Stripe webhooks and manual/admin payments. This will fix TOTAL_MISMATCH_OVERPAYMENT and other inconsistencies.
+
+
+
+Deliverable: PR-ready feature branch that adds:
+
+
+
+
+
+server/lib/splitIntegerEvenly.ts (deterministic split)
+
+
+
+server/services/paymentProcessor.ts (core service)
+
+
+
+migrations/2026-01-07_add_payments_idempotency_key.sql (idempotency & source)
+
+
+
+tests/paymentProcessor.test.ts (Jest tests)
+
+
+
+Example wiring: small edits to server/webhook-handler.ts and server/api/payment-history.ts showing how to call the service (do not remove existing code; integrate safely)
+
+
+
+server/storage.ts adapter (thin adapter mapping expected storage methods to existing storage/ORM code)
+
+
+
+README or PR description with run/test instructions and acceptance criteria
+
+
+
+Important constraints:
+
+
+
+
+
+Money must be integer cents everywhere.
+
+
+
+All ledger work (payments & allocations) must be transactional.
+
+
+
+Idempotency must be enforced via persisted idempotency_key and stripe external id.
+
+
+
+Do not commit secrets. Use environment variables (DOCUMENT which env vars the code needs).
+
+
+
+Add tests and ensure they pass locally.
+
+High-level tasks (in order)
+
+
+
+
+
+Create split utility
+
+
+
+
+
+File: server/lib/splitIntegerEvenly.ts
+
+
+
+Purpose: deterministically split integer total across N parts using floor+remainder
+
+
+
+Add unit tests (tests exist below)
+
+
+
+Create PaymentProcessor service
+
+
+
+
+
+File: server/services/paymentProcessor.ts
+
+
+
+Responsibilities:
+
+
+
+
+
+Validate payload (totalCents integer, items non-empty, items each with total_cost_cents integer)
+
+
+
+Idempotency check (externalId and idempotencyKey)
+
+
+
+Insert canonical payment row
+
+
+
+Insert payment_allocations rows with applied_cents
+
+
+
+Update enrollment totals (increment or recalc from allocations)
+
+
+
+Update scheduled_payments if applicable
+
+
+
+Return payment and allocation result
+
+
+
+Broadcast billing updates after DB commit
+
+
+
+The service should be storage-agnostic and call into a storage adapter (server/storage.ts). Use transaction abstraction: storage.transaction(cb).
+
+
+
+Add DB migration
+
+
+
+
+
+File: migrations/2026-01-07_add_payments_idempotency_key.sql
+
+
+
+Purpose: add idempotency_key and source columns, add unique index for idempotency_key and external_id.
+
+
+
+Create tests
+
+
+
+
+
+File: tests/paymentProcessor.test.ts (Jest)
+
+
+
+Tests:
+
+
+
+
+
+splitIntegerEvenly (even, remainder, single part, zero total)
+
+
+
+PaymentProcessor with a mocked storage (integration-style):
+
+
+
+
+
+Processes payment and allocations sum to totalCents
+
+
+
+Idempotency returns existing
+
+
+
+Ensure jest config can run tests (use project's existing jest config).
+
+
+
+Implement storage adapter
+
+
+
+
+
+File: server/storage.ts
+
+
+
+Purpose: map the abstract storage operations to the repo's existing DB functions or ORM.
+
+
+
+Required methods (at minimum):
+
+
+
+
+
+transaction(fn)
+
+
+
+getPaymentByExternalId(externalId)
+
+
+
+getPaymentByIdempotencyKey(key)
+
+
+
+insertPayment(paymentData)
+
+
+
+insertPaymentAllocation(allocationData)
+
+
+
+findEnrollmentIdByChildAndClass(childId, classId)
+
+
+
+incrementEnrollmentPaid(enrollmentId, cents)
+
+
+
+updateScheduledPaymentStatus(scheduledPaymentId)
+
+
+
+broadcastBillingUpdate(paymentId)
+
+
+
+If adapting to Drizzle/Prisma/knex, implement thin wrappers. If quick stub is needed for tests, make test adapter mockable.
+
+
+
+Wire the service into handlers (non-destructive)
+
+
+
+
+
+Add example code in:
+
+
+
+
+
+server/webhook-handler.ts (inside payment_intent.succeeded block) to call PaymentProcessor.processPayment with stripe data
+
+
+
+server/api/payment-history.ts manual-pay endpoint to call PaymentProcessor.processPayment with idempotencyKey
+
+
+
+Do NOT remove existing logic right away: call the service first then fallback or log errors until validated. Prefer a safe migration path.
+
+
+
+Add migration/run instructions and ENV
+
+
+
+
+
+Document required env vars (e.g., DATABASE_URL, STRIPE_SECRET_KEY, SUPABASE_URL/KEY if used).
+
+
+
+Add npm scripts if needed: test, migrate (if repo uses a migration runner).
+
+
+
+Run tests and fix issues
+
+
+
+
+
+Ensure tests pass in Replit environment: npm install, npm test
+
+
+
+Add any missing dev dependencies: jest, ts-jest, @types/jest, uuid (if used), etc.
+
+
+
+Create branch + PR
+
+
+
+
+
+Branch name: feature/payment-processor-option-b
+
+
+
+Commit messages should be granular and explicit; final PR description must include reasoning, acceptance criteria, and run steps.
+
+Files and content templates (copy exactly where helpful)
+
+
+
+
+
+server/lib/splitIntegerEvenly.ts
+
+TypeScript
+
+// Deterministic integer split utility - always sums to total
+export function splitIntegerEvenly(total: number, parts: number): number[] {
+  if (!Number.isInteger(total) || total < 0) throw new Error('total must be non-negative integer');
+  if (!Number.isInteger(parts) || parts <= 0) throw new Error('parts must be positive integer');
+
+  const base = Math.floor(total / parts);
+  let remainder = total % parts;
+  const result: number[] = [];
+  for (let i = 0; i < parts; i++) {
+    if (remainder > 0) {
+      result.push(base + 1);
+      remainder -= 1;
+    } else {
+      result.push(base);
+    }
+  }
+  const sum = result.reduce((s, v) => s + v, 0);
+  if (sum !== total) throw new Error(`split mismatch: ${sum} !== ${total}`);
+  return result;
+}
+
+
+
+
+
+
+server/services/paymentProcessor.ts (Use the service skeleton already prepared — include the same validations and transaction pattern. If you want Replit AI to paste the exact code, include the earlier PaymentProcessor skeleton code block.)
+
+
+
+migrations/2026-01-07_add_payments_idempotency_key.sql
+
+SQL
+
+ALTER TABLE public.payments
+  ADD COLUMN idempotency_key TEXT,
+  ADD COLUMN source TEXT;
+
+CREATE UNIQUE INDEX IF NOT EXISTS payments_idempotency_key_unique ON public.payments (idempotency_key) WHERE idempotency_key IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS payments_external_id_unique ON public.payments (external_id) WHERE external_id IS NOT NULL;
+
+
+
+
+
+
+tests/paymentProcessor.test.ts (Use the test file content provided earlier in this thread. Ensure import paths match your repo layout.)
+
+
+
+server/storage.ts (adapter template)
+
+TypeScript
+
+// server/storage.ts - thin adapter. Replace internals with project's ORM/DB calls.
+export default {
+  transaction: async (cb: any) => {
+    // If using an ORM with transaction, start a transaction and pass tx-adapter
+    return cb({
+      insertPayment: async (p: any) => { /* implement */ },
+      insertPaymentAllocation: async (a: any) => { /* implement */ },
+      findEnrollmentIdByChildAndClass: async (childId: number, classId: number) => { /* implement */ },
+      incrementEnrollmentPaid: async (enrollmentId: number, cents: number) => { /* implement */ },
+      updateScheduledPaymentStatus: async (id: any) => { /* implement */ },
+    });
+  },
+  getPaymentByExternalId: async (id: any) => { /* implement */ },
+  getPaymentByIdempotencyKey: async (k: any) => { /* implement */ },
+  broadcastBillingUpdate: async (paymentId: any) => { /* implement */ },
+};
+
+
+Wiring snippets (small non-destructive changes)
+
+
+
+
+
+webhook-handler: call PaymentProcessor.processPayment in the payment_intent.succeeded branch using paymentIntent.amount and paymentIntent.metadata.itemsJson; log and fall back if service throws.
+
+
+
+manual endpoint: use idempotencyKey from request body or generate UUID; call PaymentProcessor.processPayment and return result.
+
+Environment variables required (document)
+
+
+
+
+
+DATABASE_URL or your DB connection string (used by storage adapter)
+
+
+
+STRIPE_SECRET_KEY (if testing Stripe webhook integration)
+
+
+
+SUPABASE_URL and SUPABASE_KEY (if using Supabase storage)
+
+
+
+NODE_ENV, etc.
+
+Run & test instructions (to include in PR)
+
+
+
+
+
+Install deps:
+
+
+
+
+
+npm install
+
+
+
+Run tests:
+
+
+
+
+
+npm test
+
+
+
+Run migrations (follow repo's migration process) or run SQL:
+
+
+
+
+
+psql $DATABASE_URL -f migrations/2026-01-07_add_payments_idempotency_key.sql
+
+
+
+Start dev server:
+
+
+
+
+
+npm run dev (adapt to repo's start script)
+
+
+
+Simulate webhook manually (if Stripe CLI not available): POST sample payment_intent.succeeded payload to webhook endpoint and verify allocations in DB or via log.
+
+Acceptance criteria (must be satisfied before merging)
+
+
+
+
+
+All new unit tests pass (npm test).
+
+
+
+PaymentProcessor.processPayment:
+
+
+
+
+
+Throws TOTAL_MISMATCH if item sum !== totalCents (both in integer cents).
+
+
+
+Inserts a payments row and payment_allocations rows that sum exactly to totalCents.
+
+
+
+Honors idempotency: multiple calls with same externalId or idempotencyKey do not create duplicate allocations and return alreadyProcessed=true.
+
+
+
+Webhook and manual endpoints call the new service and behave identically (same ledger outcome).
+
+
+
+Migration file added and documented.
+
+
+
+No secrets added to the repo.
+
+
+
+PR includes manual test steps and a runbook entry for TOTAL_MISMATCH troubleshooting.
+
+Additional guidance for Replit AI
+
+
+
+
+
+If any existing functions or storage APIs are named differently in the repo, adapt the adapter methods to call the existing API (e.g., if the repo uses a storage.getAllEnrollments or db.updateProgramEnrollment, map to those).
+
+
+
+If the repo uses Drizzle/Prisma, prefer to implement storage adapter using that ORM.
+
+
+
+Keep code TypeScript-typed and pass ts build (tsc --noEmit).
+
+
+
+Add comments/TODOs where human review or integration with real DB is required.
+
+
+
+Create a feature branch named feature/payment-processor-option-b and push commits incrementally with clear messages. Provide a final PR description summarizing design choices, run steps and potential migration caveats.
+
+Post-implementation steps I want in the PR description
+
+
+
+
+
+Summary of changes
+
+
+
+How to run tests
+
+
+
+DB migration instructions & how to revert
+
+
+
+Manual test checklist (create payment via client -> simulate webhook -> verify allocations)
+
+
+
+Migration/backfill plan for historical manual payments (if metadata present)
+
+
+
+Any remaining TODOs and estimated follow-ups (e.g., update UI to require item total_cost_cents in cents)
+
+If you want, next actions for me (choose one)
+
+
+
+
+
+I can generate the exact files/content for the files above and produce a PR patch you can apply.
+
+
+
+Or I can generate the minimal storage adapter implemented for Drizzle/Prisma if you tell me which ORM is used.
+
