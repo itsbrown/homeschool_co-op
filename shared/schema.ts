@@ -883,6 +883,14 @@ export const stripePaymentHistory = pgTable("stripe_payment_history", {
   paymentMethod: text("payment_method"), // card, bank_transfer, etc.
   description: text("description"),
   
+  // Unified payment processing fields (PaymentProcessorService)
+  idempotencyKey: text("idempotency_key").unique(), // Prevent duplicate processing
+  source: text("source", { 
+    enum: ["stripe", "manual", "payment_plan"] 
+  }), // Payment source type
+  snapshotJson: jsonb("snapshot_json"), // Canonical cart snapshot at payment time
+  snapshotChecksum: text("snapshot_checksum"), // HMAC checksum for integrity verification
+  
   // Timestamps
   stripeCreatedAt: timestamp("stripe_created_at").notNull(), // When payment was created in Stripe
   createdAt: timestamp("created_at").defaultNow().notNull(), // When we synced it to our DB
@@ -898,6 +906,10 @@ export const insertStripePaymentHistorySchema = createInsertSchema(stripePayment
     subtotalAmount: z.number().nullable().default(null),
     discountTotal: z.number().nullable().default(null),
     discountSnapshot: z.any().nullable().default(null),
+    idempotencyKey: z.string().nullable().default(null),
+    source: z.enum(["stripe", "manual", "payment_plan"]).nullable().default(null),
+    snapshotJson: z.any().nullable().default(null),
+    snapshotChecksum: z.string().nullable().default(null),
   });
 export type InsertStripePaymentHistory = z.infer<typeof insertStripePaymentHistorySchema>;
 export type StripePaymentHistory = typeof stripePaymentHistory.$inferSelect;
