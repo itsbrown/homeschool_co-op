@@ -8,6 +8,7 @@ import { createClient } from '@supabase/supabase-js';
 import { dataLayer } from '../services/dataLayer';
 import { getStripeClient } from '../config/stripe';
 import { supabaseAuth } from '../middleware/supabase-auth';
+import { isPaymentProcessorEnabled } from '../services/PaymentProcessorService';
 
 const router = Router();
 
@@ -157,6 +158,31 @@ router.post('/create-payment-intent', paymentRateLimit, async (req, res) => {
       isMonthly
     });
 
+    // Generate snapshot metadata for PaymentProcessor if enabled
+    // NOTE: Full snapshot storage requires larger metadata capacity; for now we store
+    // essential verification data and let PaymentProcessor recalculate from enrollments
+    let snapshotMetadata: Record<string, string> = {};
+    if (isPaymentProcessorEnabled()) {
+      try {
+        const parentUserForSnapshot = await storage.getUserByEmail(parentEmail);
+        const userIdForSnapshot = parentUserForSnapshot?.id || 0;
+        
+        // Store only essential metadata within Stripe's 500 char limit per field
+        // PaymentProcessor will recalculate full snapshot from enrollmentIds during webhook
+        snapshotMetadata = {
+          processorEnabled: 'true',
+          userId: String(userIdForSnapshot),
+          snapshotVersion: '1'
+        };
+        console.log('📸 PaymentProcessor metadata set for PaymentIntent:', {
+          userId: userIdForSnapshot,
+          enrollmentCount: enrollmentDetails.length
+        });
+      } catch (snapshotError) {
+        console.warn('⚠️ Failed to set PaymentProcessor metadata:', snapshotError);
+      }
+    }
+
     // Create payment intent
     const stripe = await getStripeClient();
     const paymentIntent = await stripe.paymentIntents.create({
@@ -167,7 +193,8 @@ router.post('/create-payment-intent', paymentRateLimit, async (req, res) => {
         enrollmentDetails: JSON.stringify(enrollmentDetails),
         paymentPlan,
         paymentType: 'balance_payment',
-        enrollmentIds: JSON.stringify(enrollmentDetails.map((e: any) => e.enrollmentId))
+        enrollmentIds: JSON.stringify(enrollmentDetails.map((e: any) => e.enrollmentId)),
+        ...snapshotMetadata
       }
     });
 
