@@ -319,13 +319,15 @@ function transformStaffToFrontend(schoolStaff: any, user: any, classes: any[] = 
 const STAFF_TYPE_ROLES = ['educator', 'teacher', 'schoolAdmin'];
 
 // Transform user_roles-based staff data to frontend format
-// Optionally accepts staffRecord from school_staff for department/locationId (dual-write support)
+// userLocationId from user_locations table is the source of truth for location assignments
+// staffRecord from school_staff is used for department enrichment only
 function transformUserRoleStaffToFrontend(
   userRole: any, 
   user: any, 
   classes: any[] = [], 
   hasPendingInvitation: boolean = false,
-  staffRecord?: any // Optional school_staff record for enrichment
+  staffRecord?: any, // Optional school_staff record for department enrichment
+  userLocationId?: number | null // Source of truth for location from user_locations table
 ) {
   const status = hasPendingInvitation ? 'Pending' : (user.isActive !== false ? 'Active' : 'Inactive');
   
@@ -343,7 +345,7 @@ function transformUserRoleStaffToFrontend(
     phone: user.phone || '',
     subjects: [],
     classIds: classes.map(c => c.id.toString()),
-    locationId: staffRecord?.locationId || null, // Use locationId from school_staff if available
+    locationId: userLocationId !== undefined ? userLocationId : (staffRecord?.locationId || null), // Prefer user_locations, fallback to school_staff
     userId: user.id // Include user ID for reference
   };
 }
@@ -1271,7 +1273,7 @@ router.get("/staff", supabaseAuth, async (req: any, res: any) => {
     const allClasses = await storage.getAllClasses();
     const schoolClasses = allClasses.filter(c => c.schoolId === schoolId);
 
-    // Fetch school_staff records for enrichment (department, locationId)
+    // Fetch school_staff records for enrichment (department only)
     const schoolStaffRecords = await storage.getSchoolStaffBySchoolId(schoolId);
     const staffRecordMap = new Map<number, any>();
     schoolStaffRecords.forEach((staff: any) => {
@@ -1279,6 +1281,21 @@ router.get("/staff", supabaseAuth, async (req: any, res: any) => {
         staffRecordMap.set(staff.userId, staff);
       }
     });
+
+    // Fetch user_locations for all users (source of truth for locationId)
+    // Get all locations for this school to filter user_locations
+    const schoolLocations = await storage.getLocationsBySchoolId(schoolId);
+    const schoolLocationIds = schoolLocations.map(loc => loc.id);
+    
+    // Build a map of userId -> locationId from user_locations
+    const userLocationMap = new Map<number, number | null>();
+    for (const userId of userIds) {
+      const userLocations = await storage.getUserLocationsByUserId(userId);
+      // Filter to only locations belonging to this school
+      const schoolUserLocations = userLocations.filter(ul => schoolLocationIds.includes(ul.locationId));
+      // Use the first matching location (a user typically has one location per school)
+      userLocationMap.set(userId, schoolUserLocations.length > 0 ? schoolUserLocations[0].locationId : null);
+    }
 
     // Transform to frontend format - one entry per user role
     const staffWithDetails = staffTypeRoles.map((roleRecord: UserRole) => {
@@ -1296,10 +1313,13 @@ router.get("/staff", supabaseAuth, async (req: any, res: any) => {
       // Check if this user has a pending invitation
       const hasPendingInvitation = pendingInvitationsMap.get(user.email) || false;
       
-      // Get school_staff record for department/locationId enrichment
+      // Get school_staff record for department enrichment
       const staffRecord = staffRecordMap.get(roleRecord.userId);
       
-      return transformUserRoleStaffToFrontend(roleRecord, user, assignedClasses, hasPendingInvitation, staffRecord);
+      // Get locationId from user_locations (source of truth)
+      const userLocationId = userLocationMap.get(roleRecord.userId);
+      
+      return transformUserRoleStaffToFrontend(roleRecord, user, assignedClasses, hasPendingInvitation, staffRecord, userLocationId);
     });
 
     // Filter out null entries
@@ -1359,13 +1379,20 @@ router.get("/staff/:id", supabaseAuth, async (req: any, res) => {
     const pendingInvitationsMap = await storage.getPendingRoleInvitationsByEmails([user.email]);
     const hasPendingInvitation = pendingInvitationsMap.get(user.email) || false;
 
-    // Fetch school_staff record for enrichment (department, locationId)
+    // Fetch school_staff record for enrichment (department only)
     const schoolStaffRecords = await storage.getSchoolStaffBySchoolId(schoolId);
     const staffRecord = schoolStaffRecords.find((s: any) => s.userId === roleRecord.userId);
 
-    const staffMember = transformUserRoleStaffToFrontend(roleRecord, user, assignedClasses, hasPendingInvitation, staffRecord);
+    // Fetch locationId from user_locations (source of truth)
+    const schoolLocations = await storage.getLocationsBySchoolId(schoolId);
+    const schoolLocationIds = schoolLocations.map(loc => loc.id);
+    const userLocations = await storage.getUserLocationsByUserId(user.id);
+    const schoolUserLocations = userLocations.filter(ul => schoolLocationIds.includes(ul.locationId));
+    const userLocationId = schoolUserLocations.length > 0 ? schoolUserLocations[0].locationId : null;
+
+    const staffMember = transformUserRoleStaffToFrontend(roleRecord, user, assignedClasses, hasPendingInvitation, staffRecord, userLocationId);
     
-    console.log(`✅ Found staff member: ${staffMember.name}`);
+    console.log(`✅ Found staff member: ${staffMember.name}, locationId: ${userLocationId}`);
     res.json(staffMember);
   } catch (error) {
     console.error("Error fetching staff member:", error);
@@ -1881,13 +1908,20 @@ router.put("/staff/:id", supabaseAuth, async (req: any, res) => {
     const pendingInvitationsMap = await storage.getPendingRoleInvitationsByEmails([updatedUser!.email]);
     const hasPendingInvitation = pendingInvitationsMap.get(updatedUser!.email) || false;
 
-    // Fetch school_staff record for enrichment (department, locationId)
-    const schoolStaffRecords = await storage.getSchoolStaffBySchoolId(schoolId);
-    const staffRecord = schoolStaffRecords.find((s: any) => s.userId === updatedRoleRecord.userId);
+    // Fetch school_staff record for enrichment (department only)
+    const schoolStaffRecordsForUpdate = await storage.getSchoolStaffBySchoolId(schoolId);
+    const staffRecordForUpdate = schoolStaffRecordsForUpdate.find((s: any) => s.userId === updatedRoleRecord.userId);
 
-    const updatedStaff = transformUserRoleStaffToFrontend(updatedRoleRecord, updatedUser!, assignedClasses, hasPendingInvitation, staffRecord);
+    // Fetch locationId from user_locations (source of truth)
+    const schoolLocationsForUpdate = await storage.getLocationsBySchoolId(schoolId);
+    const schoolLocationIdsForUpdate = schoolLocationsForUpdate.map(loc => loc.id);
+    const userLocationsForUpdate = await storage.getUserLocationsByUserId(updatedUser!.id);
+    const schoolUserLocationsForUpdate = userLocationsForUpdate.filter(ul => schoolLocationIdsForUpdate.includes(ul.locationId));
+    const userLocationIdForUpdate = schoolUserLocationsForUpdate.length > 0 ? schoolUserLocationsForUpdate[0].locationId : null;
+
+    const updatedStaff = transformUserRoleStaffToFrontend(updatedRoleRecord, updatedUser!, assignedClasses, hasPendingInvitation, staffRecordForUpdate, userLocationIdForUpdate);
     
-    console.log(`✅ Successfully updated staff member with role ID ${roleId}`);
+    console.log(`✅ Successfully updated staff member with role ID ${roleId}, locationId: ${userLocationIdForUpdate}`);
 
     res.json({ 
       success: true, 
