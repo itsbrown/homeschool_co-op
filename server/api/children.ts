@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { storage } from "../storage";
 import { jwtCheck } from "../middleware/auth0-auth";
+import { syncChildLocationToParent } from "../services/locationSyncService";
 
 const router = Router();
 
@@ -100,6 +101,9 @@ router.post("/", jwtCheck, isParent, async (req: any, res: Response) => {
       return res.status(404).json({ message: "Parent user not found" });
     }
     
+    // Inherit parent's locationId for the child
+    const parentLocationId = parent.locationId || null;
+    
     // Create the new child in the database
     const newChild = await storage.createChild({
       parentId: parent.id,
@@ -120,7 +124,7 @@ router.post("/", jwtCheck, isParent, async (req: any, res: Response) => {
       emergencyContact: null,
       additionalLanguages: null,
       notes: notes || null,
-      locationId: null
+      locationId: parentLocationId
     });
     
     console.log(`✅ Child registered successfully: ${newChild.firstName} ${newChild.lastName} (ID: ${newChild.id})`);
@@ -134,14 +138,13 @@ router.post("/", jwtCheck, isParent, async (req: any, res: Response) => {
           childId: newChild.id,
           grade: gradeLevel,
           status: 'active',
-          locationId: null,
+          locationId: parentLocationId,
           studentId: null,
           notes: null
         });
-        console.log(`✅ School student record created:`, schoolStudent);
+        console.log(`✅ School student record created with locationId: ${parentLocationId}`, schoolStudent);
       } catch (schoolStudentError) {
         console.error('⚠️ Failed to create school_student record:', schoolStudentError);
-        // Don't fail the entire registration if this fails - child is already created
       }
     }
     

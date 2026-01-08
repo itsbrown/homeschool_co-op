@@ -1814,6 +1814,17 @@ async function runMigrations() {
     `);
     console.log('✅ Migration completed: pii_access_logs table created');
     
+    // Add location_id column to users table for parent home location
+    console.log('Running migration: Adding location_id column to users table...');
+    await db.execute(sql`
+      ALTER TABLE users 
+      ADD COLUMN IF NOT EXISTS location_id INTEGER REFERENCES locations(id);
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_users_location_id ON users(location_id);
+    `);
+    console.log('✅ Migration completed: location_id column added to users table');
+    
   } catch (fundraiserError) {
     const errorMessage = fundraiserError instanceof Error ? fundraiserError.message : String(fundraiserError);
     if (!errorMessage.includes('Database connection not available')) {

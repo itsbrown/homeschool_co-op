@@ -3,6 +3,12 @@ import { z } from "zod";
 import { insertLocationSchema, insertUserLocationSchema } from "@shared/schema";
 import { storage } from "../storage";
 import { requireSchoolContext } from "../middleware/require-school-context";
+import { 
+  updateParentLocation, 
+  getParentLocationInfo,
+  getLocationsBySchoolId as getLocationsService,
+  LocationSyncContext
+} from "../services/locationSyncService";
 
 const router = express.Router();
 
@@ -383,6 +389,360 @@ router.delete("/access/:userId/:locationId", requireSchoolContext, async (req: a
   } catch (error) {
     console.error("Error removing user location access:", error);
     res.status(500).json({ message: "Failed to remove user location access" });
+  }
+});
+
+// ============================================================================
+// PARENT LOCATION ENDPOINTS (self-service and admin)
+// ============================================================================
+
+// Get current user's location info (self-service)
+router.get("/my-location", requireSchoolContext, async (req: any, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ message: "User not authenticated" });
+    }
+
+    const locationInfo = await getParentLocationInfo(userId);
+    if (!locationInfo) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.json(locationInfo);
+  } catch (error) {
+    console.error("Error fetching user location:", error);
+    res.status(500).json({ message: "Failed to fetch location" });
+  }
+});
+
+// Update current user's location (parent self-service)
+router.patch("/my-location", requireSchoolContext, async (req: any, res) => {
+  try {
+    const userId = req.user?.id;
+    const userEmail = req.user?.email;
+    const schoolId = Number(req.schoolId);
+    
+    if (!userId) {
+      return res.status(401).json({ message: "User not authenticated" });
+    }
+
+    const schema = z.object({
+      locationId: z.number().nullable()
+    });
+
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ 
+        message: "Invalid request body",
+        errors: parsed.error.errors 
+      });
+    }
+
+    const { locationId } = parsed.data;
+
+    const context: LocationSyncContext = {
+      actorId: userId,
+      actorEmail: userEmail || 'unknown',
+      actorRole: req.user?.role || 'parent',
+      schoolId,
+      ipAddress: req.ip || req.connection?.remoteAddress,
+      userAgent: req.headers['user-agent']
+    };
+
+    const result = await updateParentLocation(userId, locationId, context);
+
+    if (!result.success) {
+      return res.status(400).json({ 
+        message: result.error || "Failed to update location" 
+      });
+    }
+
+    res.json({
+      message: "Location updated successfully",
+      parentUpdated: result.parentUpdated,
+      childrenUpdated: result.childrenUpdated
+    });
+  } catch (error) {
+    console.error("Error updating user location:", error);
+    res.status(500).json({ message: "Failed to update location" });
+  }
+});
+
+// Admin: Update a parent's location (requires canManageStudents permission)
+router.patch("/parent/:parentId/location", requireSchoolContext, async (req: any, res) => {
+  try {
+    const adminId = req.user?.id;
+    const adminEmail = req.user?.email;
+    const schoolId = Number(req.schoolId);
+    const parentId = parseInt(req.params.parentId);
+
+    if (!adminId) {
+      return res.status(401).json({ message: "User not authenticated" });
+    }
+
+    if (isNaN(parentId)) {
+      return res.status(400).json({ message: "Invalid parent ID" });
+    }
+
+    // Check admin permissions - must have canManageStudents
+    const userLocations = await storage.getUserLocationsByUserId(adminId);
+    const hasManageStudentsPermission = userLocations.some(
+      (ul: any) => ul.canManageStudents === true
+    );
+
+    // Also allow schoolAdmin role
+    const isSchoolAdmin = req.user?.role === 'schoolAdmin' || req.user?.role === 'admin';
+
+    if (!hasManageStudentsPermission && !isSchoolAdmin) {
+      return res.status(403).json({ 
+        message: "Permission denied - canManageStudents permission required" 
+      });
+    }
+
+    // Verify parent belongs to the same school
+    const parentUser = await storage.getUser(parentId);
+    if (!parentUser) {
+      return res.status(404).json({ message: "Parent not found" });
+    }
+
+    if (Number(parentUser.schoolId) !== schoolId) {
+      return res.status(403).json({ 
+        message: "Access denied - parent belongs to a different school" 
+      });
+    }
+
+    const schema = z.object({
+      locationId: z.number().nullable()
+    });
+
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ 
+        message: "Invalid request body",
+        errors: parsed.error.errors 
+      });
+    }
+
+    const { locationId } = parsed.data;
+
+    const context: LocationSyncContext = {
+      actorId: adminId,
+      actorEmail: adminEmail || 'unknown',
+      actorRole: req.user?.role || 'schoolAdmin',
+      schoolId,
+      ipAddress: req.ip || req.connection?.remoteAddress,
+      userAgent: req.headers['user-agent']
+    };
+
+    const result = await updateParentLocation(parentId, locationId, context);
+
+    if (!result.success) {
+      return res.status(400).json({ 
+        message: result.error || "Failed to update location" 
+      });
+    }
+
+    res.json({
+      message: "Parent location updated successfully",
+      parentUpdated: result.parentUpdated,
+      childrenUpdated: result.childrenUpdated
+    });
+  } catch (error) {
+    console.error("Error updating parent location:", error);
+    res.status(500).json({ message: "Failed to update parent location" });
+  }
+});
+
+// Admin: Get a parent's location info
+router.get("/parent/:parentId/location", requireSchoolContext, async (req: any, res) => {
+  try {
+    const schoolId = Number(req.schoolId);
+    const parentId = parseInt(req.params.parentId);
+
+    if (isNaN(parentId)) {
+      return res.status(400).json({ message: "Invalid parent ID" });
+    }
+
+    // Verify parent belongs to the same school
+    const parentUser = await storage.getUser(parentId);
+    if (!parentUser) {
+      return res.status(404).json({ message: "Parent not found" });
+    }
+
+    if (Number(parentUser.schoolId) !== schoolId) {
+      return res.status(403).json({ 
+        message: "Access denied - parent belongs to a different school" 
+      });
+    }
+
+    const locationInfo = await getParentLocationInfo(parentId);
+    res.json(locationInfo);
+  } catch (error) {
+    console.error("Error fetching parent location:", error);
+    res.status(500).json({ message: "Failed to fetch parent location" });
+  }
+});
+
+// ============================================================================
+// LOCATION-BASED REPORTING ENDPOINTS
+// ============================================================================
+
+// Get students by location
+router.get("/reports/students-by-location", requireSchoolContext, async (req: any, res) => {
+  try {
+    const schoolId = Number(req.schoolId);
+    const locationId = req.query.locationId ? parseInt(req.query.locationId as string) : null;
+
+    // Validate locationId belongs to this school if provided
+    if (locationId) {
+      const location = await storage.getLocationById(locationId);
+      if (!location || Number(location.schoolId) !== schoolId) {
+        return res.status(403).json({ message: "Access denied - location belongs to a different school" });
+      }
+    }
+
+    // Get all school students for this school (storage already filters by schoolId)
+    const schoolStudents = await storage.getSchoolStudentsBySchoolId(schoolId);
+    
+    // Double-check tenant isolation (defense in depth)
+    const tenantFilteredStudents = schoolStudents.filter((s: any) => Number(s.schoolId) === schoolId);
+    
+    // Filter by location if provided
+    const filtered = locationId 
+      ? tenantFilteredStudents.filter((s: any) => s.locationId === locationId)
+      : tenantFilteredStudents;
+
+    // Group by location
+    const byLocation: Record<string, any[]> = {};
+    for (const student of filtered) {
+      const locId = student.locationId ? String(student.locationId) : 'unassigned';
+      if (!byLocation[locId]) {
+        byLocation[locId] = [];
+      }
+      byLocation[locId].push(student);
+    }
+
+    res.json({
+      total: filtered.length,
+      byLocation,
+      students: filtered
+    });
+  } catch (error) {
+    console.error("Error fetching students by location:", error);
+    res.status(500).json({ message: "Failed to fetch students by location" });
+  }
+});
+
+// Get families (parents) by location
+router.get("/reports/families-by-location", requireSchoolContext, async (req: any, res) => {
+  try {
+    const schoolId = Number(req.schoolId);
+    const locationId = req.query.locationId ? parseInt(req.query.locationId as string) : null;
+
+    // Validate locationId belongs to this school if provided
+    if (locationId) {
+      const location = await storage.getLocationById(locationId);
+      if (!location || Number(location.schoolId) !== schoolId) {
+        return res.status(403).json({ message: "Access denied - location belongs to a different school" });
+      }
+    }
+
+    // Get all users for this school who are parents (with strict tenant filtering)
+    const allUsers = await storage.getAllUsers();
+    const schoolParents = allUsers.filter((u: any) => 
+      Number(u.schoolId) === schoolId && u.role === 'parent'
+    );
+
+    // Filter by location if provided
+    const filtered = locationId
+      ? schoolParents.filter((p: any) => p.locationId === locationId)
+      : schoolParents;
+
+    // Group by location (return only safe fields - no PII unless needed)
+    const byLocation: Record<string, any[]> = {};
+    for (const parent of filtered) {
+      const locId = parent.locationId ? String(parent.locationId) : 'unassigned';
+      if (!byLocation[locId]) {
+        byLocation[locId] = [];
+      }
+      byLocation[locId].push({
+        id: parent.id,
+        name: parent.name,
+        email: parent.email,
+        locationId: parent.locationId
+      });
+    }
+
+    res.json({
+      total: filtered.length,
+      byLocation,
+      families: filtered.map((p: any) => ({
+        id: p.id,
+        name: p.name,
+        email: p.email,
+        locationId: p.locationId
+      }))
+    });
+  } catch (error) {
+    console.error("Error fetching families by location:", error);
+    res.status(500).json({ message: "Failed to fetch families by location" });
+  }
+});
+
+// Get location summary statistics
+router.get("/reports/summary", requireSchoolContext, async (req: any, res) => {
+  try {
+    const schoolId = Number(req.schoolId);
+
+    // Get all locations for this school (with tenant isolation)
+    const allLocations = await storage.getLocationsBySchoolId(schoolId);
+    const locations = allLocations.filter((loc: any) => Number(loc.schoolId) === schoolId);
+    
+    // Get all school students (with tenant isolation)
+    const allSchoolStudents = await storage.getSchoolStudentsBySchoolId(schoolId);
+    const schoolStudents = allSchoolStudents.filter((s: any) => Number(s.schoolId) === schoolId);
+    
+    // Get all parents in this school (with strict tenant filtering)
+    const allUsers = await storage.getAllUsers();
+    const schoolParents = allUsers.filter((u: any) => 
+      Number(u.schoolId) === schoolId && u.role === 'parent'
+    );
+
+    // Build summary
+    const summary = locations.map((loc: any) => {
+      const studentCount = schoolStudents.filter((s: any) => s.locationId === loc.id).length;
+      const familyCount = schoolParents.filter((p: any) => p.locationId === loc.id).length;
+      
+      return {
+        locationId: loc.id,
+        locationName: loc.name,
+        locationCode: loc.code,
+        studentCount,
+        familyCount,
+        isActive: loc.isActive
+      };
+    });
+
+    // Add unassigned counts
+    const unassignedStudents = schoolStudents.filter((s: any) => !s.locationId).length;
+    const unassignedFamilies = schoolParents.filter((p: any) => !p.locationId).length;
+
+    res.json({
+      locations: summary,
+      unassigned: {
+        studentCount: unassignedStudents,
+        familyCount: unassignedFamilies
+      },
+      totals: {
+        locationCount: locations.length,
+        totalStudents: schoolStudents.length,
+        totalFamilies: schoolParents.length
+      }
+    });
+  } catch (error) {
+    console.error("Error fetching location summary:", error);
+    res.status(500).json({ message: "Failed to fetch location summary" });
   }
 });
 

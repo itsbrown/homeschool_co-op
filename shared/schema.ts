@@ -22,6 +22,7 @@ export const users = pgTable("users", {
   subscription: text("subscription", { enum: ["free", "individual", "family", "educator", "institutional"] }).default("free").notNull(),
   permissions: jsonb("permissions").default({}).notNull(), // Custom permissions
   schoolId: integer("school_id"), // Link user to school
+  locationId: integer("location_id").references(() => locations.id), // Parent's home location (children auto-inherit)
   phone: text("phone"), // User's phone number
   emergencyContactFirstName: text("emergency_contact_first_name"), // Emergency contact first name
   emergencyContactLastName: text("emergency_contact_last_name"), // Emergency contact last name
