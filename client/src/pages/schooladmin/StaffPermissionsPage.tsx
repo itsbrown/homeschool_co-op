@@ -17,7 +17,8 @@ import {
   Bell,
   GraduationCap,
   Phone,
-  Loader2
+  Loader2,
+  UserPlus
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
@@ -43,6 +44,14 @@ interface Location {
   id: number;
   name: string;
   code: string;
+}
+
+interface StaffMember {
+  id: number;
+  email: string;
+  firstName?: string;
+  lastName?: string;
+  role?: string;
 }
 
 const permissionLabels: Record<string, { label: string; icon: any; description: string }> = {
@@ -92,6 +101,40 @@ export default function StaffPermissionsPage() {
   const { data: permissions, isLoading: permissionsLoading } = useQuery<UserLocationPermission[]>({
     queryKey: ['/api/school-admin/user-locations', selectedLocationId],
     enabled: !!selectedLocationId,
+  });
+
+  // Fetch all school staff to show unassigned ones
+  const { data: allStaff } = useQuery<StaffMember[]>({
+    queryKey: ['/api/school-admin/staff'],
+    enabled: !!user && !!selectedLocationId,
+  });
+
+  // Calculate unassigned staff for the selected location
+  const assignedUserIds = new Set(permissions?.map(p => p.userId) || []);
+  const unassignedStaff = allStaff?.filter(staff => !assignedUserIds.has(staff.id)) || [];
+
+  const assignStaffMutation = useMutation({
+    mutationFn: async ({ userId, locationId }: { userId: number; locationId: number }) => {
+      return apiRequest('POST', '/api/school-admin/user-locations', {
+        userId,
+        locationId,
+        accessLevel: 'view',
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/school-admin/user-locations'] });
+      toast({
+        title: 'Staff assigned',
+        description: 'Staff member has been assigned to this location.',
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to assign staff member',
+        variant: 'destructive',
+      });
+    },
   });
 
   const updatePermissionMutation = useMutation({
@@ -272,12 +315,62 @@ export default function StaffPermissionsPage() {
                   </Table>
                 </div>
               ) : (
-                <div className="text-center py-8 text-muted-foreground">
-                  <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p>No staff members assigned to this location</p>
-                  <p className="text-sm mt-1">
-                    Assign staff to locations from the Staff Management page
-                  </p>
+                <div className="space-y-6">
+                  <div className="text-center py-4 text-muted-foreground">
+                    <Users className="h-10 w-10 mx-auto mb-3 opacity-50" />
+                    <p className="font-medium">No staff members assigned to this location yet</p>
+                  </div>
+                  
+                  {unassignedStaff.length > 0 && (
+                    <div>
+                      <h4 className="font-medium mb-3 flex items-center gap-2">
+                        <UserPlus className="h-4 w-4" />
+                        Assign Staff to This Location
+                      </h4>
+                      <div className="border rounded-lg divide-y">
+                        {unassignedStaff.map((staff) => (
+                          <div 
+                            key={staff.id} 
+                            className="flex items-center justify-between p-3"
+                            data-testid={`unassigned-staff-${staff.id}`}
+                          >
+                            <div>
+                              <div className="font-medium">
+                                {staff.firstName || staff.lastName 
+                                  ? `${staff.firstName || ''} ${staff.lastName || ''}`.trim()
+                                  : staff.email}
+                              </div>
+                              <div className="text-sm text-muted-foreground">{staff.email}</div>
+                            </div>
+                            <Button
+                              size="sm"
+                              onClick={() => assignStaffMutation.mutate({ 
+                                userId: staff.id, 
+                                locationId: selectedLocationId! 
+                              })}
+                              disabled={assignStaffMutation.isPending}
+                              data-testid={`assign-button-${staff.id}`}
+                            >
+                              {assignStaffMutation.isPending ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <>
+                                  <UserPlus className="h-4 w-4 mr-1" />
+                                  Assign
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {unassignedStaff.length === 0 && (
+                    <p className="text-sm text-center text-muted-foreground">
+                      All staff members have been assigned to this location
+                    </p>
+                  )}
                 </div>
               )}
             </CardContent>

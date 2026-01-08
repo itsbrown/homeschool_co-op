@@ -20,7 +20,7 @@ import { getDb } from '../db';
 // Rate limiter for permission updates - prevent bulk abuse
 const permissionUpdateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 50, // 50 permission updates per 15 minutes per IP
+  max: 50, // 50 permission updates per 15 minutes per user
   message: {
     error: 'Rate limit exceeded',
     message: 'Too many permission updates. Please try again in a few minutes.',
@@ -28,9 +28,10 @@ const permissionUpdateLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req: any) => {
-    // Key by user ID if authenticated, otherwise by IP
-    return req.user?.id ? `user:${req.user.id}` : req.ip;
+    // Key by user ID only - this runs after supabaseAuth so user is always available
+    return `user:${req.user?.id || 'anonymous'}`;
   },
+  skip: (req: any) => !req.user?.id, // Skip rate limiting if no user (will be rejected by auth anyway)
 });
 import { sql, eq, and } from 'drizzle-orm';
 import { users, schools, userRoles, userLocations, locations, type InsertSchool, type UserRole } from '@shared/schema';
@@ -3628,6 +3629,97 @@ router.patch("/user-locations/:id", supabaseAuth, requireSchoolContext, permissi
   } catch (error) {
     console.error("❌ Error updating user location permissions:", error);
     res.status(500).json({ message: "Failed to update permissions" });
+  }
+});
+
+// Create user location assignment (assign staff to location)
+router.post("/user-locations", supabaseAuth, requireSchoolContext, async (req: any, res) => {
+  try {
+    const { userId, locationId, accessLevel = 'view' } = req.body;
+
+    if (!userId || !locationId) {
+      return res.status(400).json({ message: "userId and locationId are required" });
+    }
+
+    // Verify the location belongs to the user's school (multi-tenant security)
+    const location = await storage.getLocationById(locationId);
+    if (!location || location.schoolId !== req.schoolId) {
+      return res.status(403).json({ message: "Access denied: location does not belong to your school" });
+    }
+
+    // Verify the user exists and belongs to this school
+    const targetUser = await storage.getUser(userId);
+    if (!targetUser) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Check if assignment already exists
+    const existingAssignments = await storage.getUserLocationsByLocationId(locationId);
+    const alreadyAssigned = existingAssignments.some(ul => ul.userId === userId);
+    if (alreadyAssigned) {
+      return res.status(409).json({ message: "User is already assigned to this location" });
+    }
+
+    // Create the user_location record with default permissions
+    const userLocation = await storage.createUserLocation({
+      userId,
+      locationId,
+      accessLevel,
+      canViewReports: false,
+      canManageStaff: false,
+      canManageClasses: false,
+      canManageStudents: false,
+      canSendNotifications: false,
+      canViewParentContacts: false,
+      isActive: true,
+    });
+
+    // Audit log the assignment
+    await storage.createAuditLog({
+      actionType: 'staff_location_assignment',
+      severity: 'info',
+      actorId: req.user?.id,
+      actorRole: 'schoolAdmin',
+      actorEmail: req.user?.email,
+      targetType: 'user_location',
+      targetId: String(userLocation.id),
+      schoolId: req.schoolId,
+      ipAddress: req.ip || req.headers['x-forwarded-for'] as string || null,
+      userAgent: req.headers['user-agent'] || null,
+      metadata: {
+        assignedUser: {
+          id: userId,
+          email: targetUser.email,
+          name: `${targetUser.firstName || ''} ${targetUser.lastName || ''}`.trim(),
+        },
+        locationId,
+        locationName: location.name,
+        accessLevel,
+      },
+    });
+
+    console.log(`✅ Assigned user ${userId} to location ${locationId}`);
+
+    res.status(201).json({
+      id: userLocation.id,
+      userId: userLocation.userId,
+      userName: `${targetUser.firstName || ''} ${targetUser.lastName || ''}`.trim() || targetUser.email,
+      userEmail: targetUser.email,
+      locationId: userLocation.locationId,
+      locationName: location.name,
+      accessLevel: userLocation.accessLevel,
+      canViewReports: userLocation.canViewReports,
+      canManageStaff: userLocation.canManageStaff,
+      canManageClasses: userLocation.canManageClasses,
+      canManageStudents: userLocation.canManageStudents,
+      canSendNotifications: userLocation.canSendNotifications,
+      canViewParentContacts: userLocation.canViewParentContacts,
+      isActive: userLocation.isActive,
+    });
+
+  } catch (error) {
+    console.error("❌ Error creating user location assignment:", error);
+    res.status(500).json({ message: "Failed to assign staff to location" });
   }
 });
 
