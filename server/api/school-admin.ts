@@ -13,7 +13,25 @@ import { z } from 'zod';
 import { sendAccountInviteEmail, sendStaffInvitationEmail, sendPasswordResetEmail } from '../lib/email-service';
 import { supabaseAuth } from '../middleware/supabase-auth';
 import { requireSchoolContext } from '../middleware/require-school-context';
+import { clearPermissionCache } from '../middleware/locationPermissions';
+import rateLimit from 'express-rate-limit';
 import { getDb } from '../db';
+
+// Rate limiter for permission updates - prevent bulk abuse
+const permissionUpdateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 50, // 50 permission updates per 15 minutes per IP
+  message: {
+    error: 'Rate limit exceeded',
+    message: 'Too many permission updates. Please try again in a few minutes.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req: any) => {
+    // Key by user ID if authenticated, otherwise by IP
+    return req.user?.id ? `user:${req.user.id}` : req.ip;
+  },
+});
 import { sql, eq, and } from 'drizzle-orm';
 import { users, schools, userRoles, userLocations, locations, type InsertSchool, type UserRole } from '@shared/schema';
 
@@ -3504,7 +3522,7 @@ router.get("/user-locations/:locationId", supabaseAuth, requireSchoolContext, as
 });
 
 // Update user location permissions
-router.patch("/user-locations/:id", supabaseAuth, requireSchoolContext, async (req: any, res) => {
+router.patch("/user-locations/:id", supabaseAuth, requireSchoolContext, permissionUpdateLimiter, async (req: any, res) => {
   try {
     const id = parseInt(req.params.id);
     
@@ -3543,6 +3561,46 @@ router.patch("/user-locations/:id", supabaseAuth, requireSchoolContext, async (r
     if (!updated) {
       return res.status(500).json({ message: "Failed to update user location" });
     }
+
+    // Clear permission cache for this user/location to ensure fresh permissions
+    clearPermissionCache(updated.userId, updated.locationId);
+    console.log(`🔄 Cleared permission cache for user ${updated.userId} at location ${updated.locationId}`);
+
+    // Audit log the permission change
+    const targetUser = await storage.getUser(updated.userId);
+    await storage.createAuditLog({
+      actionType: 'permission_update',
+      severity: 'info',
+      actorId: req.user?.id,
+      actorRole: 'schoolAdmin',
+      actorEmail: req.user?.email,
+      targetType: 'user_location',
+      targetId: String(id),
+      schoolId: req.schoolId,
+      ipAddress: req.ip || req.headers['x-forwarded-for'] as string || null,
+      userAgent: req.headers['user-agent'] || null,
+      metadata: {
+        before: {
+          accessLevel: existingUserLocation.accessLevel,
+          canViewReports: existingUserLocation.canViewReports,
+          canManageStaff: existingUserLocation.canManageStaff,
+          canManageClasses: existingUserLocation.canManageClasses,
+          canManageStudents: existingUserLocation.canManageStudents,
+          canSendNotifications: existingUserLocation.canSendNotifications,
+          canViewParentContacts: existingUserLocation.canViewParentContacts,
+          isActive: existingUserLocation.isActive,
+        },
+        after: updateData,
+        targetUser: {
+          id: updated.userId,
+          email: targetUser?.email,
+          name: targetUser ? `${targetUser.firstName || ''} ${targetUser.lastName || ''}`.trim() : null,
+        },
+        locationId: updated.locationId,
+        locationName: location?.name,
+      },
+    });
+    console.log(`📋 Audit logged permission update for user ${updated.userId}`);
 
     // Return enriched response
     const user = await storage.getUser(updated.userId);
