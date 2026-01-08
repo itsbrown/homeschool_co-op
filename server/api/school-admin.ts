@@ -3380,41 +3380,16 @@ router.get("/locations/overview", async (req, res) => {
   }
 });
 
-router.get("/user-locations/my-permissions", async (req, res) => {
+router.get("/user-locations/my-permissions", supabaseAuth, async (req: any, res) => {
   try {
-    // Get user from auth token
-    const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) {
-      return res.status(401).json({ message: "No token provided" });
-    }
-
-    const token = authHeader.substring(7);
-    
-    let user;
-    try {
-      const supabaseModule = await import('../db/supabase');
-      const { data: { user: supabaseUser }, error } = await supabaseModule.supabase.auth.getUser(token);
-      if (error || !supabaseUser) {
-        throw new Error('Invalid token');
-      }
-      user = supabaseUser;
-    } catch (authError) {
-      console.log('🔧 Using development mode fallback');
-      const adminUser = await storage.getUserByEmail('coreycreates@gmail.com');
-      if (!adminUser) {
-        return res.status(401).json({ message: "Authentication failed" });
-      }
-      user = { email: adminUser.email, id: adminUser.id };
-    }
-
-    // Look up user in our system (user.email is guaranteed by both auth paths above)
-    const systemUser = await storage.getUserByEmail(user.email!);
-    if (!systemUser) {
-      return res.status(404).json({ message: "User not found in system" });
+    // User is authenticated via supabaseAuth middleware - get user ID from req.user
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ message: "Authentication required" });
     }
 
     // Get user's location permissions
-    const userLocations = await storage.getUserLocationsByUserId(systemUser.id);
+    const userLocations = await storage.getUserLocationsByUserId(userId);
     
     // Get location details
     const locationsWithPermissions = await Promise.all(
