@@ -169,6 +169,7 @@ router.get('/my-classes', async (req, res) => {
 });
 
 // GET /api/educator/my-students - Get students for educator's classes (authenticated)
+// [FIX:v6.0] Added location-based access for staff with canManageStudents permission
 router.get('/my-students', async (req, res) => {
   try {
     const userId = req.user?.id;
@@ -184,6 +185,84 @@ router.get('/my-students', async (req, res) => {
       return res.json({ students: [], totalStudents: 0 });
     }
 
+    // [FIX:v6.0] Check if user has canManageStudents permission at any locations
+    const userLocations = await storage.getUserLocationsByUserId(userId);
+    const locationsWithManageStudents = userLocations.filter(
+      (ul: any) => ul.canManageStudents === true && ul.isActive === true
+    );
+
+    // If user has canManageStudents permission, show ALL students at their permitted locations
+    if (locationsWithManageStudents.length > 0) {
+      const allowedLocationIds = locationsWithManageStudents
+        .map((ul: any) => ul.locationId)
+        .filter((id: any) => id !== undefined && id !== null);
+      
+      if (allowedLocationIds.length === 0) {
+        console.log(`⚠️ [EducatorDashboard] User ${userId} has canManageStudents but no valid location IDs`);
+        // Fall through to class-based view
+      } else {
+        console.log(`📍 [EducatorDashboard] User ${userId} has canManageStudents at locations: ${allowedLocationIds.join(', ')}`);
+
+        // Get all children for efficient lookup
+        const allChildren = await storage.getAllChildren();
+        const childMap = new Map(allChildren.map(c => [c.id, c]));
+        
+        // Collect students from all permitted locations using getSchoolStudentsByLocationId
+        const locationStudents: any[] = [];
+        const seenChildIds = new Set<number>();
+
+        for (const locationId of allowedLocationIds) {
+          const schoolStudents = await storage.getSchoolStudentsByLocationId(locationId);
+          
+          for (const ss of schoolStudents) {
+            if (!seenChildIds.has(ss.childId)) {
+              const child = childMap.get(ss.childId);
+              if (child) {
+                locationStudents.push({ child, schoolStudent: ss, locationId });
+                seenChildIds.add(ss.childId);
+              }
+            }
+          }
+        }
+
+        // Get location details for each student
+        const studentsWithDetails = await Promise.all(
+          locationStudents.map(async ({ child, schoolStudent, locationId }) => {
+            let locationName = 'Unknown Location';
+            const location = await storage.getLocationById(locationId);
+            if (location) {
+              locationName = location.name;
+            }
+            
+            return {
+              id: child.id,
+              firstName: child.firstName,
+              lastName: child.lastName,
+              gradeLevel: child.gradeLevel,
+              parentEmail: child.parentEmail,
+              birthdate: child.birthdate,
+              locationId: locationId,
+              locationName: locationName,
+              classId: null, // Location-based view doesn't have class context
+              className: locationName, // Show location name in class column
+              enrollmentDate: schoolStudent.enrollmentDate || child.createdAt,
+              enrollmentStatus: schoolStudent.status || 'active'
+            };
+          })
+        );
+
+        console.log(`📊 [EducatorDashboard] Found ${studentsWithDetails.length} students at user's permitted locations`);
+        
+        return res.json({
+          students: studentsWithDetails,
+          totalStudents: studentsWithDetails.length,
+          assignedClasses: 0,
+          viewMode: 'location' // Indicate this is location-based view
+        });
+      }
+    }
+
+    // Standard class-based view for staff without canManageStudents permission
     // Get classes assigned to this educator (check assignments first, then fall back to instructor lookup)
     const assignments = await storage.getEducatorClassAssignmentsByEducatorId(userId);
     
@@ -246,7 +325,8 @@ router.get('/my-students', async (req, res) => {
     res.json({
       students: studentsWithClasses,
       totalStudents: studentsWithClasses.length,
-      assignedClasses: assignedClasses.length
+      assignedClasses: assignedClasses.length,
+      viewMode: 'class' // Indicate this is class-based view
     });
   } catch (error) {
     console.error('[EducatorDashboard] Error fetching my students:', error);

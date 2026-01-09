@@ -6415,8 +6415,7 @@ import { DatabaseStorage } from "./dbStorage";
       }
 
       async getSchoolStudentsByLocationId(locationId: number): Promise<SchoolStudent[]> {
-        // dbStorage doesn't have this method yet, use memStorage as fallback
-        return this.memStorage.getSchoolStudentsByLocationId(locationId);
+        return this.dbStorage.getSchoolStudentsByLocationId(locationId);
       }
 
       async getSchoolStudentByChildId(childId: number): Promise<SchoolStudent | undefined> {

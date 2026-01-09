@@ -283,6 +283,11 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(schoolStudents).where(eq(schoolStudents.childId, childId));
   }
 
+  async getSchoolStudentsByLocationId(locationId: number): Promise<SchoolStudent[]> {
+    const db = await getDb();
+    return await db.select().from(schoolStudents).where(eq(schoolStudents.locationId, locationId));
+  }
+
   // Curriculum methods
   async getCurriculum(id: number): Promise<Curriculum | undefined> {
     const db = await getDb();
