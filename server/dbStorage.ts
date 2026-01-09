@@ -2427,6 +2427,15 @@ export class DatabaseStorage implements IStorage {
   }
 
   // User Location methods
+  async getUserLocationById(id: number): Promise<UserLocation | undefined> {
+    const db = await getDb();
+    const [userLocation] = await db
+      .select()
+      .from(userLocations)
+      .where(eq(userLocations.id, id));
+    return userLocation;
+  }
+
   async getUserLocationsByUserId(userId: number): Promise<UserLocation[]> {
     const db = await getDb();
     return await db

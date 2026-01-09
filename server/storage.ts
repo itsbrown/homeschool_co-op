@@ -6507,7 +6507,7 @@ import { DatabaseStorage } from "./dbStorage";
 
       // User Location methods
       async getUserLocationById(id: number): Promise<UserLocation | undefined> {
-        return this.memStorage.getUserLocationById(id);
+        return this.dbStorage.getUserLocationById(id);
       }
 
       async getUserLocationsByUserId(userId: number): Promise<UserLocation[]> {

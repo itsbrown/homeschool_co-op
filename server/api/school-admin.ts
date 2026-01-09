@@ -3674,6 +3674,10 @@ router.post("/user-locations", supabaseAuth, requireSchoolContext, async (req: a
       isActive: true,
     });
 
+    // Also sync the user's profile location_id to match
+    await storage.updateUser(userId, { locationId });
+    console.log(`📍 Synced user ${userId} profile location_id to ${locationId}`);
+
     // Audit log the assignment
     await storage.createAuditLog({
       actionType: 'staff_location_assignment',
