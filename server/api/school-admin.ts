@@ -2150,8 +2150,43 @@ router.get("/students", supabaseAuth, async (req: any, res) => {
 
     console.log(`📚 [FIX:v3.0] Fetching students for school admin (school_id from DB: ${schoolId})...`);
     
+    // [FIX:v5.0] Check if user has location-specific canManageStudents permissions
+    // This ADDS capability for location coordinators - they can see all students at their locations
+    // Staff WITHOUT canManageStudents should use class-based endpoints (/my-students) instead
+    const userId = req.user?.id;
+    const userRole = req.user?.role;
+    let allowedLocationIds: number[] | null = null; // null means all locations (for school admins)
+    
+    // Only apply location filtering for non-admin roles
+    if (userId && userRole !== 'schoolAdmin' && userRole !== 'admin') {
+      const userLocations = await storage.getUserLocationsByUserId(userId);
+      const locationsWithManageStudents = userLocations.filter(
+        (ul: any) => ul.canManageStudents === true && ul.isActive === true
+      );
+      
+      if (locationsWithManageStudents.length > 0) {
+        // Staff has canManageStudents - filter to ONLY those specific locations
+        allowedLocationIds = locationsWithManageStudents.map((ul: any) => ul.locationId);
+        console.log(`📍 User ${userId} has canManageStudents at locations: ${allowedLocationIds.join(', ')}`);
+      } else {
+        // Staff WITHOUT canManageStudents cannot access location rosters via this endpoint
+        // They should use class-based endpoints like /my-students for their class rosters
+        console.log(`⚠️ User ${userId} (role: ${userRole}) lacks canManageStudents - use /my-students instead`);
+        return res.json([]); // No location roster access without canManageStudents
+      }
+    }
+    
     // Get school students from database (not in-memory storage)
-    const schoolStudents = await storage.getSchoolStudentsBySchoolId(schoolId);
+    let schoolStudents = await storage.getSchoolStudentsBySchoolId(schoolId);
+    
+    // [FIX:v5.0] Filter by allowed locations if user has location-specific permissions
+    if (allowedLocationIds !== null) {
+      schoolStudents = schoolStudents.filter(ss => 
+        ss.locationId && allowedLocationIds!.includes(ss.locationId)
+      );
+      console.log(`📊 Filtered to ${schoolStudents.length} students at user's permitted locations`);
+    }
+    
     const schoolStudentChildIds = new Set(schoolStudents.map(ss => ss.childId));
     console.log(`📊 Found ${schoolStudents.length} students in school_students table for school ${schoolId}`);
     
@@ -2220,6 +2255,12 @@ router.get("/students", supabaseAuth, async (req: any, res) => {
       const children = await storage.getChildrenByParentEmail(parentEmail);
       for (const child of children) {
         if (!schoolStudentChildIds.has(child.id)) {
+          // [FIX:v5.0] Filter by allowed locations if user has location-specific permissions
+          if (allowedLocationIds !== null) {
+            if (!child.locationId || !allowedLocationIds.includes(child.locationId)) {
+              continue; // Skip children not at user's permitted locations
+            }
+          }
           additionalChildren.push(child);
           schoolStudentChildIds.add(child.id); // Prevent duplicates
         }
