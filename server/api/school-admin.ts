@@ -3481,7 +3481,7 @@ router.get("/user-locations/:locationId", supabaseAuth, requireSchoolContext, as
     }
     
     // Verify the location belongs to the user's school context
-    if (location.schoolId !== req.schoolId) {
+    if (location.schoolId !== Number(req.schoolId)) {
       return res.status(403).json({ message: "Access denied: location does not belong to your school" });
     }
 
@@ -3551,7 +3551,7 @@ router.patch("/user-locations/:id", supabaseAuth, requireSchoolContext, permissi
     
     // Verify the record's location belongs to the user's school (multi-tenant security)
     const location = await storage.getLocationById(existingUserLocation.locationId);
-    if (!location || location.schoolId !== req.schoolId) {
+    if (!location || location.schoolId !== Number(req.schoolId)) {
       console.error(`⚠️ Security: User tried to update user_location for different school`);
       return res.status(403).json({ message: "Access denied: record does not belong to your school" });
     }
@@ -3577,7 +3577,7 @@ router.patch("/user-locations/:id", supabaseAuth, requireSchoolContext, permissi
       actorEmail: req.user?.email,
       targetType: 'user_location',
       targetId: String(id),
-      schoolId: req.schoolId,
+      schoolId: Number(req.schoolId),
       ipAddress: req.ip || req.headers['x-forwarded-for'] as string || null,
       userAgent: req.headers['user-agent'] || null,
       metadata: {
