@@ -48,6 +48,7 @@ interface Location {
 
 interface StaffMember {
   id: number;
+  userId: number;
   email: string;
   firstName?: string;
   lastName?: string;
@@ -111,7 +112,7 @@ export default function StaffPermissionsPage() {
 
   // Calculate unassigned staff for the selected location
   const assignedUserIds = new Set(permissions?.map(p => p.userId) || []);
-  const unassignedStaff = allStaff?.filter(staff => !assignedUserIds.has(staff.id)) || [];
+  const unassignedStaff = allStaff?.filter(staff => !assignedUserIds.has(staff.userId)) || [];
 
   const assignStaffMutation = useMutation({
     mutationFn: async ({ userId, locationId }: { userId: number; locationId: number }) => {
@@ -345,7 +346,7 @@ export default function StaffPermissionsPage() {
                             <Button
                               size="sm"
                               onClick={() => assignStaffMutation.mutate({ 
-                                userId: staff.id, 
+                                userId: staff.userId, 
                                 locationId: selectedLocationId! 
                               })}
                               disabled={assignStaffMutation.isPending}
