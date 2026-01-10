@@ -77,9 +77,10 @@ export default function NotificationManagementPage() {
   });
 
   // Fetch classes for class-specific notifications
-  const { data: classes = [] } = useQuery<ClassInfo[]>({
+  const { data: classesResponse } = useQuery<{ classes: ClassInfo[], pagination: any }>({
     queryKey: ["/api/classes"],
   });
+  const classes = classesResponse?.classes || [];
 
   // Send individual notification mutation
   const sendIndividualMutation = useMutation({
