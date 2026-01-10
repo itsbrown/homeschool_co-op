@@ -2910,4 +2910,295 @@ router.get('/volunteers/search', async (req, res) => {
 
 // ==================== END VOLUNTEER SEARCH ENDPOINTS ====================
 
+// ==================== NOTIFICATION ENDPOINTS ====================
+
+// GET /api/educator/notification-data - Get classes with student/parent counts for notifications
+router.get('/notification-data', async (req, res) => {
+  try {
+    const email = req.query.email as string;
+    
+    if (!email) {
+      return res.status(400).json({ classes: [], totalParents: 0, error: 'Email required' });
+    }
+
+    console.log('[EducatorNotifications] Fetching notification data for:', email);
+
+    const user = await storage.getUserByEmail(email);
+    if (!user) {
+      console.log('[EducatorNotifications] User not found for email:', email);
+      return res.json({ classes: [], totalParents: 0 });
+    }
+
+    const userId = user.id;
+
+    // Get educator's class assignments
+    const assignments = await storage.getEducatorClassAssignmentsByEducatorId(userId);
+    
+    if (assignments.length === 0) {
+      // Fallback: Look up classes by instructor
+      const allClasses = await storage.getAllClasses();
+      const assignedClasses = allClasses.filter(cls => 
+        cls.instructorId === user.id || cls.instructorName === user.name
+      );
+      
+      if (assignedClasses.length === 0) {
+        console.log('[EducatorNotifications] No classes found for educator');
+        return res.json({ classes: [], totalParents: 0 });
+      }
+
+      // Process fallback classes
+      const classesWithCounts = await Promise.all(
+        assignedClasses.map(async (cls) => {
+          const enrollments = await storage.getEnrollmentsByClassId(cls.id);
+          const activeEnrollments = enrollments.filter((e: any) => 
+            e.status === 'enrolled' || e.status === 'active' || e.status === 'confirmed'
+          );
+          
+          // Get unique parent emails
+          const parentEmails = new Set<string>();
+          for (const enrollment of activeEnrollments) {
+            if (enrollment.childId) {
+              const child = await storage.getChildById(enrollment.childId);
+              if (child?.parentEmail) {
+                parentEmails.add(child.parentEmail);
+              }
+            }
+          }
+
+          return {
+            id: cls.id,
+            title: cls.title,
+            schedule: cls.schedule || 'Not scheduled',
+            studentCount: activeEnrollments.length,
+            parentCount: parentEmails.size
+          };
+        })
+      );
+
+      // Calculate total unique parents across all classes
+      const allParentEmails = new Set<string>();
+      for (const cls of assignedClasses) {
+        const enrollments = await storage.getEnrollmentsByClassId(cls.id);
+        for (const enrollment of enrollments) {
+          if (enrollment.childId && (enrollment.status === 'enrolled' || enrollment.status === 'active' || enrollment.status === 'confirmed')) {
+            const child = await storage.getChildById(enrollment.childId);
+            if (child?.parentEmail) {
+              allParentEmails.add(child.parentEmail);
+            }
+          }
+        }
+      }
+
+      console.log('[EducatorNotifications] Found', classesWithCounts.length, 'classes with', allParentEmails.size, 'unique parents');
+      return res.json({ classes: classesWithCounts, totalParents: allParentEmails.size });
+    }
+
+    // Process assigned classes
+    const classesWithCounts = await Promise.all(
+      assignments.map(async (assignment: any) => {
+        const classInfo = await storage.getClassById(assignment.classId);
+        if (!classInfo) return null;
+
+        const enrollments = await storage.getEnrollmentsByClassId(assignment.classId);
+        const activeEnrollments = enrollments.filter((e: any) => 
+          e.status === 'enrolled' || e.status === 'active' || e.status === 'confirmed'
+        );
+
+        // Get unique parent emails for this class
+        const parentEmails = new Set<string>();
+        for (const enrollment of activeEnrollments) {
+          if (enrollment.childId) {
+            const child = await storage.getChildById(enrollment.childId);
+            if (child?.parentEmail) {
+              parentEmails.add(child.parentEmail);
+            }
+          }
+        }
+
+        return {
+          id: assignment.classId,
+          title: classInfo.title,
+          schedule: classInfo.schedule || 'Not scheduled',
+          studentCount: activeEnrollments.length,
+          parentCount: parentEmails.size
+        };
+      })
+    );
+
+    const validClasses = classesWithCounts.filter(Boolean);
+
+    // Calculate total unique parents across all assigned classes
+    const allParentEmails = new Set<string>();
+    for (const assignment of assignments) {
+      const enrollments = await storage.getEnrollmentsByClassId(assignment.classId);
+      for (const enrollment of enrollments) {
+        if (enrollment.childId && (enrollment.status === 'enrolled' || enrollment.status === 'active' || enrollment.status === 'confirmed')) {
+          const child = await storage.getChildById(enrollment.childId);
+          if (child?.parentEmail) {
+            allParentEmails.add(child.parentEmail);
+          }
+        }
+      }
+    }
+
+    console.log('[EducatorNotifications] Found', validClasses.length, 'classes with', allParentEmails.size, 'unique parents');
+    return res.json({ classes: validClasses, totalParents: allParentEmails.size });
+  } catch (error) {
+    console.error('[EducatorNotifications] Error fetching notification data:', error);
+    res.status(500).json({ classes: [], totalParents: 0, error: 'Failed to fetch notification data' });
+  }
+});
+
+// POST /api/educator/notifications/send - Send notification to parents
+router.post('/notifications/send', async (req, res) => {
+  try {
+    const { subject, message, sendToAll, classIds, senderEmail } = req.body;
+
+    if (!subject || !message || !senderEmail) {
+      return res.status(400).json({ error: 'Subject, message, and sender email are required' });
+    }
+
+    console.log('[EducatorNotifications] Sending notification:', { subject, sendToAll, classIds, senderEmail });
+
+    const sender = await storage.getUserByEmail(senderEmail);
+    if (!sender) {
+      return res.status(401).json({ error: 'Sender not found' });
+    }
+
+    // Get educator's classes
+    let targetClassIds: number[] = [];
+    
+    if (sendToAll) {
+      // Get all classes for this educator
+      const assignments = await storage.getEducatorClassAssignmentsByEducatorId(sender.id);
+      if (assignments.length > 0) {
+        targetClassIds = assignments.map((a: any) => a.classId);
+      } else {
+        // Fallback to instructor lookup
+        const allClasses = await storage.getAllClasses();
+        const assignedClasses = allClasses.filter(cls => 
+          cls.instructorId === sender.id || cls.instructorName === sender.name
+        );
+        targetClassIds = assignedClasses.map(cls => cls.id);
+      }
+    } else {
+      targetClassIds = (classIds || []).map((id: string) => parseInt(id, 10));
+    }
+
+    if (targetClassIds.length === 0) {
+      return res.status(400).json({ error: 'No classes selected' });
+    }
+
+    // Collect all parent user IDs from selected classes
+    const parentUserIds = new Set<number>();
+    const parentEmails = new Set<string>();
+
+    for (const classId of targetClassIds) {
+      const enrollments = await storage.getEnrollmentsByClassId(classId);
+      const activeEnrollments = enrollments.filter((e: any) => 
+        e.status === 'enrolled' || e.status === 'active' || e.status === 'confirmed'
+      );
+
+      for (const enrollment of activeEnrollments) {
+        if (enrollment.childId) {
+          const child = await storage.getChildById(enrollment.childId);
+          if (child?.parentEmail) {
+            parentEmails.add(child.parentEmail);
+            // Find parent user by email
+            const parentUser = await storage.getUserByEmail(child.parentEmail);
+            if (parentUser) {
+              parentUserIds.add(parentUser.id);
+            }
+          }
+        }
+      }
+    }
+
+    if (parentUserIds.size === 0) {
+      return res.status(400).json({ error: 'No parents found in selected classes' });
+    }
+
+    console.log('[EducatorNotifications] Found', parentUserIds.size, 'unique parent users');
+
+    // Create the notification using existing storage method
+    const notification = await storage.createNotification({
+      senderId: sender.id,
+      schoolId: sender.schoolId || null,
+      type: 'in_app',
+      priority: 'normal',
+      subject: subject,
+      content: message,
+      targetType: 'individual',
+      targetData: { userIds: Array.from(parentUserIds) },
+      expiresAt: null,
+      scheduledFor: null,
+    });
+
+    // Create notification recipients for each parent
+    for (const parentId of parentUserIds) {
+      await storage.createNotificationRecipient({
+        notificationId: notification.id,
+        recipientId: parentId,
+        deliveryType: 'in_app',
+        status: 'pending',
+      });
+    }
+
+    console.log('[EducatorNotifications] Notification created with', parentUserIds.size, 'recipients');
+
+    res.status(201).json({
+      success: true,
+      notificationId: notification.id,
+      recipientCount: parentUserIds.size
+    });
+  } catch (error) {
+    console.error('[EducatorNotifications] Error sending notification:', error);
+    res.status(500).json({ error: 'Failed to send notification' });
+  }
+});
+
+// GET /api/educator/notifications/history - Get sent notifications for educator
+router.get('/notifications/history', async (req, res) => {
+  try {
+    const email = req.query.email as string;
+    
+    if (!email) {
+      return res.status(400).json([]);
+    }
+
+    const user = await storage.getUserByEmail(email);
+    if (!user) {
+      return res.json([]);
+    }
+
+    // Get all notifications sent by this educator
+    const allNotifications = await storage.getAllNotifications();
+    const educatorNotifications = allNotifications
+      .filter((n: any) => n.senderId === user.id)
+      .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 20); // Limit to last 20
+
+    // Get recipient counts for each notification
+    const notificationsWithCounts = await Promise.all(
+      educatorNotifications.map(async (notification: any) => {
+        const recipients = await storage.getNotificationRecipientsByNotificationId(notification.id);
+        return {
+          id: notification.id,
+          subject: notification.subject,
+          message: notification.content,
+          sentAt: notification.createdAt,
+          recipientCount: recipients.length
+        };
+      })
+    );
+
+    res.json(notificationsWithCounts);
+  } catch (error) {
+    console.error('[EducatorNotifications] Error fetching history:', error);
+    res.status(500).json([]);
+  }
+});
+
+// ==================== END NOTIFICATION ENDPOINTS ====================
+
 export default router;

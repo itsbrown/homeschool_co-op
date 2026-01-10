@@ -53,6 +53,13 @@ interface Location {
   code: string;
 }
 
+interface ClassInfo {
+  id: number;
+  title: string;
+  schedule?: string;
+  enrollmentCount?: number;
+}
+
 export default function NotificationManagementPage() {
   const [isComposeDialogOpen, setIsComposeDialogOpen] = useState(false);
   const [selectedTab, setSelectedTab] = useState("individual");
@@ -67,6 +74,11 @@ export default function NotificationManagementPage() {
   // Fetch locations for targeting
   const { data: locations = [] } = useQuery<Location[]>({
     queryKey: ["/api/locations"],
+  });
+
+  // Fetch classes for class-specific notifications
+  const { data: classes = [] } = useQuery<ClassInfo[]>({
+    queryKey: ["/api/classes"],
   });
 
   // Send individual notification mutation
@@ -177,6 +189,33 @@ export default function NotificationManagementPage() {
     },
   });
 
+  // Send class-specific notification mutation
+  const sendClassMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const response = await apiRequest("POST", "/api/notifications/send-by-class", data);
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(error);
+      }
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications?view=sent"] });
+      setIsComposeDialogOpen(false);
+      toast({
+        title: "Success",
+        description: `Notification sent to ${data.recipientCount || 0} parents`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to send notification",
+        variant: "destructive",
+      });
+    },
+  });
+
   const getStatusIcon = (status: string) => {
     switch (status) {
       case "sent":
@@ -247,15 +286,18 @@ export default function NotificationManagementPage() {
           </DialogTrigger>
           <NotificationComposeDialog
             locations={locations}
+            classes={classes}
             onSendIndividual={sendIndividualMutation.mutate}
             onSendRole={sendRoleMutation.mutate}
             onSendLocation={sendLocationMutation.mutate}
             onSendBroadcast={sendBroadcastMutation.mutate}
+            onSendClass={sendClassMutation.mutate}
             isLoading={
               sendIndividualMutation.isPending ||
               sendRoleMutation.isPending ||
               sendLocationMutation.isPending ||
-              sendBroadcastMutation.isPending
+              sendBroadcastMutation.isPending ||
+              sendClassMutation.isPending
             }
           />
         </Dialog>
@@ -432,17 +474,21 @@ export default function NotificationManagementPage() {
 // Notification Compose Dialog Component
 function NotificationComposeDialog({
   locations,
+  classes,
   onSendIndividual,
   onSendRole,
   onSendLocation,
   onSendBroadcast,
+  onSendClass,
   isLoading,
 }: {
   locations: Location[];
+  classes: ClassInfo[];
   onSendIndividual: (data: any) => void;
   onSendRole: (data: any) => void;
   onSendLocation: (data: any) => void;
   onSendBroadcast: (data: any) => void;
+  onSendClass: (data: any) => void;
   isLoading: boolean;
 }) {
   const { toast } = useToast();
@@ -450,6 +496,7 @@ function NotificationComposeDialog({
   const [selectedLocations, setSelectedLocations] = useState<number[]>([]);
   const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
   const [selectedUsers, setSelectedUsers] = useState<UserResult[]>([]);
+  const [selectedClasses, setSelectedClasses] = useState<number[]>([]);
   
   // Get user role for default delivery method
   const userRole = localStorage.getItem('activeRole') || 'parent';
@@ -461,6 +508,7 @@ function NotificationComposeDialog({
     setSelectedLocations([]);
     setSelectedRoles([]);
     setSelectedUsers([]);
+    setSelectedClasses([]);
   };
 
   const handleSubmit = (formData: FormData) => {
@@ -505,6 +553,18 @@ function NotificationComposeDialog({
 
       case "all":
         onSendBroadcast(baseData);
+        break;
+
+      case "class":
+        if (selectedClasses.length === 0) {
+          toast({
+            title: "No classes selected",
+            description: "Please select at least one class to notify parents.",
+            variant: "destructive",
+          });
+          return;
+        }
+        onSendClass({ ...baseData, classIds: selectedClasses });
         break;
     }
   };
@@ -604,10 +664,11 @@ function NotificationComposeDialog({
           <div className="grid gap-4">
             <Label>Target Recipients</Label>
             <Tabs value={targetType} onValueChange={handleTargetTypeChange}>
-              <TabsList className="grid w-full grid-cols-4">
+              <TabsList className="grid w-full grid-cols-5">
                 <TabsTrigger value="individual">Individual</TabsTrigger>
                 <TabsTrigger value="role">By Role</TabsTrigger>
                 <TabsTrigger value="location">By Location</TabsTrigger>
+                <TabsTrigger value="class">By Class</TabsTrigger>
                 <TabsTrigger value="all">Everyone</TabsTrigger>
               </TabsList>
 
@@ -751,6 +812,59 @@ function NotificationComposeDialog({
                   <p className="text-sm text-muted-foreground">
                     Leave blank to notify everyone at selected locations
                   </p>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="class" className="space-y-4">
+                <div className="grid gap-2">
+                  <Label>Select Classes</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Notify parents of students enrolled in selected classes
+                  </p>
+                  {classes.length === 0 ? (
+                    <div className="p-4 bg-muted rounded-lg border border-dashed">
+                      <div className="flex items-center space-x-2 text-muted-foreground">
+                        <Building2 className="h-5 w-5" />
+                        <div>
+                          <p className="font-medium">No classes available</p>
+                          <p className="text-sm">
+                            Create classes in Class Management to enable class-based notifications.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto border rounded-md p-2">
+                      {classes.map((cls) => (
+                        <div key={cls.id} className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`class-${cls.id}`}
+                            checked={selectedClasses.includes(cls.id)}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                setSelectedClasses([...selectedClasses, cls.id]);
+                              } else {
+                                setSelectedClasses(selectedClasses.filter(c => c !== cls.id));
+                              }
+                            }}
+                          />
+                          <Label htmlFor={`class-${cls.id}`} className="flex-1">
+                            <span className="font-medium">{cls.title}</span>
+                            {cls.schedule && (
+                              <span className="text-sm text-muted-foreground ml-2">
+                                ({cls.schedule})
+                              </span>
+                            )}
+                          </Label>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {selectedClasses.length > 0 && (
+                    <p className="text-sm text-muted-foreground">
+                      {selectedClasses.length} class{selectedClasses.length !== 1 ? 'es' : ''} selected
+                    </p>
+                  )}
                 </div>
               </TabsContent>
 

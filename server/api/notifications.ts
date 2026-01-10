@@ -265,6 +265,76 @@ router.post("/send-all", async (req, res) => {
   }
 });
 
+// Send notification to parents of students enrolled in specific classes
+router.post("/send-by-class", async (req, res) => {
+  try {
+    const { classIds, subject, content, type = "in_app", priority = "normal", scheduledFor } = req.body;
+    const senderId = req.body.senderId || 1;
+
+    if (!classIds || !Array.isArray(classIds) || classIds.length === 0) {
+      return res.status(400).json({ message: "Class IDs are required" });
+    }
+
+    console.log('[Notifications] Sending class-specific notification to classes:', classIds);
+
+    // Collect all parent user IDs from selected classes
+    const parentUserIds = new Set<number>();
+
+    for (const classId of classIds) {
+      const enrollments = await storage.getEnrollmentsByClassId(classId);
+      const activeEnrollments = enrollments.filter((e: any) => 
+        e.status === 'enrolled' || e.status === 'active' || e.status === 'confirmed'
+      );
+
+      for (const enrollment of activeEnrollments) {
+        if (enrollment.childId) {
+          const child = await storage.getChildById(enrollment.childId);
+          if (child?.parentEmail) {
+            const parentUser = await storage.getUserByEmail(child.parentEmail);
+            if (parentUser) {
+              parentUserIds.add(parentUser.id);
+            }
+          }
+        }
+      }
+    }
+
+    if (parentUserIds.size === 0) {
+      return res.status(400).json({ message: "No parents found in selected classes" });
+    }
+
+    const userIdsArray = Array.from(parentUserIds);
+    console.log('[Notifications] Found', userIdsArray.length, 'parent users for class notification');
+
+    // Use "individual" targetType to work with existing pipeline
+    const notificationData = {
+      senderId,
+      type,
+      priority,
+      subject,
+      content,
+      targetType: "individual" as const,
+      targetData: { userIds: userIdsArray, classIds }, // Include classIds for reference
+      scheduledFor: scheduledFor ? new Date(scheduledFor) : null,
+    };
+
+    const notification = await storage.createNotification(notificationData);
+    
+    // Use existing processNotification pipeline
+    await processNotification(notification);
+
+    console.log('[Notifications] Class notification created with', userIdsArray.length, 'recipients');
+
+    res.status(201).json({
+      ...notification,
+      recipientCount: userIdsArray.length
+    });
+  } catch (error) {
+    console.error("Error sending class-specific notification:", error);
+    res.status(500).json({ message: "Failed to send notification" });
+  }
+});
+
 router.get("/:id/stats", async (req, res) => {
   try {
     const id = parseInt(req.params.id);
