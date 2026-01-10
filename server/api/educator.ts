@@ -205,6 +205,7 @@ router.get('/my-students', async (req, res) => {
 
         // Get all children for efficient lookup
         const allChildren = await storage.getAllChildren();
+        console.log(`🔍 [EducatorDashboard] Total children in database: ${allChildren.length}`);
         const childMap = new Map(allChildren.map(c => [c.id, c]));
         
         // Collect students from all permitted locations using getSchoolStudentsByLocationId
@@ -213,6 +214,7 @@ router.get('/my-students', async (req, res) => {
 
         for (const locationId of allowedLocationIds) {
           const schoolStudents = await storage.getSchoolStudentsByLocationId(locationId);
+          console.log(`📋 [EducatorDashboard] Location ${locationId}: Found ${schoolStudents.length} school_students records`);
           
           for (const ss of schoolStudents) {
             if (!seenChildIds.has(ss.childId)) {
@@ -220,6 +222,8 @@ router.get('/my-students', async (req, res) => {
               if (child) {
                 locationStudents.push({ child, schoolStudent: ss, locationId });
                 seenChildIds.add(ss.childId);
+              } else {
+                console.log(`⚠️ [EducatorDashboard] No child found for childId ${ss.childId} (school_student id: ${ss.id})`);
               }
             }
           }
