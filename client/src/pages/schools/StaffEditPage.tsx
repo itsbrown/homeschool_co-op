@@ -30,6 +30,7 @@ import { useForm } from "react-hook-form";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
 import { apiRequest } from "@/lib/queryClient";
+import { formatClassSchedule } from "@/lib/utils";
 
 interface StaffMember {
   id: number;
@@ -591,7 +592,7 @@ export default function StaffEditPage() {
                               {cls.schedule && (
                                 <span className="flex items-center gap-1">
                                   <Clock className="h-3 w-3" />
-                                  {cls.schedule}
+                                  {formatClassSchedule(cls.schedule)}
                                 </span>
                               )}
                               {cls.location && (

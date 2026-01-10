@@ -15,6 +15,7 @@ import { apiRequest } from '@/lib/queryClient';
 import { ShoppingCart, CreditCard, Percent, Gift, AlertCircle, Check, Loader2, Calendar, DollarSign, Clock, CheckCircle2, Award } from 'lucide-react';
 import ParentAppShell from '@/components/layout/ParentAppShell';
 import { formatCurrency } from '@/utils/currency';
+import { formatClassSchedule } from '@/lib/utils';
 import { stripePromise } from '@/config/stripe';
 import type { Stripe } from '@stripe/stripe-js';
 import { trackBeginCheckout, trackAddPaymentInfo } from '@/lib/analytics';
@@ -1046,7 +1047,7 @@ export default function CartCheckout() {
                         )}
                       </div>
                       {item.schedule && (
-                        <p className="text-xs text-muted-foreground mt-1">{item.schedule}</p>
+                        <p className="text-xs text-muted-foreground mt-1">{formatClassSchedule(item.schedule)}</p>
                       )}
                     </div>
                     <div className="text-sm font-medium">

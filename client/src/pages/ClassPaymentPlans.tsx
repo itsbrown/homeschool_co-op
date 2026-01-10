@@ -7,6 +7,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Check, CreditCard, Calendar, DollarSign } from "lucide-react";
 import { useLocation } from "wouter";
+import { formatClassSchedule } from "@/lib/utils";
 
 interface ClassPaymentPlan {
   id: string;
@@ -144,7 +145,7 @@ export default function ClassPaymentPlans({ classData, childName, onSelectPlan }
                   <span className="font-medium">School:</span> {classData.school}
                 </div>
                 <div>
-                  <span className="font-medium">Schedule:</span> {classData.schedule}
+                  <span className="font-medium">Schedule:</span> {formatClassSchedule(classData.schedule)}
                 </div>
               </div>
             </CardDescription>

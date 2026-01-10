@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { formatClassSchedule } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -67,16 +68,6 @@ interface ClassInfo {
   title: string;
   schedule?: string | { variants: ScheduleVariant[] };
   enrollmentCount?: number;
-}
-
-function formatClassSchedule(schedule: string | { variants: ScheduleVariant[] } | undefined): string | null {
-  if (!schedule) return null;
-  if (typeof schedule === 'string') return schedule;
-  if (schedule.variants && schedule.variants.length > 0) {
-    const v = schedule.variants[0];
-    return `${v.days.join(', ')} ${v.startTime}-${v.endTime}`;
-  }
-  return null;
 }
 
 export default function NotificationManagementPage() {

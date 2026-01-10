@@ -10,6 +10,7 @@ import { Link } from "wouter";
 import ParentAppShell from "@/components/layout/ParentAppShell";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { formatClassSchedule } from "@/lib/utils";
 import { useCart } from "@/contexts/CartContext";
 import {
   AlertDialog,
@@ -335,7 +336,7 @@ export default function ChildEnrollmentsPage() {
                           <Clock className="h-4 w-4 mr-2 text-muted-foreground" />
                           <div>
                             <p className="font-medium">Schedule</p>
-                            <p className="text-muted-foreground">{details.schedule}</p>
+                            <p className="text-muted-foreground">{details.schedule ? formatClassSchedule(details.schedule) : 'Not set'}</p>
                           </div>
                         </div>
                         <div className="flex items-center">

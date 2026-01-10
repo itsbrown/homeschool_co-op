@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import SchoolAdminLayout from "@/components/layout/SchoolAdminLayout";
+import { formatClassSchedule } from "@/lib/utils";
 
 export default function StudentClassesPage() {
   const { id } = useParams();
@@ -141,10 +142,12 @@ export default function StudentClassesPage() {
                         <div className="flex-1">
                           <h3 className="font-semibold">{enrollment.className || enrollment.title}</h3>
                           <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
-                            <span className="flex items-center gap-1">
-                              <Calendar className="h-3 w-3" />
-                              {enrollment.schedule}
-                            </span>
+                            {enrollment.schedule && (
+                              <span className="flex items-center gap-1">
+                                <Calendar className="h-3 w-3" />
+                                {formatClassSchedule(enrollment.schedule)}
+                              </span>
+                            )}
                             {enrollment.location && (
                               <span className="flex items-center gap-1">
                                 <MapPin className="h-3 w-3" />

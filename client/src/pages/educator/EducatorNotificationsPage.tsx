@@ -12,6 +12,7 @@ import { useAuth } from "@/components/SupabaseProvider";
 import { Mail, Send, Clock, Users, MessageSquare, Bell } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { formatClassSchedule } from "@/lib/utils";
 
 interface ClassInfo {
   id: number;
@@ -230,9 +231,11 @@ export default function EducatorNotificationsPage() {
                               {classItem.studentCount} students • {classItem.parentCount} parents
                             </p>
                           </div>
-                          <Badge variant="outline">
-                            {classItem.schedule}
-                          </Badge>
+                          {classItem.schedule && (
+                            <Badge variant="outline">
+                              {formatClassSchedule(classItem.schedule)}
+                            </Badge>
+                          )}
                         </div>
                       ))}
                     </div>

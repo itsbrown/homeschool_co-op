@@ -19,7 +19,7 @@ import {
   User
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatDate } from "@/lib/utils";
+import { formatDate, formatClassSchedule } from "@/lib/utils";
 
 interface ClassData {
   id: number;
@@ -130,10 +130,12 @@ export default function EducatorClassDetailsPage() {
                 <MapPin className="h-4 w-4 mr-1" />
                 {classData.location}
               </div>
-              <div className="flex items-center">
-                <Calendar className="h-4 w-4 mr-1" />
-                {classData.schedule}
-              </div>
+              {classData.schedule && (
+                <div className="flex items-center">
+                  <Calendar className="h-4 w-4 mr-1" />
+                  {formatClassSchedule(classData.schedule)}
+                </div>
+              )}
             </div>
           </div>
           <Badge className={getStatusColor(classData.status)}>
@@ -298,7 +300,7 @@ export default function EducatorClassDetailsPage() {
             <CardContent className="space-y-4">
               <div>
                 <p className="text-sm font-medium text-gray-600">Schedule</p>
-                <p className="text-lg text-gray-900">{classData.schedule}</p>
+                <p className="text-lg text-gray-900">{classData.schedule ? formatClassSchedule(classData.schedule) : 'Not set'}</p>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
