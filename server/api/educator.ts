@@ -204,19 +204,21 @@ router.get('/my-students', async (req, res) => {
       } else {
         console.log(`📍 [EducatorDashboard] User ${userId} has canManageStudents at locations: ${allowedLocationIds.join(', ')}`);
 
-        // [FIX:v6.1] Follow established pattern from /students/by-location/:locationId
+        // [FIX:v6.2] Follow established pattern from /students/by-location/:locationId
         // Collect students from all permitted locations using getSchoolStudentsByLocationId
+        // Dedup by (childId, locationId) pair to support multi-location coordinators
         const allSchoolStudents: any[] = [];
-        const seenChildIds = new Set<number>();
+        const seenChildLocationPairs = new Set<string>();
 
         for (const locationId of allowedLocationIds) {
           const schoolStudents = await storage.getSchoolStudentsByLocationId(locationId);
           console.log(`📋 [EducatorDashboard] Location ${locationId}: Found ${schoolStudents.length} school_students records`);
           
           for (const ss of schoolStudents) {
-            if (!seenChildIds.has(ss.childId)) {
+            const pairKey = `${ss.childId}-${locationId}`;
+            if (!seenChildLocationPairs.has(pairKey)) {
               allSchoolStudents.push({ schoolStudent: ss, locationId });
-              seenChildIds.add(ss.childId);
+              seenChildLocationPairs.add(pairKey);
             }
           }
         }
