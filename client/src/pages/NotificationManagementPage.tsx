@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { formatClassSchedule } from "@/lib/utils";
@@ -73,6 +73,7 @@ interface ClassInfo {
 export default function NotificationManagementPage() {
   const [isComposeDialogOpen, setIsComposeDialogOpen] = useState(false);
   const [selectedTab, setSelectedTab] = useState("individual");
+  const [editingNotification, setEditingNotification] = useState<Notification | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -227,6 +228,78 @@ export default function NotificationManagementPage() {
     },
   });
 
+  // Update draft notification mutation
+  const updateDraftMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: any }) => {
+      const response = await apiRequest("PUT", `/api/notifications/${id}`, data);
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(error);
+      }
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications?view=sent"] });
+      setIsComposeDialogOpen(false);
+      setEditingNotification(null);
+      toast({
+        title: "Success",
+        description: data.status === "sent" ? "Draft sent successfully" : "Draft saved successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update draft",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Delete draft notification mutation
+  const deleteDraftMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const response = await apiRequest("DELETE", `/api/notifications/${id}`);
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(error);
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications?view=sent"] });
+      setIsComposeDialogOpen(false);
+      setEditingNotification(null);
+      toast({
+        title: "Success",
+        description: "Draft deleted successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete draft",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Handle clicking on a draft notification to edit it
+  const handleNotificationClick = (notification: Notification) => {
+    if (notification.status === "draft") {
+      setEditingNotification(notification);
+      setIsComposeDialogOpen(true);
+    }
+  };
+
+  // Handle closing the compose dialog
+  const handleCloseDialog = (open: boolean) => {
+    setIsComposeDialogOpen(open);
+    if (!open) {
+      setEditingNotification(null);
+    }
+  };
+
   const getStatusIcon = (status: string) => {
     switch (status) {
       case "sent":
@@ -288,7 +361,7 @@ export default function NotificationManagementPage() {
             Send targeted notifications to individuals, groups, or location-specific staff and students
           </p>
         </div>
-        <Dialog open={isComposeDialogOpen} onOpenChange={setIsComposeDialogOpen}>
+        <Dialog open={isComposeDialogOpen} onOpenChange={handleCloseDialog}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="mr-2 h-4 w-4" />
@@ -298,17 +371,22 @@ export default function NotificationManagementPage() {
           <NotificationComposeDialog
             locations={locations}
             classes={classes}
+            editingNotification={editingNotification}
             onSendIndividual={sendIndividualMutation.mutate}
             onSendRole={sendRoleMutation.mutate}
             onSendLocation={sendLocationMutation.mutate}
             onSendBroadcast={sendBroadcastMutation.mutate}
             onSendClass={sendClassMutation.mutate}
+            onUpdateDraft={(data) => editingNotification && updateDraftMutation.mutate({ id: editingNotification.id, data })}
+            onDeleteDraft={() => editingNotification && deleteDraftMutation.mutate(editingNotification.id)}
             isLoading={
               sendIndividualMutation.isPending ||
               sendRoleMutation.isPending ||
               sendLocationMutation.isPending ||
               sendBroadcastMutation.isPending ||
-              sendClassMutation.isPending
+              sendClassMutation.isPending ||
+              updateDraftMutation.isPending ||
+              deleteDraftMutation.isPending
             }
           />
         </Dialog>
@@ -421,9 +499,18 @@ export default function NotificationManagementPage() {
                 </TableRow>
               ) : (
                 notifications.map((notification: Notification) => (
-                  <TableRow key={notification.id}>
+                  <TableRow 
+                    key={notification.id}
+                    className={notification.status === "draft" ? "cursor-pointer hover:bg-muted/50" : ""}
+                    onClick={() => handleNotificationClick(notification)}
+                  >
                     <TableCell>
-                      <div className="font-medium">{notification.subject}</div>
+                      <div className="font-medium">
+                        {notification.subject}
+                        {notification.status === "draft" && (
+                          <Badge variant="outline" className="ml-2 text-xs">Click to edit</Badge>
+                        )}
+                      </div>
                       <div className="text-sm text-muted-foreground truncate max-w-xs">
                         {notification.content}
                       </div>
@@ -486,52 +573,173 @@ export default function NotificationManagementPage() {
 function NotificationComposeDialog({
   locations,
   classes,
+  editingNotification,
   onSendIndividual,
   onSendRole,
   onSendLocation,
   onSendBroadcast,
   onSendClass,
+  onUpdateDraft,
+  onDeleteDraft,
   isLoading,
 }: {
   locations: Location[];
   classes: ClassInfo[];
+  editingNotification: Notification | null;
   onSendIndividual: (data: any) => void;
   onSendRole: (data: any) => void;
   onSendLocation: (data: any) => void;
   onSendBroadcast: (data: any) => void;
   onSendClass: (data: any) => void;
+  onUpdateDraft: (data: any) => void;
+  onDeleteDraft: () => void;
   isLoading: boolean;
 }) {
+  type TargetType = "individual" | "role" | "location" | "all" | "class";
+  
   const { toast } = useToast();
-  const [targetType, setTargetType] = useState("individual");
-  const [selectedLocations, setSelectedLocations] = useState<number[]>([]);
-  const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
-  const [selectedUsers, setSelectedUsers] = useState<UserResult[]>([]);
-  const [selectedClasses, setSelectedClasses] = useState<number[]>([]);
+  const isEditMode = !!editingNotification;
+  
+  // Parse targetData from editing notification
+  const existingTargetData = editingNotification?.targetData as {
+    userIds?: number[];
+    roles?: string[];
+    locationIds?: number[];
+    classIds?: number[];
+  } | null;
+  
+  const [targetType, setTargetType] = useState<TargetType>(
+    (editingNotification?.targetType as TargetType) || "individual"
+  );
+  // Hydrate selections from existing targetData when editing
+  const [selectedLocations, setSelectedLocations] = useState<number[]>(
+    existingTargetData?.locationIds || []
+  );
+  const [selectedRoles, setSelectedRoles] = useState<string[]>(
+    existingTargetData?.roles || []
+  );
+  const [selectedUsers, setSelectedUsers] = useState<UserResult[]>(
+    // Convert userIds to UserResult objects for editing - will show IDs only
+    (existingTargetData?.userIds || []).map(id => ({ id, email: `User #${id}`, displayName: `User #${id}` }))
+  );
+  const [selectedClasses, setSelectedClasses] = useState<number[]>(
+    existingTargetData?.classIds || []
+  );
+  const [subject, setSubject] = useState(editingNotification?.subject || "");
+  const [content, setContent] = useState(editingNotification?.content || "");
+  const [type, setType] = useState(editingNotification?.type || "both");
+  const [priority, setPriority] = useState(editingNotification?.priority || "normal");
   
   // Get user role for default delivery method
   const userRole = localStorage.getItem('activeRole') || 'parent';
   const defaultDeliveryMethod = userRole === 'schoolAdmin' || userRole === 'platform_admin' ? 'in_app' : 'both';
   
+  // Sync state when editingNotification changes (for when dialog opens with a draft)
+  useEffect(() => {
+    if (editingNotification) {
+      const targetData = editingNotification.targetData as {
+        userIds?: number[];
+        roles?: string[];
+        locationIds?: number[];
+        classIds?: number[];
+      } | null;
+      
+      setSubject(editingNotification.subject || "");
+      setContent(editingNotification.content || "");
+      setType(editingNotification.type || "both");
+      setPriority(editingNotification.priority || "normal");
+      setTargetType((editingNotification.targetType as TargetType) || "individual");
+      setSelectedLocations(targetData?.locationIds || []);
+      setSelectedRoles(targetData?.roles || []);
+      setSelectedUsers(
+        (targetData?.userIds || []).map(id => ({ id, email: `User #${id}`, displayName: `User #${id}` }))
+      );
+      setSelectedClasses(targetData?.classIds || []);
+    } else {
+      // Reset to defaults for new notification
+      setSubject("");
+      setContent("");
+      setType("both");
+      setPriority("normal");
+      setTargetType("individual");
+      setSelectedLocations([]);
+      setSelectedRoles([]);
+      setSelectedUsers([]);
+      setSelectedClasses([]);
+    }
+  }, [editingNotification]);
+  
   // Reset selections when changing target type
   const handleTargetTypeChange = (newType: string) => {
-    setTargetType(newType);
+    setTargetType(newType as TargetType);
     setSelectedLocations([]);
     setSelectedRoles([]);
     setSelectedUsers([]);
     setSelectedClasses([]);
   };
 
-  const handleSubmit = (formData: FormData) => {
+  // Build targetData based on current target type and selections
+  const buildTargetData = () => {
+    switch (targetType) {
+      case "individual":
+        return { userIds: selectedUsers.map(u => u.id) };
+      case "role":
+        return { 
+          roles: selectedRoles, 
+          locationIds: selectedLocations.length > 0 ? selectedLocations : undefined 
+        };
+      case "location":
+        return { 
+          locationIds: selectedLocations, 
+          roles: selectedRoles.length > 0 ? selectedRoles : undefined 
+        };
+      case "class":
+        return { classIds: selectedClasses };
+      case "all":
+      default:
+        return {};
+    }
+  };
+
+  const handleSubmit = (sendNow: boolean = false) => {
     const baseData = {
-      senderId: 1, // Current user ID
-      subject: formData.get("subject") as string,
-      content: formData.get("content") as string,
-      type: formData.get("type") as string,
-      priority: formData.get("priority") as string,
-      scheduledFor: formData.get("scheduledFor") as string || undefined,
+      senderId: 1,
+      subject,
+      content,
+      type,
+      priority,
+      targetType,
     };
 
+    // If editing a draft, use update mutation with targetData
+    if (isEditMode) {
+      const targetData = buildTargetData();
+      
+      // Validate recipients if sending now
+      if (sendNow) {
+        if (targetType === "individual" && selectedUsers.length === 0) {
+          toast({
+            title: "No recipients selected",
+            description: "Please select at least one user to send the notification to.",
+            variant: "destructive",
+          });
+          return;
+        }
+        if (targetType === "class" && selectedClasses.length === 0) {
+          toast({
+            title: "No classes selected",
+            description: "Please select at least one class to send the notification to.",
+            variant: "destructive",
+          });
+          return;
+        }
+      }
+      
+      onUpdateDraft({ ...baseData, targetData, sendNow });
+      return;
+    }
+
+    // For new notifications, use the appropriate send mutation
     switch (targetType) {
       case "individual":
         const userIds = selectedUsers.map(u => u.id);
@@ -594,13 +802,14 @@ function NotificationComposeDialog({
     <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
       <form onSubmit={(e) => {
         e.preventDefault();
-        const formData = new FormData(e.currentTarget);
-        handleSubmit(formData);
+        handleSubmit(true); // Send now
       }}>
         <DialogHeader>
-          <DialogTitle>Compose Notification</DialogTitle>
+          <DialogTitle>{isEditMode ? "Edit Draft Notification" : "Compose Notification"}</DialogTitle>
           <DialogDescription>
-            Send targeted notifications to specific individuals, roles, or locations
+            {isEditMode 
+              ? "Edit your draft notification and send when ready" 
+              : "Send targeted notifications to specific individuals, roles, or locations"}
           </DialogDescription>
         </DialogHeader>
         
@@ -613,6 +822,8 @@ function NotificationComposeDialog({
                 id="subject"
                 name="subject"
                 placeholder="Important announcement..."
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
                 required
               />
             </div>
@@ -624,6 +835,8 @@ function NotificationComposeDialog({
                 name="content"
                 placeholder="Enter your message here..."
                 rows={4}
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
                 required
               />
             </div>
@@ -631,7 +844,7 @@ function NotificationComposeDialog({
             <div className="grid grid-cols-3 gap-4">
               <div className="grid gap-2">
                 <Label htmlFor="type">Delivery Method</Label>
-                <Select name="type" defaultValue={defaultDeliveryMethod}>
+                <Select value={type} onValueChange={(v) => setType(v as "email" | "in_app" | "both")}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -647,7 +860,7 @@ function NotificationComposeDialog({
 
               <div className="grid gap-2">
                 <Label htmlFor="priority">Priority</Label>
-                <Select name="priority" defaultValue="normal">
+                <Select value={priority} onValueChange={(v) => setPriority(v as "low" | "normal" | "high" | "urgent")}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -897,10 +1110,36 @@ function NotificationComposeDialog({
           </div>
         </div>
 
-        <DialogFooter>
-          <Button type="submit" disabled={isLoading}>
-            {isLoading ? "Sending..." : "Send Notification"}
-          </Button>
+        <DialogFooter className="flex justify-between">
+          {isEditMode ? (
+            <>
+              <Button 
+                type="button" 
+                variant="destructive" 
+                onClick={onDeleteDraft}
+                disabled={isLoading}
+              >
+                Delete Draft
+              </Button>
+              <div className="flex gap-2">
+                <Button 
+                  type="button" 
+                  variant="outline"
+                  onClick={() => handleSubmit(false)}
+                  disabled={isLoading}
+                >
+                  {isLoading ? "Saving..." : "Save Draft"}
+                </Button>
+                <Button type="submit" disabled={isLoading}>
+                  {isLoading ? "Sending..." : "Send Now"}
+                </Button>
+              </div>
+            </>
+          ) : (
+            <Button type="submit" disabled={isLoading}>
+              {isLoading ? "Sending..." : "Send Notification"}
+            </Button>
+          )}
         </DialogFooter>
       </form>
     </DialogContent>

@@ -696,4 +696,106 @@ async function markAllNotificationsAsRead(userId: number): Promise<void> {
   }
 }
 
+// PUT /api/notifications/:id - Update a draft notification
+router.put("/:id", async (req, res) => {
+  try {
+    const notificationId = parseInt(req.params.id);
+    if (isNaN(notificationId)) {
+      return res.status(400).json({ message: "Invalid notification ID" });
+    }
+
+    // Get the existing notification
+    const existingNotification = await storage.getNotificationById(notificationId);
+    if (!existingNotification) {
+      return res.status(404).json({ message: "Notification not found" });
+    }
+
+    // Only allow editing draft notifications
+    if (existingNotification.status !== "draft") {
+      return res.status(400).json({ message: "Can only edit draft notifications" });
+    }
+
+    const { subject, content, type, priority, targetType, targetData, sendNow } = req.body;
+
+    // Build update object with only provided fields
+    const updateData: any = {};
+    if (subject !== undefined) updateData.subject = subject;
+    if (content !== undefined) updateData.content = content;
+    if (type !== undefined) updateData.type = type;
+    if (priority !== undefined) updateData.priority = priority;
+    if (targetType !== undefined) updateData.targetType = targetType;
+    if (targetData !== undefined) updateData.targetData = targetData;
+
+    // If sendNow is true, validate targeting before processing
+    if (sendNow) {
+      const finalTargetType = targetType || existingNotification.targetType;
+      const finalTargetData = targetData || existingNotification.targetData;
+      
+      // Validate required targeting data based on target type
+      if (finalTargetType === "individual") {
+        if (!finalTargetData?.userIds || finalTargetData.userIds.length === 0) {
+          return res.status(400).json({ message: "Individual notifications require at least one user" });
+        }
+      } else if (finalTargetType === "class") {
+        if (!finalTargetData?.classIds || finalTargetData.classIds.length === 0) {
+          return res.status(400).json({ message: "Class notifications require at least one class" });
+        }
+      } else if (finalTargetType === "location") {
+        if (!finalTargetData?.locationIds || finalTargetData.locationIds.length === 0) {
+          return res.status(400).json({ message: "Location notifications require at least one location" });
+        }
+      } else if (finalTargetType === "role") {
+        if (!finalTargetData?.roles || finalTargetData.roles.length === 0) {
+          return res.status(400).json({ message: "Role notifications require at least one role" });
+        }
+      }
+      
+      updateData.status = "sent";
+      updateData.sentAt = new Date();
+    }
+
+    const updatedNotification = await storage.updateNotification(notificationId, updateData);
+    if (!updatedNotification) {
+      return res.status(500).json({ message: "Failed to update notification" });
+    }
+
+    // If sending the draft, process it to deliver to recipients
+    if (sendNow) {
+      await processNotification(updatedNotification);
+    }
+
+    res.json(updatedNotification);
+  } catch (error) {
+    console.error("Error updating notification:", error);
+    res.status(500).json({ message: "Failed to update notification" });
+  }
+});
+
+// DELETE /api/notifications/:id - Delete a draft notification
+router.delete("/:id", async (req, res) => {
+  try {
+    const notificationId = parseInt(req.params.id);
+    if (isNaN(notificationId)) {
+      return res.status(400).json({ message: "Invalid notification ID" });
+    }
+
+    // Get the existing notification
+    const existingNotification = await storage.getNotificationById(notificationId);
+    if (!existingNotification) {
+      return res.status(404).json({ message: "Notification not found" });
+    }
+
+    // Only allow deleting draft notifications
+    if (existingNotification.status !== "draft") {
+      return res.status(400).json({ message: "Can only delete draft notifications" });
+    }
+
+    await storage.deleteNotification(notificationId);
+    res.json({ message: "Notification deleted" });
+  } catch (error) {
+    console.error("Error deleting notification:", error);
+    res.status(500).json({ message: "Failed to delete notification" });
+  }
+});
+
 export default router;

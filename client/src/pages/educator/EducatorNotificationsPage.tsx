@@ -58,9 +58,17 @@ export default function EducatorNotificationsPage() {
     enabled: !!user?.email,
   });
 
+  // Query key factory for notification history
+  const notificationHistoryKey = (email: string) => ['/api/educator/notifications/history', { email }];
+
   // Get recent notifications sent by this educator
   const { data: notificationHistory } = useQuery<NotificationHistoryItem[]>({
-    queryKey: [`/api/educator/notifications/history?email=${encodeURIComponent(user?.email || '')}`],
+    queryKey: notificationHistoryKey(user?.email || ''),
+    queryFn: async () => {
+      const response = await fetch(`/api/educator/notifications/history?email=${encodeURIComponent(user?.email || '')}`);
+      if (!response.ok) throw new Error('Failed to fetch notification history');
+      return response.json();
+    },
     enabled: !!user?.email,
   });
 
@@ -78,7 +86,7 @@ export default function EducatorNotificationsPage() {
       setSubject("");
       setSelectedClasses([]);
       setSendToAll(false);
-      queryClient.invalidateQueries({ queryKey: ["/api/educator/notifications/history"] });
+      queryClient.invalidateQueries({ queryKey: notificationHistoryKey(user?.email || '') });
     },
     onError: (error) => {
       toast({
