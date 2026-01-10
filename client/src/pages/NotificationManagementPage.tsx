@@ -53,11 +53,30 @@ interface Location {
   code: string;
 }
 
+interface ScheduleVariant {
+  id: string;
+  name: string;
+  days: string[];
+  startTime: string;
+  endTime: string;
+  price: number;
+}
+
 interface ClassInfo {
   id: number;
   title: string;
-  schedule?: string;
+  schedule?: string | { variants: ScheduleVariant[] };
   enrollmentCount?: number;
+}
+
+function formatClassSchedule(schedule: string | { variants: ScheduleVariant[] } | undefined): string | null {
+  if (!schedule) return null;
+  if (typeof schedule === 'string') return schedule;
+  if (schedule.variants && schedule.variants.length > 0) {
+    const v = schedule.variants[0];
+    return `${v.days.join(', ')} ${v.startTime}-${v.endTime}`;
+  }
+  return null;
 }
 
 export default function NotificationManagementPage() {
@@ -851,9 +870,9 @@ function NotificationComposeDialog({
                           />
                           <Label htmlFor={`class-${cls.id}`} className="flex-1">
                             <span className="font-medium">{cls.title}</span>
-                            {cls.schedule && (
+                            {formatClassSchedule(cls.schedule) && (
                               <span className="text-sm text-muted-foreground ml-2">
-                                ({cls.schedule})
+                                ({formatClassSchedule(cls.schedule)})
                               </span>
                             )}
                           </Label>
