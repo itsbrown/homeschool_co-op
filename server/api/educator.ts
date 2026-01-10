@@ -170,6 +170,7 @@ router.get('/my-classes', async (req, res) => {
 
 // GET /api/educator/my-students - Get students for educator's classes (authenticated)
 // [FIX:v6.0] Added location-based access for staff with canManageStudents permission
+// [FIX:v6.1] Follow established pattern from school-admin.ts - use getChildById per student
 router.get('/my-students', async (req, res) => {
   try {
     const userId = req.user?.id;
@@ -203,13 +204,9 @@ router.get('/my-students', async (req, res) => {
       } else {
         console.log(`📍 [EducatorDashboard] User ${userId} has canManageStudents at locations: ${allowedLocationIds.join(', ')}`);
 
-        // Get all children for efficient lookup
-        const allChildren = await storage.getAllChildren();
-        console.log(`🔍 [EducatorDashboard] Total children in database: ${allChildren.length}`);
-        const childMap = new Map(allChildren.map(c => [c.id, c]));
-        
+        // [FIX:v6.1] Follow established pattern from /students/by-location/:locationId
         // Collect students from all permitted locations using getSchoolStudentsByLocationId
-        const locationStudents: any[] = [];
+        const allSchoolStudents: any[] = [];
         const seenChildIds = new Set<number>();
 
         for (const locationId of allowedLocationIds) {
@@ -218,24 +215,22 @@ router.get('/my-students', async (req, res) => {
           
           for (const ss of schoolStudents) {
             if (!seenChildIds.has(ss.childId)) {
-              const child = childMap.get(ss.childId);
-              if (child) {
-                locationStudents.push({ child, schoolStudent: ss, locationId });
-                seenChildIds.add(ss.childId);
-              } else {
-                console.log(`⚠️ [EducatorDashboard] No child found for childId ${ss.childId} (school_student id: ${ss.id})`);
-              }
+              allSchoolStudents.push({ schoolStudent: ss, locationId });
+              seenChildIds.add(ss.childId);
             }
           }
         }
 
-        // Get location details for each student
+        // [FIX:v6.1] Get child details for each school student (following school-admin pattern)
         const studentsWithDetails = await Promise.all(
-          locationStudents.map(async ({ child, schoolStudent, locationId }) => {
-            let locationName = 'Unknown Location';
+          allSchoolStudents.map(async ({ schoolStudent, locationId }) => {
+            const child = await storage.getChildById(schoolStudent.childId);
             const location = await storage.getLocationById(locationId);
-            if (location) {
-              locationName = location.name;
+            const locationName = location?.name || 'Unknown Location';
+            
+            if (!child) {
+              console.log(`⚠️ [EducatorDashboard] No child found for childId ${schoolStudent.childId} (school_student id: ${schoolStudent.id})`);
+              return null;
             }
             
             return {
@@ -255,11 +250,14 @@ router.get('/my-students', async (req, res) => {
           })
         );
 
-        console.log(`📊 [EducatorDashboard] Found ${studentsWithDetails.length} students at user's permitted locations`);
+        // Filter out null entries (children not found)
+        const validStudents = studentsWithDetails.filter(Boolean);
+
+        console.log(`📊 [EducatorDashboard] Found ${validStudents.length} students at user's permitted locations`);
         
         return res.json({
-          students: studentsWithDetails,
-          totalStudents: studentsWithDetails.length,
+          students: validStudents,
+          totalStudents: validStudents.length,
           assignedClasses: 0,
           viewMode: 'location' // Indicate this is location-based view
         });
