@@ -433,4 +433,49 @@ router.post('/cleanup', async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * GET /api/test/locations
+ * Lists all locations in the database for data migration verification
+ */
+router.get('/locations', async (req: Request, res: Response) => {
+  try {
+    const locations = await storage.getLocations();
+    console.log(`[Test] Found ${locations.length} locations`);
+    res.json({ locations, count: locations.length });
+  } catch (error) {
+    console.error('[Test] Error fetching locations:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch locations',
+      details: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+/**
+ * GET /api/test/school-students
+ * Lists all school students by location for data migration verification
+ */
+router.get('/school-students', async (req: Request, res: Response) => {
+  try {
+    const allSchoolStudents = await storage.getAllSchoolStudents();
+    const locationCounts: Record<number, number> = {};
+    for (const ss of allSchoolStudents) {
+      const locId = ss.locationId ?? 0;
+      locationCounts[locId] = (locationCounts[locId] || 0) + 1;
+    }
+    console.log(`[Test] School students by location:`, locationCounts);
+    res.json({ 
+      totalStudents: allSchoolStudents.length,
+      byLocation: locationCounts,
+      students: allSchoolStudents
+    });
+  } catch (error) {
+    console.error('[Test] Error fetching school students:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch school students',
+      details: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
 export default router;
