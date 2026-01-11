@@ -5135,7 +5135,23 @@ router.delete('/users/:id', supabaseAuth, requireSchoolContext, async (req: any,
       console.error('⚠️ Error deleting payment receipts:', paymentReceiptError);
     }
 
-    // Step 11: Cascade delete children and their dependencies
+    // Step 11: Clear substitute educator references in class sessions
+    try {
+      await storage.clearClassSessionsSubstituteEducatorId(userId);
+      console.log(`✅ Cleared substitute educator references for user ID: ${userId}`);
+    } catch (substituteError) {
+      console.error('⚠️ Error clearing substitute educator references:', substituteError);
+    }
+
+    // Step 12: Delete class sessions where user is primary educator
+    try {
+      await storage.deleteClassSessionsByEducatorId(userId);
+      console.log(`✅ Deleted class sessions for educator ID: ${userId}`);
+    } catch (classSessionError) {
+      console.error('⚠️ Error deleting class sessions:', classSessionError);
+    }
+
+    // Step 13: Cascade delete children and their dependencies
     try {
       const children = await storage.getChildrenByParentId(userId);
       console.log(`👶 Found ${children.length} children to delete for user ID: ${userId}`);
@@ -5173,7 +5189,7 @@ router.delete('/users/:id', supabaseAuth, requireSchoolContext, async (req: any,
       console.error('⚠️ Error deleting children:', childError);
     }
 
-    // Step 12: Delete user from local database
+    // Step 14: Delete user from local database
     await storage.deleteUser(userId);
     console.log(`✅ Deleted user from database: ${userEmail} (ID: ${userId}) from school ${schoolId}`);
     

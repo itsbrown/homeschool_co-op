@@ -117,6 +117,8 @@ export interface IStorage {
   deleteMembershipEnrollmentsByParentUserId(parentUserId: number): Promise<void>;
   deleteMembershipAgreementsByParentUserId(parentUserId: number): Promise<void>;
   deletePaymentReceiptsByParentUserId(parentUserId: number): Promise<void>;
+  deleteClassSessionsByEducatorId(educatorId: number): Promise<void>;
+  clearClassSessionsSubstituteEducatorId(educatorId: number): Promise<void>;
 
   // Location methods
   getLocationsBySchool(schoolId: number): Promise<Location[]>;
@@ -1247,6 +1249,14 @@ export class MemStorage implements IStorage {
 
   async deletePaymentReceiptsByParentUserId(parentUserId: number): Promise<void> {
     // MemStorage doesn't track payment receipts - no-op
+  }
+
+  async deleteClassSessionsByEducatorId(educatorId: number): Promise<void> {
+    // MemStorage doesn't track class sessions - no-op
+  }
+
+  async clearClassSessionsSubstituteEducatorId(educatorId: number): Promise<void> {
+    // MemStorage doesn't track class sessions - no-op
   }
 
   async getLocationsBySchool(schoolId: number): Promise<Location[]> {
@@ -5609,6 +5619,14 @@ import { DatabaseStorage } from "./dbStorage";
 
     async deletePaymentReceiptsByParentUserId(parentUserId: number): Promise<void> {
       return this.dbStorage.deletePaymentReceiptsByParentUserId(parentUserId);
+    }
+
+    async deleteClassSessionsByEducatorId(educatorId: number): Promise<void> {
+      return this.dbStorage.deleteClassSessionsByEducatorId(educatorId);
+    }
+
+    async clearClassSessionsSubstituteEducatorId(educatorId: number): Promise<void> {
+      return this.dbStorage.clearClassSessionsSubstituteEducatorId(educatorId);
     }
 
     async getParentsBySchoolId(schoolId: number): Promise<User[]> {
