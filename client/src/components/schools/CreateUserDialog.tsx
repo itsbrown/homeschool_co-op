@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Dialog,
   DialogContent,
@@ -32,16 +32,23 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 
+interface Location {
+  id: number;
+  name: string;
+  code?: string;
+  isActive: boolean;
+}
+
 const createUserSchema = z.object({
   firstName: z.string().min(2, 'First name must be at least 2 characters'),
   lastName: z.string().min(2, 'Last name must be at least 2 characters'),
   email: z.string().email('Please enter a valid email address'),
   role: z.enum(['parent', 'educator', 'staff', 'schoolAdmin']),
   phone: z.string().optional(),
+  locationId: z.string().optional(),
   password: z.string().optional(),
   confirmPassword: z.string().optional(),
 }).refine((data) => {
-  // Skip password validation when editing existing user (password is optional)
   if (!data.password && !data.confirmPassword) return true;
   if (data.password && data.password.length < 6) return false;
   return data.password === data.confirmPassword;
@@ -62,6 +69,13 @@ export default function CreateUserDialog({ open, onClose, editUser }: CreateUser
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  const { data: locations = [] } = useQuery<Location[]>({
+    queryKey: ['/api/locations'],
+    enabled: open,
+  });
+
+  const activeLocations = locations.filter(loc => loc.isActive);
+
   const form = useForm<CreateUserForm>({
     resolver: zodResolver(createUserSchema),
     defaultValues: {
@@ -70,12 +84,12 @@ export default function CreateUserDialog({ open, onClose, editUser }: CreateUser
       email: editUser?.email || '',
       role: editUser?.role || 'parent',
       phone: editUser?.phone || '',
+      locationId: editUser?.locationId?.toString() || '',
       password: '',
       confirmPassword: '',
     },
   });
 
-  // Update form when editUser changes
   React.useEffect(() => {
     if (editUser) {
       form.reset({
@@ -84,6 +98,7 @@ export default function CreateUserDialog({ open, onClose, editUser }: CreateUser
         email: editUser.email || '',
         role: editUser.role || 'parent',
         phone: editUser.phone || '',
+        locationId: editUser.locationId?.toString() || '',
         password: '',
         confirmPassword: '',
       });
@@ -94,6 +109,7 @@ export default function CreateUserDialog({ open, onClose, editUser }: CreateUser
         email: '',
         role: 'parent',
         phone: '',
+        locationId: '',
         password: '',
         confirmPassword: '',
       });
@@ -102,17 +118,20 @@ export default function CreateUserDialog({ open, onClose, editUser }: CreateUser
 
   const createUserMutation = useMutation({
     mutationFn: async (userData: CreateUserForm) => {
-      const { confirmPassword, ...data } = userData;
-      // Remove password fields if they're empty (for edit mode)
+      const { confirmPassword, locationId, ...rest } = userData;
+      const data: any = { ...rest };
+      
       if (!data.password) {
         delete data.password;
       }
       
+      if (locationId && locationId !== '') {
+        data.locationId = parseInt(locationId, 10);
+      }
+      
       if (editUser) {
-        // Update existing user
         return apiRequest('PUT', `/api/school-admin/users/${editUser.id}`, data);
       } else {
-        // Create new user
         return apiRequest('POST', '/api/school-admin/users', data);
       }
     },
@@ -142,7 +161,7 @@ export default function CreateUserDialog({ open, onClose, editUser }: CreateUser
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>{editUser ? 'Edit User' : 'Create New User'}</DialogTitle>
           <DialogDescription>
@@ -202,29 +221,57 @@ export default function CreateUserDialog({ open, onClose, editUser }: CreateUser
               )}
             />
 
-            <FormField
-              control={form.control}
-              name="role"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Role</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a role" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="parent">Parent</SelectItem>
-                      <SelectItem value="educator">Educator</SelectItem>
-                      <SelectItem value="staff">Staff</SelectItem>
-                      <SelectItem value="schoolAdmin">School Admin</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="role"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Role</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a role" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="parent">Parent</SelectItem>
+                        <SelectItem value="educator">Educator</SelectItem>
+                        <SelectItem value="staff">Staff</SelectItem>
+                        <SelectItem value="schoolAdmin">School Admin</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="locationId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Location</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a location" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="">No Location</SelectItem>
+                        {activeLocations.map((location) => (
+                          <SelectItem key={location.id} value={location.id.toString()}>
+                            {location.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
 
             <FormField
               control={form.control}

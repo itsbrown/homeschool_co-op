@@ -4767,14 +4767,53 @@ router.post('/users', supabaseAuth, requireSchoolContext, async (req: any, res) 
     const schoolId = req.schoolId;
     console.log('👤 Creating new user for school admin...');
 
+    const { firstName, lastName, email, role, phone, locationId } = req.body;
+
+    // Validate required fields
+    if (!firstName || !lastName || !email || !role) {
+      return res.status(400).json({ 
+        message: 'Missing required fields: firstName, lastName, email, and role are required' 
+      });
+    }
+
+    // Check if user with this email already exists
+    const existingUser = await storage.getUserByEmail(email);
+    if (existingUser) {
+      return res.status(409).json({ 
+        message: 'A user with this email already exists' 
+      });
+    }
+
+    // Validate locationId belongs to this school (if provided)
+    if (locationId) {
+      const location = await storage.getLocationById(Number(locationId));
+      if (!location || String(location.schoolId) !== schoolId) {
+        return res.status(400).json({ 
+          message: 'Invalid location - location must belong to your school' 
+        });
+      }
+    }
+
+    // Transform form data to match storage.createUser expected format
     const userData = {
-      ...req.body,
-      schoolId: Number(schoolId) // Associate with this school
+      username: email, // Use email as username
+      name: `${firstName} ${lastName}`.trim(),
+      firstName,
+      lastName,
+      email,
+      role,
+      phone: phone || null,
+      password: 'pending_setup', // Placeholder - user will set via invite/reset
+      schoolId: Number(schoolId),
+      locationId: locationId ? Number(locationId) : null,
+      isActive: true
     };
+
+    console.log('📦 Transformed user data:', { ...userData, password: '[REDACTED]' });
 
     // Create user with school association
     const newUser = await storage.createUser(userData);
-    console.log(`✅ Created user: ${userData.email} for school ${schoolId}`);
+    console.log(`✅ Created user: ${userData.email} (ID: ${newUser.id}) for school ${schoolId}`);
     
     res.status(201).json(newUser);
   } catch (error) {
