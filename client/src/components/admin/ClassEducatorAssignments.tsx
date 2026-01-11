@@ -62,8 +62,12 @@ export function ClassEducatorAssignments({
     mutationFn: async (data: { educatorId: number; classId: number; isPrimary: boolean }) => {
       return apiRequest('POST', '/api/admin/educators/class-assignments', data);
     },
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/educators/class-assignments", classId] });
+      // Also invalidate classes list if a lead instructor was assigned
+      if (variables.isPrimary) {
+        queryClient.invalidateQueries({ queryKey: ["/api/school-admin/classes"] });
+      }
       setSelectedStaffId("");
       setIsPrimary(false);
       toast({
@@ -86,6 +90,8 @@ export function ClassEducatorAssignments({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/educators/class-assignments", classId] });
+      // Invalidate classes list in case the lead instructor was removed
+      queryClient.invalidateQueries({ queryKey: ["/api/school-admin/classes"] });
       toast({
         title: "Educator removed",
         description: "The educator has been removed from this class.",
@@ -106,6 +112,8 @@ export function ClassEducatorAssignments({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/educators/class-assignments", classId] });
+      // Invalidate classes list to show updated instructor name
+      queryClient.invalidateQueries({ queryKey: ["/api/school-admin/classes"] });
       toast({
         title: "Lead instructor updated",
         description: "The lead instructor has been updated for this class.",

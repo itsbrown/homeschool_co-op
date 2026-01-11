@@ -618,6 +618,12 @@ router.delete('/class-assignments/:id', async (req: any, res) => {
 
     await storage.deleteEducatorClassAssignment(assignmentId);
 
+    // If the removed assignment was the primary instructor, clear the class.instructorId
+    if (existingAssignment.isPrimary) {
+      await storage.updateClass(existingAssignment.classId, { instructorId: null });
+      console.log('[AdminEducators] Cleared class.instructorId since primary instructor was removed');
+    }
+
     // Create audit log
     const auditLog: InsertAuditLog = {
       actionType: 'educator_class_assignment_deleted',
