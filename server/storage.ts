@@ -127,6 +127,9 @@ export interface IStorage {
   // Soft-delete support methods
   nullifyUserReferencesForSoftDelete(userId: number): Promise<void>;
   deletePushSubscriptionsByUserId(userId: number): Promise<void>;
+  
+  // Transactional soft-delete (best practice: atomic operation with proper ordering)
+  softDeleteUserWithCleanup(userId: number): Promise<{ success: boolean; error?: string }>;
 
   // Location methods
   getLocationsBySchool(schoolId: number): Promise<Location[]>;
@@ -1299,6 +1302,16 @@ export class MemStorage implements IStorage {
 
   async deletePushSubscriptionsByUserId(userId: number): Promise<void> {
     // MemStorage doesn't track push subscriptions - no-op
+  }
+
+  async softDeleteUserWithCleanup(userId: number): Promise<{ success: boolean; error?: string }> {
+    // MemStorage simple soft-delete: just set isActive=false
+    const user = this.users.get(userId);
+    if (!user) {
+      return { success: false, error: 'User not found' };
+    }
+    this.users.set(userId, { ...user, isActive: false, activeRoleId: null });
+    return { success: true };
   }
 
   async getLocationsBySchool(schoolId: number): Promise<Location[]> {
@@ -5693,6 +5706,10 @@ import { DatabaseStorage } from "./dbStorage";
 
     async deletePushSubscriptionsByUserId(userId: number): Promise<void> {
       return this.dbStorage.deletePushSubscriptionsByUserId(userId);
+    }
+
+    async softDeleteUserWithCleanup(userId: number): Promise<{ success: boolean; error?: string }> {
+      return this.dbStorage.softDeleteUserWithCleanup(userId);
     }
 
     async getParentsBySchoolId(schoolId: number): Promise<User[]> {

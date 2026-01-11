@@ -4994,4 +4994,88 @@ export class DatabaseStorage implements IStorage {
     if (items.length === 0) return [];
     return await db.insert(fundraiserOrderItems).values(items).returning();
   }
+
+  /**
+   * Transactional soft-delete: Wraps all cleanup operations in a single atomic transaction.
+   * Best practice ordering: All FK cleanup happens first, then soft-delete (isActive=false) last.
+   * If any step fails, the entire transaction rolls back and the user remains active.
+   */
+  async softDeleteUserWithCleanup(userId: number): Promise<{ success: boolean; error?: string }> {
+    const db = await getDb();
+    const { customForms, customFormSubmissions, pushSubscriptions } = await import('../shared/schema.js');
+    
+    try {
+      await db.transaction(async (tx) => {
+        // ========== PHASE 1: Nullify nullable FK references (preserve audit trails) ==========
+        await tx.update(auditLogs).set({ actorId: null }).where(eq(auditLogs.actorId, userId));
+        await tx.update(errorLogs).set({ userId: null }).where(eq(errorLogs.userId, userId));
+        await tx.update(errorLogs).set({ resolvedBy: null }).where(eq(errorLogs.resolvedBy, userId));
+        await tx.update(customFormSubmissions).set({ submittedBy: null }).where(eq(customFormSubmissions.submittedBy, userId));
+        await tx.update(discountApplications).set({ appliedBy: null }).where(eq(discountApplications.appliedBy, userId));
+        await tx.update(volunteerCredits).set({ approvedBy: null }).where(eq(volunteerCredits.approvedBy, userId));
+        await tx.update(credits).set({ approvedBy: null }).where(eq(credits.approvedBy, userId));
+
+        // ========== PHASE 2: Delete records with NOT NULL user FKs (content/audit) ==========
+        await tx.delete(sessionAttendance).where(eq(sessionAttendance.recordedBy, userId));
+        await tx.delete(sessionVolunteers).where(eq(sessionVolunteers.volunteerId, userId));
+        await tx.delete(curricula).where(eq(curricula.authorId, userId));
+        await tx.delete(lessons).where(eq(lessons.authorId, userId));
+        await tx.delete(knowledgeBases).where(eq(knowledgeBases.authorId, userId));
+        await tx.delete(activities).where(eq(activities.authorId, userId));
+        await tx.delete(schoolDocuments).where(eq(schoolDocuments.uploadedBy, userId));
+        await tx.delete(customForms).where(eq(customForms.createdBy, userId));
+        await tx.delete(events).where(eq(events.organizerId, userId));
+        await tx.delete(marketplaceItems).where(eq(marketplaceItems.sellerId, userId));
+        await tx.delete(roleInvitations).where(eq(roleInvitations.invitedBy, userId));
+
+        // ========== PHASE 3: Delete operational records with NOT NULL user FKs ==========
+        await tx.delete(emergencyContacts).where(eq(emergencyContacts.userId, userId));
+        await tx.delete(piiAccessLogs).where(eq(piiAccessLogs.userId, userId));
+        await tx.delete(scheduledPayments).where(eq(scheduledPayments.parentId, userId));
+        await tx.delete(programEnrollments).where(eq(programEnrollments.parentId, userId));
+        await tx.delete(membershipAgreements).where(eq(membershipAgreements.parentUserId, userId));
+        await tx.delete(membershipEnrollments).where(eq(membershipEnrollments.parentUserId, userId));
+        await tx.delete(paymentReceipts).where(eq(paymentReceipts.parentUserId, userId));
+
+        // ========== PHASE 4: Clear/delete educator-related records ==========
+        await tx.update(classSessions).set({ substituteEducatorId: null }).where(eq(classSessions.substituteEducatorId, userId));
+        await tx.delete(classSessions).where(eq(classSessions.educatorId, userId));
+        await tx.delete(educatorSchedules).where(eq(educatorSchedules.educatorId, userId));
+        await tx.delete(educatorClassAssignments).where(eq(educatorClassAssignments.educatorId, userId));
+        await tx.update(classes).set({ instructorId: null }).where(eq(classes.instructorId, userId));
+        await tx.update(programs).set({ instructorId: null }).where(eq(programs.instructorId, userId));
+
+        // ========== PHASE 5: Cascade delete children and their dependencies ==========
+        const childRecords = await tx.select({ id: children.id }).from(children).where(eq(children.parentId, userId));
+        
+        for (const child of childRecords) {
+          await tx.delete(programEnrollments).where(eq(programEnrollments.childId, child.id));
+          await tx.delete(schoolStudents).where(eq(schoolStudents.childId, child.id));
+          await tx.delete(discountApplications).where(eq(discountApplications.childId, child.id));
+        }
+        
+        await tx.delete(children).where(eq(children.parentId, userId));
+
+        // ========== PHASE 6: Delete access-related records ==========
+        await tx.delete(userRoles).where(eq(userRoles.userId, userId));
+        await tx.delete(schoolStaff).where(eq(schoolStaff.userId, userId));
+        await tx.delete(userLocations).where(eq(userLocations.userId, userId));
+        await tx.delete(notificationRecipients).where(eq(notificationRecipients.recipientId, userId));
+        await tx.delete(pushSubscriptions).where(eq(pushSubscriptions.userId, userId));
+
+        // ========== PHASE 7: FINAL STEP - Soft-delete the user (happens last!) ==========
+        await tx.update(users).set({ 
+          isActive: false, 
+          activeRoleId: null,
+          supabaseId: null
+        }).where(eq(users.id, userId));
+      });
+      
+      return { success: true };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error during soft-delete';
+      console.error(`❌ Transaction failed for soft-delete user ${userId}:`, errorMessage);
+      return { success: false, error: errorMessage };
+    }
+  }
 }

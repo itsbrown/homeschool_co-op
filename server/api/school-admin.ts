@@ -5192,6 +5192,7 @@ router.delete('/users/:id', supabaseAuth, requireSchoolContext, async (req: any,
     console.log(`🗑️ Starting soft-delete process for user: ${userEmail} (ID: ${userId})`);
 
     // Step 1: Delete user from Supabase Auth (so they can't log in anymore)
+    // This happens BEFORE the database transaction since it's an external service
     try {
       const { createClient } = await import('@supabase/supabase-js');
       const supabaseUrl = process.env.SUPABASE_URL;
@@ -5240,205 +5241,21 @@ router.delete('/users/:id', supabaseAuth, requireSchoolContext, async (req: any,
       }
     } catch (supabaseError) {
       console.error('⚠️ Error during Supabase auth deletion:', supabaseError);
+      // Continue with database cleanup even if Supabase deletion fails
     }
 
-    // Step 2: Soft-delete user - set isActive=false and clear activeRoleId
-    await storage.updateUser(userId, { 
-      isActive: false, 
-      activeRoleId: null,
-      supabaseId: null // Clear supabase link since auth was deleted
-    });
-    console.log(`✅ Soft-deleted user: isActive=false, cleared activeRoleId and supabaseId`);
-
-    // Step 3: Nullify FK references in audit/history tables (preserve records, unlink user)
-    try {
-      await storage.nullifyUserReferencesForSoftDelete(userId);
-      console.log(`✅ Nullified user references in audit/content tables for user ID: ${userId}`);
-    } catch (nullifyError) {
-      console.error('⚠️ Error nullifying user references:', nullifyError);
-    }
-
-    // Step 4: Delete emergency contacts for this user
-    try {
-      await storage.deleteEmergencyContactsByUserId(userId);
-      console.log(`✅ Deleted emergency contacts for user ID: ${userId}`);
-    } catch (emergencyError) {
-      console.error('⚠️ Error deleting emergency contacts:', emergencyError);
-    }
-
-    // Step 5: Delete PII access logs for this user
-    try {
-      await storage.deletePiiAccessLogsByUserId(userId);
-      console.log(`✅ Deleted PII access logs for user ID: ${userId}`);
-    } catch (piiError) {
-      console.error('⚠️ Error deleting PII access logs:', piiError);
-    }
-
-    // Step 6: Delete scheduled payments for this parent
-    try {
-      await storage.deleteScheduledPaymentsByParentId(userId);
-      console.log(`✅ Deleted scheduled payments for user ID: ${userId}`);
-    } catch (scheduledError) {
-      console.error('⚠️ Error deleting scheduled payments:', scheduledError);
-    }
-
-    // Step 7: Delete program enrollments by parent
-    try {
-      await storage.deleteEnrollmentsByParentId(userId);
-      console.log(`✅ Deleted program enrollments (by parent) for user ID: ${userId}`);
-    } catch (enrollParentError) {
-      console.error('⚠️ Error deleting program enrollments by parent:', enrollParentError);
-    }
-
-    // Step 8: Delete membership agreements (must be before membership enrollments due to FK)
-    try {
-      await storage.deleteMembershipAgreementsByParentUserId(userId);
-      console.log(`✅ Deleted membership agreements for user ID: ${userId}`);
-    } catch (membershipAgreementError) {
-      console.error('⚠️ Error deleting membership agreements:', membershipAgreementError);
-    }
-
-    // Step 9: Delete membership enrollments
-    try {
-      await storage.deleteMembershipEnrollmentsByParentUserId(userId);
-      console.log(`✅ Deleted membership enrollments for user ID: ${userId}`);
-    } catch (membershipEnrollmentError) {
-      console.error('⚠️ Error deleting membership enrollments:', membershipEnrollmentError);
-    }
-
-    // Step 10: Delete payment receipts
-    try {
-      await storage.deletePaymentReceiptsByParentUserId(userId);
-      console.log(`✅ Deleted payment receipts for user ID: ${userId}`);
-    } catch (paymentReceiptError) {
-      console.error('⚠️ Error deleting payment receipts:', paymentReceiptError);
-    }
-
-    // Step 11: Clear substitute educator references in class sessions
-    try {
-      await storage.clearClassSessionsSubstituteEducatorId(userId);
-      console.log(`✅ Cleared substitute educator references for user ID: ${userId}`);
-    } catch (substituteError) {
-      console.error('⚠️ Error clearing substitute educator references:', substituteError);
-    }
-
-    // Step 12: Delete class sessions where user is primary educator
-    try {
-      await storage.deleteClassSessionsByEducatorId(userId);
-      console.log(`✅ Deleted class sessions for educator ID: ${userId}`);
-    } catch (classSessionError) {
-      console.error('⚠️ Error deleting class sessions:', classSessionError);
-    }
-
-    // Step 12a: Delete educator schedules
-    try {
-      await storage.deleteEducatorSchedulesByEducatorId(userId);
-      console.log(`✅ Deleted educator schedules for educator ID: ${userId}`);
-    } catch (scheduleError) {
-      console.error('⚠️ Error deleting educator schedules:', scheduleError);
-    }
-
-    // Step 12b: Delete educator class assignments
-    try {
-      await storage.deleteEducatorClassAssignmentsByEducatorId(userId);
-      console.log(`✅ Deleted educator class assignments for educator ID: ${userId}`);
-    } catch (assignmentError) {
-      console.error('⚠️ Error deleting educator class assignments:', assignmentError);
-    }
-
-    // Step 12c: Clear instructorId from classes (set to null)
-    try {
-      await storage.clearClassesInstructorId(userId);
-      console.log(`✅ Cleared instructor references in classes for user ID: ${userId}`);
-    } catch (classInstructorError) {
-      console.error('⚠️ Error clearing class instructor references:', classInstructorError);
-    }
-
-    // Step 12d: Clear instructorId from programs (set to null)
-    try {
-      await storage.clearProgramsInstructorId(userId);
-      console.log(`✅ Cleared instructor references in programs for user ID: ${userId}`);
-    } catch (programInstructorError) {
-      console.error('⚠️ Error clearing program instructor references:', programInstructorError);
-    }
-
-    // Step 13: Cascade delete children and their dependencies
-    try {
-      const children = await storage.getChildrenByParentId(userId);
-      console.log(`👶 Found ${children.length} children to delete for user ID: ${userId}`);
-      
-      for (const child of children) {
-        // Delete enrollments for this child first
-        try {
-          await storage.deleteEnrollmentsByChildId(child.id);
-          console.log(`  ✅ Deleted enrollments for child ID: ${child.id}`);
-        } catch (enrollError) {
-          console.error(`  ⚠️ Error deleting enrollments for child ${child.id}:`, enrollError);
-        }
-        
-        // Delete school_students records for this child
-        try {
-          await storage.deleteSchoolStudentsByChildId(child.id);
-          console.log(`  ✅ Deleted school student records for child ID: ${child.id}`);
-        } catch (schoolStudentError) {
-          console.error(`  ⚠️ Error deleting school student records for child ${child.id}:`, schoolStudentError);
-        }
-
-        // Delete discount_applications for this child
-        try {
-          await storage.deleteDiscountApplicationsByChildId(child.id);
-          console.log(`  ✅ Deleted discount applications for child ID: ${child.id}`);
-        } catch (discountError) {
-          console.error(`  ⚠️ Error deleting discount applications for child ${child.id}:`, discountError);
-        }
-      }
-      
-      // Now delete all children for this parent
-      await storage.deleteChildrenByParentId(userId);
-      console.log(`✅ Deleted ${children.length} children for user ID: ${userId}`);
-    } catch (childError) {
-      console.error('⚠️ Error deleting children:', childError);
-    }
-
-    // Step 14: Delete access-related records
-    // Delete user roles
-    try {
-      await storage.deleteUserRolesByUserId(userId);
-      console.log(`✅ Deleted user roles for user ID: ${userId}`);
-    } catch (roleError) {
-      console.error('⚠️ Error deleting user roles:', roleError);
-    }
-
-    // Delete school staff records
-    try {
-      await storage.deleteSchoolStaffByUserId(userId);
-      console.log(`✅ Deleted school staff records for user ID: ${userId}`);
-    } catch (staffError) {
-      console.error('⚠️ Error deleting school staff records:', staffError);
-    }
-
-    // Delete user locations
-    try {
-      await storage.deleteUserLocationsByUserId(userId);
-      console.log(`✅ Deleted user locations for user ID: ${userId}`);
-    } catch (locError) {
-      console.error('⚠️ Error deleting user locations:', locError);
-    }
-
-    // Delete notification recipients
-    try {
-      await storage.deleteNotificationRecipientsByUserId(userId);
-      console.log(`✅ Deleted notification recipients for user ID: ${userId}`);
-    } catch (notifError) {
-      console.error('⚠️ Error deleting notification recipients:', notifError);
-    }
-
-    // Delete push subscriptions (has cascade but explicit cleanup is cleaner)
-    try {
-      await storage.deletePushSubscriptionsByUserId(userId);
-      console.log(`✅ Deleted push subscriptions for user ID: ${userId}`);
-    } catch (pushError) {
-      console.error('⚠️ Error deleting push subscriptions:', pushError);
+    // Step 2: Execute transactional soft-delete with all FK cleanup
+    // This is atomic: all cleanup happens first, then soft-delete last
+    // If any step fails, the entire transaction rolls back and user remains active
+    console.log(`🔄 Starting transactional soft-delete for user ID: ${userId}`);
+    const result = await storage.softDeleteUserWithCleanup(userId);
+    
+    if (!result.success) {
+      console.error(`❌ Transactional soft-delete failed: ${result.error}`);
+      return res.status(500).json({ 
+        message: 'Error deleting user - transaction rolled back',
+        error: result.error 
+      });
     }
 
     console.log(`✅ Soft-deleted user: ${userEmail} (ID: ${userId}) from school ${schoolId}`);
