@@ -4830,9 +4830,49 @@ router.post('/users', supabaseAuth, requireSchoolContext, async (req: any, res) 
 
     console.log('📦 Transformed user data:', { ...userData, password: '[REDACTED]' });
 
-    // Create user with school association
+    // Create user with school association and user_roles entry in a consistent manner
+    const { getDb } = await import('../db');
+    const { userRoles } = await import('../../shared/schema');
+    
+    const db = await getDb();
+    
+    // Create user first
     const newUser = await storage.createUser(userData);
     console.log(`✅ Created user: ${userData.email} (ID: ${newUser.id}) for school ${schoolId}`);
+    
+    // Create user_roles entry (required for profile visibility and school relationship)
+    let newRole;
+    try {
+      newRole = await db
+        .insert(userRoles)
+        .values({
+          userId: newUser.id,
+          role: role,
+          schoolId: Number(schoolId),
+          isPrimary: true,
+        })
+        .returning();
+      
+      if (!newRole || newRole.length === 0) {
+        throw new Error('user_roles insert returned empty result');
+      }
+    } catch (roleError) {
+      // Clean up - delete the user we just created since role creation failed
+      console.error(`❌ Failed to create user_roles entry for user ${newUser.id}:`, roleError);
+      try {
+        await storage.deleteUser(newUser.id);
+        console.log(`🧹 Cleaned up user ${newUser.id} after role creation failure`);
+      } catch (deleteError) {
+        console.error(`⚠️ Failed to clean up user ${newUser.id}:`, deleteError);
+      }
+      throw new Error('Failed to establish school relationship for user');
+    }
+    
+    console.log(`✅ Created user_roles entry for user ${newUser.id} with role '${role}' at school ${schoolId}`);
+    
+    // Set this as the user's active role
+    await storage.updateUser(newUser.id, { activeRoleId: newRole[0].id });
+    console.log(`✅ Set active role ID ${newRole[0].id} for user ${newUser.id}`);
     
     res.status(201).json(newUser);
   } catch (error) {
