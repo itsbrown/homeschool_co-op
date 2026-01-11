@@ -88,7 +88,7 @@ app.use('/api/schools/upload-logo', fileUpload({
 // Apply fileUpload middleware for school document uploads
 app.use('/api/schools/documents/upload', fileUpload({
   useTempFiles: false,
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max file size for documents
+  limits: { fileSize: 25 * 1024 * 1024 }, // 25MB max file size for documents
   abortOnLimit: true,
   createParentPath: true,
 }));

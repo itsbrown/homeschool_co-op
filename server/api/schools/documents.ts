@@ -138,11 +138,11 @@ router.post('/upload', supabaseAuth, async (req: any, res) => {
       });
     }
 
-    // Validate file size (10MB limit)
-    if (documentFile.size > 10 * 1024 * 1024) {
+    // Validate file size (25MB limit)
+    if (documentFile.size > 25 * 1024 * 1024) {
       return res.status(400).json({
         success: false,
-        message: 'File too large. Maximum size is 10MB.'
+        message: 'File too large. Maximum size is 25MB.'
       });
     }
 

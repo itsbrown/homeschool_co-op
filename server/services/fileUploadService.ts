@@ -28,7 +28,7 @@ export const uploadCategories: Record<string, UploadCategoryConfig> = {
     description: "School and organization logos",
   },
   documents: {
-    maxSizeBytes: 10 * 1024 * 1024,
+    maxSizeBytes: 25 * 1024 * 1024,
     allowedTypes: ["application/pdf", "image/png", "image/jpeg"],
     folder: "documents",
     public: false,

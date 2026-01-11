@@ -200,9 +200,21 @@ export default function DocumentManagementPage() {
     }
   };
 
+  const MAX_FILE_SIZE_MB = 25;
+  const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      if (file.size > MAX_FILE_SIZE_BYTES) {
+        toast({
+          title: "File too large",
+          description: `Maximum file size is ${MAX_FILE_SIZE_MB}MB. Your file is ${(file.size / (1024 * 1024)).toFixed(1)}MB.`,
+          variant: "destructive",
+        });
+        e.target.value = '';
+        return;
+      }
       setSelectedFile(file);
       if (!uploadForm.title) {
         setUploadForm(prev => ({ ...prev, title: file.name.replace(/\.[^/.]+$/, '') }));
@@ -358,6 +370,9 @@ export default function DocumentManagementPage() {
                   accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.gif"
                   data-testid="input-file-upload"
                 />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Maximum file size: {MAX_FILE_SIZE_MB}MB
+                </p>
                 {selectedFile && (
                   <p className="text-sm text-muted-foreground mt-1">
                     Selected: {selectedFile.name} ({formatFileSize(selectedFile.size)})
