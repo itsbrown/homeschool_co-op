@@ -976,6 +976,124 @@ router.put("/classes/:id", supabaseAuth, async (req: any, res) => {
   }
 });
 
+// PATCH handler for class updates (same as PUT - frontend uses PATCH)
+router.patch("/classes/:id", supabaseAuth, async (req: any, res) => {
+  try {
+    const schoolId = await getSchoolIdFromRequest(req, res);
+    if (schoolId === null) return;
+
+    const classId = parseInt(req.params.id);
+    console.log('📝 [PATCH] Updating class with ID:', classId);
+    console.log('📄 Update data:', JSON.stringify(req.body, null, 2));
+
+    const existingClass = await storage.getClassById(classId);
+    if (!existingClass) {
+      console.log('❌ Class not found with ID:', classId);
+      return res.status(404).json({ message: 'Class not found' });
+    }
+
+    if (existingClass.schoolId !== schoolId) {
+      return res.status(403).json({ message: 'Access denied to this class' });
+    }
+
+    let schedule = req.body.schedule || existingClass.schedule;
+    if (req.body.variants && Array.isArray(req.body.variants)) {
+      schedule = JSON.stringify({ variants: req.body.variants });
+    }
+
+    let gradeLevels = existingClass.gradeLevels;
+    if (req.body.gradeLevels && Array.isArray(req.body.gradeLevels)) {
+      gradeLevels = req.body.gradeLevels;
+    }
+
+    let instructorId = existingClass.instructorId;
+    let instructorName = existingClass.instructorName;
+    if (req.body.instructorName && req.body.instructorName !== existingClass.instructorName) {
+      instructorName = req.body.instructorName;
+      if (req.body.instructorName !== 'no-instructor' && req.body.instructorName !== 'No Instructor Assigned') {
+        const allStaff = await storage.getSchoolStaffBySchoolId(schoolId);
+        for (const staffRecord of allStaff) {
+          const user = await storage.getUser(staffRecord.userId);
+          if (user && (user.name === req.body.instructorName || 
+                      `${user.firstName} ${user.lastName}` === req.body.instructorName)) {
+            instructorId = user.id;
+            console.log(`✅ Found instructor ID ${instructorId} for ${instructorName}`);
+            break;
+          }
+        }
+      } else {
+        instructorId = null;
+        console.log('ℹ️ No instructor assigned');
+      }
+    }
+
+    const updateData: any = {
+      title: req.body.title || existingClass.title,
+      description: req.body.description || existingClass.description,
+      category: req.body.category || existingClass.category,
+      gradeLevels: gradeLevels,
+      status: req.body.status || existingClass.status,
+      startDate: req.body.startDate || existingClass.startDate,
+      endDate: req.body.endDate || existingClass.endDate,
+      schedule: schedule,
+      capacity: req.body.capacity !== undefined ? req.body.capacity : existingClass.capacity,
+      locationId: req.body.locationId !== undefined ? req.body.locationId : existingClass.locationId,
+      instructorName: instructorName,
+      instructorId: instructorId,
+      price: req.body.price !== undefined ? req.body.price : existingClass.price,
+      isAdminOnly: req.body.isAdminOnly !== undefined ? req.body.isAdminOnly : existingClass.isAdminOnly
+    };
+
+    const updatedClass = await storage.updateClass(classId, updateData);
+    
+    if (!updatedClass) {
+      console.log('❌ Failed to update class with ID:', classId);
+      return res.status(500).json({ message: 'Failed to update class' });
+    }
+
+    if (req.body.variants && Array.isArray(req.body.variants)) {
+      console.log('🔄 Updating child classes for variants...');
+      const baseTitle = updatedClass.title;
+      const allClasses = await storage.getAllClasses();
+      
+      for (const variant of req.body.variants) {
+        let childTitle = `${baseTitle} | ${variant.name}`;
+        let childClass = allClasses.find((cls: any) => cls.title === childTitle);
+        
+        if (!childClass) {
+          const variantBaseName = variant.name.split(/\d/)[0].trim();
+          childTitle = `${baseTitle} | ${variantBaseName}`;
+          childClass = allClasses.find((cls: any) => cls.title === childTitle);
+        }
+        
+        if (childClass) {
+          console.log(`  ✅ Updating child class: ${childClass.title} with price ${variant.price}`);
+          await storage.updateClass(childClass.id, {
+            price: variant.price,
+            location: updatedClass.location ?? undefined,
+            instructorName: updatedClass.instructorName ?? undefined,
+            capacity: updatedClass.capacity ?? undefined,
+            startDate: updatedClass.startDate ? new Date(updatedClass.startDate) : null,
+            endDate: updatedClass.endDate ? new Date(updatedClass.endDate) : null,
+            description: updatedClass.description,
+            category: updatedClass.category,
+            status: updatedClass.status,
+            gradeLevels: updatedClass.gradeLevels || []
+          });
+        } else {
+          console.log(`  ⚠️ Child class not found for variant: ${variant.name}`);
+        }
+      }
+    }
+
+    console.log('✅ [PATCH] Class updated successfully:', updatedClass.title);
+    res.json(updatedClass);
+  } catch (error) {
+    console.error('❌ [PATCH] Error updating class:', error);
+    res.status(500).json({ message: 'Error updating class' });
+  }
+});
+
 // Delete a class
 router.delete("/classes/:id", supabaseAuth, async (req: any, res) => {
   try {
