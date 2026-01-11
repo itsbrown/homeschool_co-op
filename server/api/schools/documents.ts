@@ -79,10 +79,69 @@ router.get('/published', supabaseAuth, async (req: any, res) => {
   }
 });
 
+// Helper function to send document notification
+async function sendDocumentNotification(
+  document: any, 
+  targeting: any, 
+  senderId: number,
+  schoolId: number
+) {
+  try {
+    const notificationSubject = `New Document: ${document.title}`;
+    const notificationContent = `A new document "${document.title}" has been published${document.description ? `: ${document.description}` : ''}. You can view it in your documents section.`;
+
+    let notificationData: any = {
+      senderId,
+      type: 'in_app' as const,
+      priority: 'normal' as const,
+      subject: notificationSubject,
+      content: notificationContent,
+      status: 'sent' as const,
+    };
+
+    switch (targeting.targetType) {
+      case 'all_parents':
+        notificationData.targetType = 'all_parents';
+        notificationData.targetData = { schoolId };
+        break;
+      case 'class_specific':
+        notificationData.targetType = 'class_specific';
+        notificationData.targetData = { classIds: targeting.classIds, schoolId };
+        break;
+      case 'individual':
+        notificationData.targetType = 'individual';
+        notificationData.targetData = { userIds: targeting.userIds };
+        break;
+      case 'role':
+        notificationData.targetType = 'role';
+        notificationData.targetData = { 
+          roles: targeting.roles, 
+          locationIds: targeting.locationIds,
+          schoolId 
+        };
+        break;
+      case 'location':
+        notificationData.targetType = 'location';
+        notificationData.targetData = { locationIds: targeting.locationIds, schoolId };
+        break;
+      default:
+        console.log('Unknown targeting type, skipping notification');
+        return null;
+    }
+
+    const notification = await storage.createNotification(notificationData);
+    console.log(`✅ Created document notification ID ${notification.id} for document: ${document.title}`);
+    return notification;
+  } catch (error) {
+    console.error('Error sending document notification:', error);
+    return null;
+  }
+}
+
 // Upload a new document
 router.post('/upload', supabaseAuth, async (req: any, res) => {
   try {
-    const { title, description, category, isPublished, visibleToAll } = req.body;
+    const { title, description, category, isPublished, visibleToAll, notificationTargeting } = req.body;
     const uploadedBy = req.user?.id;
 
     if (!title) {
@@ -180,10 +239,28 @@ router.post('/upload', supabaseAuth, async (req: any, res) => {
       visibleToAll: visibleToAll !== 'false'
     });
 
+    // Send notification if document is published and targeting is provided
+    let notificationSent = false;
+    if (isPublished !== 'false' && notificationTargeting) {
+      try {
+        const targeting = typeof notificationTargeting === 'string' 
+          ? JSON.parse(notificationTargeting) 
+          : notificationTargeting;
+        
+        const notification = await sendDocumentNotification(document, targeting, uploadedBy, schoolId);
+        notificationSent = !!notification;
+      } catch (parseError) {
+        console.error('Error parsing notification targeting:', parseError);
+      }
+    }
+
     res.json({ 
       success: true, 
-      message: 'Document uploaded successfully',
-      document 
+      message: notificationSent 
+        ? 'Document uploaded and notification sent successfully' 
+        : 'Document uploaded successfully',
+      document,
+      notificationSent
     });
   } catch (error) {
     console.error('Error uploading document:', error);
