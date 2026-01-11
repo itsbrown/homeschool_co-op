@@ -4967,6 +4967,18 @@ router.delete('/users/:id', supabaseAuth, requireSchoolContext, async (req: any,
       return res.status(404).json({ message: 'User not found or access denied' });
     }
 
+    // Check for blocking dependencies (children) if force=false
+    const force = req.query.force === 'true';
+    if (!force) {
+      const children = await storage.getChildrenByParentId(userId);
+      if (children.length > 0) {
+        return res.status(409).json({ 
+          message: `Cannot delete user: ${children.length} child record(s) are linked to this account. Use force=true to delete anyway.`,
+          blockingDependencies: { children: children.length }
+        });
+      }
+    }
+
     const userEmail = existingUser.email;
     console.log(`🗑️ Starting deletion process for user: ${userEmail} (ID: ${userId})`);
 
