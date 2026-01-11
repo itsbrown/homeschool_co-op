@@ -4967,18 +4967,6 @@ router.delete('/users/:id', supabaseAuth, requireSchoolContext, async (req: any,
       return res.status(404).json({ message: 'User not found or access denied' });
     }
 
-    // Check for blocking dependencies (children) if force=false
-    const force = req.query.force === 'true';
-    if (!force) {
-      const children = await storage.getChildrenByParentId(userId);
-      if (children.length > 0) {
-        return res.status(409).json({ 
-          message: `Cannot delete user: ${children.length} child record(s) are linked to this account. Use force=true to delete anyway.`,
-          blockingDependencies: { children: children.length }
-        });
-      }
-    }
-
     const userEmail = existingUser.email;
     console.log(`🗑️ Starting deletion process for user: ${userEmail} (ID: ${userId})`);
 
@@ -5091,7 +5079,37 @@ router.delete('/users/:id', supabaseAuth, requireSchoolContext, async (req: any,
       console.error('⚠️ Error deleting notification recipients:', notifError);
     }
 
-    // Step 4: Delete user from local database
+    // Step 4: Cascade delete children and their dependencies
+    try {
+      const children = await storage.getChildrenByParentId(userId);
+      console.log(`👶 Found ${children.length} children to delete for user ID: ${userId}`);
+      
+      for (const child of children) {
+        // Delete enrollments for this child first
+        try {
+          await storage.deleteEnrollmentsByChildId(child.id);
+          console.log(`  ✅ Deleted enrollments for child ID: ${child.id}`);
+        } catch (enrollError) {
+          console.error(`  ⚠️ Error deleting enrollments for child ${child.id}:`, enrollError);
+        }
+        
+        // Delete school_students records for this child
+        try {
+          await storage.deleteSchoolStudentsByChildId(child.id);
+          console.log(`  ✅ Deleted school student records for child ID: ${child.id}`);
+        } catch (schoolStudentError) {
+          console.error(`  ⚠️ Error deleting school student records for child ${child.id}:`, schoolStudentError);
+        }
+      }
+      
+      // Now delete all children for this parent
+      await storage.deleteChildrenByParentId(userId);
+      console.log(`✅ Deleted ${children.length} children for user ID: ${userId}`);
+    } catch (childError) {
+      console.error('⚠️ Error deleting children:', childError);
+    }
+
+    // Step 5: Delete user from local database
     await storage.deleteUser(userId);
     console.log(`✅ Deleted user from database: ${userEmail} (ID: ${userId}) from school ${schoolId}`);
     

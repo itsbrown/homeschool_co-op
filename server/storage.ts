@@ -101,6 +101,11 @@ export interface IStorage {
   // User cleanup methods (for deletion)
   deleteUserLocationsByUserId(userId: number): Promise<void>;
   deleteNotificationRecipientsByUserId(userId: number): Promise<void>;
+  
+  // Cascade delete methods (for parent deletion)
+  deleteChildrenByParentId(parentId: number): Promise<void>;
+  deleteEnrollmentsByChildId(childId: number): Promise<void>;
+  deleteSchoolStudentsByChildId(childId: number): Promise<void>;
 
   // Location methods
   getLocationsBySchool(schoolId: number): Promise<Location[]>;
@@ -1168,6 +1173,33 @@ export class MemStorage implements IStorage {
 
   async deleteNotificationRecipientsByUserId(userId: number): Promise<void> {
     // MemStorage doesn't track notification recipients - no-op
+  }
+
+  async deleteChildrenByParentId(parentId: number): Promise<void> {
+    // Delete all children where parentId matches
+    for (const [id, child] of this.childrenStore.entries()) {
+      if (child.parentId === parentId) {
+        this.childrenStore.delete(id);
+      }
+    }
+  }
+
+  async deleteEnrollmentsByChildId(childId: number): Promise<void> {
+    // Delete all program enrollments for this child
+    for (const [id, enrollment] of this.programEnrollmentsStore.entries()) {
+      if (enrollment.childId === childId) {
+        this.programEnrollmentsStore.delete(id);
+      }
+    }
+  }
+
+  async deleteSchoolStudentsByChildId(childId: number): Promise<void> {
+    // Delete all school student records for this child
+    for (const [id, schoolStudent] of this.schoolStudentsStore.entries()) {
+      if (schoolStudent.childId === childId) {
+        this.schoolStudentsStore.delete(id);
+      }
+    }
   }
 
   async getLocationsBySchool(schoolId: number): Promise<Location[]> {
@@ -5509,6 +5541,18 @@ import { DatabaseStorage } from "./dbStorage";
 
     async deleteNotificationRecipientsByUserId(userId: number): Promise<void> {
       return this.dbStorage.deleteNotificationRecipientsByUserId(userId);
+    }
+
+    async deleteChildrenByParentId(parentId: number): Promise<void> {
+      return this.dbStorage.deleteChildrenByParentId(parentId);
+    }
+
+    async deleteEnrollmentsByChildId(childId: number): Promise<void> {
+      return this.dbStorage.deleteEnrollmentsByChildId(childId);
+    }
+
+    async deleteSchoolStudentsByChildId(childId: number): Promise<void> {
+      return this.dbStorage.deleteSchoolStudentsByChildId(childId);
     }
 
     async getParentsBySchoolId(schoolId: number): Promise<User[]> {
