@@ -33,7 +33,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, safeJsonParse } from "@/lib/queryClient";
+import { useRole } from "@/contexts/RoleContext";
 
 // Sample class data (will be replaced with API data)
 const sampleClasses = [
@@ -107,6 +108,7 @@ const STATUS_COLORS: Record<string, string> = {
 export default function SchoolClassesPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { activeRole } = useRole();
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -178,13 +180,15 @@ export default function SchoolClassesPage() {
   };
 
   // Fetch classes for the school from the API
+  // Only fetch when user has an active role (school context is set)
   const { data: classes, isLoading, error, refetch } = useQuery({
     queryKey: ['/api/school-admin/classes'],
     queryFn: async () => {
       const response = await apiRequest("GET", "/api/school-admin/classes");
-      const data = await response.json();
+      const data = await safeJsonParse(response);
       return data;
     },
+    enabled: !!activeRole, // Only run query when school context is available
   });
 
   // Mutation for duplicating a class

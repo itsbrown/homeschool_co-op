@@ -9,6 +9,31 @@ async function throwIfResNotOk(res: Response) {
   }
 }
 
+/**
+ * Safely parse JSON response, detecting HTML responses that indicate routing issues
+ */
+export async function safeJsonParse(response: Response): Promise<any> {
+  const contentType = response.headers.get('content-type') || '';
+  
+  // Check if response is JSON
+  if (!contentType.includes('application/json')) {
+    const text = await response.text();
+    // Check if it's HTML (SPA fallback or error page)
+    if (text.startsWith('<!DOCTYPE') || text.startsWith('<html')) {
+      console.error('❌ Received HTML instead of JSON - possible routing/auth issue');
+      throw new Error('Server returned HTML instead of JSON. Please refresh the page and try again.');
+    }
+    // Try to parse anyway in case content-type header is missing
+    try {
+      return JSON.parse(text);
+    } catch {
+      throw new Error(`Invalid response format: ${text.slice(0, 100)}`);
+    }
+  }
+  
+  return response.json();
+}
+
 interface ApiRequestOptions {
   rawFormData?: boolean;
   token?: string;
