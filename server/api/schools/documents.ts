@@ -326,6 +326,70 @@ router.patch('/:id', supabaseAuth, async (req: any, res) => {
   }
 });
 
+// Send notification for existing document
+router.post('/:id/notify', supabaseAuth, async (req: any, res) => {
+  try {
+    const documentId = parseInt(req.params.id);
+    const { targeting } = req.body;
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({ 
+        success: false, 
+        message: 'User not authenticated' 
+      });
+    }
+
+    if (!targeting || !targeting.targetType) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Notification targeting is required' 
+      });
+    }
+
+    // Get the document
+    const document = await storage.getSchoolDocumentById(documentId);
+    if (!document) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Document not found' 
+      });
+    }
+
+    // SECURITY: Verify the user can send notifications for this document (belongs to their school)
+    const user = await storage.getUser(userId);
+    if (!user || user.schoolId !== document.schoolId) {
+      console.log(`🚨 SECURITY: User ${userId} attempted to send notification for document ${documentId} from school ${document.schoolId} but belongs to school ${user?.schoolId}`);
+      return res.status(403).json({ 
+        success: false, 
+        message: 'Access denied: You do not have permission to send notifications for this document' 
+      });
+    }
+
+    // Send the notification
+    const notification = await sendDocumentNotification(document, targeting, userId, document.schoolId);
+    
+    if (!notification) {
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Failed to create notification' 
+      });
+    }
+
+    res.json({ 
+      success: true, 
+      message: 'Notification sent successfully',
+      notificationId: notification.id
+    });
+  } catch (error) {
+    console.error('Error sending document notification:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to send notification' 
+    });
+  }
+});
+
 // Delete a document
 router.delete('/:id', supabaseAuth, async (req: any, res) => {
   try {
