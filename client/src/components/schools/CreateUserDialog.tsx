@@ -259,7 +259,6 @@ export default function CreateUserDialog({ open, onClose, editUser }: CreateUser
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="">No Location</SelectItem>
                         {activeLocations.map((location) => (
                           <SelectItem key={location.id} value={location.id.toString()}>
                             {location.name}
