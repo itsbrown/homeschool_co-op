@@ -62,7 +62,8 @@ import {
   FundraiserProduct, InsertFundraiserProduct, fundraiserProducts,
   FundraiserFamilyLink, InsertFundraiserFamilyLink, fundraiserFamilyLinks,
   FundraiserOrder, InsertFundraiserOrder, fundraiserOrders,
-  FundraiserOrderItem, InsertFundraiserOrderItem, fundraiserOrderItems
+  FundraiserOrderItem, InsertFundraiserOrderItem, fundraiserOrderItems,
+  piiAccessLogs
 } from '../shared/schema';
 
 /**
@@ -215,6 +216,30 @@ export class DatabaseStorage implements IStorage {
   async deleteDiscountApplicationsByChildId(childId: number): Promise<void> {
     const db = await getDb();
     await db.delete(discountApplications).where(eq(discountApplications.childId, childId));
+  }
+
+  async deleteEmergencyContactsByUserId(userId: number): Promise<void> {
+    const db = await getDb();
+    await db.delete(emergencyContacts).where(eq(emergencyContacts.userId, userId));
+  }
+
+  async deletePiiAccessLogsByUserId(userId: number): Promise<void> {
+    const db = await getDb();
+    await db.delete(piiAccessLogs).where(eq(piiAccessLogs.userId, userId));
+  }
+
+  async deleteCartsByParentId(parentId: number): Promise<void> {
+    // Carts table doesn't exist in schema - no-op
+  }
+
+  async deleteScheduledPaymentsByParentId(parentId: number): Promise<void> {
+    const db = await getDb();
+    await db.delete(scheduledPayments).where(eq(scheduledPayments.parentId, parentId));
+  }
+
+  async deleteEnrollmentsByParentId(parentId: number): Promise<void> {
+    const db = await getDb();
+    await db.delete(programEnrollments).where(eq(programEnrollments.parentId, parentId));
   }
 
   async getParentsBySchoolId(schoolId: number): Promise<User[]> {

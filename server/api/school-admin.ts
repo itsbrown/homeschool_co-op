@@ -5079,7 +5079,39 @@ router.delete('/users/:id', supabaseAuth, requireSchoolContext, async (req: any,
       console.error('⚠️ Error deleting notification recipients:', notifError);
     }
 
-    // Step 4: Cascade delete children and their dependencies
+    // Step 4: Delete emergency contacts for this user
+    try {
+      await storage.deleteEmergencyContactsByUserId(userId);
+      console.log(`✅ Deleted emergency contacts for user ID: ${userId}`);
+    } catch (emergencyError) {
+      console.error('⚠️ Error deleting emergency contacts:', emergencyError);
+    }
+
+    // Step 5: Delete PII access logs for this user
+    try {
+      await storage.deletePiiAccessLogsByUserId(userId);
+      console.log(`✅ Deleted PII access logs for user ID: ${userId}`);
+    } catch (piiError) {
+      console.error('⚠️ Error deleting PII access logs:', piiError);
+    }
+
+    // Step 6: Delete scheduled payments for this parent
+    try {
+      await storage.deleteScheduledPaymentsByParentId(userId);
+      console.log(`✅ Deleted scheduled payments for user ID: ${userId}`);
+    } catch (scheduledError) {
+      console.error('⚠️ Error deleting scheduled payments:', scheduledError);
+    }
+
+    // Step 7: Delete program enrollments by parent (separate from child enrollments)
+    try {
+      await storage.deleteEnrollmentsByParentId(userId);
+      console.log(`✅ Deleted program enrollments (by parent) for user ID: ${userId}`);
+    } catch (enrollParentError) {
+      console.error('⚠️ Error deleting program enrollments by parent:', enrollParentError);
+    }
+
+    // Step 8: Cascade delete children and their dependencies
     try {
       const children = await storage.getChildrenByParentId(userId);
       console.log(`👶 Found ${children.length} children to delete for user ID: ${userId}`);
@@ -5117,7 +5149,7 @@ router.delete('/users/:id', supabaseAuth, requireSchoolContext, async (req: any,
       console.error('⚠️ Error deleting children:', childError);
     }
 
-    // Step 5: Delete user from local database
+    // Step 9: Delete user from local database
     await storage.deleteUser(userId);
     console.log(`✅ Deleted user from database: ${userEmail} (ID: ${userId}) from school ${schoolId}`);
     

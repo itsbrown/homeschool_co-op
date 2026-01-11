@@ -107,6 +107,13 @@ export interface IStorage {
   deleteEnrollmentsByChildId(childId: number): Promise<void>;
   deleteSchoolStudentsByChildId(childId: number): Promise<void>;
   deleteDiscountApplicationsByChildId(childId: number): Promise<void>;
+  
+  // Additional user cleanup methods (for complete deletion)
+  deleteEmergencyContactsByUserId(userId: number): Promise<void>;
+  deletePiiAccessLogsByUserId(userId: number): Promise<void>;
+  deleteCartsByParentId(parentId: number): Promise<void>;
+  deleteScheduledPaymentsByParentId(parentId: number): Promise<void>;
+  deleteEnrollmentsByParentId(parentId: number): Promise<void>;
 
   // Location methods
   getLocationsBySchool(schoolId: number): Promise<Location[]>;
@@ -1205,6 +1212,26 @@ export class MemStorage implements IStorage {
 
   async deleteDiscountApplicationsByChildId(childId: number): Promise<void> {
     // MemStorage doesn't track discount applications - no-op
+  }
+
+  async deleteEmergencyContactsByUserId(userId: number): Promise<void> {
+    // MemStorage doesn't track emergency contacts - no-op
+  }
+
+  async deletePiiAccessLogsByUserId(userId: number): Promise<void> {
+    // MemStorage doesn't track PII access logs - no-op
+  }
+
+  async deleteCartsByParentId(parentId: number): Promise<void> {
+    // MemStorage doesn't track carts - no-op
+  }
+
+  async deleteScheduledPaymentsByParentId(parentId: number): Promise<void> {
+    // MemStorage doesn't track scheduled payments - no-op
+  }
+
+  async deleteEnrollmentsByParentId(parentId: number): Promise<void> {
+    // MemStorage doesn't track enrollments - no-op
   }
 
   async getLocationsBySchool(schoolId: number): Promise<Location[]> {
@@ -5451,6 +5478,7 @@ import { DatabaseStorage } from "./dbStorage";
         // Try database storage first
         return await this.dbStorage.deleteUser(id);
       } catch (error) {
+        console.error('❌ Database deleteUser failed:', error);
         console.log('💾 Database unavailable, using file storage for user deletion');
         // Fall back to memory storage and file persistence
         this.memStorage.deleteUser(id);
@@ -5562,6 +5590,26 @@ import { DatabaseStorage } from "./dbStorage";
 
     async deleteDiscountApplicationsByChildId(childId: number): Promise<void> {
       return this.dbStorage.deleteDiscountApplicationsByChildId(childId);
+    }
+
+    async deleteEmergencyContactsByUserId(userId: number): Promise<void> {
+      return this.dbStorage.deleteEmergencyContactsByUserId(userId);
+    }
+
+    async deletePiiAccessLogsByUserId(userId: number): Promise<void> {
+      return this.dbStorage.deletePiiAccessLogsByUserId(userId);
+    }
+
+    async deleteCartsByParentId(parentId: number): Promise<void> {
+      return this.dbStorage.deleteCartsByParentId(parentId);
+    }
+
+    async deleteScheduledPaymentsByParentId(parentId: number): Promise<void> {
+      return this.dbStorage.deleteScheduledPaymentsByParentId(parentId);
+    }
+
+    async deleteEnrollmentsByParentId(parentId: number): Promise<void> {
+      return this.dbStorage.deleteEnrollmentsByParentId(parentId);
     }
 
     async getParentsBySchoolId(schoolId: number): Promise<User[]> {
