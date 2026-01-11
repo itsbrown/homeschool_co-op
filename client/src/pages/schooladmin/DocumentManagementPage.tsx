@@ -62,6 +62,98 @@ interface ClassInfo {
 
 type NotificationTargetType = 'all_parents' | 'class_specific' | 'individual';
 
+interface NotificationTargetingProps {
+  targetType: NotificationTargetType;
+  onTargetTypeChange: (type: NotificationTargetType) => void;
+  selectedClasses: number[];
+  onSelectedClassesChange: (classes: number[]) => void;
+  selectedUsers: UserResult[];
+  onSelectedUsersChange: (users: UserResult[]) => void;
+  classes: ClassInfo[];
+}
+
+function NotificationTargetingUI({
+  targetType,
+  onTargetTypeChange,
+  selectedClasses,
+  onSelectedClassesChange,
+  selectedUsers,
+  onSelectedUsersChange,
+  classes
+}: NotificationTargetingProps) {
+  return (
+    <div className="space-y-3 border rounded-lg p-3 bg-muted/50">
+      <Label className="text-sm font-medium">Who should receive the notification?</Label>
+      <Tabs value={targetType} onValueChange={(v) => onTargetTypeChange(v as NotificationTargetType)}>
+        <TabsList className="grid w-full grid-cols-3 h-auto">
+          <TabsTrigger value="all_parents" className="text-xs py-1.5">All Parents</TabsTrigger>
+          <TabsTrigger value="class_specific" className="text-xs py-1.5">By Class</TabsTrigger>
+          <TabsTrigger value="individual" className="text-xs py-1.5">Individual</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="all_parents" className="mt-2">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Users className="h-4 w-4" />
+            <span>All parents will receive a notification about this document.</span>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="class_specific" className="mt-2 space-y-2">
+          <Label className="text-sm">Select classes</Label>
+          {classes.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No classes available</p>
+          ) : (
+            <div className="max-h-32 overflow-y-auto space-y-1">
+              {classes.map((cls) => (
+                <div key={cls.id} className="flex items-center space-x-2">
+                  <Checkbox
+                    id={`target-class-${cls.id}`}
+                    checked={selectedClasses.includes(cls.id)}
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        onSelectedClassesChange([...selectedClasses, cls.id]);
+                      } else {
+                        onSelectedClassesChange(selectedClasses.filter(id => id !== cls.id));
+                      }
+                    }}
+                  />
+                  <Label htmlFor={`target-class-${cls.id}`} className="text-sm font-normal">
+                    {cls.title}
+                    {cls.enrollmentCount !== undefined && (
+                      <span className="text-muted-foreground ml-1">({cls.enrollmentCount} enrolled)</span>
+                    )}
+                  </Label>
+                </div>
+              ))}
+            </div>
+          )}
+          {selectedClasses.length > 0 && (
+            <p className="text-xs text-muted-foreground">
+              {selectedClasses.length} class{selectedClasses.length !== 1 ? 'es' : ''} selected
+            </p>
+          )}
+        </TabsContent>
+
+        <TabsContent value="individual" className="mt-2 space-y-2">
+          <Label className="text-sm">Select recipients</Label>
+          <UserLookup
+            value={selectedUsers}
+            onChange={onSelectedUsersChange}
+            placeholder="Search for parents..."
+            multiSelect={true}
+            modalTitle="Select Document Recipients"
+          />
+          {selectedUsers.length > 0 && (
+            <p className="text-xs text-muted-foreground">
+              {selectedUsers.length} recipient{selectedUsers.length !== 1 ? 's' : ''} selected
+            </p>
+          )}
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+
 const categoryLabels: Record<string, string> = {
   policy: 'Policy',
   handbook: 'Handbook',
@@ -106,6 +198,13 @@ export default function DocumentManagementPage() {
   const [notificationTargetType, setNotificationTargetType] = useState<NotificationTargetType>('all_parents');
   const [selectedClasses, setSelectedClasses] = useState<number[]>([]);
   const [selectedUsers, setSelectedUsers] = useState<UserResult[]>([]);
+
+  const [isNotifyDialogOpen, setIsNotifyDialogOpen] = useState(false);
+  const [documentToNotify, setDocumentToNotify] = useState<SchoolDocument | null>(null);
+  const [notifyTargetType, setNotifyTargetType] = useState<NotificationTargetType>('all_parents');
+  const [notifySelectedClasses, setNotifySelectedClasses] = useState<number[]>([]);
+  const [notifySelectedUsers, setNotifySelectedUsers] = useState<UserResult[]>([]);
+  const [isSendingNotification, setIsSendingNotification] = useState(false);
 
   const { data: schoolData } = useQuery<SchoolData>({
     queryKey: ['/api/school-admin/my-school'],
@@ -230,6 +329,32 @@ export default function DocumentManagementPage() {
     },
   });
 
+  const notifyMutation = useMutation({
+    mutationFn: async ({ documentId, targeting }: { documentId: number; targeting: any }) => {
+      const response = await apiRequest('POST', `/api/schools/documents/${documentId}/notify`, { targeting });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to send notification');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Notification sent successfully",
+      });
+      setIsNotifyDialogOpen(false);
+      resetNotifyForm();
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to send notification",
+        variant: "destructive",
+      });
+    },
+  });
+
   const resetUploadForm = () => {
     setSelectedFile(null);
     setUploadForm({
@@ -246,6 +371,54 @@ export default function DocumentManagementPage() {
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
+  };
+
+  const resetNotifyForm = () => {
+    setDocumentToNotify(null);
+    setNotifyTargetType('all_parents');
+    setNotifySelectedClasses([]);
+    setNotifySelectedUsers([]);
+  };
+
+  const openNotifyDialog = (doc: SchoolDocument) => {
+    setDocumentToNotify(doc);
+    setNotifyTargetType('all_parents');
+    setNotifySelectedClasses([]);
+    setNotifySelectedUsers([]);
+    setIsNotifyDialogOpen(true);
+  };
+
+  const buildNotifyTargetData = () => {
+    switch (notifyTargetType) {
+      case 'all_parents':
+        return { targetType: 'all_parents' };
+      case 'class_specific':
+        return { targetType: 'class_specific', classIds: notifySelectedClasses };
+      case 'individual':
+        return { targetType: 'individual', userIds: notifySelectedUsers.map(u => u.id) };
+      default:
+        return null;
+    }
+  };
+
+  const handleSendNotification = () => {
+    if (!documentToNotify) return;
+    
+    const targeting = buildNotifyTargetData();
+    if (!targeting) {
+      toast({
+        title: "Error",
+        description: "Please select notification recipients",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsSendingNotification(true);
+    notifyMutation.mutate(
+      { documentId: documentToNotify.id, targeting },
+      { onSettled: () => setIsSendingNotification(false) }
+    );
   };
 
   const MAX_FILE_SIZE_MB = 25;
@@ -355,7 +528,7 @@ export default function DocumentManagementPage() {
                       {doc.description}
                     </p>
                   )}
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <Button
                       variant="outline"
                       size="sm"
@@ -363,6 +536,15 @@ export default function DocumentManagementPage() {
                       data-testid={`button-download-${doc.id}`}
                     >
                       <Download className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => openNotifyDialog(doc)}
+                      data-testid={`button-notify-${doc.id}`}
+                      title="Send notification"
+                    >
+                      <Bell className="h-4 w-4" />
                     </Button>
                     <Button
                       variant="outline"
@@ -502,76 +684,15 @@ export default function DocumentManagementPage() {
                   </div>
 
                   {sendNotification && (
-                    <div className="space-y-3 border rounded-lg p-3 bg-muted/50">
-                      <Label className="text-sm font-medium">Who should receive the notification?</Label>
-                      <Tabs value={notificationTargetType} onValueChange={(v) => setNotificationTargetType(v as NotificationTargetType)}>
-                        <TabsList className="grid w-full grid-cols-3 h-auto">
-                          <TabsTrigger value="all_parents" className="text-xs py-1.5">All Parents</TabsTrigger>
-                          <TabsTrigger value="class_specific" className="text-xs py-1.5">By Class</TabsTrigger>
-                          <TabsTrigger value="individual" className="text-xs py-1.5">Individual</TabsTrigger>
-                        </TabsList>
-
-                        <TabsContent value="all_parents" className="mt-2">
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <Users className="h-4 w-4" />
-                            <span>All parents will receive a notification about this document.</span>
-                          </div>
-                        </TabsContent>
-
-                        <TabsContent value="class_specific" className="mt-2 space-y-2">
-                          <Label className="text-sm">Select classes</Label>
-                          {classes.length === 0 ? (
-                            <p className="text-sm text-muted-foreground">No classes available</p>
-                          ) : (
-                            <div className="max-h-32 overflow-y-auto space-y-1">
-                              {classes.map((cls) => (
-                                <div key={cls.id} className="flex items-center space-x-2">
-                                  <Checkbox
-                                    id={`class-${cls.id}`}
-                                    checked={selectedClasses.includes(cls.id)}
-                                    onCheckedChange={(checked) => {
-                                      if (checked) {
-                                        setSelectedClasses([...selectedClasses, cls.id]);
-                                      } else {
-                                        setSelectedClasses(selectedClasses.filter(id => id !== cls.id));
-                                      }
-                                    }}
-                                  />
-                                  <Label htmlFor={`class-${cls.id}`} className="text-sm font-normal">
-                                    {cls.title}
-                                    {cls.enrollmentCount !== undefined && (
-                                      <span className="text-muted-foreground ml-1">({cls.enrollmentCount} enrolled)</span>
-                                    )}
-                                  </Label>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                          {selectedClasses.length > 0 && (
-                            <p className="text-xs text-muted-foreground">
-                              {selectedClasses.length} class{selectedClasses.length !== 1 ? 'es' : ''} selected
-                            </p>
-                          )}
-                        </TabsContent>
-
-                        <TabsContent value="individual" className="mt-2 space-y-2">
-                          <Label className="text-sm">Select recipients</Label>
-                          <UserLookup
-                            value={selectedUsers}
-                            onChange={setSelectedUsers}
-                            placeholder="Search for parents..."
-                            multiSelect={true}
-                            modalTitle="Select Document Recipients"
-                          />
-                          {selectedUsers.length > 0 && (
-                            <p className="text-xs text-muted-foreground">
-                              {selectedUsers.length} recipient{selectedUsers.length !== 1 ? 's' : ''} selected
-                            </p>
-                          )}
-                        </TabsContent>
-                      </Tabs>
-
-                    </div>
+                    <NotificationTargetingUI
+                      targetType={notificationTargetType}
+                      onTargetTypeChange={setNotificationTargetType}
+                      selectedClasses={selectedClasses}
+                      onSelectedClassesChange={setSelectedClasses}
+                      selectedUsers={selectedUsers}
+                      onSelectedUsersChange={setSelectedUsers}
+                      classes={classes}
+                    />
                   )}
                 </>
               )}
@@ -597,6 +718,58 @@ export default function DocumentManagementPage() {
                   <>
                     <Upload className="h-4 w-4 mr-2" />
                     Upload
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={isNotifyDialogOpen} onOpenChange={(open) => {
+          setIsNotifyDialogOpen(open);
+          if (!open) resetNotifyForm();
+        }}>
+          <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Send Notification</DialogTitle>
+              <DialogDescription>
+                {documentToNotify && (
+                  <>Send a notification about "<strong>{documentToNotify.title}</strong>" to selected recipients.</>
+                )}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <NotificationTargetingUI
+                targetType={notifyTargetType}
+                onTargetTypeChange={setNotifyTargetType}
+                selectedClasses={notifySelectedClasses}
+                onSelectedClassesChange={setNotifySelectedClasses}
+                selectedUsers={notifySelectedUsers}
+                onSelectedUsersChange={setNotifySelectedUsers}
+                classes={classes}
+              />
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => {
+                setIsNotifyDialogOpen(false);
+                resetNotifyForm();
+              }}>
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleSendNotification} 
+                disabled={isSendingNotification}
+                data-testid="button-confirm-notify"
+              >
+                {isSendingNotification ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Sending...
+                  </>
+                ) : (
+                  <>
+                    <Bell className="h-4 w-4 mr-2" />
+                    Send Notification
                   </>
                 )}
               </Button>
