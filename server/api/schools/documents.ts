@@ -79,6 +79,73 @@ router.get('/published', supabaseAuth, async (req: any, res) => {
   }
 });
 
+// Helper function to resolve notification recipients
+async function resolveDocumentNotificationRecipients(
+  targeting: any,
+  schoolId: number
+): Promise<number[]> {
+  let recipients: number[] = [];
+
+  switch (targeting.targetType) {
+    case 'all_parents':
+      // Get all parents from the school
+      const allUsers = await storage.getAllUsers();
+      recipients = allUsers
+        .filter(u => u.role === 'parent' && u.schoolId === schoolId)
+        .map(u => u.id);
+      console.log(`📧 Resolved ${recipients.length} parents for all_parents targeting (schoolId: ${schoolId})`);
+      break;
+
+    case 'class_specific':
+      // Get parents of enrolled students in the specified classes
+      const classIds = targeting.classIds || [];
+      const parentIds = new Set<number>();
+      
+      for (const classId of classIds) {
+        const enrollments = await storage.getEnrollmentsByProgramId(classId);
+        for (const enrollment of enrollments) {
+          if (enrollment.parentId) {
+            parentIds.add(enrollment.parentId);
+          }
+        }
+      }
+      
+      recipients = Array.from(parentIds);
+      console.log(`📧 Resolved ${recipients.length} parents for class_specific targeting (classes: ${classIds.join(', ')})`);
+      break;
+
+    case 'individual':
+      recipients = targeting.userIds || [];
+      console.log(`📧 Resolved ${recipients.length} users for individual targeting`);
+      break;
+
+    case 'role':
+      const roleUsers = await storage.getAllUsers();
+      let filteredUsers = roleUsers.filter(u => 
+        targeting.roles?.includes(u.role) && u.schoolId === schoolId
+      );
+      recipients = filteredUsers.map(u => u.id);
+      console.log(`📧 Resolved ${recipients.length} users for role targeting`);
+      break;
+
+    case 'location':
+      const locationUserIds: number[] = [];
+      for (const locationId of targeting.locationIds || []) {
+        const userLocations = await storage.getUserLocationsByLocationId(locationId);
+        locationUserIds.push(...userLocations.map(ul => ul.userId));
+      }
+      recipients = [...new Set(locationUserIds)];
+      console.log(`📧 Resolved ${recipients.length} users for location targeting`);
+      break;
+
+    default:
+      console.log('Unknown targeting type, no recipients resolved');
+      break;
+  }
+
+  return recipients.filter(id => id && id > 0);
+}
+
 // Helper function to send document notification
 async function sendDocumentNotification(
   document: any, 
@@ -96,7 +163,7 @@ async function sendDocumentNotification(
       priority: 'normal' as const,
       subject: notificationSubject,
       content: notificationContent,
-      status: 'sent' as const,
+      status: 'pending' as const,
     };
 
     switch (targeting.targetType) {
@@ -129,8 +196,31 @@ async function sendDocumentNotification(
         return null;
     }
 
+    // Create the notification
     const notification = await storage.createNotification(notificationData);
     console.log(`✅ Created document notification ID ${notification.id} for document: ${document.title}`);
+
+    // Resolve recipients
+    const recipients = await resolveDocumentNotificationRecipients(targeting, schoolId);
+    console.log(`📧 Document notification: ${recipients.length} recipients to process`);
+
+    // Create recipient records for in-app notifications
+    for (const recipientId of recipients) {
+      await storage.createNotificationRecipient({
+        notificationId: notification.id,
+        recipientId,
+        deliveryType: 'in_app' as const,
+        status: 'delivered' as const,
+        deliveredAt: new Date(),
+      });
+    }
+
+    // Update notification status
+    await storage.updateNotification(notification.id, {
+      status: 'sent',
+    });
+
+    console.log(`✅ Document notification sent to ${recipients.length} recipients`);
     return notification;
   } catch (error) {
     console.error('Error sending document notification:', error);
