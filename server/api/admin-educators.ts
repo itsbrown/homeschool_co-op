@@ -449,6 +449,16 @@ router.post('/class-assignments', async (req: any, res) => {
       return res.status(400).json({ error: 'Educator is already assigned to this class' });
     }
 
+    // If this will be the primary instructor, clear primary from any existing assignments
+    if (validatedData.isPrimary) {
+      const existingAssignments = await storage.getEducatorClassAssignmentsByClassId(validatedData.classId);
+      for (const assignment of existingAssignments) {
+        if (assignment.isPrimary) {
+          await storage.updateEducatorClassAssignment(assignment.id, { isPrimary: false });
+        }
+      }
+    }
+
     // Create the assignment
     const assignment = await storage.createEducatorClassAssignment({
       educatorId: validatedData.educatorId,
@@ -459,6 +469,12 @@ router.post('/class-assignments', async (req: any, res) => {
       validFrom: validatedData.validFrom || null,
       validTo: validatedData.validTo || null
     });
+
+    // Sync class.instructorId when primary instructor is set
+    if (validatedData.isPrimary) {
+      await storage.updateClass(validatedData.classId, { instructorId: validatedData.educatorId });
+      console.log('[AdminEducators] Synced class.instructorId to:', validatedData.educatorId);
+    }
 
     // Create audit log
     const classInfo = await storage.getClassById(validatedData.classId);
@@ -534,6 +550,12 @@ router.patch('/class-assignments/:id', async (req: any, res) => {
 
     // Update the assignment
     const updatedAssignment = await storage.updateEducatorClassAssignment(assignmentId, validatedData);
+
+    // Sync class.instructorId when primary instructor is changed
+    if (validatedData.isPrimary) {
+      await storage.updateClass(existingAssignment.classId, { instructorId: existingAssignment.educatorId });
+      console.log('[AdminEducators] Synced class.instructorId to:', existingAssignment.educatorId);
+    }
 
     // Get details for audit log
     const classInfo = await storage.getClassById(existingAssignment.classId);
