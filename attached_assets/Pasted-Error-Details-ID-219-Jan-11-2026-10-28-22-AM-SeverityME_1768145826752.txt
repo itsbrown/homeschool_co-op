@@ -1,0 +1,108 @@
+Error Details
+ID: 219 | Jan 11, 2026, 10:28:22 AM
+
+SeverityMEDIUM
+Type
+frontend
+
+Route
+/school-admin/documents
+
+Method
+N/A
+
+User
+Anonymous
+
+School ID
+N/A
+
+Message
+Error: 413: File size limit has been reached
+
+Metadata
+{
+  "online": true,
+  "source": "toast",
+  "userId": 5,
+  "network": {
+    "rtt": 50,
+    "downlink": 10,
+    "saveData": false,
+    "effectiveType": "4g"
+  },
+  "language": "en-US",
+  "referrer": "https://accounts.google.com/",
+  "schoolId": null,
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "activeRole": null,
+  "hasSession": true,
+  "toastTitle": "Error",
+  "breadcrumbs": [
+    {
+      "route": "/",
+      "title": "",
+      "timestamp": "2026-01-11T15:12:25.539Z",
+      "timeOnPage": 657
+    },
+    {
+      "route": "/",
+      "title": "",
+      "timestamp": "2026-01-11T15:12:26.196Z",
+      "timeOnPage": 332680
+    },
+    {
+      "route": "/schools/users",
+      "title": "",
+      "timestamp": "2026-01-11T15:17:58.876Z",
+      "timeOnPage": 514058
+    },
+    {
+      "route": "/schools/classes",
+      "title": "",
+      "timestamp": "2026-01-11T15:26:32.934Z"
+    }
+  ],
+  "formContext": null,
+  "memoryUsage": {
+    "usedJSHeapSize": 79,
+    "totalJSHeapSize": 82
+  },
+  "pageLoadTime": 2734,
+  "sessionStart": "2026-01-10T12:20:18.922Z",
+  "correlationId": "8484d98b-7573-447a-9bb2-b4e371429826",
+  "recentActions": [
+    {
+      "type": "input",
+      "target": "[data-testid=\"input-document-description\"]",
+      "secondsAgo": 9
+    },
+    {
+      "type": "input",
+      "target": "[data-testid=\"input-document-description\"]",
+      "secondsAgo": 9
+    },
+    {
+      "type": "input",
+      "target": "[data-testid=\"input-document-description\"]",
+      "secondsAgo": 9
+    },
+    {
+      "type": "click",
+      "target": "body",
+      "secondsAgo": 7
+    },
+    {
+      "type": "click",
+      "target": "[data-testid=\"button-confirm-upload\"]",
+      "secondsAgo": 4
+    }
+  ],
+  "userEmailHint": "con***",
+  "viewportWidth": 1920,
+  "viewportHeight": 1020,
+  "toastDescription": "413: File size limit has been reached",
+  "sessionErrorCount": 5,
+  "timeOnCurrentPage": 109717
+}
+Update Status

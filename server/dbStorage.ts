@@ -103,7 +103,7 @@ export class DatabaseStorage implements IStorage {
 
   async getAllUsers(): Promise<User[]> {
     const db = await getDb();
-    return await db.select().from(users);
+    return await db.select().from(users).where(eq(users.isActive, true));
   }
 
   async updateUser(id: number, user: Partial<InsertUser>): Promise<User | undefined> {
@@ -293,11 +293,46 @@ export class DatabaseStorage implements IStorage {
     await db.delete(educatorClassAssignments).where(eq(educatorClassAssignments.educatorId, educatorId));
   }
 
+  async nullifyUserReferencesForSoftDelete(userId: number): Promise<void> {
+    const db = await getDb();
+    const { customForms, customFormSubmissions } = await import('../shared/schema.js');
+    
+    // Nullify references in audit/history tables with nullable FK (preserve records, unlink user)
+    await db.update(auditLogs).set({ actorId: null }).where(eq(auditLogs.actorId, userId));
+    await db.update(errorLogs).set({ userId: null }).where(eq(errorLogs.userId, userId));
+    await db.update(errorLogs).set({ resolvedBy: null }).where(eq(errorLogs.resolvedBy, userId));
+    await db.update(customFormSubmissions).set({ submittedBy: null }).where(eq(customFormSubmissions.submittedBy, userId));
+    await db.update(discountApplications).set({ appliedBy: null }).where(eq(discountApplications.appliedBy, userId));
+    await db.update(volunteerCredits).set({ approvedBy: null }).where(eq(volunteerCredits.approvedBy, userId));
+    await db.update(credits).set({ approvedBy: null }).where(eq(credits.approvedBy, userId));
+    
+    // Delete records with NOT NULL user FK (these can't have null references)
+    // Note: This removes user-created content - consider reassigning to admin if content preservation needed
+    await db.delete(sessionAttendance).where(eq(sessionAttendance.recordedBy, userId));
+    await db.delete(sessionVolunteers).where(eq(sessionVolunteers.volunteerId, userId));
+    await db.delete(curricula).where(eq(curricula.authorId, userId));
+    await db.delete(lessons).where(eq(lessons.authorId, userId));
+    await db.delete(knowledgeBases).where(eq(knowledgeBases.authorId, userId));
+    await db.delete(activities).where(eq(activities.authorId, userId));
+    await db.delete(schoolDocuments).where(eq(schoolDocuments.uploadedBy, userId));
+    await db.delete(customForms).where(eq(customForms.createdBy, userId));
+    await db.delete(events).where(eq(events.organizerId, userId));
+    await db.delete(marketplaceItems).where(eq(marketplaceItems.sellerId, userId));
+    await db.delete(roleInvitations).where(eq(roleInvitations.invitedBy, userId));
+  }
+
+  async deletePushSubscriptionsByUserId(userId: number): Promise<void> {
+    const db = await getDb();
+    const { pushSubscriptions } = await import('../shared/schema.js');
+    await db.delete(pushSubscriptions).where(eq(pushSubscriptions.userId, userId));
+  }
+
   async getParentsBySchoolId(schoolId: number): Promise<User[]> {
     const db = await getDb();
     // Get distinct user IDs that have parent role in this school
     // Use user_roles.schoolId to find parents associated with this school
     // (users.schoolId may be null or different for multi-role users)
+    // Filter out soft-deleted users (isActive=false)
     const userIdRows = await db
       .selectDistinct({ userId: users.id })
       .from(users)
@@ -305,6 +340,7 @@ export class DatabaseStorage implements IStorage {
       .where(
         and(
           eq(userRoles.schoolId, schoolId),
+          eq(users.isActive, true),
           or(
             eq(userRoles.role, 'parent'),
             eq(userRoles.role, 'Parent')
@@ -316,12 +352,12 @@ export class DatabaseStorage implements IStorage {
       return [];
     }
     
-    // Fetch full user records for those IDs
+    // Fetch full user records for those IDs (already filtered for isActive in query above)
     const userIds = userIdRows.map(r => r.userId);
     return await db
       .select()
       .from(users)
-      .where(inArray(users.id, userIds));
+      .where(and(inArray(users.id, userIds), eq(users.isActive, true)));
   }
 
   // School Student methods

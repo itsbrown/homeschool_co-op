@@ -5166,11 +5166,11 @@ router.put('/users/:id', supabaseAuth, requireSchoolContext, async (req: any, re
   }
 });
 
-// Delete a user
+// Delete a user (soft-delete: sets isActive=false, revokes auth, nullifies FK references)
 router.delete('/users/:id', supabaseAuth, requireSchoolContext, async (req: any, res) => {
   try {
     const schoolId = req.schoolId;
-    console.log('🗑️ Deleting user for school admin...');
+    console.log('🗑️ Soft-deleting user for school admin...');
     
     const userId = parseInt(req.params.id);
     if (!userId) {
@@ -5183,11 +5183,15 @@ router.delete('/users/:id', supabaseAuth, requireSchoolContext, async (req: any,
       return res.status(404).json({ message: 'User not found or access denied' });
     }
 
+    // Check if user is already soft-deleted
+    if (!existingUser.isActive) {
+      return res.status(400).json({ message: 'User is already deleted' });
+    }
+
     const userEmail = existingUser.email;
-    console.log(`🗑️ Starting deletion process for user: ${userEmail} (ID: ${userId})`);
+    console.log(`🗑️ Starting soft-delete process for user: ${userEmail} (ID: ${userId})`);
 
     // Step 1: Delete user from Supabase Auth (so they can't log in anymore)
-    let supabaseDeleted = false;
     try {
       const { createClient } = await import('@supabase/supabase-js');
       const supabaseUrl = process.env.SUPABASE_URL;
@@ -5205,32 +5209,18 @@ router.delete('/users/:id', supabaseAuth, requireSchoolContext, async (req: any,
             console.error(`⚠️ Failed to delete Supabase auth user by ID: ${deleteAuthError.message}`);
           } else {
             console.log(`✅ Deleted user from Supabase Auth by supabaseId: ${userEmail}`);
-            supabaseDeleted = true;
           }
-        }
-
-        // If no supabaseId or deletion by ID failed, search by email with pagination
-        if (!supabaseDeleted) {
+        } else {
+          // Search by email with pagination if no supabaseId
           let page = 1;
           const perPage = 100;
           let foundUser = null;
 
-          // Paginate through all users to find by email
           while (!foundUser) {
-            const { data: listData } = await supabaseAdmin.auth.admin.listUsers({
-              page,
-              perPage
-            });
-            
-            if (!listData?.users || listData.users.length === 0) {
-              break; // No more users to search
-            }
-
+            const { data: listData } = await supabaseAdmin.auth.admin.listUsers({ page, perPage });
+            if (!listData?.users || listData.users.length === 0) break;
             foundUser = listData.users.find(u => u.email === userEmail);
-            
-            if (listData.users.length < perPage) {
-              break; // Last page
-            }
+            if (listData.users.length < perPage) break;
             page++;
           }
 
@@ -5240,7 +5230,6 @@ router.delete('/users/:id', supabaseAuth, requireSchoolContext, async (req: any,
               console.error(`⚠️ Failed to delete Supabase auth user: ${deleteAuthError.message}`);
             } else {
               console.log(`✅ Deleted user from Supabase Auth: ${userEmail}`);
-              supabaseDeleted = true;
             }
           } else {
             console.log(`ℹ️ User ${userEmail} not found in Supabase Auth (may be local-only user)`);
@@ -5251,48 +5240,22 @@ router.delete('/users/:id', supabaseAuth, requireSchoolContext, async (req: any,
       }
     } catch (supabaseError) {
       console.error('⚠️ Error during Supabase auth deletion:', supabaseError);
-      // Continue with local deletion even if Supabase deletion fails
     }
 
-    // Step 2: Clear user's activeRoleId to break FK constraint before deleting roles
-    try {
-      await storage.updateUser(userId, { activeRoleId: null });
-      console.log(`✅ Cleared activeRoleId for user ID: ${userId}`);
-    } catch (clearRoleError) {
-      console.error('⚠️ Error clearing activeRoleId:', clearRoleError);
-    }
+    // Step 2: Soft-delete user - set isActive=false and clear activeRoleId
+    await storage.updateUser(userId, { 
+      isActive: false, 
+      activeRoleId: null,
+      supabaseId: null // Clear supabase link since auth was deleted
+    });
+    console.log(`✅ Soft-deleted user: isActive=false, cleared activeRoleId and supabaseId`);
 
-    // Step 3: Clean up related records before deleting user
-    // Delete user roles for this user
+    // Step 3: Nullify FK references in audit/history tables (preserve records, unlink user)
     try {
-      await storage.deleteUserRolesByUserId(userId);
-      console.log(`✅ Deleted user roles for user ID: ${userId}`);
-    } catch (roleError) {
-      console.error('⚠️ Error deleting user roles:', roleError);
-    }
-
-    // Delete school staff records
-    try {
-      await storage.deleteSchoolStaffByUserId(userId);
-      console.log(`✅ Deleted school staff records for user ID: ${userId}`);
-    } catch (staffError) {
-      console.error('⚠️ Error deleting school staff records:', staffError);
-    }
-
-    // Delete user locations
-    try {
-      await storage.deleteUserLocationsByUserId(userId);
-      console.log(`✅ Deleted user locations for user ID: ${userId}`);
-    } catch (locError) {
-      console.error('⚠️ Error deleting user locations:', locError);
-    }
-
-    // Delete notification recipients
-    try {
-      await storage.deleteNotificationRecipientsByUserId(userId);
-      console.log(`✅ Deleted notification recipients for user ID: ${userId}`);
-    } catch (notifError) {
-      console.error('⚠️ Error deleting notification recipients:', notifError);
+      await storage.nullifyUserReferencesForSoftDelete(userId);
+      console.log(`✅ Nullified user references in audit/content tables for user ID: ${userId}`);
+    } catch (nullifyError) {
+      console.error('⚠️ Error nullifying user references:', nullifyError);
     }
 
     // Step 4: Delete emergency contacts for this user
@@ -5319,7 +5282,7 @@ router.delete('/users/:id', supabaseAuth, requireSchoolContext, async (req: any,
       console.error('⚠️ Error deleting scheduled payments:', scheduledError);
     }
 
-    // Step 7: Delete program enrollments by parent (separate from child enrollments)
+    // Step 7: Delete program enrollments by parent
     try {
       await storage.deleteEnrollmentsByParentId(userId);
       console.log(`✅ Deleted program enrollments (by parent) for user ID: ${userId}`);
@@ -5437,14 +5400,56 @@ router.delete('/users/:id', supabaseAuth, requireSchoolContext, async (req: any,
       console.error('⚠️ Error deleting children:', childError);
     }
 
-    // Step 14: Delete user from local database
-    await storage.deleteUser(userId);
-    console.log(`✅ Deleted user from database: ${userEmail} (ID: ${userId}) from school ${schoolId}`);
+    // Step 14: Delete access-related records
+    // Delete user roles
+    try {
+      await storage.deleteUserRolesByUserId(userId);
+      console.log(`✅ Deleted user roles for user ID: ${userId}`);
+    } catch (roleError) {
+      console.error('⚠️ Error deleting user roles:', roleError);
+    }
+
+    // Delete school staff records
+    try {
+      await storage.deleteSchoolStaffByUserId(userId);
+      console.log(`✅ Deleted school staff records for user ID: ${userId}`);
+    } catch (staffError) {
+      console.error('⚠️ Error deleting school staff records:', staffError);
+    }
+
+    // Delete user locations
+    try {
+      await storage.deleteUserLocationsByUserId(userId);
+      console.log(`✅ Deleted user locations for user ID: ${userId}`);
+    } catch (locError) {
+      console.error('⚠️ Error deleting user locations:', locError);
+    }
+
+    // Delete notification recipients
+    try {
+      await storage.deleteNotificationRecipientsByUserId(userId);
+      console.log(`✅ Deleted notification recipients for user ID: ${userId}`);
+    } catch (notifError) {
+      console.error('⚠️ Error deleting notification recipients:', notifError);
+    }
+
+    // Delete push subscriptions (has cascade but explicit cleanup is cleaner)
+    try {
+      await storage.deletePushSubscriptionsByUserId(userId);
+      console.log(`✅ Deleted push subscriptions for user ID: ${userId}`);
+    } catch (pushError) {
+      console.error('⚠️ Error deleting push subscriptions:', pushError);
+    }
+
+    console.log(`✅ Soft-deleted user: ${userEmail} (ID: ${userId}) from school ${schoolId}`);
     
-    res.status(200).json({ message: 'User deleted successfully' });
+    res.status(200).json({ 
+      message: 'User deleted successfully',
+      softDeleted: true 
+    });
   } catch (error) {
     const err = error as Error;
-    console.error('❌ Error deleting user:', error);
+    console.error('❌ Error soft-deleting user:', error);
     res.status(500).json({ 
       message: 'Error deleting user',
       error: err.message 

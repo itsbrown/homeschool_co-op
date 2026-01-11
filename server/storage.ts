@@ -123,6 +123,10 @@ export interface IStorage {
   clearProgramsInstructorId(instructorId: number): Promise<void>;
   deleteEducatorSchedulesByEducatorId(educatorId: number): Promise<void>;
   deleteEducatorClassAssignmentsByEducatorId(educatorId: number): Promise<void>;
+  
+  // Soft-delete support methods
+  nullifyUserReferencesForSoftDelete(userId: number): Promise<void>;
+  deletePushSubscriptionsByUserId(userId: number): Promise<void>;
 
   // Location methods
   getLocationsBySchool(schoolId: number): Promise<Location[]>;
@@ -1287,6 +1291,14 @@ export class MemStorage implements IStorage {
 
   async deleteEducatorClassAssignmentsByEducatorId(educatorId: number): Promise<void> {
     // MemStorage doesn't track educator class assignments - no-op
+  }
+
+  async nullifyUserReferencesForSoftDelete(userId: number): Promise<void> {
+    // MemStorage doesn't have complex FK relationships - no-op
+  }
+
+  async deletePushSubscriptionsByUserId(userId: number): Promise<void> {
+    // MemStorage doesn't track push subscriptions - no-op
   }
 
   async getLocationsBySchool(schoolId: number): Promise<Location[]> {
@@ -5673,6 +5685,14 @@ import { DatabaseStorage } from "./dbStorage";
 
     async deleteEducatorClassAssignmentsByEducatorId(educatorId: number): Promise<void> {
       return this.dbStorage.deleteEducatorClassAssignmentsByEducatorId(educatorId);
+    }
+
+    async nullifyUserReferencesForSoftDelete(userId: number): Promise<void> {
+      return this.dbStorage.nullifyUserReferencesForSoftDelete(userId);
+    }
+
+    async deletePushSubscriptionsByUserId(userId: number): Promise<void> {
+      return this.dbStorage.deletePushSubscriptionsByUserId(userId);
     }
 
     async getParentsBySchoolId(schoolId: number): Promise<User[]> {
