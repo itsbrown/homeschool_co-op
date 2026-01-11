@@ -496,6 +496,81 @@ router.post('/class-assignments', async (req: any, res) => {
   }
 });
 
+// PATCH /api/admin/educators/class-assignments/:id - Update educator assignment (e.g., make lead instructor)
+router.patch('/class-assignments/:id', async (req: any, res) => {
+  try {
+    const schoolId = req.schoolId;
+    const actorId = req.user?.id;
+    const assignmentId = parseInt(req.params.id);
+    
+    if (!schoolId) {
+      return res.status(400).json({ error: 'School context required' });
+    }
+
+    const updateSchema = z.object({
+      isPrimary: z.boolean().optional(),
+      canStartSession: z.boolean().optional()
+    });
+
+    const validatedData = updateSchema.parse(req.body);
+    
+    console.log('[AdminEducators] Updating class assignment:', assignmentId, validatedData);
+
+    // Get existing assignment to verify school ownership
+    const existingAssignment = await storage.getEducatorClassAssignmentById(assignmentId);
+    if (!existingAssignment || existingAssignment.schoolId !== parseInt(schoolId)) {
+      return res.status(404).json({ error: 'Assignment not found in this school' });
+    }
+
+    // If making this educator the primary, clear primary from all other assignments for this class
+    if (validatedData.isPrimary) {
+      const allAssignments = await storage.getEducatorClassAssignmentsByClassId(existingAssignment.classId);
+      for (const assignment of allAssignments) {
+        if (assignment.id !== assignmentId && assignment.isPrimary) {
+          await storage.updateEducatorClassAssignment(assignment.id, { isPrimary: false });
+        }
+      }
+    }
+
+    // Update the assignment
+    const updatedAssignment = await storage.updateEducatorClassAssignment(assignmentId, validatedData);
+
+    // Get details for audit log
+    const classInfo = await storage.getClassById(existingAssignment.classId);
+    const educator = await storage.getUser(existingAssignment.educatorId);
+
+    // Create audit log
+    const auditLog: InsertAuditLog = {
+      actionType: 'educator_class_assignment_updated',
+      severity: 'info',
+      actorId: actorId,
+      actorRole: 'admin',
+      actorEmail: req.user?.email,
+      targetType: 'educator_class_assignment',
+      targetId: String(assignmentId),
+      schoolId: parseInt(schoolId),
+      metadata: {
+        context: `Admin updated ${educator?.name}'s assignment for ${classInfo?.title}`,
+        before: existingAssignment,
+        after: validatedData
+      }
+    };
+    await storage.createAuditLog(auditLog);
+
+    console.log('[AdminEducators] Assignment updated:', assignmentId);
+    res.json(updatedAssignment);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ 
+        error: 'Invalid update data',
+        details: error.errors
+      });
+    }
+    console.error('[AdminEducators] Error updating class assignment:', error);
+    res.status(500).json({ error: 'Failed to update class assignment' });
+  }
+});
+
 // DELETE /api/admin/educators/class-assignments/:id - Remove educator from class
 router.delete('/class-assignments/:id', async (req: any, res) => {
   try {

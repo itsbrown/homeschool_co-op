@@ -269,6 +269,30 @@ export class DatabaseStorage implements IStorage {
       .where(eq(classSessions.substituteEducatorId, educatorId));
   }
 
+  async clearClassesInstructorId(instructorId: number): Promise<void> {
+    const db = await getDb();
+    await db.update(classes)
+      .set({ instructorId: null })
+      .where(eq(classes.instructorId, instructorId));
+  }
+
+  async clearProgramsInstructorId(instructorId: number): Promise<void> {
+    const db = await getDb();
+    await db.update(programs)
+      .set({ instructorId: null })
+      .where(eq(programs.instructorId, instructorId));
+  }
+
+  async deleteEducatorSchedulesByEducatorId(educatorId: number): Promise<void> {
+    const db = await getDb();
+    await db.delete(educatorSchedules).where(eq(educatorSchedules.educatorId, educatorId));
+  }
+
+  async deleteEducatorClassAssignmentsByEducatorId(educatorId: number): Promise<void> {
+    const db = await getDb();
+    await db.delete(educatorClassAssignments).where(eq(educatorClassAssignments.educatorId, educatorId));
+  }
+
   async getParentsBySchoolId(schoolId: number): Promise<User[]> {
     const db = await getDb();
     // Get distinct user IDs that have parent role in this school

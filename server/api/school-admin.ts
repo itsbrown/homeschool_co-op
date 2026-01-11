@@ -5151,6 +5151,38 @@ router.delete('/users/:id', supabaseAuth, requireSchoolContext, async (req: any,
       console.error('⚠️ Error deleting class sessions:', classSessionError);
     }
 
+    // Step 12a: Delete educator schedules
+    try {
+      await storage.deleteEducatorSchedulesByEducatorId(userId);
+      console.log(`✅ Deleted educator schedules for educator ID: ${userId}`);
+    } catch (scheduleError) {
+      console.error('⚠️ Error deleting educator schedules:', scheduleError);
+    }
+
+    // Step 12b: Delete educator class assignments
+    try {
+      await storage.deleteEducatorClassAssignmentsByEducatorId(userId);
+      console.log(`✅ Deleted educator class assignments for educator ID: ${userId}`);
+    } catch (assignmentError) {
+      console.error('⚠️ Error deleting educator class assignments:', assignmentError);
+    }
+
+    // Step 12c: Clear instructorId from classes (set to null)
+    try {
+      await storage.clearClassesInstructorId(userId);
+      console.log(`✅ Cleared instructor references in classes for user ID: ${userId}`);
+    } catch (classInstructorError) {
+      console.error('⚠️ Error clearing class instructor references:', classInstructorError);
+    }
+
+    // Step 12d: Clear instructorId from programs (set to null)
+    try {
+      await storage.clearProgramsInstructorId(userId);
+      console.log(`✅ Cleared instructor references in programs for user ID: ${userId}`);
+    } catch (programInstructorError) {
+      console.error('⚠️ Error clearing program instructor references:', programInstructorError);
+    }
+
     // Step 13: Cascade delete children and their dependencies
     try {
       const children = await storage.getChildrenByParentId(userId);

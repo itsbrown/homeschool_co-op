@@ -87,11 +87,11 @@ export default function NotificationManagementPage() {
     queryKey: ["/api/locations"],
   });
 
-  // Fetch classes for class-specific notifications
-  const { data: classesResponse } = useQuery<{ classes: ClassInfo[], pagination: any }>({
-    queryKey: ["/api/classes"],
+  // Fetch classes for class-specific notifications (use school-context endpoint)
+  const { data: schoolClassesData } = useQuery<ClassInfo[]>({
+    queryKey: ["/api/schools/classes"],
   });
-  const classes = classesResponse?.classes || [];
+  const classes = schoolClassesData || [];
 
   // Send individual notification mutation
   const sendIndividualMutation = useMutation({

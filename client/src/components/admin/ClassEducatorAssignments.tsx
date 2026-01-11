@@ -100,6 +100,26 @@ export function ClassEducatorAssignments({
     },
   });
 
+  const makeLeadMutation = useMutation({
+    mutationFn: async (assignmentId: number) => {
+      return apiRequest('PATCH', `/api/admin/educators/class-assignments/${assignmentId}`, { isPrimary: true });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/educators/class-assignments", classId] });
+      toast({
+        title: "Lead instructor updated",
+        description: "The lead instructor has been updated for this class.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update lead instructor",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleAddEducator = () => {
     if (!selectedStaffId || !classId) return;
     
@@ -198,11 +218,27 @@ export function ClassEducatorAssignments({
                       <Badge variant={getRoleBadgeVariant(assignment.role)}>
                         {assignment.role || 'Staff'}
                       </Badge>
-                      {assignment.isPrimary && (
+                      {assignment.isPrimary ? (
                         <Badge variant="default" className="bg-green-600">
                           <UserCheck className="h-3 w-3 mr-1" />
                           Lead Instructor
                         </Badge>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => makeLeadMutation.mutate(assignment.id)}
+                          disabled={makeLeadMutation.isPending}
+                          data-testid={`make-lead-${assignment.id}`}
+                          className="text-xs h-7"
+                        >
+                          {makeLeadMutation.isPending ? (
+                            <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                          ) : (
+                            <UserCheck className="h-3 w-3 mr-1" />
+                          )}
+                          Make Lead
+                        </Button>
                       )}
                       <Button
                         variant="ghost"

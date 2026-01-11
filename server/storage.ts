@@ -119,6 +119,10 @@ export interface IStorage {
   deletePaymentReceiptsByParentUserId(parentUserId: number): Promise<void>;
   deleteClassSessionsByEducatorId(educatorId: number): Promise<void>;
   clearClassSessionsSubstituteEducatorId(educatorId: number): Promise<void>;
+  clearClassesInstructorId(instructorId: number): Promise<void>;
+  clearProgramsInstructorId(instructorId: number): Promise<void>;
+  deleteEducatorSchedulesByEducatorId(educatorId: number): Promise<void>;
+  deleteEducatorClassAssignmentsByEducatorId(educatorId: number): Promise<void>;
 
   // Location methods
   getLocationsBySchool(schoolId: number): Promise<Location[]>;
@@ -1257,6 +1261,32 @@ export class MemStorage implements IStorage {
 
   async clearClassSessionsSubstituteEducatorId(educatorId: number): Promise<void> {
     // MemStorage doesn't track class sessions - no-op
+  }
+
+  async clearClassesInstructorId(instructorId: number): Promise<void> {
+    // MemStorage - set instructorId to null for matching classes
+    for (const [id, cls] of this.classesStore.entries()) {
+      if (cls.instructorId === instructorId) {
+        this.classesStore.set(id, { ...cls, instructorId: null });
+      }
+    }
+  }
+
+  async clearProgramsInstructorId(instructorId: number): Promise<void> {
+    // MemStorage - set instructorId to null for matching programs
+    for (const [id, prog] of this.programsStore.entries()) {
+      if (prog.instructorId === instructorId) {
+        this.programsStore.set(id, { ...prog, instructorId: null });
+      }
+    }
+  }
+
+  async deleteEducatorSchedulesByEducatorId(educatorId: number): Promise<void> {
+    // MemStorage doesn't track educator schedules - no-op
+  }
+
+  async deleteEducatorClassAssignmentsByEducatorId(educatorId: number): Promise<void> {
+    // MemStorage doesn't track educator class assignments - no-op
   }
 
   async getLocationsBySchool(schoolId: number): Promise<Location[]> {
@@ -5627,6 +5657,22 @@ import { DatabaseStorage } from "./dbStorage";
 
     async clearClassSessionsSubstituteEducatorId(educatorId: number): Promise<void> {
       return this.dbStorage.clearClassSessionsSubstituteEducatorId(educatorId);
+    }
+
+    async clearClassesInstructorId(instructorId: number): Promise<void> {
+      return this.dbStorage.clearClassesInstructorId(instructorId);
+    }
+
+    async clearProgramsInstructorId(instructorId: number): Promise<void> {
+      return this.dbStorage.clearProgramsInstructorId(instructorId);
+    }
+
+    async deleteEducatorSchedulesByEducatorId(educatorId: number): Promise<void> {
+      return this.dbStorage.deleteEducatorSchedulesByEducatorId(educatorId);
+    }
+
+    async deleteEducatorClassAssignmentsByEducatorId(educatorId: number): Promise<void> {
+      return this.dbStorage.deleteEducatorClassAssignmentsByEducatorId(educatorId);
     }
 
     async getParentsBySchoolId(schoolId: number): Promise<User[]> {
