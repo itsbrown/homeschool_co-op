@@ -88,10 +88,11 @@ export default function NotificationManagementPage() {
   });
 
   // Fetch classes for class-specific notifications (use school-admin endpoint)
-  const { data: schoolClassesData } = useQuery<ClassInfo[]>({
+  // API returns paginated response { items: ClassInfo[], total, page, limit, totalPages }
+  const { data: schoolClassesData } = useQuery<{ items: ClassInfo[], total: number }>({
     queryKey: ["/api/school-admin/classes"],
   });
-  const classes = schoolClassesData || [];
+  const classes = schoolClassesData?.items || [];
 
   // Send individual notification mutation
   const sendIndividualMutation = useMutation({
