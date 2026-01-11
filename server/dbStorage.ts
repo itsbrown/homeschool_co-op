@@ -63,9 +63,7 @@ import {
   FundraiserFamilyLink, InsertFundraiserFamilyLink, fundraiserFamilyLinks,
   FundraiserOrder, InsertFundraiserOrder, fundraiserOrders,
   FundraiserOrderItem, InsertFundraiserOrderItem, fundraiserOrderItems,
-  piiAccessLogs,
-  membershipAgreements,
-  paymentReceipts
+  piiAccessLogs
 } from '../shared/schema';
 
 /**

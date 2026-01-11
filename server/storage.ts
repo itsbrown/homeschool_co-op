@@ -114,6 +114,9 @@ export interface IStorage {
   deleteCartsByParentId(parentId: number): Promise<void>;
   deleteScheduledPaymentsByParentId(parentId: number): Promise<void>;
   deleteEnrollmentsByParentId(parentId: number): Promise<void>;
+  deleteMembershipEnrollmentsByParentUserId(parentUserId: number): Promise<void>;
+  deleteMembershipAgreementsByParentUserId(parentUserId: number): Promise<void>;
+  deletePaymentReceiptsByParentUserId(parentUserId: number): Promise<void>;
 
   // Location methods
   getLocationsBySchool(schoolId: number): Promise<Location[]>;
@@ -1232,6 +1235,18 @@ export class MemStorage implements IStorage {
 
   async deleteEnrollmentsByParentId(parentId: number): Promise<void> {
     // MemStorage doesn't track enrollments - no-op
+  }
+
+  async deleteMembershipEnrollmentsByParentUserId(parentUserId: number): Promise<void> {
+    // MemStorage doesn't track membership enrollments - no-op
+  }
+
+  async deleteMembershipAgreementsByParentUserId(parentUserId: number): Promise<void> {
+    // MemStorage doesn't track membership agreements - no-op
+  }
+
+  async deletePaymentReceiptsByParentUserId(parentUserId: number): Promise<void> {
+    // MemStorage doesn't track payment receipts - no-op
   }
 
   async getLocationsBySchool(schoolId: number): Promise<Location[]> {
@@ -5474,37 +5489,9 @@ import { DatabaseStorage } from "./dbStorage";
     }
 
     async deleteUser(id: number): Promise<void> {
-      try {
-        // Try database storage first
-        return await this.dbStorage.deleteUser(id);
-      } catch (error) {
-        console.error('❌ Database deleteUser failed:', error);
-        console.log('💾 Database unavailable, using file storage for user deletion');
-        // Fall back to memory storage and file persistence
-        this.memStorage.deleteUser(id);
-        
-        // Also remove from file storage
-        try {
-          const fs = await import('fs');
-          const path = await import('path');
-          const DATA_DIR = path.join(process.cwd(), 'data');
-          const USERS_FILE = path.join(DATA_DIR, 'users.json');
-
-          if (fs.existsSync(USERS_FILE)) {
-            const fileContent = fs.readFileSync(USERS_FILE, 'utf8');
-            let users = JSON.parse(fileContent);
-            
-            // Remove user from file
-            users = users.filter((u: any) => u.id !== id);
-            
-            // Write back to file
-            fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
-            console.log(`💾 Deleted user from file: ID ${id}`);
-          }
-        } catch (fileError) {
-          console.log('❌ Failed to delete user from file:', fileError);
-        }
-      }
+      // Database is authoritative for user deletion - no fallback to file storage
+      // If database fails due to FK constraints, the error must be surfaced
+      await this.dbStorage.deleteUser(id);
     }
 
     // School methods - use database storage with fallback to memory
