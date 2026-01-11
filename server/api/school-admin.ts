@@ -5038,8 +5038,16 @@ router.delete('/users/:id', supabaseAuth, requireSchoolContext, async (req: any,
       // Continue with local deletion even if Supabase deletion fails
     }
 
-    // Step 2: Clean up related records before deleting user
-    // Delete user roles for this school
+    // Step 2: Clear user's activeRoleId to break FK constraint before deleting roles
+    try {
+      await storage.updateUser(userId, { activeRoleId: null });
+      console.log(`✅ Cleared activeRoleId for user ID: ${userId}`);
+    } catch (clearRoleError) {
+      console.error('⚠️ Error clearing activeRoleId:', clearRoleError);
+    }
+
+    // Step 3: Clean up related records before deleting user
+    // Delete user roles for this user
     try {
       await storage.deleteUserRolesByUserId(userId);
       console.log(`✅ Deleted user roles for user ID: ${userId}`);
@@ -5055,7 +5063,23 @@ router.delete('/users/:id', supabaseAuth, requireSchoolContext, async (req: any,
       console.error('⚠️ Error deleting school staff records:', staffError);
     }
 
-    // Step 3: Delete user from local database
+    // Delete user locations
+    try {
+      await storage.deleteUserLocationsByUserId(userId);
+      console.log(`✅ Deleted user locations for user ID: ${userId}`);
+    } catch (locError) {
+      console.error('⚠️ Error deleting user locations:', locError);
+    }
+
+    // Delete notification recipients
+    try {
+      await storage.deleteNotificationRecipientsByUserId(userId);
+      console.log(`✅ Deleted notification recipients for user ID: ${userId}`);
+    } catch (notifError) {
+      console.error('⚠️ Error deleting notification recipients:', notifError);
+    }
+
+    // Step 4: Delete user from local database
     await storage.deleteUser(userId);
     console.log(`✅ Deleted user from database: ${userEmail} (ID: ${userId}) from school ${schoolId}`);
     

@@ -98,6 +98,10 @@ export interface IStorage {
   deleteUserRolesByUserId(userId: number): Promise<void>;
   getParentsBySchoolId(schoolId: number): Promise<User[]>;
 
+  // User cleanup methods (for deletion)
+  deleteUserLocationsByUserId(userId: number): Promise<void>;
+  deleteNotificationRecipientsByUserId(userId: number): Promise<void>;
+
   // Location methods
   getLocationsBySchool(schoolId: number): Promise<Location[]>;
 
@@ -1156,6 +1160,14 @@ export class MemStorage implements IStorage {
   async getParentsBySchoolId(schoolId: number): Promise<User[]> {
     // MemStorage doesn't track user roles - return empty
     return [];
+  }
+
+  async deleteUserLocationsByUserId(userId: number): Promise<void> {
+    // MemStorage doesn't track user locations - no-op
+  }
+
+  async deleteNotificationRecipientsByUserId(userId: number): Promise<void> {
+    // MemStorage doesn't track notification recipients - no-op
   }
 
   async getLocationsBySchool(schoolId: number): Promise<Location[]> {
@@ -5489,6 +5501,14 @@ import { DatabaseStorage } from "./dbStorage";
 
     async deleteUserRolesByUserId(userId: number): Promise<void> {
       return this.dbStorage.deleteUserRolesByUserId(userId);
+    }
+
+    async deleteUserLocationsByUserId(userId: number): Promise<void> {
+      return this.dbStorage.deleteUserLocationsByUserId(userId);
+    }
+
+    async deleteNotificationRecipientsByUserId(userId: number): Promise<void> {
+      return this.dbStorage.deleteNotificationRecipientsByUserId(userId);
     }
 
     async getParentsBySchoolId(schoolId: number): Promise<User[]> {
