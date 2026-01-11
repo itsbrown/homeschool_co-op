@@ -5100,6 +5100,14 @@ router.delete('/users/:id', supabaseAuth, requireSchoolContext, async (req: any,
         } catch (schoolStudentError) {
           console.error(`  ⚠️ Error deleting school student records for child ${child.id}:`, schoolStudentError);
         }
+
+        // Delete discount_applications for this child
+        try {
+          await storage.deleteDiscountApplicationsByChildId(child.id);
+          console.log(`  ✅ Deleted discount applications for child ID: ${child.id}`);
+        } catch (discountError) {
+          console.error(`  ⚠️ Error deleting discount applications for child ${child.id}:`, discountError);
+        }
       }
       
       // Now delete all children for this parent

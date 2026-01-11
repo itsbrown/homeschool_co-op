@@ -106,6 +106,7 @@ export interface IStorage {
   deleteChildrenByParentId(parentId: number): Promise<void>;
   deleteEnrollmentsByChildId(childId: number): Promise<void>;
   deleteSchoolStudentsByChildId(childId: number): Promise<void>;
+  deleteDiscountApplicationsByChildId(childId: number): Promise<void>;
 
   // Location methods
   getLocationsBySchool(schoolId: number): Promise<Location[]>;
@@ -1200,6 +1201,10 @@ export class MemStorage implements IStorage {
         this.schoolStudentsStore.delete(id);
       }
     }
+  }
+
+  async deleteDiscountApplicationsByChildId(childId: number): Promise<void> {
+    // MemStorage doesn't track discount applications - no-op
   }
 
   async getLocationsBySchool(schoolId: number): Promise<Location[]> {
@@ -5553,6 +5558,10 @@ import { DatabaseStorage } from "./dbStorage";
 
     async deleteSchoolStudentsByChildId(childId: number): Promise<void> {
       return this.dbStorage.deleteSchoolStudentsByChildId(childId);
+    }
+
+    async deleteDiscountApplicationsByChildId(childId: number): Promise<void> {
+      return this.dbStorage.deleteDiscountApplicationsByChildId(childId);
     }
 
     async getParentsBySchoolId(schoolId: number): Promise<User[]> {
