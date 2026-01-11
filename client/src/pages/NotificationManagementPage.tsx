@@ -87,9 +87,9 @@ export default function NotificationManagementPage() {
     queryKey: ["/api/locations"],
   });
 
-  // Fetch classes for class-specific notifications (use school-context endpoint)
+  // Fetch classes for class-specific notifications (use school-admin endpoint)
   const { data: schoolClassesData } = useQuery<ClassInfo[]>({
-    queryKey: ["/api/schools/classes"],
+    queryKey: ["/api/school-admin/classes"],
   });
   const classes = schoolClassesData || [];
 
