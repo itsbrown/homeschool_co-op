@@ -470,15 +470,25 @@ router.post('/class-assignments', async (req: any, res) => {
       validTo: validatedData.validTo || null
     });
 
-    // Sync class.instructorId when primary instructor is set
+    // Get educator details (needed for instructorName sync and audit log)
+    const educator = await storage.getUser(validatedData.educatorId);
+    // Derive instructor display name with proper fallback order: name > firstName+lastName > email > Unknown
+    const instructorName = educator?.name 
+      || (educator?.firstName && educator?.lastName ? `${educator.firstName} ${educator.lastName}` : null)
+      || educator?.email 
+      || 'Unknown Instructor';
+
+    // Sync class.instructorId and instructorName when primary instructor is set
     if (validatedData.isPrimary) {
-      await storage.updateClass(validatedData.classId, { instructorId: validatedData.educatorId });
-      console.log('[AdminEducators] Synced class.instructorId to:', validatedData.educatorId);
+      await storage.updateClass(validatedData.classId, { 
+        instructorId: validatedData.educatorId,
+        instructorName: instructorName
+      });
+      console.log('[AdminEducators] Synced class instructor to:', instructorName, '(ID:', validatedData.educatorId, ')');
     }
 
     // Create audit log
     const classInfo = await storage.getClassById(validatedData.classId);
-    const educator = await storage.getUser(validatedData.educatorId);
     
     const auditLog: InsertAuditLog = {
       actionType: 'educator_class_assignment_created',
@@ -551,15 +561,25 @@ router.patch('/class-assignments/:id', async (req: any, res) => {
     // Update the assignment
     const updatedAssignment = await storage.updateEducatorClassAssignment(assignmentId, validatedData);
 
-    // Sync class.instructorId when primary instructor is changed
+    // Get educator details for instructor sync and audit log
+    const educator = await storage.getUser(existingAssignment.educatorId);
+    // Derive instructor display name with proper fallback order: name > firstName+lastName > email > Unknown
+    const instructorName = educator?.name 
+      || (educator?.firstName && educator?.lastName ? `${educator.firstName} ${educator.lastName}` : null)
+      || educator?.email 
+      || 'Unknown Instructor';
+
+    // Sync class.instructorId and instructorName when primary instructor is changed
     if (validatedData.isPrimary) {
-      await storage.updateClass(existingAssignment.classId, { instructorId: existingAssignment.educatorId });
-      console.log('[AdminEducators] Synced class.instructorId to:', existingAssignment.educatorId);
+      await storage.updateClass(existingAssignment.classId, { 
+        instructorId: existingAssignment.educatorId,
+        instructorName: instructorName
+      });
+      console.log('[AdminEducators] Synced class instructor to:', instructorName, '(ID:', existingAssignment.educatorId, ')');
     }
 
     // Get details for audit log
     const classInfo = await storage.getClassById(existingAssignment.classId);
-    const educator = await storage.getUser(existingAssignment.educatorId);
 
     // Create audit log
     const auditLog: InsertAuditLog = {
@@ -618,10 +638,13 @@ router.delete('/class-assignments/:id', async (req: any, res) => {
 
     await storage.deleteEducatorClassAssignment(assignmentId);
 
-    // If the removed assignment was the primary instructor, clear the class.instructorId
+    // If the removed assignment was the primary instructor, clear both instructorId and instructorName
     if (existingAssignment.isPrimary) {
-      await storage.updateClass(existingAssignment.classId, { instructorId: null });
-      console.log('[AdminEducators] Cleared class.instructorId since primary instructor was removed');
+      await storage.updateClass(existingAssignment.classId, { 
+        instructorId: null,
+        instructorName: null
+      });
+      console.log('[AdminEducators] Cleared class instructor since primary instructor was removed');
     }
 
     // Create audit log

@@ -727,6 +727,23 @@ router.get("/classes", supabaseAuth, requireSchoolContext, async (req: any, res:
         }
       }
       
+      // Derive instructor name from instructorId join (source of truth) instead of hardcoded field
+      let derivedInstructorName = null;
+      if (classItem.instructorId) {
+        try {
+          const instructor = await storage.getUser(classItem.instructorId);
+          if (instructor) {
+            // Fallback order: name > firstName+lastName > email > null
+            derivedInstructorName = instructor.name 
+              || (instructor.firstName && instructor.lastName ? `${instructor.firstName} ${instructor.lastName}` : null)
+              || instructor.email 
+              || null;
+          }
+        } catch (error) {
+          console.log(`⚠️ Could not fetch instructor for class ${classItem.id}:`, error);
+        }
+      }
+      
       // Return the class with variants array intact for enrollment dialog
       // Category is stored as a string in the database, so we just pass it through as categoryName
       return {
@@ -739,7 +756,9 @@ router.get("/classes", supabaseAuth, requireSchoolContext, async (req: any, res:
         // Include location name for display
         location: locationName || classItem.location || null,
         // Pass category as categoryName for frontend consistency
-        categoryName: classItem.category || null
+        categoryName: classItem.category || null,
+        // Override instructorName with derived value from instructorId (source of truth)
+        instructorName: derivedInstructorName || classItem.instructorName || null
       };
     }));
 
