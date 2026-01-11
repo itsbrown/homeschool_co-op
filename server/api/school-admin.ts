@@ -5111,7 +5111,31 @@ router.delete('/users/:id', supabaseAuth, requireSchoolContext, async (req: any,
       console.error('⚠️ Error deleting program enrollments by parent:', enrollParentError);
     }
 
-    // Step 8: Cascade delete children and their dependencies
+    // Step 8: Delete membership agreements (must be before membership enrollments due to FK)
+    try {
+      await storage.deleteMembershipAgreementsByParentUserId(userId);
+      console.log(`✅ Deleted membership agreements for user ID: ${userId}`);
+    } catch (membershipAgreementError) {
+      console.error('⚠️ Error deleting membership agreements:', membershipAgreementError);
+    }
+
+    // Step 9: Delete membership enrollments
+    try {
+      await storage.deleteMembershipEnrollmentsByParentUserId(userId);
+      console.log(`✅ Deleted membership enrollments for user ID: ${userId}`);
+    } catch (membershipEnrollmentError) {
+      console.error('⚠️ Error deleting membership enrollments:', membershipEnrollmentError);
+    }
+
+    // Step 10: Delete payment receipts
+    try {
+      await storage.deletePaymentReceiptsByParentUserId(userId);
+      console.log(`✅ Deleted payment receipts for user ID: ${userId}`);
+    } catch (paymentReceiptError) {
+      console.error('⚠️ Error deleting payment receipts:', paymentReceiptError);
+    }
+
+    // Step 11: Cascade delete children and their dependencies
     try {
       const children = await storage.getChildrenByParentId(userId);
       console.log(`👶 Found ${children.length} children to delete for user ID: ${userId}`);
@@ -5149,7 +5173,7 @@ router.delete('/users/:id', supabaseAuth, requireSchoolContext, async (req: any,
       console.error('⚠️ Error deleting children:', childError);
     }
 
-    // Step 9: Delete user from local database
+    // Step 12: Delete user from local database
     await storage.deleteUser(userId);
     console.log(`✅ Deleted user from database: ${userEmail} (ID: ${userId}) from school ${schoolId}`);
     

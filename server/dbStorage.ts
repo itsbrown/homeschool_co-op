@@ -63,7 +63,9 @@ import {
   FundraiserFamilyLink, InsertFundraiserFamilyLink, fundraiserFamilyLinks,
   FundraiserOrder, InsertFundraiserOrder, fundraiserOrders,
   FundraiserOrderItem, InsertFundraiserOrderItem, fundraiserOrderItems,
-  piiAccessLogs
+  piiAccessLogs,
+  membershipAgreements,
+  paymentReceipts
 } from '../shared/schema';
 
 /**
@@ -240,6 +242,21 @@ export class DatabaseStorage implements IStorage {
   async deleteEnrollmentsByParentId(parentId: number): Promise<void> {
     const db = await getDb();
     await db.delete(programEnrollments).where(eq(programEnrollments.parentId, parentId));
+  }
+
+  async deleteMembershipEnrollmentsByParentUserId(parentUserId: number): Promise<void> {
+    const db = await getDb();
+    await db.delete(membershipEnrollments).where(eq(membershipEnrollments.parentUserId, parentUserId));
+  }
+
+  async deleteMembershipAgreementsByParentUserId(parentUserId: number): Promise<void> {
+    const db = await getDb();
+    await db.delete(membershipAgreements).where(eq(membershipAgreements.parentUserId, parentUserId));
+  }
+
+  async deletePaymentReceiptsByParentUserId(parentUserId: number): Promise<void> {
+    const db = await getDb();
+    await db.delete(paymentReceipts).where(eq(paymentReceipts.parentUserId, parentUserId));
   }
 
   async getParentsBySchoolId(schoolId: number): Promise<User[]> {

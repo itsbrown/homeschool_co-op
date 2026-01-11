@@ -5612,6 +5612,18 @@ import { DatabaseStorage } from "./dbStorage";
       return this.dbStorage.deleteEnrollmentsByParentId(parentId);
     }
 
+    async deleteMembershipEnrollmentsByParentUserId(parentUserId: number): Promise<void> {
+      return this.dbStorage.deleteMembershipEnrollmentsByParentUserId(parentUserId);
+    }
+
+    async deleteMembershipAgreementsByParentUserId(parentUserId: number): Promise<void> {
+      return this.dbStorage.deleteMembershipAgreementsByParentUserId(parentUserId);
+    }
+
+    async deletePaymentReceiptsByParentUserId(parentUserId: number): Promise<void> {
+      return this.dbStorage.deletePaymentReceiptsByParentUserId(parentUserId);
+    }
+
     async getParentsBySchoolId(schoolId: number): Promise<User[]> {
       try {
         return await this.dbStorage.getParentsBySchoolId(schoolId);
