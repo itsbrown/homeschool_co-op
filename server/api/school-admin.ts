@@ -4780,20 +4780,37 @@ router.get('/users/:userId', supabaseAuth, requireSchoolContext, async (req: any
   }
 });
 
+// Validation schema for user creation (follows registration.ts and user-roles.ts patterns)
+const systemRoles = ['student', 'parent', 'learner', 'educator', 'mentor', 'teacher', 'schoolAdmin', 'admin', 'superAdmin'];
+const createUserSchema = z.object({
+  firstName: z.string().min(1, 'First name is required'),
+  lastName: z.string().min(1, 'Last name is required'),
+  email: z.string().email('Invalid email format'),
+  role: z.string().refine((val) => systemRoles.includes(val), {
+    message: `Role must be one of: ${systemRoles.join(', ')}`
+  }),
+  phone: z.string().optional().nullable(),
+  // Accept string or number for locationId (forms send strings, API may send numbers)
+  locationId: z.union([z.string(), z.number()]).optional().nullable().transform(val => val ? Number(val) : null),
+});
+
 // Create a new user for the school
 router.post('/users', supabaseAuth, requireSchoolContext, async (req: any, res) => {
   try {
     const schoolId = req.schoolId;
     console.log('👤 Creating new user for school admin...');
 
-    const { firstName, lastName, email, role, phone, locationId } = req.body;
-
-    // Validate required fields
-    if (!firstName || !lastName || !email || !role) {
+    // Validate request body using Zod schema
+    const parseResult = createUserSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      const errors = parseResult.error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ');
+      console.log('❌ Validation failed:', errors);
       return res.status(400).json({ 
-        message: 'Missing required fields: firstName, lastName, email, and role are required' 
+        message: `Validation failed: ${errors}` 
       });
     }
+
+    const { firstName, lastName, email, role, phone, locationId } = parseResult.data;
 
     // Check if user with this email already exists
     const existingUser = await storage.getUserByEmail(email);
@@ -4820,7 +4837,7 @@ router.post('/users', supabaseAuth, requireSchoolContext, async (req: any, res) 
       firstName,
       lastName,
       email,
-      role,
+      role: role as 'student' | 'parent' | 'learner' | 'educator' | 'mentor' | 'teacher' | 'schoolAdmin' | 'admin' | 'superAdmin',
       phone: phone || null,
       password: 'pending_setup', // Placeholder - user will set via invite/reset
       schoolId: Number(schoolId),
@@ -4873,6 +4890,28 @@ router.post('/users', supabaseAuth, requireSchoolContext, async (req: any, res) 
     // Set this as the user's active role
     await storage.updateUser(newUser.id, { activeRoleId: newRole[0].id });
     console.log(`✅ Set active role ID ${newRole[0].id} for user ${newUser.id}`);
+    
+    // Create user_locations entry if locationId was provided (follows POST /user-locations pattern)
+    if (locationId) {
+      try {
+        await storage.createUserLocation({
+          userId: newUser.id,
+          locationId: Number(locationId),
+          accessLevel: 'view', // Default access level for new users
+          canViewReports: false,
+          canManageStaff: false,
+          canManageClasses: false,
+          canManageStudents: false,
+          canSendNotifications: false,
+          canViewParentContacts: false,
+          isActive: true,
+        });
+        console.log(`✅ Created user_locations entry for user ${newUser.id} at location ${locationId}`);
+      } catch (locationError) {
+        // Log but don't fail the request - location assignment is supplementary
+        console.error(`⚠️ Failed to create user_locations entry for user ${newUser.id}:`, locationError);
+      }
+    }
     
     res.status(201).json(newUser);
   } catch (error) {
