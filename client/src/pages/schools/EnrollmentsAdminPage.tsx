@@ -18,9 +18,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Calendar, DollarSign, Edit, Loader2, AlertTriangle, Clock, CheckCircle2 } from "lucide-react";
+import { Calendar, DollarSign, Edit, Loader2, AlertTriangle, Clock, CheckCircle2, RotateCcw } from "lucide-react";
 import { formatCurrency, centsToDollars } from "@/utils/currency";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { RefundDialog } from "@/components/payments/RefundDialog";
 
 interface Enrollment {
   id: number;
@@ -86,6 +87,8 @@ export default function EnrollmentsAdminPage() {
   const [paymentPlanDetails, setPaymentPlanDetails] = useState<PaymentPlanDetails | null>(null);
   const [selectedFrequency, setSelectedFrequency] = useState<string>("");
   const [adminComment, setAdminComment] = useState("");
+  const [refundDialogOpen, setRefundDialogOpen] = useState(false);
+  const [refundEnrollment, setRefundEnrollment] = useState<Enrollment | null>(null);
 
   // Fetch all enrollments for the school
   const { data: enrollments = [], isLoading, refetch } = useQuery<Enrollment[]>({
@@ -391,6 +394,21 @@ export default function EnrollmentsAdminPage() {
                                 <Edit className="h-4 w-4 mr-2" />
                                 Edit Plan
                               </Button>
+                              {enrollment.totalPaid > 0 && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    setRefundEnrollment(enrollment);
+                                    setRefundDialogOpen(true);
+                                  }}
+                                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                  data-testid={`button-issue-refund-${enrollment.id}`}
+                                >
+                                  <RotateCcw className="h-4 w-4 mr-2" />
+                                  Refund
+                                </Button>
+                              )}
                               {(enrollment.paymentStatus === 'pending_payment' || enrollment.paymentStatus === 'pending') && (
                                 <Button
                                   variant="default"
@@ -626,6 +644,17 @@ export default function EnrollmentsAdminPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* Refund Dialog */}
+        <RefundDialog
+          enrollment={refundEnrollment}
+          open={refundDialogOpen}
+          onOpenChange={setRefundDialogOpen}
+          onSuccess={() => {
+            refetch();
+            setRefundEnrollment(null);
+          }}
+        />
       </div>
     </SchoolAdminLayout>
   );

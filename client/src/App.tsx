@@ -57,6 +57,7 @@ import CreditManagementPage from "./pages/schooladmin/CreditManagementPage";
 import FundraiserManagementPage from "./pages/schooladmin/FundraiserManagementPage";
 import StaffPermissionsPage from "./pages/schooladmin/StaffPermissionsPage";
 import LocationEnrollmentsPage from "./pages/schooladmin/LocationEnrollmentsPage";
+import RefundHistoryPage from "./pages/schooladmin/RefundHistoryPage";
 import FundraiserStorePage from "./pages/FundraiserStorePage";
 import FundraiserSuccessPage from "./pages/FundraiserSuccessPage";
 import DynamicFormPage from "./pages/DynamicFormPage";
@@ -615,6 +616,7 @@ function Router() {
       <Route path="/school-admin/fundraisers" component={FundraiserManagementPage} />
       <Route path="/school-admin/staff-permissions" component={StaffPermissionsPage} />
       <Route path="/school-admin/location-enrollments" component={LocationEnrollmentsPage} />
+      <Route path="/school-admin/refunds" component={RefundHistoryPage} />
       <Route path="/fundraiser/:campaignId/:familySlug" component={FundraiserStorePage} />
       <Route path="/fundraiser/success" component={FundraiserSuccessPage} />
       <Route path="/forms/:slug" component={DynamicFormPage} />

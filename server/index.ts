@@ -26,6 +26,7 @@ import stripeMigrationRouter from "./api/stripe-migration";
 // REMOVED: stripeWebhookRouter - Insecure endpoint without signature verification
 // All webhook events are now handled through the secure /api/stripe/webhook endpoint
 import adminEnrollmentPaymentRouter from "./api/admin-enrollment-payment";
+import adminRefundsRouter from "./api/admin-refunds";
 import membershipRouter from "./api/membership";
 import { webhookHandler } from "./webhook-handler";
 import userRolesRouter from "./api/user-roles";
@@ -309,6 +310,9 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
   
   // Register admin enrollment payment routes with authentication
   app.use('/api/admin/enrollments', jwtCheck, requireRole(['schoolAdmin', 'admin', 'superAdmin']), adminEnrollmentPaymentRouter);
+  
+  // Register admin refunds routes with authentication
+  app.use('/api/admin/refunds', jwtCheck, requireRole(['schoolAdmin', 'admin', 'superAdmin']), adminRefundsRouter);
   
   // Register membership admin routes with authentication
   app.use('/api/admin/memberships', jwtCheck, requireRole(['schoolAdmin', 'admin', 'superAdmin']), membershipRouter);
