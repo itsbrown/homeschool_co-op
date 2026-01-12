@@ -361,6 +361,85 @@ router.post('/upload', supabaseAuth, async (req: any, res) => {
   }
 });
 
+// Download a document by ID
+router.get('/:id/download', supabaseAuth, async (req: any, res) => {
+  try {
+    const documentId = parseInt(req.params.id);
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({ 
+        success: false, 
+        message: 'User not authenticated' 
+      });
+    }
+
+    // Get the document
+    const document = await storage.getSchoolDocumentById(documentId);
+    if (!document) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Document not found' 
+      });
+    }
+
+    // SECURITY: Verify user has access to this document
+    const user = await storage.getUser(userId);
+    if (!user || user.schoolId !== document.schoolId) {
+      console.log(`🚨 SECURITY: User ${userId} attempted to download document ${documentId} from school ${document.schoolId} but belongs to school ${user?.schoolId}`);
+      return res.status(403).json({ 
+        success: false, 
+        message: 'Access denied: You do not have permission to download this document' 
+      });
+    }
+
+    // Build the file path from the stored filePath
+    // filePath is stored as: /uploads/school-documents/{schoolId}/{filename}
+    const relativePath = document.filePath.startsWith('/') 
+      ? document.filePath.substring(1) 
+      : document.filePath;
+    const absolutePath = path.join(process.cwd(), relativePath);
+
+    // Check if file exists
+    if (!fs.existsSync(absolutePath)) {
+      console.error(`Document file not found: ${absolutePath}`);
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Document file not found on server' 
+      });
+    }
+
+    // Get file stats
+    const stats = fs.statSync(absolutePath);
+
+    // Set proper headers for file download
+    res.setHeader('Content-Type', document.mimeType || 'application/octet-stream');
+    res.setHeader('Content-Length', stats.size);
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(document.fileName)}"`);
+    res.setHeader('Cache-Control', 'no-cache');
+
+    // Stream the file to the response
+    const fileStream = fs.createReadStream(absolutePath);
+    fileStream.pipe(res);
+
+    fileStream.on('error', (err) => {
+      console.error('Error streaming file:', err);
+      if (!res.headersSent) {
+        res.status(500).json({ 
+          success: false, 
+          message: 'Error streaming file' 
+        });
+      }
+    });
+  } catch (error) {
+    console.error('Error downloading document:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to download document' 
+    });
+  }
+});
+
 // Update document metadata
 router.patch('/:id', supabaseAuth, async (req: any, res) => {
   try {

@@ -9,6 +9,7 @@ import { useAuth } from "@/components/SupabaseProvider";
 import { queryClient } from "@/lib/queryClient";
 import ParentAppShell from "@/components/layout/ParentAppShell";
 import { format } from "date-fns";
+import { useToast } from "@/hooks/use-toast";
 
 interface ParentDocument {
   id: number;
@@ -78,6 +79,7 @@ function getFileIcon(mimeType: string) {
 
 export default function MyDocumentsPage() {
   const { user, session } = useAuth();
+  const { toast } = useToast();
 
   const { data: documentsData, isLoading: isLoadingAgreements, isError: isErrorAgreements } = useQuery<{ documents: ParentDocument[] }>({
     queryKey: ["/api/parent/documents"],
@@ -151,13 +153,44 @@ export default function MyDocumentsPage() {
     retry: 1,
   });
 
-  const handleDownload = (filePath: string, fileName: string) => {
-    const link = document.createElement('a');
+  const handleSchoolDocDownload = async (docId: number, fileName: string) => {
+    try {
+      const token = localStorage.getItem('supabase_token');
+      const response = await fetch(`/api/schools/documents/${docId}/download`, {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+        credentials: 'include',
+      });
+      
+      if (!response.ok) {
+        throw new Error('Download failed');
+      }
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = window.document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      window.document.body.appendChild(link);
+      link.click();
+      window.document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Download error:', error);
+      toast({
+        title: "Download failed",
+        description: "Unable to download the document. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleReceiptDownload = (filePath: string, fileName: string) => {
+    const link = window.document.createElement('a');
     link.href = filePath;
     link.download = fileName;
-    document.body.appendChild(link);
+    window.document.body.appendChild(link);
     link.click();
-    document.body.removeChild(link);
+    window.document.body.removeChild(link);
   };
 
   const schoolDocuments = schoolDocsData?.documents || [];
@@ -343,7 +376,7 @@ export default function MyDocumentsPage() {
                           <Button 
                             variant="outline" 
                             size="sm"
-                            onClick={() => handleDownload(doc.filePath, doc.fileName)}
+                            onClick={() => handleSchoolDocDownload(doc.id, doc.fileName)}
                             data-testid={`button-download-school-doc-${doc.id}`}
                           >
                             <Download className="h-4 w-4 mr-2" />
@@ -410,7 +443,7 @@ export default function MyDocumentsPage() {
                             <Button 
                               variant="outline" 
                               size="sm"
-                              onClick={() => handleDownload(receipt.filePath!, `receipt-${receipt.receiptNumber}.pdf`)}
+                              onClick={() => handleReceiptDownload(receipt.filePath!, `receipt-${receipt.receiptNumber}.pdf`)}
                               data-testid={`button-download-receipt-${receipt.id}`}
                             >
                               <Download className="h-4 w-4 mr-2" />

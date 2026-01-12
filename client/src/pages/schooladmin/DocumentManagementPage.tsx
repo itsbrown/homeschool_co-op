@@ -458,13 +458,35 @@ export default function DocumentManagementPage() {
     });
   };
 
-  const handleDownload = (document: SchoolDocument) => {
-    const link = window.document.createElement('a');
-    link.href = document.filePath;
-    link.download = document.fileName;
-    window.document.body.appendChild(link);
-    link.click();
-    window.document.body.removeChild(link);
+  const handleDownload = async (document: SchoolDocument) => {
+    try {
+      const token = localStorage.getItem('supabase_token');
+      const response = await fetch(`/api/schools/documents/${document.id}/download`, {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+        credentials: 'include',
+      });
+      
+      if (!response.ok) {
+        throw new Error('Download failed');
+      }
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = window.document.createElement('a');
+      link.href = url;
+      link.download = document.fileName;
+      window.document.body.appendChild(link);
+      link.click();
+      window.document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Download error:', error);
+      toast({
+        title: "Download failed",
+        description: "Unable to download the document. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
