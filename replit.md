@@ -45,6 +45,28 @@ The platform prioritizes scalability, security, and user experience, incorporati
 -   **System Error Monitoring**: Comprehensive error tracking and notification system with database logging, severity levels, automatic email notifications for critical errors, and an admin dashboard.
 -   **Unified Credit System**: Extensible multi-type credit system supporting volunteer, referral, achievement, marketing, and manual credits, with admin approval, FIFO consumption, and an expiration service.
 -   **Fundraiser System**: Complete fundraiser management for schools to run product-based campaigns, including database schema, school admin UI, public storefront, parent dashboard, and credit integration.
+-   **Refund Management System**: Comprehensive refund processing with pro-rated calculator, structured reason codes, refund history page, analytics dashboard, and policy display on checkout.
+
+### Refund System
+Complete refund management for school administrators:
+
+**Components:**
+-   `RefundDialog` (`client/src/components/payments/RefundDialog.tsx`) - Issue refunds with structured reason dropdown, pro-rated calculator display, and confirmation workflow
+-   `RefundHistoryPage` (`client/src/pages/schooladmin/RefundHistoryPage.tsx`) - View all refunds with search, filters, CSV export, and analytics cards
+-   `RefundPolicyNotice` (`client/src/components/checkout/RefundPolicyNotice.tsx`) - Display refund policy on checkout pages
+-   `refundCalculator` (`client/src/lib/refundCalculator.ts`) - Pro-rated refund calculation based on program dates
+
+**Pro-rated Refund Logic:**
+-   Before program start: Full refund available
+-   During program: Pro-rated based on remaining days (daysRemaining / totalDays)
+-   After program end: No refund available
+
+**Refund Reason Codes:**
+-   `duplicate_charge`, `program_cancelled`, `customer_request`, `sibling_adjustment`, `billing_error`, `service_issue`, `withdrawal`, `other`
+
+**API Endpoints:**
+-   `GET /api/admin/refunds` - Fetch refund history with school isolation and enriched enrollment/payment data
+-   `POST /api/admin/enrollments/:id/reallocate-payment` with `targetType='refund'` - Process refunds
 
 ### Educator Dashboard
 Provides educators/mentors with tools to manage classes, track attendance, view lesson plans, and log work hours. It integrates with the Daily Flow system and features a dedicated `EducatorAppShell` with role-specific routing.
