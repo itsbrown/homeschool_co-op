@@ -441,6 +441,7 @@ router.post('/manual', supabaseAuth, async (req: any, res) => {
     console.log('✅ Manual payment authorized for school admin:', userEmail);
 
     const {
+      enrollmentId,
       parentEmail,
       childName,
       className,
@@ -452,11 +453,58 @@ router.post('/manual', supabaseAuth, async (req: any, res) => {
       paymentDate
     } = req.body;
 
-    // Validate required fields
-    if (!parentEmail || !childName || !className || !amount) {
+    // If enrollmentId is provided, use direct lookup (new best-practice flow)
+    // Otherwise fall back to text-based matching (legacy flow)
+    let targetEnrollment: any = null;
+    let resolvedParentEmail = parentEmail;
+    let resolvedChildName = childName;
+    let resolvedClassName = className;
+
+    if (enrollmentId) {
+      console.log('💰 Using enrollment ID for direct lookup:', enrollmentId);
+      const allEnrollments = await storage.getAllEnrollments();
+      targetEnrollment = allEnrollments.find((e: any) => e.id === enrollmentId);
+      
+      if (!targetEnrollment) {
+        return res.status(400).json({
+          success: false,
+          error: 'Enrollment not found with the provided ID'
+        });
+      }
+      
+      // Verify enrollment belongs to admin's school
+      if (targetEnrollment.schoolId !== user.schoolId) {
+        return res.status(403).json({
+          success: false,
+          error: 'Enrollment does not belong to your school'
+        });
+      }
+      
+      // Use enrollment data for resolved values
+      resolvedParentEmail = targetEnrollment.parentEmail;
+      resolvedChildName = targetEnrollment.childName;
+      resolvedClassName = targetEnrollment.className;
+      
+      console.log('✅ Found enrollment:', { 
+        id: targetEnrollment.id, 
+        childName: resolvedChildName, 
+        className: resolvedClassName,
+        remainingBalance: targetEnrollment.remainingBalance 
+      });
+    }
+
+    // Validate required fields (only if not using enrollmentId)
+    if (!enrollmentId && (!parentEmail || !childName || !className || !amount)) {
       return res.status(400).json({
         success: false,
-        error: 'Missing required fields: parentEmail, childName, className, amount'
+        error: 'Missing required fields: parentEmail, childName, className, amount (or provide enrollmentId)'
+      });
+    }
+    
+    if (!amount) {
+      return res.status(400).json({
+        success: false,
+        error: 'Amount is required'
       });
     }
 
@@ -471,8 +519,9 @@ router.post('/manual', supabaseAuth, async (req: any, res) => {
     const amountInCents = CurrencyUtils.toStorage(amount);
 
     // Verify parent exists
+    let parentUser: any = null;
     try {
-      const parentUser = await storage.getUserByEmail(parentEmail);
+      parentUser = await storage.getUserByEmail(resolvedParentEmail);
       if (!parentUser) {
         return res.status(400).json({
           success: false,
@@ -491,13 +540,13 @@ router.post('/manual', supabaseAuth, async (req: any, res) => {
     const manualPaymentIntentId = `manual_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const paymentData = {
       stripePaymentIntentId: manualPaymentIntentId,
-      parentEmail,
-      childName,
-      className,
+      parentEmail: resolvedParentEmail,
+      childName: resolvedChildName,
+      className: resolvedClassName,
       amount: amountInCents,
       currency,
       status: 'completed' as const,
-      description: description || `Manual payment for ${childName} - ${className}`,
+      description: description || `Manual payment for ${resolvedChildName} - ${resolvedClassName}`,
       schoolId: user.schoolId || 0,
       parentId: user.id,
       stripeChargeId: null,
@@ -522,13 +571,17 @@ router.post('/manual', supabaseAuth, async (req: any, res) => {
     // Try PaymentProcessor if enabled
     if (isPaymentProcessorEnabled() && await checkSchemaReady()) {
       try {
-        const parentUser = await storage.getUserByEmail(parentEmail);
         if (parentUser) {
-          // Find matching enrollments
-          const allEnrollments = await storage.getAllEnrollments();
-          const matchingEnrollmentIds = allEnrollments
-            .filter((e: any) => e.parentEmail === parentEmail && e.childName === childName && e.className === className)
-            .map((e: any) => e.id);
+          // Use direct enrollment ID if provided, otherwise fall back to text matching
+          let matchingEnrollmentIds: number[] = [];
+          if (targetEnrollment) {
+            matchingEnrollmentIds = [targetEnrollment.id];
+          } else {
+            const allEnrollments = await storage.getAllEnrollments();
+            matchingEnrollmentIds = allEnrollments
+              .filter((e: any) => e.parentEmail === resolvedParentEmail && e.childName === resolvedChildName && e.className === resolvedClassName)
+              .map((e: any) => e.id);
+          }
           
           const idempotencyKey = generateIdempotencyKey('manual', undefined, parentUser.id, Date.now());
           
@@ -573,20 +626,27 @@ router.post('/manual', supabaseAuth, async (req: any, res) => {
       payment = await storage.createPayment(paymentData);
       console.log('✅ Legacy manual payment created:', payment.id);
 
-      // Legacy enrollment update
+      // Legacy enrollment update - use direct enrollment if available
       try {
-        const allEnrollments = await storage.getAllEnrollments();
-        const matchingEnrollments = allEnrollments.filter((enrollment: any) => {
-          return enrollment.parentEmail === parentEmail &&
-                 enrollment.childName === childName &&
-                 enrollment.className === className;
-        });
+        let enrollmentToUpdate = targetEnrollment;
+        
+        if (!enrollmentToUpdate) {
+          // Fall back to text matching if no direct enrollment
+          const allEnrollments = await storage.getAllEnrollments();
+          const matchingEnrollments = allEnrollments.filter((enrollment: any) => {
+            return enrollment.parentEmail === resolvedParentEmail &&
+                   enrollment.childName === resolvedChildName &&
+                   enrollment.className === resolvedClassName;
+          });
+          console.log(`🔍 Found ${matchingEnrollments.length} matching enrollments via text search`);
+          if (matchingEnrollments.length > 0) {
+            enrollmentToUpdate = matchingEnrollments[0];
+          }
+        }
 
-        console.log(`🔍 Found ${matchingEnrollments.length} matching enrollments for manual payment`);
-
-        if (matchingEnrollments.length > 0) {
-          const enrollment = matchingEnrollments[0] as any;
-          const updatedEnrollment = BillingCalculationService.applyPaymentToEnrollment(enrollment, amountInCents);
+        if (enrollmentToUpdate) {
+          console.log(`💰 Applying payment to enrollment ${enrollmentToUpdate.id} (direct: ${!!targetEnrollment})`);
+          const updatedEnrollment = BillingCalculationService.applyPaymentToEnrollment(enrollmentToUpdate, amountInCents);
           updatedEnrollment.paymentIntentId = payment.stripePaymentIntentId;
           await storage.updateProgramEnrollment(updatedEnrollment.id, updatedEnrollment);
           console.log(`✅ Updated enrollment ${updatedEnrollment.id}: paid=${CurrencyUtils.format(updatedEnrollment.amountPaid)}, remaining=${CurrencyUtils.format(updatedEnrollment.remainingBalance)}, status=${updatedEnrollment.status}`);
@@ -605,12 +665,11 @@ router.post('/manual', supabaseAuth, async (req: any, res) => {
 
     // Send email receipt
     try {
-      const parentUser = await storage.getUserByEmail(parentEmail);
       const parentName = parentUser ? 
-        parentUser.name || parentEmail.split('@')[0] : 
-        parentEmail.split('@')[0];
+        parentUser.name || resolvedParentEmail.split('@')[0] : 
+        resolvedParentEmail.split('@')[0];
 
-      const formatCurrency = (amountInCents: number) => {
+      const formatCurrencyForEmail = (amountInCents: number) => {
         return CurrencyUtils.format(amountInCents);
       };
 
@@ -623,18 +682,18 @@ router.post('/manual', supabaseAuth, async (req: any, res) => {
       };
 
       await sendPaymentReceipt({
-        parentEmail,
+        parentEmail: resolvedParentEmail,
         parentName,
         receiptNumber: payment.stripePaymentIntentId || `MANUAL-${payment.id}`,
         paymentDate: formatDate(paymentDate || payment.createdAt),
         paymentMethod: paymentMethod === 'manual' ? 'Manual Entry' : paymentMethod,
-        amount: formatCurrency(payment.amount),
-        childName,
-        className,
+        amount: formatCurrencyForEmail(payment.amount),
+        childName: resolvedChildName,
+        className: resolvedClassName,
         notes: notes || undefined
       });
       
-      console.log('📧 Payment receipt email sent to:', parentEmail);
+      console.log('📧 Payment receipt email sent to:', resolvedParentEmail);
     } catch (emailError) {
       console.error('❌ Failed to send payment receipt email:', emailError);
       // Don't fail the payment creation if email fails
@@ -650,11 +709,12 @@ router.post('/manual', supabaseAuth, async (req: any, res) => {
         amount: payment.amount, // Return cents (platform standard) - frontend uses formatCurrency()
         currency: payment.currency,
         status: payment.status,
-        description: description || `Manual payment for ${childName} - ${className}`,
+        description: description || `Manual payment for ${resolvedChildName} - ${resolvedClassName}`,
         createdAt: payment.createdAt,
         updatedAt: payment.updatedAt,
         paymentMethod,
-        notes: notes || ''
+        notes: notes || '',
+        enrollmentId: targetEnrollment?.id || null
       }
     });
 

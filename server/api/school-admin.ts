@@ -3084,6 +3084,69 @@ router.get('/enrollments', supabaseAuth, async (req: any, res) => {
   }
 });
 
+// Get enrollments with outstanding balances for manual payment entry
+// Returns enrollments that have remaining balance > 0 for easy payment application
+router.get('/pending-enrollments', supabaseAuth, async (req: any, res) => {
+  try {
+    const schoolId = await getSchoolIdFromRequest(req, res);
+    if (schoolId === null) return;
+
+    console.log('💰 Fetching enrollments with outstanding balances for school:', schoolId);
+    const allEnrollments = await storage.getAllEnrollments();
+    
+    // Filter enrollments by school and those with remaining balance
+    const enrollmentsWithBalance = allEnrollments.filter((e: any) => {
+      const balance = e.remainingBalance || (e.totalCost - (e.totalPaid || 0));
+      return e.schoolId === schoolId && balance > 0;
+    });
+    
+    // Format enrollments for manual payment selection
+    const formattedEnrollments = enrollmentsWithBalance.map((enrollment: any) => {
+      const totalCost = enrollment.totalCost || 0;
+      const totalPaid = enrollment.totalPaid || 0;
+      const remainingBalance = enrollment.remainingBalance || (totalCost - totalPaid);
+      
+      return {
+        id: enrollment.id,
+        parentEmail: enrollment.parentEmail,
+        childId: enrollment.childId,
+        childName: enrollment.childName || 'Unknown Student',
+        classId: enrollment.classId,
+        className: enrollment.className || 'Unknown Class',
+        totalCost,
+        totalPaid,
+        remainingBalance,
+        paymentStatus: enrollment.paymentStatus || enrollment.status || 'pending_payment',
+        status: enrollment.status || 'pending_payment',
+        programStartDate: enrollment.programStartDate,
+        programEndDate: enrollment.programEndDate,
+        enrollmentDate: enrollment.enrollmentDate || enrollment.createdAt,
+        // Formatted display string for dropdown
+        displayLabel: `${enrollment.childName} - ${enrollment.className} (Balance: $${(remainingBalance / 100).toFixed(2)})`
+      };
+    });
+    
+    // Sort by child name, then by class name
+    formattedEnrollments.sort((a: any, b: any) => {
+      const nameCompare = a.childName.localeCompare(b.childName);
+      if (nameCompare !== 0) return nameCompare;
+      return a.className.localeCompare(b.className);
+    });
+    
+    console.log(`💰 Found ${formattedEnrollments.length} enrollments with outstanding balances`);
+    res.json({
+      success: true,
+      enrollments: formattedEnrollments
+    });
+  } catch (error) {
+    console.error('Error fetching pending enrollments:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Error fetching pending enrollments' 
+    });
+  }
+});
+
 // Get individual student endpoint
 router.get('/students/:id', supabaseAuth, async (req: any, res) => {
   try {
