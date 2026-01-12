@@ -332,8 +332,10 @@ export async function calculateCartPricing(
     freeItemIds = freeItems.map(item => item.id);
   }
 
-  let siblingDiscount = 0;
+  // Calculate potential sibling discount (may be overridden by higher-priority promo)
+  let potentialSiblingDiscount = 0;
   let discountedChildIds: number[] = [];
+  const siblingDiscountPriority = siblingDiscountSetting?.priority ?? 10;
 
   if ((!freeAfterThreeEnabled || uniqueChildren <= freeAfterThreshold) && uniqueChildren > 1 && siblingDiscountRate > 0) {
     const itemsWithPrices = items.map((item, idx) => ({
@@ -352,7 +354,7 @@ export async function calculateCartPricing(
 
     discountedChildIds = childrenByTotalCost.slice(1);
 
-    siblingDiscount = discountedChildIds.reduce((sum, childId) => {
+    potentialSiblingDiscount = discountedChildIds.reduce((sum, childId) => {
       const childItems = itemsWithPrices.filter(item => item.childId === childId);
       
       if (childItems.length > 0) {
@@ -365,10 +367,11 @@ export async function calculateCartPricing(
       return sum;
     }, 0);
     
-    console.log('💰 Sibling discount calculated:', {
-      siblingDiscount,
+    console.log('💰 Potential sibling discount calculated:', {
+      potentialSiblingDiscount,
       discountedChildIds,
-      siblingDiscountRate: siblingDiscountRate * 100 + '%'
+      siblingDiscountRate: siblingDiscountRate * 100 + '%',
+      siblingDiscountPriority
     });
   }
 
@@ -384,8 +387,56 @@ export async function calculateCartPricing(
 
   const appliedDiscounts: AppliedDiscount[] = [];
   let autoAndPromoDiscountAmount = 0;
+  let siblingDiscount = 0;
+  let siblingOverriddenByPromo = false;
 
   if (!freeAfterThreeEnabled || uniqueChildren <= freeAfterThreshold) {
+    // Check for promo code first to determine if it should override sibling discount
+    let promoDiscount: typeof schoolDiscounts[0] | undefined;
+    let promoHasHigherPriority = false;
+    
+    if (appliedPromoCode) {
+      promoDiscount = schoolDiscounts.find(d => 
+        d.isActive && 
+        d.code?.toLowerCase() === appliedPromoCode.toLowerCase() &&
+        (d.applicationMethod === 'manual' || d.applicationMethod === 'both')
+      );
+      
+      if (promoDiscount) {
+        const promoPriority = promoDiscount.priority ?? 0;
+        // Lower number = higher priority. If promo priority < sibling priority, promo wins.
+        promoHasHigherPriority = promoPriority < siblingDiscountPriority;
+        
+        console.log('🎫 Promo code priority check:', {
+          promoCode: appliedPromoCode,
+          promoPriority,
+          siblingDiscountPriority,
+          promoHasHigherPriority,
+          promoIsCombinable: promoDiscount.combinableWithOthers,
+          siblingIsCombinable: siblingDiscountSetting?.combinableWithOthers
+        });
+      }
+    }
+
+    // Determine if sibling discount should be applied
+    // Higher-priority promo (lower number) always overrides lower-priority sibling discount
+    // This ensures priority 1 promo beats priority 10 sibling discount
+    const promoBlocksSibling = promoDiscount && promoHasHigherPriority;
+    
+    if (potentialSiblingDiscount > 0 && !promoBlocksSibling) {
+      siblingDiscount = potentialSiblingDiscount;
+    } else if (promoBlocksSibling) {
+      siblingOverriddenByPromo = true;
+      discountedChildIds = []; // Clear since sibling discount not applied
+      console.log('🔄 Sibling discount overridden by higher-priority promo code:', {
+        promoCode: appliedPromoCode,
+        promoPriority: promoDiscount?.priority ?? 0,
+        siblingDiscountPriority,
+        potentialSiblingDiscountWouldHaveBeen: potentialSiblingDiscount
+      });
+    }
+
+    // Apply automatic discounts (sorted by priority: lower number = higher priority)
     const activeDiscounts = schoolDiscounts.filter(d => 
       d.isActive && 
       !d.siblingDiscount &&
@@ -393,7 +444,8 @@ export async function calculateCartPricing(
       (d.applicationMethod === 'automatic' || d.applicationMethod === 'both')
     );
 
-    const sortedDiscounts = [...activeDiscounts].sort((a, b) => (b.priority || 0) - (a.priority || 0));
+    // Sort by priority ascending: lower number = higher priority = applied first
+    const sortedDiscounts = [...activeDiscounts].sort((a, b) => (a.priority || 0) - (b.priority || 0));
 
     for (const discount of sortedDiscounts) {
       if (!checkRoleEligibility(userRolesList, discount.requiredRoles, discount.roleMatchLogic)) {
@@ -431,59 +483,80 @@ export async function calculateCartPricing(
       }
     }
 
-    if (appliedPromoCode) {
-      const promoDiscount = schoolDiscounts.find(d => 
-        d.isActive && 
-        d.code?.toLowerCase() === appliedPromoCode.toLowerCase() &&
-        (d.applicationMethod === 'manual' || d.applicationMethod === 'both')
-      );
-
-      if (promoDiscount) {
-        // Check if sibling discount is applied and not combinable with other discounts
-        const siblingDiscountAllowsCombining = siblingDiscount === 0 || 
-          (siblingDiscountSetting?.combinableWithOthers !== false);
-        
-        const canApplyPromo = siblingDiscountAllowsCombining && (
-          appliedDiscounts.length === 0 || 
-          appliedDiscounts.every(d => {
-            const originalDiscount = schoolDiscounts.find(sd => sd.id === d.id);
-            return originalDiscount?.combinableWithOthers;
-          })
-        );
-
-        if (!canApplyPromo) {
-          console.log('⚠️ Promo code blocked due to non-combinable discounts:', {
-            promoCode: appliedPromoCode,
-            siblingDiscount,
-            siblingDiscountAllowsCombining,
-            siblingDiscountCombinable: siblingDiscountSetting?.combinableWithOthers,
-            appliedDiscountsCount: appliedDiscounts.length
+    // Apply promo code if eligible
+    if (promoDiscount) {
+      const promoPriority = promoDiscount.priority ?? 0;
+      
+      // Remove lower-priority non-combinable discounts when higher-priority promo is applied
+      // This enforces: lower priority number = higher priority = wins
+      const discountsToRemove: number[] = [];
+      appliedDiscounts.forEach((d, idx) => {
+        const originalDiscount = schoolDiscounts.find(sd => sd.id === d.id);
+        const discountPriority = originalDiscount?.priority ?? 0;
+        // If promo has higher priority (lower number) and existing discount is non-combinable, remove it
+        if (promoPriority < discountPriority && originalDiscount?.combinableWithOthers === false) {
+          discountsToRemove.push(idx);
+          console.log('🔄 Removing lower-priority non-combinable discount:', {
+            discountName: d.name,
+            discountPriority,
+            promoPriority,
+            discountAmount: d.discountAmount
           });
         }
+      });
+      
+      // Remove from highest index to lowest to avoid index shifting issues
+      discountsToRemove.sort((a, b) => b - a).forEach(idx => {
+        const removed = appliedDiscounts.splice(idx, 1)[0];
+        autoAndPromoDiscountAmount -= removed.discountAmount;
+      });
+      
+      // Check if remaining discounts allow combining
+      const existingDiscountsAllowCombining = appliedDiscounts.length === 0 || 
+        appliedDiscounts.every(d => {
+          const originalDiscount = schoolDiscounts.find(sd => sd.id === d.id);
+          return originalDiscount?.combinableWithOthers !== false;
+        });
+      
+      // Sibling discount is already handled above - if promo has higher priority, sibling is already removed
+      const siblingAllowsCombining = siblingDiscount === 0 || 
+        siblingDiscountSetting?.combinableWithOthers !== false;
 
-        if (canApplyPromo && checkRoleEligibility(userRolesList, promoDiscount.requiredRoles, promoDiscount.roleMatchLogic)) {
-          const itemsForDiscount = itemPrices.map(ip => ({
-            classId: ip.classId,
-            price: ip.price
-          }));
+      const canApplyPromo = existingDiscountsAllowCombining && siblingAllowsCombining;
 
-          if (isDiscountApplicable(promoDiscount, itemsForDiscount, subtotal)) {
-            const discountAmount = calculateDiscountAmount(promoDiscount, subtotal, itemsForDiscount);
+      if (!canApplyPromo) {
+        console.log('⚠️ Promo code blocked due to non-combinable discounts:', {
+          promoCode: appliedPromoCode,
+          promoPriority,
+          siblingDiscount,
+          siblingAllowsCombining,
+          existingDiscountsAllowCombining,
+          appliedDiscountsCount: appliedDiscounts.length
+        });
+      }
 
-            if (discountAmount > 0) {
-              appliedDiscounts.push({
-                id: promoDiscount.id,
-                name: promoDiscount.name,
-                type: promoDiscount.bundleRule ? 'bundle' : promoDiscount.type as 'percentage' | 'fixed_amount',
-                value: promoDiscount.value,
-                discountAmount,
-                priority: 999,
-                bundleRule: promoDiscount.bundleRule || undefined,
-                sourceType: 'promo'
-              });
+      if (canApplyPromo && checkRoleEligibility(userRolesList, promoDiscount.requiredRoles, promoDiscount.roleMatchLogic)) {
+        const itemsForDiscount = itemPrices.map(ip => ({
+          classId: ip.classId,
+          price: ip.price
+        }));
 
-              autoAndPromoDiscountAmount += discountAmount;
-            }
+        if (isDiscountApplicable(promoDiscount, itemsForDiscount, subtotal)) {
+          const discountAmount = calculateDiscountAmount(promoDiscount, subtotal, itemsForDiscount);
+
+          if (discountAmount > 0) {
+            appliedDiscounts.push({
+              id: promoDiscount.id,
+              name: promoDiscount.name,
+              type: promoDiscount.bundleRule ? 'bundle' : promoDiscount.type as 'percentage' | 'fixed_amount',
+              value: promoDiscount.value,
+              discountAmount,
+              priority: promoDiscount.priority ?? 0,
+              bundleRule: promoDiscount.bundleRule || undefined,
+              sourceType: 'promo'
+            });
+
+            autoAndPromoDiscountAmount += discountAmount;
           }
         }
       }
