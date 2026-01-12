@@ -255,6 +255,36 @@ router.post('/validate', requireSchoolContext, async (req: any, res) => {
       }
     }
 
+    // Determine if this promo should override sibling discount
+    // Promo overrides sibling when: promo is not combinable AND has higher priority
+    const promoPriority = discount.priority ?? 0;
+    let overridesSiblingDiscount = false;
+    
+    if (userId && items && Array.isArray(items) && items.length > 0) {
+      const uniqueChildIds = new Set(items.map((item: any) => item.childId));
+      if (uniqueChildIds.size > 1) {
+        // Check sibling discount settings
+        const siblingDiscountSetting = allDiscounts.find(
+          (d) => String(d.schoolId) === schoolId && 
+                 d.isActive && 
+                 d.siblingDiscount === true
+        );
+        if (siblingDiscountSetting) {
+          const siblingPriority = siblingDiscountSetting.priority ?? 10;
+          // Override if promo has higher priority (lower number) AND promo is not combinable
+          if (promoPriority < siblingPriority && discount.combinableWithOthers === false) {
+            overridesSiblingDiscount = true;
+            console.log('📍 Promo will override sibling discount on frontend:', {
+              promoCode: code,
+              promoPriority,
+              siblingPriority,
+              promoCombinable: discount.combinableWithOthers
+            });
+          }
+        }
+      }
+    }
+
     // Calculate discount amount
     console.log('💰 Discount raw data from DB:', {
       id: discount.id,
@@ -318,8 +348,10 @@ router.post('/validate', requireSchoolContext, async (req: any, res) => {
         discountAmount,
         code: discount.code,
         combinableWithOthers: discount.combinableWithOthers,
+        priority: promoPriority,
       },
       discountAmount, // Also include at top level for easier access
+      overridesSiblingDiscount, // Flag to tell frontend to zero out sibling discount
     });
   } catch (error) {
     console.error('Error validating discount code:', error);

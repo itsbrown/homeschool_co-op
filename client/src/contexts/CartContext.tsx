@@ -190,6 +190,7 @@ export interface Cart {
     type: 'percentage' | 'fixed_amount' | 'bundle';
     value: number;
     discountAmount: number;
+    overridesSiblingDiscount?: boolean; // Server flag indicating promo should override sibling discount
   } | null;
   // Store school discount settings so sync calculator can access them
   schoolSettings?: {
@@ -232,7 +233,7 @@ type CartAction =
   | { type: 'OPEN_CART' }
   | { type: 'CLOSE_CART' }
   | { type: 'LOAD_CART'; payload: Cart }
-  | { type: 'APPLY_PROMO'; payload: { code: string; discountId: number; name: string; type: 'percentage' | 'fixed_amount' | 'bundle'; value: number; discountAmount: number } }
+  | { type: 'APPLY_PROMO'; payload: { code: string; discountId: number; name: string; type: 'percentage' | 'fixed_amount' | 'bundle'; value: number; discountAmount: number; overridesSiblingDiscount?: boolean } }
   | { type: 'REMOVE_PROMO' }
   | { type: 'SET_MEMBERSHIP'; payload: MembershipFee }
   | { type: 'REMOVE_MEMBERSHIP' };
@@ -591,7 +592,7 @@ const calculateBundleDiscount = (
 // Keep the synchronous version for immediate calculations
 const calculateCartTotalsSync = (
   items: CartItem[],
-  appliedPromo?: { code: string; discountId: number; name: string; type: 'percentage' | 'fixed_amount' | 'bundle'; value: number; discountAmount: number } | null,
+  appliedPromo?: { code: string; discountId: number; name: string; type: 'percentage' | 'fixed_amount' | 'bundle'; value: number; discountAmount: number; overridesSiblingDiscount?: boolean } | null,
   schoolSettings?: { freeAfterThresholdEnabled: boolean; freeAfterThreshold: number; siblingDiscountRate: number; showSubscriptionStatus?: boolean }
 ): { subtotal: number; discounts: any; total: number; schoolSettings?: typeof schoolSettings } => {
   const subtotal = items.reduce((sum, item) => sum + item.price, 0);
@@ -687,6 +688,13 @@ const calculateCartTotalsSync = (
         bundleRule: undefined
       });
       promoDiscount = appliedPromo.discountAmount;
+      
+      // Only zero out sibling discount if server says promo overrides it
+      // This respects combinable promos that should stack with sibling discount
+      if (appliedPromo.overridesSiblingDiscount) {
+        siblingDiscount = 0;
+        discountedChildIds = [];
+      }
     }
   }
   
@@ -1842,7 +1850,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         type: data.discount.type,
         value: data.discount.value,
         cartSubtotal: state.cart.subtotal,
-        isNaN: isNaN(data.discountAmount)
+        isNaN: isNaN(data.discountAmount),
+        overridesSiblingDiscount: data.overridesSiblingDiscount
       });
 
       // Validate discountAmount is a valid number
@@ -1861,6 +1870,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
           type: data.discount.type,
           value: data.discount.value,
           discountAmount: data.discountAmount,
+          overridesSiblingDiscount: data.overridesSiblingDiscount || false,
         },
       });
 
