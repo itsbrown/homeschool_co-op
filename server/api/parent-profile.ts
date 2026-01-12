@@ -443,20 +443,131 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
     // Calculate summary statistics using FILTERED data only
     const totalAmountPaid = BillingCalculationService.calculateTotalPaid(paymentHistory);
     
-    // Calculate total amount due by summing ACTUAL remaining balances from enrollments
-    // CRITICAL FIX: Use remainingBalance field directly instead of recalculating from payments
-    // The remainingBalance field is the authoritative source updated by webhook handlers
+    // FIRST: Build enrollments with recalculated balances (same logic as UI display)
+    // This ensures summary and table use the same source of truth
+    const processedEnrollments = await Promise.all(filteredEnrollments.map(async enrollment => {
+      const classInfo = (classes as any[]).find(c => c.id === enrollment.classId);
+      
+      // Calculate totalPaid with three fallback levels:
+      // 1. Payment allocations ledger (source of truth for new payments)
+      // 2. Payment history matching (for legacy payments)
+      // 3. Cached totalPaid field (last resort)
+      let totalPaid = 0;
+      
+      try {
+        // LEVEL 1: Check payment_allocations ledger first (source of truth)
+        const allocationTotal = await storage.getTotalPaidForEnrollment(enrollment.id);
+        if (allocationTotal > 0) {
+          totalPaid = allocationTotal;
+        } else {
+          // LEVEL 2: For legacy enrollments, calculate from payment history
+          const enrollmentPayments = paymentHistory.filter(payment => {
+            if (!['completed', 'succeeded'].includes(payment.status)) {
+              return false;
+            }
+            // Match by enrollmentIds array (most accurate - prevents double counting)
+            const paymentEnrollmentIds = (payment as any).enrollmentIds;
+            if (paymentEnrollmentIds && Array.isArray(paymentEnrollmentIds) && paymentEnrollmentIds.length > 0) {
+              return paymentEnrollmentIds.includes(enrollment.id);
+            }
+            // Match by class name (specific, prevents double counting across enrollments)
+            const paymentClassName = (payment.className || '').toLowerCase().trim();
+            const enrollmentClassName = (classInfo?.title || '').toLowerCase().trim();
+            if (paymentClassName && enrollmentClassName && paymentClassName === enrollmentClassName) {
+              // Also verify childName matches to be extra safe
+              const paymentChildName = (payment.childName || '').toLowerCase().trim();
+              const enrollmentChildName = (enrollment.childName || '').toLowerCase().trim();
+              if (!paymentChildName || !enrollmentChildName || paymentChildName === enrollmentChildName) {
+                return true;
+              }
+            }
+            return false;
+          });
+          
+          const historyTotal = CurrencyUtils.sum(enrollmentPayments.map(p => p.amount || 0));
+          if (historyTotal > 0) {
+            totalPaid = historyTotal;
+          } else {
+            // LEVEL 3: Use cached totalPaid as last resort
+            totalPaid = enrollment.totalPaid || 0;
+          }
+        }
+      } catch (err) {
+        // On error, fall back to cached value
+        totalPaid = enrollment.totalPaid || 0;
+      }
+      
+      const totalCost = enrollment.totalCost || 0;
+      const actualRemainingBalance = CurrencyUtils.calculateBalance(totalCost, totalPaid);
+      
+      return {
+        id: enrollment.id,
+        classId: enrollment.classId,
+        className: classInfo?.title || 'Unknown Class',
+        classDescription: classInfo?.description,
+        childId: enrollment.childId,
+        childName: enrollment.childName,
+        enrollmentDate: enrollment.enrollmentDate,
+        status: enrollment.status,
+        amount: CurrencyUtils.toDisplay(totalPaid),
+        depositRequired: CurrencyUtils.toDisplay(enrollment.depositRequired || 0),
+        totalCost: CurrencyUtils.toDisplay(totalCost),
+        remainingBalance: CurrencyUtils.toDisplay(actualRemainingBalance),
+        // Keep raw cents value for summary calculation
+        _remainingBalanceCents: actualRemainingBalance,
+        paymentPlan: enrollment.paymentPlan
+      };
+    }));
+    
+    // Calculate class amount due from RECALCULATED balances (not cached DB values)
+    // This ensures the summary matches what's shown in the enrollments table
     const classAmountDue = CurrencyUtils.sum(
-      filteredEnrollments.map(enrollment => enrollment.remainingBalance || 0)
+      processedEnrollments.map(enrollment => (enrollment as any)._remainingBalanceCents || 0)
     );
 
-    // Calculate membership amount due using ACTUAL remaining balances
-    // CRITICAL FIX: Use remainingBalance field directly instead of recalculating
+    // Process membership enrollments with recalculated balances
+    const processedMembershipEnrollments = membershipEnrollments.map(membership => {
+      // Get school info for membership display
+      const school = classes.find(c => c.schoolId === membership.schoolId) || { schoolId: membership.schoolId };
+      
+      // Calculate actual membership payments made
+      const membershipPayments = paymentHistory.filter(payment => 
+        payment.description?.includes('Membership') &&
+        ['completed', 'succeeded'].includes(payment.status)
+      );
+      
+      const totalPaid = CurrencyUtils.sum(membershipPayments.map(p => p.amount || 0));
+      const actualRemainingBalance = CurrencyUtils.calculateBalance(membership.amount, totalPaid);
+      
+      return {
+        id: membership.id,
+        schoolId: membership.schoolId,
+        schoolName: (school as any).schoolName || 'Unknown School',
+        membershipYear: membership.membershipYear,
+        amount: CurrencyUtils.toDisplay(totalPaid),
+        amountPaid: CurrencyUtils.toDisplay(membership.amountPaid || totalPaid),
+        totalCost: CurrencyUtils.toDisplay(membership.amount),
+        remainingBalance: CurrencyUtils.toDisplay(membership.remainingBalance ?? actualRemainingBalance),
+        balanceDue: CurrencyUtils.toDisplay(membership.balanceDue ?? actualRemainingBalance),
+        // Keep raw cents value for summary calculation
+        _remainingBalanceCents: membership.remainingBalance ?? actualRemainingBalance,
+        status: membership.status,
+        dueDate: membership.dueDate,
+        expirationDate: membership.expirationDate,
+        gracePeriodEnd: membership.gracePeriodEnd,
+        startDate: membership.startDate,
+        renewalDate: membership.renewalDate,
+        membershipTier: membership.membershipTier,
+        stripeSubscriptionId: membership.stripeSubscriptionId
+      };
+    });
+    
+    // Calculate membership amount due from recalculated balances
     const membershipAmountDue = CurrencyUtils.sum(
-      membershipEnrollments.map(membership => membership.remainingBalance || 0)
+      processedMembershipEnrollments.map(m => (m as any)._remainingBalanceCents || 0)
     );
-
-    // Total amount due includes both class and membership fees (FILTERED data only)
+    
+    // Total amount due includes both class and membership fees
     const totalAmountDue = classAmountDue + membershipAmountDue;
 
     const profile = {
@@ -488,110 +599,9 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
         notes: child.notes,
         createdAt: child.createdAt
       })),
-      enrollments: await Promise.all(filteredEnrollments.map(async enrollment => {
-        const classInfo = (classes as any[]).find(c => c.id === enrollment.classId);
-        
-        // Calculate totalPaid with three fallback levels:
-        // 1. Payment allocations ledger (source of truth for new payments)
-        // 2. Payment history matching (for legacy payments)
-        // 3. Cached totalPaid field (last resort)
-        let totalPaid = 0;
-        
-        try {
-          // LEVEL 1: Check payment_allocations ledger first (source of truth)
-          const allocationTotal = await storage.getTotalPaidForEnrollment(enrollment.id);
-          if (allocationTotal > 0) {
-            totalPaid = allocationTotal;
-          } else {
-            // LEVEL 2: For legacy enrollments, calculate from payment history
-            const enrollmentPayments = paymentHistory.filter(payment => {
-              if (!['completed', 'succeeded'].includes(payment.status)) {
-                return false;
-              }
-              // Match by enrollmentIds array (most accurate - prevents double counting)
-              const paymentEnrollmentIds = (payment as any).enrollmentIds;
-              if (paymentEnrollmentIds && Array.isArray(paymentEnrollmentIds) && paymentEnrollmentIds.length > 0) {
-                return paymentEnrollmentIds.includes(enrollment.id);
-              }
-              // Match by class name (specific, prevents double counting across enrollments)
-              const paymentClassName = (payment.className || '').toLowerCase().trim();
-              const enrollmentClassName = (classInfo?.title || '').toLowerCase().trim();
-              if (paymentClassName && enrollmentClassName && paymentClassName === enrollmentClassName) {
-                // Also verify childName matches to be extra safe
-                const paymentChildName = (payment.childName || '').toLowerCase().trim();
-                const enrollmentChildName = (enrollment.childName || '').toLowerCase().trim();
-                if (!paymentChildName || !enrollmentChildName || paymentChildName === enrollmentChildName) {
-                  return true;
-                }
-              }
-              return false;
-            });
-            
-            const historyTotal = CurrencyUtils.sum(enrollmentPayments.map(p => p.amount || 0));
-            if (historyTotal > 0) {
-              totalPaid = historyTotal;
-            } else {
-              // LEVEL 3: Use cached totalPaid as last resort
-              totalPaid = enrollment.totalPaid || 0;
-            }
-          }
-        } catch (err) {
-          // On error, fall back to cached value
-          totalPaid = enrollment.totalPaid || 0;
-        }
-        
-        const totalCost = enrollment.totalCost || 0;
-        const actualRemainingBalance = CurrencyUtils.calculateBalance(totalCost, totalPaid);
-        
-        return {
-          id: enrollment.id,
-          classId: enrollment.classId,
-          className: classInfo?.title || 'Unknown Class',
-          classDescription: classInfo?.description,
-          childId: enrollment.childId,
-          childName: enrollment.childName,
-          enrollmentDate: enrollment.enrollmentDate,
-          status: enrollment.status,
-          amount: CurrencyUtils.toDisplay(totalPaid),
-          depositRequired: CurrencyUtils.toDisplay(enrollment.depositRequired || 0),
-          totalCost: CurrencyUtils.toDisplay(totalCost),
-          remainingBalance: CurrencyUtils.toDisplay(actualRemainingBalance),
-          paymentPlan: enrollment.paymentPlan
-        };
-      })),
-      membershipEnrollments: membershipEnrollments.map(membership => {
-        // Get school info for membership display
-        const school = classes.find(c => c.schoolId === membership.schoolId) || { schoolId: membership.schoolId };
-        
-        // Calculate actual membership payments made
-        const membershipPayments = paymentHistory.filter(payment => 
-          payment.description?.includes('Membership') &&
-          ['completed', 'succeeded'].includes(payment.status)
-        );
-        
-        const totalPaid = CurrencyUtils.sum(membershipPayments.map(p => p.amount || 0));
-        const actualRemainingBalance = CurrencyUtils.calculateBalance(membership.amount, totalPaid);
-        
-        return {
-          id: membership.id,
-          schoolId: membership.schoolId,
-          schoolName: school.schoolName || 'Unknown School',
-          membershipYear: membership.membershipYear,
-          amount: CurrencyUtils.toDisplay(totalPaid),
-          amountPaid: CurrencyUtils.toDisplay(membership.amountPaid || totalPaid),
-          totalCost: CurrencyUtils.toDisplay(membership.amount),
-          remainingBalance: CurrencyUtils.toDisplay(membership.remainingBalance ?? actualRemainingBalance),
-          balanceDue: CurrencyUtils.toDisplay(membership.balanceDue ?? actualRemainingBalance),
-          status: membership.status,
-          dueDate: membership.dueDate,
-          expirationDate: membership.expirationDate,
-          gracePeriodEnd: membership.gracePeriodEnd,
-          startDate: membership.startDate,
-          renewalDate: membership.renewalDate,
-          membershipTier: membership.membershipTier,
-          stripeSubscriptionId: membership.stripeSubscriptionId
-        };
-      }),
+      // Use processed enrollments (remove internal _remainingBalanceCents field from response)
+      enrollments: processedEnrollments.map(({ _remainingBalanceCents, ...rest }) => rest),
+      membershipEnrollments: processedMembershipEnrollments.map(({ _remainingBalanceCents, ...rest }) => rest),
       paymentHistory: paymentHistory.map(payment => ({
         id: payment.id,
         amount: CurrencyUtils.toDisplay(payment.amount || 0),
@@ -610,11 +620,11 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
       })),
       emergencyContacts,
       summary: {
-        totalChildren: children.length, // FILTERED children only
-        totalEnrollments: filteredEnrollments.length, // FILTERED enrollments only
-        totalMemberships: membershipEnrollments.length, // FILTERED memberships only
-        totalAmountPaid: CurrencyUtils.toDisplay(totalAmountPaid), // Based on FILTERED payments
-        totalAmountDue: CurrencyUtils.toDisplay(totalAmountDue), // Based on FILTERED data
+        totalChildren: children.length,
+        totalEnrollments: filteredEnrollments.length,
+        totalMemberships: membershipEnrollments.length,
+        totalAmountPaid: CurrencyUtils.toDisplay(totalAmountPaid),
+        totalAmountDue: CurrencyUtils.toDisplay(totalAmountDue),
         activeEnrollments: filteredEnrollments.filter(e => ['enrolled', 'pending_payment'].includes(e.status)).length,
         activeMemberships: membershipEnrollments.filter(m => ['active', 'enrolled', 'pending_payment'].includes(m.status)).length
       }
