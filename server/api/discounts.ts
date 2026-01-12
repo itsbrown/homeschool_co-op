@@ -216,13 +216,20 @@ router.post('/validate', requireSchoolContext, async (req: any, res) => {
           );
           
           // Only block if sibling discount is configured with a non-zero value AND not combinable
+          // AND the promo code does NOT have higher priority (lower number = higher priority)
           const siblingDiscountRate = siblingDiscountSetting ? siblingDiscountSetting.value / 100 : 0;
+          const siblingPriority = siblingDiscountSetting?.priority ?? 10;
+          const promoPriority = discount.priority ?? 0;
+          const promoHasHigherPriority = promoPriority < siblingPriority;
 
-          if (siblingDiscountSetting && siblingDiscountRate > 0 && siblingDiscountSetting.combinableWithOthers === false) {
+          if (siblingDiscountSetting && siblingDiscountRate > 0 && siblingDiscountSetting.combinableWithOthers === false && !promoHasHigherPriority) {
             console.log('🚫 Promo code blocked by non-combinable sibling discount:', {
               promoCode: code,
               siblingDiscountId: siblingDiscountSetting.id,
               siblingDiscountCombinable: siblingDiscountSetting.combinableWithOthers,
+              siblingPriority,
+              promoPriority,
+              promoHasHigherPriority,
               uniqueChildrenInCart: uniqueChildrenCount,
               freeAfterThreeEnabled,
               freeAfterThreshold,
@@ -233,6 +240,15 @@ router.post('/validate', requireSchoolContext, async (req: any, res) => {
               error: 'This promo code cannot be combined with the sibling discount already applied to your cart',
               valid: false,
               blockedBy: 'sibling_discount',
+            });
+          }
+          
+          // If promo has higher priority, log that it will override sibling discount
+          if (promoHasHigherPriority && siblingDiscountSetting && siblingDiscountRate > 0) {
+            console.log('✅ Promo code has higher priority than sibling discount - will override:', {
+              promoCode: code,
+              promoPriority,
+              siblingPriority
             });
           }
         }
