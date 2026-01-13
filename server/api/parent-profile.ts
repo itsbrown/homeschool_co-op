@@ -446,7 +446,9 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
     // FIRST: Build enrollments with recalculated balances (same logic as UI display)
     // This ensures summary and table use the same source of truth
     const processedEnrollments = await Promise.all(filteredEnrollments.map(async enrollment => {
-      const classInfo = (classes as any[]).find(c => c.id === enrollment.classId);
+      // Check both classId and marketplaceClassId since marketplace enrollments use marketplaceClassId
+      const effectiveClassId = enrollment.classId || enrollment.marketplaceClassId;
+      const classInfo = (classes as any[]).find(c => c.id === effectiveClassId);
       
       // Calculate totalPaid with three fallback levels:
       // 1. Payment allocations ledger (source of truth for new payments)
@@ -502,7 +504,7 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
       
       return {
         id: enrollment.id,
-        classId: enrollment.classId,
+        classId: enrollment.classId || enrollment.marketplaceClassId,
         className: classInfo?.title || 'Unknown Class',
         classDescription: classInfo?.description,
         childId: enrollment.childId,

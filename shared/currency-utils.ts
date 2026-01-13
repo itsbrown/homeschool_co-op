@@ -127,7 +127,8 @@ export class BillingCalculationService {
    * @returns Updated enrollment
    */
   static applyPaymentToEnrollment(enrollment: any, paymentAmount: number): any {
-    const currentAmountPaid = enrollment.amountPaid || enrollment.amount || 0;
+    // Use totalPaid as the source of truth (matches database schema), with fallback to amountPaid or amount
+    const currentAmountPaid = enrollment.totalPaid || enrollment.amountPaid || enrollment.amount || 0;
     const newAmountPaid = currentAmountPaid + paymentAmount;
     const totalCost = enrollment.totalCost || 0;
     const remainingBalance = CurrencyUtils.calculateBalance(totalCost, newAmountPaid);
@@ -136,6 +137,7 @@ export class BillingCalculationService {
       ...enrollment,
       amount: newAmountPaid,
       amountPaid: newAmountPaid,
+      totalPaid: newAmountPaid, // Matches database schema field name
       remainingBalance,
       outstandingBalance: remainingBalance,
       status: remainingBalance <= 0 ? 'enrolled' : 'enrolled' // Any payment enrolls student
