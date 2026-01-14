@@ -127,13 +127,35 @@ export class BillingCalculationService {
    * @returns Updated enrollment
    */
   static applyPaymentToEnrollment(enrollment: any, paymentAmount: number): any {
+    console.log('📋 [applyPaymentToEnrollment] INPUT:', {
+      enrollmentId: enrollment.id,
+      paymentAmount,
+      paymentAmountFormatted: CurrencyUtils.format(paymentAmount),
+      existingTotalPaid: enrollment.totalPaid,
+      existingAmountPaid: enrollment.amountPaid,
+      existingAmount: enrollment.amount,
+      totalCost: enrollment.totalCost
+    });
+    
     // Use totalPaid as the source of truth (matches database schema), with fallback to amountPaid or amount
     const currentAmountPaid = enrollment.totalPaid || enrollment.amountPaid || enrollment.amount || 0;
     const newAmountPaid = currentAmountPaid + paymentAmount;
     const totalCost = enrollment.totalCost || 0;
     const remainingBalance = CurrencyUtils.calculateBalance(totalCost, newAmountPaid);
 
-    return {
+    console.log('📋 [applyPaymentToEnrollment] CALCULATION:', {
+      currentAmountPaidSource: enrollment.totalPaid ? 'totalPaid' : (enrollment.amountPaid ? 'amountPaid' : 'amount'),
+      currentAmountPaid,
+      currentAmountPaidFormatted: CurrencyUtils.format(currentAmountPaid),
+      newAmountPaid,
+      newAmountPaidFormatted: CurrencyUtils.format(newAmountPaid),
+      totalCost,
+      totalCostFormatted: CurrencyUtils.format(totalCost),
+      remainingBalance,
+      remainingBalanceFormatted: CurrencyUtils.format(remainingBalance)
+    });
+
+    const result = {
       ...enrollment,
       amount: newAmountPaid,
       amountPaid: newAmountPaid,
@@ -142,6 +164,18 @@ export class BillingCalculationService {
       outstandingBalance: remainingBalance,
       status: remainingBalance <= 0 ? 'enrolled' : 'enrolled' // Any payment enrolls student
     };
+    
+    console.log('📋 [applyPaymentToEnrollment] OUTPUT:', {
+      enrollmentId: result.id,
+      amount: result.amount,
+      amountPaid: result.amountPaid,
+      totalPaid: result.totalPaid,
+      remainingBalance: result.remainingBalance,
+      outstandingBalance: result.outstandingBalance,
+      status: result.status
+    });
+    
+    return result;
   }
 
   /**

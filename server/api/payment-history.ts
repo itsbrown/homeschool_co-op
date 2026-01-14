@@ -425,20 +425,28 @@ router.get('/:paymentId', supabaseAuth, async (req: any, res) => {
 // Create manual payment (school admin only)
 router.post('/manual', supabaseAuth, async (req: any, res) => {
   try {
-    console.log('💰 Manual payment creation request received');
+    console.log('\n' + '='.repeat(80));
+    console.log('📋 MANUAL PAYMENT TRACE - START');
+    console.log('='.repeat(80));
+    console.log('💰 Manual payment creation request received at:', new Date().toISOString());
     
     const userEmail = req.user.email;
+    console.log('📋 [STEP 1] Request received from admin:', userEmail);
+    console.log('📋 [STEP 1] Raw request body:', JSON.stringify(req.body, null, 2));
 
     // Verify user has school admin role
     const user = await storage.getUserByEmail(userEmail);
+    console.log('📋 [STEP 2] Admin user lookup result:', user ? { id: user.id, role: user.role, schoolId: user.schoolId } : 'NOT FOUND');
+    
     if (!user || !['schoolAdmin', 'superAdmin', 'admin'].includes(user.role)) {
+      console.log('📋 [STEP 2] ❌ Authorization FAILED - insufficient permissions');
       return res.status(403).json({
         success: false,
         error: 'Insufficient permissions. School administrator access required.'
       });
     }
 
-    console.log('✅ Manual payment authorized for school admin:', userEmail);
+    console.log('📋 [STEP 2] ✅ Authorization PASSED for school admin:', userEmail);
 
     const {
       enrollmentId,
@@ -452,6 +460,18 @@ router.post('/manual', supabaseAuth, async (req: any, res) => {
       notes,
       paymentDate
     } = req.body;
+    
+    console.log('📋 [STEP 3] Parsed input values:', {
+      enrollmentId,
+      parentEmail,
+      childName,
+      className,
+      amount,
+      amountType: typeof amount,
+      currency,
+      paymentMethod,
+      paymentDate
+    });
 
     // If enrollmentId is provided, use direct lookup (new best-practice flow)
     // Otherwise fall back to text-based matching (legacy flow)
@@ -461,19 +481,35 @@ router.post('/manual', supabaseAuth, async (req: any, res) => {
     let resolvedClassName = className;
 
     if (enrollmentId) {
-      console.log('💰 Using enrollment ID for direct lookup:', enrollmentId);
+      console.log('📋 [STEP 4] Using enrollment ID for direct lookup:', enrollmentId);
       const allEnrollments = await storage.getAllEnrollments();
+      console.log('📋 [STEP 4] Total enrollments in system:', allEnrollments.length);
       targetEnrollment = allEnrollments.find((e: any) => e.id === enrollmentId);
       
       if (!targetEnrollment) {
+        console.log('📋 [STEP 4] ❌ Enrollment NOT FOUND with ID:', enrollmentId);
         return res.status(400).json({
           success: false,
           error: 'Enrollment not found with the provided ID'
         });
       }
       
+      console.log('📋 [STEP 4] ✅ Enrollment FOUND - BEFORE payment update:', {
+        id: targetEnrollment.id,
+        parentEmail: targetEnrollment.parentEmail,
+        childName: targetEnrollment.childName,
+        className: targetEnrollment.className,
+        totalCost: targetEnrollment.totalCost,
+        totalPaid: targetEnrollment.totalPaid,
+        amountPaid: targetEnrollment.amountPaid,
+        remainingBalance: targetEnrollment.remainingBalance,
+        status: targetEnrollment.status,
+        schoolId: targetEnrollment.schoolId
+      });
+      
       // Verify enrollment belongs to admin's school
       if (targetEnrollment.schoolId !== user.schoolId) {
+        console.log('📋 [STEP 4] ❌ School mismatch - enrollment schoolId:', targetEnrollment.schoolId, 'admin schoolId:', user.schoolId);
         return res.status(403).json({
           success: false,
           error: 'Enrollment does not belong to your school'
@@ -485,11 +521,10 @@ router.post('/manual', supabaseAuth, async (req: any, res) => {
       resolvedChildName = targetEnrollment.childName;
       resolvedClassName = targetEnrollment.className;
       
-      console.log('✅ Found enrollment:', { 
-        id: targetEnrollment.id, 
-        childName: resolvedChildName, 
-        className: resolvedClassName,
-        remainingBalance: targetEnrollment.remainingBalance 
+      console.log('📋 [STEP 4] Resolved values from enrollment:', { 
+        resolvedParentEmail, 
+        resolvedChildName, 
+        resolvedClassName 
       });
     }
 
@@ -517,19 +552,27 @@ router.post('/manual', supabaseAuth, async (req: any, res) => {
 
     // Convert user input to storage format (cents)
     const amountInCents = CurrencyUtils.toStorage(amount);
+    console.log('📋 [STEP 5] Amount conversion:', {
+      inputAmount: amount,
+      inputType: typeof amount,
+      amountInCents,
+      formatted: CurrencyUtils.format(amountInCents)
+    });
 
     // Verify parent exists
     let parentUser: any = null;
     try {
       parentUser = await storage.getUserByEmail(resolvedParentEmail);
+      console.log('📋 [STEP 6] Parent user lookup:', parentUser ? { id: parentUser.id, email: parentUser.email, name: parentUser.name } : 'NOT FOUND');
       if (!parentUser) {
+        console.log('📋 [STEP 6] ❌ Parent NOT FOUND:', resolvedParentEmail);
         return res.status(400).json({
           success: false,
           error: 'Parent email not found in system'
         });
       }
     } catch (error) {
-      console.log('❌ Error verifying parent:', error);
+      console.log('📋 [STEP 6] ❌ Error verifying parent:', error);
       return res.status(400).json({
         success: false,
         error: 'Unable to verify parent email'
@@ -563,13 +606,28 @@ router.post('/manual', supabaseAuth, async (req: any, res) => {
         originalPaymentDate: paymentDate || new Date().toISOString()
       }
     };
+    
+    console.log('📋 [STEP 7] Payment data prepared:', {
+      stripePaymentIntentId: manualPaymentIntentId,
+      amount: paymentData.amount,
+      amountFormatted: CurrencyUtils.format(paymentData.amount),
+      parentEmail: paymentData.parentEmail,
+      childName: paymentData.childName,
+      className: paymentData.className,
+      status: paymentData.status,
+      schoolId: paymentData.schoolId
+    });
 
     // Determine which path to use: PaymentProcessor or legacy
     let payment: any = null;
     let usedPaymentProcessor = false;
+    
+    const paymentProcessorEnabled = isPaymentProcessorEnabled();
+    console.log('📋 [STEP 8] PaymentProcessor check:', { enabled: paymentProcessorEnabled });
 
     // Try PaymentProcessor if enabled
-    if (isPaymentProcessorEnabled() && await checkSchemaReady()) {
+    if (paymentProcessorEnabled && await checkSchemaReady()) {
+      console.log('📋 [STEP 8] Using PaymentProcessor path (modern)');
       try {
         if (parentUser) {
           // Use direct enrollment ID if provided, otherwise fall back to text matching
@@ -623,8 +681,17 @@ router.post('/manual', supabaseAuth, async (req: any, res) => {
 
     // Fallback to legacy payment creation if PaymentProcessor didn't handle it
     if (!usedPaymentProcessor) {
+      console.log('📋 [STEP 9] Using LEGACY payment path (PaymentProcessor disabled)');
+      
       payment = await storage.createPayment(paymentData);
-      console.log('✅ Legacy manual payment created:', payment.id);
+      console.log('📋 [STEP 10] Payment record CREATED:', {
+        id: payment.id,
+        stripePaymentIntentId: payment.stripePaymentIntentId,
+        amount: payment.amount,
+        amountFormatted: CurrencyUtils.format(payment.amount),
+        status: payment.status,
+        parentEmail: payment.parentEmail
+      });
 
       // Legacy enrollment update - use direct enrollment if available
       try {
@@ -632,29 +699,72 @@ router.post('/manual', supabaseAuth, async (req: any, res) => {
         
         if (!enrollmentToUpdate) {
           // Fall back to text matching if no direct enrollment
+          console.log('📋 [STEP 11] No direct enrollment - falling back to text search');
           const allEnrollments = await storage.getAllEnrollments();
           const matchingEnrollments = allEnrollments.filter((enrollment: any) => {
             return enrollment.parentEmail === resolvedParentEmail &&
                    enrollment.childName === resolvedChildName &&
                    enrollment.className === resolvedClassName;
           });
-          console.log(`🔍 Found ${matchingEnrollments.length} matching enrollments via text search`);
+          console.log(`📋 [STEP 11] Found ${matchingEnrollments.length} matching enrollments via text search`);
           if (matchingEnrollments.length > 0) {
             enrollmentToUpdate = matchingEnrollments[0];
           }
+        } else {
+          console.log('📋 [STEP 11] Using direct enrollment (from enrollmentId)');
         }
 
         if (enrollmentToUpdate) {
-          console.log(`💰 Applying payment to enrollment ${enrollmentToUpdate.id} (direct: ${!!targetEnrollment})`);
+          console.log('📋 [STEP 12] Enrollment BEFORE applyPaymentToEnrollment:', {
+            id: enrollmentToUpdate.id,
+            totalCost: enrollmentToUpdate.totalCost,
+            totalPaid: enrollmentToUpdate.totalPaid,
+            amountPaid: enrollmentToUpdate.amountPaid,
+            remainingBalance: enrollmentToUpdate.remainingBalance,
+            status: enrollmentToUpdate.status
+          });
+          
+          console.log('📋 [STEP 12] Calling BillingCalculationService.applyPaymentToEnrollment with:', {
+            enrollmentId: enrollmentToUpdate.id,
+            paymentAmountCents: amountInCents,
+            paymentAmountFormatted: CurrencyUtils.format(amountInCents)
+          });
+          
           const updatedEnrollment = BillingCalculationService.applyPaymentToEnrollment(enrollmentToUpdate, amountInCents);
           updatedEnrollment.paymentIntentId = payment.stripePaymentIntentId;
+          
+          console.log('📋 [STEP 13] Enrollment AFTER applyPaymentToEnrollment (before DB save):', {
+            id: updatedEnrollment.id,
+            totalCost: updatedEnrollment.totalCost,
+            totalPaid: updatedEnrollment.totalPaid,
+            amountPaid: updatedEnrollment.amountPaid,
+            amount: updatedEnrollment.amount,
+            remainingBalance: updatedEnrollment.remainingBalance,
+            outstandingBalance: updatedEnrollment.outstandingBalance,
+            status: updatedEnrollment.status,
+            paymentIntentId: updatedEnrollment.paymentIntentId
+          });
+          
           await storage.updateProgramEnrollment(updatedEnrollment.id, updatedEnrollment);
+          
+          // Verify the update by reading back
+          const verifyEnrollments = await storage.getAllEnrollments();
+          const verifiedEnrollment: any = verifyEnrollments.find((e: any) => e.id === updatedEnrollment.id);
+          console.log('📋 [STEP 14] Enrollment AFTER DB save (verification read):', verifiedEnrollment ? {
+            id: verifiedEnrollment.id,
+            totalCost: verifiedEnrollment.totalCost,
+            totalPaid: verifiedEnrollment.totalPaid,
+            amountPaid: verifiedEnrollment.amountPaid,
+            remainingBalance: verifiedEnrollment.remainingBalance,
+            status: verifiedEnrollment.status
+          } : 'FAILED TO READ BACK');
+          
           console.log(`✅ Updated enrollment ${updatedEnrollment.id}: paid=${CurrencyUtils.format(updatedEnrollment.amountPaid)}, remaining=${CurrencyUtils.format(updatedEnrollment.remainingBalance)}, status=${updatedEnrollment.status}`);
         } else {
-          console.log(`ℹ️ No matching enrollment found for manual payment - payment recorded as general payment`);
+          console.log('📋 [STEP 12] ⚠️ No matching enrollment found for manual payment - payment recorded as general payment');
         }
       } catch (enrollmentError) {
-        console.error('❌ Failed to update enrollment for manual payment:', enrollmentError);
+        console.error('📋 [STEP 12] ❌ Failed to update enrollment for manual payment:', enrollmentError);
       }
     }
 
@@ -699,7 +809,7 @@ router.post('/manual', supabaseAuth, async (req: any, res) => {
       // Don't fail the payment creation if email fails
     }
 
-    res.json({
+    const responsePayload = {
       success: true,
       payment: {
         id: payment.id,
@@ -716,10 +826,20 @@ router.post('/manual', supabaseAuth, async (req: any, res) => {
         notes: notes || '',
         enrollmentId: targetEnrollment?.id || null
       }
-    });
+    };
+    
+    console.log('📋 [STEP 15] Response payload:', JSON.stringify(responsePayload, null, 2));
+    console.log('='.repeat(80));
+    console.log('📋 MANUAL PAYMENT TRACE - END (SUCCESS)');
+    console.log('='.repeat(80) + '\n');
+    
+    res.json(responsePayload);
 
   } catch (error) {
+    console.error('='.repeat(80));
+    console.error('📋 MANUAL PAYMENT TRACE - END (ERROR)');
     console.error('❌ Error creating manual payment:', error);
+    console.error('='.repeat(80) + '\n');
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Failed to create manual payment'
