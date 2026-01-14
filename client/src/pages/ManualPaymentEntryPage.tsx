@@ -117,6 +117,11 @@ export default function ManualPaymentEntryPage() {
       queryClient.invalidateQueries({ queryKey: ['/api/payment-history'] });
       queryClient.invalidateQueries({ queryKey: ['/api/school-admin/pending-enrollments'] });
       queryClient.invalidateQueries({ queryKey: ['/api/school-admin/enrollments'] });
+      queryClient.invalidateQueries({ 
+        predicate: (query) => 
+          typeof query.queryKey[0] === 'string' && 
+          query.queryKey[0].startsWith('/api/parent-profile')
+      });
       form.reset({
         enrollmentId: 0,
         amount: 0,
