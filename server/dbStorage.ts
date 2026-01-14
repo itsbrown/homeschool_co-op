@@ -5056,6 +5056,10 @@ export class DatabaseStorage implements IStorage {
         
         await tx.delete(children).where(eq(children.parentId, userId));
 
+        // ========== PHASE 5.5: Clear activeRoleId BEFORE deleting user_roles ==========
+        // This breaks the FK reference so user_roles can be deleted without constraint violation
+        await tx.update(users).set({ activeRoleId: null }).where(eq(users.id, userId));
+
         // ========== PHASE 6: Delete access-related records ==========
         await tx.delete(userRoles).where(eq(userRoles.userId, userId));
         await tx.delete(schoolStaff).where(eq(schoolStaff.userId, userId));
@@ -5064,9 +5068,9 @@ export class DatabaseStorage implements IStorage {
         await tx.delete(pushSubscriptions).where(eq(pushSubscriptions.userId, userId));
 
         // ========== PHASE 7: FINAL STEP - Soft-delete the user (happens last!) ==========
+        // Note: activeRoleId was already cleared in Phase 5.5
         await tx.update(users).set({ 
           isActive: false, 
-          activeRoleId: null,
           supabaseId: null
         }).where(eq(users.id, userId));
       });
