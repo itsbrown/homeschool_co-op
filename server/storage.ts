@@ -5330,18 +5330,12 @@ import { DatabaseStorage } from "./dbStorage";
     }
 
     async getAllPayments(): Promise<Payment[]> {
-      try {
-        // Prefer dbStorage, but fallback to fileStorage (memStorage instance) if unavailable
-        if (this.dbStorage && typeof this.dbStorage.getAllPayments === 'function') {
-          return await this.dbStorage.getAllPayments();
-        } else {
-          console.log('💾 DB storage unavailable or method missing, using file storage fallback for getAllPayments');
-          return await this.fileStorage.getAllPayments();
-        }
-      } catch (error) {
-        console.error('❌ Error getting all payments, falling back to file storage:', error);
-        return await this.fileStorage.getAllPayments();
+      // Use database storage exclusively - consistent with createPayment
+      if (this.dbStorage && typeof this.dbStorage.getAllPayments === 'function') {
+        return await this.dbStorage.getAllPayments();
       }
+      console.error('❌ Database storage not available for getAllPayments');
+      return [];
     }
 
     async getAllEnrollments(): Promise<ProgramEnrollment[]> {
@@ -6472,28 +6466,33 @@ import { DatabaseStorage } from "./dbStorage";
       return this.memStorage.getLinkAnalyticsBySchoolId(schoolId, startDate, endDate);
     }
 
-      // Payment methods implementation - use memStorage since database is failing
+      // Payment methods implementation - use dbStorage exclusively for consistency
       async createPayment(payment: InsertPayment): Promise<Payment> {
-        try {
-          // Prefer dbStorage, but fallback to fileStorage (memStorage instance) if unavailable
-          if (this.dbStorage && typeof this.dbStorage.createPayment === 'function') {
-            return await this.dbStorage.createPayment(payment);
-          } else {
-            console.log('💾 DB storage unavailable or method missing, using file storage fallback for createPayment');
-            return await this.fileStorage.createPayment(payment);
-          }
-        } catch (error) {
-          console.error('❌ Error creating payment, falling back to file storage:', error);
-          return await this.fileStorage.createPayment(payment);
+        // Use database storage exclusively - no fallback to avoid ID mismatches
+        if (this.dbStorage && typeof this.dbStorage.createPayment === 'function') {
+          const result = await this.dbStorage.createPayment(payment);
+          console.log('💾 Payment created in database:', result.id);
+          return result;
         }
+        throw new Error('Database storage not available for createPayment');
       }
 
       async getPaymentsByParentEmail(parentEmail: string): Promise<Payment[]> {
-        return this.memStorage.getPaymentsByParentEmail(parentEmail);
+        // Use database storage exclusively - consistent with createPayment
+        if (this.dbStorage && typeof this.dbStorage.getPaymentsByParentEmail === 'function') {
+          return await this.dbStorage.getPaymentsByParentEmail(parentEmail);
+        }
+        console.error('❌ Database storage not available for getPaymentsByParentEmail');
+        return [];
       }
 
       async getPaymentByStripeId(stripePaymentIntentId: string): Promise<Payment | undefined> {
-        return this.memStorage.getPaymentByStripeId(stripePaymentIntentId);
+        // Use database storage exclusively - consistent with createPayment
+        if (this.dbStorage && typeof this.dbStorage.getPaymentByStripeId === 'function') {
+          return await this.dbStorage.getPaymentByStripeId(stripePaymentIntentId);
+        }
+        console.error('❌ Database storage not available for getPaymentByStripeId');
+        return undefined;
       }
 
       async updatePaymentStatus(id: number, status: 'pending' | 'succeeded' | 'failed' | 'canceled'): Promise<Payment | undefined> {
@@ -6509,7 +6508,17 @@ import { DatabaseStorage } from "./dbStorage";
           default:
             internalStatus = status;
         }
-        return this.memStorage.updatePaymentStatus(id, internalStatus);
+        
+        // Use database storage exclusively - consistent with createPayment
+        if (this.dbStorage && typeof this.dbStorage.updatePaymentStatus === 'function') {
+          const result = await this.dbStorage.updatePaymentStatus(id, internalStatus);
+          if (result) {
+            console.log('💾 Payment status updated in database:', id, status);
+          }
+          return result;
+        }
+        console.error('❌ Database storage not available for updatePaymentStatus');
+        return undefined;
       }
 
       async removeEnrollment(enrollmentId: number): Promise<boolean> {
