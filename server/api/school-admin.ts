@@ -5229,11 +5229,11 @@ router.put('/users/:id', supabaseAuth, requireSchoolContext, async (req: any, re
   }
 });
 
-// Delete a user (soft-delete: sets isActive=false, revokes auth, nullifies FK references)
+// Delete a user (hard-delete: completely removes from database, revokes auth, cleans up FK references)
 router.delete('/users/:id', supabaseAuth, requireSchoolContext, async (req: any, res) => {
   try {
     const schoolId = req.schoolId;
-    console.log('🗑️ Soft-deleting user for school admin...');
+    console.log('🗑️ Hard-deleting user for school admin...');
     
     const userId = parseInt(req.params.id);
     if (!userId) {
@@ -5246,13 +5246,8 @@ router.delete('/users/:id', supabaseAuth, requireSchoolContext, async (req: any,
       return res.status(404).json({ message: 'User not found or access denied' });
     }
 
-    // Check if user is already soft-deleted
-    if (!existingUser.isActive) {
-      return res.status(400).json({ message: 'User is already deleted' });
-    }
-
     const userEmail = existingUser.email;
-    console.log(`🗑️ Starting soft-delete process for user: ${userEmail} (ID: ${userId})`);
+    console.log(`🗑️ Starting hard-delete process for user: ${userEmail} (ID: ${userId})`);
 
     // Step 1: Delete user from Supabase Auth (so they can't log in anymore)
     // This happens BEFORE the database transaction since it's an external service
@@ -5307,29 +5302,29 @@ router.delete('/users/:id', supabaseAuth, requireSchoolContext, async (req: any,
       // Continue with database cleanup even if Supabase deletion fails
     }
 
-    // Step 2: Execute transactional soft-delete with all FK cleanup
-    // This is atomic: all cleanup happens first, then soft-delete last
-    // If any step fails, the entire transaction rolls back and user remains active
-    console.log(`🔄 Starting transactional soft-delete for user ID: ${userId}`);
+    // Step 2: Execute transactional hard-delete with all FK cleanup
+    // This is atomic: all cleanup happens first, then DELETE user last
+    // If any step fails, the entire transaction rolls back and user remains
+    console.log(`🔄 Starting transactional hard-delete for user ID: ${userId}`);
     const result = await storage.softDeleteUserWithCleanup(userId);
     
     if (!result.success) {
-      console.error(`❌ Transactional soft-delete failed: ${result.error}`);
+      console.error(`❌ Transactional hard-delete failed: ${result.error}`);
       return res.status(500).json({ 
         message: 'Error deleting user - transaction rolled back',
         error: result.error 
       });
     }
 
-    console.log(`✅ Soft-deleted user: ${userEmail} (ID: ${userId}) from school ${schoolId}`);
+    console.log(`✅ Hard-deleted user: ${userEmail} (ID: ${userId}) from school ${schoolId}`);
     
     res.status(200).json({ 
-      message: 'User deleted successfully',
-      softDeleted: true 
+      message: 'User permanently deleted',
+      deleted: true 
     });
   } catch (error) {
     const err = error as Error;
-    console.error('❌ Error soft-deleting user:', error);
+    console.error('❌ Error hard-deleting user:', error);
     res.status(500).json({ 
       message: 'Error deleting user',
       error: err.message 

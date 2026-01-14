@@ -5067,18 +5067,15 @@ export class DatabaseStorage implements IStorage {
         await tx.delete(notificationRecipients).where(eq(notificationRecipients.recipientId, userId));
         await tx.delete(pushSubscriptions).where(eq(pushSubscriptions.userId, userId));
 
-        // ========== PHASE 7: FINAL STEP - Soft-delete the user (happens last!) ==========
-        // Note: activeRoleId was already cleared in Phase 5.5
-        await tx.update(users).set({ 
-          isActive: false, 
-          supabaseId: null
-        }).where(eq(users.id, userId));
+        // ========== PHASE 7: FINAL STEP - Hard delete the user (completely remove from database) ==========
+        // Note: activeRoleId was already cleared in Phase 5.5, all FKs cleaned up
+        await tx.delete(users).where(eq(users.id, userId));
       });
       
       return { success: true };
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error during soft-delete';
-      console.error(`❌ Transaction failed for soft-delete user ${userId}:`, errorMessage);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error during hard-delete';
+      console.error(`❌ Transaction failed for hard-delete user ${userId}:`, errorMessage);
       return { success: false, error: errorMessage };
     }
   }
