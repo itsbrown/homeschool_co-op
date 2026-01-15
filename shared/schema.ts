@@ -109,6 +109,9 @@ export const schools = pgTable("schools", {
   membershipAgreementTemplate: text("membership_agreement_template"), // The agreement text/HTML that members must sign
   membershipAgreementVersion: text("membership_agreement_version").default("1.0"), // Version of the current agreement
   membershipAgreementUpdatedAt: timestamp("membership_agreement_updated_at"), // When the agreement was last updated
+  
+  // Premium Feature Toggles (controlled by Super Admin)
+  enabledFeatures: jsonb("enabled_features").default({}).notNull(), // { financialReports: true, aiInsights: true, ... }
 });
 
 export const insertSchoolSchema = createInsertSchema(schools)
@@ -147,6 +150,9 @@ export const insertSchoolSchema = createInsertSchema(schools)
     membershipAgreementTemplate: z.string().nullable().default(null),
     membershipAgreementVersion: z.string().default("1.0"),
     membershipAgreementUpdatedAt: z.date().nullable().default(null),
+    
+    // Premium Feature Toggles
+    enabledFeatures: z.record(z.string(), z.boolean()).default({}),
   });
 export type InsertSchool = z.infer<typeof insertSchoolSchema>;
 export type School = typeof schools.$inferSelect;

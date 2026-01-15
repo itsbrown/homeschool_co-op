@@ -92,6 +92,10 @@ export interface IStorage {
   updateSchool(id: number, school: Partial<InsertSchool>): Promise<School | undefined>;
   getAllSchools(): Promise<School[]>;
   getSchoolsByAdminId(adminId: number): Promise<School[]>;
+  
+  // School Feature Toggle methods
+  getSchoolFeatures(schoolId: number): Promise<Record<string, boolean>>;
+  updateSchoolFeatures(schoolId: number, features: Record<string, boolean>): Promise<School | undefined>;
 
   // User Role methods
   getUserRolesByUserId(userId: number): Promise<UserRole[]>;
@@ -1176,6 +1180,19 @@ export class MemStorage implements IStorage {
     return Array.from(this.schoolsStore.values()).filter(
       school => school.adminId === adminId
     );
+  }
+
+  async getSchoolFeatures(schoolId: number): Promise<Record<string, boolean>> {
+    const school = this.schoolsStore.get(schoolId);
+    return (school?.enabledFeatures as Record<string, boolean>) || {};
+  }
+
+  async updateSchoolFeatures(schoolId: number, features: Record<string, boolean>): Promise<School | undefined> {
+    const school = this.schoolsStore.get(schoolId);
+    if (!school) return undefined;
+    const updatedSchool = { ...school, enabledFeatures: features, updatedAt: new Date() };
+    this.schoolsStore.set(schoolId, updatedSchool);
+    return updatedSchool;
   }
 
   async getUserRolesByUserId(userId: number): Promise<UserRole[]> {
@@ -5599,6 +5616,22 @@ import { DatabaseStorage } from "./dbStorage";
         return await this.dbStorage.getSchoolsByAdminId(adminId);
       } catch (error) {
         return this.memStorage.getSchoolsByAdminId(adminId);
+      }
+    }
+
+    async getSchoolFeatures(schoolId: number): Promise<Record<string, boolean>> {
+      try {
+        return await this.dbStorage.getSchoolFeatures(schoolId);
+      } catch (error) {
+        return this.memStorage.getSchoolFeatures(schoolId);
+      }
+    }
+
+    async updateSchoolFeatures(schoolId: number, features: Record<string, boolean>): Promise<School | undefined> {
+      try {
+        return await this.dbStorage.updateSchoolFeatures(schoolId, features);
+      } catch (error) {
+        return this.memStorage.updateSchoolFeatures(schoolId, features);
       }
     }
 

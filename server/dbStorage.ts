@@ -177,6 +177,25 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(schools).where(eq(schools.adminId, adminId));
   }
 
+  // School Feature Toggle methods
+  async getSchoolFeatures(schoolId: number): Promise<Record<string, boolean>> {
+    const db = await getDb();
+    const [school] = await db.select({ enabledFeatures: schools.enabledFeatures })
+      .from(schools)
+      .where(eq(schools.id, schoolId));
+    return (school?.enabledFeatures as Record<string, boolean>) || {};
+  }
+
+  async updateSchoolFeatures(schoolId: number, features: Record<string, boolean>): Promise<School | undefined> {
+    const db = await getDb();
+    const [updatedSchool] = await db
+      .update(schools)
+      .set({ enabledFeatures: features, updatedAt: new Date() })
+      .where(eq(schools.id, schoolId))
+      .returning();
+    return updatedSchool;
+  }
+
   // User Role methods
   async getUserRolesByUserId(userId: number): Promise<UserRole[]> {
     const db = await getDb();
