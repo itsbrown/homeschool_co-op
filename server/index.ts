@@ -34,6 +34,7 @@ import errorTelemetryRouter from "./api/error-telemetry";
 import { errorNotificationService } from "./services/error-notification";
 import { registerObjectStorageRoutes } from "./replit_integrations/object_storage";
 import unifiedUploadsRouter from "./api/unified-uploads";
+import financialReportsRouter from "./api/financial-reports";
 
 // 🔒 PRODUCTION SAFETY: Verify NODE_ENV is set and log startup environment
 const currentEnv = process.env.NODE_ENV || 'development';
@@ -313,6 +314,9 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
   
   // Register admin refunds routes with authentication
   app.use('/api/admin/refunds', jwtCheck, requireRole(['schoolAdmin', 'admin', 'superAdmin']), adminRefundsRouter);
+  
+  // Register financial reports routes with authentication
+  app.use('/api/admin/financial-reports', jwtCheck, requireRole(['schoolAdmin', 'admin', 'superAdmin']), financialReportsRouter);
   
   // Register membership admin routes with authentication
   app.use('/api/admin/memberships', jwtCheck, requireRole(['schoolAdmin', 'admin', 'superAdmin']), membershipRouter);
