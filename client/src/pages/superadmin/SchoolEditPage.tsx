@@ -1,13 +1,13 @@
-
-import React, { useRef } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
-import { Loader2, ArrowLeft } from "lucide-react";
+import { Loader2, ArrowLeft, Sparkles, Shield } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -62,6 +62,51 @@ export default function SchoolEditPage() {
     },
     enabled: !!schoolId,
   });
+
+  const { data: featuresData, isLoading: featuresLoading } = useQuery<{ features: Record<string, boolean> }>({
+    queryKey: [`/api/superadmin/schools/${schoolId}/features`],
+    queryFn: async () => {
+      const response = await apiRequest("GET", `/superadmin/schools/${schoolId}/features`);
+      return await response.json();
+    },
+    enabled: !!schoolId,
+  });
+
+  const [localFeatures, setLocalFeatures] = useState<Record<string, boolean>>({});
+  const [featuresInitialized, setFeaturesInitialized] = useState(false);
+
+  useEffect(() => {
+    if (featuresData?.features && !featuresInitialized) {
+      setLocalFeatures(featuresData.features);
+      setFeaturesInitialized(true);
+    }
+  }, [featuresData, featuresInitialized]);
+
+  const updateFeaturesMutation = useMutation({
+    mutationFn: (features: Record<string, boolean>) => {
+      return apiRequest("PUT", `/superadmin/schools/${schoolId}/features`, { features });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Features updated",
+        description: "The school's premium features have been updated successfully.",
+      });
+      queryClient.invalidateQueries({ queryKey: [`/api/superadmin/schools/${schoolId}/features`] });
+    },
+    onError: () => {
+      toast({
+        title: "Update failed",
+        description: "There was an error updating the features. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleFeatureToggle = (featureName: string, enabled: boolean) => {
+    const newFeatures = { ...localFeatures, [featureName]: enabled };
+    setLocalFeatures(newFeatures);
+    updateFeaturesMutation.mutate(newFeatures);
+  };
 
   const form = useForm<z.infer<typeof schoolFormSchema>>({
     resolver: zodResolver(schoolFormSchema),
@@ -361,6 +406,45 @@ export default function SchoolEditPage() {
                       </FormItem>
                     )}
                   />
+                </div>
+
+                {/* Premium Features Section */}
+                <div className="mt-8 pt-6 border-t">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Sparkles className="h-5 w-5 text-purple-600" />
+                    <h3 className="text-lg font-semibold">Premium Features</h3>
+                  </div>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Enable or disable premium features for this school. Changes take effect immediately.
+                  </p>
+                  
+                  {featuresLoading ? (
+                    <div className="flex items-center space-x-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span className="text-sm text-muted-foreground">Loading features...</span>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between p-4 bg-purple-50 rounded-lg border border-purple-200">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-purple-100 rounded-lg">
+                            <Shield className="h-5 w-5 text-purple-600" />
+                          </div>
+                          <div>
+                            <p className="font-medium">CFO Financial Reports</p>
+                            <p className="text-sm text-muted-foreground">
+                              AI-powered financial analytics, revenue trends, and CFO-grade insights
+                            </p>
+                          </div>
+                        </div>
+                        <Switch
+                          checked={localFeatures.financialReports || false}
+                          onCheckedChange={(checked) => handleFeatureToggle('financialReports', checked)}
+                          disabled={updateFeaturesMutation.isPending}
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex justify-end space-x-4 mt-6">

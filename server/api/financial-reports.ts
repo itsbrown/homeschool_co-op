@@ -3,6 +3,7 @@ import { storage } from '../storage';
 import { getDb } from '../db';
 import { payments, scheduledPayments, programEnrollments, users, refunds, schools } from '@shared/schema';
 import { eq, and, gte, lte, sql, desc, isNull, not, inArray } from 'drizzle-orm';
+import { generateCFOInsights, isAIAvailable } from '../services/cfoInsightsService';
 
 const router = express.Router();
 
@@ -651,6 +652,151 @@ router.get('/export', async (req: any, res) => {
   } catch (error) {
     console.error('Error exporting financial data:', error);
     res.status(500).json({ error: 'Failed to export financial data' });
+  }
+});
+
+router.get('/ai-insights', async (req: any, res) => {
+  try {
+    const result = await getSchoolAdminWithFeatureCheck(req, 'financialReports');
+    if (isError(result)) {
+      return res.status(result.status).json({ error: result.error });
+    }
+    const { schoolId } = result;
+
+    const db = await getDb();
+
+    const summaryResult = await db
+      .select({
+        totalRevenue: sql<number>`COALESCE(SUM(${payments.amount}), 0)::integer`,
+        paymentCount: sql<number>`COUNT(*)::integer`,
+      })
+      .from(payments)
+      .where(
+        and(
+          eq(payments.schoolId, schoolId),
+          eq(payments.status, 'completed')
+        )
+      );
+
+    const outstandingResult = await db
+      .select({
+        outstanding: sql<number>`COALESCE(SUM(${scheduledPayments.amount}), 0)::integer`,
+      })
+      .from(scheduledPayments)
+      .where(
+        and(
+          eq(scheduledPayments.schoolId, schoolId),
+          eq(scheduledPayments.status, 'pending')
+        )
+      );
+
+    const enrollmentCountResult = await db
+      .select({
+        count: sql<number>`COUNT(*)::integer`,
+      })
+      .from(programEnrollments)
+      .where(eq(programEnrollments.schoolId, schoolId));
+
+    const paymentPlansResult = await db
+      .select({
+        parentEmail: scheduledPayments.parentEmail,
+        totalAmount: sql<number>`SUM(${scheduledPayments.amount})::integer`,
+        paidAmount: sql<number>`SUM(CASE WHEN ${scheduledPayments.status} = 'completed' THEN ${scheduledPayments.amount} ELSE 0 END)::integer`,
+        totalInstallments: sql<number>`MAX(${scheduledPayments.totalInstallments})::integer`,
+        completedInstallments: sql<number>`COUNT(CASE WHEN ${scheduledPayments.status} = 'completed' THEN 1 END)::integer`,
+      })
+      .from(scheduledPayments)
+      .where(eq(scheduledPayments.schoolId, schoolId))
+      .groupBy(scheduledPayments.parentEmail, scheduledPayments.childName, scheduledPayments.className);
+
+    const totalPlans = paymentPlansResult.length;
+    let avgProgress = 0;
+    if (totalPlans > 0) {
+      const totalProgress = paymentPlansResult.reduce((sum, plan) => {
+        const progress = plan.totalAmount > 0 ? (plan.paidAmount / plan.totalAmount) * 100 : 0;
+        return sum + progress;
+      }, 0);
+      avgProgress = totalProgress / totalPlans;
+    }
+
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+
+    const revenueTrendsResult = await db
+      .select({
+        month: sql<string>`TO_CHAR(${payments.createdAt}, 'YYYY-MM')`,
+        revenue: sql<number>`COALESCE(SUM(${payments.amount}), 0)::integer`,
+      })
+      .from(payments)
+      .where(
+        and(
+          eq(payments.schoolId, schoolId),
+          eq(payments.status, 'completed'),
+          gte(payments.createdAt, sixMonthsAgo)
+        )
+      )
+      .groupBy(sql`TO_CHAR(${payments.createdAt}, 'YYYY-MM')`)
+      .orderBy(sql`TO_CHAR(${payments.createdAt}, 'YYYY-MM')`);
+
+    const now = new Date();
+    const outstandingBalancesResult = await db
+      .select({
+        parentEmail: scheduledPayments.parentEmail,
+        amount: sql<number>`SUM(${scheduledPayments.amount})::integer`,
+        scheduledDate: sql<Date>`MIN(${scheduledPayments.scheduledDate})`,
+      })
+      .from(scheduledPayments)
+      .where(
+        and(
+          eq(scheduledPayments.schoolId, schoolId),
+          eq(scheduledPayments.status, 'pending')
+        )
+      )
+      .groupBy(scheduledPayments.parentEmail);
+
+    const summary = {
+      totalRevenue: summaryResult[0]?.totalRevenue || 0,
+      totalCollected: summaryResult[0]?.totalRevenue || 0,
+      outstandingBalance: outstandingResult[0]?.outstanding || 0,
+      paymentPlanProgress: avgProgress,
+      enrollmentCount: enrollmentCountResult[0]?.count || 0,
+      averagePaymentAmount: summaryResult[0]?.paymentCount > 0 
+        ? Math.round((summaryResult[0]?.totalRevenue || 0) / summaryResult[0].paymentCount) 
+        : 0,
+    };
+
+    const revenueTrends = revenueTrendsResult.map((r: typeof revenueTrendsResult[number]) => ({
+      month: r.month,
+      revenue: r.revenue,
+      collected: r.revenue,
+    }));
+
+    const outstandingBalances = outstandingBalancesResult.map((o: typeof outstandingBalancesResult[number]) => {
+      const daysOverdue = o.scheduledDate 
+        ? Math.max(0, Math.floor((now.getTime() - new Date(o.scheduledDate).getTime()) / (1000 * 60 * 60 * 24)))
+        : 0;
+      return {
+        familyName: o.parentEmail?.split('@')[0] || 'Unknown',
+        balance: o.amount,
+        daysOverdue,
+      };
+    });
+
+    const paymentPlans = paymentPlansResult.slice(0, 10).map((p: typeof paymentPlansResult[number]) => ({
+      familyName: p.parentEmail?.split('@')[0] || 'Unknown',
+      progress: p.totalAmount > 0 ? Math.round((p.paidAmount / p.totalAmount) * 100) : 0,
+      remainingBalance: p.totalAmount - p.paidAmount,
+    }));
+
+    const insights = await generateCFOInsights(summary, revenueTrends, outstandingBalances, paymentPlans);
+
+    res.json({
+      ...insights,
+      aiAvailable: isAIAvailable(),
+    });
+  } catch (error) {
+    console.error('Error generating AI insights:', error);
+    res.status(500).json({ error: 'Failed to generate AI insights' });
   }
 });
 

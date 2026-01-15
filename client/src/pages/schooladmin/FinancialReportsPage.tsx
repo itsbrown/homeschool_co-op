@@ -30,7 +30,10 @@ import {
   Users,
   Calendar,
   RefreshCw,
-  Lock
+  Lock,
+  Brain,
+  Sparkles,
+  ArrowRight
 } from 'lucide-react';
 import { format } from 'date-fns';
 import {
@@ -104,6 +107,22 @@ interface RecentTransaction {
   status: string;
   createdAt: string;
   enrollment: { id: number; childName: string; className: string; parentEmail: string } | null;
+}
+
+interface CFOInsight {
+  category: 'revenue' | 'collections' | 'risk' | 'opportunity' | 'forecast';
+  title: string;
+  description: string;
+  priority: 'high' | 'medium' | 'low';
+  metric?: string;
+  recommendation?: string;
+}
+
+interface CFOAnalysisResult {
+  insights: CFOInsight[];
+  executiveSummary: string;
+  generatedAt: string;
+  aiAvailable: boolean;
 }
 
 function formatCurrency(cents: number): string {
@@ -209,6 +228,11 @@ export default function FinancialReportsPage() {
 
   const { data: transactionsData, isLoading: transactionsLoading } = useQuery<{ transactions: RecentTransaction[] }>({
     queryKey: ['/api/admin/financial-reports/recent-transactions'],
+  });
+
+  const { data: aiInsightsData, isLoading: aiInsightsLoading, refetch: refetchAIInsights } = useQuery<CFOAnalysisResult>({
+    queryKey: ['/api/admin/financial-reports/ai-insights'],
+    staleTime: 5 * 60 * 1000,
   });
 
   if (summaryError && (summaryError as any)?.message?.includes('not enabled')) {
@@ -364,6 +388,117 @@ export default function FinancialReportsPage() {
                 </CardContent>
               </Card>
             </div>
+
+            {/* AI CFO Insights Panel */}
+            <Card className="border-purple-200 bg-gradient-to-br from-purple-50 to-white">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Brain className="h-5 w-5 text-purple-600" />
+                  <div>
+                    <CardTitle className="text-lg">AI Financial Insights</CardTitle>
+                    <CardDescription>CFO-grade analysis powered by AI</CardDescription>
+                  </div>
+                </div>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => refetchAIInsights()}
+                  disabled={aiInsightsLoading}
+                >
+                  <RefreshCw className={`h-4 w-4 mr-2 ${aiInsightsLoading ? 'animate-spin' : ''}`} />
+                  Refresh
+                </Button>
+              </CardHeader>
+              <CardContent>
+                {aiInsightsLoading ? (
+                  <div className="space-y-4">
+                    <Skeleton className="h-16 w-full" />
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <Skeleton className="h-24" />
+                      <Skeleton className="h-24" />
+                    </div>
+                  </div>
+                ) : aiInsightsData ? (
+                  <div className="space-y-4">
+                    {/* Executive Summary */}
+                    <div className="p-4 bg-white rounded-lg border border-purple-100">
+                      <div className="flex items-start gap-3">
+                        <Sparkles className="h-5 w-5 text-purple-500 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <h4 className="font-medium text-gray-900 mb-1">Executive Summary</h4>
+                          <p className="text-sm text-gray-700">{aiInsightsData.executiveSummary}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Insights Grid */}
+                    {aiInsightsData.insights && aiInsightsData.insights.length > 0 && (
+                      <div className="grid gap-3 md:grid-cols-2">
+                        {aiInsightsData.insights.map((insight, idx) => (
+                          <div 
+                            key={idx} 
+                            className={`p-4 rounded-lg border ${
+                              insight.priority === 'high' 
+                                ? 'bg-red-50 border-red-200' 
+                                : insight.priority === 'medium' 
+                                  ? 'bg-yellow-50 border-yellow-200' 
+                                  : 'bg-green-50 border-green-200'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between mb-2">
+                              <Badge 
+                                variant="outline" 
+                                className={`text-xs ${
+                                  insight.category === 'risk' 
+                                    ? 'bg-red-100 text-red-700 border-red-300' 
+                                    : insight.category === 'revenue' 
+                                      ? 'bg-green-100 text-green-700 border-green-300'
+                                      : insight.category === 'collections'
+                                        ? 'bg-blue-100 text-blue-700 border-blue-300'
+                                        : insight.category === 'opportunity'
+                                          ? 'bg-purple-100 text-purple-700 border-purple-300'
+                                          : 'bg-gray-100 text-gray-700 border-gray-300'
+                                }`}
+                              >
+                                {insight.category}
+                              </Badge>
+                              {insight.metric && (
+                                <span className="text-sm font-semibold text-gray-700">{insight.metric}</span>
+                              )}
+                            </div>
+                            <h5 className="font-medium text-gray-900 mb-1">{insight.title}</h5>
+                            <p className="text-sm text-gray-600">{insight.description}</p>
+                            {insight.recommendation && (
+                              <div className="mt-2 flex items-start gap-1 text-xs text-gray-500">
+                                <ArrowRight className="h-3 w-3 mt-0.5 flex-shrink-0" />
+                                <span>{insight.recommendation}</span>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Footer */}
+                    <div className="flex items-center justify-between text-xs text-gray-500 pt-2">
+                      <span>
+                        {aiInsightsData.aiAvailable 
+                          ? 'Powered by AI analysis' 
+                          : 'Basic analysis (AI unavailable)'}
+                      </span>
+                      {aiInsightsData.generatedAt && (
+                        <span>Generated {format(new Date(aiInsightsData.generatedAt), 'MMM d, h:mm a')}</span>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-6 text-gray-500">
+                    <Brain className="h-8 w-8 mx-auto mb-2 text-gray-300" />
+                    <p>No insights available yet</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
 
             <Tabs value={activeTab} onValueChange={setActiveTab}>
               <TabsList>

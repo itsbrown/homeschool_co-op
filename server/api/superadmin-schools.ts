@@ -121,3 +121,43 @@ export const updateSuperAdminSchool = async (req: Request, res: Response) => {
     });
   }
 };
+
+export const getSchoolFeatures = async (req: Request, res: Response) => {
+  try {
+    const { schoolId } = req.params;
+    const features = await storage.getSchoolFeatures(parseInt(schoolId));
+    
+    console.log(`🔧 SuperAdmin: Retrieved features for school ${schoolId}:`, features);
+    res.json({ features, schoolId: parseInt(schoolId) });
+  } catch (error) {
+    console.error('❌ Error fetching school features:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch school features',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+};
+
+export const updateSchoolFeatures = async (req: Request, res: Response) => {
+  try {
+    const { schoolId } = req.params;
+    const { features } = req.body;
+    
+    if (!features || typeof features !== 'object') {
+      return res.status(400).json({ error: 'Invalid features object' });
+    }
+    
+    console.log(`🔄 SuperAdmin: Updating features for school ${schoolId}:`, features);
+    
+    await storage.updateSchoolFeatures(parseInt(schoolId), features);
+    
+    console.log(`✅ SuperAdmin: Updated features for school ${schoolId} successfully`);
+    res.json({ success: true, features });
+  } catch (error) {
+    console.error('❌ Error updating school features:', error);
+    res.status(500).json({ 
+      error: 'Failed to update school features',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+};
