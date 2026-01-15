@@ -34,7 +34,8 @@ import {
   Coins,
   Gift,
   Shield,
-  Phone
+  Phone,
+  BarChart3
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -166,6 +167,11 @@ const adminNavItems: NavItem[] = [
     title: 'Calendar',
     href: '/schools/calendar',
     icon: CalendarDays,
+  },
+  {
+    title: 'Financial Reports',
+    href: '/school-admin/financial-reports',
+    icon: BarChart3,
   },
   {
     title: 'Settings',

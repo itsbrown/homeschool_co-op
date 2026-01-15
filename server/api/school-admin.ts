@@ -6827,4 +6827,32 @@ router.post('/credits/create', async (req, res) => {
   }
 });
 
+// GET /api/school-admin/features - Get enabled features for the school
+router.get('/features', supabaseAuth, async (req: any, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    // Get user's school
+    const userRolesList = await storage.getUserRolesByUserId(userId);
+    const adminRole = userRolesList.find(r => r.role === 'schoolAdmin' || r.role === 'superAdmin');
+    
+    if (!adminRole?.schoolId) {
+      return res.status(403).json({ error: 'No school admin role found' });
+    }
+
+    const features = await storage.getSchoolFeatures(adminRole.schoolId);
+    
+    res.json({
+      features,
+      schoolId: adminRole.schoolId,
+    });
+  } catch (error) {
+    console.error('[Features] Error fetching school features:', error);
+    res.status(500).json({ error: 'Failed to fetch school features' });
+  }
+});
+
 export default router;
