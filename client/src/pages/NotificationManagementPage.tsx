@@ -70,6 +70,14 @@ interface ClassInfo {
   enrollmentCount?: number;
 }
 
+interface StaffPosition {
+  id: number;
+  title: string;
+  description?: string;
+  isDefault: boolean;
+  schoolId?: number;
+}
+
 export default function NotificationManagementPage() {
   const [isComposeDialogOpen, setIsComposeDialogOpen] = useState(false);
   const [selectedTab, setSelectedTab] = useState("individual");
@@ -93,6 +101,11 @@ export default function NotificationManagementPage() {
     queryKey: ["/api/school-admin/classes"],
   });
   const classes = schoolClassesData?.items || [];
+
+  // Fetch staff positions for role targeting
+  const { data: staffPositions = [] } = useQuery<StaffPosition[]>({
+    queryKey: ["/api/school-admin/staff-positions"],
+  });
 
   // Send individual notification mutation
   const sendIndividualMutation = useMutation({
@@ -372,6 +385,7 @@ export default function NotificationManagementPage() {
           <NotificationComposeDialog
             locations={locations}
             classes={classes}
+            staffPositions={staffPositions}
             editingNotification={editingNotification}
             onSendIndividual={sendIndividualMutation.mutate}
             onSendRole={sendRoleMutation.mutate}
@@ -574,6 +588,7 @@ export default function NotificationManagementPage() {
 function NotificationComposeDialog({
   locations,
   classes,
+  staffPositions,
   editingNotification,
   onSendIndividual,
   onSendRole,
@@ -586,6 +601,7 @@ function NotificationComposeDialog({
 }: {
   locations: Location[];
   classes: ClassInfo[];
+  staffPositions: StaffPosition[];
   editingNotification: Notification | null;
   onSendIndividual: (data: any) => void;
   onSendRole: (data: any) => void;
@@ -789,15 +805,8 @@ function NotificationComposeDialog({
     }
   };
 
-  const roles = [
-    "teacher",
-    "administrator", 
-    "staff",
-    "counselor",
-    "librarian",
-    "substitute",
-    "volunteer"
-  ];
+  // Get roles from staff positions (dynamic from database)
+  const roles = staffPositions.map(p => p.title.toLowerCase());
 
   return (
     <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
