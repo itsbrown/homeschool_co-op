@@ -131,7 +131,7 @@ export default function ParentSidebar() {
   const { user, signOut } = useAuth();
   const { activeRole, availableRoles } = useRole();
   
-  const hasSuperAdminRole = availableRoles.some(r => r.role.toLowerCase() === 'superadmin');
+  const hasSuperAdminRole = (availableRoles || []).some(r => r.role.toLowerCase() === 'superadmin');
   const [isOpen, setIsOpen] = React.useState(false);
   const [location, setLocation] = useLocation();
   const [expandedSections, setExpandedSections] = React.useState<{ [key: string]: boolean }>({});

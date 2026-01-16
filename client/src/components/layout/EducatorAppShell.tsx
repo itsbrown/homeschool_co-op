@@ -65,7 +65,7 @@ function EducatorSidebar() {
   const { activeRole, availableRoles } = useRole();
   const [userSchool, setUserSchool] = useState<any>(null);
   
-  const hasSuperAdminRole = availableRoles.some(r => r.role.toLowerCase() === 'superadmin');
+  const hasSuperAdminRole = (availableRoles || []).some(r => r.role.toLowerCase() === 'superadmin');
 
   const { data: notifications = [] } = useQuery<Notification[]>({
     queryKey: ['/api/notifications'],
@@ -207,10 +207,12 @@ function EducatorSidebar() {
 
 export default function EducatorAppShell({ children }: EducatorAppShellProps) {
   const { user, signOut, isAuthenticated } = useAuth();
-  const { activeRole } = useRole();
+  const { activeRole, availableRoles } = useRole();
   const [location, setLocation] = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userSchool, setUserSchool] = useState<any>(null);
+  
+  const hasSuperAdminRole = (availableRoles || []).some(r => r.role.toLowerCase() === 'superadmin');
 
   const { data: notifications = [] } = useQuery<Notification[]>({
     queryKey: ['/api/notifications'],
@@ -320,6 +322,23 @@ export default function EducatorAppShell({ children }: EducatorAppShellProps) {
                           </SheetClose>
                         );
                       })}
+                      {hasSuperAdminRole && (
+                        <SheetClose asChild>
+                          <Link
+                            href="/superadmin"
+                            className={cn(
+                              "flex items-center gap-3 rounded-lg px-3 py-3 text-base font-medium transition-colors",
+                              location.startsWith('/superadmin')
+                                ? "bg-emerald-600 text-white"
+                                : "text-slate-300 hover:bg-slate-800 hover:text-white"
+                            )}
+                            data-testid="nav-mobile-superadmin"
+                          >
+                            <Shield className="h-5 w-5" />
+                            <span className="flex-1">Super Admin</span>
+                          </Link>
+                        </SheetClose>
+                      )}
                     </nav>
                   </ScrollArea>
 

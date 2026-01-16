@@ -227,7 +227,7 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
   const { user, isAuthenticated, signOut } = useAuth();
   const { activeRole, availableRoles } = useRole();
   
-  const hasSuperAdminRole = availableRoles.some(r => r.role.toLowerCase() === 'superadmin');
+  const hasSuperAdminRole = (availableRoles || []).some(r => r.role.toLowerCase() === 'superadmin');
 
   // Fetch school data for logo and name
   const { data: schoolData } = useQuery<SchoolData>({
