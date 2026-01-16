@@ -52,21 +52,41 @@ export const jwtCheck = async (req: any, res: Response, next: NextFunction) => {
 
     // Check for role override from role switcher
     const activeRoleHeader = req.headers['x-active-role'];
-    const multiRoleUsers = ['coreycreates@gmail.com', 'corey@americanseekersacademy.com'];
 
     // Use role from database if available, otherwise use user metadata, otherwise default
     let effectiveRole = dbUser?.role || user.user_metadata?.role || 'parent';
     
-    // Special handling for known superAdmin users
-    if (user.email === 'corey@americanseekersacademy.com') {
-      effectiveRole = 'superAdmin';
-      console.log('🔑 Forcing superAdmin role for:', user.email);
+    // Check user_roles table for superAdmin role (multi-role system)
+    // This is the source of truth for roles in the new system
+    let userRoles: string[] = [];
+    if (dbUser?.id) {
+      try {
+        const dbModule = await import('../db');
+        const schemaModule = await import('../../shared/schema');
+        const drizzleModule = await import('drizzle-orm');
+        
+        const rolesResult = await dbModule.db.select({
+          role: schemaModule.userRoles.role
+        }).from(schemaModule.userRoles).where(drizzleModule.eq(schemaModule.userRoles.userId, dbUser.id));
+        
+        userRoles = rolesResult.map((r: { role: string }) => r.role);
+        console.log('📋 User roles from user_roles table:', userRoles);
+        
+        // If user has superAdmin in their roles, set effectiveRole to superAdmin for API access
+        if (userRoles.some((r: string) => r.toLowerCase() === 'superadmin')) {
+          effectiveRole = 'superAdmin';
+          console.log('🔑 User has superAdmin role in user_roles table');
+        }
+      } catch (rolesError) {
+        console.error('❌ Failed to fetch user_roles:', rolesError);
+      }
     }
 
-    // Allow role switching for multi-role users
-    if (user.email && multiRoleUsers.includes(user.email) && activeRoleHeader) {
-      const allowedRoles = ['parent', 'schoolAdmin', 'superAdmin'];
-      if (allowedRoles.includes(activeRoleHeader as string)) {
+    // Allow role switching via header (for UI role switching)
+    if (activeRoleHeader && userRoles.length > 0) {
+      // Only allow switching to roles the user actually has
+      const hasRole = userRoles.some(r => r.toLowerCase() === (activeRoleHeader as string).toLowerCase());
+      if (hasRole) {
         effectiveRole = activeRoleHeader as string;
         console.log(`🔄 Role switched to: ${effectiveRole} for user: ${user.email}`);
       }
