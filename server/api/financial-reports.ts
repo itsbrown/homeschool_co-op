@@ -707,7 +707,7 @@ router.get('/ai-insights', async (req: any, res) => {
       })
       .from(scheduledPayments)
       .where(eq(scheduledPayments.schoolId, schoolId))
-      .groupBy(scheduledPayments.parentEmail, scheduledPayments.childName, scheduledPayments.className);
+      .groupBy(scheduledPayments.parentEmail);
 
     const totalPlans = paymentPlansResult.length;
     let avgProgress = 0;
