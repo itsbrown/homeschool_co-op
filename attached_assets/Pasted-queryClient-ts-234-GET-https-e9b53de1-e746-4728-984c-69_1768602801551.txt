@@ -1,0 +1,68 @@
+queryClient.ts:234  GET https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/api/notifications 403 (Forbidden)
+(anonymous) @ queryClient.ts:234
+fetchFn @ @tanstack_react-query.js?v=eaadf7f5:840
+run @ @tanstack_react-query.js?v=eaadf7f5:494
+start @ @tanstack_react-query.js?v=eaadf7f5:536
+fetch @ @tanstack_react-query.js?v=eaadf7f5:926
+executeFetch_fn @ @tanstack_react-query.js?v=eaadf7f5:2211
+setOptions @ @tanstack_react-query.js?v=eaadf7f5:1955
+(anonymous) @ @tanstack_react-query.js?v=eaadf7f5:3032
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=eaadf7f5:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=eaadf7f5:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=eaadf7f5:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=eaadf7f5:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=eaadf7f5:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=eaadf7f5:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=eaadf7f5:19447
+(anonymous) @ chunk-NFC5BX5N.js?v=eaadf7f5:19328
+workLoop @ chunk-NFC5BX5N.js?v=eaadf7f5:197
+flushWork @ chunk-NFC5BX5N.js?v=eaadf7f5:176
+performWorkUntilDeadline @ chunk-NFC5BX5N.js?v=eaadf7f5:384Understand this error
+RoleContext.tsx:67  GET https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/api/user/roles 403 (Forbidden)
+queryFn @ RoleContext.tsx:67
+fetchFn @ @tanstack_react-query.js?v=eaadf7f5:840
+run @ @tanstack_react-query.js?v=eaadf7f5:494
+start @ @tanstack_react-query.js?v=eaadf7f5:536
+fetch @ @tanstack_react-query.js?v=eaadf7f5:926
+executeFetch_fn @ @tanstack_react-query.js?v=eaadf7f5:2211
+setOptions @ @tanstack_react-query.js?v=eaadf7f5:1955
+(anonymous) @ @tanstack_react-query.js?v=eaadf7f5:3032
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=eaadf7f5:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=eaadf7f5:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=eaadf7f5:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=eaadf7f5:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=eaadf7f5:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=eaadf7f5:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=eaadf7f5:19447
+(anonymous) @ chunk-NFC5BX5N.js?v=eaadf7f5:19328
+workLoop @ chunk-NFC5BX5N.js?v=eaadf7f5:197
+flushWork @ chunk-NFC5BX5N.js?v=eaadf7f5:176
+performWorkUntilDeadline @ chunk-NFC5BX5N.js?v=eaadf7f5:384Understand this error
+RoleContext.tsx:65 🔍 Fetching user roles from database...
+RoleContext.tsx:67  GET https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/api/user/roles 403 (Forbidden)
+queryFn @ RoleContext.tsx:67
+fetchFn @ @tanstack_react-query.js?v=eaadf7f5:840
+run @ @tanstack_react-query.js?v=eaadf7f5:494
+(anonymous) @ @tanstack_react-query.js?v=eaadf7f5:519
+Promise.then
+(anonymous) @ @tanstack_react-query.js?v=eaadf7f5:515
+Promise.catch
+run @ @tanstack_react-query.js?v=eaadf7f5:498
+start @ @tanstack_react-query.js?v=eaadf7f5:536
+fetch @ @tanstack_react-query.js?v=eaadf7f5:926
+executeFetch_fn @ @tanstack_react-query.js?v=eaadf7f5:2211
+setOptions @ @tanstack_react-query.js?v=eaadf7f5:1955
+(anonymous) @ @tanstack_react-query.js?v=eaadf7f5:3032
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=eaadf7f5:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=eaadf7f5:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=eaadf7f5:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=eaadf7f5:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=eaadf7f5:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=eaadf7f5:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=eaadf7f5:19447
+(anonymous) @ chunk-NFC5BX5N.js?v=eaadf7f5:19328
+workLoop @ chunk-NFC5BX5N.js?v=eaadf7f5:197
+flushWork @ chunk-NFC5BX5N.js?v=eaadf7f5:176
+performWorkUntilDeadline @ chunk-NFC5BX5N.js?v=eaadf7f5:384Understand this error
+RoleContext.tsx:65 🔍 Fetching user roles from database...
+RoleContext.tsx:67  GET https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/api/user/roles 403 (Forbidden)
