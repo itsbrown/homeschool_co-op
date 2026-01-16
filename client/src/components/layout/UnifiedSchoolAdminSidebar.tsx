@@ -225,7 +225,9 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
   const [logoLoadFailed, setLogoLoadFailed] = useState(false);
   const [mobileLogoLoadFailed, setMobileLogoLoadFailed] = useState(false);
   const { user, isAuthenticated, signOut } = useAuth();
-  const { activeRole } = useRole();
+  const { activeRole, availableRoles } = useRole();
+  
+  const hasSuperAdminRole = availableRoles.some(r => r.role.toLowerCase() === 'superadmin');
 
   // Fetch school data for logo and name
   const { data: schoolData } = useQuery<SchoolData>({
@@ -386,6 +388,23 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
                 </Link>
               );
             })}
+            {hasSuperAdminRole && (
+              <Link href="/superadmin">
+                <div
+                  className={cn(
+                    "flex items-center gap-3 rounded-lg px-3 py-2 transition-all cursor-pointer",
+                    location.startsWith('/superadmin')
+                      ? "bg-blue-600 text-white" 
+                      : "text-gray-700 hover:bg-gray-100",
+                    isCollapsed ? "justify-center" : "justify-start"
+                  )}
+                  data-testid="nav-superadmin"
+                >
+                  <Shield className="h-5 w-5" />
+                  {!isCollapsed && <span className="font-medium">Super Admin</span>}
+                </div>
+              </Link>
+            )}
           </nav>
         </div>
         
@@ -492,6 +511,23 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
                       </Link>
                     );
                   })}
+                  {hasSuperAdminRole && (
+                    <Link href="/superadmin">
+                      <div
+                        className={cn(
+                          "flex items-center gap-3 rounded-lg px-3 py-2 transition-all cursor-pointer",
+                          location.startsWith('/superadmin')
+                            ? "bg-blue-600 text-white" 
+                            : "text-gray-700 hover:bg-gray-100"
+                        )}
+                        onClick={closeMobileMenu}
+                        data-testid="mobile-nav-superadmin"
+                      >
+                        <Shield className="h-5 w-5" />
+                        <span className="font-medium">Super Admin</span>
+                      </div>
+                    </Link>
+                  )}
                 </nav>
               </div>
               

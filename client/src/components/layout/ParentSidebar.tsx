@@ -17,6 +17,7 @@ import {
   Brain,
   Bell,
   FolderOpen,
+  Shield,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -128,7 +129,9 @@ export function SidebarNav({ className, items, expandedSections, onToggleExpande
 
 export default function ParentSidebar() {
   const { user, signOut } = useAuth();
-  const { activeRole } = useRole();
+  const { activeRole, availableRoles } = useRole();
+  
+  const hasSuperAdminRole = availableRoles.some(r => r.role.toLowerCase() === 'superadmin');
   const [isOpen, setIsOpen] = React.useState(false);
   const [location, setLocation] = useLocation();
   const [expandedSections, setExpandedSections] = React.useState<{ [key: string]: boolean }>({});
@@ -244,6 +247,11 @@ export default function ParentSidebar() {
       title: "Settings",
       icon: <Settings className="h-5 w-5" />,
     },
+    ...(hasSuperAdminRole ? [{
+      href: "/superadmin",
+      title: "Super Admin",
+      icon: <Shield className="h-5 w-5" />,
+    }] : []),
   ];
 
   return (

@@ -5,7 +5,7 @@ import RoleSwitcher from "@/components/RoleSwitcher.tsx";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetTrigger, SheetClose } from "@/components/ui/sheet";
-import { LogOut, Menu, User, Bell, Home, BookOpen, Calendar, Clock, Users, Settings, GraduationCap, PlayCircle } from "lucide-react";
+import { LogOut, Menu, User, Bell, Home, BookOpen, Calendar, Clock, Users, Settings, GraduationCap, PlayCircle, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { Link, useLocation } from "wouter";
@@ -62,8 +62,10 @@ const educatorNavigationItems = [
 function EducatorSidebar() {
   const [location] = useLocation();
   const { user, signOut } = useAuth();
-  const { activeRole } = useRole();
+  const { activeRole, availableRoles } = useRole();
   const [userSchool, setUserSchool] = useState<any>(null);
+  
+  const hasSuperAdminRole = availableRoles.some(r => r.role.toLowerCase() === 'superadmin');
 
   const { data: notifications = [] } = useQuery<Notification[]>({
     queryKey: ['/api/notifications'],
@@ -158,6 +160,21 @@ function EducatorSidebar() {
               </Link>
             );
           })}
+          {hasSuperAdminRole && (
+            <Link
+              href="/superadmin"
+              className={cn(
+                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                location.startsWith('/superadmin')
+                  ? "bg-emerald-600 text-white"
+                  : "text-slate-300 hover:bg-slate-800 hover:text-white"
+              )}
+              data-testid="nav-educator-superadmin"
+            >
+              <Shield className="h-5 w-5" />
+              <span className="flex-1">Super Admin</span>
+            </Link>
+          )}
         </nav>
       </ScrollArea>
 
