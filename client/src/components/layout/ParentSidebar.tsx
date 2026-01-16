@@ -248,7 +248,7 @@ export default function ParentSidebar() {
       icon: <Settings className="h-5 w-5" />,
     },
     ...(hasSuperAdminRole ? [{
-      href: "/superadmin",
+      href: "/superadmin/schools",
       title: "Super Admin",
       icon: <Shield className="h-5 w-5" />,
     }] : []),

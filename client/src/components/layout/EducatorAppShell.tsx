@@ -162,7 +162,7 @@ function EducatorSidebar() {
           })}
           {hasSuperAdminRole && (
             <Link
-              href="/superadmin"
+              href="/superadmin/schools"
               className={cn(
                 "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
                 location.startsWith('/superadmin')
@@ -325,7 +325,7 @@ export default function EducatorAppShell({ children }: EducatorAppShellProps) {
                       {hasSuperAdminRole && (
                         <SheetClose asChild>
                           <Link
-                            href="/superadmin"
+                            href="/superadmin/schools"
                             className={cn(
                               "flex items-center gap-3 rounded-lg px-3 py-3 text-base font-medium transition-colors",
                               location.startsWith('/superadmin')

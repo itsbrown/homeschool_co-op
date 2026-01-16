@@ -389,7 +389,7 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
               );
             })}
             {hasSuperAdminRole && (
-              <Link href="/superadmin">
+              <Link href="/superadmin/schools">
                 <div
                   className={cn(
                     "flex items-center gap-3 rounded-lg px-3 py-2 transition-all cursor-pointer",
@@ -512,7 +512,7 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
                     );
                   })}
                   {hasSuperAdminRole && (
-                    <Link href="/superadmin">
+                    <Link href="/superadmin/schools">
                       <div
                         className={cn(
                           "flex items-center gap-3 rounded-lg px-3 py-2 transition-all cursor-pointer",
