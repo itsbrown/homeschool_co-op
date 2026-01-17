@@ -1352,6 +1352,198 @@ Thank you for choosing ${schoolName}!
   }
 }
 
+// ============================================================================
+// CONSOLIDATED PAYMENT SUMMARY REMINDER
+// ============================================================================
+
+interface ConsolidatedPaymentReminderData {
+  parentEmail: string;
+  parentName: string;
+  schoolName: string;
+  totalAmountCents: number;
+  payments: Array<{
+    childName: string;
+    className: string;
+    amountCents: number;
+    dueDate: Date;
+    isOverdue: boolean;
+    daysOverdue: number;
+  }>;
+  overdueCount: number;
+  overdueAmountCents: number;
+}
+
+export async function sendConsolidatedPaymentReminder(data: ConsolidatedPaymentReminderData): Promise<boolean> {
+  try {
+    if (!apiInstance) {
+      console.log('📧 Brevo not configured, skipping consolidated payment reminder email');
+      return true;
+    }
+
+    const {
+      parentEmail,
+      parentName,
+      schoolName,
+      totalAmountCents,
+      payments,
+      overdueCount,
+      overdueAmountCents
+    } = data;
+
+    const formatCurrency = (cents: number) => {
+      return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+      }).format(cents / 100);
+    };
+
+    const formatDate = (date: Date) => {
+      return new Intl.DateTimeFormat('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      }).format(date);
+    };
+
+    const paymentUrl = `${process.env.APP_URL || 'https://app.americanseekersacademy.com'}/billing`;
+    const hasOverdue = overdueCount > 0;
+
+    const subjectLine = hasOverdue
+      ? `Action Required: ${overdueCount} Overdue Payment${overdueCount > 1 ? 's' : ''} - ${formatCurrency(totalAmountCents)} Total Due`
+      : `Payment Summary: ${formatCurrency(totalAmountCents)} Total Due`;
+
+    const paymentRows = payments.map(p => `
+      <tr style="border-bottom: 1px solid #E5E7EB;">
+        <td style="padding: 12px 8px;">${p.childName}</td>
+        <td style="padding: 12px 8px;">${p.className}</td>
+        <td style="padding: 12px 8px;">${formatDate(p.dueDate)}</td>
+        <td style="padding: 12px 8px; text-align: right; font-weight: 500;">${formatCurrency(p.amountCents)}</td>
+        <td style="padding: 12px 8px; text-align: center;">
+          ${p.isOverdue 
+            ? `<span style="background-color: #FEE2E2; color: #991B1B; padding: 2px 8px; border-radius: 4px; font-size: 12px;">${p.daysOverdue}d overdue</span>` 
+            : `<span style="background-color: #FEF3C7; color: #92400E; padding: 2px 8px; border-radius: 4px; font-size: 12px;">Pending</span>`}
+        </td>
+      </tr>
+    `).join('');
+
+    const paymentTextRows = payments.map(p => 
+      `- ${p.childName} | ${p.className} | Due: ${formatDate(p.dueDate)} | ${formatCurrency(p.amountCents)} ${p.isOverdue ? `(${p.daysOverdue} days overdue)` : ''}`
+    ).join('\n');
+
+    const htmlContent = `
+      <html>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 650px; margin: 0 auto;">
+          <div style="background-color: ${hasOverdue ? '#DC2626' : '#4F46E5'}; padding: 24px; text-align: center;">
+            <h1 style="color: white; margin: 0;">Payment Summary</h1>
+            <p style="color: ${hasOverdue ? '#FEE2E2' : '#E0E7FF'}; margin: 8px 0 0 0;">${schoolName}</p>
+          </div>
+          
+          <div style="padding: 24px;">
+            <p>Hello ${parentName},</p>
+            
+            <p>This is a consolidated summary of your outstanding payments at ${schoolName}.</p>
+            
+            <div style="background-color: ${hasOverdue ? '#FEF2F2' : '#EFF6FF'}; border-left: 4px solid ${hasOverdue ? '#DC2626' : '#3B82F6'}; padding: 16px; border-radius: 0 8px 8px 0; margin: 24px 0;">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                  <p style="margin: 0; font-size: 14px; color: #6B7280;">Total Amount Due</p>
+                  <p style="margin: 4px 0 0 0; font-size: 24px; font-weight: bold; color: ${hasOverdue ? '#DC2626' : '#4F46E5'};">${formatCurrency(totalAmountCents)}</p>
+                </div>
+                <div style="text-align: right;">
+                  <p style="margin: 0; font-size: 14px; color: #6B7280;">${payments.length} Payment${payments.length > 1 ? 's' : ''}</p>
+                  ${hasOverdue ? `<p style="margin: 4px 0 0 0; font-size: 14px; color: #DC2626; font-weight: bold;">${overdueCount} Overdue</p>` : ''}
+                </div>
+              </div>
+            </div>
+            
+            <h3 style="margin: 24px 0 16px 0; color: #374151;">Payment Details</h3>
+            <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+              <thead>
+                <tr style="background-color: #F3F4F6;">
+                  <th style="padding: 12px 8px; text-align: left; font-weight: 600;">Child</th>
+                  <th style="padding: 12px 8px; text-align: left; font-weight: 600;">Class</th>
+                  <th style="padding: 12px 8px; text-align: left; font-weight: 600;">Due Date</th>
+                  <th style="padding: 12px 8px; text-align: right; font-weight: 600;">Amount</th>
+                  <th style="padding: 12px 8px; text-align: center; font-weight: 600;">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${paymentRows}
+              </tbody>
+              <tfoot>
+                <tr style="background-color: #F9FAFB;">
+                  <td colspan="3" style="padding: 12px 8px; font-weight: bold;">Total</td>
+                  <td style="padding: 12px 8px; text-align: right; font-weight: bold; font-size: 16px; color: ${hasOverdue ? '#DC2626' : '#4F46E5'};">${formatCurrency(totalAmountCents)}</td>
+                  <td></td>
+                </tr>
+              </tfoot>
+            </table>
+            
+            <div style="text-align: center; margin: 32px 0;">
+              <a href="${paymentUrl}" 
+                 style="background-color: ${hasOverdue ? '#DC2626' : '#4F46E5'}; color: white; padding: 14px 32px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold;">
+                 View & Pay Now
+              </a>
+            </div>
+            
+            <p style="color: #6B7280; font-size: 14px;">
+              If you have any questions about these payments or need assistance, please contact us at 
+              <a href="mailto:support@americanseekersacademy.com" style="color: #4F46E5;">support@americanseekersacademy.com</a>
+            </p>
+            
+            <div style="margin-top: 32px; text-align: center; color: #6B7280; font-size: 14px;">
+              <p>Thank you for choosing ${schoolName}!</p>
+              <p style="margin-top: 16px; font-size: 12px;">
+                © 2025 ${schoolName}. All rights reserved.
+              </p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    const textContent = `
+Payment Summary - ${schoolName}
+
+Hello ${parentName},
+
+This is a consolidated summary of your outstanding payments at ${schoolName}.
+
+Total Amount Due: ${formatCurrency(totalAmountCents)}
+Number of Payments: ${payments.length}
+${hasOverdue ? `Overdue Payments: ${overdueCount} (${formatCurrency(overdueAmountCents)})` : ''}
+
+Payment Details:
+${paymentTextRows}
+
+View and pay your balance at: ${paymentUrl}
+
+If you have any questions, please contact us at support@americanseekersacademy.com
+
+Thank you for choosing ${schoolName}!
+    `;
+
+    const sendSmtpEmail = new brevo.SendSmtpEmail();
+    sendSmtpEmail.to = [{ email: parentEmail }];
+    sendSmtpEmail.sender = { 
+      email: process.env.BREVO_SENDER_EMAIL || 'contact@americanseekersacademy.com', 
+      name: schoolName
+    };
+    sendSmtpEmail.subject = subjectLine;
+    sendSmtpEmail.htmlContent = htmlContent;
+    sendSmtpEmail.textContent = textContent;
+
+    const result = await apiInstance.sendTransacEmail(sendSmtpEmail);
+    
+    console.log('✅ Consolidated payment reminder sent successfully to:', parentEmail);
+    console.log('📧 Brevo Message ID:', result.body.messageId);
+    return true;
+  } catch (error: any) {
+    console.error('❌ Failed to send consolidated payment reminder:', error.message || error);
+    return false;
+  }
+}
+
 interface OverduePaymentNoticeData {
   parentEmail: string;
   childName: string;

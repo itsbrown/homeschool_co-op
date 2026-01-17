@@ -943,4 +943,153 @@ router.post('/send-reminder', async (req: any, res) => {
   }
 });
 
+// Send a consolidated summary reminder for all payments from a parent
+router.post('/send-summary-reminder', async (req: any, res) => {
+  try {
+    const result = await getSchoolAdminWithFeatureCheck(req, 'financialReports');
+    if (isError(result)) {
+      return res.status(result.status).json({ error: result.error });
+    }
+    const { user, schoolId } = result;
+
+    const { parentEmail } = req.body;
+    if (!parentEmail) {
+      return res.status(400).json({ error: 'parentEmail is required' });
+    }
+
+    const db = await getDb();
+
+    // Security: Get all pending payments for this parent within THIS school only
+    // The schoolId filter ensures we only return payments belonging to the admin's school,
+    // preventing cross-tenant data leakage. Even if an admin provides an email from
+    // another school, no data will be returned since payments are scoped by schoolId.
+    const outstandingPayments = await db
+      .select({
+        id: scheduledPayments.id,
+        enrollmentId: scheduledPayments.enrollmentId,
+        parentId: scheduledPayments.parentId,
+        parentEmail: scheduledPayments.parentEmail,
+        amount: scheduledPayments.amount,
+        scheduledDate: scheduledPayments.scheduledDate,
+      })
+      .from(scheduledPayments)
+      .where(
+        and(
+          eq(scheduledPayments.schoolId, schoolId),
+          eq(scheduledPayments.parentEmail, parentEmail),
+          eq(scheduledPayments.status, 'pending')
+        )
+      )
+      .orderBy(scheduledPayments.scheduledDate);
+
+    if (outstandingPayments.length === 0) {
+      return res.status(404).json({ error: 'No outstanding payments found for this parent' });
+    }
+
+    // Get school name
+    const school = await storage.getSchool(schoolId);
+    const schoolName = school?.name || 'School';
+
+    // Get parent name
+    const parent = await storage.getUserByEmail(parentEmail);
+    const parentName = parent?.name || parentEmail.split('@')[0];
+
+    // Enrich payments with enrollment details
+    const now = new Date();
+    const paymentDetails = await Promise.all(
+      outstandingPayments.map(async (payment) => {
+        let childName = 'Student';
+        let className = 'Class';
+
+        if (payment.enrollmentId) {
+          const enrollment = await storage.getProgramEnrollmentById(payment.enrollmentId);
+          if (enrollment) {
+            childName = enrollment.childName || 'Student';
+            className = enrollment.className || 'Class';
+          }
+        }
+
+        const isOverdue = new Date(payment.scheduledDate) < now;
+        const daysOverdue = isOverdue 
+          ? Math.floor((now.getTime() - new Date(payment.scheduledDate).getTime()) / (1000 * 60 * 60 * 24))
+          : 0;
+
+        return {
+          childName,
+          className,
+          amountCents: payment.amount,
+          dueDate: new Date(payment.scheduledDate),
+          isOverdue,
+          daysOverdue,
+        };
+      })
+    );
+
+    const totalAmountCents = paymentDetails.reduce((sum, p) => sum + p.amountCents, 0);
+    const overduePayments = paymentDetails.filter(p => p.isOverdue);
+    const overdueCount = overduePayments.length;
+    const overdueAmountCents = overduePayments.reduce((sum, p) => sum + p.amountCents, 0);
+
+    // Import email service dynamically
+    const { sendConsolidatedPaymentReminder } = await import('../lib/email-service');
+
+    try {
+      await sendConsolidatedPaymentReminder({
+        parentEmail,
+        parentName,
+        schoolName,
+        totalAmountCents,
+        payments: paymentDetails,
+        overdueCount,
+        overdueAmountCents,
+      });
+
+      // Log the summary reminder
+      await storage.createPaymentReminderLog({
+        schoolId,
+        scheduledPaymentId: null, // Summary covers multiple payments
+        parentEmail,
+        parentName,
+        childName: `${outstandingPayments.length} children`,
+        className: `${outstandingPayments.length} payments`,
+        amountCents: totalAmountCents,
+        reminderType: 'summary',
+        status: 'sent',
+        isManual: true,
+        sentBy: user.id,
+        errorMessage: null
+      });
+
+      console.log(`✅ Summary reminder sent to ${parentEmail} for ${outstandingPayments.length} payments`);
+      res.json({ success: true, message: 'Summary reminder sent successfully', paymentCount: outstandingPayments.length });
+
+    } catch (emailError) {
+      const errorMessage = emailError instanceof Error ? emailError.message : String(emailError);
+      
+      // Log the failed attempt
+      await storage.createPaymentReminderLog({
+        schoolId,
+        scheduledPaymentId: null,
+        parentEmail,
+        parentName,
+        childName: `${outstandingPayments.length} children`,
+        className: `${outstandingPayments.length} payments`,
+        amountCents: totalAmountCents,
+        reminderType: 'summary',
+        status: 'failed',
+        isManual: true,
+        sentBy: user.id,
+        errorMessage
+      });
+
+      console.error(`❌ Failed to send summary reminder:`, errorMessage);
+      res.status(500).json({ error: 'Failed to send summary reminder', message: errorMessage });
+    }
+
+  } catch (error) {
+    console.error('Error sending summary reminder:', error);
+    res.status(500).json({ error: 'Failed to send summary reminder' });
+  }
+});
+
 export default router;

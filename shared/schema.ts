@@ -3166,7 +3166,7 @@ export const paymentReminderLogs = pgTable("payment_reminder_logs", {
   className: text("class_name"),
   amountCents: integer("amount_cents"),
   reminderType: text("reminder_type", {
-    enum: ["7_days_before", "3_days_before", "1_day_before", "due_today", "1_day_overdue", "7_days_overdue", "manual"]
+    enum: ["7_days_before", "3_days_before", "1_day_before", "due_today", "1_day_overdue", "7_days_overdue", "manual", "summary"]
   }).notNull(),
   status: text("status", {
     enum: ["sent", "failed", "pending"]

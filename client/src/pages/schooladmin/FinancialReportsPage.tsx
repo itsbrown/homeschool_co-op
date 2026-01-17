@@ -152,6 +152,7 @@ interface ReminderLog {
 interface GroupedBalance {
   parentEmail: string;
   parentName: string;
+  parentPhone: string | null;
   totalAmount: number;
   balanceCount: number;
   oldestOverdue: number;
@@ -245,6 +246,7 @@ export default function FinancialReportsPage() {
   const [activeTab, setActiveTab] = useState('overview');
   const [groupByParent, setGroupByParent] = useState(false);
   const [sendingReminderId, setSendingReminderId] = useState<number | null>(null);
+  const [sendingSummaryEmail, setSendingSummaryEmail] = useState<string | null>(null);
   const { toast } = useToast();
 
   const { data: summaryData, isLoading: summaryLoading, error: summaryError } = useQuery<{ summary: FinancialSummary }>({
@@ -308,6 +310,37 @@ export default function FinancialReportsPage() {
     sendReminderMutation.mutate(scheduledPaymentId);
   };
 
+  const sendSummaryMutation = useMutation({
+    mutationFn: async (parentEmail: string) => {
+      const response = await apiRequest('POST', '/api/admin/financial-reports/send-summary-reminder', {
+        parentEmail
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: 'Summary reminder sent',
+        description: 'Consolidated payment reminder has been sent successfully.',
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/financial-reports/reminder-history'] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Failed to send summary',
+        description: error.message || 'An error occurred while sending the summary reminder.',
+        variant: 'destructive',
+      });
+    },
+    onSettled: () => {
+      setSendingSummaryEmail(null);
+    }
+  });
+
+  const handleSendSummaryReminder = (parentEmail: string) => {
+    setSendingSummaryEmail(parentEmail);
+    sendSummaryMutation.mutate(parentEmail);
+  };
+
   if (summaryError && (summaryError as any)?.message?.includes('not enabled')) {
     return <FeatureDisabledState />;
   }
@@ -334,6 +367,7 @@ export default function FinancialReportsPage() {
       groups.push({
         parentEmail: balance.parentEmail,
         parentName: balance.parent?.name || balance.parentEmail,
+        parentPhone: balance.parent?.phone || null,
         totalAmount: balance.amount,
         balanceCount: 1,
         oldestOverdue: balance.isOverdue ? balance.daysOverdue : 0,
@@ -701,10 +735,29 @@ export default function FinancialReportsPage() {
                                 <div>
                                   <p className="font-medium">{group.parentName}</p>
                                   <p className="text-sm text-muted-foreground">{group.parentEmail}</p>
+                                  {group.parentPhone && (
+                                    <p className="text-sm text-muted-foreground">{group.parentPhone}</p>
+                                  )}
                                 </div>
-                                <div className="text-right">
-                                  <p className="font-semibold">{formatCurrency(group.totalAmount)}</p>
-                                  <p className="text-sm text-muted-foreground">{group.balanceCount} payment{group.balanceCount > 1 ? 's' : ''}</p>
+                                <div className="flex items-center gap-4">
+                                  <div className="text-right">
+                                    <p className="font-semibold">{formatCurrency(group.totalAmount)}</p>
+                                    <p className="text-sm text-muted-foreground">{group.balanceCount} payment{group.balanceCount > 1 ? 's' : ''}</p>
+                                  </div>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleSendSummaryReminder(group.parentEmail)}
+                                    disabled={sendingSummaryEmail === group.parentEmail}
+                                    title="Send consolidated reminder for all payments"
+                                  >
+                                    {sendingSummaryEmail === group.parentEmail ? (
+                                      <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                                    ) : (
+                                      <Mail className="h-4 w-4 mr-1" />
+                                    )}
+                                    Send Summary
+                                  </Button>
                                 </div>
                               </div>
                               {group.hasOverdue && (
@@ -751,6 +804,7 @@ export default function FinancialReportsPage() {
                             <TableRow>
                               <TableHead>Due Date</TableHead>
                               <TableHead>Family</TableHead>
+                              <TableHead>Phone</TableHead>
                               <TableHead>Student</TableHead>
                               <TableHead>Class</TableHead>
                               <TableHead>Amount</TableHead>
@@ -763,6 +817,7 @@ export default function FinancialReportsPage() {
                               <TableRow key={balance.id}>
                                 <TableCell>{format(new Date(balance.scheduledDate), 'MMM d, yyyy')}</TableCell>
                                 <TableCell>{balance.parent?.name || balance.parentEmail}</TableCell>
+                                <TableCell className="text-muted-foreground">{balance.parent?.phone || '-'}</TableCell>
                                 <TableCell>{balance.enrollment?.childName || 'N/A'}</TableCell>
                                 <TableCell>{balance.enrollment?.className || 'N/A'}</TableCell>
                                 <TableCell>{formatCurrency(balance.amount)}</TableCell>
