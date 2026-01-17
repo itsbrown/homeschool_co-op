@@ -233,6 +233,57 @@ export async function processPayment(
             newPaid,
             newBalance,
           });
+
+          // Step 7.5: Sync scheduled_payments - mark pending payments as 'completed' to match new enrollment totalPaid
+          // We compare the newPaid amount to cumulative scheduled payments (including already completed) to determine which should be completed
+          try {
+            const enrollmentScheduledPayments = await storage.getScheduledPaymentsByEnrollmentId(enrollment.id);
+            // Sort all payments chronologically by date, then by installment number
+            const sortedPayments = enrollmentScheduledPayments
+              .sort((a, b) => {
+                const dateCompare = new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime();
+                return dateCompare !== 0 ? dateCompare : (a.installmentNumber || 0) - (b.installmentNumber || 0);
+              });
+            
+            // Calculate cumulative amounts INCLUDING already-completed installments
+            // This ensures we only mark pending installments as completed when the cumulative total is covered
+            let cumulativeAmount = 0;
+            let paymentsMarked = 0;
+            
+            for (const sp of sortedPayments) {
+              // Skip cancelled/skipped payments - they don't count toward cumulative
+              if (sp.status === 'cancelled' || sp.status === 'skipped') {
+                continue;
+              }
+              
+              // Add this installment's amount to cumulative total (whether completed or pending)
+              cumulativeAmount += sp.amount;
+              
+              // Skip already completed payments - but their amount is already added above
+              if (sp.status === 'completed') {
+                continue;
+              }
+              
+              // For pending/failed payments: mark as completed if cumulative is covered by totalPaid
+              if (cumulativeAmount <= newPaid) {
+                await storage.updateScheduledPayment(sp.id, {
+                  status: 'completed',
+                  processedAt: new Date(),
+                });
+                paymentsMarked++;
+              } else {
+                // Once cumulative exceeds paid amount, stop processing
+                // Note: We continue adding to cumulative for tracking, but don't mark more as completed
+                break;
+              }
+            }
+            
+            if (paymentsMarked > 0) {
+              console.log(`✅ PaymentProcessor: Synced ${paymentsMarked} scheduled_payment(s) to 'completed' for enrollment ${enrollment.id} (totalPaid: ${newPaid})`);
+            }
+          } catch (syncErr) {
+            console.error(`⚠️ PaymentProcessor: Failed to sync scheduled_payments for enrollment ${enrollment.id}`, syncErr);
+          }
         }
       } catch (err) {
         console.error(`❌ PaymentProcessor: Failed to update enrollment ${allocation.enrollmentId}`, err);

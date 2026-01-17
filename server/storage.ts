@@ -383,6 +383,7 @@ export interface IStorage {
   getScheduledPaymentsByParentEmail(parentEmail: string): Promise<any[]>;
   getScheduledPaymentsByEnrollmentId(enrollmentId: number): Promise<any[]>;
   getAllScheduledPayments(): Promise<any[]>;
+  updateScheduledPayment(id: number, payment: Partial<InsertScheduledPayment>): Promise<any | undefined>;
   updateScheduledPaymentStatus(id: number, status: string): Promise<any | undefined>;
   updateScheduledPaymentReminderCount(id: number, count: number): Promise<any | undefined>;
 
@@ -6627,6 +6628,24 @@ import { DatabaseStorage } from "./dbStorage";
           }
         } catch (error) {
           return await this.memStorage.updateScheduledPaymentStatus(id, status);
+        }
+      }
+
+      async updateScheduledPayment(id: number, payment: Partial<InsertScheduledPayment>): Promise<ScheduledPayment | undefined> {
+        try {
+          if (this.dbStorage && typeof this.dbStorage.updateScheduledPayment === 'function') {
+            return await this.dbStorage.updateScheduledPayment(id, payment);
+          } else {
+            // Fallback: use memStorage status update if status is provided
+            if (payment.status) {
+              return await this.memStorage.updateScheduledPaymentStatus(id, payment.status as any);
+            }
+            console.warn('updateScheduledPayment fallback: DB unavailable and no status in payload');
+            return undefined;
+          }
+        } catch (error) {
+          console.error('Failed to update scheduled payment:', error);
+          return undefined;
         }
       }
 

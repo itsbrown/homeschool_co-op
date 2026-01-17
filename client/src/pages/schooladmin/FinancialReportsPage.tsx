@@ -341,41 +341,6 @@ export default function FinancialReportsPage() {
     sendSummaryMutation.mutate(parentEmail);
   };
 
-  const [isReconciling, setIsReconciling] = useState(false);
-
-  const reconcileMutation = useMutation({
-    mutationFn: async () => {
-      const response = await apiRequest('POST', '/api/admin/financial-reports/reconcile-scheduled-payments', {});
-      return response.json();
-    },
-    onSuccess: (data) => {
-      const count = data.summary?.paymentsMarkedPaid || 0;
-      toast({
-        title: 'Data reconciled',
-        description: count > 0 
-          ? `Fixed ${count} scheduled payment(s) to match enrollment balances.`
-          : 'All scheduled payments already match enrollment balances.',
-      });
-      queryClient.invalidateQueries({ queryKey: ['/api/admin/financial-reports/outstanding-balances'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/admin/financial-reports/summary'] });
-    },
-    onError: (error: any) => {
-      toast({
-        title: 'Reconciliation failed',
-        description: error.message || 'An error occurred while reconciling data.',
-        variant: 'destructive',
-      });
-    },
-    onSettled: () => {
-      setIsReconciling(false);
-    }
-  });
-
-  const handleReconcile = () => {
-    setIsReconciling(true);
-    reconcileMutation.mutate();
-  };
-
   if (summaryError && (summaryError as any)?.message?.includes('not enabled')) {
     return <FeatureDisabledState />;
   }
@@ -743,32 +708,16 @@ export default function FinancialReportsPage() {
                         <CardTitle>Outstanding Balances</CardTitle>
                         <CardDescription>Pending payments due from families</CardDescription>
                       </div>
-                      <div className="flex items-center space-x-4">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={handleReconcile}
-                          disabled={isReconciling}
-                          title="Sync scheduled payments with enrollment balances"
-                        >
-                          {isReconciling ? (
-                            <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                          ) : (
-                            <RefreshCw className="h-4 w-4 mr-1" />
-                          )}
-                          Reconcile Data
-                        </Button>
-                        <div className="flex items-center space-x-2">
-                          <Switch
-                            id="group-by-parent"
-                            checked={groupByParent}
-                            onCheckedChange={setGroupByParent}
-                          />
-                          <Label htmlFor="group-by-parent" className="text-sm cursor-pointer">
-                            <Users className="h-4 w-4 inline mr-1" />
-                            Group by Parent
-                          </Label>
-                        </div>
+                      <div className="flex items-center space-x-2">
+                        <Switch
+                          id="group-by-parent"
+                          checked={groupByParent}
+                          onCheckedChange={setGroupByParent}
+                        />
+                        <Label htmlFor="group-by-parent" className="text-sm cursor-pointer">
+                          <Users className="h-4 w-4 inline mr-1" />
+                          Group by Parent
+                        </Label>
                       </div>
                     </div>
                   </CardHeader>
