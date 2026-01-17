@@ -46,6 +46,29 @@ The platform prioritizes scalability, security, and user experience, incorporati
 -   **Unified Credit System**: Extensible multi-type credit system supporting volunteer, referral, achievement, marketing, and manual credits, with admin approval, FIFO consumption, and an expiration service.
 -   **Fundraiser System**: Complete fundraiser management for schools to run product-based campaigns, including database schema, school admin UI, public storefront, parent dashboard, and credit integration.
 -   **Refund Management System**: Comprehensive refund processing with pro-rated calculator, structured reason codes, refund history page, analytics dashboard, and policy display on checkout.
+-   **Payment Reminder Tracking System**: Comprehensive audit logging for all payment reminders (automatic and manual) with school admin visibility, manual reminder send capabilities, and "Group by Parent" view.
+
+### Payment Reminder Tracking System
+Complete payment reminder audit logging and manual send capabilities for school administrators:
+
+**Database Schema:**
+-   `payment_reminder_logs` table tracks all reminders with: schoolId, scheduledPaymentId, parentEmail, parentName, childName, className, amountCents, reminderType, status, isManual, sentBy, errorMessage, sentAt
+
+**Reminder Types:**
+-   `7_days_before`, `3_days_before`, `1_day_before`, `due_today`, `1_day_overdue`, `7_days_overdue`, `manual`
+
+**Components:**
+-   Reminders tab in `FinancialReportsPage` - View all sent/failed reminders with status badges
+-   "Send Reminder" button on Outstanding Balances rows - Manual reminder with loading state
+-   "Group by Parent" toggle - Consolidates balances by parent email
+
+**API Endpoints:**
+-   `GET /api/admin/financial-reports/reminder-history` - Fetch reminder logs for school
+-   `POST /api/admin/financial-reports/send-reminder` - Send manual reminder with school ownership validation
+
+**Security:**
+-   All endpoints use `getSchoolAdminWithFeatureCheck` for auth + feature gating
+-   Manual reminders validate scheduled payment belongs to admin's school via enrollment.schoolId
 
 ### Refund System
 Complete refund management for school administrators:
