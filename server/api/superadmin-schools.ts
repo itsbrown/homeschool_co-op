@@ -1,12 +1,11 @@
 import { Request, Response } from 'express';
 import { storage } from '../storage.ts';
-import { schoolStorage } from '../school-storage.ts';
 
 export const getSuperAdminSchools = async (req: Request, res: Response) => {
   try {
     
-    // Get all schools from school storage
-    const schools = schoolStorage.getAllSchools();
+    // Get all schools from database storage
+    const schools = await storage.getAllSchools();
     
     // Get additional statistics for each school
     const schoolsWithStats = await Promise.all(
@@ -58,8 +57,8 @@ export const getSuperAdminSchoolDetails = async (req: Request, res: Response) =>
   try {
     const { schoolId } = req.params;
     
-    // Get school details
-    const school = schoolStorage.getSchoolById(parseInt(schoolId));
+    // Get school details from database
+    const school = await storage.getSchool(parseInt(schoolId));
     
     if (!school) {
       return res.status(404).json({ error: 'School not found' });
@@ -104,8 +103,8 @@ export const updateSuperAdminSchool = async (req: Request, res: Response) => {
     
     console.log(`🔄 SuperAdmin: Updating school ${schoolId} with data:`, updateData);
     
-    // Update school using school storage
-    const updatedSchool = schoolStorage.updateSchool(parseInt(schoolId), updateData);
+    // Update school using database storage
+    const updatedSchool = await storage.updateSchool(parseInt(schoolId), updateData);
     
     if (!updatedSchool) {
       return res.status(404).json({ error: 'School not found' });
