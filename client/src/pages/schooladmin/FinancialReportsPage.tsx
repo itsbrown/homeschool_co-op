@@ -247,6 +247,7 @@ export default function FinancialReportsPage() {
   const [groupByParent, setGroupByParent] = useState(false);
   const [sendingReminderId, setSendingReminderId] = useState<number | null>(null);
   const [sendingSummaryEmail, setSendingSummaryEmail] = useState<string | null>(null);
+  const [isReconciling, setIsReconciling] = useState(false);
   const { toast } = useToast();
 
   const { data: summaryData, isLoading: summaryLoading, error: summaryError } = useQuery<{ summary: FinancialSummary }>({
@@ -339,6 +340,37 @@ export default function FinancialReportsPage() {
   const handleSendSummaryReminder = (parentEmail: string) => {
     setSendingSummaryEmail(parentEmail);
     sendSummaryMutation.mutate(parentEmail);
+  };
+
+  const reconcileMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest('POST', '/api/admin/financial-reports/reconcile-scheduled-payments', {});
+      return response.json();
+    },
+    onSuccess: (data: any) => {
+      toast({
+        title: 'Data synced successfully',
+        description: `Updated ${data.summary?.paymentsMarkedCompleted || 0} scheduled payment(s) across ${data.summary?.enrollmentsWithChanges || 0} enrollment(s).`,
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/financial-reports/outstanding-balances'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/financial-reports/summary'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/financial-reports/payment-plans'] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Sync failed',
+        description: error.message || 'An error occurred while syncing data.',
+        variant: 'destructive',
+      });
+    },
+    onSettled: () => {
+      setIsReconciling(false);
+    }
+  });
+
+  const handleReconcile = () => {
+    setIsReconciling(true);
+    reconcileMutation.mutate();
   };
 
   if (summaryError && (summaryError as any)?.message?.includes('not enabled')) {
@@ -708,16 +740,32 @@ export default function FinancialReportsPage() {
                         <CardTitle>Outstanding Balances</CardTitle>
                         <CardDescription>Pending payments due from families</CardDescription>
                       </div>
-                      <div className="flex items-center space-x-2">
-                        <Switch
-                          id="group-by-parent"
-                          checked={groupByParent}
-                          onCheckedChange={setGroupByParent}
-                        />
-                        <Label htmlFor="group-by-parent" className="text-sm cursor-pointer">
-                          <Users className="h-4 w-4 inline mr-1" />
-                          Group by Parent
-                        </Label>
+                      <div className="flex items-center space-x-4">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleReconcile}
+                          disabled={isReconciling}
+                          title="Sync scheduled payments with actual payment data"
+                        >
+                          {isReconciling ? (
+                            <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                          ) : (
+                            <RefreshCw className="h-4 w-4 mr-1" />
+                          )}
+                          Sync Data
+                        </Button>
+                        <div className="flex items-center space-x-2">
+                          <Switch
+                            id="group-by-parent"
+                            checked={groupByParent}
+                            onCheckedChange={setGroupByParent}
+                          />
+                          <Label htmlFor="group-by-parent" className="text-sm cursor-pointer">
+                            <Users className="h-4 w-4 inline mr-1" />
+                            Group by Parent
+                          </Label>
+                        </div>
                       </div>
                     </div>
                   </CardHeader>
