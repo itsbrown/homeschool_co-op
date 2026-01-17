@@ -4,6 +4,7 @@ import { getDb } from '../db';
 import { payments, scheduledPayments, programEnrollments, users, refunds, schools } from '@shared/schema';
 import { eq, and, gte, lte, sql, desc, isNull, not, inArray } from 'drizzle-orm';
 import { generateCFOInsights, isAIAvailable } from '../services/cfoInsightsService';
+import { reconcileSchoolScheduledPayments } from '../services/scheduled-payment-reconciliation';
 
 const router = express.Router();
 
@@ -1089,6 +1090,58 @@ router.post('/send-summary-reminder', async (req: any, res) => {
   } catch (error) {
     console.error('Error sending summary reminder:', error);
     res.status(500).json({ error: 'Failed to send summary reminder' });
+  }
+});
+
+router.get('/reconcile-scheduled-payments/preview', async (req: any, res) => {
+  try {
+    const result = await getSchoolAdminWithFeatureCheck(req, 'financialReports');
+    if (isError(result)) {
+      return res.status(result.status).json({ error: result.error });
+    }
+    const { schoolId } = result;
+
+    const preview = await reconcileSchoolScheduledPayments(schoolId, true);
+    
+    res.json({
+      message: 'Preview of scheduled payment reconciliation',
+      summary: {
+        enrollmentsToProcess: preview.enrollmentsProcessed,
+        enrollmentsWithChanges: preview.enrollmentsWithChanges,
+        paymentsToMarkCompleted: preview.totalPaymentsMarkedCompleted,
+      },
+      details: preview.results,
+      errors: preview.errors,
+    });
+  } catch (error) {
+    console.error('Error previewing reconciliation:', error);
+    res.status(500).json({ error: 'Failed to preview reconciliation' });
+  }
+});
+
+router.post('/reconcile-scheduled-payments', async (req: any, res) => {
+  try {
+    const result = await getSchoolAdminWithFeatureCheck(req, 'financialReports');
+    if (isError(result)) {
+      return res.status(result.status).json({ error: result.error });
+    }
+    const { schoolId } = result;
+
+    const reconciliation = await reconcileSchoolScheduledPayments(schoolId, false);
+    
+    res.json({
+      message: 'Scheduled payment reconciliation completed',
+      summary: {
+        enrollmentsProcessed: reconciliation.enrollmentsProcessed,
+        enrollmentsWithChanges: reconciliation.enrollmentsWithChanges,
+        paymentsMarkedCompleted: reconciliation.totalPaymentsMarkedCompleted,
+      },
+      details: reconciliation.results,
+      errors: reconciliation.errors,
+    });
+  } catch (error) {
+    console.error('Error running reconciliation:', error);
+    res.status(500).json({ error: 'Failed to run reconciliation' });
   }
 });
 
