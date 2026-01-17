@@ -55,20 +55,27 @@ Complete payment reminder audit logging and manual send capabilities for school 
 -   `payment_reminder_logs` table tracks all reminders with: schoolId, scheduledPaymentId, parentEmail, parentName, childName, className, amountCents, reminderType, status, isManual, sentBy, errorMessage, sentAt
 
 **Reminder Types:**
--   `7_days_before`, `3_days_before`, `1_day_before`, `due_today`, `1_day_overdue`, `7_days_overdue`, `manual`
+-   `7_days_before`, `3_days_before`, `1_day_before`, `due_today`, `1_day_overdue`, `7_days_overdue`, `manual`, `summary`
 
 **Components:**
 -   Reminders tab in `FinancialReportsPage` - View all sent/failed reminders with status badges
 -   "Send Reminder" button on Outstanding Balances rows - Manual reminder with loading state
--   "Group by Parent" toggle - Consolidates balances by parent email
+-   "Send Summary" button in grouped parent view header - Sends consolidated email with all outstanding payments for that parent
+-   "Group by Parent" toggle - Consolidates balances by parent email, shows phone numbers for quick contact
 
 **API Endpoints:**
 -   `GET /api/admin/financial-reports/reminder-history` - Fetch reminder logs for school
--   `POST /api/admin/financial-reports/send-reminder` - Send manual reminder with school ownership validation
+-   `POST /api/admin/financial-reports/send-reminder` - Send manual reminder for single payment
+-   `POST /api/admin/financial-reports/send-summary-reminder` - Send consolidated summary email with all outstanding payments for a parent
+
+**Email Templates:**
+-   `sendScheduledPaymentReminder` - Single payment reminder with due date and amount
+-   `sendConsolidatedPaymentReminder` - Summary email with HTML table of all outstanding payments, overdue highlighting, and total amount
 
 **Security:**
 -   All endpoints use `getSchoolAdminWithFeatureCheck` for auth + feature gating
 -   Manual reminders validate scheduled payment belongs to admin's school via enrollment.schoolId
+-   Summary reminders query only payments WHERE scheduledPayments.schoolId = adminSchoolId, preventing cross-tenant data leakage
 
 ### Refund System
 Complete refund management for school administrators:

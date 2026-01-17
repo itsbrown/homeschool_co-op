@@ -1853,6 +1853,23 @@ async function runMigrations() {
     `);
     console.log('✅ Migration completed: payment_reminder_logs table created');
     
+    // Update reminder_type constraint to include 'summary' type
+    console.log('Running migration: Updating payment_reminder_logs reminder_type constraint...');
+    try {
+      await db.execute(sql`
+        ALTER TABLE payment_reminder_logs 
+        DROP CONSTRAINT IF EXISTS payment_reminder_logs_reminder_type_check;
+      `);
+      await db.execute(sql`
+        ALTER TABLE payment_reminder_logs 
+        ADD CONSTRAINT payment_reminder_logs_reminder_type_check 
+        CHECK (reminder_type IN ('7_days_before', '3_days_before', '1_day_before', 'due_today', '1_day_overdue', '7_days_overdue', 'manual', 'summary'));
+      `);
+      console.log('✅ Migration completed: reminder_type constraint updated to include summary');
+    } catch (constraintError) {
+      console.log('Constraint migration note:', constraintError instanceof Error ? constraintError.message : String(constraintError));
+    }
+    
   } catch (fundraiserError) {
     const errorMessage = fundraiserError instanceof Error ? fundraiserError.message : String(fundraiserError);
     if (!errorMessage.includes('Database connection not available')) {
