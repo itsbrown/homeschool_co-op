@@ -49,7 +49,7 @@ interface School {
 }
 
 export default function SchoolEditPage() {
-  const { schoolId } = useParams();
+  const { id: schoolId } = useParams();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();

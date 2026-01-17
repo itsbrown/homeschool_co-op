@@ -37,7 +37,7 @@ interface School {
 }
 
 export default function SchoolDetailsPage() {
-  const { schoolId } = useParams();
+  const { id: schoolId } = useParams();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
