@@ -61,11 +61,12 @@ export const jwtCheck = async (req: any, res: Response, next: NextFunction) => {
     let userRoles: string[] = [];
     if (dbUser?.id) {
       try {
-        const dbModule = await import('../db');
+        const { getDb } = await import('../db');
         const schemaModule = await import('../../shared/schema');
         const drizzleModule = await import('drizzle-orm');
         
-        const rolesResult = await dbModule.db.select({
+        const database = await getDb();
+        const rolesResult = await database.select({
           role: schemaModule.userRoles.role
         }).from(schemaModule.userRoles).where(drizzleModule.eq(schemaModule.userRoles.userId, dbUser.id));
         

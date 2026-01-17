@@ -16,6 +16,11 @@ declare module 'express-serve-static-core' {
         name?: string;
         permissions?: any;
       };
+      // Direct fields for requireRole middleware compatibility
+      role?: string;
+      email?: string;
+      schoolId?: number | null;
+      dbUserId?: number | null;
     };
     user?: {
       id: number;  // Always normalized to DB integer ID in supabaseAuth

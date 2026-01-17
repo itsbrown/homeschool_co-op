@@ -262,6 +262,33 @@ export const supabaseAuth = async (
     // Only include non-sensitive metadata from user_metadata (like name, avatar)
     const { role: _, school_id: __, ...safeUserMetadata } = user.user_metadata || {};
     
+    // Check user_roles table for superAdmin role (multi-role system)
+    // This is the source of truth for roles in the new system
+    let effectiveRole = dbUserData?.role || 'parent';
+    if (dbUserId) {
+      try {
+        const { getDb } = await import('../db');
+        const { userRoles } = await import('../../shared/schema');
+        const { eq } = await import('drizzle-orm');
+        
+        const database = await getDb();
+        const rolesResult = await database.select({
+          role: userRoles.role
+        }).from(userRoles).where(eq(userRoles.userId, dbUserId));
+        
+        const userRolesList = rolesResult.map((r: { role: string }) => r.role);
+        console.log('📋 supabaseAuth - User roles from user_roles table:', userRolesList);
+        
+        // If user has superAdmin in their roles, set effectiveRole to superAdmin
+        if (userRolesList.some((r: string) => r.toLowerCase() === 'superadmin')) {
+          effectiveRole = 'superAdmin';
+          console.log('🔑 supabaseAuth - User has superAdmin role in user_roles table');
+        }
+      } catch (rolesError) {
+        console.error('❌ supabaseAuth - Failed to fetch user_roles:', rolesError);
+      }
+    }
+    
     req.auth = {
       payload: {
         sub: user.id,
@@ -270,10 +297,15 @@ export const supabaseAuth = async (
         ...safeUserMetadata,
         // 🔒 CRITICAL: Always use database as source of truth for role and school_id
         // This prevents privilege escalation via tampered metadata in stale tokens
-        role: dbUserData?.role,
+        role: effectiveRole,
         school_id: dbUserData?.schoolId,
         name: dbUserData?.name,
       },
+      // Also set role directly on req.auth for requireRole middleware compatibility
+      role: effectiveRole,
+      email: user.email!,
+      schoolId: dbUserData?.schoolId,
+      dbUserId: dbUserId,
     };
 
     next();
