@@ -63,7 +63,8 @@ import {
   FundraiserFamilyLink, InsertFundraiserFamilyLink, fundraiserFamilyLinks,
   FundraiserOrder, InsertFundraiserOrder, fundraiserOrders,
   FundraiserOrderItem, InsertFundraiserOrderItem, fundraiserOrderItems,
-  piiAccessLogs
+  piiAccessLogs,
+  PaymentReminderLog, InsertPaymentReminderLog, paymentReminderLogs
 } from '../shared/schema';
 
 /**
@@ -5014,6 +5015,23 @@ export class DatabaseStorage implements IStorage {
     return await db.insert(fundraiserOrderItems).values(items).returning();
   }
 
+  // Payment Reminder Log methods
+  async createPaymentReminderLog(log: InsertPaymentReminderLog): Promise<PaymentReminderLog> {
+    const db = await getDb();
+    const [created] = await db.insert(paymentReminderLogs).values(log).returning();
+    return created;
+  }
+
+  async getPaymentReminderLogsBySchool(schoolId: number, limit: number = 100): Promise<PaymentReminderLog[]> {
+    const db = await getDb();
+    return await db
+      .select()
+      .from(paymentReminderLogs)
+      .where(eq(paymentReminderLogs.schoolId, schoolId))
+      .orderBy(desc(paymentReminderLogs.sentAt))
+      .limit(limit);
+  }
+
   /**
    * Transactional soft-delete: Wraps all cleanup operations in a single atomic transaction.
    * Best practice ordering: All FK cleanup happens first, then soft-delete (isActive=false) last.
@@ -5097,5 +5115,21 @@ export class DatabaseStorage implements IStorage {
       console.error(`❌ Transaction failed for hard-delete user ${userId}:`, errorMessage);
       return { success: false, error: errorMessage };
     }
+  }
+
+  // Payment Reminder Log methods
+  async createPaymentReminderLog(log: InsertPaymentReminderLog): Promise<PaymentReminderLog> {
+    const db = await getDb();
+    const [newLog] = await db.insert(paymentReminderLogs).values(log).returning();
+    return newLog;
+  }
+
+  async getPaymentReminderLogsBySchool(schoolId: number, limit: number = 100): Promise<PaymentReminderLog[]> {
+    const db = await getDb();
+    return await db.select()
+      .from(paymentReminderLogs)
+      .where(eq(paymentReminderLogs.schoolId, schoolId))
+      .orderBy(desc(paymentReminderLogs.sentAt))
+      .limit(limit);
   }
 }

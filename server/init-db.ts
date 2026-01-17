@@ -1825,6 +1825,34 @@ async function runMigrations() {
     `);
     console.log('✅ Migration completed: location_id column added to users table');
     
+    // Create payment_reminder_logs table for tracking sent reminders
+    console.log('Running migration: Creating payment_reminder_logs table...');
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS payment_reminder_logs (
+        id SERIAL PRIMARY KEY,
+        school_id INTEGER NOT NULL REFERENCES schools(id),
+        scheduled_payment_id INTEGER REFERENCES scheduled_payments(id),
+        parent_email TEXT NOT NULL,
+        parent_name TEXT,
+        child_name TEXT,
+        class_name TEXT,
+        amount_cents INTEGER,
+        reminder_type TEXT NOT NULL CHECK (reminder_type IN ('7_days_before', '3_days_before', '1_day_before', 'due_today', '1_day_overdue', '7_days_overdue', 'manual')),
+        status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('sent', 'failed', 'pending')),
+        is_manual BOOLEAN NOT NULL DEFAULT false,
+        sent_by INTEGER REFERENCES users(id),
+        error_message TEXT,
+        sent_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_payment_reminder_logs_school_id ON payment_reminder_logs(school_id);
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_payment_reminder_logs_sent_at ON payment_reminder_logs(sent_at);
+    `);
+    console.log('✅ Migration completed: payment_reminder_logs table created');
+    
   } catch (fundraiserError) {
     const errorMessage = fundraiserError instanceof Error ? fundraiserError.message : String(fundraiserError);
     if (!errorMessage.includes('Database connection not available')) {

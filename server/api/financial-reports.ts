@@ -800,4 +800,147 @@ router.get('/ai-insights', async (req: any, res) => {
   }
 });
 
+// Get payment reminder history
+router.get('/reminder-history', async (req: any, res) => {
+  try {
+    const result = await getSchoolAdminWithFeatureCheck(req, 'financialReports');
+    if (isError(result)) {
+      return res.status(result.status).json({ error: result.error });
+    }
+    const { schoolId } = result;
+
+    const limit = parseInt(req.query.limit as string) || 100;
+    const reminderLogs = await storage.getPaymentReminderLogsBySchool(schoolId, limit);
+
+    console.log(`📧 Retrieved ${reminderLogs.length} reminder logs for school ${schoolId}`);
+    res.json(reminderLogs);
+  } catch (error) {
+    console.error('Error fetching reminder history:', error);
+    res.status(500).json({ error: 'Failed to fetch reminder history' });
+  }
+});
+
+// Send a manual payment reminder
+router.post('/send-reminder', async (req: any, res) => {
+  try {
+    const result = await getSchoolAdminWithFeatureCheck(req, 'financialReports');
+    if (isError(result)) {
+      return res.status(result.status).json({ error: result.error });
+    }
+    const { user, schoolId } = result;
+
+    const { scheduledPaymentId } = req.body;
+    if (!scheduledPaymentId) {
+      return res.status(400).json({ error: 'scheduledPaymentId is required' });
+    }
+
+    // Get the scheduled payment and validate school ownership
+    const allPayments = await storage.getAllScheduledPayments();
+    const payment = allPayments.find(p => p.id === scheduledPaymentId);
+    
+    if (!payment) {
+      return res.status(404).json({ error: 'Scheduled payment not found' });
+    }
+
+    // Security check: Verify the payment belongs to the admin's school via enrollment
+    let childName = 'Student';
+    let className = 'Class';
+    let schoolName = 'School';
+    let parentName = null;
+    let paymentSchoolId: number | null = null;
+
+    if (payment.enrollmentId) {
+      const enrollment = await storage.getEnrollmentById(payment.enrollmentId);
+      if (enrollment) {
+        childName = enrollment.childName || 'Student';
+        className = enrollment.className || 'Class';
+        paymentSchoolId = enrollment.schoolId;
+        
+        if (enrollment.schoolId) {
+          const school = await storage.getSchool(enrollment.schoolId);
+          if (school) {
+            schoolName = school.name;
+          }
+        }
+      }
+    }
+
+    // Critical security check: Ensure payment belongs to admin's school
+    if (paymentSchoolId !== schoolId) {
+      console.error(`⚠️ Cross-tenant access attempt: User from school ${schoolId} tried to send reminder for payment from school ${paymentSchoolId}`);
+      return res.status(403).json({ error: 'Access denied: Payment does not belong to your school' });
+    }
+
+    // Get parent name
+    const parent = await storage.getUserByEmail(payment.parentEmail);
+    if (parent) {
+      parentName = parent.name || parent.email;
+    }
+
+    // Import email service dynamically
+    const { sendScheduledPaymentReminder } = await import('../lib/email-service');
+
+    try {
+      await sendScheduledPaymentReminder({
+        parentEmail: payment.parentEmail,
+        childName,
+        className,
+        schoolName,
+        amount: payment.amount,
+        dueDate: new Date(payment.scheduledDate),
+        daysUntilDue: Math.floor((new Date(payment.scheduledDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)),
+        paymentId: payment.id,
+        installmentNumber: payment.installmentNumber,
+        totalInstallments: payment.totalInstallments,
+        urgency: 'medium'
+      });
+
+      // Log the manual reminder
+      await storage.createPaymentReminderLog({
+        schoolId,
+        scheduledPaymentId: payment.id,
+        parentEmail: payment.parentEmail,
+        parentName,
+        childName,
+        className,
+        amountCents: payment.amount,
+        reminderType: 'manual',
+        status: 'sent',
+        isManual: true,
+        sentBy: user.id,
+        errorMessage: null
+      });
+
+      console.log(`✅ Manual reminder sent to ${payment.parentEmail} for payment ${payment.id}`);
+      res.json({ success: true, message: 'Reminder sent successfully' });
+
+    } catch (emailError) {
+      const errorMessage = emailError instanceof Error ? emailError.message : String(emailError);
+      
+      // Log the failed attempt
+      await storage.createPaymentReminderLog({
+        schoolId,
+        scheduledPaymentId: payment.id,
+        parentEmail: payment.parentEmail,
+        parentName,
+        childName,
+        className,
+        amountCents: payment.amount,
+        reminderType: 'manual',
+        status: 'failed',
+        isManual: true,
+        sentBy: user.id,
+        errorMessage
+      });
+
+      console.error(`❌ Failed to send manual reminder:`, errorMessage);
+      res.status(500).json({ error: 'Failed to send reminder', message: errorMessage });
+    }
+
+  } catch (error) {
+    console.error('Error sending manual reminder:', error);
+    res.status(500).json({ error: 'Failed to send reminder' });
+  }
+});
+
 export default router;

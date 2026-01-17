@@ -213,9 +213,61 @@ export async function processScheduledPaymentReminders(): Promise<ReminderResult
         result.sent = true;
         console.log(`✅ Sent ${result.reminderType} reminder for payment ${payment.id} to ${payment.parentEmail}`);
         
+        // Log the reminder to the database
+        try {
+          const enrollment = payment.enrollmentId ? await storage.getEnrollmentById(payment.enrollmentId) : null;
+          const reminderTypeMap: Record<number, string> = {
+            7: '7_days_before',
+            3: '3_days_before',
+            1: '1_day_before',
+            0: 'due_today',
+            [-1]: '1_day_overdue',
+            [-7]: '7_days_overdue'
+          };
+          const reminderLogType = reminderTypeMap[daysUntil] || (daysUntil < 0 ? '7_days_overdue' : '7_days_before');
+          
+          await storage.createPaymentReminderLog({
+            schoolId: enrollment?.schoolId || 1,
+            scheduledPaymentId: payment.id,
+            parentEmail: payment.parentEmail,
+            parentName: null,
+            childName,
+            className,
+            amountCents: payment.amount,
+            reminderType: reminderLogType as any,
+            status: 'sent',
+            isManual: false,
+            sentBy: null,
+            errorMessage: null
+          });
+        } catch (logError) {
+          console.error(`⚠️ Failed to log reminder for payment ${payment.id}:`, logError);
+        }
+        
       } catch (emailError) {
         result.error = emailError instanceof Error ? emailError.message : String(emailError);
         console.error(`❌ Failed to send reminder for payment ${payment.id}:`, result.error);
+        
+        // Log the failed reminder attempt
+        try {
+          const enrollment = payment.enrollmentId ? await storage.getEnrollmentById(payment.enrollmentId) : null;
+          await storage.createPaymentReminderLog({
+            schoolId: enrollment?.schoolId || 1,
+            scheduledPaymentId: payment.id,
+            parentEmail: payment.parentEmail,
+            parentName: null,
+            childName,
+            className,
+            amountCents: payment.amount,
+            reminderType: daysUntil < 0 ? '1_day_overdue' : 'due_today',
+            status: 'failed',
+            isManual: false,
+            sentBy: null,
+            errorMessage: result.error || null
+          });
+        } catch (logError) {
+          console.error(`⚠️ Failed to log failed reminder:`, logError);
+        }
       }
       
       results.push(result);

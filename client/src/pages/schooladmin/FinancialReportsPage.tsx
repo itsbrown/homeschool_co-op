@@ -1,9 +1,13 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import { queryClient, apiRequest } from '@/lib/queryClient';
+import { useToast } from '@/hooks/use-toast';
 import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Table,
@@ -33,7 +37,10 @@ import {
   Lock,
   Brain,
   Sparkles,
-  ArrowRight
+  ArrowRight,
+  Mail,
+  Loader2,
+  Send
 } from 'lucide-react';
 import { format } from 'date-fns';
 import {
@@ -125,6 +132,33 @@ interface CFOAnalysisResult {
   aiAvailable: boolean;
 }
 
+interface ReminderLog {
+  id: number;
+  schoolId: number;
+  scheduledPaymentId: number | null;
+  parentEmail: string;
+  parentName: string | null;
+  childName: string | null;
+  className: string | null;
+  amountCents: number;
+  reminderType: string;
+  status: string;
+  isManual: boolean;
+  sentBy: number | null;
+  errorMessage: string | null;
+  sentAt: string;
+}
+
+interface GroupedBalance {
+  parentEmail: string;
+  parentName: string;
+  totalAmount: number;
+  balanceCount: number;
+  oldestOverdue: number;
+  hasOverdue: boolean;
+  balances: OutstandingBalance[];
+}
+
 function formatCurrency(cents: number): string {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
@@ -209,6 +243,9 @@ function FeatureDisabledState() {
 
 export default function FinancialReportsPage() {
   const [activeTab, setActiveTab] = useState('overview');
+  const [groupByParent, setGroupByParent] = useState(false);
+  const [sendingReminderId, setSendingReminderId] = useState<number | null>(null);
+  const { toast } = useToast();
 
   const { data: summaryData, isLoading: summaryLoading, error: summaryError } = useQuery<{ summary: FinancialSummary }>({
     queryKey: ['/api/admin/financial-reports/summary'],
@@ -235,6 +272,42 @@ export default function FinancialReportsPage() {
     staleTime: 5 * 60 * 1000,
   });
 
+  const { data: reminderHistoryData, isLoading: reminderHistoryLoading } = useQuery<ReminderLog[]>({
+    queryKey: ['/api/admin/financial-reports/reminder-history'],
+    enabled: activeTab === 'reminders',
+  });
+
+  const sendReminderMutation = useMutation({
+    mutationFn: async (scheduledPaymentId: number) => {
+      const response = await apiRequest('POST', '/api/admin/financial-reports/send-reminder', {
+        scheduledPaymentId
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: 'Reminder sent',
+        description: 'Payment reminder email has been sent successfully.',
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/financial-reports/reminder-history'] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Failed to send reminder',
+        description: error.message || 'An error occurred while sending the reminder.',
+        variant: 'destructive',
+      });
+    },
+    onSettled: () => {
+      setSendingReminderId(null);
+    }
+  });
+
+  const handleSendReminder = (scheduledPaymentId: number) => {
+    setSendingReminderId(scheduledPaymentId);
+    sendReminderMutation.mutate(scheduledPaymentId);
+  };
+
   if (summaryError && (summaryError as any)?.message?.includes('not enabled')) {
     return <FeatureDisabledState />;
   }
@@ -244,6 +317,32 @@ export default function FinancialReportsPage() {
   const balances = balancesData?.balances || [];
   const plans = plansData?.activePlans || [];
   const transactions = transactionsData?.transactions || [];
+  const reminderHistory = reminderHistoryData || [];
+
+  // Group balances by parent email
+  const groupedBalances: GroupedBalance[] = balances.reduce((groups: GroupedBalance[], balance) => {
+    const existing = groups.find(g => g.parentEmail === balance.parentEmail);
+    if (existing) {
+      existing.totalAmount += balance.amount;
+      existing.balanceCount += 1;
+      if (balance.isOverdue && balance.daysOverdue > existing.oldestOverdue) {
+        existing.oldestOverdue = balance.daysOverdue;
+      }
+      if (balance.isOverdue) existing.hasOverdue = true;
+      existing.balances.push(balance);
+    } else {
+      groups.push({
+        parentEmail: balance.parentEmail,
+        parentName: balance.parent?.name || balance.parentEmail,
+        totalAmount: balance.amount,
+        balanceCount: 1,
+        oldestOverdue: balance.isOverdue ? balance.daysOverdue : 0,
+        hasOverdue: balance.isOverdue,
+        balances: [balance],
+      });
+    }
+    return groups;
+  }, []);
 
   const chartData = trends.map(t => ({
     month: t.month,
@@ -505,6 +604,10 @@ export default function FinancialReportsPage() {
                 <TabsTrigger value="overview">Recent Transactions</TabsTrigger>
                 <TabsTrigger value="balances">Outstanding Balances</TabsTrigger>
                 <TabsTrigger value="plans">Payment Plans</TabsTrigger>
+                <TabsTrigger value="reminders">
+                  <Mail className="h-4 w-4 mr-1" />
+                  Reminders
+                </TabsTrigger>
               </TabsList>
 
               <TabsContent value="overview" className="mt-4">
@@ -566,8 +669,23 @@ export default function FinancialReportsPage() {
               <TabsContent value="balances" className="mt-4">
                 <Card>
                   <CardHeader>
-                    <CardTitle>Outstanding Balances</CardTitle>
-                    <CardDescription>Pending payments due from families</CardDescription>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <CardTitle>Outstanding Balances</CardTitle>
+                        <CardDescription>Pending payments due from families</CardDescription>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Switch
+                          id="group-by-parent"
+                          checked={groupByParent}
+                          onCheckedChange={setGroupByParent}
+                        />
+                        <Label htmlFor="group-by-parent" className="text-sm cursor-pointer">
+                          <Users className="h-4 w-4 inline mr-1" />
+                          Group by Parent
+                        </Label>
+                      </div>
+                    </div>
                   </CardHeader>
                   <CardContent>
                     {balancesLoading ? (
@@ -575,42 +693,113 @@ export default function FinancialReportsPage() {
                         {[1, 2, 3, 4, 5].map(i => <Skeleton key={i} className="h-12 w-full" />)}
                       </div>
                     ) : balances.length > 0 ? (
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Due Date</TableHead>
-                            <TableHead>Family</TableHead>
-                            <TableHead>Student</TableHead>
-                            <TableHead>Class</TableHead>
-                            <TableHead>Amount</TableHead>
-                            <TableHead>Status</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {balances.map((balance) => (
-                            <TableRow key={balance.id}>
-                              <TableCell>{format(new Date(balance.scheduledDate), 'MMM d, yyyy')}</TableCell>
-                              <TableCell>{balance.parent?.name || balance.parentEmail}</TableCell>
-                              <TableCell>{balance.enrollment?.childName || 'N/A'}</TableCell>
-                              <TableCell>{balance.enrollment?.className || 'N/A'}</TableCell>
-                              <TableCell>{formatCurrency(balance.amount)}</TableCell>
-                              <TableCell>
-                                {balance.isOverdue ? (
-                                  <Badge variant="destructive">
-                                    <AlertTriangle className="h-3 w-3 mr-1" />
-                                    {balance.daysOverdue} days overdue
-                                  </Badge>
-                                ) : (
-                                  <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
-                                    <Clock className="h-3 w-3 mr-1" />
-                                    Pending
-                                  </Badge>
-                                )}
-                              </TableCell>
-                            </TableRow>
+                      groupByParent ? (
+                        <div className="space-y-4">
+                          {groupedBalances.map((group) => (
+                            <div key={group.parentEmail} className="border rounded-lg p-4">
+                              <div className="flex items-center justify-between mb-3">
+                                <div>
+                                  <p className="font-medium">{group.parentName}</p>
+                                  <p className="text-sm text-muted-foreground">{group.parentEmail}</p>
+                                </div>
+                                <div className="text-right">
+                                  <p className="font-semibold">{formatCurrency(group.totalAmount)}</p>
+                                  <p className="text-sm text-muted-foreground">{group.balanceCount} payment{group.balanceCount > 1 ? 's' : ''}</p>
+                                </div>
+                              </div>
+                              {group.hasOverdue && (
+                                <Badge variant="destructive" className="mb-3">
+                                  <AlertTriangle className="h-3 w-3 mr-1" />
+                                  Up to {group.oldestOverdue} days overdue
+                                </Badge>
+                              )}
+                              <div className="space-y-2 mt-2">
+                                {group.balances.map((balance) => (
+                                  <div key={balance.id} className="flex items-center justify-between bg-gray-50 rounded p-2 text-sm">
+                                    <div>
+                                      <span className="font-medium">{balance.enrollment?.childName}</span>
+                                      <span className="text-muted-foreground"> - {balance.enrollment?.className}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <span>{formatCurrency(balance.amount)}</span>
+                                      <span className="text-muted-foreground">
+                                        Due {format(new Date(balance.scheduledDate), 'MMM d')}
+                                      </span>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => handleSendReminder(balance.id)}
+                                        disabled={sendingReminderId === balance.id}
+                                        className="h-7 px-2"
+                                      >
+                                        {sendingReminderId === balance.id ? (
+                                          <Loader2 className="h-3 w-3 animate-spin" />
+                                        ) : (
+                                          <Send className="h-3 w-3" />
+                                        )}
+                                      </Button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
                           ))}
-                        </TableBody>
-                      </Table>
+                        </div>
+                      ) : (
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Due Date</TableHead>
+                              <TableHead>Family</TableHead>
+                              <TableHead>Student</TableHead>
+                              <TableHead>Class</TableHead>
+                              <TableHead>Amount</TableHead>
+                              <TableHead>Status</TableHead>
+                              <TableHead className="w-[80px]">Action</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {balances.map((balance) => (
+                              <TableRow key={balance.id}>
+                                <TableCell>{format(new Date(balance.scheduledDate), 'MMM d, yyyy')}</TableCell>
+                                <TableCell>{balance.parent?.name || balance.parentEmail}</TableCell>
+                                <TableCell>{balance.enrollment?.childName || 'N/A'}</TableCell>
+                                <TableCell>{balance.enrollment?.className || 'N/A'}</TableCell>
+                                <TableCell>{formatCurrency(balance.amount)}</TableCell>
+                                <TableCell>
+                                  {balance.isOverdue ? (
+                                    <Badge variant="destructive">
+                                      <AlertTriangle className="h-3 w-3 mr-1" />
+                                      {balance.daysOverdue} days overdue
+                                    </Badge>
+                                  ) : (
+                                    <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
+                                      <Clock className="h-3 w-3 mr-1" />
+                                      Pending
+                                    </Badge>
+                                  )}
+                                </TableCell>
+                                <TableCell>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleSendReminder(balance.id)}
+                                    disabled={sendingReminderId === balance.id}
+                                    className="h-8 px-2"
+                                    title="Send payment reminder"
+                                  >
+                                    {sendingReminderId === balance.id ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <Send className="h-4 w-4" />
+                                    )}
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      )
                     ) : (
                       <div className="text-center py-8 text-muted-foreground">
                         <CheckCircle2 className="h-12 w-12 mx-auto mb-4 text-green-500" />
@@ -671,6 +860,80 @@ export default function FinancialReportsPage() {
                     ) : (
                       <div className="text-center py-8 text-muted-foreground">
                         No active payment plans
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="reminders" className="mt-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Mail className="h-5 w-5" />
+                      Payment Reminder History
+                    </CardTitle>
+                    <CardDescription>
+                      All automatic and manual payment reminders sent to families
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {reminderHistoryLoading ? (
+                      <div className="space-y-2">
+                        {[1, 2, 3, 4, 5].map(i => <Skeleton key={i} className="h-12 w-full" />)}
+                      </div>
+                    ) : reminderHistory.length > 0 ? (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Date Sent</TableHead>
+                            <TableHead>Parent</TableHead>
+                            <TableHead>Student</TableHead>
+                            <TableHead>Class</TableHead>
+                            <TableHead>Amount</TableHead>
+                            <TableHead>Type</TableHead>
+                            <TableHead>Status</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {reminderHistory.map((log) => (
+                            <TableRow key={log.id}>
+                              <TableCell>{format(new Date(log.sentAt), 'MMM d, yyyy h:mm a')}</TableCell>
+                              <TableCell>
+                                <div>
+                                  <p className="font-medium">{log.parentName || log.parentEmail.split('@')[0]}</p>
+                                  <p className="text-xs text-muted-foreground">{log.parentEmail}</p>
+                                </div>
+                              </TableCell>
+                              <TableCell>{log.childName || 'N/A'}</TableCell>
+                              <TableCell>{log.className || 'N/A'}</TableCell>
+                              <TableCell>{formatCurrency(log.amountCents)}</TableCell>
+                              <TableCell>
+                                <Badge variant={log.isManual ? 'default' : 'secondary'}>
+                                  {log.isManual ? 'Manual' : log.reminderType.replace(/_/g, ' ')}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                {log.status === 'sent' ? (
+                                  <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                                    <CheckCircle2 className="h-3 w-3 mr-1" />
+                                    Sent
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="destructive">
+                                    <AlertTriangle className="h-3 w-3 mr-1" />
+                                    Failed
+                                  </Badge>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    ) : (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <Mail className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                        No reminders have been sent yet
                       </div>
                     )}
                   </CardContent>

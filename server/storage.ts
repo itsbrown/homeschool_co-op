@@ -63,7 +63,8 @@ import {
   fundraiserProducts, type FundraiserProduct, type InsertFundraiserProduct,
   fundraiserFamilyLinks, type FundraiserFamilyLink, type InsertFundraiserFamilyLink,
   fundraiserOrders, type FundraiserOrder, type InsertFundraiserOrder,
-  fundraiserOrderItems, type FundraiserOrderItem, type InsertFundraiserOrderItem
+  fundraiserOrderItems, type FundraiserOrderItem, type InsertFundraiserOrderItem,
+  paymentReminderLogs, type PaymentReminderLog, type InsertPaymentReminderLog
 } from "@shared/schema";
 import { eq, inArray } from 'drizzle-orm';
 import { getDb } from './db';
@@ -761,6 +762,10 @@ export interface IStorage {
   getFundraiserOrderItemsByOrderId(orderId: number): Promise<FundraiserOrderItem[]>;
   createFundraiserOrderItem(item: InsertFundraiserOrderItem): Promise<FundraiserOrderItem>;
   createFundraiserOrderItems(items: InsertFundraiserOrderItem[]): Promise<FundraiserOrderItem[]>;
+  
+  // Payment Reminder Log methods
+  createPaymentReminderLog(log: InsertPaymentReminderLog): Promise<PaymentReminderLog>;
+  getPaymentReminderLogsBySchool(schoolId: number, limit?: number): Promise<PaymentReminderLog[]>;
 }
 
 export class MemStorage implements IStorage {
@@ -5191,6 +5196,10 @@ export class MemStorage implements IStorage {
   async getFundraiserOrderItemsByOrderId(orderId: number): Promise<FundraiserOrderItem[]> { return []; }
   async createFundraiserOrderItem(item: InsertFundraiserOrderItem): Promise<FundraiserOrderItem> { throw new Error('Not implemented'); }
   async createFundraiserOrderItems(items: InsertFundraiserOrderItem[]): Promise<FundraiserOrderItem[]> { return []; }
+  
+  // Payment Reminder Log methods
+  async createPaymentReminderLog(log: InsertPaymentReminderLog): Promise<PaymentReminderLog> { throw new Error('Not implemented'); }
+  async getPaymentReminderLogsBySchool(schoolId: number, limit: number = 100): Promise<PaymentReminderLog[]> { return []; }
 }
 
 import { DatabaseStorage } from "./dbStorage";
@@ -7940,6 +7949,14 @@ import { DatabaseStorage } from "./dbStorage";
       }
       async createFundraiserOrderItems(items: InsertFundraiserOrderItem[]): Promise<FundraiserOrderItem[]> {
         return this.dbStorage.createFundraiserOrderItems(items);
+      }
+      
+      // Payment Reminder Log methods
+      async createPaymentReminderLog(log: InsertPaymentReminderLog): Promise<PaymentReminderLog> {
+        return this.dbStorage.createPaymentReminderLog(log);
+      }
+      async getPaymentReminderLogsBySchool(schoolId: number, limit: number = 100): Promise<PaymentReminderLog[]> {
+        return this.dbStorage.getPaymentReminderLogsBySchool(schoolId, limit);
       }
 
       // Clear all data from storage (for testing)

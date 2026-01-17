@@ -3154,3 +3154,36 @@ export const piiAccessLogsRelations = relations(piiAccessLogs, ({ one }) => ({
   location: one(locations, { fields: [piiAccessLogs.locationId], references: [locations.id] }),
   school: one(schools, { fields: [piiAccessLogs.schoolId], references: [schools.id] }),
 }));
+
+// Payment Reminder Logs - Track all payment reminders sent (automatic and manual)
+export const paymentReminderLogs = pgTable("payment_reminder_logs", {
+  id: serial("id").primaryKey(),
+  schoolId: integer("school_id").notNull().references(() => schools.id),
+  scheduledPaymentId: integer("scheduled_payment_id").references(() => scheduledPayments.id),
+  parentEmail: text("parent_email").notNull(),
+  parentName: text("parent_name"),
+  childName: text("child_name"),
+  className: text("class_name"),
+  amountCents: integer("amount_cents"),
+  reminderType: text("reminder_type", {
+    enum: ["7_days_before", "3_days_before", "1_day_before", "due_today", "1_day_overdue", "7_days_overdue", "manual"]
+  }).notNull(),
+  status: text("status", {
+    enum: ["sent", "failed", "pending"]
+  }).default("pending").notNull(),
+  isManual: boolean("is_manual").default(false).notNull(),
+  sentBy: integer("sent_by").references(() => users.id),
+  errorMessage: text("error_message"),
+  sentAt: timestamp("sent_at").defaultNow().notNull(),
+});
+
+export const insertPaymentReminderLogSchema = createInsertSchema(paymentReminderLogs)
+  .omit({ id: true, sentAt: true });
+export type InsertPaymentReminderLog = z.infer<typeof insertPaymentReminderLogSchema>;
+export type PaymentReminderLog = typeof paymentReminderLogs.$inferSelect;
+
+export const paymentReminderLogsRelations = relations(paymentReminderLogs, ({ one }) => ({
+  school: one(schools, { fields: [paymentReminderLogs.schoolId], references: [schools.id] }),
+  scheduledPayment: one(scheduledPayments, { fields: [paymentReminderLogs.scheduledPaymentId], references: [scheduledPayments.id] }),
+  sentByUser: one(users, { fields: [paymentReminderLogs.sentBy], references: [users.id] }),
+}));
