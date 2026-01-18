@@ -417,8 +417,34 @@ export default function FinancialReportsPage() {
     net: t.netRevenueCents / 100,
   }));
 
+  const [isExporting, setIsExporting] = useState<string | null>(null);
+
   const handleExport = async (type: string) => {
-    window.open(`/api/admin/financial-reports/export?type=${type}`, '_blank');
+    setIsExporting(type);
+    try {
+      const response = await apiRequest('GET', `/api/admin/financial-reports/export?type=${type}`);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `financial-${type}-${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      toast({
+        title: 'Export complete',
+        description: `${type === 'payments' ? 'Payments' : 'Outstanding balances'} exported successfully.`,
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Export failed',
+        description: error.message || 'Failed to download the report.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsExporting(null);
+    }
   };
 
   const isLoading = summaryLoading || trendsLoading;
@@ -432,12 +458,20 @@ export default function FinancialReportsPage() {
             <p className="text-muted-foreground">CFO-grade analytics and financial insights for your school</p>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => handleExport('payments')}>
-              <Download className="h-4 w-4 mr-2" />
+            <Button variant="outline" size="sm" onClick={() => handleExport('payments')} disabled={isExporting !== null}>
+              {isExporting === 'payments' ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Download className="h-4 w-4 mr-2" />
+              )}
               Export Payments
             </Button>
-            <Button variant="outline" size="sm" onClick={() => handleExport('outstanding')}>
-              <Download className="h-4 w-4 mr-2" />
+            <Button variant="outline" size="sm" onClick={() => handleExport('outstanding')} disabled={isExporting !== null}>
+              {isExporting === 'outstanding' ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Download className="h-4 w-4 mr-2" />
+              )}
               Export Balances
             </Button>
           </div>
