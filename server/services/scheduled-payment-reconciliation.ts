@@ -304,3 +304,164 @@ export async function cleanupScheduledPayments(
     details,
   };
 }
+
+export interface GenerateMissingPaymentsResult {
+  enrollmentsProcessed: number;
+  paymentsCreated: number;
+  details: Array<{
+    enrollmentId: number;
+    parentEmail: string;
+    remainingBalance: number;
+    paymentCreated: boolean;
+    scheduledPaymentId?: number;
+  }>;
+  errors: Array<{ enrollmentId: number; error: string }>;
+}
+
+/**
+ * Generate scheduled payments for enrollments that have remaining balances
+ * but no pending scheduled payments. This ensures all outstanding balances
+ * appear in the Outstanding Balances report.
+ */
+export async function generateMissingScheduledPayments(
+  schoolId: number,
+  dryRun: boolean = false
+): Promise<GenerateMissingPaymentsResult> {
+  console.log(`📋 Generating missing scheduled payments for school ${schoolId} (dryRun: ${dryRun})`);
+  
+  const allEnrollments = await storage.getAllEnrollments();
+  const schoolEnrollments = allEnrollments.filter(e => 
+    e.schoolId === schoolId && 
+    ['pending_payment', 'confirmed', 'active'].includes(e.status || '')
+  );
+  
+  const allScheduledPayments = await storage.getAllScheduledPayments();
+  const schoolPayments = allScheduledPayments.filter((sp: any) => sp.schoolId === schoolId);
+  
+  const result: GenerateMissingPaymentsResult = {
+    enrollmentsProcessed: 0,
+    paymentsCreated: 0,
+    details: [],
+    errors: [],
+  };
+  
+  for (const enrollment of schoolEnrollments) {
+    result.enrollmentsProcessed++;
+    
+    try {
+      const totalCost = enrollment.totalCost || 0;
+      const totalPaid = enrollment.totalPaid || 0;
+      const remainingBalance = totalCost - totalPaid;
+      
+      // Skip if no remaining balance
+      if (remainingBalance <= 0) {
+        continue;
+      }
+      
+      // Check if there are pending scheduled payments for this enrollment
+      const enrollmentPayments = schoolPayments.filter(
+        (sp: any) => sp.enrollmentId === enrollment.id && sp.status === 'pending'
+      );
+      const pendingTotal = enrollmentPayments.reduce((sum: number, sp: any) => sum + sp.amount, 0);
+      
+      // If pending payments already cover the remaining balance, skip
+      if (pendingTotal >= remainingBalance - 100) { // Allow $1 buffer
+        continue;
+      }
+      
+      // Need to create a scheduled payment for the gap
+      const gapAmount = remainingBalance - pendingTotal;
+      
+      // Get parent info
+      const parentEmail = enrollment.parentEmail || '';
+      if (!parentEmail) {
+        result.errors.push({
+          enrollmentId: enrollment.id,
+          error: 'No parent email on enrollment',
+        });
+        continue;
+      }
+      
+      const parentUser = await storage.getUserByEmail(parentEmail);
+      const parentId = parentUser?.id || 0;
+      
+      // Get all scheduled payments for this enrollment (including completed ones) to preserve plan structure
+      const allEnrollmentPayments = schoolPayments.filter(
+        (sp: any) => sp.enrollmentId === enrollment.id
+      );
+      
+      // Determine existing plan structure
+      const existingTotalInstallments = allEnrollmentPayments.reduce(
+        (max: number, sp: any) => Math.max(max, sp.totalInstallments || 1), 1
+      );
+      const maxInstallment = allEnrollmentPayments.reduce(
+        (max: number, sp: any) => Math.max(max, sp.installmentNumber || 0), 0
+      );
+      
+      // Calculate installment number for the new payment
+      // If this is an enrollment with no scheduled payments at all, start at 1
+      const nextInstallmentNumber = maxInstallment > 0 ? maxInstallment + 1 : 1;
+      
+      // Preserve the existing total installments, or set to the new count if no plan exists
+      const totalInstallmentsToUse = existingTotalInstallments > 0 
+        ? Math.max(existingTotalInstallments, nextInstallmentNumber)
+        : nextInstallmentNumber;
+      
+      const detail: GenerateMissingPaymentsResult['details'][number] = {
+        enrollmentId: enrollment.id,
+        parentEmail,
+        remainingBalance: gapAmount,
+        paymentCreated: false,
+      };
+      
+      if (!dryRun) {
+        // Create the scheduled payment - due in 7 days for catch-up payments
+        const scheduledPayment = await storage.createScheduledPayment({
+          schoolId,
+          enrollmentId: enrollment.id,
+          parentId,
+          parentEmail,
+          amount: gapAmount,
+          currency: 'usd',
+          scheduledDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
+          frequency: 'one_time',
+          installmentNumber: nextInstallmentNumber,
+          totalInstallments: totalInstallmentsToUse,
+          status: 'pending',
+          stripePaymentIntentId: null,
+          processedAt: null,
+          failureReason: null,
+          retryCount: 0,
+          metadata: {
+            generatedForMissingBalance: true,
+            generatedAt: new Date().toISOString(),
+            childName: enrollment.childName,
+            className: enrollment.className,
+          },
+        });
+        detail.paymentCreated = true;
+        detail.scheduledPaymentId = scheduledPayment.id;
+        console.log(`✅ Created scheduled payment ${scheduledPayment.id} for enrollment ${enrollment.id}: $${(gapAmount / 100).toFixed(2)} (installment ${nextInstallmentNumber}/${totalInstallmentsToUse})`);
+      } else {
+        detail.paymentCreated = false;
+        console.log(`📝 [DRY RUN] Would create scheduled payment for enrollment ${enrollment.id}: $${(gapAmount / 100).toFixed(2)} (installment ${nextInstallmentNumber}/${totalInstallmentsToUse})`);
+      }
+      
+      result.details.push(detail);
+      result.paymentsCreated++;
+    } catch (err) {
+      result.errors.push({
+        enrollmentId: enrollment.id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+  
+  console.log(`📋 Generate missing payments ${dryRun ? 'preview' : 'complete'} for school ${schoolId}:`, {
+    enrollmentsProcessed: result.enrollmentsProcessed,
+    paymentsCreated: result.paymentsCreated,
+    errors: result.errors.length,
+  });
+  
+  return result;
+}

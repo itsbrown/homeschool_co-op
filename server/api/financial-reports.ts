@@ -4,7 +4,7 @@ import { getDb } from '../db';
 import { payments, scheduledPayments, programEnrollments, users, refunds, schools } from '@shared/schema';
 import { eq, and, gte, lte, sql, desc, isNull, not, inArray } from 'drizzle-orm';
 import { generateCFOInsights, isAIAvailable } from '../services/cfoInsightsService';
-import { reconcileSchoolScheduledPayments, cleanupScheduledPayments } from '../services/scheduled-payment-reconciliation';
+import { reconcileSchoolScheduledPayments, cleanupScheduledPayments, generateMissingScheduledPayments } from '../services/scheduled-payment-reconciliation';
 
 const router = express.Router();
 
@@ -1136,6 +1136,9 @@ router.get('/reconcile-scheduled-payments/preview', async (req: any, res) => {
     // Preview reconciliation
     const preview = await reconcileSchoolScheduledPayments(schoolId, true);
     
+    // Preview missing payments generation
+    const missingPreview = await generateMissingScheduledPayments(schoolId, true);
+    
     res.json({
       message: 'Preview of scheduled payment sync',
       summary: {
@@ -1146,10 +1149,13 @@ router.get('/reconcile-scheduled-payments/preview', async (req: any, res) => {
         orphansToRemove: cleanupPreview.orphansRemoved,
         excessToRemove: cleanupPreview.excessRemoved,
         totalToClean: cleanupPreview.duplicatesRemoved + cleanupPreview.orphansRemoved + cleanupPreview.excessRemoved,
+        missingPaymentsToCreate: missingPreview.paymentsCreated,
+        enrollmentsWithMissingPayments: missingPreview.details.length,
       },
       details: preview.results,
       cleanupDetails: cleanupPreview.details,
-      errors: preview.errors,
+      missingPaymentsDetails: missingPreview.details,
+      errors: [...preview.errors, ...missingPreview.errors],
     });
   } catch (error) {
     console.error('Error previewing reconciliation:', error);
@@ -1171,6 +1177,9 @@ router.post('/reconcile-scheduled-payments', async (req: any, res) => {
     // Then run status reconciliation
     const reconciliation = await reconcileSchoolScheduledPayments(schoolId, false);
     
+    // Finally, generate missing scheduled payments for enrollments with remaining balances
+    const generated = await generateMissingScheduledPayments(schoolId, false);
+    
     res.json({
       message: 'Scheduled payment sync completed',
       summary: {
@@ -1181,14 +1190,69 @@ router.post('/reconcile-scheduled-payments', async (req: any, res) => {
         orphansRemoved: cleanup.orphansRemoved,
         excessRemoved: cleanup.excessRemoved,
         totalCleaned: cleanup.duplicatesRemoved + cleanup.orphansRemoved + cleanup.excessRemoved,
+        missingPaymentsCreated: generated.paymentsCreated,
+        enrollmentsWithMissingPayments: generated.details.length,
       },
       details: reconciliation.results,
       cleanupDetails: cleanup.details,
-      errors: reconciliation.errors,
+      generatedDetails: generated.details,
+      errors: [...reconciliation.errors, ...generated.errors],
     });
   } catch (error) {
     console.error('Error running reconciliation:', error);
     res.status(500).json({ error: 'Failed to run reconciliation' });
+  }
+});
+
+// Preview endpoint for generating missing scheduled payments
+router.get('/generate-missing-payments/preview', async (req: any, res) => {
+  try {
+    const result = await getSchoolAdminWithFeatureCheck(req, 'financialReports');
+    if (isError(result)) {
+      return res.status(result.status).json({ error: result.error });
+    }
+    const { schoolId } = result;
+
+    const preview = await generateMissingScheduledPayments(schoolId, true);
+    
+    res.json({
+      message: 'Preview of missing scheduled payments to generate',
+      summary: {
+        enrollmentsProcessed: preview.enrollmentsProcessed,
+        paymentsToCreate: preview.paymentsCreated,
+      },
+      details: preview.details,
+      errors: preview.errors,
+    });
+  } catch (error) {
+    console.error('Error previewing missing payments:', error);
+    res.status(500).json({ error: 'Failed to preview missing payments' });
+  }
+});
+
+// Execute endpoint for generating missing scheduled payments
+router.post('/generate-missing-payments', async (req: any, res) => {
+  try {
+    const result = await getSchoolAdminWithFeatureCheck(req, 'financialReports');
+    if (isError(result)) {
+      return res.status(result.status).json({ error: result.error });
+    }
+    const { schoolId } = result;
+
+    const generated = await generateMissingScheduledPayments(schoolId, false);
+    
+    res.json({
+      message: 'Missing scheduled payments generated',
+      summary: {
+        enrollmentsProcessed: generated.enrollmentsProcessed,
+        paymentsCreated: generated.paymentsCreated,
+      },
+      details: generated.details,
+      errors: generated.errors,
+    });
+  } catch (error) {
+    console.error('Error generating missing payments:', error);
+    res.status(500).json({ error: 'Failed to generate missing payments' });
   }
 });
 
