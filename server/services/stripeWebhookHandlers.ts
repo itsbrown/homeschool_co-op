@@ -224,6 +224,29 @@ export async function handleDirectPaymentSuccess(paymentIntent: Stripe.PaymentIn
           status: 'enrolled'
         });
         console.log(`✅ Updated enrollment ${enrollment.id}: paid=${newTotalPaid}, balance=${newBalance}`);
+        
+        // Mark matching scheduled payment as completed
+        // Find pending scheduled payments for this enrollment and mark as completed
+        try {
+          // Storage already returns payments sorted by scheduledDate, no need to re-sort
+          const scheduledPayments = await storage.getScheduledPaymentsByEnrollmentId(enrollment.id);
+          // Find first pending payment (FIFO - oldest first since storage returns sorted)
+          const paymentToComplete = scheduledPayments.find((sp: any) => sp.status === 'pending');
+          
+          if (paymentToComplete) {
+            // Use updateScheduledPayment to set status to 'completed' (matches schema enum)
+            await storage.updateScheduledPayment(paymentToComplete.id, {
+              status: 'completed',
+              processedAt: new Date(),
+            });
+            console.log(`✅ Marked scheduled payment ${paymentToComplete.id} as completed for enrollment ${enrollment.id}`);
+          } else {
+            // Log when no pending payment found - may need manual reconciliation
+            console.warn(`⚠️ No pending scheduled payment found for enrollment ${enrollment.id} after successful payment - all may already be completed or data anomaly`);
+          }
+        } catch (spError) {
+          console.error(`❌ Failed to update scheduled payment for enrollment ${enrollment.id}:`, spError);
+        }
       } catch (error) {
         console.error(`❌ Error updating enrollment ${enrollment.id}:`, error);
       }

@@ -483,12 +483,19 @@ export const webhookHandler = async (req: Request, res: Response) => {
           const allScheduledPayments = await storage.getScheduledPaymentsByParentEmail(parentEmail);
           const scheduledPayment = allScheduledPayments.find(p => p.id === parseInt(scheduledPaymentId));
           
-          if (scheduledPayment) {
-            // Update the scheduled payment status to paid
-            await storage.updateScheduledPaymentStatus(parseInt(scheduledPaymentId), 'paid');
-            console.log(`✅ Marked scheduled payment ${scheduledPaymentId} as completed`);
+          if (!scheduledPayment) {
+            console.error(`❌ Scheduled payment ${scheduledPaymentId} not found for parent ${parentEmail} - data anomaly requires manual reconciliation`);
+            break;
+          }
+          
+          // Update the scheduled payment status to completed (matches schema enum)
+          await storage.updateScheduledPayment(parseInt(scheduledPaymentId), {
+            status: 'completed',
+            processedAt: new Date(),
+          });
+          console.log(`✅ Marked scheduled payment ${scheduledPaymentId} as completed`);
             
-            // UPDATE ENROLLMENT BALANCE
+          // UPDATE ENROLLMENT BALANCE
             console.log('💰 Updating enrollment balance for scheduled payment...');
             
             // CRITICAL: Each scheduled_payment row is for ONE enrollment with exact prorated amount
@@ -649,10 +656,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
               console.error('❌ Failed to push real-time update for scheduled payment:', error);
             }
             
-            console.log(`✅ Scheduled payment ${scheduledPaymentId} processing complete`);
-          } else {
-            console.error(`❌ Scheduled payment ${scheduledPaymentId} not found`);
-          }
+          console.log(`✅ Scheduled payment ${scheduledPaymentId} processing complete`);
           
           // Break out of switch after processing scheduled payment
           break;
