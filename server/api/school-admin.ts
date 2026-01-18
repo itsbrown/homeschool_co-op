@@ -4779,7 +4779,7 @@ router.get('/users', supabaseAuth, requireSchoolContext, async (req: any, res) =
 
     const db = await getDb();
     
-    // Get all users for this school from database with active role
+    // Get all users for this school from database with active role and location
     const dbUsers = await db
       .select({
         id: users.id,
@@ -4793,8 +4793,12 @@ router.get('/users', supabaseAuth, requireSchoolContext, async (req: any, res) =
         isActive: users.isActive,
         createdAt: users.createdAt,
         schoolId: users.schoolId,
+        locationId: users.locationId,
+        locationName: locations.name,
+        locationCode: locations.code,
       })
       .from(users)
+      .leftJoin(locations, eq(users.locationId, locations.id))
       .where(eq(users.schoolId, Number(schoolId)));
 
     // Load staff from database to create a lookup map by userId
@@ -4828,7 +4832,10 @@ router.get('/users', supabaseAuth, requireSchoolContext, async (req: any, res) =
           isActive: staffRecord.isActive, // Use staff record's isActive, NOT user's
           createdAt: staffRecord.startDate || user.createdAt,
           department: staffRecord.department,
-          position: staffRecord.position || 'Staff Member'
+          position: staffRecord.position || 'Staff Member',
+          locationId: user.locationId,
+          locationName: user.locationName,
+          locationCode: user.locationCode,
         };
       }
       
@@ -4842,6 +4849,9 @@ router.get('/users', supabaseAuth, requireSchoolContext, async (req: any, res) =
         phone: user.phone || '',
         isActive: user.isActive !== false,
         createdAt: user.createdAt,
+        locationId: user.locationId,
+        locationName: user.locationName,
+        locationCode: user.locationCode,
       };
     });
     

@@ -550,12 +550,23 @@ router.get('/export/users-and-children', supabaseAuth, requireSchoolContext, asy
     
     console.log(`👥 Found ${schoolUsers.length} users for school ${schoolId}`);
     
+    // Fetch all locations for this school to create a lookup map
+    const schoolLocations = await storage.getLocationsBySchoolId(schoolId);
+    const locationMap = new Map<number, { id: number; name: string; code: string | null }>(
+      schoolLocations.map((loc: any) => [loc.id, { id: loc.id, name: loc.name, code: loc.code }])
+    );
+    
     // Build export data - one row per child, with parent info repeated
     const exportRows: any[] = [];
     
     for (const user of schoolUsers) {
       // Get children for this user
       const children = await storage.getChildrenByParentId(user.id);
+      
+      // Get location name for this user
+      const userLocation = user.locationId ? locationMap.get(user.locationId) : null;
+      const locationName = userLocation?.name || '';
+      const locationCode = userLocation?.code || '';
       
       if (children.length === 0) {
         // User with no children - still include them
@@ -569,6 +580,8 @@ router.get('/export/users-and-children', supabaseAuth, requireSchoolContext, asy
           userLastName: user.lastName || '',
           userPhone: user.phone || '',
           userRole: user.role,
+          userLocationName: locationName,
+          userLocationCode: locationCode,
           emergencyContactFirstName: user.emergencyContactFirstName || '',
           emergencyContactLastName: user.emergencyContactLastName || '',
           emergencyContactPhone: user.emergencyContactPhone || '',
@@ -605,6 +618,8 @@ router.get('/export/users-and-children', supabaseAuth, requireSchoolContext, asy
             userLastName: user.lastName || '',
             userPhone: user.phone || '',
             userRole: user.role,
+            userLocationName: locationName,
+            userLocationCode: locationCode,
             emergencyContactFirstName: user.emergencyContactFirstName || '',
             emergencyContactLastName: user.emergencyContactLastName || '',
             emergencyContactPhone: user.emergencyContactPhone || '',
@@ -637,6 +652,7 @@ router.get('/export/users-and-children', supabaseAuth, requireSchoolContext, asy
     // Generate CSV
     const headers = [
       'User ID', 'Member ID', 'User Email', 'User Name', 'First Name', 'Last Name', 'Phone', 'Role',
+      'Location', 'Location Code',
       'Emergency Contact First Name', 'Emergency Contact Last Name', 'Emergency Contact Phone', 'Emergency Contact Relationship',
       'User Created At',
       'Child ID', 'Child First Name', 'Child Last Name', 'Child Birthdate', 'Child Grade Level',
@@ -660,7 +676,8 @@ router.get('/export/users-and-children', supabaseAuth, requireSchoolContext, asy
     for (const row of exportRows) {
       const values = [
         row.userId, row.memberId, row.userEmail, row.userName, row.userFirstName, row.userLastName,
-        row.userPhone, row.userRole, row.emergencyContactFirstName, row.emergencyContactLastName,
+        row.userPhone, row.userRole, row.userLocationName, row.userLocationCode,
+        row.emergencyContactFirstName, row.emergencyContactLastName,
         row.emergencyContactPhone, row.emergencyContactRelationship, row.userCreatedAt,
         row.childId, row.childFirstName, row.childLastName, row.childBirthdate, row.childGradeLevel,
         row.childGender, row.childSchool, row.childLearningStyle, row.childSpecialNeeds, row.childInterests,

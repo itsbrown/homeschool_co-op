@@ -48,6 +48,7 @@ import { apiRequest } from '@/lib/queryClient';
 export default function UsersPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRole, setSelectedRole] = useState('all');
+  const [selectedLocation, setSelectedLocation] = useState('all');
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [editingUser, setEditingUser] = useState<any>(null);
@@ -57,6 +58,12 @@ export default function UsersPage() {
   const queryClient = useQueryClient();
   const { schoolId, isLoading: isLoadingSchool, userProfile } = useSchoolAdmin();
   const { toast } = useToast();
+
+  // Fetch locations for the school
+  const { data: locationsData = [] } = useQuery<any[]>({
+    queryKey: ['/api/locations'],
+    enabled: !!schoolId,
+  });
 
   console.log('🔍 UsersPage - schoolId:', schoolId, 'isLoadingSchool:', isLoadingSchool, 'userProfile:', userProfile);
 
@@ -70,13 +77,16 @@ export default function UsersPage() {
 
   const isLoading = isLoadingSchool || isLoadingUsers;
 
-  // Filter users based on search and role
+  // Filter users based on search, role, and location
   const filteredUsers = users.filter((user: any) => {
     const matchesSearch = user.firstName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          user.lastName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          user.email?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesRole = selectedRole === 'all' || user.role === selectedRole;
-    return matchesSearch && matchesRole;
+    const matchesLocation = selectedLocation === 'all' || 
+                           (selectedLocation === 'none' && !user.locationId) ||
+                           String(user.locationId) === selectedLocation;
+    return matchesSearch && matchesRole && matchesLocation;
   });
 
   const getRoleBadgeVariant = (role: string) => {
@@ -410,6 +420,32 @@ export default function UsersPage() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="flex items-center gap-2">
+                  <Filter className="h-4 w-4" />
+                  Location: {selectedLocation === 'all' ? 'All' : 
+                            selectedLocation === 'none' ? 'No Location' :
+                            locationsData.find((l: any) => String(l.id) === selectedLocation)?.name || 'Unknown'}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setSelectedLocation('all')}>
+                  All Locations
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setSelectedLocation('none')}>
+                  No Location
+                </DropdownMenuItem>
+                {locationsData.map((location: any) => (
+                  <DropdownMenuItem 
+                    key={location.id} 
+                    onClick={() => setSelectedLocation(String(location.id))}
+                  >
+                    {location.name} {location.code && `(${location.code})`}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
 
           {/* Users Table */}
@@ -420,6 +456,7 @@ export default function UsersPage() {
                   <TableHead>Name</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Role</TableHead>
+                  <TableHead>Location</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Created</TableHead>
                   <TableHead className="w-[70px]">Actions</TableHead>
@@ -428,8 +465,8 @@ export default function UsersPage() {
               <TableBody>
                 {filteredUsers.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="h-24 text-center">
-                      {searchTerm || selectedRole !== 'all' ? 'No users match your filters.' : 'No users found.'}
+                    <TableCell colSpan={7} className="h-24 text-center">
+                      {searchTerm || selectedRole !== 'all' || selectedLocation !== 'all' ? 'No users match your filters.' : 'No users found.'}
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -456,6 +493,15 @@ export default function UsersPage() {
                         <Badge variant={getRoleBadgeVariant(user.role)}>
                           {getRoleDisplayName(user.role)}
                         </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {user.locationName ? (
+                          <Badge variant="outline">
+                            {user.locationName}
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground text-sm">—</span>
+                        )}
                       </TableCell>
                       <TableCell>
                         <Badge variant={user.isActive ? 'default' : 'secondary'}>

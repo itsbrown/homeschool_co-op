@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { getDb } from '../db';
-import { userLocations } from '@shared/schema';
+import { userLocations, locations, users } from '@shared/schema';
 import { eq, and } from 'drizzle-orm';
 
 export type LocationPermission = 
@@ -105,6 +105,45 @@ export function clearPermissionCache(userId?: number, locationId?: number): void
   }
 }
 
+async function isSchoolAdminForLocation(userId: number, locationId: number): Promise<boolean> {
+  try {
+    const db = await getDb();
+    
+    const userResult = await db.select({
+      role: users.role,
+      schoolId: users.schoolId,
+    })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+
+    if (userResult.length === 0) {
+      return false;
+    }
+
+    const user = userResult[0];
+    const isSchoolAdmin = user.role === 'schoolAdmin' || user.role === 'admin';
+    
+    if (!isSchoolAdmin || !user.schoolId) {
+      return false;
+    }
+
+    const locationResult = await db.select({ schoolId: locations.schoolId })
+      .from(locations)
+      .where(eq(locations.id, locationId))
+      .limit(1);
+
+    if (locationResult.length === 0) {
+      return false;
+    }
+
+    return locationResult[0].schoolId === user.schoolId;
+  } catch (error) {
+    console.error('Error checking school admin status for location:', error);
+    return false;
+  }
+}
+
 export function requireLocationPermission(permission: LocationPermission) {
   return async (req: Request, res: Response, next: NextFunction) => {
     const userId = req.user?.id;
@@ -118,12 +157,17 @@ export function requireLocationPermission(permission: LocationPermission) {
       return res.status(400).json({ error: 'Invalid location ID' });
     }
 
+    const isSchoolAdmin = await isSchoolAdminForLocation(userId, locationId);
+    if (isSchoolAdmin) {
+      return next();
+    }
+
     const hasPermission = await checkLocationPermission(userId, locationId, permission);
 
     if (!hasPermission) {
       return res.status(403).json({ 
         error: 'Access denied',
-        message: `You do not have ${permission} permission for this location`
+        message: `You do not have permission to view parent contacts at this location. Contact your administrator for access.`
       });
     }
 
