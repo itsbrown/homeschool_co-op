@@ -612,10 +612,11 @@ router.get('/export', async (req: any, res) => {
         .where(eq(payments.schoolId, schoolId))
         .orderBy(desc(payments.createdAt));
 
-      csvContent = 'Transaction ID,Amount (cents),Status,Payment Method,Date,Child Name,Class,Parent Email\n';
-      csvContent += paymentsData.map((p: typeof paymentsData[number]) => 
-        `${p.id},${p.amount},${p.status},${p.paymentMethod || 'N/A'},${p.createdAt?.toISOString() || 'N/A'},${p.childName || 'N/A'},${p.className || 'N/A'},${p.parentEmail || 'N/A'}`
-      ).join('\n');
+      csvContent = 'Transaction ID,Amount,Status,Payment Method,Date,Child Name,Class,Parent Email\n';
+      csvContent += paymentsData.map((p: typeof paymentsData[number]) => {
+        const amountDollars = p.amount != null ? `$${(p.amount / 100).toFixed(2)}` : '$0.00';
+        return `${p.id},${amountDollars},${p.status},${p.paymentMethod || 'N/A'},${p.createdAt?.toISOString() || 'N/A'},${p.childName || 'N/A'},${p.className || 'N/A'},${p.parentEmail || 'N/A'}`;
+      }).join('\n');
 
       filename = `payments_export_${new Date().toISOString().split('T')[0]}.csv`;
     } else if (reportType === 'outstanding') {
@@ -662,13 +663,14 @@ router.get('/export', async (req: any, res) => {
         lastPaymentsByParent.map((p: any) => [p.parentEmail, p.lastPaymentDate])
       );
 
-      csvContent = 'Payment ID,Parent Email,Phone,Amount (cents),Scheduled Date,Next Payment Date,Last Payment Date,Installment,Total Installments,Status,Reminders Sent\n';
+      csvContent = 'Payment ID,Parent Email,Phone,Amount,Scheduled Date,Next Payment Date,Last Payment Date,Installment,Total Installments,Status,Reminders Sent\n';
       csvContent += outstandingData.map((o: typeof outstandingData[number]) => {
         const lastPayment = o.parentEmail ? lastPaymentMap.get(o.parentEmail) : null;
         const lastPaymentStr = lastPayment ? new Date(lastPayment).toISOString().split('T')[0] : 'N/A';
         const nextPaymentStr = o.scheduledDate ? new Date(o.scheduledDate).toISOString().split('T')[0] : 'N/A';
         const phoneStr = o.phone || 'N/A';
-        return `${o.id},${o.parentEmail},${phoneStr},${o.amount},${o.scheduledDate?.toISOString() || 'N/A'},${nextPaymentStr},${lastPaymentStr},${o.installmentNumber},${o.totalInstallments},${o.status},${o.reminderCount}`;
+        const amountDollars = o.amount != null ? `$${(o.amount / 100).toFixed(2)}` : '$0.00';
+        return `${o.id},${o.parentEmail},${phoneStr},${amountDollars},${o.scheduledDate?.toISOString() || 'N/A'},${nextPaymentStr},${lastPaymentStr},${o.installmentNumber},${o.totalInstallments},${o.status},${o.reminderCount}`;
       }).join('\n');
 
       filename = `outstanding_balances_${new Date().toISOString().split('T')[0]}.csv`;
