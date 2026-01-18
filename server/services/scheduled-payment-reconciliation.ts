@@ -386,7 +386,7 @@ export async function generateMissingScheduledPayments(
   const allEnrollments = await storage.getAllEnrollments();
   const schoolEnrollments = allEnrollments.filter(e => 
     e.schoolId === schoolId && 
-    ['pending_payment', 'confirmed', 'active'].includes(e.status || '')
+    ['pending_payment', 'confirmed', 'active', 'enrolled'].includes(e.status || '')
   );
   
   const result: GenerateMissingPaymentsResult = {
