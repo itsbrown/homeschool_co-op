@@ -619,6 +619,7 @@ router.get('/export', async (req: any, res) => {
 
       filename = `payments_export_${new Date().toISOString().split('T')[0]}.csv`;
     } else if (reportType === 'outstanding') {
+      // Get outstanding scheduled payments with user phone numbers via left join
       const outstandingData = await db
         .select({
           id: scheduledPayments.id,
@@ -629,8 +630,10 @@ router.get('/export', async (req: any, res) => {
           totalInstallments: scheduledPayments.totalInstallments,
           status: scheduledPayments.status,
           reminderCount: scheduledPayments.reminderCount,
+          phone: users.phone,
         })
         .from(scheduledPayments)
+        .leftJoin(users, eq(scheduledPayments.parentEmail, users.email))
         .where(
           and(
             eq(scheduledPayments.schoolId, schoolId),
@@ -639,10 +642,34 @@ router.get('/export', async (req: any, res) => {
         )
         .orderBy(scheduledPayments.scheduledDate);
 
-      csvContent = 'Payment ID,Parent Email,Amount (cents),Scheduled Date,Installment,Total Installments,Status,Reminders Sent\n';
-      csvContent += outstandingData.map((o: typeof outstandingData[number]) => 
-        `${o.id},${o.parentEmail},${o.amount},${o.scheduledDate?.toISOString() || 'N/A'},${o.installmentNumber},${o.totalInstallments},${o.status},${o.reminderCount}`
-      ).join('\n');
+      // Get last payment date for each parent email
+      const lastPaymentsByParent = await db
+        .select({
+          parentEmail: payments.parentEmail,
+          lastPaymentDate: sql<Date>`MAX(${payments.createdAt})`,
+        })
+        .from(payments)
+        .where(
+          and(
+            eq(payments.schoolId, schoolId),
+            eq(payments.status, 'completed')
+          )
+        )
+        .groupBy(payments.parentEmail);
+
+      // Create a lookup map for last payment dates
+      const lastPaymentMap = new Map<string, Date | null>(
+        lastPaymentsByParent.map((p: any) => [p.parentEmail, p.lastPaymentDate])
+      );
+
+      csvContent = 'Payment ID,Parent Email,Phone,Amount (cents),Scheduled Date,Next Payment Date,Last Payment Date,Installment,Total Installments,Status,Reminders Sent\n';
+      csvContent += outstandingData.map((o: typeof outstandingData[number]) => {
+        const lastPayment = o.parentEmail ? lastPaymentMap.get(o.parentEmail) : null;
+        const lastPaymentStr = lastPayment ? new Date(lastPayment).toISOString().split('T')[0] : 'N/A';
+        const nextPaymentStr = o.scheduledDate ? new Date(o.scheduledDate).toISOString().split('T')[0] : 'N/A';
+        const phoneStr = o.phone || 'N/A';
+        return `${o.id},${o.parentEmail},${phoneStr},${o.amount},${o.scheduledDate?.toISOString() || 'N/A'},${nextPaymentStr},${lastPaymentStr},${o.installmentNumber},${o.totalInstallments},${o.status},${o.reminderCount}`;
+      }).join('\n');
 
       filename = `outstanding_balances_${new Date().toISOString().split('T')[0]}.csv`;
     }
