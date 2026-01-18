@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -10,6 +10,10 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Progress } from "@/components/ui/progress";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -18,10 +22,36 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Calendar, DollarSign, Edit, Loader2, AlertTriangle, Clock, CheckCircle2, RotateCcw } from "lucide-react";
-import { formatCurrency, centsToDollars } from "@/utils/currency";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { 
+  Calendar, 
+  DollarSign, 
+  Edit, 
+  Loader2, 
+  AlertTriangle, 
+  Clock, 
+  CheckCircle2, 
+  RotateCcw,
+  Users,
+  ClipboardList,
+  Search,
+  MoreHorizontal,
+  Mail,
+  Eye,
+  LayoutGrid,
+  LayoutList,
+  TrendingUp
+} from "lucide-react";
+import { formatCurrency } from "@/utils/currency";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { RefundDialog } from "@/components/payments/RefundDialog";
+import { cn } from "@/lib/utils";
 
 interface Enrollment {
   id: number;
@@ -37,6 +67,7 @@ interface Enrollment {
   waitlistPosition?: number | null;
   programStartDate?: string;
   programEndDate?: string;
+  parentEmail?: string;
   metadata?: {
     paymentPlanHistory?: Array<{
       timestamp: string;
@@ -80,6 +111,91 @@ interface PaymentPlanDetails {
   }>;
 }
 
+type StatusFilter = 'all' | 'enrolled' | 'waitlist' | 'pending_payment' | 'cancelled';
+
+function MetricCard({ 
+  title, 
+  value, 
+  subtitle, 
+  icon: Icon,
+  trend,
+  trendValue 
+}: { 
+  title: string; 
+  value: string | number; 
+  subtitle?: string; 
+  icon: any;
+  trend?: 'up' | 'down' | 'neutral';
+  trendValue?: string;
+}) {
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-sm font-medium">{title}</CardTitle>
+        <Icon className="h-4 w-4 text-muted-foreground" />
+      </CardHeader>
+      <CardContent>
+        <div className="text-2xl font-bold">{value}</div>
+        {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
+        {trend && trendValue && (
+          <p className={cn(
+            "text-xs flex items-center mt-1",
+            trend === 'up' ? 'text-green-600' : trend === 'down' ? 'text-red-600' : 'text-gray-500'
+          )}>
+            {trend === 'up' && <TrendingUp className="h-3 w-3 mr-1" />}
+            {trendValue}
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function LoadingState() {
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {[1, 2, 3, 4].map((i) => (
+          <Card key={i}>
+            <CardHeader className="pb-2">
+              <Skeleton className="h-4 w-[100px]" />
+            </CardHeader>
+            <CardContent>
+              <Skeleton className="h-8 w-[80px]" />
+              <Skeleton className="h-3 w-[120px] mt-2" />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+      <Card>
+        <CardHeader>
+          <Skeleton className="h-6 w-[200px]" />
+        </CardHeader>
+        <CardContent>
+          <Skeleton className="h-[300px] w-full" />
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function PaymentProgressBar({ paid, total }: { paid: number; total: number }) {
+  const percentage = total > 0 ? Math.min(100, (paid / total) * 100) : 0;
+  const isComplete = percentage >= 100;
+  
+  return (
+    <div className="w-full min-w-[100px]">
+      <Progress 
+        value={percentage} 
+        className={cn("h-2", isComplete ? "[&>div]:bg-green-500" : "")}
+      />
+      <p className="text-xs text-muted-foreground mt-1">
+        {Math.round(percentage)}% paid
+      </p>
+    </div>
+  );
+}
+
 export default function EnrollmentsAdminPage() {
   const { toast } = useToast();
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -89,6 +205,9 @@ export default function EnrollmentsAdminPage() {
   const [adminComment, setAdminComment] = useState("");
   const [refundDialogOpen, setRefundDialogOpen] = useState(false);
   const [refundEnrollment, setRefundEnrollment] = useState<Enrollment | null>(null);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [searchTerm, setSearchTerm] = useState("");
+  const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
 
   // Fetch all enrollments for the school
   const { data: enrollments = [], isLoading, refetch } = useQuery<Enrollment[]>({
@@ -108,6 +227,73 @@ export default function EnrollmentsAdminPage() {
       setSelectedFrequency(planDetails.enrollment.currentFrequency || planDetails.enrollment.paymentFrequency || "one_time");
     }
   }, [planDetails]);
+
+  // Calculate metrics from enrollments (values are in cents, formatCurrency handles conversion)
+  const metrics = useMemo(() => {
+    const totalEnrolled = enrollments.filter(e => e.status === 'enrolled' || e.status === 'active').length;
+    const totalWaitlist = enrollments.filter(e => e.status === 'waitlist').length;
+    const totalPending = enrollments.filter(e => 
+      e.status === 'pending_payment' || e.paymentStatus === 'pending' || e.paymentStatus === 'pending_payment'
+    ).length;
+    const totalRevenue = enrollments.reduce((sum, e) => sum + (e.totalPaid || 0), 0);
+    const totalOutstanding = enrollments.reduce((sum, e) => sum + (e.remainingBalance || 0), 0);
+    
+    return {
+      totalEnrolled,
+      totalWaitlist,
+      totalPending,
+      totalRevenue,
+      totalOutstanding,
+      total: enrollments.length
+    };
+  }, [enrollments]);
+
+  // Filter enrollments based on status and search
+  const filteredEnrollments = useMemo(() => {
+    return enrollments.filter(enrollment => {
+      // Status filter
+      if (statusFilter !== 'all') {
+        if (statusFilter === 'enrolled' && enrollment.status !== 'enrolled' && enrollment.status !== 'active') {
+          return false;
+        }
+        if (statusFilter === 'waitlist' && enrollment.status !== 'waitlist') {
+          return false;
+        }
+        if (statusFilter === 'pending_payment' && 
+            enrollment.status !== 'pending_payment' && 
+            enrollment.paymentStatus !== 'pending' && 
+            enrollment.paymentStatus !== 'pending_payment') {
+          return false;
+        }
+        if (statusFilter === 'cancelled' && enrollment.status !== 'cancelled') {
+          return false;
+        }
+      }
+      
+      // Search filter
+      if (searchTerm) {
+        const search = searchTerm.toLowerCase();
+        return (
+          enrollment.childName?.toLowerCase().includes(search) ||
+          enrollment.className?.toLowerCase().includes(search) ||
+          enrollment.parentEmail?.toLowerCase().includes(search)
+        );
+      }
+      
+      return true;
+    });
+  }, [enrollments, statusFilter, searchTerm]);
+
+  // Count by status for tabs
+  const statusCounts = useMemo(() => ({
+    all: enrollments.length,
+    enrolled: enrollments.filter(e => e.status === 'enrolled' || e.status === 'active').length,
+    waitlist: enrollments.filter(e => e.status === 'waitlist').length,
+    pending_payment: enrollments.filter(e => 
+      e.status === 'pending_payment' || e.paymentStatus === 'pending' || e.paymentStatus === 'pending_payment'
+    ).length,
+    cancelled: enrollments.filter(e => e.status === 'cancelled').length,
+  }), [enrollments]);
 
   // Update payment plan mutation
   const updatePaymentPlan = useMutation({
@@ -137,7 +323,6 @@ export default function EnrollmentsAdminPage() {
         description: `Successfully updated to ${data.newSchedule.frequency} payment plan`,
       });
       
-      // Show Stripe review warning if needed
       if (data.stripeUpdate?.status === "manual_review_required") {
         toast({
           title: "Stripe Review Required",
@@ -183,7 +368,6 @@ export default function EnrollmentsAdminPage() {
         description: `${enrollment.childName} has been promoted from the waitlist for ${enrollment.className}. They can now proceed with payment.`,
       });
       
-      // Refresh the enrollments list
       refetch();
     } catch (error) {
       console.error("Failed to promote from waitlist:", error);
@@ -217,7 +401,6 @@ export default function EnrollmentsAdminPage() {
         description: `${enrollment.childName} is now enrolled in ${enrollment.className}.`,
       });
       
-      // Refresh the enrollments list
       refetch();
     } catch (error) {
       console.error("Failed to mark as enrolled:", error);
@@ -269,22 +452,32 @@ export default function EnrollmentsAdminPage() {
       case "paid":
       case "active":
       case "completed":
+      case "enrolled":
         return "default";
       case "pending_payment":
       case "pending_admin_approval":
+      case "pending":
         return "secondary";
       case "overdue":
         return "destructive";
+      case "waitlist":
+        return "outline";
       default:
         return "outline";
     }
   };
 
-  const getStatusDisplayText = (status: string, paymentStatus: string) => {
-    if (status === 'pending_admin_approval') {
+  const getStatusDisplayText = (enrollment: Enrollment) => {
+    if (enrollment.status === 'waitlist') {
+      return `Waitlist #${enrollment.waitlistPosition || '?'}`;
+    }
+    if (enrollment.status === 'pending_admin_approval') {
       return 'Pending Approval';
     }
-    return paymentStatus;
+    if (enrollment.status === 'enrolled' || enrollment.status === 'active') {
+      return 'Enrolled';
+    }
+    return enrollment.paymentStatus || enrollment.status || 'Unknown';
   };
 
   const selectedPreviewData = paymentPlanDetails && selectedFrequency && paymentPlanDetails.frequencyPreviews[selectedFrequency];
@@ -294,8 +487,8 @@ export default function EnrollmentsAdminPage() {
   if (isLoading) {
     return (
       <SchoolAdminLayout pageTitle="Enrollment Management">
-        <div className="flex justify-center items-center min-h-[50vh]">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        <div className="container mx-auto p-4">
+          <LoadingState />
         </div>
       </SchoolAdminLayout>
     );
@@ -304,92 +497,278 @@ export default function EnrollmentsAdminPage() {
   return (
     <SchoolAdminLayout pageTitle="Enrollment Management">
       <div className="container mx-auto p-4 space-y-6">
-        <div className="flex items-center justify-between">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold">Enrollment Management</h1>
             <p className="text-muted-foreground">Manage student enrollments and payment plans</p>
           </div>
         </div>
 
+        {/* Metrics Cards */}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <MetricCard
+            title="Total Enrolled"
+            value={metrics.totalEnrolled}
+            subtitle={`of ${metrics.total} total enrollments`}
+            icon={Users}
+          />
+          <MetricCard
+            title="Waitlist"
+            value={metrics.totalWaitlist}
+            subtitle="students waiting"
+            icon={ClipboardList}
+          />
+          <MetricCard
+            title="Pending Payment"
+            value={metrics.totalPending}
+            subtitle="awaiting payment"
+            icon={Clock}
+          />
+          <MetricCard
+            title="Revenue Collected"
+            value={formatCurrency(metrics.totalRevenue)}
+            subtitle={`${formatCurrency(metrics.totalOutstanding)} outstanding`}
+            icon={DollarSign}
+          />
+        </div>
+
+        {/* Filters and Search */}
         <Card>
-          <CardHeader>
-            <CardTitle>Active Enrollments</CardTitle>
-            <CardDescription>
-              View and edit payment plans for student enrollments
-            </CardDescription>
+          <CardHeader className="pb-3">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <CardTitle>Enrollments</CardTitle>
+                <CardDescription>
+                  {filteredEnrollments.length} of {enrollments.length} enrollments
+                </CardDescription>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search student, class..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-9 w-[200px] sm:w-[250px]"
+                  />
+                </div>
+                <div className="hidden sm:flex border rounded-md">
+                  <Button
+                    variant={viewMode === 'table' ? 'secondary' : 'ghost'}
+                    size="sm"
+                    onClick={() => setViewMode('table')}
+                    className="rounded-r-none"
+                  >
+                    <LayoutList className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant={viewMode === 'cards' ? 'secondary' : 'ghost'}
+                    size="sm"
+                    onClick={() => setViewMode('cards')}
+                    className="rounded-l-none"
+                  >
+                    <LayoutGrid className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </div>
           </CardHeader>
+
+          {/* Status Tabs */}
+          <div className="px-6 pb-4">
+            <Tabs value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
+              <TabsList className="grid w-full grid-cols-5 lg:w-auto lg:inline-flex">
+                <TabsTrigger value="all" className="text-xs sm:text-sm">
+                  All ({statusCounts.all})
+                </TabsTrigger>
+                <TabsTrigger value="enrolled" className="text-xs sm:text-sm">
+                  Enrolled ({statusCounts.enrolled})
+                </TabsTrigger>
+                <TabsTrigger value="waitlist" className="text-xs sm:text-sm">
+                  Waitlist ({statusCounts.waitlist})
+                </TabsTrigger>
+                <TabsTrigger value="pending_payment" className="text-xs sm:text-sm">
+                  Pending ({statusCounts.pending_payment})
+                </TabsTrigger>
+                <TabsTrigger value="cancelled" className="text-xs sm:text-sm">
+                  Cancelled ({statusCounts.cancelled})
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
+
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Student</TableHead>
-                  <TableHead>Class</TableHead>
-                  <TableHead>Payment Plan</TableHead>
-                  <TableHead>Total Cost</TableHead>
-                  <TableHead>Paid</TableHead>
-                  <TableHead>Balance</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {enrollments.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={8} className="text-center text-muted-foreground">
-                      No enrollments found
-                    </TableCell>
-                  </TableRow>
+            {viewMode === 'table' ? (
+              /* Table View */
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Student</TableHead>
+                      <TableHead className="hidden md:table-cell">Class</TableHead>
+                      <TableHead className="hidden lg:table-cell">Payment Plan</TableHead>
+                      <TableHead>Payment Progress</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredEnrollments.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                          {searchTerm || statusFilter !== 'all' 
+                            ? 'No enrollments match your filters'
+                            : 'No enrollments found'}
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      filteredEnrollments.map((enrollment) => (
+                        <TableRow key={enrollment.id}>
+                          <TableCell>
+                            <div>
+                              <div className="font-medium">{enrollment.childName}</div>
+                              <div className="text-sm text-muted-foreground md:hidden">
+                                {enrollment.className}
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="hidden md:table-cell">{enrollment.className}</TableCell>
+                          <TableCell className="hidden lg:table-cell">
+                            {formatFrequency(enrollment.paymentFrequency)}
+                          </TableCell>
+                          <TableCell>
+                            <div className="space-y-1">
+                              <PaymentProgressBar 
+                                paid={enrollment.totalPaid} 
+                                total={enrollment.totalCost} 
+                              />
+                              <div className="text-xs text-muted-foreground">
+                                {formatCurrency(enrollment.totalPaid)} / {formatCurrency(enrollment.totalCost)}
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={getStatusBadgeVariant(enrollment.status || enrollment.paymentStatus)}>
+                              {getStatusDisplayText(enrollment)}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                {enrollment.status === 'waitlist' ? (
+                                  <DropdownMenuItem onClick={() => handlePromoteFromWaitlist(enrollment)}>
+                                    <CheckCircle2 className="h-4 w-4 mr-2" />
+                                    Promote from Waitlist
+                                  </DropdownMenuItem>
+                                ) : (
+                                  <>
+                                    <DropdownMenuItem onClick={() => handleEditClick(enrollment)}>
+                                      <Edit className="h-4 w-4 mr-2" />
+                                      Edit Payment Plan
+                                    </DropdownMenuItem>
+                                    {(enrollment.paymentStatus === 'pending_payment' || enrollment.paymentStatus === 'pending') && (
+                                      <DropdownMenuItem onClick={() => handleMarkAsEnrolled(enrollment)}>
+                                        <CheckCircle2 className="h-4 w-4 mr-2" />
+                                        Mark as Enrolled
+                                      </DropdownMenuItem>
+                                    )}
+                                    {enrollment.status === 'pending_admin_approval' && (
+                                      <DropdownMenuItem onClick={() => handleMarkAsEnrolled(enrollment)}>
+                                        <CheckCircle2 className="h-4 w-4 mr-2" />
+                                        Approve Enrollment
+                                      </DropdownMenuItem>
+                                    )}
+                                    {enrollment.totalPaid > 0 && (
+                                      <>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem 
+                                          onClick={() => {
+                                            setRefundEnrollment(enrollment);
+                                            setRefundDialogOpen(true);
+                                          }}
+                                          className="text-red-600"
+                                        >
+                                          <RotateCcw className="h-4 w-4 mr-2" />
+                                          Issue Refund
+                                        </DropdownMenuItem>
+                                      </>
+                                    )}
+                                  </>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            ) : (
+              /* Card View - Mobile Friendly */
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {filteredEnrollments.length === 0 ? (
+                  <div className="col-span-full text-center text-muted-foreground py-8">
+                    {searchTerm || statusFilter !== 'all' 
+                      ? 'No enrollments match your filters'
+                      : 'No enrollments found'}
+                  </div>
                 ) : (
-                  enrollments.map((enrollment) => (
-                    <TableRow key={enrollment.id}>
-                      <TableCell className="font-medium">{enrollment.childName}</TableCell>
-                      <TableCell>{enrollment.className}</TableCell>
-                      <TableCell>{formatFrequency(enrollment.paymentFrequency)}</TableCell>
-                      <TableCell>{formatCurrency(enrollment.totalCost)}</TableCell>
-                      <TableCell>{formatCurrency(enrollment.totalPaid)}</TableCell>
-                      <TableCell>{formatCurrency(enrollment.remainingBalance)}</TableCell>
-                      <TableCell>
-                        <div className="flex flex-col gap-1">
-                          {enrollment.status === 'waitlist' ? (
-                            <>
-                              <Badge variant="secondary">
-                                Waitlist
-                              </Badge>
-                              {enrollment.waitlistPosition && (
-                                <span className="text-xs text-muted-foreground">
-                                  Position #{enrollment.waitlistPosition}
-                                </span>
-                              )}
-                            </>
-                          ) : enrollment.status === 'pending_admin_approval' ? (
-                            <Badge variant="secondary" className="bg-amber-100 text-amber-800">
-                              Pending Approval
-                            </Badge>
-                          ) : (
-                            <Badge variant={getStatusBadgeVariant(enrollment.paymentStatus)}>
-                              {enrollment.paymentStatus}
-                            </Badge>
-                          )}
+                  filteredEnrollments.map((enrollment) => (
+                    <Card key={enrollment.id} className="relative">
+                      <CardHeader className="pb-2">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <CardTitle className="text-base">{enrollment.childName}</CardTitle>
+                            <CardDescription>{enrollment.className}</CardDescription>
+                          </div>
+                          <Badge variant={getStatusBadgeVariant(enrollment.status || enrollment.paymentStatus)}>
+                            {getStatusDisplayText(enrollment)}
+                          </Badge>
                         </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex gap-2">
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div>
+                          <div className="text-sm text-muted-foreground mb-1">Payment Progress</div>
+                          <PaymentProgressBar 
+                            paid={enrollment.totalPaid} 
+                            total={enrollment.totalCost} 
+                          />
+                          <div className="flex justify-between text-sm mt-1">
+                            <span>{formatCurrency(enrollment.totalPaid)} paid</span>
+                            <span>{formatCurrency(enrollment.remainingBalance)} remaining</span>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">Plan:</span>
+                          <span>{formatFrequency(enrollment.paymentFrequency)}</span>
+                        </div>
+
+                        <div className="flex gap-2 pt-2 border-t">
                           {enrollment.status === 'waitlist' ? (
                             <Button
                               variant="default"
                               size="sm"
+                              className="flex-1"
                               onClick={() => handlePromoteFromWaitlist(enrollment)}
-                              data-testid={`button-promote-${enrollment.id}`}
                             >
+                              <CheckCircle2 className="h-4 w-4 mr-2" />
                               Promote
                             </Button>
                           ) : (
                             <>
                               <Button
-                                variant="ghost"
+                                variant="outline"
                                 size="sm"
+                                className="flex-1"
                                 onClick={() => handleEditClick(enrollment)}
-                                data-testid={`button-edit-payment-plan-${enrollment.id}`}
                               >
                                 <Edit className="h-4 w-4 mr-2" />
                                 Edit Plan
@@ -403,44 +782,19 @@ export default function EnrollmentsAdminPage() {
                                     setRefundDialogOpen(true);
                                   }}
                                   className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                                  data-testid={`button-issue-refund-${enrollment.id}`}
                                 >
-                                  <RotateCcw className="h-4 w-4 mr-2" />
-                                  Refund
-                                </Button>
-                              )}
-                              {(enrollment.paymentStatus === 'pending_payment' || enrollment.paymentStatus === 'pending') && (
-                                <Button
-                                  variant="default"
-                                  size="sm"
-                                  onClick={() => handleMarkAsEnrolled(enrollment)}
-                                  data-testid={`button-mark-enrolled-${enrollment.id}`}
-                                >
-                                  <CheckCircle2 className="h-4 w-4 mr-2" />
-                                  Mark Enrolled
-                                </Button>
-                              )}
-                              {enrollment.status === 'pending_admin_approval' && (
-                                <Button
-                                  variant="default"
-                                  size="sm"
-                                  className="bg-green-600 hover:bg-green-700"
-                                  onClick={() => handleMarkAsEnrolled(enrollment)}
-                                  data-testid={`button-approve-${enrollment.id}`}
-                                >
-                                  <CheckCircle2 className="h-4 w-4 mr-2" />
-                                  Approve
+                                  <RotateCcw className="h-4 w-4" />
                                 </Button>
                               )}
                             </>
                           )}
                         </div>
-                      </TableCell>
-                    </TableRow>
+                      </CardContent>
+                    </Card>
                   ))
                 )}
-              </TableBody>
-            </Table>
+              </div>
+            )}
           </CardContent>
         </Card>
 
