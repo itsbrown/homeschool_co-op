@@ -335,9 +335,6 @@ export async function generateMissingScheduledPayments(
     ['pending_payment', 'confirmed', 'active'].includes(e.status || '')
   );
   
-  const allScheduledPayments = await storage.getAllScheduledPayments();
-  const schoolPayments = allScheduledPayments.filter((sp: any) => sp.schoolId === schoolId);
-  
   const result: GenerateMissingPaymentsResult = {
     enrollmentsProcessed: 0,
     paymentsCreated: 0,
@@ -358,18 +355,37 @@ export async function generateMissingScheduledPayments(
         continue;
       }
       
-      // Check if there are pending scheduled payments for this enrollment
-      const enrollmentPayments = schoolPayments.filter(
-        (sp: any) => sp.enrollmentId === enrollment.id && sp.status === 'pending'
+      // IMPORTANT: Fetch fresh scheduled payments per enrollment to get latest status
+      // This ensures reconciliation changes (completed status) are reflected
+      const freshEnrollmentPayments = await storage.getScheduledPaymentsByEnrollmentId(enrollment.id);
+      
+      // Get ALL scheduled payments for this enrollment (completed + pending, excluding cancelled)
+      const allEnrollmentScheduledPayments = freshEnrollmentPayments.filter(
+        (sp: any) => sp.status !== 'cancelled' && sp.status !== 'skipped'
       );
-      const pendingTotal = enrollmentPayments.reduce((sum: number, sp: any) => sum + sp.amount, 0);
+      
+      // Check if the total scheduled amount already covers totalCost
+      const totalScheduledAmount = allEnrollmentScheduledPayments.reduce(
+        (sum: number, sp: any) => sum + sp.amount, 0
+      );
+      
+      // If scheduled payments already cover the full cost, no gap to fill
+      if (totalScheduledAmount >= totalCost - 100) { // Allow $1 buffer
+        continue;
+      }
+      
+      // Check pending payments specifically for the gap calculation
+      const pendingPayments = allEnrollmentScheduledPayments.filter(
+        (sp: any) => sp.status === 'pending'
+      );
+      const pendingTotal = pendingPayments.reduce((sum: number, sp: any) => sum + sp.amount, 0);
       
       // If pending payments already cover the remaining balance, skip
       if (pendingTotal >= remainingBalance - 100) { // Allow $1 buffer
         continue;
       }
       
-      // Need to create a scheduled payment for the gap
+      // Calculate gap: what's still owed that doesn't have a pending payment
       const gapAmount = remainingBalance - pendingTotal;
       
       // Get parent info
@@ -385,16 +401,11 @@ export async function generateMissingScheduledPayments(
       const parentUser = await storage.getUserByEmail(parentEmail);
       const parentId = parentUser?.id || 0;
       
-      // Get all scheduled payments for this enrollment (including completed ones) to preserve plan structure
-      const allEnrollmentPayments = schoolPayments.filter(
-        (sp: any) => sp.enrollmentId === enrollment.id
-      );
-      
-      // Determine existing plan structure
-      const existingTotalInstallments = allEnrollmentPayments.reduce(
+      // Determine existing plan structure from all scheduled payments (reuse the variable from above)
+      const existingTotalInstallments = allEnrollmentScheduledPayments.reduce(
         (max: number, sp: any) => Math.max(max, sp.totalInstallments || 1), 1
       );
-      const maxInstallment = allEnrollmentPayments.reduce(
+      const maxInstallment = allEnrollmentScheduledPayments.reduce(
         (max: number, sp: any) => Math.max(max, sp.installmentNumber || 0), 0
       );
       
@@ -432,6 +443,8 @@ export async function generateMissingScheduledPayments(
           processedAt: null,
           failureReason: null,
           retryCount: 0,
+          reminderCount: 0,
+          lastReminderSentAt: null,
           metadata: {
             generatedForMissingBalance: true,
             generatedAt: new Date().toISOString(),
