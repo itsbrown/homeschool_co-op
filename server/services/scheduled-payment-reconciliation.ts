@@ -198,8 +198,9 @@ export async function cleanupScheduledPayments(
     
     const pendingPayments = payments.filter((p: any) => p.status === 'pending');
     
-    // Remove orphaned payments (enrollment doesn't exist or is cancelled)
-    if (!enrollment || enrollment.status === 'cancelled') {
+    // Remove orphaned payments (enrollment doesn't exist or is in a terminal status)
+    const terminalStatuses = ['cancelled', 'withdrawn', 'failed'];
+    if (!enrollment || terminalStatuses.includes(enrollment.status)) {
       for (const sp of pendingPayments) {
         if (!dryRun) {
           await storage.updateScheduledPayment(sp.id, { status: 'cancelled' });
@@ -215,17 +216,23 @@ export async function cleanupScheduledPayments(
       continue;
     }
     
-    // Find duplicates (same installmentNumber, same enrollmentId, both pending)
-    const installmentMap = new Map<number, typeof pendingPayments>();
+    // Find duplicates - only for payments with the SAME installmentNumber, amount, AND scheduledDate
+    // This prevents false positives on deposits or variable schedules with null installmentNumber
+    const duplicateKeyMap = new Map<string, typeof pendingPayments>();
     for (const sp of pendingPayments) {
-      const key = sp.installmentNumber || 0;
-      if (!installmentMap.has(key)) {
-        installmentMap.set(key, []);
+      // Only consider as potential duplicate if installmentNumber is set
+      // Payments without installmentNumber are unique by definition (deposits, one-time payments)
+      if (sp.installmentNumber != null) {
+        const dateStr = new Date(sp.scheduledDate).toISOString().split('T')[0];
+        const key = `${sp.installmentNumber}-${sp.amount}-${dateStr}`;
+        if (!duplicateKeyMap.has(key)) {
+          duplicateKeyMap.set(key, []);
+        }
+        duplicateKeyMap.get(key)!.push(sp);
       }
-      installmentMap.get(key)!.push(sp);
     }
     
-    for (const [installmentNum, duplicates] of installmentMap) {
+    for (const [key, duplicates] of duplicateKeyMap) {
       if (duplicates.length > 1) {
         // Keep the oldest one (lowest ID), remove the rest
         const sorted = duplicates.sort((a: any, b: any) => a.id - b.id);
