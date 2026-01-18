@@ -5,6 +5,7 @@ import { useAuth } from "@/components/SupabaseProvider";
 import { useRole } from "@/contexts/RoleContext";
 import { cn } from '@/lib/utils';
 import RoleSwitcher from "@/components/RoleSwitcher";
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 import { 
   School, 
   BookOpen, 
@@ -35,7 +36,11 @@ import {
   Gift,
   Shield,
   Phone,
-  BarChart3
+  BarChart3,
+  ChevronDown,
+  Building2,
+  Wallet,
+  FolderOpen
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -51,133 +56,78 @@ interface NavItem {
   icon: LucideIcon;
 }
 
-// Navigation items for school administrators
-const adminNavItems: NavItem[] = [
+interface NavGroup {
+  title: string;
+  icon: LucideIcon;
+  items: NavItem[];
+}
+
+// Grouped navigation items for school administrators - mobile-first design
+const adminNavGroups: NavGroup[] = [
   {
-    title: 'Dashboard',
-    href: '/dashboard',
-    icon: Home,
+    title: 'School',
+    icon: Building2,
+    items: [
+      { title: 'My School', href: '/schools/my-school', icon: School },
+      { title: 'Locations', href: '/schools/locations', icon: MapPin },
+      { title: 'Classes', href: '/schools/classes', icon: BookOpen },
+      { title: 'Categories', href: '/schools/categories', icon: Tag },
+      { title: 'Calendar', href: '/schools/calendar', icon: CalendarDays },
+    ],
   },
   {
-    title: 'My School',
-    href: '/schools/my-school',
-    icon: School,
-  },
-  {
-    title: 'Classes',
-    href: '/schools/classes',
-    icon: BookOpen,
-  },
-  {
-    title: 'Staff',
-    href: '/schools/staff',
+    title: 'People',
     icon: Users,
-  },
-  {
-    title: 'Staff Hours',
-    href: '/schools/staff/hours',
-    icon: Clock,
-  },
-  {
-    title: 'Students',
-    href: '/schools/students',
-    icon: GraduationCap,
+    items: [
+      { title: 'Staff', href: '/schools/staff', icon: Users },
+      { title: 'Staff Hours', href: '/schools/staff/hours', icon: Clock },
+      { title: 'Staff Permissions', href: '/school-admin/staff-permissions', icon: Shield },
+      { title: 'Students', href: '/schools/students', icon: GraduationCap },
+      { title: 'Users', href: '/schools/users', icon: UserPlus },
+    ],
   },
   {
     title: 'Enrollments',
-    href: '/schools/enrollments',
     icon: GraduationCap,
+    items: [
+      { title: 'Enrollments', href: '/schools/enrollments', icon: GraduationCap },
+      { title: 'Location Enrollments', href: '/school-admin/location-enrollments', icon: Phone },
+    ],
   },
   {
-    title: 'Users',
-    href: '/schools/users',
-    icon: UserPlus,
+    title: 'Finance',
+    icon: Wallet,
+    items: [
+      { title: 'Financial Reports', href: '/school-admin/financial-reports', icon: BarChart3 },
+      { title: 'Manual Payments', href: '/schools/manual-payments', icon: CreditCard },
+      { title: 'Discounts', href: '/schools/discounts', icon: Target },
+      { title: 'Credits', href: '/school-admin/credits', icon: Coins },
+      { title: 'Fundraisers', href: '/school-admin/fundraisers', icon: Gift },
+    ],
   },
   {
-    title: 'Forms',
-    href: '/school-admin/forms',
-    icon: ClipboardList,
+    title: 'Content',
+    icon: FolderOpen,
+    items: [
+      { title: 'Forms', href: '/school-admin/forms', icon: ClipboardList },
+      { title: 'Documents', href: '/school-admin/documents', icon: FileText },
+      { title: 'Knowledge Base', href: '/schools/knowledge-base', icon: Database },
+      { title: 'Marketing Links', href: '/schools/marketing-links', icon: Link2 },
+    ],
   },
   {
-    title: 'Documents',
-    href: '/school-admin/documents',
-    icon: FileText,
-  },
-  {
-    title: 'Discounts',
-    href: '/schools/discounts',
-    icon: Target,
-  },
-  {
-    title: 'Credits',
-    href: '/school-admin/credits',
-    icon: Coins,
-  },
-  {
-    title: 'Fundraisers',
-    href: '/school-admin/fundraisers',
-    icon: Gift,
-  },
-  {
-    title: 'Manual Payments',
-    href: '/schools/manual-payments',
-    icon: CreditCard,
-  },
-  {
-    title: 'Knowledge Base',
-    href: '/schools/knowledge-base',
-    icon: Database,
-  },
-  {
-    title: 'Marketing Links',
-    href: '/schools/marketing-links',
-    icon: Link2,
-  },
-  {
-    title: 'Locations',
-    href: '/schools/locations',
-    icon: MapPin,
-  },
-  {
-    title: 'Staff Permissions',
-    href: '/school-admin/staff-permissions',
-    icon: Shield,
-  },
-  {
-    title: 'Location Enrollments',
-    href: '/school-admin/location-enrollments',
-    icon: Phone,
-  },
-  {
-    title: 'Categories',
-    href: '/schools/categories',
-    icon: Tag,
-  },
-  {
-    title: 'Notifications',
-    href: '/schools/notifications',
+    title: 'Communication',
     icon: Bell,
+    items: [
+      { title: 'Notifications', href: '/schools/notifications', icon: Bell },
+      { title: 'Announcements', href: '/schools/announcements', icon: Megaphone },
+    ],
   },
-  {
-    title: 'Announcements',
-    href: '/schools/announcements',
-    icon: Megaphone,
-  },
-  {
-    title: 'Calendar',
-    href: '/schools/calendar',
-    icon: CalendarDays,
-  },
-  {
-    title: 'Financial Reports',
-    href: '/school-admin/financial-reports',
-    icon: BarChart3,
-  },
-  {
-    title: 'Settings',
-    href: '/schools/settings',
-    icon: Settings,
-  },
+];
+
+// Educator-specific nav items (no Dashboard/Settings duplication)
+const educatorOnlyNavItems: NavItem[] = [
+  // Educators see their specific items only (Dashboard/Settings rendered separately)
 ];
 
 // Navigation items for educators (limited scope)
@@ -224,8 +174,56 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [logoLoadFailed, setLogoLoadFailed] = useState(false);
   const [mobileLogoLoadFailed, setMobileLogoLoadFailed] = useState(false);
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => {
+    // Start with all groups collapsed, but expand the one containing the current route
+    // Guard against SSR/pre-render context where localStorage is not available
+    if (typeof window === 'undefined') return new Set<string>();
+    try {
+      const saved = localStorage.getItem('sidebar-expanded-groups');
+      return saved ? new Set(JSON.parse(saved)) : new Set<string>();
+    } catch {
+      return new Set<string>();
+    }
+  });
   const { user, isAuthenticated, signOut } = useAuth();
   const { activeRole, availableRoles } = useRole();
+
+  // Auto-expand group containing current route
+  useEffect(() => {
+    if (activeRole !== 'educator') {
+      for (const group of adminNavGroups) {
+        const hasActiveItem = group.items.some(item => 
+          location === item.href || location.startsWith(`${item.href}/`)
+        );
+        if (hasActiveItem && !expandedGroups.has(group.title)) {
+          setExpandedGroups(prev => new Set([...prev, group.title]));
+        }
+      }
+    }
+  }, [location, activeRole]);
+
+  // Save expanded state to localStorage (guarded for SSR safety)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('sidebar-expanded-groups', JSON.stringify([...expandedGroups]));
+      } catch {
+        // Ignore storage errors (e.g., quota exceeded)
+      }
+    }
+  }, [expandedGroups]);
+
+  const toggleGroup = (groupTitle: string) => {
+    setExpandedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(groupTitle)) {
+        next.delete(groupTitle);
+      } else {
+        next.add(groupTitle);
+      }
+      return next;
+    });
+  };
   
   const hasSuperAdminRole = (availableRoles || []).some(r => r.role.toLowerCase() === 'superadmin');
 
@@ -243,14 +241,6 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
     }
   }, [schoolData?.logo]);
 
-  // Get appropriate navigation items based on role
-  const getNavItems = () => {
-    if (activeRole === 'educator') {
-      return educatorNavItems;
-    }
-    return adminNavItems; // Default for admin roles
-  };
-
   // Get role display name
   const getRoleDisplayName = () => {
     switch (activeRole) {
@@ -264,8 +254,6 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
         return 'School Administrator';
     }
   };
-
-  const navItems = getNavItems();
 
   const toggleSidebar = () => {
     setIsCollapsed(!isCollapsed);
@@ -367,32 +355,133 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
         {/* Navigation */}
         <div className="flex-1 overflow-y-auto py-2">
           <nav className="grid gap-1 px-2" data-testid="admin-sidebar-navigation">
-            {navItems.map((item) => {
+            {/* Dashboard - always visible at top */}
+            <Link href="/dashboard">
+              <div
+                className={cn(
+                  "flex items-center gap-3 rounded-lg px-3 py-2.5 transition-all cursor-pointer min-h-[44px]",
+                  location === '/dashboard' 
+                    ? "bg-blue-600 text-white" 
+                    : "text-gray-700 hover:bg-gray-100",
+                  isCollapsed ? "justify-center" : "justify-start"
+                )}
+                data-testid="nav-dashboard"
+              >
+                <Home className="h-5 w-5 flex-shrink-0" />
+                {!isCollapsed && <span className="font-medium">Dashboard</span>}
+              </div>
+            </Link>
+
+            {/* Grouped Navigation - only for admin roles */}
+            {activeRole !== 'educator' && adminNavGroups.map((group) => {
+              const isGroupExpanded = expandedGroups.has(group.title);
+              const hasActiveItem = group.items.some(item => 
+                location === item.href || location.startsWith(`${item.href}/`)
+              );
+
+              return (
+                <Collapsible
+                  key={group.title}
+                  open={isGroupExpanded}
+                  onOpenChange={() => toggleGroup(group.title)}
+                >
+                  <CollapsibleTrigger asChild>
+                    <div
+                      className={cn(
+                        "flex items-center gap-3 rounded-lg px-3 py-2.5 transition-all cursor-pointer min-h-[44px]",
+                        hasActiveItem && !isGroupExpanded
+                          ? "bg-blue-50 text-blue-700 border-l-2 border-blue-600"
+                          : "text-gray-700 hover:bg-gray-100",
+                        isCollapsed ? "justify-center" : "justify-between"
+                      )}
+                    >
+                      <div className="flex items-center gap-3">
+                        <group.icon className="h-5 w-5 flex-shrink-0" />
+                        {!isCollapsed && <span className="font-medium">{group.title}</span>}
+                      </div>
+                      {!isCollapsed && (
+                        <ChevronDown 
+                          className={cn(
+                            "h-4 w-4 transition-transform duration-200",
+                            isGroupExpanded ? "rotate-180" : ""
+                          )} 
+                        />
+                      )}
+                    </div>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="overflow-hidden transition-all data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 duration-200">
+                    <div className={cn("ml-4 mt-1 grid gap-0.5", isCollapsed && "ml-0")}>
+                      {group.items.map((item) => {
+                        const isActive = location === item.href || location.startsWith(`${item.href}/`);
+                        return (
+                          <Link key={item.href} href={item.href}>
+                            <div
+                              className={cn(
+                                "flex items-center gap-3 rounded-lg px-3 py-2.5 transition-all cursor-pointer min-h-[44px]",
+                                isActive 
+                                  ? "bg-blue-600 text-white" 
+                                  : "text-gray-600 hover:bg-gray-100",
+                                isCollapsed ? "justify-center" : "justify-start"
+                              )}
+                              data-testid={`nav-${item.href.replace(/\//g, '-')}`}
+                            >
+                              <item.icon className="h-4 w-4 flex-shrink-0" />
+                              {!isCollapsed && <span className="text-sm">{item.title}</span>}
+                            </div>
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
+              );
+            })}
+
+            {/* Educator-specific nav items (separate from Dashboard/Settings which are always shown) */}
+            {activeRole === 'educator' && educatorNavItems.filter(item => 
+              item.href !== '/dashboard' && item.href !== '/schools/settings'
+            ).map((item) => {
               const isActive = location === item.href || location.startsWith(`${item.href}/`);
-              
               return (
                 <Link key={item.href} href={item.href}>
                   <div
                     className={cn(
-                      "flex items-center gap-3 rounded-lg px-3 py-2 transition-all cursor-pointer",
+                      "flex items-center gap-3 rounded-lg px-3 py-2.5 transition-all cursor-pointer min-h-[44px]",
                       isActive 
                         ? "bg-blue-600 text-white" 
                         : "text-gray-700 hover:bg-gray-100",
                       isCollapsed ? "justify-center" : "justify-start"
                     )}
-                    data-testid={`nav-${item.href.replace(/\//g, '-')}`}
                   >
-                    <item.icon className="h-5 w-5" />
+                    <item.icon className="h-5 w-5 flex-shrink-0" />
                     {!isCollapsed && <span className="font-medium">{item.title}</span>}
                   </div>
                 </Link>
               );
             })}
+
+            {/* Settings - always visible at bottom of nav */}
+            <Link href="/schools/settings">
+              <div
+                className={cn(
+                  "flex items-center gap-3 rounded-lg px-3 py-2.5 transition-all cursor-pointer min-h-[44px]",
+                  location === '/schools/settings' 
+                    ? "bg-blue-600 text-white" 
+                    : "text-gray-700 hover:bg-gray-100",
+                  isCollapsed ? "justify-center" : "justify-start"
+                )}
+                data-testid="nav-settings"
+              >
+                <Settings className="h-5 w-5 flex-shrink-0" />
+                {!isCollapsed && <span className="font-medium">Settings</span>}
+              </div>
+            </Link>
+
             {hasSuperAdminRole && (
               <Link href="/superadmin/schools">
                 <div
                   className={cn(
-                    "flex items-center gap-3 rounded-lg px-3 py-2 transition-all cursor-pointer",
+                    "flex items-center gap-3 rounded-lg px-3 py-2.5 transition-all cursor-pointer min-h-[44px]",
                     location.startsWith('/superadmin')
                       ? "bg-blue-600 text-white" 
                       : "text-gray-700 hover:bg-gray-100",
@@ -400,7 +489,7 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
                   )}
                   data-testid="nav-superadmin"
                 >
-                  <Shield className="h-5 w-5" />
+                  <Shield className="h-5 w-5 flex-shrink-0" />
                   {!isCollapsed && <span className="font-medium">Super Admin</span>}
                 </div>
               </Link>
@@ -490,32 +579,130 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
               {/* Navigation - Scrollable */}
               <div className="flex-1 overflow-y-auto py-4">
                 <nav id="mobile-navigation" className="grid gap-1 px-2">
-                  {navItems.map((item) => {
+                  {/* Dashboard - always visible at top */}
+                  <Link href="/dashboard">
+                    <div
+                      className={cn(
+                        "flex items-center gap-3 rounded-lg px-3 py-3 transition-all cursor-pointer min-h-[48px]",
+                        location === '/dashboard' 
+                          ? "bg-blue-600 text-white" 
+                          : "text-gray-700 hover:bg-gray-100"
+                      )}
+                      onClick={closeMobileMenu}
+                      data-testid="mobile-nav-dashboard"
+                    >
+                      <Home className="h-5 w-5 flex-shrink-0" />
+                      <span className="font-medium">Dashboard</span>
+                    </div>
+                  </Link>
+
+                  {/* Grouped Navigation - only for admin roles */}
+                  {activeRole !== 'educator' && adminNavGroups.map((group) => {
+                    const isGroupExpanded = expandedGroups.has(group.title);
+                    const hasActiveItem = group.items.some(item => 
+                      location === item.href || location.startsWith(`${item.href}/`)
+                    );
+
+                    return (
+                      <Collapsible
+                        key={group.title}
+                        open={isGroupExpanded}
+                        onOpenChange={() => toggleGroup(group.title)}
+                      >
+                        <CollapsibleTrigger asChild>
+                          <div
+                            className={cn(
+                              "flex items-center justify-between rounded-lg px-3 py-3 transition-all cursor-pointer min-h-[48px]",
+                              hasActiveItem && !isGroupExpanded
+                                ? "bg-blue-50 text-blue-700 border-l-2 border-blue-600"
+                                : "text-gray-700 hover:bg-gray-100"
+                            )}
+                          >
+                            <div className="flex items-center gap-3">
+                              <group.icon className="h-5 w-5 flex-shrink-0" />
+                              <span className="font-medium">{group.title}</span>
+                            </div>
+                            <ChevronDown 
+                              className={cn(
+                                "h-4 w-4 transition-transform duration-200",
+                                isGroupExpanded ? "rotate-180" : ""
+                              )} 
+                            />
+                          </div>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent className="overflow-hidden transition-all data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 duration-200">
+                          <div className="ml-4 mt-1 grid gap-0.5">
+                            {group.items.map((item) => {
+                              const isActive = location === item.href || location.startsWith(`${item.href}/`);
+                              return (
+                                <Link key={item.href} href={item.href}>
+                                  <div
+                                    className={cn(
+                                      "flex items-center gap-3 rounded-lg px-3 py-2.5 transition-all cursor-pointer min-h-[44px]",
+                                      isActive 
+                                        ? "bg-blue-600 text-white" 
+                                        : "text-gray-600 hover:bg-gray-100"
+                                    )}
+                                    onClick={closeMobileMenu}
+                                    data-testid={`mobile-nav-${item.href.replace(/\//g, '-')}`}
+                                  >
+                                    <item.icon className="h-4 w-4 flex-shrink-0" />
+                                    <span className="text-sm">{item.title}</span>
+                                  </div>
+                                </Link>
+                              );
+                            })}
+                          </div>
+                        </CollapsibleContent>
+                      </Collapsible>
+                    );
+                  })}
+
+                  {/* Educator-specific nav items (separate from Dashboard/Settings which are always shown) */}
+                  {activeRole === 'educator' && educatorNavItems.filter(item => 
+                    item.href !== '/dashboard' && item.href !== '/schools/settings'
+                  ).map((item) => {
                     const isActive = location === item.href || location.startsWith(`${item.href}/`);
-                    
                     return (
                       <Link key={item.href} href={item.href}>
                         <div
                           className={cn(
-                            "flex items-center gap-3 rounded-lg px-3 py-2 transition-all cursor-pointer",
+                            "flex items-center gap-3 rounded-lg px-3 py-3 transition-all cursor-pointer min-h-[48px]",
                             isActive 
                               ? "bg-blue-600 text-white" 
                               : "text-gray-700 hover:bg-gray-100"
                           )}
                           onClick={closeMobileMenu}
-                          data-testid={`mobile-nav-${item.href.replace(/\//g, '-')}`}
                         >
-                          <item.icon className="h-5 w-5" />
+                          <item.icon className="h-5 w-5 flex-shrink-0" />
                           <span className="font-medium">{item.title}</span>
                         </div>
                       </Link>
                     );
                   })}
+
+                  {/* Settings - always visible */}
+                  <Link href="/schools/settings">
+                    <div
+                      className={cn(
+                        "flex items-center gap-3 rounded-lg px-3 py-3 transition-all cursor-pointer min-h-[48px]",
+                        location === '/schools/settings' 
+                          ? "bg-blue-600 text-white" 
+                          : "text-gray-700 hover:bg-gray-100"
+                      )}
+                      onClick={closeMobileMenu}
+                      data-testid="mobile-nav-settings"
+                    >
+                      <Settings className="h-5 w-5 flex-shrink-0" />
+                      <span className="font-medium">Settings</span>
+                    </div>
+                  </Link>
+
                   {hasSuperAdminRole && (
                     <Link href="/superadmin/schools">
                       <div
                         className={cn(
-                          "flex items-center gap-3 rounded-lg px-3 py-2 transition-all cursor-pointer",
+                          "flex items-center gap-3 rounded-lg px-3 py-3 transition-all cursor-pointer min-h-[48px]",
                           location.startsWith('/superadmin')
                             ? "bg-blue-600 text-white" 
                             : "text-gray-700 hover:bg-gray-100"
@@ -523,7 +710,7 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
                         onClick={closeMobileMenu}
                         data-testid="mobile-nav-superadmin"
                       >
-                        <Shield className="h-5 w-5" />
+                        <Shield className="h-5 w-5 flex-shrink-0" />
                         <span className="font-medium">Super Admin</span>
                       </div>
                     </Link>
