@@ -2120,6 +2120,12 @@ export class DatabaseStorage implements IStorage {
     return updatedPayment;
   }
 
+  async deleteScheduledPayment(id: number): Promise<void> {
+    const db = await getDb();
+    await db.delete(scheduledPayments).where(eq(scheduledPayments.id, id));
+    console.log(`🗑️ Deleted scheduled payment ${id} from database`);
+  }
+
   // Refund methods
   async createRefund(refund: InsertRefund): Promise<Refund> {
     const db = await getDb();

@@ -148,18 +148,22 @@ export interface CleanupResult {
   duplicatesRemoved: number;
   orphansRemoved: number;
   excessRemoved: number;
+  cancelledDeleted: number;
+  generatedCatchupsRemoved: number;
   details: Array<{
     scheduledPaymentId: number;
-    reason: 'duplicate' | 'orphan' | 'excess';
+    reason: 'duplicate' | 'orphan' | 'excess' | 'cancelled' | 'generated_catchup';
     enrollmentId: number;
     amount: number;
   }>;
 }
 
 /**
- * Clean up duplicate, orphaned, and excess scheduled payments for a school.
+ * Clean up duplicate, orphaned, excess, cancelled, and incorrectly generated scheduled payments.
  * 
  * Removes:
+ * - Cancelled payments: Payments with status 'cancelled' (deletes them entirely)
+ * - Generated catchups: Payments auto-generated with generatedForMissingBalance metadata (to regenerate correctly)
  * - Duplicate payments: Same enrollmentId + installmentNumber with status 'pending'
  * - Orphan payments: EnrollmentId that no longer exists or is cancelled
  * - Excess payments: More pending payments than the enrollment's remaining balance requires
@@ -177,10 +181,56 @@ export async function cleanupScheduledPayments(
   let duplicatesRemoved = 0;
   let orphansRemoved = 0;
   let excessRemoved = 0;
+  let cancelledDeleted = 0;
+  let generatedCatchupsRemoved = 0;
   
-  // Group payments by enrollment
-  const paymentsByEnrollment = new Map<number, typeof schoolPayments>();
+  // First pass: Remove cancelled payments entirely
   for (const sp of schoolPayments) {
+    if (sp.status === 'cancelled') {
+      if (!dryRun) {
+        await storage.deleteScheduledPayment(sp.id);
+      }
+      details.push({
+        scheduledPaymentId: sp.id,
+        reason: 'cancelled',
+        enrollmentId: sp.enrollmentId,
+        amount: sp.amount,
+      });
+      cancelledDeleted++;
+    }
+  }
+  
+  // Second pass: Remove previously generated catch-up payments (to regenerate with correct amounts)
+  // These have metadata.generatedForMissingBalance = true
+  for (const sp of schoolPayments) {
+    if (sp.status === 'cancelled') continue; // Already handled
+    
+    const metadata = sp.metadata as Record<string, any> | null;
+    if (metadata?.generatedForMissingBalance === true) {
+      if (!dryRun) {
+        await storage.deleteScheduledPayment(sp.id);
+      }
+      details.push({
+        scheduledPaymentId: sp.id,
+        reason: 'generated_catchup',
+        enrollmentId: sp.enrollmentId,
+        amount: sp.amount,
+      });
+      generatedCatchupsRemoved++;
+    }
+  }
+  
+  // Re-fetch to get updated list after deletions
+  const refreshedPayments = dryRun 
+    ? schoolPayments.filter((sp: any) => 
+        sp.status !== 'cancelled' && 
+        !(sp.metadata as Record<string, any> | null)?.generatedForMissingBalance
+      )
+    : (await storage.getAllScheduledPayments()).filter((sp: any) => sp.schoolId === schoolId);
+  
+  // Group remaining payments by enrollment
+  const paymentsByEnrollment = new Map<number, typeof refreshedPayments>();
+  for (const sp of refreshedPayments) {
     if (!paymentsByEnrollment.has(sp.enrollmentId)) {
       paymentsByEnrollment.set(sp.enrollmentId, []);
     }
@@ -291,16 +341,20 @@ export async function cleanupScheduledPayments(
   }
   
   console.log(`🧹 Cleanup ${dryRun ? 'preview' : 'complete'} for school ${schoolId}:`, {
+    cancelledDeleted,
+    generatedCatchupsRemoved,
     duplicatesRemoved,
     orphansRemoved,
     excessRemoved,
-    totalRemoved: duplicatesRemoved + orphansRemoved + excessRemoved,
+    totalRemoved: cancelledDeleted + generatedCatchupsRemoved + duplicatesRemoved + orphansRemoved + excessRemoved,
   });
   
   return {
     duplicatesRemoved,
     orphansRemoved,
     excessRemoved,
+    cancelledDeleted,
+    generatedCatchupsRemoved,
     details,
   };
 }

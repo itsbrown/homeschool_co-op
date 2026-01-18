@@ -386,6 +386,7 @@ export interface IStorage {
   updateScheduledPayment(id: number, payment: Partial<InsertScheduledPayment>): Promise<any | undefined>;
   updateScheduledPaymentStatus(id: number, status: string): Promise<any | undefined>;
   updateScheduledPaymentReminderCount(id: number, count: number): Promise<any | undefined>;
+  deleteScheduledPayment(id: number): Promise<void>;
 
   // Refund methods
   createRefund(refund: InsertRefund): Promise<Refund>;
@@ -3662,6 +3663,15 @@ export class MemStorage implements IStorage {
     return updatedPayment;
   }
 
+  async deleteScheduledPayment(id: number): Promise<void> {
+    const payment = this.scheduledPaymentsStore.get(id);
+    if (payment) {
+      this.scheduledPaymentsStore.delete(id);
+      await this.saveScheduledPaymentsToFile();
+      console.log(`🗑️ Deleted scheduled payment ${id}`);
+    }
+  }
+
   private async saveScheduledPaymentsToFile(): Promise<void> {
     try {
       const fs = await import('fs');
@@ -6658,6 +6668,19 @@ import { DatabaseStorage } from "./dbStorage";
           }
         } catch (error) {
           return await this.memStorage.updateScheduledPaymentReminderCount(id, count);
+        }
+      }
+
+      async deleteScheduledPayment(id: number): Promise<void> {
+        try {
+          if (this.dbStorage && typeof this.dbStorage.deleteScheduledPayment === 'function') {
+            return await this.dbStorage.deleteScheduledPayment(id);
+          } else {
+            return await this.memStorage.deleteScheduledPayment(id);
+          }
+        } catch (error) {
+          console.error('Failed to delete scheduled payment from DB, trying memStorage:', error);
+          return await this.memStorage.deleteScheduledPayment(id);
         }
       }
 
