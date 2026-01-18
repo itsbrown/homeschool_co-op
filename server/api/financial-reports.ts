@@ -4,7 +4,7 @@ import { getDb } from '../db';
 import { payments, scheduledPayments, programEnrollments, users, refunds, schools } from '@shared/schema';
 import { eq, and, gte, lte, sql, desc, isNull, not, inArray } from 'drizzle-orm';
 import { generateCFOInsights, isAIAvailable } from '../services/cfoInsightsService';
-import { reconcileSchoolScheduledPayments } from '../services/scheduled-payment-reconciliation';
+import { reconcileSchoolScheduledPayments, cleanupScheduledPayments } from '../services/scheduled-payment-reconciliation';
 
 const router = express.Router();
 
@@ -1101,16 +1101,25 @@ router.get('/reconcile-scheduled-payments/preview', async (req: any, res) => {
     }
     const { schoolId } = result;
 
+    // Preview cleanup
+    const cleanupPreview = await cleanupScheduledPayments(schoolId, true);
+    
+    // Preview reconciliation
     const preview = await reconcileSchoolScheduledPayments(schoolId, true);
     
     res.json({
-      message: 'Preview of scheduled payment reconciliation',
+      message: 'Preview of scheduled payment sync',
       summary: {
         enrollmentsToProcess: preview.enrollmentsProcessed,
         enrollmentsWithChanges: preview.enrollmentsWithChanges,
         paymentsToMarkCompleted: preview.totalPaymentsMarkedCompleted,
+        duplicatesToRemove: cleanupPreview.duplicatesRemoved,
+        orphansToRemove: cleanupPreview.orphansRemoved,
+        excessToRemove: cleanupPreview.excessRemoved,
+        totalToClean: cleanupPreview.duplicatesRemoved + cleanupPreview.orphansRemoved + cleanupPreview.excessRemoved,
       },
       details: preview.results,
+      cleanupDetails: cleanupPreview.details,
       errors: preview.errors,
     });
   } catch (error) {
@@ -1127,16 +1136,25 @@ router.post('/reconcile-scheduled-payments', async (req: any, res) => {
     }
     const { schoolId } = result;
 
+    // First, cleanup duplicate/orphaned/excess scheduled payments
+    const cleanup = await cleanupScheduledPayments(schoolId, false);
+    
+    // Then run status reconciliation
     const reconciliation = await reconcileSchoolScheduledPayments(schoolId, false);
     
     res.json({
-      message: 'Scheduled payment reconciliation completed',
+      message: 'Scheduled payment sync completed',
       summary: {
         enrollmentsProcessed: reconciliation.enrollmentsProcessed,
         enrollmentsWithChanges: reconciliation.enrollmentsWithChanges,
         paymentsMarkedCompleted: reconciliation.totalPaymentsMarkedCompleted,
+        duplicatesRemoved: cleanup.duplicatesRemoved,
+        orphansRemoved: cleanup.orphansRemoved,
+        excessRemoved: cleanup.excessRemoved,
+        totalCleaned: cleanup.duplicatesRemoved + cleanup.orphansRemoved + cleanup.excessRemoved,
       },
       details: reconciliation.results,
+      cleanupDetails: cleanup.details,
       errors: reconciliation.errors,
     });
   } catch (error) {

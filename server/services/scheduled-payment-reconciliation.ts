@@ -143,3 +143,157 @@ export async function reconcileSchoolScheduledPayments(
     errors,
   };
 }
+
+export interface CleanupResult {
+  duplicatesRemoved: number;
+  orphansRemoved: number;
+  excessRemoved: number;
+  details: Array<{
+    scheduledPaymentId: number;
+    reason: 'duplicate' | 'orphan' | 'excess';
+    enrollmentId: number;
+    amount: number;
+  }>;
+}
+
+/**
+ * Clean up duplicate, orphaned, and excess scheduled payments for a school.
+ * 
+ * Removes:
+ * - Duplicate payments: Same enrollmentId + installmentNumber with status 'pending'
+ * - Orphan payments: EnrollmentId that no longer exists or is cancelled
+ * - Excess payments: More pending payments than the enrollment's remaining balance requires
+ */
+export async function cleanupScheduledPayments(
+  schoolId: number,
+  dryRun: boolean = false
+): Promise<CleanupResult> {
+  console.log(`🧹 Starting scheduled payment cleanup for school ${schoolId} (dryRun: ${dryRun})`);
+  
+  const allScheduledPayments = await storage.getAllScheduledPayments();
+  const schoolPayments = allScheduledPayments.filter((sp: any) => sp.schoolId === schoolId);
+  
+  const details: CleanupResult['details'] = [];
+  let duplicatesRemoved = 0;
+  let orphansRemoved = 0;
+  let excessRemoved = 0;
+  
+  // Group payments by enrollment
+  const paymentsByEnrollment = new Map<number, typeof schoolPayments>();
+  for (const sp of schoolPayments) {
+    if (!paymentsByEnrollment.has(sp.enrollmentId)) {
+      paymentsByEnrollment.set(sp.enrollmentId, []);
+    }
+    paymentsByEnrollment.get(sp.enrollmentId)!.push(sp);
+  }
+  
+  for (const [enrollmentId, payments] of paymentsByEnrollment) {
+    // Check if enrollment exists and is valid
+    let enrollment;
+    try {
+      enrollment = await storage.getProgramEnrollmentById(enrollmentId);
+    } catch (e) {
+      enrollment = null;
+    }
+    
+    const pendingPayments = payments.filter((p: any) => p.status === 'pending');
+    
+    // Remove orphaned payments (enrollment doesn't exist or is cancelled)
+    if (!enrollment || enrollment.status === 'cancelled') {
+      for (const sp of pendingPayments) {
+        if (!dryRun) {
+          await storage.updateScheduledPayment(sp.id, { status: 'cancelled' });
+        }
+        details.push({
+          scheduledPaymentId: sp.id,
+          reason: 'orphan',
+          enrollmentId,
+          amount: sp.amount,
+        });
+        orphansRemoved++;
+      }
+      continue;
+    }
+    
+    // Find duplicates (same installmentNumber, same enrollmentId, both pending)
+    const installmentMap = new Map<number, typeof pendingPayments>();
+    for (const sp of pendingPayments) {
+      const key = sp.installmentNumber || 0;
+      if (!installmentMap.has(key)) {
+        installmentMap.set(key, []);
+      }
+      installmentMap.get(key)!.push(sp);
+    }
+    
+    for (const [installmentNum, duplicates] of installmentMap) {
+      if (duplicates.length > 1) {
+        // Keep the oldest one (lowest ID), remove the rest
+        const sorted = duplicates.sort((a: any, b: any) => a.id - b.id);
+        for (let i = 1; i < sorted.length; i++) {
+          const sp = sorted[i];
+          if (!dryRun) {
+            await storage.updateScheduledPayment(sp.id, { status: 'cancelled' });
+          }
+          details.push({
+            scheduledPaymentId: sp.id,
+            reason: 'duplicate',
+            enrollmentId,
+            amount: sp.amount,
+          });
+          duplicatesRemoved++;
+        }
+      }
+    }
+    
+    // Check for excess payments
+    // Calculate remaining balance needed for this enrollment
+    const totalPaid = enrollment.totalPaid || 0;
+    const totalCost = enrollment.totalCost || 0;
+    const remainingBalance = Math.max(0, totalCost - totalPaid);
+    
+    // Get current pending payments after duplicate removal
+    const currentPendingPayments = pendingPayments.filter((p: any) => 
+      !details.some(d => d.scheduledPaymentId === p.id)
+    );
+    
+    // Sort by scheduled date to remove furthest-out payments first
+    const sortedPending = currentPendingPayments.sort((a: any, b: any) => 
+      new Date(b.scheduledDate).getTime() - new Date(a.scheduledDate).getTime()
+    );
+    
+    let pendingTotal = sortedPending.reduce((sum: number, p: any) => sum + p.amount, 0);
+    
+    // Remove excess pending payments (those beyond what's needed to cover remaining balance)
+    for (const sp of sortedPending) {
+      if (pendingTotal > remainingBalance + 100) { // Allow $1 buffer for rounding
+        if (!dryRun) {
+          await storage.updateScheduledPayment(sp.id, { status: 'cancelled' });
+        }
+        details.push({
+          scheduledPaymentId: sp.id,
+          reason: 'excess',
+          enrollmentId,
+          amount: sp.amount,
+        });
+        pendingTotal -= sp.amount;
+        excessRemoved++;
+      } else {
+        break;
+      }
+    }
+  }
+  
+  console.log(`🧹 Cleanup ${dryRun ? 'preview' : 'complete'} for school ${schoolId}:`, {
+    duplicatesRemoved,
+    orphansRemoved,
+    excessRemoved,
+    totalRemoved: duplicatesRemoved + orphansRemoved + excessRemoved,
+  });
+  
+  return {
+    duplicatesRemoved,
+    orphansRemoved,
+    excessRemoved,
+    details,
+  };
+}

@@ -348,9 +348,20 @@ export default function FinancialReportsPage() {
       return response.json();
     },
     onSuccess: (data: any) => {
+      const cleaned = data.summary?.totalCleaned || 0;
+      const updated = data.summary?.paymentsMarkedCompleted || 0;
+      const parts = [];
+      if (cleaned > 0) {
+        parts.push(`Removed ${cleaned} duplicate/orphaned payment(s)`);
+      }
+      if (updated > 0) {
+        parts.push(`Updated ${updated} payment status(es)`);
+      }
+      const description = parts.length > 0 ? parts.join('. ') + '.' : 'No changes needed.';
+      
       toast({
         title: 'Data synced successfully',
-        description: `Updated ${data.summary?.paymentsMarkedCompleted || 0} scheduled payment(s) across ${data.summary?.enrollmentsWithChanges || 0} enrollment(s).`,
+        description,
       });
       queryClient.invalidateQueries({ queryKey: ['/api/admin/financial-reports/outstanding-balances'] });
       queryClient.invalidateQueries({ queryKey: ['/api/admin/financial-reports/summary'] });
