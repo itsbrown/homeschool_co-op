@@ -2918,6 +2918,9 @@ export const insertCurriculumBookSchema = createInsertSchema(curriculumBooks)
 export type InsertCurriculumBook = z.infer<typeof insertCurriculumBookSchema>;
 export type CurriculumBook = typeof curriculumBooks.$inferSelect;
 
+// Assessment source enum - tracks whether entry was manual or from in-app testing
+export const assessmentSourceEnum = pgEnum("assessment_source", ["manual_entry", "in_app"]);
+
 // Student Assessments - individual assessment records with location support
 export const studentAssessments = pgTable("student_assessments", {
   id: serial("id").primaryKey(),
@@ -2930,7 +2933,27 @@ export const studentAssessments = pgTable("student_assessments", {
   score: text("score").notNull(),
   lesson: integer("lesson"),
   notes: text("notes"),
+  source: assessmentSourceEnum("source").default("manual_entry").notNull(),
+  lexileScore: integer("lexile_score"),
+  sessionId: integer("session_id"),
   recordedBy: integer("recorded_by").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Assessment Sessions - for future in-app testing, tracks complete test sessions
+export const assessmentSessions = pgTable("assessment_sessions", {
+  id: serial("id").primaryKey(),
+  schoolId: integer("school_id").notNull().references(() => schools.id),
+  childId: integer("child_id").notNull().references(() => children.id, { onDelete: 'cascade' }),
+  assessmentTypeId: integer("assessment_type_id").notNull().references(() => assessmentTypes.id),
+  startedAt: timestamp("started_at").notNull(),
+  completedAt: timestamp("completed_at"),
+  status: text("status").notNull().default("in_progress"),
+  totalQuestions: integer("total_questions"),
+  correctAnswers: integer("correct_answers"),
+  timeSpentSeconds: integer("time_spent_seconds"),
+  metadata: jsonb("metadata"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -2942,10 +2965,26 @@ export const insertStudentAssessmentSchema = createInsertSchema(studentAssessmen
     curriculumBookId: z.number().nullable().default(null),
     lesson: z.number().nullable().default(null),
     notes: z.string().nullable().default(null),
+    source: z.enum(["manual_entry", "in_app"]).default("manual_entry"),
+    lexileScore: z.number().nullable().default(null),
+    sessionId: z.number().nullable().default(null),
     assessmentDate: z.union([z.string(), z.date()]).transform((val) => typeof val === 'string' ? new Date(val) : val),
   });
 export type InsertStudentAssessment = z.infer<typeof insertStudentAssessmentSchema>;
 export type StudentAssessment = typeof studentAssessments.$inferSelect;
+
+export const insertAssessmentSessionSchema = createInsertSchema(assessmentSessions)
+  .omit({ id: true, createdAt: true, updatedAt: true })
+  .extend({
+    completedAt: z.union([z.string(), z.date(), z.null()]).transform((val) => val === null ? null : typeof val === 'string' ? new Date(val) : val).nullable().default(null),
+    startedAt: z.union([z.string(), z.date()]).transform((val) => typeof val === 'string' ? new Date(val) : val),
+    totalQuestions: z.number().nullable().default(null),
+    correctAnswers: z.number().nullable().default(null),
+    timeSpentSeconds: z.number().nullable().default(null),
+    metadata: z.any().nullable().default(null),
+  });
+export type InsertAssessmentSession = z.infer<typeof insertAssessmentSessionSchema>;
+export type AssessmentSession = typeof assessmentSessions.$inferSelect;
 
 // Relations for assessment tables
 export const assessmentTypesRelations = relations(assessmentTypes, ({ one, many }) => ({
@@ -2966,6 +3005,14 @@ export const studentAssessmentsRelations = relations(studentAssessments, ({ one 
   assessmentType: one(assessmentTypes, { fields: [studentAssessments.assessmentTypeId], references: [assessmentTypes.id] }),
   curriculumBook: one(curriculumBooks, { fields: [studentAssessments.curriculumBookId], references: [curriculumBooks.id] }),
   recorder: one(users, { fields: [studentAssessments.recordedBy], references: [users.id] }),
+  session: one(assessmentSessions, { fields: [studentAssessments.sessionId], references: [assessmentSessions.id] }),
+}));
+
+export const assessmentSessionsRelations = relations(assessmentSessions, ({ one, many }) => ({
+  school: one(schools, { fields: [assessmentSessions.schoolId], references: [schools.id] }),
+  child: one(children, { fields: [assessmentSessions.childId], references: [children.id] }),
+  assessmentType: one(assessmentTypes, { fields: [assessmentSessions.assessmentTypeId], references: [assessmentTypes.id] }),
+  assessments: many(studentAssessments),
 }));
 
 // ==================== FUNDRAISER SYSTEM ====================
