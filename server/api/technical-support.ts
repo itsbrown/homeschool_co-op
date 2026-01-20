@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { AITechnicalSupportService } from "../lib/ai-technical-support";
 import { storage } from "../storage";
+import { supabaseAuth } from "../middleware/supabase-auth";
 
 interface TechnicalIssue {
   id: string;
@@ -88,20 +89,78 @@ export function registerTechnicalSupportRoutes(app: Express) {
         userFirstName
       });
 
-      // Notify admins if needed
+      // Create admin notification if needed
       if (analysis.requiresAdminNotification) {
-        await storage.createAdminNotification({
-          id: `TECH-NOTIF-${Date.now()}`,
-          type: 'technical_issue',
-          title: `Technical Issue: ${analysis.issueType}`,
-          message: aiSupport.formatIssueForAdmin(issue),
-          severity: analysis.severity,
-          targetRole: 'schoolAdmin',
-          createdAt: new Date(),
-          read: false,
-          actionRequired: true,
-          relatedId: issue.id
-        });
+        try {
+          // Find admin users from both users.role AND userRoles table for comprehensive detection
+          const allUsers = await storage.getAllUsers();
+          
+          // Build set of admin user IDs - check primary role first
+          const adminUserIds = new Set<number>();
+          for (const user of allUsers) {
+            // Check primary role
+            if (user.role === 'admin' || user.role === 'schoolAdmin' || user.role === 'superAdmin') {
+              adminUserIds.add(user.id);
+              continue;
+            }
+            // Check secondary roles in userRoles table
+            const userRoles = await storage.getUserRolesByUserId(user.id);
+            if (userRoles.some(ur => ur.role === 'admin' || ur.role === 'schoolAdmin' || ur.role === 'superAdmin')) {
+              adminUserIds.add(user.id);
+            }
+          }
+          
+          const adminUsers = allUsers.filter(u => adminUserIds.has(u.id));
+          const senderId = adminUsers[0]?.id || 1;
+          
+          if (adminUsers.length === 0) {
+            console.warn('⚠️ No admin users found to notify about technical issue');
+          }
+          
+          // Create notification for admins
+          const notification = await storage.createNotification({
+            senderId,
+            type: 'in_app',
+            priority: analysis.severity === 'critical' ? 'high' : 'normal',
+            subject: `Technical Issue: ${analysis.issueType}`,
+            content: `User ${userEmail} reported: ${description.substring(0, 200)}${description.length > 200 ? '...' : ''}`,
+            targetType: 'role',
+            targetData: { role: 'schoolAdmin', issueId: issue.id },
+            scheduledFor: null,
+            expiresAt: null
+          });
+          
+          // Create notification recipients for all admin users
+          for (const admin of adminUsers) {
+            try {
+              await storage.createNotificationRecipient({
+                notificationId: notification.id,
+                recipientId: admin.id,
+                deliveryType: 'in_app',
+                status: 'pending'
+              });
+            } catch (recipientError) {
+              console.error(`Failed to create recipient for admin ${admin.id}:`, recipientError);
+            }
+          }
+          console.log(`📬 Created ${adminUsers.length} notification recipients for technical issue`);
+          
+          // Also log to error monitoring for tracking
+          await storage.createErrorLog({
+            errorType: 'frontend',
+            severity: analysis.severity === 'critical' ? 'high' : 'medium',
+            route: currentUrl || '/technical-support',
+            method: 'POST',
+            message: `Technical Issue: ${analysis.issueType} - ${issue.title}`,
+            stackTrace: aiSupport.formatIssueForAdmin(issue),
+            userEmail: userEmail,
+            metadata: { issueId: issue.id, notificationId: notification.id }
+          });
+          
+          console.log(`📢 Created admin notification ${notification.id} for technical issue ${issue.id}`);
+        } catch (notifError) {
+          console.error('Failed to create admin notification:', notifError);
+        }
       }
 
       res.json({
@@ -178,13 +237,30 @@ export function registerTechnicalSupportRoutes(app: Express) {
     }
   });
 
-  // Admin: Get all technical issues
-  app.get('/api/admin/technical-issues', async (req, res) => {
+  // Admin: Get all technical issues (requires admin role)
+  app.get('/api/admin/technical-issues', supabaseAuth, async (req: any, res) => {
     try {
-      if (!req.isAuthenticated()) {
+      // Verify admin role (check both users.role AND userRoles table)
+      const userEmail = req.user?.email;
+      if (!userEmail) {
         return res.status(401).json({ success: false, error: 'Unauthorized' });
       }
-
+      
+      const user = await storage.getUserByEmail(userEmail);
+      if (!user) {
+        return res.status(401).json({ success: false, error: 'User not found' });
+      }
+      
+      // Check if user has admin role in either users.role or userRoles table
+      const userRolesForUser = await storage.getUserRolesByUserId(user.id);
+      const hasAdminRole = 
+        user.role === 'admin' || user.role === 'schoolAdmin' || user.role === 'superAdmin' ||
+        userRolesForUser.some(ur => ur.role === 'admin' || ur.role === 'schoolAdmin' || ur.role === 'superAdmin');
+      
+      if (!hasAdminRole) {
+        return res.status(403).json({ success: false, error: 'Admin access required' });
+      }
+      
       const issues = await storage.getAllTechnicalIssues();
 
       res.json({
@@ -203,11 +279,28 @@ export function registerTechnicalSupportRoutes(app: Express) {
     }
   });
 
-  // Admin: Update issue status
-  app.patch('/api/admin/technical-issues/:issueId', async (req, res) => {
+  // Admin: Update issue status (requires admin role)
+  app.patch('/api/admin/technical-issues/:issueId', supabaseAuth, async (req: any, res) => {
     try {
-      if (!req.isAuthenticated()) {
+      // Verify admin role (check both users.role AND userRoles table)
+      const userEmail = req.user?.email;
+      if (!userEmail) {
         return res.status(401).json({ success: false, error: 'Unauthorized' });
+      }
+      
+      const user = await storage.getUserByEmail(userEmail);
+      if (!user) {
+        return res.status(401).json({ success: false, error: 'User not found' });
+      }
+      
+      // Check if user has admin role in either users.role or userRoles table
+      const userRolesForUser = await storage.getUserRolesByUserId(user.id);
+      const hasAdminRole = 
+        user.role === 'admin' || user.role === 'schoolAdmin' || user.role === 'superAdmin' ||
+        userRolesForUser.some(ur => ur.role === 'admin' || ur.role === 'schoolAdmin' || ur.role === 'superAdmin');
+      
+      if (!hasAdminRole) {
+        return res.status(403).json({ success: false, error: 'Admin access required' });
       }
 
       const { issueId } = req.params;
@@ -226,17 +319,9 @@ export function registerTechnicalSupportRoutes(app: Express) {
         });
       }
 
-      // Notify user of status change
+      // Log resolution to error monitoring for tracking
       if (status === 'resolved' && resolution) {
-        await storage.createUserNotification({
-          id: `USER-NOTIF-${Date.now()}`,
-          userEmail: updatedIssue.userEmail,
-          type: 'issue_resolved',
-          title: 'Technical Issue Resolved',
-          message: `Your technical issue (${updatedIssue.id}) has been resolved: ${resolution}`,
-          createdAt: new Date(),
-          read: false
-        });
+        console.log(`✅ Technical issue ${updatedIssue.id} resolved for ${updatedIssue.userEmail}: ${resolution}`);
       }
 
       res.json({

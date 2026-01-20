@@ -6,6 +6,29 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
+function extractJsonFromResponse(text: string): string {
+  let cleaned = text.trim();
+  
+  if (cleaned.startsWith('```json')) {
+    cleaned = cleaned.slice(7);
+  } else if (cleaned.startsWith('```')) {
+    cleaned = cleaned.slice(3);
+  }
+  
+  if (cleaned.endsWith('```')) {
+    cleaned = cleaned.slice(0, -3);
+  }
+  
+  return cleaned.trim();
+}
+
+function getTextContent(content: Anthropic.ContentBlock): string | null {
+  if (content.type === 'text') {
+    return content.text;
+  }
+  return null;
+}
+
 interface TechnicalIssue {
   id: string;
   userEmail: string;
@@ -83,7 +106,13 @@ Respond in JSON format:
         messages: [{ role: 'user', content: prompt }],
       });
 
-      return JSON.parse(response.content[0].text);
+      const textContent = getTextContent(response.content[0]);
+      if (!textContent) {
+        throw new Error('No text content in AI response');
+      }
+      
+      const cleanedJson = extractJsonFromResponse(textContent);
+      return JSON.parse(cleanedJson);
     } catch (error) {
       console.error('AI analysis failed:', error);
       return {
@@ -131,7 +160,8 @@ Keep it concise but thorough.`;
         messages: [{ role: 'user', content: prompt }],
       });
 
-      return response.content[0].text;
+      const textContent = getTextContent(response.content[0]);
+      return textContent || `Hi ${issue.userFirstName}, I've analyzed your issue and our team is looking into it.`;
     } catch (error) {
       console.error('Response generation failed:', error);
       return `Hi ${issue.userFirstName}, I understand you're having trouble with the platform. I've analyzed your issue and have some suggestions that should help. I've also notified our technical team so they can investigate and fix the underlying problem. You'll receive an update once it's resolved.`;
@@ -158,9 +188,12 @@ Keep it concise but thorough.`;
 
     for (const endpoint of criticalEndpoints) {
       try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
         const response = await fetch(`http://localhost:5000${endpoint}`, {
-          timeout: 5000
+          signal: controller.signal
         });
+        clearTimeout(timeoutId);
         if (!response.ok) {
           issues.push({
             component: endpoint,
