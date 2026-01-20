@@ -115,16 +115,16 @@ router.patch('/:enrollmentId/payment-plan', async (req: any, res) => {
     };
 
     // Update enrollment metadata with audit log
-    const currentMetadata = enrollment.metadata || {};
+    const currentMetadata = (enrollment.metadata || {}) as Record<string, any>;
     const paymentPlanHistory = currentMetadata.paymentPlanHistory || [];
     paymentPlanHistory.push(auditEntry);
 
     // Determine new payment plan type based on frequency
-    let newPaymentPlan: 'full_payment' | 'deposit_only' | 'monthly' | 'custom' = 'full_payment';
-    if (paymentFrequency === 'monthly') {
-      newPaymentPlan = 'monthly';
+    let newPaymentPlan: 'full_payment' | 'deposit_only' | 'biweekly' | 'custom' = 'full_payment';
+    if (paymentFrequency === 'biweekly') {
+      newPaymentPlan = 'biweekly';
     } else if (paymentFrequency !== 'one_time') {
-      newPaymentPlan = 'custom'; // weekly/biweekly are custom plans
+      newPaymentPlan = 'custom'; // weekly/monthly are custom plans
     }
 
     // Update Stripe subscription schedule if it exists
@@ -248,7 +248,7 @@ router.get('/:enrollmentId/payment-plan', async (req: any, res) => {
     }
 
     // Get payment history
-    const metadata = enrollment.metadata || {};
+    const metadata = (enrollment.metadata || {}) as Record<string, any>;
     const paymentPlanHistory = metadata.paymentPlanHistory || [];
 
     // Calculate previews for all frequencies
@@ -655,9 +655,12 @@ router.post('/:enrollmentId/reallocate-payment', async (req: any, res) => {
         paymentId: latestPayment.id,
         amount: amount,
         reason: `Payment reallocation: ${adminComment}`,
+        description: `Payment reallocation from enrollment ${enrollmentId}`,
         status: 'completed',
         stripeRefundId: stripeRefund.id,
         processedBy: user.id,
+        processedAt: new Date(),
+        failureReason: null,
         metadata: {
           reallocationAudit: auditEntry,
           parentEmail: sourceEnrollment.parentEmail

@@ -450,54 +450,10 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
       const effectiveClassId = enrollment.classId || enrollment.marketplaceClassId;
       const classInfo = (classes as any[]).find(c => c.id === effectiveClassId);
       
-      // Calculate totalPaid with three fallback levels:
-      // 1. Payment allocations ledger (source of truth for new payments)
-      // 2. Payment history matching (for legacy payments)
-      // 3. Cached totalPaid field (last resort)
-      let totalPaid = 0;
-      
-      try {
-        // LEVEL 1: Check payment_allocations ledger first (source of truth)
-        const allocationTotal = await storage.getTotalPaidForEnrollment(enrollment.id);
-        if (allocationTotal > 0) {
-          totalPaid = allocationTotal;
-        } else {
-          // LEVEL 2: For legacy enrollments, calculate from payment history
-          const enrollmentPayments = paymentHistory.filter(payment => {
-            if (!['completed', 'succeeded'].includes(payment.status)) {
-              return false;
-            }
-            // Match by enrollmentIds array (most accurate - prevents double counting)
-            const paymentEnrollmentIds = (payment as any).enrollmentIds;
-            if (paymentEnrollmentIds && Array.isArray(paymentEnrollmentIds) && paymentEnrollmentIds.length > 0) {
-              return paymentEnrollmentIds.includes(enrollment.id);
-            }
-            // Match by class name (specific, prevents double counting across enrollments)
-            const paymentClassName = (payment.className || '').toLowerCase().trim();
-            const enrollmentClassName = (classInfo?.title || '').toLowerCase().trim();
-            if (paymentClassName && enrollmentClassName && paymentClassName === enrollmentClassName) {
-              // Also verify childName matches to be extra safe
-              const paymentChildName = (payment.childName || '').toLowerCase().trim();
-              const enrollmentChildName = (enrollment.childName || '').toLowerCase().trim();
-              if (!paymentChildName || !enrollmentChildName || paymentChildName === enrollmentChildName) {
-                return true;
-              }
-            }
-            return false;
-          });
-          
-          const historyTotal = CurrencyUtils.sum(enrollmentPayments.map(p => p.amount || 0));
-          if (historyTotal > 0) {
-            totalPaid = historyTotal;
-          } else {
-            // LEVEL 3: Use cached totalPaid as last resort
-            totalPaid = enrollment.totalPaid || 0;
-          }
-        }
-      } catch (err) {
-        // On error, fall back to cached value
-        totalPaid = enrollment.totalPaid || 0;
-      }
+      // Server-authoritative: Use enrollment.totalPaid directly
+      // This field is updated by all payment operations (payments, reallocations, refunds)
+      // and is the single source of truth for display
+      const totalPaid = enrollment.totalPaid || 0;
       
       const totalCost = enrollment.totalCost || 0;
       const actualRemainingBalance = CurrencyUtils.calculateBalance(totalCost, totalPaid);
