@@ -42,6 +42,7 @@ The platform prioritizes scalability, security, and user experience, incorporati
 -   **Student Management System**: Tracks students across schools.
 -   **Notification System**: In-app notification system with PostgreSQL storage and real-time unread counts.
 -   **AI Smart Tutorial System**: Conversational AI guidance using Anthropic Claude with context-aware help, rate limiting, conversation truncation, dynamic UI element highlighting, and page-specific suggestions.
+-   **AI Payment Help Assistant**: Context-aware payment assistance using Anthropic Claude that helps parents with payment questions. Features personalized responses based on user's membership status, outstanding balance, and payment plans. Accessible via floating help button on payment pages (cart, checkout, billing, payment-plans).
 -   **System Error Monitoring**: Comprehensive error tracking and notification system with database logging, severity levels, automatic email notifications for critical errors, and an admin dashboard.
 -   **Unified Credit System**: Extensible multi-type credit system supporting volunteer, referral, achievement, marketing, and manual credits, with admin approval, FIFO consumption, and an expiration service.
 -   **Fundraiser System**: Complete fundraiser management for schools to run product-based campaigns, including database schema, school admin UI, public storefront, parent dashboard, and credit integration.
