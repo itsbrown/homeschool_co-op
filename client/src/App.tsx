@@ -10,6 +10,7 @@ import { NotificationProvider } from "@/hooks/useNotifications";
 import { CartProvider } from "@/contexts/CartContext";
 import { FormTracker } from "@/components/FormTracker";
 import { InteractiveTutorialProvider } from "@/components/tutorials/InteractiveTutorial";
+import PaymentHelpAssistant from "@/components/payments/PaymentHelpAssistant";
 
 import Home from "@/pages/Home";
 import Login from "@/pages/Login";
@@ -725,6 +726,7 @@ function App() {
                     <FormTracker />
                     <Router />
                     <SupportAssistantTrigger />
+                    <PaymentHelpAssistant />
                   </TooltipProvider>
                 </InteractiveTutorialProvider>
               </CartProvider>

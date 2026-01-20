@@ -51,6 +51,7 @@ import classInclusionsRouter from "./api/class-inclusions";
 import onboardingRouter from "./api/onboarding";
 import membershipAgreementRouter from "./api/membership-agreement";
 import smartTutorialRouter from "./api/smart-tutorial";
+import paymentHelpRouter from "./api/payment-help";
 import announcementsRouter from "./api/announcements";
 import calendarEventsRouter from "./api/calendar-events";
 import analyticsRouter from "./api/analytics";
@@ -2108,6 +2109,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/ai", aiPricingRouter);
   app.use("/api/ai-insights", aiInsightsRouter);
   app.use("/api/smart-tutorial", smartTutorialRouter);
+  app.use("/api/payment-help", paymentHelpRouter);
   // Register /api/admin/educators BEFORE /api/admin to ensure specific route matches first
   // (admin-educators uses Supabase auth, while admin uses Auth0 auth)
   app.use("/api/admin/educators", adminEducatorsRouter);
