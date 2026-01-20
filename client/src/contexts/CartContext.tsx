@@ -139,6 +139,101 @@ const normalizeDiscounts = (discounts: Partial<Cart['discounts']> | null | undef
   };
 };
 
+/**
+ * Fetch server-authoritative cart pricing from /api/cart/calculate
+ * This is the SINGLE SOURCE OF TRUTH for cart pricing, preventing
+ * client-server price mismatches that cause payment failures.
+ */
+interface ServerCartPricingResponse {
+  subtotal: number;
+  discounts: {
+    siblingDiscount: number;
+    freeAfterThree: number;
+    appliedDiscounts: Array<{
+      id: number;
+      name: string;
+      type: 'percentage' | 'fixed_amount' | 'bundle';
+      value: number;
+      discountAmount: number;
+      priority: number;
+      bundleRule?: {
+        type: 'nth_item_free' | 'buy_x_get_y_free' | 'buy_x_get_y_percent_off';
+        buyQuantity: number;
+        freeQuantity?: number;
+        discountPercentage?: number;
+      };
+      sourceType?: 'percentage' | 'fixed_amount' | 'bundle';
+    }>;
+    totalDiscountAmount: number;
+    discountedChildIds: number[];
+    freeItemIds: string[];
+  };
+  total: number;
+  itemPrices: Array<{ classId: number; variantId?: string; price: number }>;
+  schoolSettings?: {
+    freeAfterThresholdEnabled: boolean;
+    freeAfterThreshold: number;
+    siblingDiscountRate: number;
+    showSubscriptionStatus?: boolean;
+  };
+}
+
+const fetchServerCartPricing = async (
+  items: CartItem[],
+  getAccessToken: () => Promise<string>,
+  appliedPromoCode?: string | null
+): Promise<{
+  subtotal: number;
+  discounts: Cart['discounts'];
+  total: number;
+  schoolSettings?: Cart['schoolSettings'];
+}> => {
+  try {
+    const token = await getAccessToken();
+    
+    const response = await fetch('/api/cart/calculate', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        items: items.map(item => ({
+          id: item.id,
+          classId: item.classId,
+          childId: item.childId,
+          childName: item.childName,
+          variantId: item.variantId,
+        })),
+        appliedPromoCode,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Server cart calculation failed: ${response.status}`);
+    }
+
+    const data = await response.json() as ServerCartPricingResponse;
+    
+    console.log('📊 Server-authoritative cart pricing received:', {
+      itemCount: items.length,
+      subtotal: data.subtotal,
+      totalDiscount: data.discounts.totalDiscountAmount,
+      total: data.total,
+    });
+
+    return {
+      subtotal: data.subtotal,
+      discounts: normalizeDiscounts(data.discounts),
+      total: data.total,
+      schoolSettings: data.schoolSettings,
+    };
+  } catch (error) {
+    console.error('Failed to fetch server cart pricing:', error);
+    throw error;
+  }
+};
+
 export interface CartItem {
   id: string;
   enrollmentId?: number;
@@ -1396,26 +1491,35 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
       };
 
-      // Use calculateCartTotalsWithDiscounts to fetch school settings and calculate discounts properly
-      // Wrap in try-catch to handle errors gracefully - cart should still work even if discounts fail
+      // Use server-authoritative pricing from /api/cart/calculate
+      // This is the SINGLE SOURCE OF TRUTH, preventing client-server price mismatches
       let subtotal = 0;
       let total = 0;
       let discounts: Cart['discounts'] = buildDefaultDiscounts();
       let schoolSettings: Cart['schoolSettings'] | undefined = undefined;
       
       try {
-        const calculatedTotals = await calculateCartTotalsWithDiscounts(cartItems, getAccessToken, null, userRolesList);
-        subtotal = typeof calculatedTotals.subtotal === 'number' ? calculatedTotals.subtotal : 0;
-        total = typeof calculatedTotals.total === 'number' ? calculatedTotals.total : subtotal;
-        discounts = normalizeDiscounts(calculatedTotals.discounts);
-        schoolSettings = calculatedTotals.schoolSettings;
+        const serverPricing = await fetchServerCartPricing(cartItems, getAccessToken, null);
+        subtotal = serverPricing.subtotal;
+        total = serverPricing.total;
+        discounts = serverPricing.discounts;
+        schoolSettings = serverPricing.schoolSettings;
       } catch (totalsError) {
-        console.warn('🛒 Error calculating cart totals, using defaults:', totalsError);
-        // Calculate basic totals from items without discounts
-        subtotal = calculateBasicSubtotal(cartItems);
-        total = subtotal;
-        discounts = buildDefaultDiscounts();
-        schoolSettings = undefined;
+        console.warn('🛒 Error fetching server cart pricing, using client calculation fallback:', totalsError);
+        // Fallback to client-side calculation if server is unavailable
+        try {
+          const fallbackTotals = await calculateCartTotalsWithDiscounts(cartItems, getAccessToken, null, userRolesList);
+          subtotal = typeof fallbackTotals.subtotal === 'number' ? fallbackTotals.subtotal : 0;
+          total = typeof fallbackTotals.total === 'number' ? fallbackTotals.total : subtotal;
+          discounts = normalizeDiscounts(fallbackTotals.discounts);
+          schoolSettings = fallbackTotals.schoolSettings;
+        } catch (fallbackError) {
+          console.warn('🛒 Client-side fallback also failed, using basic totals:', fallbackError);
+          subtotal = calculateBasicSubtotal(cartItems);
+          total = subtotal;
+          discounts = buildDefaultDiscounts();
+          schoolSettings = undefined;
+        }
       }
 
       // Fetch membership data during cart hydration (non-blocking with timeout)
@@ -1482,29 +1586,48 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [user?.email, isAuthenticated, activeRole, refetchEnrollments]);
 
-  // Function to refresh discounts for the current cart
+  // Function to refresh discounts for the current cart using server-authoritative pricing
   const refreshDiscounts = useCallback(async () => {
     if (state.cart.items.length === 0) {
       return;
     }
 
     try {
-      const totalsWithDiscounts = await calculateCartTotalsWithDiscounts(
+      // Use server-authoritative pricing to prevent client-server mismatches
+      const serverPricing = await fetchServerCartPricing(
         state.cart.items, 
         getAccessToken,
-        state.cart.appliedPromoCode, // Pass promo code to preserve it
-        userRolesList // Pass user roles for eligibility checking
+        state.cart.appliedPromoCode?.code || null
       );
       dispatch({
         type: 'LOAD_CART',
         payload: {
           items: state.cart.items,
-          ...totalsWithDiscounts,
+          ...serverPricing,
           appliedPromoCode: state.cart.appliedPromoCode, // Preserve promo code
         },
       });
     } catch (error) {
-      console.error('Error refreshing discounts:', error);
+      console.error('Error refreshing discounts from server:', error);
+      // Fallback to client-side calculation if server fails
+      try {
+        const fallbackTotals = await calculateCartTotalsWithDiscounts(
+          state.cart.items, 
+          getAccessToken,
+          state.cart.appliedPromoCode,
+          userRolesList
+        );
+        dispatch({
+          type: 'LOAD_CART',
+          payload: {
+            items: state.cart.items,
+            ...fallbackTotals,
+            appliedPromoCode: state.cart.appliedPromoCode,
+          },
+        });
+      } catch (fallbackError) {
+        console.error('Client-side fallback also failed:', fallbackError);
+      }
     }
   }, [state.cart.items, state.cart.appliedPromoCode, getAccessToken, userRolesList]);
 

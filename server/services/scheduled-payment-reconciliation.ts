@@ -532,3 +532,134 @@ export async function generateMissingScheduledPayments(
   
   return result;
 }
+
+/**
+ * System-wide batch reconciliation interface
+ */
+export interface SystemReconciliationSummary {
+  totalEnrollmentsProcessed: number;
+  totalEnrollmentsWithChanges: number;
+  totalPaymentsMarkedCompleted: number;
+  schoolSummaries: Array<{
+    schoolId: number;
+    enrollmentsProcessed: number;
+    enrollmentsWithChanges: number;
+    paymentsMarkedCompleted: number;
+  }>;
+  errors: Array<{ enrollmentId: number; error: string }>;
+  batchesProcessed: number;
+  processingTimeMs: number;
+}
+
+/**
+ * System-wide batch reconciliation.
+ * Processes all enrollments across all schools in batches to prevent timeout.
+ * 
+ * @param batchSize - Number of enrollments to process per batch (default 50)
+ * @param delayBetweenBatchesMs - Delay between batches to reduce database load (default 100ms)
+ * @param dryRun - If true, preview changes without applying them
+ */
+export async function reconcileAllScheduledPayments(
+  batchSize: number = 50,
+  delayBetweenBatchesMs: number = 100,
+  dryRun: boolean = false
+): Promise<SystemReconciliationSummary> {
+  const startTime = Date.now();
+  console.log(`🔄 Starting system-wide scheduled payment reconciliation (dryRun: ${dryRun})`);
+  console.log(`   Batch size: ${batchSize}, Delay between batches: ${delayBetweenBatchesMs}ms`);
+  
+  // Get all scheduled payments with pending status
+  const allScheduledPayments = await storage.getAllScheduledPayments();
+  const pendingPayments = allScheduledPayments.filter((sp: any) => sp.status === 'pending');
+  
+  // Get unique enrollment IDs that have pending payments
+  const enrollmentIds = [...new Set(pendingPayments.map((sp: any) => sp.enrollmentId))];
+  
+  console.log(`📊 Found ${pendingPayments.length} pending payments across ${enrollmentIds.length} enrollments`);
+  
+  const summary: SystemReconciliationSummary = {
+    totalEnrollmentsProcessed: 0,
+    totalEnrollmentsWithChanges: 0,
+    totalPaymentsMarkedCompleted: 0,
+    schoolSummaries: [],
+    errors: [],
+    batchesProcessed: 0,
+    processingTimeMs: 0,
+  };
+  
+  // Track per-school results
+  const schoolResults = new Map<number, {
+    enrollmentsProcessed: number;
+    enrollmentsWithChanges: number;
+    paymentsMarkedCompleted: number;
+  }>();
+  
+  // Process in batches
+  for (let i = 0; i < enrollmentIds.length; i += batchSize) {
+    const batch = enrollmentIds.slice(i, i + batchSize);
+    summary.batchesProcessed++;
+    
+    console.log(`📦 Processing batch ${summary.batchesProcessed}: enrollments ${i + 1}-${Math.min(i + batchSize, enrollmentIds.length)} of ${enrollmentIds.length}`);
+    
+    for (const enrollmentId of batch) {
+      try {
+        const result = await reconcileEnrollmentScheduledPayments(enrollmentId, dryRun);
+        summary.totalEnrollmentsProcessed++;
+        
+        // Get enrollment's school ID
+        const enrollment = await storage.getProgramEnrollmentById(enrollmentId);
+        const schoolId = enrollment?.schoolId || 0;
+        
+        // Track school-level results
+        if (!schoolResults.has(schoolId)) {
+          schoolResults.set(schoolId, {
+            enrollmentsProcessed: 0,
+            enrollmentsWithChanges: 0,
+            paymentsMarkedCompleted: 0,
+          });
+        }
+        const schoolResult = schoolResults.get(schoolId)!;
+        schoolResult.enrollmentsProcessed++;
+        
+        if (result.paymentsMarkedCompleted > 0) {
+          summary.totalEnrollmentsWithChanges++;
+          summary.totalPaymentsMarkedCompleted += result.paymentsMarkedCompleted;
+          schoolResult.enrollmentsWithChanges++;
+          schoolResult.paymentsMarkedCompleted += result.paymentsMarkedCompleted;
+          
+          console.log(`   ✅ Enrollment ${enrollmentId}: ${result.paymentsMarkedCompleted} payment(s) ${dryRun ? 'would be' : ''} marked completed`);
+        }
+      } catch (err) {
+        summary.errors.push({
+          enrollmentId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        console.error(`   ❌ Enrollment ${enrollmentId}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+    
+    // Delay between batches to reduce database load
+    if (i + batchSize < enrollmentIds.length && delayBetweenBatchesMs > 0) {
+      await new Promise(resolve => setTimeout(resolve, delayBetweenBatchesMs));
+    }
+  }
+  
+  // Convert school results map to array
+  summary.schoolSummaries = Array.from(schoolResults.entries()).map(([schoolId, result]) => ({
+    schoolId,
+    ...result,
+  }));
+  
+  summary.processingTimeMs = Date.now() - startTime;
+  
+  const action = dryRun ? 'Preview' : 'Reconciliation';
+  console.log(`\n✅ ${action} complete:`);
+  console.log(`   - Enrollments processed: ${summary.totalEnrollmentsProcessed}`);
+  console.log(`   - Enrollments with changes: ${summary.totalEnrollmentsWithChanges}`);
+  console.log(`   - Payments marked completed: ${summary.totalPaymentsMarkedCompleted}`);
+  console.log(`   - Batches processed: ${summary.batchesProcessed}`);
+  console.log(`   - Errors: ${summary.errors.length}`);
+  console.log(`   - Processing time: ${summary.processingTimeMs}ms`);
+  
+  return summary;
+}

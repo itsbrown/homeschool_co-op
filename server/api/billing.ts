@@ -121,8 +121,68 @@ export async function processBalancePayment(paymentIntent: Stripe.PaymentIntent,
     await storage.createPayment(paymentRecord);
     console.log('✅ Payment record created:', paymentRecord.stripePaymentIntentId);
     
-    // Payment plans are now handled by Stripe Subscription Schedules in the stripe-payment-plans service
-    // No manual scheduled payments needed - all payment scheduling is managed by Stripe
+    // Sync scheduled payments: mark as 'completed' when cumulative amount is covered by totalPaid
+    // This ensures scheduled payment status matches actual payment state
+    for (const enrollment of enrollments) {
+      try {
+        const updatedEnrollment = await storage.getProgramEnrollmentById(enrollment.id);
+        if (!updatedEnrollment) continue;
+        
+        const enrollmentScheduledPayments = await storage.getScheduledPaymentsByEnrollmentId(enrollment.id);
+        const sortedPayments = enrollmentScheduledPayments
+          .sort((a, b) => {
+            const dateCompare = new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime();
+            return dateCompare !== 0 ? dateCompare : (a.installmentNumber || 0) - (b.installmentNumber || 0);
+          });
+        
+        let cumulativeAmount = 0;
+        let paymentsMarked = 0;
+        
+        for (const sp of sortedPayments) {
+          if (sp.status === 'cancelled' || sp.status === 'skipped') continue;
+          cumulativeAmount += sp.amount;
+          if (sp.status === 'completed') continue;
+          
+          // Mark as completed if cumulative is covered by totalPaid
+          if (cumulativeAmount <= (updatedEnrollment.totalPaid || 0)) {
+            await storage.updateScheduledPayment(sp.id, {
+              status: 'completed',
+              processedAt: new Date(),
+            });
+            paymentsMarked++;
+          } else {
+            break;
+          }
+        }
+        
+        if (paymentsMarked > 0) {
+          console.log(`✅ Synced ${paymentsMarked} scheduled payment(s) to 'completed' for enrollment ${enrollment.id}`);
+        }
+      } catch (syncErr) {
+        console.error(`⚠️ Failed to sync scheduled payments for enrollment ${enrollment.id}:`, syncErr);
+        // Log to error monitoring system for admin visibility
+        try {
+          await storage.createErrorLog({
+            errorType: 'backend',
+            message: `Failed to sync scheduled payments for enrollment ${enrollment.id}`,
+            severity: 'medium',
+            route: '/billing/processBalancePayment',
+            method: 'POST',
+            userEmail: userEmail,
+            schoolId: enrollment.schoolId,
+            stackTrace: syncErr instanceof Error ? syncErr.stack : String(syncErr),
+            metadata: {
+              enrollmentId: enrollment.id,
+              paymentIntentId: paymentIntent.id,
+              error: syncErr instanceof Error ? syncErr.message : String(syncErr)
+            },
+            notificationSent: false
+          });
+        } catch (logErr) {
+          console.error('❌ Failed to log sync error:', logErr);
+        }
+      }
+    }
     
     // Add small delay to ensure all storage operations are committed
     await new Promise(resolve => setTimeout(resolve, 100));

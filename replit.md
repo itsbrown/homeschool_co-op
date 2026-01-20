@@ -151,15 +151,49 @@ Production-grade file upload system using Replit App Storage (Object Storage) fo
 -   **SendGrid**: Email service.
 -   **Twilio**: SMS service.
 
-## Future Improvements
+### Scheduled Payment Synchronization System
+Ensures scheduled payment statuses stay in sync with actual payments:
 
-### Server-Authoritative Pricing (High Priority)
-**Problem:** Client-side discount calculations duplicate server logic, causing payment mismatches when rules change.
+**Architecture:**
+-   **Real-time Sync**: `processBalancePayment` in `server/api/billing.ts` marks scheduled payments as completed when Stripe payments succeed
+-   **Batch Reconciliation**: `server/services/scheduled-payment-reconciliation.ts` processes enrollments in batches to fix any out-of-sync payments
+-   **Daily Job**: `server/services/scheduled-payment-reconciliation-job.ts` runs at 3 AM UTC as safety net
 
-**Solution:** Make the server the single source of truth for all pricing:
-1. Create `/api/cart/calculate` endpoint returning complete pricing breakdown
-2. Update CartContext to fetch prices from server instead of calculating locally
-3. Remove duplicate discount logic from frontend
-4. Add E2E tests for discount combinations (sibling + promo, free-after-threshold, etc.)
+**Sync Logic:**
+-   Uses cumulative approach: marks all pending payments where `cumulativeAmount <= totalPaid`
+-   Preserves cancelled payments (user intent)
+-   Logs sync failures to error monitoring system (MEDIUM severity)
+
+**API Endpoints:**
+-   Real-time: Syncs happen automatically during `processBalancePayment`
+-   Manual: `triggerManualReconciliation()` available for admin use
+
+**Error Handling:**
+-   Uses existing `storage.createErrorLog()` with MEDIUM severity
+-   Errors don't block payment processing (async sync with fallback)
+
+### Server-Authoritative Cart Pricing
+The server is the SINGLE SOURCE OF TRUTH for all cart pricing to prevent payment mismatches:
+
+**Architecture:**
+-   **Server Endpoint**: `POST /api/cart/calculate` - Returns authoritative pricing breakdown
+-   **Cart Context**: `fetchServerCartPricing()` calls server before checkout
+-   **Fallback**: Client-side calculation as fallback if server unavailable
+
+**Flow:**
+1. CartContext calls `/api/cart/calculate` with cart items
+2. Server fetches class prices, applies discounts (sibling, free-after-threshold, promo)
+3. Server returns `subtotal`, `discounts`, `total`, `schoolSettings`
+4. CartContext uses server response for display and checkout
+
+**Files:**
+-   `server/utils/cart-pricing.ts` - Server-side discount calculation engine
+-   `server/api/cart.ts` - API endpoints (/calculate, /validate, /snapshot)
+-   `client/src/contexts/CartContext.tsx` - Uses `fetchServerCartPricing()`
 
 **Impact:** Eliminates TOTAL_MISMATCH payment errors permanently.
+
+## Future Improvements
+
+### Cleanup Duplicate Client Discount Logic
+The client-side discount calculation functions (`calculateCartTotalsWithDiscounts`, `fetchApplicableDiscounts`) are now kept only as fallbacks. Consider removing them entirely once server-authoritative pricing is validated in production.
