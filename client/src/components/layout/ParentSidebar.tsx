@@ -229,6 +229,12 @@ export default function ParentSidebar() {
       title: "My Documents",
       icon: <FolderOpen className="h-5 w-5" />,
     },
+    {
+      href: "/parent/assessments",
+      title: "Reading Progress",
+      icon: <BookOpen className="h-5 w-5" />,
+      description: "View reading assessments and Lexile scores"
+    },
     // TODO: Future feature - AI Enrollment Assistant
     // {
     //   href: "/enrollment-assistant",

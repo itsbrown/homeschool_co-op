@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { 
   Plus, 
   Pencil, 
@@ -21,8 +22,12 @@ import {
   ClipboardList,
   ChevronDown,
   ChevronRight,
-  GraduationCap
+  GraduationCap,
+  Users,
+  Calendar,
+  Search
 } from 'lucide-react';
+import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import AppShell from '@/components/layout/AppShell';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -54,6 +59,36 @@ interface CurriculumBook {
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
+}
+
+interface StudentAssessment {
+  id: number;
+  schoolId: number;
+  childId: number;
+  assessmentTypeId: number;
+  curriculumBookId: number | null;
+  assessmentDate: string;
+  score: string;
+  lexileScore: number | null;
+  lesson: number | null;
+  notes: string | null;
+  source: string;
+  recordedBy: number;
+  child?: { firstName: string; lastName: string };
+  assessmentType?: { name: string };
+  curriculumBook?: { name: string } | null;
+  recorder?: { firstName: string; lastName: string };
+}
+
+interface Child {
+  id: number;
+  firstName: string;
+  lastName: string;
+}
+
+interface Location {
+  id: number;
+  name: string;
 }
 
 const scoreFormatOptions = [
@@ -110,10 +145,41 @@ export default function AssessmentManagementPage() {
     gradeLevel: '',
     isActive: true,
   });
+  
+  const [assessmentFilters, setAssessmentFilters] = useState({
+    childId: '',
+    assessmentTypeId: '',
+    locationId: '',
+    searchQuery: ''
+  });
 
   const { data: assessmentTypes = [], isLoading: typesLoading } = useQuery<AssessmentType[]>({
     queryKey: ['/api/assessments/types'],
     enabled: !!user?.email,
+  });
+  
+  const { data: allStudentAssessments = [], isLoading: assessmentsLoading } = useQuery<StudentAssessment[]>({
+    queryKey: ['/api/assessments/students', assessmentFilters.childId, assessmentFilters.assessmentTypeId, assessmentFilters.locationId],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (assessmentFilters.childId) params.append('childId', assessmentFilters.childId);
+      if (assessmentFilters.assessmentTypeId) params.append('assessmentTypeId', assessmentFilters.assessmentTypeId);
+      if (assessmentFilters.locationId) params.append('locationId', assessmentFilters.locationId);
+      const response = await fetch(`/api/assessments/students?${params.toString()}`);
+      if (!response.ok) throw new Error('Failed to fetch assessments');
+      return response.json();
+    },
+    enabled: !!user?.email && activeTab === 'all',
+  });
+  
+  const { data: schoolChildren = [] } = useQuery<Child[]>({
+    queryKey: ['/api/admin/children'],
+    enabled: !!user?.email && activeTab === 'all',
+  });
+  
+  const { data: schoolLocations = [] } = useQuery<Location[]>({
+    queryKey: ['/api/locations'],
+    enabled: !!user?.email && activeTab === 'all',
   });
 
   const createTypeMutation = useMutation({
@@ -367,6 +433,10 @@ export default function AssessmentManagementPage() {
               <ClipboardList className="h-4 w-4" />
               Assessment Types
             </TabsTrigger>
+            <TabsTrigger value="all" className="flex items-center gap-2" data-testid="tab-all-assessments">
+              <Users className="h-4 w-4" />
+              All Assessments
+            </TabsTrigger>
             <TabsTrigger value="overview" className="flex items-center gap-2" data-testid="tab-overview">
               <BookOpen className="h-4 w-4" />
               Overview
@@ -425,6 +495,169 @@ export default function AssessmentManagementPage() {
                 ))}
               </div>
             )}
+          </TabsContent>
+
+          <TabsContent value="all">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="h-5 w-5" />
+                  All Student Assessments
+                </CardTitle>
+                <CardDescription>View and filter all recorded assessments across students</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-wrap gap-4 mb-6">
+                  <div className="flex-1 min-w-[180px]">
+                    <Label htmlFor="filter-location" className="text-sm">Class/Location</Label>
+                    <Select
+                      value={assessmentFilters.locationId}
+                      onValueChange={(value) => setAssessmentFilters({ ...assessmentFilters, locationId: value })}
+                    >
+                      <SelectTrigger id="filter-location">
+                        <SelectValue placeholder="All locations" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">All locations</SelectItem>
+                        {schoolLocations.map((location) => (
+                          <SelectItem key={location.id} value={String(location.id)}>
+                            {location.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex-1 min-w-[180px]">
+                    <Label htmlFor="filter-child" className="text-sm">Student</Label>
+                    <Select
+                      value={assessmentFilters.childId}
+                      onValueChange={(value) => setAssessmentFilters({ ...assessmentFilters, childId: value })}
+                    >
+                      <SelectTrigger id="filter-child">
+                        <SelectValue placeholder="All students" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">All students</SelectItem>
+                        {schoolChildren.map((child) => (
+                          <SelectItem key={child.id} value={String(child.id)}>
+                            {child.firstName} {child.lastName}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex-1 min-w-[180px]">
+                    <Label htmlFor="filter-type" className="text-sm">Assessment Type</Label>
+                    <Select
+                      value={assessmentFilters.assessmentTypeId}
+                      onValueChange={(value) => setAssessmentFilters({ ...assessmentFilters, assessmentTypeId: value })}
+                    >
+                      <SelectTrigger id="filter-type">
+                        <SelectValue placeholder="All types" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">All types</SelectItem>
+                        {assessmentTypes.map((type) => (
+                          <SelectItem key={type.id} value={String(type.id)}>
+                            {type.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex items-end">
+                    <Button
+                      variant="outline"
+                      onClick={() => setAssessmentFilters({ childId: '', assessmentTypeId: '', locationId: '', searchQuery: '' })}
+                    >
+                      Clear Filters
+                    </Button>
+                  </div>
+                </div>
+
+                {assessmentsLoading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 className="h-8 w-8 animate-spin" />
+                  </div>
+                ) : allStudentAssessments.length === 0 ? (
+                  <div className="text-center py-12 text-muted-foreground">
+                    <GraduationCap className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>No assessments found</p>
+                    <p className="text-sm">Try adjusting your filters or record new assessments</p>
+                  </div>
+                ) : (
+                  <div className="border rounded-lg overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Student</TableHead>
+                          <TableHead>Assessment Type</TableHead>
+                          <TableHead>Book/Lesson</TableHead>
+                          <TableHead>Score</TableHead>
+                          <TableHead>Lexile</TableHead>
+                          <TableHead>Source</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {allStudentAssessments.map((assessment) => (
+                          <TableRow key={assessment.id}>
+                            <TableCell className="whitespace-nowrap">
+                              <div className="flex items-center gap-2">
+                                <Calendar className="h-4 w-4 text-muted-foreground" />
+                                {format(new Date(assessment.assessmentDate), 'MMM d, yyyy')}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              {assessment.child 
+                                ? `${assessment.child.firstName} ${assessment.child.lastName}`
+                                : `Child #${assessment.childId}`}
+                            </TableCell>
+                            <TableCell>
+                              {assessment.assessmentType?.name || `Type #${assessment.assessmentTypeId}`}
+                            </TableCell>
+                            <TableCell>
+                              {assessment.curriculumBook?.name && (
+                                <span className="text-sm">
+                                  Book {assessment.curriculumBook.name}
+                                  {assessment.lesson && `, Lesson ${assessment.lesson}`}
+                                </span>
+                              )}
+                              {!assessment.curriculumBook?.name && assessment.lesson && (
+                                <span className="text-sm">Lesson {assessment.lesson}</span>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className="bg-blue-50 text-blue-700">
+                                {assessment.score}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              {assessment.lexileScore !== null ? (
+                                <Badge variant="outline" className="bg-emerald-50 text-emerald-700">
+                                  {assessment.lexileScore}L
+                                </Badge>
+                              ) : (
+                                <span className="text-muted-foreground">-</span>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="secondary" className="text-xs">
+                                {assessment.source === 'in_app' ? 'In-App' : 'Manual'}
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+                
+                <div className="mt-4 text-sm text-muted-foreground">
+                  Showing {allStudentAssessments.length} assessment{allStudentAssessments.length !== 1 ? 's' : ''}
+                </div>
+              </CardContent>
+            </Card>
           </TabsContent>
 
           <TabsContent value="overview">
