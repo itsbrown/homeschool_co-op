@@ -43,6 +43,7 @@ The platform is built on a full-stack architecture prioritizing scalability, sec
 -   **Payment Reminder Tracking System**: Complete audit logging for automatic and manual payment reminders with school admin visibility.
 -   **Educator Dashboard**: Tools for educators to manage classes, attendance, lesson plans, and log work hours, integrated with Daily Flow.
 -   **Unified File Upload System**: Production-grade system using Replit App Storage for secure, scalable file handling with category-based validation and presigned URLs.
+-   **Reading Assessment Tracking System**: McCall-Crabbs format with auto-averaging of grade-level scores, automatic Lexile score conversion (200 + gradeLevel × 100), assessment source tracking ('manual_entry' | 'in_app'), parent progress viewing with Recharts charts, and admin aggregate reporting with class/student/type filters.
 
 **Core Architectural Principles:**
 -   **Scheduled Payment Synchronization System**: Ensures scheduled payment statuses sync with actual payments via real-time and daily batch reconciliation.
