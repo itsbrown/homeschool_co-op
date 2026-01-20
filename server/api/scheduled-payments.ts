@@ -16,10 +16,12 @@ router.get('/upcoming', supabaseAuth, async (req: any, res) => {
     // Get scheduled payments from local database
     const allScheduledPayments = await storage.getScheduledPaymentsByParentEmail(userEmail);
     
-    // Filter for pending payments only (future installments)
-    const pendingPayments = allScheduledPayments.filter(p => p.status === 'pending');
+    // Filter for pending and processing payments (processing may be from abandoned checkout)
+    const pendingPayments = allScheduledPayments.filter(
+      p => p.status === 'pending' || p.status === 'processing'
+    );
     
-    console.log(`📊 Found ${pendingPayments.length} pending scheduled payments for ${userEmail}`);
+    console.log(`📊 Found ${pendingPayments.length} pending/processing scheduled payments for ${userEmail}`);
 
     // Get enrollment details for enrichment
     const enrichedPayments = await Promise.all(pendingPayments.map(async (payment) => {
@@ -238,15 +240,15 @@ router.get('/upcoming-old', async (req, res) => {
 // Process a scheduled payment
 router.post('/pay', supabaseAuth, async (req: any, res) => {
   try {
-    const { paymentId, amount, description } = req.body;
+    const { paymentId, creditsToApply = 0 } = req.body;
     const userEmail = req.user.email;
 
-    console.log('💳 Processing scheduled payment:', { paymentId, amount, description, userEmail });
+    console.log('💳 Processing scheduled payment:', { paymentId, userEmail, creditsToApply });
 
-    if (!paymentId || !amount) {
+    if (!paymentId) {
       return res.status(400).json({
         success: false,
-        error: 'Payment ID and amount are required'
+        error: 'Payment ID is required'
       });
     }
 
@@ -267,6 +269,67 @@ router.post('/pay', supabaseAuth, async (req: any, res) => {
       });
     }
 
+    // Prevent duplicate payment attempts for already completed payments
+    // Allow 'processing' status to proceed (user may be retrying after abandonment)
+    if (scheduledPayment.status === 'completed') {
+      return res.status(400).json({
+        success: false,
+        error: 'This payment has already been completed'
+      });
+    }
+    
+    // Log if retrying a processing payment (user likely abandoned previous checkout)
+    if (scheduledPayment.status === 'processing') {
+      console.log(`🔄 Retrying payment ${paymentId} that was previously in processing state`);
+    }
+
+    // SERVER-AUTHORITATIVE AMOUNT: Use the scheduled payment amount, not client-supplied
+    const authoritativeAmount = scheduledPayment.amount;
+    console.log('💰 Server-authoritative amount:', authoritativeAmount);
+
+    // Get the user for credit validation
+    const parentUser = await storage.getUserByEmail(userEmail);
+    if (!parentUser) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+
+    // SERVER-SIDE CREDIT VALIDATION
+    let validatedCreditsToApply = 0;
+    if (creditsToApply > 0) {
+      const availableCredits = await storage.getAvailableCredits(parentUser.id);
+      const totalAvailable = availableCredits.reduce((sum, c) => sum + (c.creditAmountCents - (c.usedAmountCents || 0)), 0);
+      
+      // Validate credits: can't apply more than available or more than payment amount
+      validatedCreditsToApply = Math.min(creditsToApply, totalAvailable, authoritativeAmount);
+      console.log('💰 Credit validation:', { requested: creditsToApply, available: totalAvailable, validated: validatedCreditsToApply });
+    }
+
+    // Calculate final charge amount after credits (using authoritative amount)
+    const chargeAmount = Math.max(0, authoritativeAmount - validatedCreditsToApply);
+    
+    // If credits fully cover the payment, don't create a Stripe intent
+    if (chargeAmount === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Payment fully covered by credits. Use pay-with-credits endpoint instead.'
+      });
+    }
+
+    // CREDIT RESERVATION: Mark scheduled payment as processing with pending credits
+    // This prevents duplicate payment attempts and tracks reserved credits
+    await storage.updateScheduledPayment(scheduledPayment.id, {
+      status: 'processing',
+      metadata: {
+        ...((scheduledPayment.metadata as Record<string, any>) || {}),
+        pendingCreditsReservation: validatedCreditsToApply,
+        paymentIntentCreatedAt: new Date().toISOString()
+      }
+    });
+    console.log(`🔒 Reserved ${validatedCreditsToApply} credits for payment ${scheduledPayment.id} (status: processing)`);
+
     // Get the enrollment to retrieve enrollmentIds and Stripe customer
     const enrollment = scheduledPayment.enrollmentId 
       ? await storage.getEnrollmentById(scheduledPayment.enrollmentId)
@@ -280,7 +343,6 @@ router.post('/pay', supabaseAuth, async (req: any, res) => {
     
     // If no customer ID on enrollment, try to find from parent user
     if (!stripeCustomerId) {
-      const parentUser = await storage.getUserByEmail(userEmail);
       stripeCustomerId = parentUser?.stripeCustomerId || null;
     }
     
@@ -289,27 +351,33 @@ router.post('/pay', supabaseAuth, async (req: any, res) => {
       enrollmentId: scheduledPayment.enrollmentId,
       enrollmentIds,
       stripeCustomerId,
-      amount
+      originalAmount: authoritativeAmount,
+      creditsApplied: validatedCreditsToApply,
+      chargeAmount
     });
 
     // Create Stripe payment intent with complete metadata
     const stripe = await getStripeClient();
     const paymentIntentParams: any = {
-      amount: Math.round(amount), // Amount should be in cents
+      amount: Math.round(chargeAmount), // Charge reduced amount after credits
       currency: 'usd',
       metadata: {
         type: 'scheduled_payment',
         paymentType: 'scheduled_payment',
         scheduledPaymentId: paymentId.toString(),
         parentEmail: userEmail,
-        description: description || `Scheduled Payment ${scheduledPayment.installmentNumber}`,
+        description: `Scheduled Payment ${scheduledPayment.installmentNumber}`,
         // CRITICAL: Include enrollmentIds so webhook can update balances
         enrollmentIds: JSON.stringify(enrollmentIds),
         enrollmentId: scheduledPayment.enrollmentId?.toString() || '',
         installmentNumber: scheduledPayment.installmentNumber?.toString() || '1',
         totalInstallments: scheduledPayment.totalInstallments?.toString() || '1',
         createdBy: 'asa_payment_system',
-        version: 'v2_scheduled_payment'
+        version: 'v2_scheduled_payment',
+        // Credit tracking metadata - SERVER AUTHORITATIVE VALUES
+        originalAmountCents: authoritativeAmount.toString(),
+        creditsAppliedCents: validatedCreditsToApply.toString(),
+        userId: parentUser.id.toString()
       },
       automatic_payment_methods: {
         enabled: true
@@ -324,19 +392,201 @@ router.post('/pay', supabaseAuth, async (req: any, res) => {
     
     const paymentIntent = await stripe.paymentIntents.create(paymentIntentParams);
 
-    console.log('✅ Created payment intent for scheduled payment:', paymentIntent.id, 'with enrollmentIds:', enrollmentIds);
+    console.log('✅ Created payment intent for scheduled payment:', paymentIntent.id, 'with enrollmentIds:', enrollmentIds, 'chargeAmount:', chargeAmount);
 
     res.json({
       success: true,
       clientSecret: paymentIntent.client_secret,
-      paymentIntentId: paymentIntent.id
+      paymentIntentId: paymentIntent.id,
+      chargeAmount,
+      creditsApplied: validatedCreditsToApply
     });
 
   } catch (error) {
     console.error('❌ Error processing scheduled payment:', error);
+    
+    // ROLLBACK: Reset scheduled payment status if Stripe intent creation failed
+    try {
+      const { paymentId } = req.body;
+      if (paymentId) {
+        console.log(`🔓 Rolling back credit reservation for payment ${paymentId} after error`);
+        
+        // Get existing metadata to preserve
+        const allPayments = await storage.getScheduledPaymentsByParentEmail(req.user.email);
+        const existingPayment = allPayments.find(p => p.id === parseInt(paymentId));
+        const existingMetadata = (existingPayment?.metadata as Record<string, any>) || {};
+        
+        await storage.updateScheduledPayment(parseInt(paymentId), {
+          status: 'pending',  // Reset to pending to allow retry
+          metadata: {
+            ...existingMetadata,  // Preserve existing metadata
+            pendingCreditsReservation: 0,
+            lastErrorAt: new Date().toISOString(),
+            errorReason: error instanceof Error ? error.message : 'Unknown error'
+          }
+        });
+        console.log(`✅ Reset scheduled payment ${paymentId} to pending after failure`);
+      }
+    } catch (rollbackError) {
+      console.error('❌ Failed to rollback scheduled payment status:', rollbackError);
+    }
+    
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Failed to process scheduled payment'
+    });
+  }
+});
+
+// Process scheduled payment using credits only (no Stripe charge)
+router.post('/pay-with-credits', supabaseAuth, async (req: any, res) => {
+  try {
+    const { paymentId, creditsToApply } = req.body;
+    const userEmail = req.user.email;
+
+    console.log('🎫 Processing credit-only scheduled payment:', { paymentId, creditsToApply, userEmail });
+
+    if (!paymentId || !creditsToApply || creditsToApply <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Payment ID and credits amount are required'
+      });
+    }
+
+    // Get the scheduled payment to verify it belongs to the user
+    const allScheduledPayments = await storage.getScheduledPaymentsByParentEmail(userEmail);
+    const scheduledPayment = allScheduledPayments.find(p => p.id === parseInt(paymentId));
+    if (!scheduledPayment) {
+      return res.status(404).json({
+        success: false,
+        error: 'Scheduled payment not found'
+      });
+    }
+
+    if (scheduledPayment.parentEmail !== userEmail) {
+      return res.status(403).json({
+        success: false,
+        error: 'Payment does not belong to this user'
+      });
+    }
+
+    if (scheduledPayment.status === 'completed') {
+      return res.status(400).json({
+        success: false,
+        error: 'This payment has already been completed'
+      });
+    }
+
+    // Get the user for credit validation and consumption
+    const parentUser = await storage.getUserByEmail(userEmail);
+    if (!parentUser) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+
+    // SERVER-SIDE CREDIT VALIDATION
+    const availableCredits = await storage.getAvailableCredits(parentUser.id);
+    const totalAvailable = availableCredits.reduce((sum, c) => sum + (c.creditAmountCents - (c.usedAmountCents || 0)), 0);
+    
+    // Validate that credits fully cover the payment
+    const paymentAmount = scheduledPayment.amount;
+    if (creditsToApply < paymentAmount) {
+      return res.status(400).json({
+        success: false,
+        error: 'Credits do not fully cover the payment amount. Use regular pay endpoint for partial credit payments.'
+      });
+    }
+    
+    if (totalAvailable < paymentAmount) {
+      return res.status(400).json({
+        success: false,
+        error: `Insufficient credits. Available: ${totalAvailable} cents, Required: ${paymentAmount} cents`
+      });
+    }
+
+    console.log('💰 Credit-only payment validation passed:', { 
+      paymentAmount, 
+      creditsToApply, 
+      totalAvailable 
+    });
+
+    // CONSUME CREDITS using the existing FIFO pattern
+    const { usedCredits, totalUsed } = await storage.useCredits(
+      parentUser.id,
+      paymentAmount,
+      undefined, // paymentHistoryId - we'll create it after
+      `Scheduled payment ${scheduledPayment.id} - ${scheduledPayment.installmentNumber}/${scheduledPayment.totalInstallments}`
+    );
+
+    console.log(`💰 ✅ Consumed ${totalUsed} cents across ${usedCredits.length} credits for scheduled payment`);
+
+    // Mark the scheduled payment as completed
+    await storage.updateScheduledPayment(scheduledPayment.id, {
+      status: 'completed',
+      processedAt: new Date(),
+    });
+
+    // Update enrollment totalPaid if we have an enrollment
+    if (scheduledPayment.enrollmentId) {
+      const enrollment = await storage.getEnrollmentById(scheduledPayment.enrollmentId);
+      if (enrollment) {
+        const newTotalPaid = (enrollment.totalPaid || 0) + paymentAmount;
+        const classData = enrollment.programId ? await storage.getClassById(enrollment.programId) : null;
+        const totalCost = classData?.price || 0;
+        const remainingBalance = Math.max(0, totalCost - newTotalPaid);
+        
+        await storage.updateProgramEnrollment(enrollment.id, {
+          totalPaid: newTotalPaid,
+          remainingBalance
+        });
+        
+        console.log(`✅ Updated enrollment ${enrollment.id}: totalPaid=${newTotalPaid}, remaining=${remainingBalance}`);
+      }
+    }
+
+    // Get enrollment details for payment record
+    let childName = 'Child';
+    let className = 'Class';
+    if (scheduledPayment.enrollmentId) {
+      const enrollment = await storage.getEnrollmentById(scheduledPayment.enrollmentId);
+      if (enrollment) {
+        childName = enrollment.childName || 'Child';
+        className = enrollment.className || 'Class';
+      }
+    }
+    
+    // Create a payment record for tracking
+    await storage.createPayment({
+      schoolId: scheduledPayment.schoolId,
+      parentId: parentUser.id,
+      parentEmail: userEmail,
+      childName,
+      className,
+      amount: paymentAmount,
+      paymentDate: new Date(),
+      status: 'completed',
+      paymentMethod: 'other',  // 'credits' is not a valid type, use 'other' with description
+      description: `Credit payment for ${scheduledPayment.installmentNumber}/${scheduledPayment.totalInstallments}`,
+      enrollmentId: scheduledPayment.enrollmentId || undefined,
+      stripePaymentIntentId: `credit_${Date.now()}_${scheduledPayment.id}`,
+    });
+
+    console.log('✅ Credit-only payment completed successfully for scheduled payment:', scheduledPayment.id);
+
+    res.json({
+      success: true,
+      message: 'Payment completed using credits',
+      creditsUsed: totalUsed,
+      remainingCredits: totalAvailable - totalUsed
+    });
+
+  } catch (error) {
+    console.error('❌ Error processing credit-only payment:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to process credit payment'
     });
   }
 });

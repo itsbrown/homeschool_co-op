@@ -494,6 +494,26 @@ export const webhookHandler = async (req: Request, res: Response) => {
             processedAt: new Date(),
           });
           console.log(`✅ Marked scheduled payment ${scheduledPaymentId} as completed`);
+          
+          // CONSUME CREDITS if any were applied to this payment
+          const creditsAppliedCents = parseInt(paymentIntent.metadata.creditsAppliedCents || '0');
+          const userId = parseInt(paymentIntent.metadata.userId || '0');
+          
+          if (creditsAppliedCents > 0 && userId > 0) {
+            try {
+              console.log(`💰 Consuming ${creditsAppliedCents} cents of credits for user ${userId}`);
+              const { usedCredits, totalUsed } = await storage.useCredits(
+                userId,
+                creditsAppliedCents,
+                undefined, // paymentHistoryId will be linked later if needed
+                `Scheduled payment ${scheduledPaymentId} - ${paymentIntent.metadata.installmentNumber}/${paymentIntent.metadata.totalInstallments}`
+              );
+              console.log(`💰 ✅ Consumed ${totalUsed} cents across ${usedCredits.length} credit records`);
+            } catch (creditError) {
+              console.error(`❌ Failed to consume credits for scheduled payment ${scheduledPaymentId}:`, creditError);
+              // Don't fail the webhook - credits can be manually reconciled
+            }
+          }
             
           // UPDATE ENROLLMENT BALANCE
             console.log('💰 Updating enrollment balance for scheduled payment...');
@@ -517,7 +537,12 @@ export const webhookHandler = async (req: Request, res: Response) => {
               if (enrollment) {
                 const currentAmountPaid = enrollment.totalPaid || 0;
                 // Apply FULL payment amount to this single enrollment (already prorated when scheduled)
-                const newAmountPaid = currentAmountPaid + paymentIntent.amount;
+                // Use original amount (Stripe charge + credits applied) for enrollment balance
+                const originalAmount = parseInt(paymentIntent.metadata.originalAmountCents || '0') || paymentIntent.amount;
+                const totalPaymentAmount = creditsAppliedCents > 0 
+                  ? originalAmount  // Use original full amount when credits were applied
+                  : paymentIntent.amount;  // Use Stripe amount for non-credit payments
+                const newAmountPaid = currentAmountPaid + totalPaymentAmount;
                 const newBalance = Math.max(0, (enrollment.totalCost || 0) - newAmountPaid);
                 
                 // Update program enrollment in database
@@ -871,6 +896,34 @@ export const webhookHandler = async (req: Request, res: Response) => {
     case 'payment_intent.payment_failed':
       const failedPayment = event.data.object as Stripe.PaymentIntent;
       console.log('❌ Payment failed:', failedPayment.id);
+      
+      // Handle scheduled payment failure - release credit reservation
+      if (failedPayment.metadata.paymentType === 'scheduled_payment') {
+        const failedScheduledPaymentId = failedPayment.metadata.scheduledPaymentId;
+        if (failedScheduledPaymentId) {
+          try {
+            console.log(`🔓 Releasing credit reservation for failed scheduled payment: ${failedScheduledPaymentId}`);
+            
+            // Get existing scheduled payment to preserve metadata
+            const existingPayments = await storage.getScheduledPaymentsByParentEmail(failedPayment.metadata.parentEmail);
+            const existingPayment = existingPayments.find(p => p.id === parseInt(failedScheduledPaymentId));
+            const existingMetadata = (existingPayment?.metadata as Record<string, any>) || {};
+            
+            await storage.updateScheduledPayment(parseInt(failedScheduledPaymentId), {
+              status: 'pending', // Reset to pending to allow retry
+              metadata: {
+                ...existingMetadata,  // Preserve existing metadata
+                pendingCreditsReservation: 0,
+                lastFailedAt: new Date().toISOString(),
+                failureReason: failedPayment.last_payment_error?.message || 'Payment failed'
+              }
+            });
+            console.log(`✅ Reset scheduled payment ${failedScheduledPaymentId} to pending after failure`);
+          } catch (resetError) {
+            console.error(`❌ Failed to reset scheduled payment ${failedScheduledPaymentId}:`, resetError);
+          }
+        }
+      }
       break;
 
     case 'charge.refunded':

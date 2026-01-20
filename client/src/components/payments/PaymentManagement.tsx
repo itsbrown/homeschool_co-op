@@ -44,7 +44,8 @@ import {
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { AlertCircle, CreditCard, DollarSign, Calendar, Check, Clock, FileText, Search, ChevronDown } from "lucide-react";
+import { AlertCircle, CreditCard, DollarSign, Calendar, Check, Clock, FileText, Search, ChevronDown, Award } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 interface Payment {
@@ -209,23 +210,73 @@ function ScheduledPaymentDialog({
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // Credit application state
+  const [availableCredits, setAvailableCredits] = useState<number>(0);
+  const [applyCredits, setApplyCredits] = useState(false);
+  const [loadingCredits, setLoadingCredits] = useState(false);
+  const [creditPaymentComplete, setCreditPaymentComplete] = useState(false);
+  
+  // Calculate credits to apply (capped at payment amount)
+  const creditsToApply = applyCredits ? Math.min(availableCredits, payment.amount) : 0;
+  const amountAfterCredits = Math.max(0, payment.amount - creditsToApply);
+  const isFullyCoveredByCredits = amountAfterCredits === 0 && creditsToApply > 0;
 
-  // Create payment intent when dialog opens
+  // Fetch available credits when dialog opens
   useEffect(() => {
-    if (isOpen && !clientSecret) {
-      createPaymentIntent();
+    if (isOpen) {
+      fetchCredits();
     }
   }, [isOpen]);
+
+  // Create payment intent when dialog opens (only if not fully covered by credits)
+  useEffect(() => {
+    if (isOpen && !clientSecret && !isFullyCoveredByCredits && !loadingCredits) {
+      createPaymentIntent();
+    }
+  }, [isOpen, isFullyCoveredByCredits, loadingCredits, applyCredits]);
 
   // Reset state when dialog closes
   useEffect(() => {
     if (!isOpen) {
       setClientSecret(null);
       setError(null);
+      setApplyCredits(false);
+      setCreditPaymentComplete(false);
     }
   }, [isOpen]);
 
+  const fetchCredits = async () => {
+    setLoadingCredits(true);
+    try {
+      const token = localStorage.getItem('supabase_token');
+      if (!token) return;
+      
+      const response = await fetch('/api/my-credits/available', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setAvailableCredits(data.totalAvailableCents || 0);
+      }
+    } catch (err) {
+      console.error('Failed to fetch credits:', err);
+      setAvailableCredits(0);
+    } finally {
+      setLoadingCredits(false);
+    }
+  };
+
   const createPaymentIntent = async () => {
+    // Don't create Stripe intent if fully covered by credits
+    if (isFullyCoveredByCredits) {
+      return;
+    }
+    
     setIsLoading(true);
     setError(null);
     
@@ -243,8 +294,7 @@ function ScheduledPaymentDialog({
         },
         body: JSON.stringify({
           paymentId: payment.id,
-          amount: payment.amount,
-          description: payment.description
+          creditsToApply: creditsToApply  // Amount is server-authoritative
         })
       });
 
@@ -260,6 +310,57 @@ function ScheduledPaymentDialog({
       toast({
         title: "Payment Error",
         description: err.message || 'Failed to initialize payment',
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  // Handle credit-only payment (no Stripe needed)
+  const handleCreditOnlyPayment = async () => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const token = localStorage.getItem('supabase_token');
+      if (!token) {
+        throw new Error('Please sign in to make a payment');
+      }
+
+      const response = await fetch('/api/scheduled-payments/pay-with-credits', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          paymentId: payment.id,
+          creditsToApply: creditsToApply
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Failed to process credit payment');
+      }
+
+      setCreditPaymentComplete(true);
+      toast({
+        title: "Payment Successful",
+        description: `Payment completed using ${formatCurrency(creditsToApply)} in credits.`,
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/payment-history'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/parent/credits'] });
+      onSuccess();
+      onClose();
+    } catch (err: any) {
+      setError(err.message || 'Failed to process credit payment');
+      toast({
+        title: "Payment Error",
+        description: err.message || 'Failed to process credit payment',
         variant: "destructive",
       });
     } finally {
@@ -320,25 +421,95 @@ function ScheduledPaymentDialog({
                 </div>
               )}
               <div className="flex justify-between pt-2 border-t border-border">
-                <span>Total:</span>
-                <span className="font-bold">{formatCurrency(payment.amount)}</span>
+                <span>Payment Amount:</span>
+                <span className="font-medium">{formatCurrency(payment.amount)}</span>
+              </div>
+              {creditsToApply > 0 && (
+                <div className="flex justify-between text-amber-600">
+                  <span>Credits Applied:</span>
+                  <span className="font-medium">-{formatCurrency(creditsToApply)}</span>
+                </div>
+              )}
+              <div className="flex justify-between pt-2 border-t border-border mt-2">
+                <span className="font-semibold">Amount Due:</span>
+                <span className="font-bold text-lg">{formatCurrency(amountAfterCredits)}</span>
               </div>
             </div>
           </div>
 
-          {/* Payment Form */}
-          {isLoading ? (
+          {/* Credits Section */}
+          {availableCredits > 0 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Award className="h-5 w-5 text-amber-600" />
+                  <div>
+                    <p className="text-sm font-medium text-amber-800">Available Credits</p>
+                    <p className="text-lg font-bold text-amber-600">{formatCurrency(availableCredits)}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="apply-credits-toggle" className="text-sm text-amber-800">
+                    Apply to payment
+                  </Label>
+                  <Switch
+                    id="apply-credits-toggle"
+                    checked={applyCredits}
+                    onCheckedChange={(checked) => {
+                      setApplyCredits(checked);
+                      setClientSecret(null); // Reset to recalculate with credits
+                    }}
+                  />
+                </div>
+              </div>
+              {applyCredits && (
+                <div className="mt-3 p-2 bg-amber-100 rounded text-sm text-amber-800">
+                  <div className="flex items-center gap-1">
+                    <Check className="h-4 w-4" />
+                    <span>
+                      {isFullyCoveredByCredits 
+                        ? `Full payment covered by credits! Remaining credits: ${formatCurrency(availableCredits - creditsToApply)}`
+                        : `${formatCurrency(creditsToApply)} will be applied. You'll pay ${formatCurrency(amountAfterCredits)} with card.`
+                      }
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Payment Form or Credit-Only Payment */}
+          {isLoading || loadingCredits ? (
             <div className="flex flex-col items-center justify-center py-8">
               <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
-              <p className="text-muted-foreground">Initializing payment...</p>
+              <p className="text-muted-foreground">
+                {loadingCredits ? 'Loading credits...' : 'Initializing payment...'}
+              </p>
             </div>
           ) : error ? (
             <div className="text-center py-4">
               <AlertCircle className="h-8 w-8 text-destructive mx-auto mb-2" />
               <p className="text-destructive mb-4">{error}</p>
-              <Button onClick={createPaymentIntent} variant="outline">
+              <Button onClick={isFullyCoveredByCredits ? handleCreditOnlyPayment : createPaymentIntent} variant="outline">
                 Try Again
               </Button>
+            </div>
+          ) : isFullyCoveredByCredits ? (
+            <div className="space-y-4">
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
+                <Check className="h-8 w-8 text-green-600 mx-auto mb-2" />
+                <p className="font-medium text-green-800">No card payment needed!</p>
+                <p className="text-sm text-green-600">Your credits fully cover this payment.</p>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={onClose} className="flex-1">
+                  Cancel
+                </Button>
+                <Button onClick={handleCreditOnlyPayment} className="flex-1">
+                  <Award className="h-4 w-4 mr-2" />
+                  Pay with Credits
+                </Button>
+              </div>
             </div>
           ) : clientSecret ? (
             <Elements 
@@ -357,7 +528,7 @@ function ScheduledPaymentDialog({
                 onSuccess={handleSuccess}
                 onError={handleError}
                 onCancel={onClose}
-                amount={payment.amount}
+                amount={amountAfterCredits}
               />
             </Elements>
           ) : null}
