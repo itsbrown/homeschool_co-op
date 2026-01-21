@@ -6,6 +6,7 @@ import { syncChildLocationToParent } from "../services/locationSyncService";
 const router = Router();
 
 // Middleware to check if user is authenticated as a parent using JWT
+// MULTI-ROLE SUPPORT: Checks BOTH users.role AND user_roles table
 const isParent = async (req: any, res: Response, next: NextFunction) => {
   try {
     // Ensure JWT authentication has been verified first
@@ -17,16 +18,26 @@ const isParent = async (req: any, res: Response, next: NextFunction) => {
     const userEmail = req.user.email;
     console.log(`🔍 Checking parent access for: ${userEmail}`);
     
-    // Use the same role checking logic as the working endpoints  
+    // Get user from database
     const user = await storage.getUserByEmail(userEmail);
-    const userRole = user?.role;
+    if (!user) {
+      console.log(`❌ User not found: ${userEmail}`);
+      return res.status(404).json({ message: "User not found" });
+    }
     
-    if (userRole !== 'parent') {
-      console.log(`❌ Access denied - user role: ${userRole}, required: parent`);
+    // MULTI-ROLE CHECK: Check both user_roles table (new system) and users.role (legacy)
+    const userRoles = await storage.getUserRolesByUserId(user.id);
+    const hasParentRoleInTable = userRoles.some(r => r.role === 'parent');
+    const hasParentRoleLegacy = user.role === 'parent';
+    
+    console.log(`📋 User ${userEmail} roles: user_roles table: [${userRoles.map(r => r.role).join(', ')}], legacy role: ${user.role}`);
+    
+    if (!hasParentRoleInTable && !hasParentRoleLegacy) {
+      console.log(`❌ Access denied - user has no parent role. Roles: [${userRoles.map(r => r.role).join(', ')}], legacy: ${user.role}`);
       return res.status(403).json({ message: "Only parents can access this resource" });
     }
     
-    console.log(`✅ Parent access granted for: ${userEmail}`);
+    console.log(`✅ Parent access granted for: ${userEmail} (via ${hasParentRoleInTable ? 'user_roles table' : 'legacy role'})`);
     next();
   } catch (error) {
     console.error("Error in parent middleware:", error);
