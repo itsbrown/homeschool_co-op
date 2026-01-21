@@ -326,12 +326,8 @@ export default function CartCheckout() {
       
       if (!clientSecret) {
         console.log('🛒 Creating initial payment intent with', cart.items.length, 'items and membership:', !!cart.membership);
-        // Fetch cart snapshot first to get authoritative pricing, then create payment intent
-        const initializeCheckout = async () => {
-          await fetchCartSnapshot();
-          createPaymentIntent();
-        };
-        initializeCheckout();
+        // Pass forceRefresh=true to ensure fresh snapshot with membership data
+        createPaymentIntent(null, true);
       }
     } else {
       // Cart is hydrated, not loading, and empty - redirect to programs
@@ -399,12 +395,10 @@ export default function CartCheckout() {
     }
     
     const timeoutId = setTimeout(async () => {
-      console.log('💳 Credits changed, refreshing snapshot and payment intent with creditsToApply:', creditsToApply);
-      // First refresh snapshot to get updated payment plans
-      await fetchCartSnapshot(undefined, creditsToApply);
-      // Then recreate payment intent
+      console.log('💳 Credits changed, recreating payment intent with creditsToApply:', creditsToApply);
       setClientSecret('');
-      createPaymentIntent();
+      // Pass forceRefresh=true to ensure fresh snapshot with current credits amount
+      createPaymentIntent(null, true);
     }, 300);
     
     return () => clearTimeout(timeoutId);
@@ -436,11 +430,28 @@ export default function CartCheckout() {
     paymentPlans: PaymentPlanOption[]; // Server-calculated payment plans
   } | null>(null);
 
+  // Type for authoritative snapshot data
+  type AuthoritativeDataType = {
+    itemsTotal: number;
+    membershipAmount: number;
+    membershipAlreadyPaid: boolean;
+    membershipRequired: boolean;
+    membershipSchoolId: number | null;
+    membershipSchoolName: string;
+    membershipYear: number;
+    discounts: any;
+    schoolSettings: any;
+    appliedPromoCode: string | null;
+    payableAmount: number;
+    paymentPlans: PaymentPlanOption[];
+  };
+
   // Fetch cart snapshot from server to get authoritative pricing
   // IMPORTANT: promoCodeOverride parameter is used to pass fresh promo code
   // when called immediately after applyPromoCode (before React state updates)
-  const fetchCartSnapshot = async (promoCodeOverride?: string | null, creditsOverride?: number): Promise<boolean> => {
-    if (cart.items.length === 0) return true; // No items to sync
+  // Returns the authoritative data directly for immediate use (avoids React state timing issues)
+  const fetchCartSnapshot = async (promoCodeOverride?: string | null, creditsOverride?: number): Promise<AuthoritativeDataType | null> => {
+    if (cart.items.length === 0) return null; // No items to sync
     
     try {
       setSnapshotLoading(true);
@@ -483,10 +494,8 @@ export default function CartCheckout() {
           availableCredits: snapshot.credits.available
         });
         
-        // Store authoritative data for payment intent creation
-        // Include membershipRequired and school info so we can construct payload even when cart.membership is null
-        // Also store the promo code to avoid stale closure issues when createPaymentIntent runs
-        setAuthoritativeData({
+        // Build authoritative data object
+        const authData: AuthoritativeDataType = {
           itemsTotal: snapshot.totals.itemsTotal,
           membershipAmount: snapshot.membership.alreadyPaid ? 0 : snapshot.membership.discountedAmount,
           membershipAlreadyPaid: snapshot.membership.alreadyPaid,
@@ -499,39 +508,62 @@ export default function CartCheckout() {
           appliedPromoCode: promoCode, // Store the promo code used for this snapshot
           payableAmount: snapshot.totals.payableAmount,
           paymentPlans: snapshot.paymentPlans || []
-        });
+        };
+        
+        // Store authoritative data in state for UI components
+        setAuthoritativeData(authData);
         
         // Update available credits from snapshot
         setAvailableCredits(snapshot.credits.available);
         
-        return true;
+        // Return the data directly for immediate use (avoids waiting for React state update)
+        return authData;
       }
-      return false;
+      return null;
     } catch (err: any) {
       console.warn('⚠️ Failed to fetch cart snapshot (will proceed with client values):', err);
-      return true; // Graceful degradation - proceed anyway
+      return null; // Return null on error
     } finally {
       setSnapshotLoading(false);
     }
   };
 
-  const createPaymentIntent = async () => {
+  // Accept optional fresh auth data to avoid React state timing issues
+  // When forceRefresh is true, always fetches new snapshot even if authoritativeData exists
+  const createPaymentIntent = async (freshAuthData?: AuthoritativeDataType | null, forceRefresh: boolean = false) => {
     try {
       setLoading(true);
+      
+      // CRITICAL FIX: Always use fresh data when provided, or fetch if null/forceRefresh
+      // This prevents race conditions where authoritativeData is stale/null
+      // The snapshot is the single source of truth for pricing
+      let currentAuthData = freshAuthData || (forceRefresh ? null : authoritativeData);
+      if (!currentAuthData) {
+        console.log('📸 Fetching fresh snapshot before payment (forceRefresh:', forceRefresh, ')...');
+        currentAuthData = await fetchCartSnapshot();
+        if (!currentAuthData) {
+          throw new Error('Unable to verify cart pricing. Please refresh and try again.');
+        }
+        console.log('📸 Fresh snapshot data obtained:', {
+          itemsTotal: currentAuthData.itemsTotal,
+          membershipAmount: currentAuthData.membershipAmount,
+          membershipRequired: currentAuthData.membershipRequired
+        });
+      }
       
       // Get the amount to charge based on selected payment plan
       const selectedPlanAmount = getSelectedPlanAmount();
       // selectedPlanAmount is already in cents, no need to multiply by 100
       
-      // Use authoritative data from snapshot if available, otherwise use client cart values
-      const useAuthData = authoritativeData !== null;
-      const itemsTotal = useAuthData ? authoritativeData.itemsTotal : cart.total;
+      // Use authoritative data from snapshot (now guaranteed to exist)
+      const useAuthData = currentAuthData !== null;
+      const itemsTotal = useAuthData ? currentAuthData.itemsTotal : cart.total;
       const membershipAmount = useAuthData 
-        ? authoritativeData.membershipAmount 
+        ? currentAuthData.membershipAmount 
         : (cart.membership?.amount || 0);
-      const membershipAlreadyPaid = useAuthData ? authoritativeData.membershipAlreadyPaid : false;
+      const membershipAlreadyPaid = useAuthData ? currentAuthData.membershipAlreadyPaid : false;
       const discounts = useAuthData 
-        ? authoritativeData.discounts 
+        ? currentAuthData.discounts 
         : cart.discounts;
       
       // Build membership object using authoritative data when available
@@ -547,15 +579,15 @@ export default function CartCheckout() {
         if (membershipAlreadyPaid) {
           // Already paid - don't send membership at all
           membershipPayload = null;
-        } else if (authoritativeData.membershipRequired && authoritativeData.membershipSchoolId) {
+        } else if (currentAuthData.membershipRequired && currentAuthData.membershipSchoolId) {
           // Membership required and not paid - ALWAYS send payload using authoritative data
           // This handles the case where cart.membership is null (discounted to $0 on load)
           // We use authoritative values because cart.membership may be stale or missing
           membershipPayload = {
-            schoolId: authoritativeData.membershipSchoolId,
-            schoolName: authoritativeData.membershipSchoolName || cart.membership?.schoolName || 'School',
+            schoolId: currentAuthData.membershipSchoolId,
+            schoolName: currentAuthData.membershipSchoolName || cart.membership?.schoolName || 'School',
             amount: membershipAmount, // Use authoritative amount (may be 0 for discounted)
-            year: authoritativeData.membershipYear,
+            year: currentAuthData.membershipYear,
           };
         } else if (cart.membership) {
           // Cart has membership but server says not required (edge case) - use cart data
@@ -612,7 +644,7 @@ export default function CartCheckout() {
           // Include membership fee - use authoritative amount or null if already paid
           membership: membershipPayload,
           // Use promo code from authoritative data if available, otherwise fall back to cart state
-          promoCode: useAuthData ? authoritativeData.appliedPromoCode : (cart.appliedPromoCode?.code || null),
+          promoCode: useAuthData ? currentAuthData.appliedPromoCode : (cart.appliedPromoCode?.code || null),
           // Volunteer credits to apply (in cents)
           creditsToApply: creditsToApply,
         })
