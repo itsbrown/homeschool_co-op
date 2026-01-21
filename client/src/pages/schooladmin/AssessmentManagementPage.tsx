@@ -147,9 +147,9 @@ export default function AssessmentManagementPage() {
   });
   
   const [assessmentFilters, setAssessmentFilters] = useState({
-    childId: '',
-    assessmentTypeId: '',
-    locationId: '',
+    childId: 'all-students',
+    assessmentTypeId: 'all-types',
+    locationId: 'all-locations',
     searchQuery: ''
   });
 
@@ -162,9 +162,9 @@ export default function AssessmentManagementPage() {
     queryKey: ['/api/assessments/students', assessmentFilters.childId, assessmentFilters.assessmentTypeId, assessmentFilters.locationId],
     queryFn: async () => {
       const params = new URLSearchParams();
-      if (assessmentFilters.childId) params.append('childId', assessmentFilters.childId);
-      if (assessmentFilters.assessmentTypeId) params.append('assessmentTypeId', assessmentFilters.assessmentTypeId);
-      if (assessmentFilters.locationId) params.append('locationId', assessmentFilters.locationId);
+      if (assessmentFilters.childId && assessmentFilters.childId !== 'all-students') params.append('childId', assessmentFilters.childId);
+      if (assessmentFilters.assessmentTypeId && assessmentFilters.assessmentTypeId !== 'all-types') params.append('assessmentTypeId', assessmentFilters.assessmentTypeId);
+      if (assessmentFilters.locationId && assessmentFilters.locationId !== 'all-locations') params.append('locationId', assessmentFilters.locationId);
       const response = await fetch(`/api/assessments/students?${params.toString()}`);
       if (!response.ok) throw new Error('Failed to fetch assessments');
       return response.json();
@@ -518,7 +518,7 @@ export default function AssessmentManagementPage() {
                         <SelectValue placeholder="All locations" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">All locations</SelectItem>
+                        <SelectItem value="all-locations">All locations</SelectItem>
                         {schoolLocations.map((location) => (
                           <SelectItem key={location.id} value={String(location.id)}>
                             {location.name}
@@ -537,7 +537,7 @@ export default function AssessmentManagementPage() {
                         <SelectValue placeholder="All students" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">All students</SelectItem>
+                        <SelectItem value="all-students">All students</SelectItem>
                         {schoolChildren.map((child) => (
                           <SelectItem key={child.id} value={String(child.id)}>
                             {child.firstName} {child.lastName}
@@ -556,7 +556,7 @@ export default function AssessmentManagementPage() {
                         <SelectValue placeholder="All types" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">All types</SelectItem>
+                        <SelectItem value="all-types">All types</SelectItem>
                         {assessmentTypes.map((type) => (
                           <SelectItem key={type.id} value={String(type.id)}>
                             {type.name}
@@ -568,7 +568,7 @@ export default function AssessmentManagementPage() {
                   <div className="flex items-end">
                     <Button
                       variant="outline"
-                      onClick={() => setAssessmentFilters({ childId: '', assessmentTypeId: '', locationId: '', searchQuery: '' })}
+                      onClick={() => setAssessmentFilters({ childId: 'all-students', assessmentTypeId: 'all-types', locationId: 'all-locations', searchQuery: '' })}
                     >
                       Clear Filters
                     </Button>
