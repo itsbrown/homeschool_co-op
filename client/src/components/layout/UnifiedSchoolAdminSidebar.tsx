@@ -40,7 +40,8 @@ import {
   ChevronDown,
   Building2,
   Wallet,
-  FolderOpen
+  FolderOpen,
+  ClipboardCheck
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -92,6 +93,13 @@ const adminNavGroups: NavGroup[] = [
     items: [
       { title: 'Enrollments', href: '/schools/enrollments', icon: GraduationCap },
       { title: 'Location Enrollments', href: '/school-admin/location-enrollments', icon: Phone },
+    ],
+  },
+  {
+    title: 'Academics',
+    icon: ClipboardCheck,
+    items: [
+      { title: 'Assessments', href: '/school-admin/assessments', icon: ClipboardCheck },
     ],
   },
   {
