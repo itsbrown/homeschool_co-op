@@ -34,7 +34,10 @@ router.post('/snapshot', supabaseAuth, async (req: any, res) => {
       classId: item.classId,
       childId: item.childId,
       childName: item.childName || '',
-      variantId: item.variantId
+      variantId: item.variantId,
+      // Pass through enrollment data for existing enrollments with partial payments
+      enrollmentId: item.enrollmentId,
+      remainingBalance: item.remainingBalance
     }));
 
     for (const item of cartItems) {
@@ -43,6 +46,18 @@ router.post('/snapshot', supabaseAuth, async (req: any, res) => {
           error: 'UNAUTHORIZED_CHILDREN',
           message: 'Cannot calculate pricing for children not owned by this parent'
         });
+      }
+    }
+
+    // Server-side validation: verify remainingBalance for existing enrollments
+    for (const item of cartItems) {
+      if (item.enrollmentId) {
+        const enrollment = await storage.getEnrollmentById(item.enrollmentId);
+        if (enrollment) {
+          // Use server-authoritative remainingBalance, overriding client value
+          item.remainingBalance = enrollment.remainingBalance ?? enrollment.totalCost ?? 0;
+          console.log(`✅ Validated enrollment ${item.enrollmentId} remainingBalance: ${item.remainingBalance}`);
+        }
       }
     }
 
@@ -101,7 +116,10 @@ router.post('/calculate', supabaseAuth, async (req: any, res) => {
       classId: item.classId,
       childId: item.childId,
       childName: item.childName || '',
-      variantId: item.variantId
+      variantId: item.variantId,
+      // Pass through enrollment data for existing enrollments with partial payments
+      enrollmentId: item.enrollmentId,
+      remainingBalance: item.remainingBalance
     }));
 
     for (const item of cartItems) {
@@ -110,6 +128,17 @@ router.post('/calculate', supabaseAuth, async (req: any, res) => {
           error: 'UNAUTHORIZED_CHILDREN',
           message: 'Cannot calculate pricing for children not owned by this parent'
         });
+      }
+    }
+
+    // Server-side validation: verify remainingBalance for existing enrollments
+    for (const item of cartItems) {
+      if (item.enrollmentId) {
+        const enrollment = await storage.getEnrollmentById(item.enrollmentId);
+        if (enrollment) {
+          // Use server-authoritative remainingBalance, overriding client value
+          item.remainingBalance = enrollment.remainingBalance ?? enrollment.totalCost ?? 0;
+        }
       }
     }
 
@@ -169,7 +198,10 @@ router.post('/validate', supabaseAuth, async (req: any, res) => {
       classId: item.classId,
       childId: item.childId,
       childName: item.childName || '',
-      variantId: item.variantId
+      variantId: item.variantId,
+      // Include enrollment data for existing enrollments with partial payments
+      enrollmentId: item.enrollmentId,
+      remainingBalance: item.remainingBalance
     }));
 
     for (const item of cartItems) {
@@ -178,6 +210,17 @@ router.post('/validate', supabaseAuth, async (req: any, res) => {
           error: 'UNAUTHORIZED_CHILDREN',
           message: 'Cannot validate cart for children not owned by this parent'
         });
+      }
+    }
+
+    // Server-side validation: verify remainingBalance for existing enrollments
+    for (const item of cartItems) {
+      if (item.enrollmentId) {
+        const enrollment = await storage.getEnrollmentById(item.enrollmentId);
+        if (enrollment) {
+          // Use server-authoritative remainingBalance, overriding client value
+          item.remainingBalance = enrollment.remainingBalance ?? enrollment.totalCost ?? 0;
+        }
       }
     }
 

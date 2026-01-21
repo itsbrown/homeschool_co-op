@@ -459,7 +459,10 @@ export default function CartCheckout() {
             classId: item.classId,
             childId: item.childId,
             childName: item.childName,
-            variantId: item.variantId
+            variantId: item.variantId,
+            // Include enrollment data for existing enrollments with partial payments
+            enrollmentId: item.enrollmentId,
+            remainingBalance: item.remainingBalance
           })),
           appliedPromoCode: promoCode,
           creditsToApply: creditsAmount

@@ -204,6 +204,9 @@ const fetchServerCartPricing = async (
           childId: item.childId,
           childName: item.childName,
           variantId: item.variantId,
+          // Include enrollment data for existing enrollments with partial payments
+          enrollmentId: item.enrollmentId,
+          remainingBalance: item.remainingBalance,
         })),
         appliedPromoCode,
       }),

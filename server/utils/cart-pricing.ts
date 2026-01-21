@@ -11,6 +11,9 @@ export interface CartItem {
   childName: string;
   variantId?: string;
   price?: number;
+  // For existing enrollments with partial payments - server-authoritative remaining balance
+  enrollmentId?: number;
+  remainingBalance?: number;
 }
 
 export interface AppliedDiscount {
@@ -275,10 +278,27 @@ export async function calculateCartPricing(
     appliedPromoCode
   });
 
-  const itemPrices: Array<{ classId: number; variantId?: string; price: number }> = [];
+  const itemPrices: Array<{ classId: number; variantId?: string; price: number; enrollmentId?: number }> = [];
   for (const item of items) {
-    const price = await getClassPrice(item.classId, item.variantId);
-    itemPrices.push({ classId: item.classId, variantId: item.variantId, price });
+    // For existing enrollments with partial payments, use the authoritative remainingBalance
+    // This ensures parents only pay what's actually owed, not the full class price
+    if (item.enrollmentId && typeof item.remainingBalance === 'number' && item.remainingBalance >= 0) {
+      console.log(`💰 Using enrollment remainingBalance for item ${item.id}:`, {
+        enrollmentId: item.enrollmentId,
+        remainingBalance: item.remainingBalance,
+        classId: item.classId
+      });
+      itemPrices.push({ 
+        classId: item.classId, 
+        variantId: item.variantId, 
+        price: item.remainingBalance,
+        enrollmentId: item.enrollmentId
+      });
+    } else {
+      // For new enrollments, fetch the class price as usual
+      const price = await getClassPrice(item.classId, item.variantId);
+      itemPrices.push({ classId: item.classId, variantId: item.variantId, price });
+    }
   }
 
   const subtotal = itemPrices.reduce((sum, item) => sum + item.price, 0);
