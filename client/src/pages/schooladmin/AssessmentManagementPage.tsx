@@ -941,13 +941,6 @@ function AssessmentTypeCard({
 }: AssessmentTypeCardProps) {
   const { data: books = [], isLoading: booksLoading } = useQuery<CurriculumBook[]>({
     queryKey: ['/api/assessments/types', type.id, 'books'],
-    queryFn: async () => {
-      const response = await fetch(`/api/assessments/types/${type.id}/books`, {
-        credentials: 'include',
-      });
-      if (!response.ok) throw new Error('Failed to fetch books');
-      return response.json();
-    },
     enabled: isExpanded,
   });
 
