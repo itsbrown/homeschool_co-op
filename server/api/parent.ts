@@ -4,6 +4,7 @@ import path from 'path';
 import { storage } from '../storage';
 import { jwtCheck } from '../middleware/auth0-auth';
 import { sendNewStudentNotificationEmail } from '../lib/email-service';
+import { isActiveMembership } from '@shared/schema';
 
 const router = Router();
 
@@ -714,7 +715,7 @@ router.post('/memberships/checkout', jwtCheck, async (req: any, res) => {
   }
 });
 
-// Get parent's member ID
+// Get parent's member ID and membership status
 router.get('/member-id', jwtCheck, async (req: any, res) => {
   try {
     console.log('🎫 Get member ID API called');
@@ -736,9 +737,25 @@ router.get('/member-id', jwtCheck, async (req: any, res) => {
       });
     }
 
+    // Check actual membership enrollment status for accurate badge display
+    const currentYear = new Date().getFullYear();
+    const memberships = await storage.getMembershipEnrollmentsByParentId(user.id);
+    
+    // Find the most recent membership for current or next year
+    const relevantMembership = memberships?.find((m: any) => 
+      (m.membershipYear === currentYear || m.membershipYear === currentYear + 1)
+    );
+    
+    // Use shared isActiveMembership helper for consistent status checking
+    const isActiveMember = relevantMembership ? isActiveMembership(relevantMembership.status) : false;
+    
+    // hasMemberId: Whether user has a member ID (for copy/edit controls - any member with ID)
+    // hasMembership: Whether membership is actively paid (for "Active Member" badge)
     return res.status(200).json({
       memberId: user.memberId || null,
-      hasMembership: !!user.memberId && user.memberId.trim() !== ''
+      hasMemberId: !!user.memberId && user.memberId.trim() !== '',
+      hasMembership: isActiveMember,
+      membershipStatus: relevantMembership?.status || null
     });
   } catch (error: any) {
     console.error('❌ Error getting member ID:', error);

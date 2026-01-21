@@ -1,6 +1,6 @@
 import { storage } from '../storage';
 import { getDb } from '../db';
-import { userRoles } from '@shared/schema';
+import { userRoles, isActiveMembership } from '@shared/schema';
 import { eq } from 'drizzle-orm';
 import type { Discount, SchoolClass } from '@shared/schema';
 
@@ -781,12 +781,12 @@ export async function calculateCartSnapshot(
   const membershipRequired = school?.membershipRequired || false;
   const membershipFeeAmount = school?.membershipFeeAmount || 0;
   
-  // Check if user already has active membership
+  // Check if user already has active membership using shared helper for consistency
   const existingMemberships = await storage.getMembershipEnrollmentsByParentId(userId);
   const currentYear = new Date().getFullYear();
   const activeMembership = existingMemberships?.find((m: any) => 
     (m.membershipYear === currentYear || m.membershipYear === currentYear + 1) && 
-    m.status === 'enrolled' &&
+    isActiveMembership(m.status) &&
     m.schoolId === schoolId
   );
   const alreadyPaid = !!activeMembership;
@@ -829,7 +829,9 @@ export async function calculateCartSnapshot(
     generatedAt: Date.now(),
     pricing,
     membership: {
-      required: membershipRequired,
+      // CRITICAL: 'required' indicates whether client MUST include membership in payment
+      // True when membershipTotal > 0 (regardless of school config), ensures client includes unpaid membership
+      required: membershipTotal > 0,
       amount: membershipFeeAmount,
       discountedAmount: discountedMembershipAmount,
       alreadyPaid,

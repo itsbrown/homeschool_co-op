@@ -1153,6 +1153,27 @@ export const insertMembershipEnrollmentSchema = createInsertSchema(membershipEnr
 export type InsertMembershipEnrollment = z.infer<typeof insertMembershipEnrollmentSchema>;
 export type MembershipEnrollment = typeof membershipEnrollments.$inferSelect;
 
+/** 
+ * Valid membership statuses that indicate a fully paid/active membership.
+ * Use isActiveMembership() helper for consistent status checks across the codebase.
+ * - 'enrolled': Membership is fully paid and active
+ * - 'grace_period': Membership expired but still within grace period (counts as active)
+ */
+export const VALID_PAID_MEMBERSHIP_STATUSES = ['enrolled', 'grace_period'] as const;
+
+/** Type for valid paid membership statuses */
+export type PaidMembershipStatus = typeof VALID_PAID_MEMBERSHIP_STATUSES[number];
+
+/** 
+ * Check if a membership status indicates an active/paid membership.
+ * Use this instead of checking status directly for consistency across the codebase.
+ * @param status - The membership status to check
+ * @returns true if the membership is considered active (enrolled or in grace period)
+ */
+export function isActiveMembership(status: string | null | undefined): boolean {
+  return !!status && (VALID_PAID_MEMBERSHIP_STATUSES as readonly string[]).includes(status);
+}
+
 // Define membership enrollment relations
 export const membershipEnrollmentsRelations = relations(membershipEnrollments, ({ one }) => ({
   school: one(schools, { fields: [membershipEnrollments.schoolId], references: [schools.id] }),

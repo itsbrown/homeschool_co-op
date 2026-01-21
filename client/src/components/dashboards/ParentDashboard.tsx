@@ -240,10 +240,12 @@ export default function ParentDashboard() {
   const { toast } = useToast();
   const { cart } = useCart();
 
-  // Fetch user's member ID
+  // Fetch user's member ID and membership status
   interface MemberIdResponse {
     memberId: string | null;
-    hasMembership: boolean;
+    hasMemberId: boolean; // Whether user has a member ID (for copy/edit controls)
+    hasMembership: boolean; // Whether membership is actively paid (for "Active Member" badge)
+    membershipStatus: string | null; // 'enrolled', 'pending_payment', 'grace_period', etc.
   }
 
   const { data: memberIdData, isLoading: memberIdLoading } = useQuery<MemberIdResponse>({
@@ -281,8 +283,8 @@ export default function ParentDashboard() {
       setMemberIdInput("");
       toast({
         title: "Member ID Saved",
-        description: data.hasMembership 
-          ? "Your membership has been verified." 
+        description: data.hasMemberId 
+          ? "Your member ID has been saved." 
           : "Member ID cleared.",
       });
     },
@@ -859,12 +861,17 @@ export default function ParentDashboard() {
                   <Award className="h-5 w-5" />
                   My Membership
                 </CardTitle>
-                {memberIdData?.hasMembership && (
+                {memberIdData?.hasMembership ? (
                   <Badge variant="default" className="bg-green-100 text-green-800">
                     <CheckCircle className="h-3 w-3 mr-1" />
                     Active Member
                   </Badge>
-                )}
+                ) : memberIdData?.membershipStatus === 'pending_payment' ? (
+                  <Badge variant="default" className="bg-yellow-100 text-yellow-800">
+                    <Clock className="h-3 w-3 mr-1" />
+                    Pending Payment
+                  </Badge>
+                ) : null}
               </div>
               <CardDescription>
                 View your membership status and Member ID
@@ -875,7 +882,7 @@ export default function ParentDashboard() {
               <div className="p-4 rounded-lg border bg-gradient-to-r from-primary/5 to-primary/10">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm font-medium text-muted-foreground">Member ID</span>
-                  {memberIdData?.hasMembership && !isEditingMemberId && (
+                  {memberIdData?.hasMemberId && !isEditingMemberId && (
                     <Button 
                       variant="ghost" 
                       size="sm" 
@@ -894,7 +901,7 @@ export default function ParentDashboard() {
                     <Loader2 className="h-4 w-4 animate-spin" />
                     <span className="text-sm text-muted-foreground">Loading...</span>
                   </div>
-                ) : memberIdData?.hasMembership && !isEditingMemberId ? (
+                ) : memberIdData?.hasMemberId && !isEditingMemberId ? (
                   <div className="flex items-center justify-between">
                     <code className="text-lg font-mono font-bold text-primary bg-white/50 px-3 py-1 rounded" data-testid="text-member-id">
                       {memberIdData.memberId}

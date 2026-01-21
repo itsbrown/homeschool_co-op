@@ -8,6 +8,7 @@ import { getStripeClient, getStripePublishableKey } from '../config/stripe';
 import { calculateMembershipDiscount } from '../utils/membership';
 import { calculateCartPricing, CartItem } from '../utils/cart-pricing';
 import { CurrencyUtils } from '@shared/currency-utils';
+import { isActiveMembership, VALID_PAID_MEMBERSHIP_STATUSES } from '@shared/schema';
 
 const router = Router();
 
@@ -101,11 +102,10 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
         
         // Filter for memberships at the same school with valid paid status
         // Allow current year OR next year to handle academic year memberships (e.g., 2025-2026 school year stored as "2026")
-        // CRITICAL: Recognize multiple valid "paid" statuses - 'enrolled', 'active', 'paid'
-        const VALID_PAID_MEMBERSHIP_STATUSES = ['enrolled', 'active', 'paid'];
+        // Use shared isActiveMembership() helper for consistent status checking
         const activeMembershipForThisSchool = existingMemberships?.find((m: any) => 
           (m.membershipYear === currentYear || m.membershipYear === currentYear + 1) && 
-          VALID_PAID_MEMBERSHIP_STATUSES.includes(m.status) &&
+          isActiveMembership(m.status) &&
           m.schoolId === parentForMembership.schoolId
         );
         const hasActiveMembership = !!activeMembershipForThisSchool;
@@ -122,7 +122,7 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
             schoolId: m.schoolId,
             membershipYear: m.membershipYear,
             status: m.status,
-            statusRecognized: VALID_PAID_MEMBERSHIP_STATUSES.includes(m.status)
+            statusRecognized: isActiveMembership(m.status)
           })),
           hasActiveMembership,
           activeMembershipFound: activeMembershipForThisSchool ? {

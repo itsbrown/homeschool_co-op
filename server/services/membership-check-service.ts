@@ -1,4 +1,5 @@
 import { storage } from '../storage';
+import { isActiveMembership } from '@shared/schema';
 
 export class MembershipCheckService {
   /**
@@ -82,8 +83,8 @@ export class MembershipCheckService {
         };
       }
 
-      // Check if membership is fully paid ('enrolled' = active in DB schema)
-      if (membership.status === 'active' || membership.status === 'enrolled' || membership.remainingBalance <= 0) {
+      // Check if membership is fully paid using shared helper for consistency
+      if (isActiveMembership(membership.status) || membership.remainingBalance <= 0) {
         return {
           isValid: true,
           membership,
