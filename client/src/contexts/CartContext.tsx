@@ -1259,10 +1259,12 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         ]);
         
         // Check if user already has active membership
+        // Only skip if hasMembership is true (enrolled/grace_period status)
+        // memberId alone doesn't mean they've paid for current year - it's just their card ID
         if (memberResponse.ok) {
           const memberData = await memberResponse.json();
-          if (memberData.memberId || memberData.hasMembership) {
-            console.log('🎫 User already has active membership, skipping auto-add');
+          if (memberData.hasMembership) {
+            console.log('🎫 User already has active membership (enrolled/grace_period), skipping auto-add');
             return null;
           }
         }
