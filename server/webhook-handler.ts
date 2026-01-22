@@ -30,6 +30,14 @@ import {
  * app.post('/api/stripe/webhook', express.raw({ type: 'application/json', limit: '5mb' }), webhookHandler);
  */
 export const webhookHandler = async (req: Request, res: Response) => {
+  // FIRST LOG - captures every webhook request immediately
+  console.log('🚀 WEBHOOK ENDPOINT HIT:', new Date().toISOString(), {
+    method: req.method,
+    url: req.url,
+    contentType: req.headers['content-type'],
+    userAgent: req.headers['user-agent']?.substring(0, 50)
+  });
+  
   // Get Stripe client for webhook operations
   const stripe = await getStripeClient();
   

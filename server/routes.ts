@@ -1954,6 +1954,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // DEV ONLY: Fix pending membership to enrolled (for debugging webhook issues)
+  if (process.env.NODE_ENV === 'development') {
+    app.post('/api/admin/fix-pending-membership/:parentId', supabaseAuth, async (req: any, res) => {
+      try {
+        const authenticatedUser = req.user;
+        if (!authenticatedUser || !['schoolAdmin', 'admin', 'superAdmin'].includes(authenticatedUser.role)) {
+          return res.status(403).json({ message: "Not authorized" });
+        }
+
+        const parentId = parseInt(req.params.parentId);
+        const { schoolId, academicYear, amountPaid } = req.body;
+        
+        // Get the membership enrollment
+        const membership = await storage.getMembershipEnrollmentByParentAndSchoolAndYear(
+          parentId, 
+          schoolId || authenticatedUser.schoolId,
+          academicYear || '2025-2026'
+        );
+        
+        if (!membership) {
+          return res.status(404).json({ message: "Membership not found" });
+        }
+
+        console.log('🔧 DEV FIX: Found membership to update:', {
+          id: membership.id,
+          status: membership.status,
+          amount: membership.amount,
+          amountPaid: membership.amountPaid
+        });
+
+        // Update to enrolled with full payment
+        const paidAmount = amountPaid || membership.amount;
+        const updated = await storage.updateMembershipEnrollment(membership.id, {
+          status: 'enrolled',
+          amountPaid: paidAmount,
+          remainingBalance: Math.max(0, membership.amount - paidAmount),
+          balanceDue: Math.max(0, membership.amount - paidAmount)
+        });
+
+        console.log('✅ DEV FIX: Membership updated to enrolled:', updated);
+        res.json({ success: true, membership: updated });
+      } catch (error: any) {
+        console.error('Error fixing membership:', error);
+        res.status(500).json({ message: error.message });
+      }
+    });
+  }
+
   // AI Enrollment Assistant with Anthropic AI
   app.post('/api/ai/enrollment-assistant', jwtCheck, handleEnrollmentMessage);
 
