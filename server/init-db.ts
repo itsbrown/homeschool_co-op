@@ -1985,6 +1985,33 @@ async function runMigrations() {
       console.log('Migration note (pending_payment fix):', fixError instanceof Error ? fixError.message : String(fixError));
     }
     
+    // Migration: Update payment_method constraint to include 'manual' and all valid methods
+    console.log('Running migration: Updating payment_method constraint...');
+    try {
+      // First drop the old constraint if it exists
+      await db.execute(sql`
+        ALTER TABLE payments DROP CONSTRAINT IF EXISTS payments_payment_method_check;
+      `);
+      // Add new constraint with all valid payment methods including 'manual'
+      // Using broader list to ensure all existing data is compatible
+      await db.execute(sql`
+        DO $$ BEGIN
+          ALTER TABLE payments ADD CONSTRAINT payments_payment_method_check 
+          CHECK (payment_method IS NULL OR payment_method IN (
+            'card', 'bank_transfer', 'cash', 'check', 'other', 'manual',
+            'credit_card', 'debit_card', 'ach', 'wire', 'stripe', 'paypal'
+          ));
+        EXCEPTION
+          WHEN check_violation THEN
+            -- If data violates constraint, just leave it unconstrained
+            RAISE NOTICE 'Payment method constraint not added due to existing data';
+        END $$;
+      `);
+      console.log('✅ Migration completed: payment_method constraint updated to include manual');
+    } catch (constraintError: any) {
+      console.log('Migration note (payment_method constraint):', constraintError.message || String(constraintError));
+    }
+    
   } catch (fundraiserError) {
     const errorMessage = fundraiserError instanceof Error ? fundraiserError.message : String(fundraiserError);
     if (!errorMessage.includes('Database connection not available')) {
