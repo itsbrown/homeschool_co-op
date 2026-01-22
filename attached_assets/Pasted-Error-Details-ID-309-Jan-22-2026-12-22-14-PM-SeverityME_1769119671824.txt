@@ -1,0 +1,93 @@
+Error Details
+ID: 309 | Jan 22, 2026, 12:22:14 PM
+
+SeverityMEDIUM
+Type
+frontend
+
+Route
+/api/admin/enrollments/241/reallocate-payment
+
+Method
+N/A
+
+User
+Anonymous
+
+School ID
+N/A
+
+Message
+API 404: POST /api/admin/enrollments/241/reallocate-payment - Resource not found
+
+Metadata
+{
+  "action": "api_request",
+  "online": true,
+  "userId": 5,
+  "network": {
+    "rtt": 100,
+    "downlink": 10,
+    "saveData": false,
+    "effectiveType": "4g"
+  },
+  "endpoint": "/api/admin/enrollments/241/reallocate-payment",
+  "language": "en-US",
+  "referrer": null,
+  "schoolId": null,
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36",
+  "activeRole": null,
+  "hasSession": true,
+  "httpMethod": "POST",
+  "statusCode": 404,
+  "breadcrumbs": [
+    {
+      "route": "/",
+      "title": "",
+      "timestamp": "2026-01-22T17:12:15.648Z",
+      "timeOnPage": 544953
+    }
+  ],
+  "formContext": null,
+  "memoryUsage": {
+    "usedJSHeapSize": 68,
+    "totalJSHeapSize": 80
+  },
+  "originalUrl": "/api/admin/enrollments/241/reallocate-payment",
+  "pageLoadTime": 2256,
+  "responseBody": "{\"error\":\"Source enrollment not found\"}",
+  "sessionStart": "2026-01-22T17:12:15.648Z",
+  "correlationId": "5804534d-9d4f-4e79-b876-47aba85761ef",
+  "recentActions": [
+    {
+      "type": "input",
+      "target": "[data-testid=\"input-reallocate-comment\"]",
+      "secondsAgo": 3
+    },
+    {
+      "type": "input",
+      "target": "[data-testid=\"input-reallocate-comment\"]",
+      "secondsAgo": 3
+    },
+    {
+      "type": "input",
+      "target": "[data-testid=\"input-reallocate-comment\"]",
+      "secondsAgo": 3
+    },
+    {
+      "type": "input",
+      "target": "[data-testid=\"input-reallocate-comment\"]",
+      "secondsAgo": 3
+    },
+    {
+      "type": "click",
+      "target": "[data-testid=\"btn-confirm-reallocate\"]",
+      "secondsAgo": 2
+    }
+  ],
+  "userEmailHint": "con***",
+  "viewportWidth": 1920,
+  "viewportHeight": 1020,
+  "sessionErrorCount": 9,
+  "timeOnCurrentPage": 598551
+}

@@ -3054,11 +3054,25 @@ router.get('/enrollments', supabaseAuth, async (req: any, res) => {
     const schoolId = await getSchoolIdFromRequest(req, res);
     if (schoolId === null) return;
 
+    // Allow explicit status filter via query param (e.g., ?includeCancelled=true or ?status=cancelled)
+    const includeCancelled = req.query.includeCancelled === 'true';
+    const statusFilter = req.query.status as string | undefined;
+
     console.log('📚 School admin fetching all enrollments for school:', schoolId);
     const allEnrollments = await storage.getAllEnrollments();
     
-    // Filter enrollments by school
-    const enrollments = allEnrollments.filter((e: any) => e.schoolId === schoolId);
+    // Filter enrollments by school and exclude cancelled/withdrawn by default
+    let enrollments = allEnrollments.filter((e: any) => e.schoolId === schoolId);
+    
+    if (statusFilter) {
+      // If specific status requested, filter to that status
+      enrollments = enrollments.filter((e: any) => e.status === statusFilter);
+    } else if (!includeCancelled) {
+      // By default, exclude cancelled and withdrawn enrollments from active lists
+      enrollments = enrollments.filter((e: any) => 
+        e.status !== 'cancelled' && e.status !== 'withdrawn'
+      );
+    }
     
     // Format enrollments for admin display
     const formattedEnrollments = enrollments.map((enrollment: any) => ({
@@ -3071,9 +3085,13 @@ router.get('/enrollments', supabaseAuth, async (req: any, res) => {
       totalPaid: enrollment.totalPaid || 0,
       remainingBalance: enrollment.remainingBalance || (enrollment.totalCost - (enrollment.totalPaid || 0)),
       paymentStatus: enrollment.paymentStatus || enrollment.status || 'pending_payment',
+      status: enrollment.status || 'enrolled',
       programStartDate: enrollment.programStartDate,
       programEndDate: enrollment.programEndDate,
-      metadata: enrollment.metadata || {}
+      metadata: enrollment.metadata || {},
+      // Include cancellation info if cancelled
+      cancelledAt: enrollment.cancelledAt,
+      cancellationReason: enrollment.cancellationReason,
     }));
     
     console.log(`📚 Found ${formattedEnrollments.length} enrollments`);

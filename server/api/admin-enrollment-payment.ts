@@ -424,6 +424,14 @@ router.post('/:enrollmentId/reallocate-payment', async (req: any, res) => {
         return res.status(403).json({ error: 'Cannot transfer payments to enrollments in other schools' });
       }
 
+      // Prevent transferring to cancelled/withdrawn enrollments
+      if (targetEnrollment.status === 'cancelled' || targetEnrollment.status === 'withdrawn') {
+        return res.status(400).json({ 
+          error: 'Cannot transfer payments to a cancelled or withdrawn enrollment',
+          hint: 'Please select an active enrollment as the target'
+        });
+      }
+
       // Check if transfer would cause overpayment
       const targetTotalPaid = targetEnrollment.totalPaid || 0;
       const targetNewTotalPaid = targetTotalPaid + amount;

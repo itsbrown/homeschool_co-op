@@ -25,10 +25,12 @@ router.get('/enrollments/:id', async (req, res) => {
   }
 });
 
-// DELETE enrollment by ID (blocks if totalPaid > 0)
+// DELETE enrollment by ID (soft-delete: sets status to 'cancelled')
+// Preserves enrollment record for payment history and audit trail
 router.delete('/enrollments/:id', async (req: any, res) => {
   try {
     const enrollmentId = parseInt(req.params.id);
+    const { reason } = req.body || {};
     
     if (isNaN(enrollmentId)) {
       return res.status(400).json({ message: 'Invalid enrollment ID' });
@@ -43,10 +45,10 @@ router.delete('/enrollments/:id', async (req: any, res) => {
     // Verify user is a school admin
     const user = await storage.getUserByEmail(userEmail);
     if (!user || user.role !== 'schoolAdmin') {
-      return res.status(403).json({ message: 'Only school administrators can delete enrollments' });
+      return res.status(403).json({ message: 'Only school administrators can unenroll students' });
     }
     
-    console.log(`🗑️  Admin ${userEmail} attempting to delete enrollment ID: ${enrollmentId}`);
+    console.log(`🗑️  Admin ${userEmail} attempting to cancel enrollment ID: ${enrollmentId}`);
     
     // Get enrollment details first for validation and logging
     const enrollment = await storage.getProgramEnrollmentById(enrollmentId);
@@ -55,45 +57,49 @@ router.delete('/enrollments/:id', async (req: any, res) => {
       return res.status(404).json({ message: 'Enrollment not found' });
     }
 
-    // Verify enrollment belongs to admin's school
-    if (enrollment.schoolId !== user.schoolId) {
-      return res.status(403).json({ message: 'Cannot delete enrollments from other schools' });
+    // Check if already cancelled
+    if (enrollment.status === 'cancelled' || enrollment.status === 'withdrawn') {
+      return res.status(400).json({ message: 'Enrollment is already cancelled or withdrawn' });
     }
 
-    // Block deletion if there are payments - require reallocation first
+    // Verify enrollment belongs to admin's school
+    if (enrollment.schoolId !== user.schoolId) {
+      return res.status(403).json({ message: 'Cannot unenroll students from other schools' });
+    }
+
     const totalPaid = enrollment.totalPaid || 0;
+    
+    console.log(`📝 Cancelling enrollment: ${enrollment.className} for ${enrollment.childName} (${enrollment.parentEmail})`);
     if (totalPaid > 0) {
-      console.log(`⚠️ Cannot delete enrollment ${enrollmentId} - has $${(totalPaid / 100).toFixed(2)} in payments`);
-      return res.status(400).json({ 
-        message: 'Cannot delete enrollment with existing payments',
-        error: 'PAYMENTS_EXIST',
-        details: {
-          totalPaid: totalPaid,
-          totalPaidFormatted: `$${(totalPaid / 100).toFixed(2)}`,
-          hint: 'Please reallocate or refund the payments before unenrolling'
-        }
-      });
+      console.log(`💰 Note: Enrollment has $${(totalPaid / 100).toFixed(2)} in payments - preserved for reallocation`);
     }
     
-    console.log(`📝 Deleting: ${enrollment.className} for ${enrollment.childName} (${enrollment.parentEmail})`);
+    // Soft-delete: Update status to cancelled instead of deleting
+    await storage.updateProgramEnrollment(enrollmentId, {
+      status: 'cancelled',
+      cancelledAt: new Date(),
+      cancelledBy: user.id,
+      cancellationReason: reason || 'Unenrolled by school administrator',
+    });
     
-    // Delete the enrollment
-    await storage.deleteProgramEnrollment(enrollmentId);
-    
-    console.log(`✅ Successfully deleted enrollment ID ${enrollmentId}`);
+    console.log(`✅ Successfully cancelled enrollment ID ${enrollmentId}`);
     
     res.json({ 
-      message: 'Enrollment deleted successfully',
-      deletedEnrollment: {
+      message: 'Student unenrolled successfully',
+      cancelledEnrollment: {
         id: enrollmentId,
         className: enrollment.className,
         childName: enrollment.childName,
-        parentEmail: enrollment.parentEmail
+        parentEmail: enrollment.parentEmail,
+        status: 'cancelled',
+        totalPaid: totalPaid,
+        totalPaidFormatted: totalPaid > 0 ? `$${(totalPaid / 100).toFixed(2)}` : '$0.00',
+        canReallocatePayments: totalPaid > 0,
       }
     });
   } catch (error) {
-    console.error('Error deleting enrollment:', error);
-    res.status(500).json({ message: 'Failed to delete enrollment' });
+    console.error('Error cancelling enrollment:', error);
+    res.status(500).json({ message: 'Failed to unenroll student' });
   }
 });
 

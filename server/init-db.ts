@@ -2012,6 +2012,20 @@ async function runMigrations() {
       console.log('Migration note (payment_method constraint):', constraintError.message || String(constraintError));
     }
     
+    // Migration: Add cancellation metadata columns to program_enrollments for soft-delete
+    console.log('Running migration: Adding cancellation metadata columns...');
+    try {
+      await db.execute(sql`
+        ALTER TABLE program_enrollments 
+        ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMP,
+        ADD COLUMN IF NOT EXISTS cancelled_by INTEGER REFERENCES users(id),
+        ADD COLUMN IF NOT EXISTS cancellation_reason TEXT;
+      `);
+      console.log('✅ Migration completed: cancellation metadata columns added to program_enrollments');
+    } catch (cancellationError: any) {
+      console.log('Migration note (cancellation columns):', cancellationError.message || String(cancellationError));
+    }
+    
   } catch (fundraiserError) {
     const errorMessage = fundraiserError instanceof Error ? fundraiserError.message : String(fundraiserError);
     if (!errorMessage.includes('Database connection not available')) {

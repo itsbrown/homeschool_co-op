@@ -590,6 +590,11 @@ export const programEnrollments = pgTable("program_enrollments", {
   notes: text("notes"),
   metadata: jsonb("metadata").default({}).notNull(),
   
+  // Cancellation tracking (for soft-delete)
+  cancelledAt: timestamp("cancelled_at"),
+  cancelledBy: integer("cancelled_by").references(() => users.id),
+  cancellationReason: text("cancellation_reason"),
+  
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -618,6 +623,9 @@ export const updateProgramEnrollmentSchema = insertProgramEnrollmentSchema.parti
   paymentStatus: z.enum(["pending", "deposit_paid", "partial_payment", "completed", "stripe_managed", "refunded"]).optional(),
   status: z.enum(["pending_payment", "pending_admin_approval", "enrolled", "waitlist", "cancelled", "completed", "withdrawn", "failed"]).optional(),
   totalPaid: z.number().optional(),
+  cancelledAt: z.date().nullable().optional(),
+  cancelledBy: z.number().nullable().optional(),
+  cancellationReason: z.string().nullable().optional(),
 });
 export type UpdateProgramEnrollment = z.infer<typeof updateProgramEnrollmentSchema>;
 
