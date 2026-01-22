@@ -1954,6 +1954,37 @@ async function runMigrations() {
       console.log('Constraint migration note:', constraintError instanceof Error ? constraintError.message : String(constraintError));
     }
     
+    // One-time fix: Update pending_payment memberships to enrolled for users with completed payments
+    // This fixes memberships that weren't updated due to the memberId conditional bug in webhook
+    console.log('Running migration: Fixing pending_payment memberships with completed payments...');
+    try {
+      const result = await db.execute(sql`
+        UPDATE membership_enrollments 
+        SET 
+          status = 'enrolled',
+          amount_paid = amount,
+          remaining_balance = 0,
+          balance_due = 0,
+          updated_at = NOW()
+        WHERE status = 'pending_payment'
+        AND (amount_paid = 0 OR amount_paid IS NULL)
+        AND parent_user_id IN (
+          SELECT DISTINCT parent_id FROM payments 
+          WHERE status = 'completed' 
+          AND description LIKE '%full payment%'
+        )
+        RETURNING id, parent_user_id;
+      `);
+      const updatedCount = Array.isArray(result) ? result.length : 0;
+      if (updatedCount > 0) {
+        console.log(`✅ Migration completed: Fixed ${updatedCount} pending_payment memberships to enrolled status`);
+      } else {
+        console.log('✅ Migration completed: No pending_payment memberships needed fixing');
+      }
+    } catch (fixError) {
+      console.log('Migration note (pending_payment fix):', fixError instanceof Error ? fixError.message : String(fixError));
+    }
+    
   } catch (fundraiserError) {
     const errorMessage = fundraiserError instanceof Error ? fundraiserError.message : String(fundraiserError);
     if (!errorMessage.includes('Database connection not available')) {

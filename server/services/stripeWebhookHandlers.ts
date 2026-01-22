@@ -72,6 +72,7 @@ export async function handleDirectPaymentSuccess(paymentIntent: Stripe.PaymentIn
           .where(eq(users.id, parentUserId))
           .limit(1);
         
+        // Generate memberId if user doesn't have one (separate from enrollment logic)
         if (existingUser.length > 0 && !existingUser[0].memberId) {
           const newMemberId = generateMemberId();
           
@@ -81,11 +82,62 @@ export async function handleDirectPaymentSuccess(paymentIntent: Stripe.PaymentIn
             .where(eq(users.id, parentUserId));
           
           console.log(`🎫 ✅ Generated Member ID ${newMemberId} for user ${parentUserId}`);
-          
-          const startDate = new Date();
-          const expirationDate = new Date(startDate);
-          expirationDate.setFullYear(expirationDate.getFullYear() + 1);
-          
+        } else if (existingUser.length > 0 && existingUser[0].memberId) {
+          console.log(`🎫 User ${parentUserId} already has Member ID: ${existingUser[0].memberId}`);
+        }
+        
+        // Check for existing membership enrollment using storage interface
+        const existingEnrollment = await storage.getMembershipEnrollmentByParentAndSchoolAndYear(
+          parentUserId, membershipSchoolId, membershipYear
+        );
+        
+        const startDate = new Date();
+        const expirationDate = new Date(startDate);
+        expirationDate.setFullYear(expirationDate.getFullYear() + 1);
+        
+        if (existingEnrollment) {
+          if (existingEnrollment.status === 'pending_payment') {
+            // UPDATE existing pending_payment enrollment to enrolled
+            await storage.updateMembershipEnrollment(existingEnrollment.id, {
+              status: 'enrolled',
+              amountPaid: membershipAmount,
+              remainingBalance: 0,
+              totalAmount: membershipAmount,
+              balanceDue: 0,
+              stripeCustomerId: (paymentIntent.customer as string) || null,
+              startDate,
+              renewalDate: expirationDate,
+              endDate: expirationDate,
+              expirationDate,
+              paymentMethod: 'other',
+              notes: `Stripe payment via cart checkout (${paymentIntent.id})${membershipDiscountName ? ` - Discount: ${membershipDiscountName}` : ''}`
+            });
+            
+            console.log(`🎫 ✅ Updated existing pending_payment membership enrollment ${existingEnrollment.id} to enrolled for user ${parentUserId}`);
+          } else if (existingEnrollment.status === 'enrolled') {
+            // Already enrolled - skip (idempotent for webhook retries)
+            console.log(`🎫 Membership enrollment ${existingEnrollment.id} already enrolled for user ${parentUserId} - skipping (idempotent)`);
+          } else {
+            // Other status (expired, grace_period, etc) - update to enrolled
+            await storage.updateMembershipEnrollment(existingEnrollment.id, {
+              status: 'enrolled',
+              amountPaid: membershipAmount,
+              remainingBalance: 0,
+              totalAmount: membershipAmount,
+              balanceDue: 0,
+              stripeCustomerId: (paymentIntent.customer as string) || null,
+              startDate,
+              renewalDate: expirationDate,
+              endDate: expirationDate,
+              expirationDate,
+              paymentMethod: 'other',
+              notes: `Stripe payment via cart checkout (${paymentIntent.id})${membershipDiscountName ? ` - Discount: ${membershipDiscountName}` : ''}`
+            });
+            
+            console.log(`🎫 ✅ Updated membership enrollment ${existingEnrollment.id} from ${existingEnrollment.status} to enrolled for user ${parentUserId}`);
+          }
+        } else {
+          // No existing enrollment - CREATE new one
           await storage.createMembershipEnrollment({
             schoolId: membershipSchoolId,
             parentUserId: parentUserId,
@@ -109,44 +161,43 @@ export async function handleDirectPaymentSuccess(paymentIntent: Stripe.PaymentIn
             notes: `Stripe payment via cart checkout (${paymentIntent.id})${membershipDiscountName ? ` - Discount: ${membershipDiscountName}` : ''}`
           });
           
-          console.log(`🎫 ✅ Created membership enrollment for user ${parentUserId}`);
-          
-          if (membershipDiscountId && membershipDiscountAmount > 0 && membershipSchoolId) {
-            try {
-              const schoolDiscounts = await storage.getDiscountsBySchoolId(membershipSchoolId);
-              const discount = schoolDiscounts.find(d => d.id === membershipDiscountId);
+          console.log(`🎫 ✅ Created new membership enrollment for user ${parentUserId}`);
+        }
+        
+        // Track discount application if applicable
+        if (membershipDiscountId && membershipDiscountAmount > 0 && membershipSchoolId) {
+          try {
+            const schoolDiscounts = await storage.getDiscountsBySchoolId(membershipSchoolId);
+            const discount = schoolDiscounts.find(d => d.id === membershipDiscountId);
+            
+            if (!discount) {
+              console.error(`⚠️ Discount ${membershipDiscountId} not found for school ${membershipSchoolId} - skipping tracking`);
+            } else {
+              const incrementSuccess = await storage.incrementDiscountUsageAtomic(membershipDiscountId);
               
-              if (!discount) {
-                console.error(`⚠️ Discount ${membershipDiscountId} not found for school ${membershipSchoolId} - skipping tracking`);
+              if (!incrementSuccess) {
+                console.log(`⚠️ Discount ${membershipDiscountName} has reached usage limit - atomic increment failed`);
               } else {
-                const incrementSuccess = await storage.incrementDiscountUsageAtomic(membershipDiscountId);
-                
-                if (!incrementSuccess) {
-                  console.log(`⚠️ Discount ${membershipDiscountName} has reached usage limit - atomic increment failed`);
-                } else {
-                  await storage.createDiscountApplication({
-                    discountId: membershipDiscountId,
-                    parentEmail: parentEmail || '',
-                    childId: null,
-                    schoolEnrollmentId: null,
-                    programEnrollmentId: null,
-                    paymentId: null,
-                    classId: null,
-                    originalAmount: membershipOriginalAmount || membershipAmount + membershipDiscountAmount,
-                    discountAmount: membershipDiscountAmount,
-                    finalAmount: membershipAmount,
-                    applicationMethod: 'automatic',
-                    appliedBy: null,
-                  });
-                  console.log(`🎫 ✅ Tracked membership discount usage: ${membershipDiscountName}`);
-                }
+                await storage.createDiscountApplication({
+                  discountId: membershipDiscountId,
+                  parentEmail: parentEmail || '',
+                  childId: null,
+                  schoolEnrollmentId: null,
+                  programEnrollmentId: null,
+                  paymentId: null,
+                  classId: null,
+                  originalAmount: membershipOriginalAmount || membershipAmount + membershipDiscountAmount,
+                  discountAmount: membershipDiscountAmount,
+                  finalAmount: membershipAmount,
+                  applicationMethod: 'automatic',
+                  appliedBy: null,
+                });
+                console.log(`🎫 ✅ Tracked membership discount usage: ${membershipDiscountName}`);
               }
-            } catch (discountTrackError) {
-              console.error('⚠️ Error tracking membership discount application:', discountTrackError);
             }
+          } catch (discountTrackError) {
+            console.error('⚠️ Error tracking membership discount application:', discountTrackError);
           }
-        } else if (existingUser.length > 0 && existingUser[0].memberId) {
-          console.log(`🎫 User ${parentUserId} already has Member ID: ${existingUser[0].memberId}`);
         }
       } catch (membershipError) {
         console.error('❌ Error processing membership payment:', membershipError);
