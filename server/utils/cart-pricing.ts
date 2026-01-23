@@ -83,6 +83,57 @@ function checkRoleEligibility(
   }
 }
 
+/**
+ * Derives schoolId from cart items when user doesn't have schoolId set directly.
+ * Looks up the school from the first class in the cart.
+ * Returns null if cart is empty or classes don't have a school.
+ */
+export async function deriveSchoolIdFromCart(items: CartItem[]): Promise<number | null> {
+  if (!items || items.length === 0) {
+    console.log('🏫 deriveSchoolIdFromCart: No items in cart');
+    return null;
+  }
+
+  // Get the first class from the cart to determine school
+  const firstClassId = items[0].classId;
+  if (!firstClassId) {
+    console.log('🏫 deriveSchoolIdFromCart: First item has no classId');
+    return null;
+  }
+
+  try {
+    const classData = await storage.getClass(firstClassId);
+    if (!classData) {
+      console.log(`🏫 deriveSchoolIdFromCart: Class ${firstClassId} not found`);
+      return null;
+    }
+
+    const schoolId = classData.schoolId;
+    if (!schoolId) {
+      console.log(`🏫 deriveSchoolIdFromCart: Class ${firstClassId} has no schoolId`);
+      return null;
+    }
+
+    console.log(`🏫 deriveSchoolIdFromCart: Derived schoolId ${schoolId} from class ${firstClassId}`);
+    
+    // Validate all items are from the same school (multi-school cart not supported)
+    for (const item of items) {
+      if (item.classId !== firstClassId) {
+        const otherClass = await storage.getClass(item.classId);
+        if (otherClass && otherClass.schoolId !== schoolId) {
+          console.warn(`⚠️ deriveSchoolIdFromCart: Mixed schools in cart - class ${item.classId} has schoolId ${otherClass.schoolId}, expected ${schoolId}`);
+          // Return the first school for now - cart validation should catch this
+        }
+      }
+    }
+
+    return schoolId;
+  } catch (error) {
+    console.error('🏫 deriveSchoolIdFromCart: Error looking up class:', error);
+    return null;
+  }
+}
+
 function isDiscountCurrentlyValid(discount: Discount): boolean {
   const now = new Date();
   

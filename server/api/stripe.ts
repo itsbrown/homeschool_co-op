@@ -1324,10 +1324,10 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
             for (const [enrollmentId, originalState] of originalEnrollmentStates.entries()) {
               try {
                 await storage.updateProgramEnrollment(enrollmentId, {
-                  status: originalState.status as any,
-                  paymentStatus: originalState.paymentStatus,
+                  status: originalState.status as "pending_admin_approval" | "pending_payment" | "enrolled" | "completed" | "cancelled" | "waitlist" | "withdrawn" | "failed",
+                  paymentStatus: originalState.paymentStatus as "pending" | "deposit_paid" | "partial_payment" | "completed" | "stripe_managed" | "refunded",
                   totalPaid: originalState.totalPaid,
-                  remainingBalance: originalState.remainingBalance,
+                  remainingBalance: originalState.remainingBalance ?? undefined,
                   metadata: originalState.metadata
                 });
                 console.log(`   🔄 Rolled back enrollment ${enrollmentId}`);
