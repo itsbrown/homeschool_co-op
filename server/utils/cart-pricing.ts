@@ -83,21 +83,32 @@ function checkRoleEligibility(
   }
 }
 
+export interface SchoolIdResult {
+  schoolId: number | null;
+  error?: 'EMPTY_CART' | 'NO_CLASS_ID' | 'CLASS_NOT_FOUND' | 'NO_SCHOOL_ID' | 'MIXED_SCHOOLS' | 'LOOKUP_ERROR';
+  errorMessage?: string;
+}
+
 /**
  * Derives schoolId from cart items when user doesn't have schoolId set directly.
- * Looks up the school from the first class in the cart.
- * Returns null if cart is empty or classes don't have a school.
+ * Enforces single-school constraint - rejects carts with classes from multiple schools.
+ * Returns schoolId if all items are from the same school.
  */
-export async function deriveSchoolIdFromCart(items: CartItem[]): Promise<number | null> {
+export async function deriveSchoolIdFromCart(items: CartItem[]): Promise<number | null>;
+export async function deriveSchoolIdFromCart(items: CartItem[], options: { strict: true }): Promise<SchoolIdResult>;
+export async function deriveSchoolIdFromCart(items: CartItem[], options?: { strict?: boolean }): Promise<number | null | SchoolIdResult> {
+  const strict = options?.strict ?? false;
+
   if (!items || items.length === 0) {
     console.log('🏫 deriveSchoolIdFromCart: No items in cart');
+    if (strict) return { schoolId: null, error: 'EMPTY_CART', errorMessage: 'Cart is empty' };
     return null;
   }
 
-  // Get the first class from the cart to determine school
   const firstClassId = items[0].classId;
   if (!firstClassId) {
     console.log('🏫 deriveSchoolIdFromCart: First item has no classId');
+    if (strict) return { schoolId: null, error: 'NO_CLASS_ID', errorMessage: 'Cart item missing class ID' };
     return null;
   }
 
@@ -105,31 +116,42 @@ export async function deriveSchoolIdFromCart(items: CartItem[]): Promise<number 
     const classData = await storage.getClassById(firstClassId);
     if (!classData) {
       console.log(`🏫 deriveSchoolIdFromCart: Class ${firstClassId} not found`);
+      if (strict) return { schoolId: null, error: 'CLASS_NOT_FOUND', errorMessage: `Class ${firstClassId} not found` };
       return null;
     }
 
     const schoolId = classData.schoolId;
     if (!schoolId) {
       console.log(`🏫 deriveSchoolIdFromCart: Class ${firstClassId} has no schoolId`);
+      if (strict) return { schoolId: null, error: 'NO_SCHOOL_ID', errorMessage: `Class ${firstClassId} is not associated with a school` };
       return null;
     }
 
     console.log(`🏫 deriveSchoolIdFromCart: Derived schoolId ${schoolId} from class ${firstClassId}`);
     
-    // Validate all items are from the same school (multi-school cart not supported)
+    // Enforce single-school constraint - all items must be from the same school
     for (const item of items) {
       if (item.classId !== firstClassId) {
         const otherClass = await storage.getClassById(item.classId);
         if (otherClass && otherClass.schoolId !== schoolId) {
-          console.warn(`⚠️ deriveSchoolIdFromCart: Mixed schools in cart - class ${item.classId} has schoolId ${otherClass.schoolId}, expected ${schoolId}`);
-          // Return the first school for now - cart validation should catch this
+          console.error(`🚫 deriveSchoolIdFromCart: REJECTED - Mixed schools in cart. Class ${item.classId} is from school ${otherClass.schoolId}, but class ${firstClassId} is from school ${schoolId}`);
+          if (strict) {
+            return { 
+              schoolId: null, 
+              error: 'MIXED_SCHOOLS', 
+              errorMessage: 'Your cart contains classes from different schools. Please complete each school\'s classes separately.'
+            };
+          }
+          return null;
         }
       }
     }
 
+    if (strict) return { schoolId };
     return schoolId;
   } catch (error) {
     console.error('🏫 deriveSchoolIdFromCart: Error looking up class:', error);
+    if (strict) return { schoolId: null, error: 'LOOKUP_ERROR', errorMessage: 'Unable to verify school for cart items' };
     return null;
   }
 }

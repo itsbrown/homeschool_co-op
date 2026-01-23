@@ -6,7 +6,7 @@ import { supabaseAuth } from '../middleware/supabase-auth';
 import { requireSchoolContext } from '../middleware/require-school-context';
 import { getStripeClient, getStripePublishableKey } from '../config/stripe';
 import { calculateMembershipDiscount } from '../utils/membership';
-import { calculateCartPricing, CartItem, deriveSchoolIdFromCart } from '../utils/cart-pricing';
+import { calculateCartPricing, CartItem, deriveSchoolIdFromCart, SchoolIdResult } from '../utils/cart-pricing';
 import { CurrencyUtils } from '@shared/currency-utils';
 import { isActiveMembership, VALID_PAID_MEMBERSHIP_STATUSES } from '@shared/schema';
 
@@ -90,7 +90,7 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
     // 2. Client is claiming to pay membership (even if optional)
     const clientClaimsMembership = (membership?.amount || 0) > 0;
     
-    // Derive schoolId from cart items if user doesn't have one set
+    // Derive schoolId from cart items if user doesn't have one set (with strict validation)
     let effectiveSchoolIdForPayment = parentForMembership?.schoolId || null;
     if (!effectiveSchoolIdForPayment && hasItems) {
       console.log(`🏫 User ${userEmail} has no schoolId, deriving from cart items for payment...`);
@@ -101,7 +101,15 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
         childName: item.childName || '',
         variantId: item.variantId
       }));
-      effectiveSchoolIdForPayment = await deriveSchoolIdFromCart(earlyCartItems);
+      const derivedResult = await deriveSchoolIdFromCart(earlyCartItems, { strict: true }) as SchoolIdResult;
+      if (derivedResult.error) {
+        console.error(`🚫 Payment creation rejected: ${derivedResult.error}`, { userEmail, error: derivedResult.errorMessage });
+        return res.status(400).json({
+          message: derivedResult.errorMessage || 'Unable to process cart',
+          error: derivedResult.error
+        });
+      }
+      effectiveSchoolIdForPayment = derivedResult.schoolId;
       if (effectiveSchoolIdForPayment) {
         console.log(`🏫 Derived schoolId ${effectiveSchoolIdForPayment} from cart items for payment`);
       }

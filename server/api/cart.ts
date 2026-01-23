@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { supabaseAuth } from '../middleware/supabase-auth';
 import { storage } from '../storage';
-import { calculateCartPricing, validateCartTotal, calculateCartSnapshot, CartItem, deriveSchoolIdFromCart } from '../utils/cart-pricing';
+import { calculateCartPricing, validateCartTotal, calculateCartSnapshot, CartItem, deriveSchoolIdFromCart, SchoolIdResult } from '../utils/cart-pricing';
 
 const router = Router();
 
@@ -44,11 +44,18 @@ router.post('/snapshot', supabaseAuth, async (req: any, res) => {
       }
     }
 
-    // Derive schoolId: prefer user.schoolId, fall back to cart items
+    // Derive schoolId: prefer user.schoolId, fall back to cart items with strict validation
     let effectiveSchoolId = user.schoolId;
     if (!effectiveSchoolId && cartItems.length > 0) {
       console.log(`🏫 User ${userEmail} has no schoolId, deriving from cart items...`);
-      effectiveSchoolId = await deriveSchoolIdFromCart(cartItems);
+      const result = await deriveSchoolIdFromCart(cartItems, { strict: true }) as SchoolIdResult;
+      if (result.error) {
+        return res.status(400).json({ 
+          error: result.error,
+          message: result.errorMessage || 'Unable to determine school for this cart.'
+        });
+      }
+      effectiveSchoolId = result.schoolId;
       if (effectiveSchoolId) {
         console.log(`🏫 Using derived schoolId ${effectiveSchoolId} for cart snapshot`);
       }
@@ -138,11 +145,18 @@ router.post('/calculate', supabaseAuth, async (req: any, res) => {
       }
     }
 
-    // Derive schoolId: prefer user.schoolId, fall back to cart items
+    // Derive schoolId: prefer user.schoolId, fall back to cart items with strict validation
     let effectiveSchoolId = user.schoolId;
     if (!effectiveSchoolId && cartItems.length > 0) {
       console.log(`🏫 User ${userEmail} has no schoolId, deriving from cart items...`);
-      effectiveSchoolId = await deriveSchoolIdFromCart(cartItems);
+      const result = await deriveSchoolIdFromCart(cartItems, { strict: true }) as SchoolIdResult;
+      if (result.error) {
+        return res.status(400).json({ 
+          error: result.error,
+          message: result.errorMessage || 'Unable to determine school for this cart.'
+        });
+      }
+      effectiveSchoolId = result.schoolId;
     }
 
     if (!effectiveSchoolId) {
@@ -228,11 +242,18 @@ router.post('/validate', supabaseAuth, async (req: any, res) => {
       }
     }
 
-    // Derive schoolId: prefer user.schoolId, fall back to cart items
+    // Derive schoolId: prefer user.schoolId, fall back to cart items with strict validation
     let effectiveSchoolId = user.schoolId;
     if (!effectiveSchoolId && cartItems.length > 0) {
       console.log(`🏫 User ${userEmail} has no schoolId, deriving from cart items for validation...`);
-      effectiveSchoolId = await deriveSchoolIdFromCart(cartItems);
+      const derivedResult = await deriveSchoolIdFromCart(cartItems, { strict: true }) as SchoolIdResult;
+      if (derivedResult.error) {
+        return res.status(400).json({ 
+          error: derivedResult.error,
+          message: derivedResult.errorMessage || 'Unable to determine school for this cart.'
+        });
+      }
+      effectiveSchoolId = derivedResult.schoolId;
     }
 
     if (!effectiveSchoolId) {
