@@ -6,7 +6,7 @@ import { supabaseAuth } from '../middleware/supabase-auth';
 import { requireSchoolContext } from '../middleware/require-school-context';
 import { getStripeClient, getStripePublishableKey } from '../config/stripe';
 import { calculateMembershipDiscount } from '../utils/membership';
-import { calculateCartPricing, CartItem } from '../utils/cart-pricing';
+import { calculateCartPricing, CartItem, deriveSchoolIdFromCart } from '../utils/cart-pricing';
 import { CurrencyUtils } from '@shared/currency-utils';
 import { isActiveMembership, VALID_PAID_MEMBERSHIP_STATUSES } from '@shared/schema';
 
@@ -90,14 +90,31 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
     // 2. Client is claiming to pay membership (even if optional)
     const clientClaimsMembership = (membership?.amount || 0) > 0;
     
-    if (parentForMembership?.schoolId) {
-      const schoolForMembership = await storage.getSchool(parentForMembership.schoolId);
+    // Derive schoolId from cart items if user doesn't have one set
+    let effectiveSchoolIdForPayment = parentForMembership?.schoolId || null;
+    if (!effectiveSchoolIdForPayment && hasItems) {
+      console.log(`🏫 User ${userEmail} has no schoolId, deriving from cart items for payment...`);
+      const earlyCartItems: CartItem[] = items.map((item: any) => ({
+        id: item.id || `${item.classId}-${item.childId}`,
+        classId: item.classId,
+        childId: item.childId,
+        childName: item.childName || '',
+        variantId: item.variantId
+      }));
+      effectiveSchoolIdForPayment = await deriveSchoolIdFromCart(earlyCartItems);
+      if (effectiveSchoolIdForPayment) {
+        console.log(`🏫 Derived schoolId ${effectiveSchoolIdForPayment} from cart items for payment`);
+      }
+    }
+    
+    if (effectiveSchoolIdForPayment) {
+      const schoolForMembership = await storage.getSchool(effectiveSchoolIdForPayment);
       const membershipRequired = schoolForMembership?.membershipRequired || false;
       
       // Calculate amounts if membership is required OR if client wants to purchase
       if (membershipRequired || clientClaimsMembership) {
         // Check if parent already has active membership for this year at THIS school
-        const existingMemberships = await storage.getMembershipEnrollmentsByParentId(parentForMembership.id);
+        const existingMemberships = parentForMembership ? await storage.getMembershipEnrollmentsByParentId(parentForMembership.id) : [];
         const currentYear = new Date().getFullYear();
         
         // Filter for memberships at the same school with valid paid status
@@ -106,13 +123,13 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
         const activeMembershipForThisSchool = existingMemberships?.find((m: any) => 
           (m.membershipYear === currentYear || m.membershipYear === currentYear + 1) && 
           isActiveMembership(m.status) &&
-          m.schoolId === parentForMembership.schoolId
+          m.schoolId === effectiveSchoolIdForPayment
         );
         const hasActiveMembership = !!activeMembershipForThisSchool;
         
         console.log('🎫 Active membership check:', {
-          parentId: parentForMembership.id,
-          schoolId: parentForMembership.schoolId,
+          parentId: parentForMembership?.id,
+          schoolId: effectiveSchoolIdForPayment,
           currentYear,
           allowedYears: [currentYear, currentYear + 1],
           validPaidStatuses: VALID_PAID_MEMBERSHIP_STATUSES,
@@ -140,7 +157,7 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
             // Only error if required - optional memberships without fee config are just skipped
             if (membershipRequired) {
               console.error('🚨 PAYMENT VALIDATION FAILED: Membership required but fee not configured', {
-                schoolId: parentForMembership.schoolId,
+                schoolId: effectiveSchoolIdForPayment,
                 membershipRequired: true,
                 membershipFeeAmount: schoolForMembership?.membershipFeeAmount,
                 userEmail
@@ -152,7 +169,7 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
             } else if (clientClaimsMembership) {
               // Client claims membership but school has no fee configured
               console.error('🚨 PAYMENT VALIDATION FAILED: Client claims membership but school has no fee', {
-                schoolId: parentForMembership.schoolId,
+                schoolId: effectiveSchoolIdForPayment,
                 clientClaimedAmount: membership?.amount,
                 userEmail
               });
@@ -166,8 +183,8 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
             
             // Calculate applicable discounts server-side
             const discountResult = await calculateMembershipDiscount(
-              parentForMembership.schoolId,
-              parentForMembership.id,
+              effectiveSchoolIdForPayment,
+              parentForMembership?.id || 0,
               schoolForMembership.membershipFeeAmount
             );
             authoritativeMembershipDiscounted = discountResult.finalAmount;
@@ -215,7 +232,7 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
           userEmail
         });
         // Get school name for membership payload construction
-        const schoolForError = await storage.getSchool(parentForMembership?.schoolId || 0);
+        const schoolForError = await storage.getSchool(effectiveSchoolIdForPayment || 0);
         return res.status(409).json({
           message: 'Membership fee amount does not match expected amount. Cart will be refreshed automatically.',
           error: 'MEMBERSHIP_AMOUNT_MISMATCH',
@@ -224,7 +241,7 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
             membershipAmount: authoritativeMembershipDiscounted,
             membershipAlreadyPaid: false, // If we're in mismatch, it means membership is required and not paid
             membershipRequired: true,
-            membershipSchoolId: parentForMembership?.schoolId || null,
+            membershipSchoolId: effectiveSchoolIdForPayment,
             membershipSchoolName: schoolForError?.name || 'School',
             membershipYear: new Date().getFullYear(),
             membershipFull: authoritativeMembershipFull,
@@ -438,7 +455,7 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
       cartPricingResult = await calculateCartPricing(
         cartItems,
         parentForMembership?.id || 0,
-        parentForMembership?.schoolId || 0,
+        effectiveSchoolIdForPayment || 0,
         appliedPromoCode
       );
       
@@ -574,7 +591,7 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
           
           userEmail,
           userId: parentForMembership?.id,
-          schoolId: parentForMembership?.schoolId,
+          schoolId: effectiveSchoolIdForPayment,
           securityNote: 'FRAUD PREVENTION - client attempting to overpay'
         });
         return res.status(400).json({
@@ -640,7 +657,7 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
         // Include membershipAlreadyPaid flag to help frontend distinguish paid vs $0 discount
         // Also include full membership metadata so client can construct proper payload on retry
         const membershipAlreadyPaid = authoritativeMembershipFull > 0 && authoritativeMembershipAmount === 0;
-        const schoolForConflict = await storage.getSchool(parentForMembership?.schoolId || 0);
+        const schoolForConflict = await storage.getSchool(effectiveSchoolIdForPayment || 0);
         return res.status(409).json({
           message: 'Your cart prices may have changed. Cart will be refreshed automatically.',
           error: 'UNIFIED_TOTAL_MISMATCH',
@@ -649,7 +666,7 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
             membershipAmount: authoritativeMembershipAmount,
             membershipAlreadyPaid: membershipAlreadyPaid,
             membershipRequired: authoritativeMembershipFull > 0 && !membershipAlreadyPaid,
-            membershipSchoolId: parentForMembership?.schoolId || null,
+            membershipSchoolId: effectiveSchoolIdForPayment,
             membershipSchoolName: schoolForConflict?.name || 'School',
             membershipYear: new Date().getFullYear(),
             grandTotal: finalServerTotal,
