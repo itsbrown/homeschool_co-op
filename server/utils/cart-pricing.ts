@@ -102,7 +102,7 @@ export async function deriveSchoolIdFromCart(items: CartItem[]): Promise<number 
   }
 
   try {
-    const classData = await storage.getClass(firstClassId);
+    const classData = await storage.getClassById(firstClassId);
     if (!classData) {
       console.log(`🏫 deriveSchoolIdFromCart: Class ${firstClassId} not found`);
       return null;
@@ -119,7 +119,7 @@ export async function deriveSchoolIdFromCart(items: CartItem[]): Promise<number 
     // Validate all items are from the same school (multi-school cart not supported)
     for (const item of items) {
       if (item.classId !== firstClassId) {
-        const otherClass = await storage.getClass(item.classId);
+        const otherClass = await storage.getClassById(item.classId);
         if (otherClass && otherClass.schoolId !== schoolId) {
           console.warn(`⚠️ deriveSchoolIdFromCart: Mixed schools in cart - class ${item.classId} has schoolId ${otherClass.schoolId}, expected ${schoolId}`);
           // Return the first school for now - cart validation should catch this

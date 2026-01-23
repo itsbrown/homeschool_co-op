@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { supabaseAuth } from '../middleware/supabase-auth';
 import { storage } from '../storage';
-import { calculateCartPricing, validateCartTotal, calculateCartSnapshot, CartItem } from '../utils/cart-pricing';
+import { calculateCartPricing, validateCartTotal, calculateCartSnapshot, CartItem, deriveSchoolIdFromCart } from '../utils/cart-pricing';
 
 const router = Router();
 
@@ -14,10 +14,6 @@ router.post('/snapshot', supabaseAuth, async (req: any, res) => {
     
     if (!user) {
       return res.status(401).json({ error: 'User not found' });
-    }
-
-    if (!user.schoolId) {
-      return res.status(400).json({ error: 'User is not associated with a school' });
     }
 
     const { items, appliedPromoCode, creditsToApply } = req.body;
@@ -35,7 +31,6 @@ router.post('/snapshot', supabaseAuth, async (req: any, res) => {
       childId: item.childId,
       childName: item.childName || '',
       variantId: item.variantId,
-      // Pass through enrollment data for existing enrollments with partial payments
       enrollmentId: item.enrollmentId,
       remainingBalance: item.remainingBalance
     }));
@@ -49,12 +44,28 @@ router.post('/snapshot', supabaseAuth, async (req: any, res) => {
       }
     }
 
+    // Derive schoolId: prefer user.schoolId, fall back to cart items
+    let effectiveSchoolId = user.schoolId;
+    if (!effectiveSchoolId && cartItems.length > 0) {
+      console.log(`🏫 User ${userEmail} has no schoolId, deriving from cart items...`);
+      effectiveSchoolId = await deriveSchoolIdFromCart(cartItems);
+      if (effectiveSchoolId) {
+        console.log(`🏫 Using derived schoolId ${effectiveSchoolId} for cart snapshot`);
+      }
+    }
+
+    if (!effectiveSchoolId) {
+      return res.status(400).json({ 
+        error: 'SCHOOL_NOT_FOUND',
+        message: 'Unable to determine school for this cart. Please ensure classes are valid.'
+      });
+    }
+
     // Server-side validation: verify remainingBalance for existing enrollments
     for (const item of cartItems) {
       if (item.enrollmentId) {
         const enrollment = await storage.getEnrollmentById(item.enrollmentId);
         if (enrollment) {
-          // Use server-authoritative remainingBalance, overriding client value
           item.remainingBalance = enrollment.remainingBalance ?? enrollment.totalCost ?? 0;
           console.log(`✅ Validated enrollment ${item.enrollmentId} remainingBalance: ${item.remainingBalance}`);
         }
@@ -64,7 +75,7 @@ router.post('/snapshot', supabaseAuth, async (req: any, res) => {
     const snapshot = await calculateCartSnapshot(
       cartItems,
       user.id,
-      user.schoolId,
+      effectiveSchoolId,
       appliedPromoCode,
       creditsToApply
     );
@@ -76,7 +87,8 @@ router.post('/snapshot', supabaseAuth, async (req: any, res) => {
       itemsTotal: snapshot.totals.itemsTotal,
       membershipTotal: snapshot.totals.membershipTotal,
       grandTotal: snapshot.totals.grandTotal,
-      availableCredits: snapshot.credits.available
+      availableCredits: snapshot.credits.available,
+      derivedSchoolId: user.schoolId ? null : effectiveSchoolId
     });
 
     res.json(snapshot);
@@ -98,10 +110,6 @@ router.post('/calculate', supabaseAuth, async (req: any, res) => {
       return res.status(401).json({ error: 'User not found' });
     }
 
-    if (!user.schoolId) {
-      return res.status(400).json({ error: 'User is not associated with a school' });
-    }
-
     const { items, appliedPromoCode } = req.body;
 
     if (!items || !Array.isArray(items)) {
@@ -117,7 +125,6 @@ router.post('/calculate', supabaseAuth, async (req: any, res) => {
       childId: item.childId,
       childName: item.childName || '',
       variantId: item.variantId,
-      // Pass through enrollment data for existing enrollments with partial payments
       enrollmentId: item.enrollmentId,
       remainingBalance: item.remainingBalance
     }));
@@ -131,12 +138,25 @@ router.post('/calculate', supabaseAuth, async (req: any, res) => {
       }
     }
 
+    // Derive schoolId: prefer user.schoolId, fall back to cart items
+    let effectiveSchoolId = user.schoolId;
+    if (!effectiveSchoolId && cartItems.length > 0) {
+      console.log(`🏫 User ${userEmail} has no schoolId, deriving from cart items...`);
+      effectiveSchoolId = await deriveSchoolIdFromCart(cartItems);
+    }
+
+    if (!effectiveSchoolId) {
+      return res.status(400).json({ 
+        error: 'SCHOOL_NOT_FOUND',
+        message: 'Unable to determine school for this cart. Please ensure classes are valid.'
+      });
+    }
+
     // Server-side validation: verify remainingBalance for existing enrollments
     for (const item of cartItems) {
       if (item.enrollmentId) {
         const enrollment = await storage.getEnrollmentById(item.enrollmentId);
         if (enrollment) {
-          // Use server-authoritative remainingBalance, overriding client value
           item.remainingBalance = enrollment.remainingBalance ?? enrollment.totalCost ?? 0;
         }
       }
@@ -145,7 +165,7 @@ router.post('/calculate', supabaseAuth, async (req: any, res) => {
     const result = await calculateCartPricing(
       cartItems,
       user.id,
-      user.schoolId,
+      effectiveSchoolId,
       appliedPromoCode
     );
 
