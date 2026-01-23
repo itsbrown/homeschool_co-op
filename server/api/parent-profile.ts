@@ -170,10 +170,12 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
         for (const enrollment of allChildEnrollments) {
           if (enrollment.classId === null) continue;
           const classSchoolId = enrollmentClassSchoolMap.get(enrollment.classId);
-          if (classSchoolId && adminSchoolIds.includes(classSchoolId)) {
+          // Fallback to enrollment.schoolId when class.schoolId is null (following membership-admin.ts pattern)
+          const effectiveSchoolId = classSchoolId ?? enrollment.schoolId;
+          if (effectiveSchoolId && adminSchoolIds.includes(effectiveSchoolId)) {
             childrenWithEnrollmentsInAdminSchool.add(enrollment.childId);
             if (!childToEnrolledSchoolId.has(enrollment.childId)) {
-              childToEnrolledSchoolId.set(enrollment.childId, classSchoolId);
+              childToEnrolledSchoolId.set(enrollment.childId, effectiveSchoolId);
             }
           }
         }
@@ -278,12 +280,15 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
 
     // FILTER: Only enrollments in classes from admin's schools
     // Check both classId and marketplaceClassId since marketplace enrollments use marketplaceClassId
+    // Use enrollment.schoolId as fallback when class.schoolId is null (following membership-admin.ts pattern)
     const filteredEnrollments = isSuperAdmin
       ? allEnrollments
       : allEnrollments.filter(e => {
           const effectiveClassId = e.classId || e.marketplaceClassId;
           const classSchoolId = effectiveClassId ? classSchoolMap.get(effectiveClassId) : null;
-          return classSchoolId && adminSchoolIds.includes(classSchoolId);
+          // Fallback to enrollment.schoolId when class.schoolId is null
+          const effectiveSchoolId = classSchoolId ?? e.schoolId;
+          return effectiveSchoolId && adminSchoolIds.includes(effectiveSchoolId);
         });
     
     console.log(`📚 Found ${allEnrollments.length} total enrollments, ${filteredEnrollments.length} visible to admin`);
