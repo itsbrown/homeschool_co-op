@@ -191,7 +191,7 @@ export default function PaymentHelpAssistant() {
       {!isOpen && (
         <Button
           onClick={() => setIsOpen(true)}
-          className="fixed bottom-4 right-4 z-[9999] h-14 w-14 rounded-full shadow-lg bg-gradient-to-br from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700"
+          className="fixed bottom-20 right-4 z-[9999] h-14 w-14 rounded-full shadow-lg bg-gradient-to-br from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700"
           data-testid="payment-help-button"
         >
           <div className="relative">
