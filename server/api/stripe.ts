@@ -447,12 +447,34 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
       // This calculates ALL applicable discounts (promo codes, auto-apply, 
       // sibling discounts, free-after-threshold) on the server side
       // ================================================================
+      
+      // Validate remainingBalance for existing enrollments (server-authoritative)
+      // This ensures we use fresh DB values, not potentially stale client data
+      for (const item of items) {
+        if (item.enrollmentId) {
+          const enrollment = await storage.getProgramEnrollmentById(item.enrollmentId);
+          if (enrollment) {
+            const dbRemainingBalance = enrollment.remainingBalance ?? enrollment.totalCost ?? 0;
+            if (item.remainingBalance !== dbRemainingBalance) {
+              console.log(`💰 Payment: Correcting stale remainingBalance for enrollment ${item.enrollmentId}:`, {
+                clientValue: item.remainingBalance,
+                dbValue: dbRemainingBalance
+              });
+            }
+            item.remainingBalance = dbRemainingBalance;
+            console.log(`✅ Payment: Validated enrollment ${item.enrollmentId} remainingBalance: ${item.remainingBalance}`);
+          }
+        }
+      }
+      
       const cartItems: CartItem[] = items.map((item: any) => ({
         id: item.id || `${item.classId}-${item.childId}`,
         classId: item.classId,
         childId: item.childId,
         childName: item.childName || '',
-        variantId: item.variantId
+        variantId: item.variantId,
+        enrollmentId: item.enrollmentId,
+        remainingBalance: item.remainingBalance
       }));
       
       // Extract promo code - prefer explicitly passed promoCode, fallback to discounts structure
