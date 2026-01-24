@@ -230,14 +230,21 @@ export default function PaymentHelpAssistant() {
 
           {paymentContext && (paymentContext.membershipExpired || paymentContext.outstandingBalance) && (
             <div className="px-4 py-2 bg-amber-50 border-b border-amber-100 flex-shrink-0">
-              <div className="flex items-center gap-2 text-xs text-amber-700">
-                <DollarSign className="h-3 w-3" />
-                <span>
-                  {paymentContext.membershipExpired && 'Membership renewal required. '}
-                  {paymentContext.outstandingBalance && paymentContext.outstandingBalance > 0 && 
-                    `Outstanding balance: $${(paymentContext.outstandingBalance / 100).toFixed(2)}`
-                  }
-                </span>
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center gap-2 text-xs text-amber-700">
+                  <DollarSign className="h-3 w-3" />
+                  <span>
+                    {paymentContext.membershipExpired && 'Membership renewal required. '}
+                    {paymentContext.outstandingBalance && paymentContext.outstandingBalance > 0 && 
+                      `Outstanding balance: $${(paymentContext.outstandingBalance / 100).toFixed(2)}`
+                    }
+                  </span>
+                </div>
+                {paymentContext.outstandingBalance && paymentContext.outstandingBalance > 0 && (
+                  <p className="text-[10px] text-amber-600/80 pl-5">
+                    This is your total from all scheduled payments, not your current cart total.
+                  </p>
+                )}
               </div>
             </div>
           )}
