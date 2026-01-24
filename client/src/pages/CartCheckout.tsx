@@ -12,7 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useLocation } from 'wouter';
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { apiRequest } from '@/lib/queryClient';
-import { ShoppingCart, CreditCard, Percent, Gift, AlertCircle, Check, Loader2, Calendar, DollarSign, Clock, CheckCircle2, Award } from 'lucide-react';
+import { ShoppingCart, CreditCard, Percent, Gift, AlertCircle, Check, Loader2, Calendar, DollarSign, Clock, CheckCircle2, Award, RefreshCw } from 'lucide-react';
 import ParentAppShell from '@/components/layout/ParentAppShell';
 import { formatCurrency } from '@/utils/currency';
 import { formatClassSchedule } from '@/lib/utils';
@@ -147,13 +147,14 @@ function CheckoutForm({ selectedPaymentPlan, selectedPlanAmount }: { selectedPay
 }
 
 export default function CartCheckout() {
-  const { cart, cartHydrated, cartLoading, clearCart, applyPromoCode, removePromoCode } = useCart();
+  const { cart, cartHydrated, cartLoading, clearCart, applyPromoCode, removePromoCode, refreshCart } = useCart();
   const { user, isAuthenticated } = useAuth();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [clientSecret, setClientSecret] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
+  const [isPriceMismatchError, setIsPriceMismatchError] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [selectedPaymentPlan, setSelectedPaymentPlan] = useState<string>('full');
   const [paymentFrequency, setPaymentFrequency] = useState<'weekly' | 'biweekly' | 'monthly' | 'one_time'>('one_time');
@@ -719,10 +720,11 @@ export default function CartCheckout() {
           setHasCheckoutConflict(true);
           
           const serverTotal = conflictData.authoritative?.grandTotal;
-          setError(`Cart prices have changed. Server total: ${serverTotal ? formatCurrency(serverTotal) : 'unknown'}. Please refresh the page and try again.`);
+          setIsPriceMismatchError(true);
+          setError(`Prices in your cart have been updated since you added them. The current total is ${serverTotal ? formatCurrency(serverTotal) : 'different'}.`);
           toast({
-            title: "Cart Updated",
-            description: "Your cart prices have changed. Please refresh the page to continue.",
+            title: "Prices Updated",
+            description: "Some prices have changed. Please refresh your cart to see the latest prices.",
             variant: "destructive",
           });
           return;
@@ -731,6 +733,23 @@ export default function CartCheckout() {
 
       if (!response.ok) {
         const errorData = await response.json();
+        const errorCode = errorData.error || '';
+        const isMismatchError = [
+          'MEMBERSHIP_AMOUNT_MISMATCH',
+          'TOTAL_MISMATCH_OVERPAYMENT', 
+          'UNIFIED_TOTAL_MISMATCH',
+          'ZERO_SERVER_TOTAL_MISMATCH',
+          'AMOUNT_MISMATCH'
+        ].includes(errorCode) || 
+          errorData.message?.toLowerCase().includes('mismatch') ||
+          errorData.message?.toLowerCase().includes('prices have changed') ||
+          errorData.message?.toLowerCase().includes('cart prices');
+        
+        if (isMismatchError) {
+          setIsPriceMismatchError(true);
+          setError(errorData.message || 'Prices have changed. Please refresh your cart.');
+          return;
+        }
         throw new Error(errorData.message || 'Failed to create payment intent');
       }
 
@@ -999,23 +1018,72 @@ export default function CartCheckout() {
   }
 
   if (error) {
+    const handleRefreshCart = async () => {
+      setError('');
+      setIsPriceMismatchError(false);
+      setHasCheckoutConflict(false);
+      setClientSecret('');
+      setLoading(true);
+      retryCountRef.current = 0;
+      setRetryCount(0);
+      await refreshCart();
+      toast({
+        title: "Cart Refreshed",
+        description: "Your cart has been updated with the latest prices. Preparing checkout...",
+      });
+    };
+
     return (
       <ParentAppShell>
         <div className="flex flex-col items-center justify-center min-h-[50vh] p-4">
           <Card className="w-full max-w-md">
             <CardHeader>
-              <CardTitle className="text-center text-red-500 flex items-center justify-center gap-2">
-                <AlertCircle className="h-5 w-5" />
-                Checkout Error
+              <CardTitle className={`text-center flex items-center justify-center gap-2 ${isPriceMismatchError ? 'text-amber-600' : 'text-red-500'}`}>
+                {isPriceMismatchError ? (
+                  <>
+                    <RefreshCw className="h-5 w-5" />
+                    Prices Have Changed
+                  </>
+                ) : (
+                  <>
+                    <AlertCircle className="h-5 w-5" />
+                    Checkout Error
+                  </>
+                )}
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <p className="text-center">{error}</p>
+            <CardContent className="space-y-4">
+              <p className="text-center text-muted-foreground">{error}</p>
+              {isPriceMismatchError && (
+                <p className="text-center text-sm text-muted-foreground">
+                  This can happen when class prices are updated or promotions change. 
+                  Refresh your cart to see the current prices and continue checkout.
+                </p>
+              )}
             </CardContent>
-            <CardFooter className="flex justify-center">
-              <Button onClick={() => setLocation('/programs')}>
-                Return to Classes
-              </Button>
+            <CardFooter className="flex flex-col gap-3">
+              {isPriceMismatchError ? (
+                <>
+                  <Button 
+                    onClick={handleRefreshCart}
+                    className="w-full"
+                  >
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Refresh Cart & Continue
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setLocation('/cart')}
+                    className="w-full"
+                  >
+                    Review Cart
+                  </Button>
+                </>
+              ) : (
+                <Button onClick={() => setLocation('/programs')} className="w-full">
+                  Return to Classes
+                </Button>
+              )}
             </CardFooter>
           </Card>
         </div>
