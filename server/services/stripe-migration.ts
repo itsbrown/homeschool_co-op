@@ -224,7 +224,7 @@ export class StripeMigrationService {
     try {
       console.log(`🎯 Migrating single enrollment: ${enrollmentId}`);
 
-      const enrollment = await this.storage.getEnrollmentById(enrollmentId);
+      const enrollment = await this.storage.getProgramEnrollmentById(enrollmentId);
       if (!enrollment) {
         throw new Error(`Enrollment ${enrollmentId} not found`);
       }

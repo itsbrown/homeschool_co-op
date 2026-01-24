@@ -95,7 +95,7 @@ export class StripePaymentPlanService {
     let programEndDate: Date | null = null;
     
     if (data.paymentFrequency && data.paymentFrequency !== 'one_time' && data.enrollmentIds.length > 0) {
-      const firstEnrollment = await this.storage.getEnrollmentById(data.enrollmentIds[0]);
+      const firstEnrollment = await this.storage.getProgramEnrollmentById(data.enrollmentIds[0]);
       if (firstEnrollment?.programStartDate && firstEnrollment?.programEndDate) {
         const parsedStartDate = new Date(firstEnrollment.programStartDate);
         const parsedEndDate = new Date(firstEnrollment.programEndDate);
@@ -319,7 +319,7 @@ export class StripePaymentPlanService {
       return { created: 0, skipped: true };
     }
     
-    const firstEnrollmentData = await this.storage.getEnrollmentById(enrollmentIds[0]);
+    const firstEnrollmentData = await this.storage.getProgramEnrollmentById(enrollmentIds[0]);
     if (!firstEnrollmentData) {
       console.error(`❌ Enrollment not found: ${enrollmentIds[0]}`);
       return { created: 0, skipped: true };
@@ -336,7 +336,7 @@ export class StripePaymentPlanService {
     let totalEnrollmentCost = 0;
     
     for (const enrollmentId of enrollmentIds) {
-      const enrollmentData = await this.storage.getEnrollmentById(enrollmentId);
+      const enrollmentData = await this.storage.getProgramEnrollmentById(enrollmentId);
       if (enrollmentData) {
         const cost = enrollmentData.totalCost || 0;
         enrollmentDataList.push({ id: enrollmentId, totalCost: cost });
@@ -640,7 +640,7 @@ export class StripePaymentPlanService {
     console.log('🔄 Updating enrollments with PaymentIntent references:', enrollmentIds);
 
     for (const enrollmentId of enrollmentIds) {
-      const existingEnrollment = await this.storage.getEnrollmentById(enrollmentId);
+      const existingEnrollment = await this.storage.getProgramEnrollmentById(enrollmentId);
       if (existingEnrollment) {
         await this.storage.updateEnrollment(enrollmentId, {
           ...existingEnrollment,
@@ -682,7 +682,7 @@ export class StripePaymentPlanService {
     // Update enrollment balances
     const enrollmentIds = scheduledPayment.enrollmentIds;
     for (const enrollmentId of enrollmentIds) {
-      const enrollment = await this.storage.getEnrollmentById(enrollmentId);
+      const enrollment = await this.storage.getProgramEnrollmentById(enrollmentId);
       if (enrollment) {
         const newPaidAmount = (enrollment.totalPaid || 0) + scheduledPayment.amount;
         const newBalance = Math.max(0, (enrollment.totalCost || 0) - newPaidAmount);

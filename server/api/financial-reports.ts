@@ -880,7 +880,7 @@ router.post('/send-reminder', async (req: any, res) => {
     let paymentSchoolId: number | null = null;
 
     if (payment.enrollmentId) {
-      const enrollment = await storage.getEnrollmentById(payment.enrollmentId);
+      const enrollment = await storage.getProgramEnrollmentById(payment.enrollmentId);
       if (enrollment) {
         childName = enrollment.childName || 'Student';
         className = enrollment.className || 'Class';

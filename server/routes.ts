@@ -3803,15 +3803,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
             password: 'temppass123', // Temporary password - parent will set their own
             name: `${firstName}'s Parent`, // Default name
             role: 'parent',
-            subscription: 'free'
+            subscription: 'free',
+            schoolId: schoolId // Associate parent with the school (derived from admin's JWT)
           });
-          console.log('✅ Parent account created:', parentUser.id);
+          console.log('✅ Parent account created:', parentUser.id, 'with schoolId:', schoolId);
         } catch (userError) {
           console.error('❌ Error creating parent user:', userError);
           throw userError;
         }
       } else {
         console.log('✅ Found existing parent:', parentUser.id);
+        // Update parent's schoolId if null (parent may have been created without school association)
+        if (!parentUser.schoolId) {
+          console.log('📝 Updating parent schoolId from null to:', schoolId);
+          await storage.updateUser(parentUser.id, { schoolId: schoolId });
+          parentUser.schoolId = schoolId;
+        }
       }
 
       // Create the student/child record with correct schema

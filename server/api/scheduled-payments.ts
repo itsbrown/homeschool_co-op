@@ -27,7 +27,7 @@ router.get('/upcoming', supabaseAuth, async (req: any, res) => {
     const enrichedPayments = await Promise.all(pendingPayments.map(async (payment) => {
       let enrollmentDetails = null;
       if (payment.enrollmentId) {
-        const enrollment = await storage.getEnrollmentById(payment.enrollmentId);
+        const enrollment = await storage.getProgramEnrollmentById(payment.enrollmentId);
         if (enrollment) {
           enrollmentDetails = {
             className: enrollment.className,
@@ -332,7 +332,7 @@ router.post('/pay', supabaseAuth, async (req: any, res) => {
 
     // Get the enrollment to retrieve enrollmentIds and Stripe customer
     const enrollment = scheduledPayment.enrollmentId 
-      ? await storage.getEnrollmentById(scheduledPayment.enrollmentId)
+      ? await storage.getProgramEnrollmentById(scheduledPayment.enrollmentId)
       : null;
     
     // Build enrollmentIds array - use the enrollment from the scheduled payment
@@ -530,7 +530,7 @@ router.post('/pay-with-credits', supabaseAuth, async (req: any, res) => {
 
     // Update enrollment totalPaid if we have an enrollment
     if (scheduledPayment.enrollmentId) {
-      const enrollment = await storage.getEnrollmentById(scheduledPayment.enrollmentId);
+      const enrollment = await storage.getProgramEnrollmentById(scheduledPayment.enrollmentId);
       if (enrollment) {
         const newTotalPaid = (enrollment.totalPaid || 0) + paymentAmount;
         const classData = enrollment.programId ? await storage.getClassById(enrollment.programId) : null;
@@ -550,7 +550,7 @@ router.post('/pay-with-credits', supabaseAuth, async (req: any, res) => {
     let childName = 'Child';
     let className = 'Class';
     if (scheduledPayment.enrollmentId) {
-      const enrollment = await storage.getEnrollmentById(scheduledPayment.enrollmentId);
+      const enrollment = await storage.getProgramEnrollmentById(scheduledPayment.enrollmentId);
       if (enrollment) {
         childName = enrollment.childName || 'Child';
         className = enrollment.className || 'Class';

@@ -844,8 +844,18 @@ router.get('/school-documents', jwtCheck, async (req: any, res) => {
       });
     }
 
+    // Derive schoolId from enrollments if user.schoolId is null
+    let effectiveSchoolId = user.schoolId;
+    if (!effectiveSchoolId) {
+      const enrollments = await storage.getProgramEnrollmentsByParent(user.id);
+      if (enrollments.length > 0) {
+        effectiveSchoolId = enrollments[0].schoolId;
+        console.log(`📄 Derived schoolId ${effectiveSchoolId} from parent's enrollments`);
+      }
+    }
+
     // Get the parent's school ID
-    if (!user.schoolId) {
+    if (!effectiveSchoolId) {
       return res.status(200).json({ 
         success: true,
         documents: []
@@ -853,7 +863,7 @@ router.get('/school-documents', jwtCheck, async (req: any, res) => {
     }
 
     // Get published documents for the parent's school
-    const documents = await storage.getPublishedSchoolDocuments(user.schoolId);
+    const documents = await storage.getPublishedSchoolDocuments(effectiveSchoolId);
 
     console.log(`📄 Found ${documents.length} school documents for parent ${userEmail}`);
 

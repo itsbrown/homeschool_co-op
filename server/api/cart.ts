@@ -71,7 +71,7 @@ router.post('/snapshot', supabaseAuth, async (req: any, res) => {
     // Server-side validation: verify remainingBalance for existing enrollments
     for (const item of cartItems) {
       if (item.enrollmentId) {
-        const enrollment = await storage.getEnrollmentById(item.enrollmentId);
+        const enrollment = await storage.getProgramEnrollmentById(item.enrollmentId);
         if (enrollment) {
           item.remainingBalance = enrollment.remainingBalance ?? enrollment.totalCost ?? 0;
           console.log(`✅ Validated enrollment ${item.enrollmentId} remainingBalance: ${item.remainingBalance}`);
@@ -169,7 +169,7 @@ router.post('/calculate', supabaseAuth, async (req: any, res) => {
     // Server-side validation: verify remainingBalance for existing enrollments
     for (const item of cartItems) {
       if (item.enrollmentId) {
-        const enrollment = await storage.getEnrollmentById(item.enrollmentId);
+        const enrollment = await storage.getProgramEnrollmentById(item.enrollmentId);
         if (enrollment) {
           item.remainingBalance = enrollment.remainingBalance ?? enrollment.totalCost ?? 0;
         }
@@ -266,7 +266,7 @@ router.post('/validate', supabaseAuth, async (req: any, res) => {
     // Server-side validation: verify remainingBalance for existing enrollments
     for (const item of cartItems) {
       if (item.enrollmentId) {
-        const enrollment = await storage.getEnrollmentById(item.enrollmentId);
+        const enrollment = await storage.getProgramEnrollmentById(item.enrollmentId);
         if (enrollment) {
           item.remainingBalance = enrollment.remainingBalance ?? enrollment.totalCost ?? 0;
         }

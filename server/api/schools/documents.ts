@@ -385,8 +385,19 @@ router.get('/:id/download', supabaseAuth, async (req: any, res) => {
 
     // SECURITY: Verify user has access to this document
     const user = await storage.getUser(userId);
-    if (!user || user.schoolId !== document.schoolId) {
-      console.log(`🚨 SECURITY: User ${userId} attempted to download document ${documentId} from school ${document.schoolId} but belongs to school ${user?.schoolId}`);
+    
+    // Derive schoolId from enrollments if user.schoolId is null
+    let effectiveSchoolId = user?.schoolId;
+    if (!effectiveSchoolId && user) {
+      const enrollments = await storage.getProgramEnrollmentsByParent(user.id);
+      if (enrollments.length > 0) {
+        effectiveSchoolId = enrollments[0].schoolId;
+        console.log(`📄 Download: Derived schoolId ${effectiveSchoolId} from user's enrollments`);
+      }
+    }
+    
+    if (!user || effectiveSchoolId !== document.schoolId) {
+      console.log(`🚨 SECURITY: User ${userId} attempted to download document ${documentId} from school ${document.schoolId} but belongs to school ${effectiveSchoolId}`);
       return res.status(403).json({ 
         success: false, 
         message: 'Access denied: You do not have permission to download this document' 

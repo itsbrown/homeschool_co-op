@@ -149,7 +149,7 @@ async function backfillScheduledPayments(
     }
     
     // Get first enrollment for school ID
-    const firstEnrollment = await storage.getEnrollmentById(plan.enrollmentIds[0]);
+    const firstEnrollment = await storage.getProgramEnrollmentById(plan.enrollmentIds[0]);
     if (!firstEnrollment) {
       result.error = 'First enrollment not found';
       return result;

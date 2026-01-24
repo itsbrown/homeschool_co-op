@@ -146,7 +146,7 @@ export async function processScheduledPaymentReminders(): Promise<ReminderResult
       let schoolName = 'School';
       
       if (payment.enrollmentId) {
-        const enrollment = await storage.getEnrollmentById(payment.enrollmentId);
+        const enrollment = await storage.getProgramEnrollmentById(payment.enrollmentId);
         if (enrollment) {
           childName = enrollment.childName || 'Student';
           className = enrollment.className || 'Class';
@@ -215,7 +215,7 @@ export async function processScheduledPaymentReminders(): Promise<ReminderResult
         
         // Log the reminder to the database
         try {
-          const enrollment = payment.enrollmentId ? await storage.getEnrollmentById(payment.enrollmentId) : null;
+          const enrollment = payment.enrollmentId ? await storage.getProgramEnrollmentById(payment.enrollmentId) : null;
           const reminderTypeMap: Record<number, string> = {
             7: '7_days_before',
             3: '3_days_before',
@@ -250,7 +250,7 @@ export async function processScheduledPaymentReminders(): Promise<ReminderResult
         
         // Log the failed reminder attempt
         try {
-          const enrollment = payment.enrollmentId ? await storage.getEnrollmentById(payment.enrollmentId) : null;
+          const enrollment = payment.enrollmentId ? await storage.getProgramEnrollmentById(payment.enrollmentId) : null;
           await storage.createPaymentReminderLog({
             schoolId: enrollment?.schoolId || 1,
             scheduledPaymentId: payment.id,

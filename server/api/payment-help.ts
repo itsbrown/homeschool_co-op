@@ -151,7 +151,7 @@ router.get('/context', supabaseAuth, async (req, res) => {
           hasPaymentPlan = true;
           
           if (upcomingPayments.length < 3) {
-            const enrollment = await storage.getEnrollmentById(payment.enrollmentId);
+            const enrollment = await storage.getProgramEnrollmentById(payment.enrollmentId);
             let className = 'Class';
             if (enrollment) {
               const classInfo = allClasses.find(c => c.id === enrollment.classId);
@@ -252,7 +252,7 @@ router.post('/chat', supabaseAuth, chatLimiter, async (req, res) => {
                 outstandingBalance += payment.amount || 0;
                 
                 if (upcomingPaymentsInfo.length < 3) {
-                  const enrollment = await storage.getEnrollmentById(payment.enrollmentId);
+                  const enrollment = await storage.getProgramEnrollmentById(payment.enrollmentId);
                   let className = 'Class';
                   if (enrollment) {
                     const classInfo = allClasses.find(c => c.id === enrollment.classId);

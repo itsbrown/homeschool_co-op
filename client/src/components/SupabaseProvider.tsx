@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { createClient, User, Session } from "@supabase/supabase-js";
+import { queryClient } from "@/lib/queryClient";
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -128,7 +129,16 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({
         setSession(null);
         setUser(null);
         setIsLoading(false);
+        // Clear React Query cache to prevent stale data display after logout/login
+        queryClient.clear();
+        console.log("🗑️ React Query cache cleared");
         return;
+      }
+      
+      // Clear cache on sign in to ensure fresh data for the new user
+      if (event === "SIGNED_IN") {
+        queryClient.clear();
+        console.log("🔄 React Query cache cleared for new session");
       }
 
       // Handle successful OAuth login or session refresh
