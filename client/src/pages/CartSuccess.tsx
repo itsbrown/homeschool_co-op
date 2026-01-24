@@ -128,6 +128,7 @@ export default function CartSuccess() {
           queryClient.invalidateQueries({ queryKey: ['/api/enrollments'] });
           queryClient.invalidateQueries({ queryKey: ['billing-summary'] });
           queryClient.invalidateQueries({ queryKey: ['payment-history'] });
+          queryClient.invalidateQueries({ queryKey: ['scheduled-payments-upcoming'] });
           
           console.log('✅ Cart cleared and queries invalidated');
           
@@ -281,6 +282,7 @@ export default function CartSuccess() {
               // Force refresh billing data before navigation
               await queryClient.invalidateQueries({ queryKey: ['billing-summary'] });
               await queryClient.invalidateQueries({ queryKey: ['payment-history'] });
+              await queryClient.invalidateQueries({ queryKey: ['scheduled-payments-upcoming'] });
               setTimeout(() => setLocation('/billing'), 100); // Small delay to ensure cache refresh
             }}
             className="flex items-center gap-2"

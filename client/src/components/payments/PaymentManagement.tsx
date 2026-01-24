@@ -354,6 +354,7 @@ function ScheduledPaymentDialog({
       queryClient.invalidateQueries({ queryKey: ['/api/payment-history'] });
       queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments'] });
       queryClient.invalidateQueries({ queryKey: ['/api/parent/credits'] });
+      queryClient.invalidateQueries({ queryKey: ['scheduled-payments-upcoming'] });
       onSuccess();
       onClose();
     } catch (err: any) {
@@ -376,6 +377,7 @@ function ScheduledPaymentDialog({
     // Invalidate queries to refresh data
     queryClient.invalidateQueries({ queryKey: ['/api/payment-history'] });
     queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments'] });
+    queryClient.invalidateQueries({ queryKey: ['scheduled-payments-upcoming'] });
     onSuccess();
     onClose();
   };

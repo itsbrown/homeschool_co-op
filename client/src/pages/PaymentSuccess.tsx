@@ -35,6 +35,7 @@ export default function PaymentSuccess() {
     // Invalidate queries to refresh billing data
     queryClient.invalidateQueries({ queryKey: ['billing-summary'] });
     queryClient.invalidateQueries({ queryKey: ['payment-history'] });
+    queryClient.invalidateQueries({ queryKey: ['scheduled-payments-upcoming'] });
     
     setIsLoading(false);
   }, [searchParams]);

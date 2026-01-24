@@ -1718,6 +1718,7 @@ export default function BillingPage() {
                           queryClient.invalidateQueries({ queryKey: ['stripe-subscription-schedules'] });
                           queryClient.invalidateQueries({ queryKey: ['/api/billing/summary'] });
                           queryClient.invalidateQueries({ queryKey: ['/api/enrollments'] });
+                          queryClient.invalidateQueries({ queryKey: ['scheduled-payments-upcoming'] });
                           
                           console.log('✅ Payment success handling complete');
                         }}
