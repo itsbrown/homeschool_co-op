@@ -1169,7 +1169,7 @@ router.get("/classes/:id/roster", supabaseAuth, async (req: any, res) => {
 
     console.log(`📚 Found ${classEnrollments.length} program enrollments for class ${classId}`);
 
-    // Map enrollments to student data by looking up children directly
+    // Map enrollments to student data by looking up children and their parents
     const students = await Promise.all(classEnrollments.map(async (enrollment: any) => {
       // Get child data directly using the childId from program_enrollments
       const child = await storage.getChildById(enrollment.childId);
@@ -1179,13 +1179,30 @@ router.get("/classes/:id/roster", supabaseAuth, async (req: any, res) => {
         return null;
       }
 
+      // Get parent user data for contact information
+      let parentName = '';
+      let parentPhone = '';
+      let parentEmail = child.parentEmail || '';
+      
+      if (child.parentId) {
+        const parent = await storage.getUser(child.parentId);
+        if (parent) {
+          parentName = parent.name || `${parent.firstName || ''} ${parent.lastName || ''}`.trim();
+          parentPhone = parent.phone || '';
+          parentEmail = parent.email || parentEmail;
+        }
+      }
+
       return {
         id: child.id,
         enrollmentId: enrollment.id,
         firstName: child.firstName,
         lastName: child.lastName,
-        email: child.parentEmail || '',
-        phone: '',
+        email: parentEmail,
+        phone: parentPhone,
+        parentName: parentName,
+        parentEmail: parentEmail,
+        parentPhone: parentPhone,
         gradeLevel: child.gradeLevel || 'Unknown',
         enrollmentDate: enrollment.enrollmentDate?.toISOString() || enrollment.createdAt?.toISOString() || new Date().toISOString(),
         status: enrollment.status === 'pending_payment' ? 'Pending' : 

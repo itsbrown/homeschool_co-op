@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Loader2, UserPlus, Mail, Phone, Calendar, GraduationCap } from "lucide-react";
+import { Loader2, UserPlus, Mail, Phone, Calendar, GraduationCap, Download } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,6 +24,9 @@ interface Student {
   lastName: string;
   email?: string;
   phone?: string;
+  parentName?: string;
+  parentEmail?: string;
+  parentPhone?: string;
   gradeLevel: string;
   enrollmentDate: string;
   status: string;
@@ -98,6 +101,59 @@ export default function ClassRosterPage() {
   const classTitle = classData?.title || "Class";
   const totalEnrolled = rosterData?.totalStudents || students.length;
 
+  const exportToCSV = () => {
+    if (!students.length) {
+      toast({
+        title: "No data to export",
+        description: "There are no students enrolled in this class.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const headers = [
+      "Student First Name",
+      "Student Last Name",
+      "Grade Level",
+      "Parent/Guardian Name",
+      "Parent Email",
+      "Parent Phone",
+      "Enrollment Date",
+      "Status"
+    ];
+
+    const rows = filteredStudents.map(student => [
+      student.firstName,
+      student.lastName,
+      student.gradeLevel,
+      student.parentName || '',
+      student.parentEmail || student.email || '',
+      student.parentPhone || student.phone || '',
+      new Date(student.enrollmentDate).toLocaleDateString(),
+      student.status
+    ]);
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => `"${(cell || '').replace(/"/g, '""')}"`).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `${classTitle.replace(/[^a-z0-9]/gi, '_')}_roster_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    toast({
+      title: "Export successful",
+      description: `Exported ${filteredStudents.length} students to CSV.`
+    });
+  };
+
   return (
     <SchoolAdminLayout pageTitle={`${classTitle} - Roster`}>
       <div className="max-w-6xl mx-auto p-6">
@@ -113,10 +169,16 @@ export default function ClassRosterPage() {
                 {totalEnrolled} {totalEnrolled === 1 ? 'student' : 'students'} enrolled
               </p>
             </div>
-            <Button onClick={() => setLocation(`/schools/classes/${classId}/enrollments`)}>
-              <UserPlus className="mr-2 h-4 w-4" />
-              Add Student to Class
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={exportToCSV} disabled={!students.length}>
+                <Download className="mr-2 h-4 w-4" />
+                Export CSV
+              </Button>
+              <Button onClick={() => setLocation(`/schools/classes/${classId}/enrollments`)}>
+                <UserPlus className="mr-2 h-4 w-4" />
+                Add Student to Class
+              </Button>
+            </div>
           </div>
 
           {/* Class Info Card */}
@@ -184,6 +246,7 @@ export default function ClassRosterPage() {
                     <TableRow>
                       <TableHead>Student Name</TableHead>
                       <TableHead>Grade Level</TableHead>
+                      <TableHead>Parent/Guardian</TableHead>
                       <TableHead>Contact Info</TableHead>
                       <TableHead>Enrollment Date</TableHead>
                       <TableHead>Status</TableHead>
@@ -199,17 +262,20 @@ export default function ClassRosterPage() {
                           </TableCell>
                           <TableCell>{student.gradeLevel}</TableCell>
                           <TableCell>
+                            {student.parentName || '-'}
+                          </TableCell>
+                          <TableCell>
                             <div className="space-y-1">
-                              {student.email && (
+                              {(student.parentEmail || student.email) && (
                                 <div className="flex items-center space-x-1 text-sm">
                                   <Mail className="h-3 w-3" />
-                                  <span>{student.email}</span>
+                                  <span>{student.parentEmail || student.email}</span>
                                 </div>
                               )}
-                              {student.phone && (
+                              {(student.parentPhone || student.phone) && (
                                 <div className="flex items-center space-x-1 text-sm">
                                   <Phone className="h-3 w-3" />
-                                  <span>{student.phone}</span>
+                                  <span>{student.parentPhone || student.phone}</span>
                                 </div>
                               )}
                             </div>
@@ -242,7 +308,7 @@ export default function ClassRosterPage() {
                       ))
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">
+                        <TableCell colSpan={7} className="text-center py-6 text-muted-foreground">
                           {searchQuery ? "No students found matching your search." : "No students enrolled in this class yet."}
                         </TableCell>
                       </TableRow>
