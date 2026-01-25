@@ -61,7 +61,8 @@ import {
   Award,
   Copy,
   Loader2,
-  XCircle
+  XCircle,
+  Gift
 } from 'lucide-react';
 import { Link } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
@@ -110,8 +111,12 @@ interface ParentProfile {
     amount: number;
     depositRequired: number;
     totalCost: number;
+    totalPaid?: number;
     remainingBalance: number;
     paymentPlan?: string;
+    compPercentage?: number;
+    compAmountCents?: number;
+    compReason?: string;
   }>;
   membershipEnrollments: Array<{
     id: number;
@@ -513,6 +518,11 @@ export default function ParentProfilePage() {
   const [reallocateTargetEnrollmentId, setReallocateTargetEnrollmentId] = useState('');
   const [reallocateComment, setReallocateComment] = useState('');
   
+  // Comp enrollment state
+  const [compDialogOpen, setCompDialogOpen] = useState(false);
+  const [compPercentage, setCompPercentage] = useState('100');
+  const [compReason, setCompReason] = useState('');
+  
   // Edit parent state
   const [editParentDialogOpen, setEditParentDialogOpen] = useState(false);
   const [editParentFirstName, setEditParentFirstName] = useState('');
@@ -776,6 +786,46 @@ export default function ParentProfilePage() {
           variant: "destructive",
         });
       }
+    },
+  });
+
+  // Comp enrollment mutation
+  const compEnrollmentMutation = useMutation({
+    mutationFn: async ({ enrollmentId, compPercentage, compReason }: { 
+      enrollmentId: number; 
+      compPercentage: number; 
+      compReason: string;
+    }) => {
+      const response = await apiRequest("POST", `/api/admin/enrollments/${enrollmentId}/comp`, {
+        compPercentage,
+        compReason
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to comp enrollment');
+      }
+      return response.json();
+    },
+    onSuccess: (data) => {
+      const msg = data.compedEnrollment.isFullyComped 
+        ? `${data.compedEnrollment.childName} is now enrolled in ${data.compedEnrollment.className}` 
+        : `${data.compedEnrollment.compPercentage}% discount applied`;
+      toast({
+        title: "Enrollment Comped",
+        description: msg
+      });
+      queryClient.invalidateQueries({ queryKey: [`/api/parent-profile/${parentId}`] });
+      setCompDialogOpen(false);
+      setSelectedEnrollment(null);
+      setCompPercentage('100');
+      setCompReason('');
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to comp enrollment",
+        variant: "destructive",
+      });
     },
   });
 
@@ -1624,6 +1674,24 @@ export default function ParentProfilePage() {
                                     Reallocate
                                   </Button>
                                 )}
+                                {/* Comp button - only show for pending_payment enrollments without existing comp */}
+                                {enrollment.status === 'pending_payment' && !enrollment.compPercentage && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="text-green-600 border-green-600 hover:bg-green-50"
+                                    onClick={() => {
+                                      setSelectedEnrollment(enrollment);
+                                      setCompPercentage('100');
+                                      setCompReason('');
+                                      setCompDialogOpen(true);
+                                    }}
+                                    data-testid={`btn-comp-${enrollment.id}`}
+                                  >
+                                    <Gift className="h-4 w-4 mr-1" />
+                                    Comp
+                                  </Button>
+                                )}
                                 <Button
                                   variant="destructive"
                                   size="sm"
@@ -1705,6 +1773,135 @@ export default function ParentProfilePage() {
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
+
+            {/* Comp Enrollment Dialog */}
+            <Dialog open={compDialogOpen} onOpenChange={(open) => {
+              setCompDialogOpen(open);
+              if (!open) {
+                setSelectedEnrollment(null);
+                setCompPercentage('100');
+                setCompReason('');
+              }
+            }}>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    <Gift className="h-5 w-5 text-green-600" />
+                    Comp Enrollment
+                  </DialogTitle>
+                  <DialogDescription>
+                    Apply a complimentary discount to waive some or all of the enrollment cost.
+                  </DialogDescription>
+                </DialogHeader>
+                {selectedEnrollment && (
+                  <div className="space-y-4 py-4">
+                    <div className="bg-gray-50 p-3 rounded-lg">
+                      <p className="font-medium">{selectedEnrollment.childName}</p>
+                      <p className="text-sm text-muted-foreground">{selectedEnrollment.className}</p>
+                      <p className="text-sm mt-2">
+                        Total Cost: <span className="font-medium">${(selectedEnrollment.totalCost || 0).toFixed(2)}</span>
+                      </p>
+                      <p className="text-sm">
+                        Already Paid: <span className="font-medium">${(selectedEnrollment.totalPaid || 0).toFixed(2)}</span>
+                      </p>
+                      <p className="text-sm">
+                        Current Balance: <span className="font-medium text-red-600">${(selectedEnrollment.remainingBalance || selectedEnrollment.totalCost || 0).toFixed(2)}</span>
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="text-sm font-medium block mb-2">Comp Percentage</label>
+                      <div className="flex gap-2 items-center">
+                        <input
+                          type="number"
+                          min="1"
+                          max="100"
+                          value={compPercentage}
+                          onChange={(e) => setCompPercentage(e.target.value)}
+                          className="w-24 p-2 border border-gray-300 rounded-md text-center"
+                          data-testid="input-comp-percentage"
+                        />
+                        <span className="text-lg font-medium">%</span>
+                        <div className="flex gap-1 ml-2">
+                          {[25, 50, 75, 100].map((pct) => (
+                            <Button
+                              key={pct}
+                              type="button"
+                              variant={compPercentage === String(pct) ? "default" : "outline"}
+                              size="sm"
+                              onClick={() => setCompPercentage(String(pct))}
+                            >
+                              {pct}%
+                            </Button>
+                          ))}
+                        </div>
+                      </div>
+                      {selectedEnrollment && compPercentage && (
+                        <p className="text-sm text-green-600 mt-2">
+                          Comp amount: ${((selectedEnrollment.totalCost * parseInt(compPercentage || '0')) / 100).toFixed(2)}
+                          {parseInt(compPercentage || '0') === 100 && (
+                            <span className="text-green-700 font-medium ml-2">
+                              (Fully comped - will be enrolled immediately)
+                            </span>
+                          )}
+                        </p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="text-sm font-medium block mb-2">Reason for Comp (optional)</label>
+                      <input
+                        type="text"
+                        value={compReason}
+                        onChange={(e) => setCompReason(e.target.value)}
+                        className="w-full p-2 border border-gray-300 rounded-md"
+                        placeholder="e.g., Special arrangement, scholarship, etc."
+                        data-testid="input-comp-reason"
+                      />
+                    </div>
+
+                    <div className="flex gap-2 pt-2">
+                      <Button
+                        variant="outline"
+                        className="flex-1"
+                        onClick={() => {
+                          setCompDialogOpen(false);
+                          setSelectedEnrollment(null);
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        className="flex-1 bg-green-600 hover:bg-green-700"
+                        onClick={() => {
+                          if (selectedEnrollment && compPercentage) {
+                            compEnrollmentMutation.mutate({
+                              enrollmentId: selectedEnrollment.id,
+                              compPercentage: parseInt(compPercentage),
+                              compReason: compReason || `${compPercentage}% comp applied by administrator`
+                            });
+                          }
+                        }}
+                        disabled={compEnrollmentMutation.isPending || !compPercentage || parseInt(compPercentage) < 1 || parseInt(compPercentage) > 100}
+                        data-testid="btn-confirm-comp"
+                      >
+                        {compEnrollmentMutation.isPending ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Processing...
+                          </>
+                        ) : (
+                          <>
+                            <Gift className="h-4 w-4 mr-2" />
+                            Apply {compPercentage}% Comp
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </DialogContent>
+            </Dialog>
 
             {/* Reallocate Payment Dialog */}
             <Dialog open={reallocateDialogOpen} onOpenChange={(open) => {

@@ -103,6 +103,121 @@ router.delete('/enrollments/:id', async (req: any, res) => {
   }
 });
 
+// POST comp enrollment - apply percentage-based discount and activate enrollment
+router.post('/enrollments/:id/comp', async (req: any, res) => {
+  try {
+    const enrollmentId = parseInt(req.params.id);
+    const { compPercentage, compReason } = req.body;
+    
+    if (isNaN(enrollmentId)) {
+      return res.status(400).json({ message: 'Invalid enrollment ID' });
+    }
+    
+    // Validate percentage
+    const percentage = parseInt(compPercentage);
+    if (isNaN(percentage) || percentage < 1 || percentage > 100) {
+      return res.status(400).json({ message: 'Comp percentage must be between 1 and 100' });
+    }
+    
+    // Get authenticated user
+    const userEmail = req.user?.email || req.auth?.email;
+    if (!userEmail) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    // Verify user is a school admin
+    const user = await storage.getUserByEmail(userEmail);
+    if (!user || user.role !== 'schoolAdmin') {
+      return res.status(403).json({ message: 'Only school administrators can comp enrollments' });
+    }
+    
+    console.log(`🎁 Admin ${userEmail} attempting to comp enrollment ID: ${enrollmentId} at ${percentage}%`);
+    
+    // Get enrollment details
+    const enrollment = await storage.getProgramEnrollmentById(enrollmentId);
+    
+    if (!enrollment) {
+      return res.status(404).json({ message: 'Enrollment not found' });
+    }
+
+    // Verify enrollment belongs to admin's school
+    if (enrollment.schoolId !== user.schoolId) {
+      return res.status(403).json({ message: 'Cannot comp enrollments from other schools' });
+    }
+
+    // Check enrollment status - only allow comping pending_payment enrollments
+    if (enrollment.status !== 'pending_payment') {
+      return res.status(400).json({ 
+        message: `Can only comp enrollments with 'pending_payment' status. Current status: ${enrollment.status}` 
+      });
+    }
+
+    // Check if already comped
+    if (enrollment.compPercentage && enrollment.compPercentage > 0) {
+      return res.status(400).json({ 
+        message: `Enrollment already has a ${enrollment.compPercentage}% comp applied` 
+      });
+    }
+
+    // Calculate comp amount (based on total cost)
+    const totalCost = enrollment.totalCost || 0;
+    const compAmountCents = Math.round((totalCost * percentage) / 100);
+    
+    // Calculate new remaining balance after comp
+    const currentPaid = enrollment.totalPaid || 0;
+    const newRemainingBalance = Math.max(0, totalCost - compAmountCents - currentPaid);
+    
+    // Determine new status and payment status
+    const isFullyComped = newRemainingBalance === 0;
+    const newStatus = isFullyComped ? 'enrolled' : enrollment.status;
+    const newPaymentStatus = isFullyComped ? 'completed' : enrollment.paymentStatus;
+    
+    console.log(`📝 Comping enrollment: ${enrollment.className} for ${enrollment.childName}`);
+    console.log(`   Total cost: $${(totalCost / 100).toFixed(2)}`);
+    console.log(`   Comp percentage: ${percentage}%`);
+    console.log(`   Comp amount: $${(compAmountCents / 100).toFixed(2)}`);
+    console.log(`   New remaining balance: $${(newRemainingBalance / 100).toFixed(2)}`);
+    
+    // Update enrollment with comp details
+    await storage.updateProgramEnrollment(enrollmentId, {
+      compPercentage: percentage,
+      compAmountCents: compAmountCents,
+      compReason: compReason || 'Comped by school administrator',
+      compBy: user.id,
+      compAt: new Date(),
+      remainingBalance: newRemainingBalance,
+      status: newStatus,
+      paymentStatus: newPaymentStatus,
+    });
+    
+    console.log(`✅ Successfully comped enrollment ID ${enrollmentId}`);
+    
+    res.json({ 
+      success: true,
+      message: isFullyComped 
+        ? `Enrollment fully comped - student is now enrolled` 
+        : `${percentage}% comp applied - remaining balance: $${(newRemainingBalance / 100).toFixed(2)}`,
+      compedEnrollment: {
+        id: enrollmentId,
+        className: enrollment.className,
+        childName: enrollment.childName,
+        parentEmail: enrollment.parentEmail,
+        compPercentage: percentage,
+        compAmount: compAmountCents,
+        compAmountFormatted: `$${(compAmountCents / 100).toFixed(2)}`,
+        remainingBalance: newRemainingBalance,
+        remainingBalanceFormatted: `$${(newRemainingBalance / 100).toFixed(2)}`,
+        status: newStatus,
+        paymentStatus: newPaymentStatus,
+        isFullyComped: isFullyComped,
+      }
+    });
+  } catch (error) {
+    console.error('Error comping enrollment:', error);
+    res.status(500).json({ message: 'Failed to comp enrollment' });
+  }
+});
+
 // GET enrollments by parent email (for investigation)
 router.get('/enrollments/parent/:email', async (req, res) => {
   try {

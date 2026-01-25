@@ -460,8 +460,12 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
       // and is the single source of truth for display
       const totalPaid = enrollment.totalPaid || 0;
       
+      // Include comp amount in "effective paid" for balance calculation
+      const compAmount = enrollment.compAmountCents || 0;
+      
       const totalCost = enrollment.totalCost || 0;
-      const actualRemainingBalance = CurrencyUtils.calculateBalance(totalCost, totalPaid);
+      // Calculate remaining balance: totalCost - totalPaid - compAmount
+      const actualRemainingBalance = CurrencyUtils.calculateBalance(totalCost, totalPaid + compAmount);
       
       return {
         id: enrollment.id,
@@ -475,10 +479,15 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
         amount: CurrencyUtils.toDisplay(totalPaid),
         depositRequired: CurrencyUtils.toDisplay(enrollment.depositRequired || 0),
         totalCost: CurrencyUtils.toDisplay(totalCost),
+        totalPaid: CurrencyUtils.toDisplay(totalPaid),
         remainingBalance: CurrencyUtils.toDisplay(actualRemainingBalance),
         // Keep raw cents value for summary calculation
         _remainingBalanceCents: actualRemainingBalance,
-        paymentPlan: enrollment.paymentPlan
+        paymentPlan: enrollment.paymentPlan,
+        // Comp fields
+        compPercentage: enrollment.compPercentage,
+        compAmountCents: enrollment.compAmountCents,
+        compReason: enrollment.compReason,
       };
     }));
     
