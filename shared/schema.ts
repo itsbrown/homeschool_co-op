@@ -595,6 +595,13 @@ export const programEnrollments = pgTable("program_enrollments", {
   cancelledBy: integer("cancelled_by").references(() => users.id),
   cancellationReason: text("cancellation_reason"),
   
+  // Comp/discount tracking (for admin-applied complimentary enrollments)
+  compPercentage: integer("comp_percentage"), // 0-100, percentage of total cost comped
+  compAmountCents: integer("comp_amount_cents"), // Calculated comp amount in cents
+  compReason: text("comp_reason"),
+  compBy: integer("comp_by").references(() => users.id),
+  compAt: timestamp("comp_at"),
+  
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -626,6 +633,11 @@ export const updateProgramEnrollmentSchema = insertProgramEnrollmentSchema.parti
   cancelledAt: z.date().nullable().optional(),
   cancelledBy: z.number().nullable().optional(),
   cancellationReason: z.string().nullable().optional(),
+  compPercentage: z.number().min(0).max(100).nullable().optional(),
+  compAmountCents: z.number().nullable().optional(),
+  compReason: z.string().nullable().optional(),
+  compBy: z.number().nullable().optional(),
+  compAt: z.date().nullable().optional(),
 });
 export type UpdateProgramEnrollment = z.infer<typeof updateProgramEnrollmentSchema>;
 
