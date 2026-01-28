@@ -6872,6 +6872,150 @@ router.post('/credits/create', async (req, res) => {
   }
 });
 
+// GET /api/school-admin/notifications/tracking - Get notifications with recipient tracking stats
+router.get('/notifications/tracking', supabaseAuth, requireSchoolContext, async (req: any, res) => {
+  try {
+    const userId = req.user?.id;
+    const schoolId = req.schoolContext?.schoolId;
+    
+    if (!userId || !schoolId) {
+      return res.status(401).json({ error: 'Not authenticated or no school context' });
+    }
+
+    // Get all notifications for this school (sent ones only)
+    const notifications = await storage.getAnnouncementsBySchool(schoolId);
+    const sentNotifications = notifications.filter(n => n.status === 'sent');
+
+    // Get tracking stats for each notification
+    const trackingData = await Promise.all(
+      sentNotifications.map(async (notification) => {
+        const recipients = await storage.getNotificationRecipientsByNotificationId(notification.id);
+        
+        // Count by delivery type and status
+        const inAppRecipients = recipients.filter(r => r.deliveryType === 'in_app');
+        const emailRecipients = recipients.filter(r => r.deliveryType === 'email');
+        const smsRecipients = recipients.filter(r => r.deliveryType === 'sms');
+        
+        const totalRecipients = inAppRecipients.length;
+        const openedCount = inAppRecipients.filter(r => r.status === 'read').length;
+        const deliveredCount = inAppRecipients.filter(r => r.status === 'delivered' || r.status === 'read').length;
+        
+        const openRate = totalRecipients > 0 ? Math.round((openedCount / totalRecipients) * 100) : 0;
+
+        return {
+          id: notification.id,
+          subject: notification.subject,
+          content: notification.content,
+          targetType: notification.targetType,
+          type: notification.type,
+          priority: notification.priority,
+          sentAt: notification.sentAt,
+          createdAt: notification.createdAt,
+          stats: {
+            totalRecipients,
+            delivered: deliveredCount,
+            opened: openedCount,
+            openRate,
+            email: {
+              sent: emailRecipients.filter(r => r.status !== 'pending').length,
+              total: emailRecipients.length,
+            },
+            sms: {
+              sent: smsRecipients.filter(r => r.status !== 'pending').length,
+              total: smsRecipients.length,
+            },
+          },
+        };
+      })
+    );
+
+    // Sort by sentAt descending (most recent first)
+    trackingData.sort((a, b) => {
+      const dateA = a.sentAt ? new Date(a.sentAt).getTime() : 0;
+      const dateB = b.sentAt ? new Date(b.sentAt).getTime() : 0;
+      return dateB - dateA;
+    });
+
+    res.json(trackingData);
+  } catch (error) {
+    console.error('[NotificationTracking] Error fetching tracking data:', error);
+    res.status(500).json({ error: 'Failed to fetch notification tracking data' });
+  }
+});
+
+// GET /api/school-admin/notifications/:id/recipients - Get individual recipients for a notification
+router.get('/notifications/:id/recipients', supabaseAuth, requireSchoolContext, async (req: any, res) => {
+  try {
+    const userId = req.user?.id;
+    const schoolId = req.schoolContext?.schoolId;
+    const notificationId = parseInt(req.params.id);
+    
+    if (!userId || !schoolId) {
+      return res.status(401).json({ error: 'Not authenticated or no school context' });
+    }
+
+    if (isNaN(notificationId)) {
+      return res.status(400).json({ error: 'Invalid notification ID' });
+    }
+
+    // Verify the notification belongs to this school
+    const notification = await storage.getNotificationById(notificationId);
+    if (!notification || notification.schoolId !== schoolId) {
+      return res.status(404).json({ error: 'Notification not found' });
+    }
+
+    // Get all recipients
+    const recipients = await storage.getNotificationRecipientsByNotificationId(notificationId);
+    
+    // Get user details for each recipient
+    const recipientDetails = await Promise.all(
+      recipients.map(async (recipient) => {
+        const user = await storage.getUser(recipient.recipientId);
+        return {
+          id: recipient.id,
+          recipientId: recipient.recipientId,
+          name: user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email : 'Unknown',
+          email: user?.email || '',
+          deliveryType: recipient.deliveryType,
+          status: recipient.status,
+          sentAt: recipient.sentAt,
+          deliveredAt: recipient.deliveredAt,
+          readAt: recipient.readAt,
+          errorMessage: recipient.errorMessage,
+        };
+      })
+    );
+
+    // Group by delivery type
+    const grouped = {
+      inApp: recipientDetails.filter(r => r.deliveryType === 'in_app'),
+      email: recipientDetails.filter(r => r.deliveryType === 'email'),
+      sms: recipientDetails.filter(r => r.deliveryType === 'sms'),
+    };
+
+    res.json({
+      notification: {
+        id: notification.id,
+        subject: notification.subject,
+        content: notification.content,
+        targetType: notification.targetType,
+        sentAt: notification.sentAt,
+      },
+      recipients: grouped,
+      summary: {
+        total: recipientDetails.length,
+        opened: recipientDetails.filter(r => r.status === 'read').length,
+        delivered: recipientDetails.filter(r => r.status === 'delivered' || r.status === 'read').length,
+        pending: recipientDetails.filter(r => r.status === 'pending').length,
+        failed: recipientDetails.filter(r => r.status === 'failed').length,
+      },
+    });
+  } catch (error) {
+    console.error('[NotificationTracking] Error fetching recipients:', error);
+    res.status(500).json({ error: 'Failed to fetch notification recipients' });
+  }
+});
+
 // GET /api/school-admin/features - Get enabled features for the school
 router.get('/features', supabaseAuth, async (req: any, res) => {
   try {
