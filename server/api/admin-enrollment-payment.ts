@@ -296,6 +296,10 @@ router.get('/:enrollmentId/payment-plan', async (req: any, res) => {
       }
     }
 
+    // Calculate remaining balance dynamically to ensure accuracy
+    // This prevents display issues when stored remainingBalance is out of sync
+    const calculatedRemainingBalance = Math.max(0, (enrollment.totalCost || 0) - (enrollment.totalPaid || 0));
+
     res.json({
       enrollment: {
         id: enrollment.id,
@@ -303,7 +307,7 @@ router.get('/:enrollmentId/payment-plan', async (req: any, res) => {
         className: enrollment.className,
         totalCost: enrollment.totalCost,
         totalPaid: enrollment.totalPaid || 0,
-        remainingBalance: enrollment.remainingBalance,
+        remainingBalance: calculatedRemainingBalance,
         currentFrequency: enrollment.paymentFrequency || 'one_time',
         paymentPlan: enrollment.paymentPlan,
         programStartDate: enrollment.programStartDate,
