@@ -132,6 +132,7 @@ import EducatorAssessmentsPage from './pages/educator/EducatorAssessmentsPage';
 import SchoolClassEnrollmentsPage from './pages/schools/ClassEnrollmentsPage';
 import AdminClassEnrollmentsPage from './pages/admin/ClassEnrollmentsPage';
 import AnnouncementsPage from './pages/schools/AnnouncementsPage';
+import NotificationTrackingPage from './pages/schools/NotificationTrackingPage';
 import SchoolCalendarPage from './pages/schools/CalendarPage';
 
 const CallbackPage = () => {
@@ -646,6 +647,7 @@ function Router() {
       <Route path="/schools/knowledge-base/:id" component={KnowledgeBaseDetailsPage} />
       <Route path="/schools/knowledge-base" component={KnowledgeBasePage} />
       <Route path="/schools/announcements" component={AnnouncementsPage} />
+      <Route path="/schools/notification-tracking" component={NotificationTrackingPage} />
       <Route path="/schools/calendar" component={SchoolCalendarPage} />
       <Route path="/schools/marketing-links" component={MarketingLinksPage} />
       <Route path="/schools/locations">

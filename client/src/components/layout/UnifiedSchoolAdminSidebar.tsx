@@ -129,6 +129,7 @@ const adminNavGroups: NavGroup[] = [
     items: [
       { title: 'Notifications', href: '/schools/notifications', icon: Bell },
       { title: 'Announcements', href: '/schools/announcements', icon: Megaphone },
+      { title: 'Notification Tracking', href: '/schools/notification-tracking', icon: BarChart3 },
     ],
   },
 ];
