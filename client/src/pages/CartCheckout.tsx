@@ -960,6 +960,7 @@ export default function CartCheckout() {
         name: 'Biweekly Payment Plan',
         description: 'Automatic payments every 2 weeks until class ends',
         amount: biweeklyAmount,
+        numberOfPayments: 4, // Fallback estimate - server will provide actual count
         features: [
           'Pay every 2 weeks based on class schedule',
           'Payments automatically calculated from class start to end date',
@@ -1486,13 +1487,15 @@ export default function CartCheckout() {
                         const selectedPlan = getPaymentPlanOptions().find(p => p.id === selectedPaymentPlan);
                         
                         if (selectedPaymentPlan === 'biweekly') {
+                          // Use server-provided numberOfPayments if available, otherwise fallback to 4
+                          const numPayments = (selectedPlan as any)?.numberOfPayments || 4;
                           return (
                             <>
                               <div className="text-xs text-blue-600 mb-1">
                                 Total: {formatCurrency(payableAmount)}
                               </div>
                               <div className="text-lg font-bold text-blue-900">
-                                {formatCurrency(selectedPlan?.amount || Math.ceil(payableAmount / 4))} × 4 payments
+                                {formatCurrency(selectedPlan?.amount || Math.ceil(payableAmount / numPayments))} × {numPayments} payments
                               </div>
                             </>
                           );

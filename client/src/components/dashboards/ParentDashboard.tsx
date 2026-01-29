@@ -570,10 +570,13 @@ export default function ParentDashboard() {
   const getMembershipStatusInfo = (status: string) => {
     switch (status) {
       case 'active':
+      case 'enrolled':
         return { label: 'Active', color: 'bg-green-100 text-green-800', icon: CheckCircle };
       case 'pending':
       case 'pending_payment':
         return { label: 'Pending Payment', color: 'bg-yellow-100 text-yellow-800', icon: AlertCircle };
+      case 'partial_payment':
+        return { label: 'Partial Payment', color: 'bg-yellow-100 text-yellow-800', icon: AlertCircle };
       case 'expired':
         return { label: 'Expired', color: 'bg-red-100 text-red-800', icon: XCircle };
       case 'cancelled':

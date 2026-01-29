@@ -68,7 +68,18 @@ export class MembershipStatusService {
   static calculateMembershipStatus(membership: any, totalPaid: number): string {
     const now = new Date();
     const expirationDate = new Date(membership.expirationDate);
-    const gracePeriodEnd = new Date(membership.gracePeriodEnd);
+    
+    // Handle null/undefined gracePeriodEnd by defaulting to expirationDate + 30 days
+    // This prevents new Date(null) from creating epoch date (1970) which causes false expiration
+    let gracePeriodEnd: Date;
+    if (membership.gracePeriodEnd) {
+      gracePeriodEnd = new Date(membership.gracePeriodEnd);
+    } else {
+      // Fallback: use expiration date + 30 days as grace period end
+      gracePeriodEnd = new Date(expirationDate);
+      gracePeriodEnd.setDate(gracePeriodEnd.getDate() + 30);
+    }
+    
     const remainingBalance = membership.amount - totalPaid;
     
     // If fully paid - membership stays enrolled through the paid term

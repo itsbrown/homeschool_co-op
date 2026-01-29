@@ -786,8 +786,11 @@ export interface PaymentPlanOption {
   id: string;
   name: string;
   description: string;
-  amount: number; // Amount to pay now in cents
+  amount: number; // Amount to pay now (first payment) in cents
   features: string[];
+  numberOfPayments?: number; // Number of payments for installment plans
+  totalAmount?: number; // Total amount for reference (for installment plans)
+  finalPaymentAmount?: number; // Last payment amount (may differ due to rounding)
 }
 
 // Extended cart snapshot with membership and credits for checkout reconciliation
@@ -849,14 +852,77 @@ function generateSnapshotId(
   return `snap_${Math.abs(hash).toString(36)}_${Date.now().toString(36)}`;
 }
 
-// Calculate payment plan options based on payable amount
-function calculatePaymentPlans(payableAmount: number): PaymentPlanOption[] {
+// Calculate payment plan options based on payable amount and class dates
+// Uses the same logic as actual payment creation to ensure consistency
+async function calculatePaymentPlans(
+  payableAmount: number, 
+  items: CartItem[]
+): Promise<PaymentPlanOption[]> {
   if (payableAmount <= 0) {
     return [];
   }
 
   const depositAmount = Math.round(payableAmount * 0.1); // 10% deposit
-  const biweeklyAmount = Math.round(payableAmount / 4); // Estimated 4 payments
+  
+  // Calculate number of biweekly payments based on actual class dates
+  // This ensures display matches the actual payment schedule that will be created
+  let numberOfBiweeklyPayments = 4; // Default fallback
+  let earliestStartDate: Date | null = null;
+  let latestEndDate: Date | null = null;
+  
+  // Get class dates from cart items to calculate actual payment schedule
+  for (const item of items) {
+    try {
+      const classData = await storage.getClass(item.classId);
+      if (classData) {
+        // Get dates from variant or class level
+        let startDate = classData.startDate ? new Date(classData.startDate) : null;
+        let endDate = classData.endDate ? new Date(classData.endDate) : null;
+        
+        // Check if variant has different dates
+        if (item.variantId && classData.priceVariants) {
+          const variants = typeof classData.priceVariants === 'string' 
+            ? JSON.parse(classData.priceVariants) 
+            : classData.priceVariants;
+          const variant = Array.isArray(variants) 
+            ? variants.find((v: any) => v.id === item.variantId)
+            : null;
+          if (variant) {
+            if (variant.startDate) startDate = new Date(variant.startDate);
+            if (variant.endDate) endDate = new Date(variant.endDate);
+          }
+        }
+        
+        // Track the full date range across all items
+        if (startDate && (!earliestStartDate || startDate < earliestStartDate)) {
+          earliestStartDate = startDate;
+        }
+        if (endDate && (!latestEndDate || endDate > latestEndDate)) {
+          latestEndDate = endDate;
+        }
+      }
+    } catch (e) {
+      console.warn(`Could not fetch class ${item.classId} for payment plan calculation:`, e);
+    }
+  }
+  
+  // Calculate actual payment schedule using the same calculator as payment creation
+  // This ensures display amounts match what will actually be charged
+  let biweeklyAmount = Math.round(payableAmount / numberOfBiweeklyPayments);
+  let finalPaymentAmount = biweeklyAmount;
+  
+  if (earliestStartDate && latestEndDate) {
+    try {
+      const { calculatePaymentSchedule } = await import('../lib/payment-calculator');
+      const schedule = calculatePaymentSchedule(payableAmount, earliestStartDate, latestEndDate, 'biweekly');
+      numberOfBiweeklyPayments = schedule.numberOfPayments;
+      // Use the actual payment amounts from the schedule for server-authoritative pricing
+      biweeklyAmount = schedule.paymentAmount;
+      finalPaymentAmount = schedule.finalPaymentAmount;
+    } catch (e) {
+      console.warn('Could not calculate payment schedule, using default 4 payments:', e);
+    }
+  }
 
   return [
     {
@@ -884,6 +950,9 @@ function calculatePaymentPlans(payableAmount: number): PaymentPlanOption[] {
       name: 'Biweekly Payment Plan',
       description: 'Automatic payments every 2 weeks until class ends',
       amount: biweeklyAmount,
+      numberOfPayments: numberOfBiweeklyPayments,
+      totalAmount: payableAmount,
+      finalPaymentAmount: finalPaymentAmount,
       features: [
         'Pay every 2 weeks based on class schedule',
         'Payments automatically calculated from class start to end date'
@@ -948,8 +1017,9 @@ export async function calculateCartSnapshot(
   const appliedCredits = Math.min(creditsToApply || 0, availableCredits, grandTotal);
   const payableAmount = Math.max(0, grandTotal - appliedCredits);
   
-  // Calculate payment plans based on payable amount
-  const paymentPlans = calculatePaymentPlans(payableAmount);
+  // Calculate payment plans based on payable amount and class dates
+  // This ensures the displayed payment schedule matches actual payment creation
+  const paymentPlans = await calculatePaymentPlans(payableAmount, items);
   
   return {
     snapshotId: generateSnapshotId(items, userId, schoolId, appliedPromoCode),

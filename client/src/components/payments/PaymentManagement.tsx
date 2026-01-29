@@ -550,6 +550,43 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const [selectedPaymentForDialog, setSelectedPaymentForDialog] = useState<any>(null);
   
+  // Detect Stripe redirect completion (e.g., after 3D Secure verification)
+  // When Stripe redirects back, URL contains payment_intent and redirect_status params
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const paymentIntent = urlParams.get('payment_intent');
+    const redirectStatus = urlParams.get('redirect_status');
+    
+    if (paymentIntent && redirectStatus) {
+      console.log('🔄 Detected Stripe redirect completion:', { paymentIntent, redirectStatus });
+      
+      // Invalidate all payment-related queries to refresh data
+      queryClient.invalidateQueries({ queryKey: ['/api/payment-history'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments'] });
+      queryClient.invalidateQueries({ queryKey: ['scheduled-payments-upcoming'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/enrollments'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/parent/memberships'] });
+      
+      // Show appropriate toast based on status
+      if (redirectStatus === 'succeeded') {
+        toast({
+          title: "Payment Successful",
+          description: "Your payment has been processed successfully.",
+        });
+      } else if (redirectStatus === 'failed') {
+        toast({
+          title: "Payment Failed",
+          description: "Your payment could not be processed. Please try again.",
+          variant: "destructive",
+        });
+      }
+      
+      // Clean up URL parameters to prevent re-triggering on refresh
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, '', newUrl);
+    }
+  }, [toast]);
+  
   // Get payment data for the parent (and optionally filtered by child)
   const { data: payments, isLoading, refetch } = useQuery({
     queryKey: ["/api/payment-history", childId],
