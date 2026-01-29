@@ -489,11 +489,26 @@ export async function calculateCartPricing(
     let promoHasHigherPriority = false;
     
     if (appliedPromoCode) {
+      console.log('🎫 Searching for promo code in school discounts:', {
+        promoCode: appliedPromoCode,
+        schoolId,
+        availableDiscountsWithCodes: schoolDiscounts
+          .filter(d => d.code)
+          .map(d => ({ id: d.id, code: d.code, isActive: d.isActive, applicationMethod: d.applicationMethod }))
+      });
+      
       promoDiscount = schoolDiscounts.find(d => 
         d.isActive && 
         d.code?.toLowerCase() === appliedPromoCode.toLowerCase() &&
         (d.applicationMethod === 'manual' || d.applicationMethod === 'both')
       );
+      
+      if (!promoDiscount) {
+        console.log('⚠️ Promo code not found or not applicable:', {
+          promoCode: appliedPromoCode,
+          reason: 'No matching discount with code, isActive=true, and applicationMethod=manual/both'
+        });
+      }
       
       if (promoDiscount) {
         const promoPriority = promoDiscount.priority ?? 0;

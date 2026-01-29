@@ -664,7 +664,7 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
 
   // Get database-stored scheduled payments (class enrollments)
   const { data: dbScheduledPayments, isLoading: isLoadingDbScheduled, refetch: refetchDbScheduledPayments } = useQuery({
-    queryKey: ["/api/scheduled-payments/upcoming"],
+    queryKey: ['scheduled-payments-upcoming'],
     queryFn: async () => {
       const token = localStorage.getItem('supabase_token');
       if (!token) {
