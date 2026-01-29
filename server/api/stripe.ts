@@ -513,6 +513,17 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
         }))
       });
       
+      // CRITICAL: Validate promo code was applied if provided
+      // This prevents charging full price when user expects a promo discount
+      if (cartPricingResult.promoCodeValidation && !cartPricingResult.promoCodeValidation.promoCodeApplied) {
+        console.error('❌ Promo code provided but not applied:', cartPricingResult.promoCodeValidation);
+        return res.status(400).json({ 
+          error: 'Invalid promo code',
+          message: cartPricingResult.promoCodeValidation.reason || 'The promo code could not be applied',
+          promoCode: cartPricingResult.promoCodeValidation.promoCodeProvided
+        });
+      }
+      
       // CRITICAL: Store server-calculated values for use in payment creation
       // These are the AUTHORITATIVE amounts that must be used, not client-sent values
       // Validation deferred to UNIFIED STRICT VALIDATION block below
@@ -1129,6 +1140,32 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
           value: d.value || d.discountValue || 0,
           amount: d.discountAmount || d.amount || 0
         }));
+        
+        // Also include sibling discount if applied (tracked separately from appliedDiscounts)
+        if (cartPricingResult.discounts.siblingDiscount > 0) {
+          mappedDiscounts.push({
+            source: 'sibling' as const,
+            discountId: undefined,
+            code: undefined,
+            name: 'Sibling Discount',
+            type: 'percentage',
+            value: cartPricingResult.schoolSettings?.siblingDiscountRate || 0,
+            amount: cartPricingResult.discounts.siblingDiscount
+          });
+        }
+        
+        // Also include free after threshold discount if applied
+        if (cartPricingResult.discounts.freeAfterThree > 0) {
+          mappedDiscounts.push({
+            source: 'free_after_threshold' as const,
+            discountId: undefined,
+            code: undefined,
+            name: 'Free After ' + (cartPricingResult.schoolSettings?.freeAfterThreshold || 3),
+            type: 'percentage',
+            value: 100,
+            amount: cartPricingResult.discounts.freeAfterThree
+          });
+        }
         
         discountSnapshot = {
           subtotal: cartPricingResult.subtotal,

@@ -49,6 +49,11 @@ export interface CartPricingResult {
     freeAfterThreshold: number;
     siblingDiscountRate: number;
   };
+  promoCodeValidation?: {
+    promoCodeProvided: string;
+    promoCodeApplied: boolean;
+    reason?: string;
+  };
 }
 
 async function getUserRoles(userId: number): Promise<string[]> {
@@ -482,6 +487,9 @@ export async function calculateCartPricing(
   let autoAndPromoDiscountAmount = 0;
   let siblingDiscount = 0;
   let siblingOverriddenByPromo = false;
+  
+  // Track promo code validation for caller visibility
+  let promoCodeValidation: CartPricingResult['promoCodeValidation'] = undefined;
 
   if (!freeAfterThreeEnabled || uniqueChildren <= freeAfterThreshold) {
     // Check for promo code first to determine if it should override sibling discount
@@ -504,10 +512,27 @@ export async function calculateCartPricing(
       );
       
       if (!promoDiscount) {
+        // Build detailed reason for promo code not found
+        const codeMatch = schoolDiscounts.find(d => d.code?.toLowerCase() === appliedPromoCode.toLowerCase());
+        let reason = 'No matching discount found with this code';
+        if (codeMatch) {
+          if (!codeMatch.isActive) {
+            reason = 'Promo code exists but is no longer active';
+          } else if (codeMatch.applicationMethod !== 'manual' && codeMatch.applicationMethod !== 'both') {
+            reason = 'Promo code exists but is configured for automatic application only';
+          }
+        }
+        
         console.log('⚠️ Promo code not found or not applicable:', {
           promoCode: appliedPromoCode,
-          reason: 'No matching discount with code, isActive=true, and applicationMethod=manual/both'
+          reason
         });
+        
+        promoCodeValidation = {
+          promoCodeProvided: appliedPromoCode,
+          promoCodeApplied: false,
+          reason
+        };
       }
       
       if (promoDiscount) {
@@ -665,6 +690,19 @@ export async function calculateCartPricing(
             });
 
             autoAndPromoDiscountAmount += discountAmount;
+            
+            // Mark promo code as successfully applied
+            promoCodeValidation = {
+              promoCodeProvided: appliedPromoCode!,
+              promoCodeApplied: true
+            };
+            
+            console.log('✅ Promo code successfully applied:', {
+              promoCode: appliedPromoCode,
+              discountId: promoDiscount.id,
+              discountName: promoDiscount.name,
+              discountAmount
+            });
           }
         }
       }
@@ -700,7 +738,8 @@ export async function calculateCartPricing(
       freeAfterThresholdEnabled: freeAfterThreeEnabled,
       freeAfterThreshold,
       siblingDiscountRate
-    }
+    },
+    promoCodeValidation
   };
 }
 

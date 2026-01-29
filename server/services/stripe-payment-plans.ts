@@ -303,13 +303,20 @@ export class StripePaymentPlanService {
       return { created: 0, skipped: false };
     }
     
-    // Idempotency check: Check if scheduled payments already exist for these enrollments
-    const existingPayments = await this.storage.getScheduledPaymentsByEnrollmentId(enrollmentIds[0]);
-    const pendingPayments = existingPayments.filter(p => p.status === 'pending');
-    
-    if (pendingPayments.length > 0) {
-      console.log(`⏭️ Scheduled payments already exist for enrollment ${enrollmentIds[0]} (${pendingPayments.length} pending). Skipping creation.`);
-      return { created: 0, skipped: true };
+    // Idempotency check: Check if scheduled payments already exist for ANY enrollment in the cart
+    // This prevents duplicates when processing retries or when one enrollment already has payments
+    // Note: Excludes 'failed' status to allow legitimate retry flows for failed payments
+    for (const enrollmentId of enrollmentIds) {
+      const existingPayments = await this.storage.getScheduledPaymentsByEnrollmentId(enrollmentId);
+      // Check for pending/scheduled payments only - failed payments can be retried
+      const activePayments = existingPayments.filter(p => 
+        p.status === 'pending' || p.status === 'scheduled'
+      );
+      
+      if (activePayments.length > 0) {
+        console.log(`⏭️ Scheduled payments already exist for enrollment ${enrollmentId} (${activePayments.length} pending/scheduled). Skipping creation for all enrollments.`);
+        return { created: 0, skipped: true };
+      }
     }
     
     // Get parent user and enrollment data
