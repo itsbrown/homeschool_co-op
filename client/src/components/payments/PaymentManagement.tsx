@@ -86,12 +86,14 @@ function ScheduledPaymentForm({
   onSuccess, 
   onError,
   onCancel,
-  amount
+  amount,
+  paymentId
 }: { 
   onSuccess: () => void; 
   onError: (error: string) => void;
   onCancel: () => void;
   amount: number;
+  paymentId: string | number;
 }) {
   const stripe = useStripe();
   const elements = useElements();
@@ -126,6 +128,33 @@ function ScheduledPaymentForm({
         onError(error.message || 'Payment failed');
         setIsProcessing(false);
       } else if (paymentIntent && paymentIntent.status === 'succeeded') {
+        // IMMEDIATELY confirm with server to update scheduled payment status
+        // This provides immediate UI update without waiting for webhook
+        try {
+          const token = localStorage.getItem('supabase_token');
+          const confirmResponse = await fetch(`/api/scheduled-payments/${paymentId}/confirm`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              paymentIntentId: paymentIntent.id
+            })
+          });
+          
+          const confirmData = await confirmResponse.json();
+          if (!confirmResponse.ok) {
+            console.warn('⚠️ Failed to confirm payment immediately:', confirmData.error);
+            // Don't fail the whole flow - webhook will eventually update the status
+          } else {
+            console.log('✅ Payment confirmed immediately with server:', confirmData);
+          }
+        } catch (confirmError) {
+          console.warn('⚠️ Error confirming payment with server:', confirmError);
+          // Don't fail - webhook will handle it
+        }
+        
         onSuccess();
       } else if (paymentIntent && paymentIntent.status === 'requires_action') {
         onError('Additional verification required. Please try again.');
@@ -531,6 +560,7 @@ function ScheduledPaymentDialog({
                 onError={handleError}
                 onCancel={onClose}
                 amount={amountAfterCredits}
+                paymentId={payment.id}
               />
             </Elements>
           ) : null}

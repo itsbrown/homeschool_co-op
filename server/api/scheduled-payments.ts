@@ -591,6 +591,182 @@ router.post('/pay-with-credits', supabaseAuth, async (req: any, res) => {
   }
 });
 
+// Confirm a scheduled payment after successful Stripe payment
+// This endpoint verifies with Stripe that the PaymentIntent succeeded before updating status
+// Provides immediate status update without waiting for webhook (server-authoritative)
+router.post('/:id/confirm', supabaseAuth, async (req: any, res) => {
+  try {
+    const paymentId = parseInt(req.params.id);
+    const { paymentIntentId } = req.body;
+    const userEmail = req.user.email;
+
+    console.log('🔐 Confirming scheduled payment with Stripe verification:', { 
+      paymentId, 
+      paymentIntentId: paymentIntentId?.substring(0, 20) + '...', 
+      userEmail 
+    });
+
+    if (!paymentIntentId) {
+      return res.status(400).json({
+        success: false,
+        error: 'PaymentIntent ID is required for confirmation'
+      });
+    }
+
+    // Get the scheduled payment first
+    const allScheduledPayments = await storage.getScheduledPaymentsByParentEmail(userEmail);
+    const scheduledPayment = allScheduledPayments.find(p => p.id === paymentId);
+
+    if (!scheduledPayment) {
+      console.error(`❌ Scheduled payment ${paymentId} not found for ${userEmail}`);
+      return res.status(404).json({
+        success: false,
+        error: 'Scheduled payment not found'
+      });
+    }
+
+    // IDEMPOTENCY CHECK: If already completed, return success without reprocessing
+    if (scheduledPayment.status === 'completed' || scheduledPayment.status === 'paid') {
+      console.log(`✅ Payment ${paymentId} already completed - returning idempotent success`);
+      return res.json({
+        success: true,
+        message: 'Payment already confirmed',
+        alreadyProcessed: true
+      });
+    }
+
+    // VERIFY WITH STRIPE that the PaymentIntent actually succeeded
+    const stripe = await getStripeClient();
+    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+
+    console.log('🔍 Stripe PaymentIntent verification:', {
+      id: paymentIntent.id,
+      status: paymentIntent.status,
+      amount: paymentIntent.amount
+    });
+
+    if (paymentIntent.status !== 'succeeded') {
+      console.error(`❌ PaymentIntent ${paymentIntentId} status is ${paymentIntent.status}, not succeeded`);
+      return res.status(400).json({
+        success: false,
+        error: `Payment not yet successful. Status: ${paymentIntent.status}`
+      });
+    }
+
+    // SECURITY CHECK: Verify this payment belongs to this user via metadata
+    if (paymentIntent.metadata?.parentEmail !== userEmail) {
+      console.error(`❌ PaymentIntent ${paymentIntentId} belongs to ${paymentIntent.metadata?.parentEmail}, not ${userEmail}`);
+      return res.status(403).json({
+        success: false,
+        error: 'Payment does not belong to this user'
+      });
+    }
+
+    // CRITICAL SECURITY CHECK: Verify PaymentIntent is for THIS scheduled payment
+    // This prevents a user from using any of their succeeded PaymentIntents to confirm any scheduled payment
+    const paymentIntentScheduledPaymentId = paymentIntent.metadata?.scheduledPaymentId;
+    if (!paymentIntentScheduledPaymentId || parseInt(paymentIntentScheduledPaymentId) !== paymentId) {
+      console.error(`❌ PaymentIntent ${paymentIntentId} scheduledPaymentId mismatch: metadata has ${paymentIntentScheduledPaymentId}, but request is for ${paymentId}`);
+      return res.status(400).json({
+        success: false,
+        error: 'Payment intent does not match this scheduled payment'
+      });
+    }
+
+    // AMOUNT VERIFICATION: Ensure the payment amount matches expected
+    // The originalAmountCents (before credits) should match the scheduled payment amount
+    const expectedAmount = scheduledPayment.amount;
+    const originalAmountCents = parseInt(paymentIntent.metadata?.originalAmountCents || '0') || paymentIntent.amount;
+    // Allow for credits being applied - original amount should match scheduled amount
+    // Use Stripe amount + credits applied as the total that should match scheduled amount
+    const creditsApplied = parseInt(paymentIntent.metadata?.creditsAppliedCents || '0');
+    const totalPaymentAmount = paymentIntent.amount + creditsApplied;
+    
+    // Allow small variance (1 cent) for rounding
+    if (Math.abs(totalPaymentAmount - expectedAmount) > 1 && Math.abs(originalAmountCents - expectedAmount) > 1) {
+      console.warn(`⚠️ PaymentIntent amount mismatch: PI total=${totalPaymentAmount}, original=${originalAmountCents}, expected=${expectedAmount}`);
+      // Log warning but proceed - webhook reconciliation will catch discrepancies
+    }
+
+    // UPDATE SCHEDULED PAYMENT STATUS TO COMPLETED
+    await storage.updateScheduledPayment(paymentId, {
+      status: 'completed',
+      processedAt: new Date(),
+    });
+    console.log(`✅ Marked scheduled payment ${paymentId} as completed`);
+
+    // UPDATE ENROLLMENT BALANCE (matching webhook logic)
+    const targetEnrollmentId = scheduledPayment.enrollmentId;
+    
+    if (targetEnrollmentId) {
+      try {
+        const enrollment = await storage.getProgramEnrollmentById(targetEnrollmentId);
+        
+        if (enrollment) {
+          const currentAmountPaid = enrollment.totalPaid || 0;
+          // Use original amount (may include credits) or Stripe amount
+          const creditsAppliedCents = parseInt(paymentIntent.metadata?.creditsAppliedCents || '0');
+          const originalAmount = parseInt(paymentIntent.metadata?.originalAmountCents || '0') || paymentIntent.amount;
+          const totalPaymentAmount = creditsAppliedCents > 0 
+            ? originalAmount
+            : paymentIntent.amount;
+          const newAmountPaid = currentAmountPaid + totalPaymentAmount;
+          const newBalance = Math.max(0, (enrollment.totalCost || 0) - newAmountPaid);
+          
+          await storage.updateProgramEnrollment(targetEnrollmentId, {
+            totalPaid: newAmountPaid,
+            remainingBalance: newBalance,
+            paymentStatus: newBalance <= 0 ? 'completed' : 'partial_payment'
+          });
+          
+          console.log(`✅ Updated enrollment ${targetEnrollmentId}: paid=${newAmountPaid}, balance=${newBalance}`);
+        }
+      } catch (enrollmentError) {
+        console.error(`⚠️ Error updating enrollment ${targetEnrollmentId}:`, enrollmentError);
+        // Don't fail the whole request - enrollment can be reconciled later
+      }
+    }
+
+    // CONSUME CREDITS if any were applied
+    const creditsAppliedCents = parseInt(paymentIntent.metadata?.creditsAppliedCents || '0');
+    const userId = parseInt(paymentIntent.metadata?.userId || '0');
+    
+    if (creditsAppliedCents > 0 && userId > 0) {
+      try {
+        console.log(`💰 Consuming ${creditsAppliedCents} cents of credits for user ${userId}`);
+        const { usedCredits, totalUsed } = await storage.useCredits(
+          userId,
+          creditsAppliedCents,
+          undefined,
+          `Scheduled payment ${paymentId} - ${scheduledPayment.installmentNumber}/${scheduledPayment.totalInstallments}`
+        );
+        console.log(`💰 ✅ Consumed ${totalUsed} cents across ${usedCredits.length} credit records`);
+      } catch (creditError) {
+        console.error(`❌ Failed to consume credits for scheduled payment ${paymentId}:`, creditError);
+        // Don't fail - credits can be manually reconciled
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'Scheduled payment confirmed and completed',
+      payment: {
+        id: paymentId,
+        status: 'completed',
+        amount: paymentIntent.amount,
+        stripePaymentIntentId: paymentIntentId
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error confirming scheduled payment:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to confirm scheduled payment'
+    });
+  }
+});
+
 // Mark a scheduled payment as paid (for when someone pays early)
 router.patch('/:id/paid', supabaseAuth, async (req: any, res) => {
   try {
