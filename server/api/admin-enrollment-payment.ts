@@ -870,7 +870,21 @@ router.patch('/scheduled-payments/:paymentId/reschedule', async (req: any, res) 
       return res.status(400).json({ error: 'Admin comment is required to justify date changes' });
     }
 
-    const parsedDate = new Date(newDate);
+    // Parse the date string correctly to avoid timezone offset issues
+    // When receiving "2026-03-06" from date picker, we want to store that exact date
+    // Using new Date("2026-03-06") creates UTC midnight which shifts when displayed locally
+    // Instead, parse as local date components
+    let parsedDate: Date;
+    const dateMatch = newDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (dateMatch) {
+      // Parse YYYY-MM-DD as local date (not UTC)
+      const [, year, month, day] = dateMatch;
+      parsedDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day), 12, 0, 0);
+    } else {
+      // Fallback for other formats
+      parsedDate = new Date(newDate);
+    }
+    
     if (isNaN(parsedDate.getTime())) {
       return res.status(400).json({ error: 'Invalid date format' });
     }
@@ -956,16 +970,18 @@ router.patch('/scheduled-payments/:paymentId/reschedule', async (req: any, res) 
     const oldDate = scheduledPayment.scheduledDate;
 
     // Create audit log entry in metadata
+    // Store dates as YYYY-MM-DD strings for consistency with codebase patterns
     const existingMetadata = scheduledPayment.metadata as Record<string, any> || {};
     const auditLog = existingMetadata.auditLog || [];
+    const newDateString = `${parsedDate.getFullYear()}-${String(parsedDate.getMonth() + 1).padStart(2, '0')}-${String(parsedDate.getDate()).padStart(2, '0')}`;
     auditLog.push({
       action: 'reschedule',
       timestamp: new Date().toISOString(),
       adminEmail: userEmail,
       adminId: user.id,
       adminComment: adminComment.trim(),
-      oldDate: oldDate,
-      newDate: parsedDate.toISOString()
+      oldDate: oldDate instanceof Date ? oldDate.toISOString().split('T')[0] : oldDate,
+      newDate: newDateString
     });
 
     // Update the scheduled payment
@@ -983,15 +999,15 @@ router.patch('/scheduled-payments/:paymentId/reschedule', async (req: any, res) 
       return res.status(500).json({ error: 'Failed to update payment date' });
     }
 
-    console.log(`📅 Payment ${paymentId} rescheduled by ${userEmail}: ${oldDate} -> ${parsedDate.toISOString()}`);
+    console.log(`📅 Payment ${paymentId} rescheduled by ${userEmail}: ${oldDate instanceof Date ? oldDate.toISOString().split('T')[0] : oldDate} -> ${newDateString}`);
 
     res.json({
       success: true,
       message: 'Payment date updated successfully',
       payment: {
         id: paymentId,
-        oldDate: oldDate,
-        newDate: parsedDate,
+        oldDate: oldDate instanceof Date ? oldDate.toISOString().split('T')[0] : oldDate,
+        newDate: newDateString,
         enrollment: {
           id: enrollment.id,
           childName: enrollment.childName,
