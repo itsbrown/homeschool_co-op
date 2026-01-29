@@ -156,6 +156,8 @@ interface ParentProfile {
     enrollmentId: number | null;
     childName?: string;
     className?: string;
+    programStartDate?: string;
+    programEndDate?: string;
   }>;
   emergencyContacts: Array<{
     childId: number;
@@ -2367,6 +2369,7 @@ export default function ParentProfilePage() {
                           <TableRow>
                             <TableHead>Due Date</TableHead>
                             <TableHead>Description</TableHead>
+                            <TableHead>Program Dates</TableHead>
                             <TableHead>Amount</TableHead>
                             <TableHead>Status</TableHead>
                             <TableHead className="text-right">Actions</TableHead>
@@ -2379,6 +2382,15 @@ export default function ParentProfilePage() {
                                 {new Date(payment.dueDate).toLocaleDateString()}
                               </TableCell>
                               <TableCell>{payment.description}</TableCell>
+                              <TableCell className="text-sm">
+                                {payment.programStartDate && payment.programEndDate ? (
+                                  <span className="text-muted-foreground">
+                                    {new Date(payment.programStartDate).toLocaleDateString()} - {new Date(payment.programEndDate).toLocaleDateString()}
+                                  </span>
+                                ) : (
+                                  <span className="text-muted-foreground">—</span>
+                                )}
+                              </TableCell>
                               <TableCell>${payment.amount.toFixed(2)}</TableCell>
                               <TableCell>
                                 <Badge variant={getPaymentStatusBadgeVariant(payment.status)}>

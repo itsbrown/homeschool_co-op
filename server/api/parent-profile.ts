@@ -583,13 +583,20 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
         description: `${payment.childName} - ${payment.className}`,
         transactionId: payment.stripePaymentIntentId
       })),
-      scheduledPayments: scheduledPayments.map(payment => ({
-        id: payment.id,
-        amount: CurrencyUtils.toDisplay(payment.amount || 0),
-        dueDate: payment.scheduledDate,
-        status: payment.status,
-        enrollmentId: payment.enrollmentId
-      })),
+      scheduledPayments: scheduledPayments.map(payment => {
+        const enrollment = filteredEnrollments.find(e => e.id === payment.enrollmentId);
+        return {
+          id: payment.id,
+          amount: CurrencyUtils.toDisplay(payment.amount || 0),
+          dueDate: payment.scheduledDate,
+          status: payment.status,
+          enrollmentId: payment.enrollmentId,
+          childName: enrollment?.childName,
+          className: enrollment?.className,
+          programStartDate: enrollment?.programStartDate,
+          programEndDate: enrollment?.programEndDate
+        };
+      }),
       emergencyContacts,
       summary: {
         totalChildren: children.length,
