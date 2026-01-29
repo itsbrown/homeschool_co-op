@@ -47,6 +47,7 @@ The platform is built on a full-stack architecture prioritizing scalability, sec
 
 **Core Architectural Principles:**
 -   **Scheduled Payment Synchronization System**: Ensures scheduled payment statuses sync with actual payments via real-time and daily batch reconciliation.
+-   **Immediate Payment Confirmation**: After successful Stripe payment, client immediately calls `/api/scheduled-payments/:id/confirm` with paymentIntentId for server-side verification before updating status. Includes security checks: scheduledPaymentId metadata match, parentEmail verification, amount validation, and idempotency handling (webhook backup safe).
 -   **Server-Authoritative Cart Pricing**: The server is the single source of truth for all cart pricing to prevent payment mismatches.
 -   **Server-Authoritative Enrollment Payment Display**: `totalPaid` and `remainingBalance` fields on enrollment are the single source of truth for payment display.
 -   **Promo Code Validation**: Checkout endpoint validates promo codes server-side and rejects payments if a provided promo code cannot be applied (returns detailed error reason).
