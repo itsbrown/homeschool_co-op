@@ -1,4 +1,4 @@
-import React, { useState, useTransition } from 'react';
+import React, { useState, useTransition, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/components/SupabaseProvider';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -1070,6 +1070,44 @@ export default function BillingPage() {
   const [clientSecret, setClientSecret] = useState<string>('');
   const [currentPayment, setCurrentPayment] = useState<any>(null);
   const [isPending, startTransition] = useTransition();
+
+  // Detect Stripe redirect completion (e.g., after 3D Secure verification)
+  // When Stripe redirects back, URL contains payment_intent and redirect_status params
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const paymentIntent = urlParams.get('payment_intent');
+    const redirectStatus = urlParams.get('redirect_status');
+    
+    if (paymentIntent && redirectStatus) {
+      console.log('🔄 Detected Stripe redirect completion on BillingPage:', { paymentIntent, redirectStatus });
+      
+      // Invalidate all payment-related queries to refresh data
+      queryClient.invalidateQueries({ queryKey: ['/api/payment-history'] });
+      queryClient.invalidateQueries({ queryKey: ['scheduled-payments-upcoming'] });
+      queryClient.invalidateQueries({ queryKey: ['billing-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/enrollments'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/parent/memberships'] });
+      queryClient.invalidateQueries({ queryKey: ['stripe-subscription-schedules'] });
+      
+      // Show appropriate toast based on status
+      if (redirectStatus === 'succeeded') {
+        toast({
+          title: "Payment Successful",
+          description: "Your payment has been processed successfully.",
+        });
+      } else if (redirectStatus === 'failed') {
+        toast({
+          title: "Payment Failed",
+          description: "Your payment could not be processed. Please try again.",
+          variant: "destructive",
+        });
+      }
+      
+      // Clean up URL parameters to prevent re-triggering on refresh
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, '', newUrl);
+    }
+  }, [toast]);
 
   // Debug logging for state changes
   React.useEffect(() => {

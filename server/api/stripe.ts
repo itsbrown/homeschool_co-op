@@ -925,6 +925,42 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
             return String(date);
           };
           
+          // CRITICAL: Resolve variant dates following the same pattern as cart-pricing.ts
+          // This ensures payment schedule calculation uses identical dates for display and creation
+          let enrollmentStartDate = classData.startDate;
+          let enrollmentEndDate = classData.endDate;
+          
+          // Access priceVariants from classData (may exist on raw class data)
+          const classPriceVariants = (classData as any).priceVariants;
+          if (item.variantId && classPriceVariants) {
+            try {
+              const variants = typeof classPriceVariants === 'string' 
+                ? JSON.parse(classPriceVariants) 
+                : classPriceVariants;
+              const variant = Array.isArray(variants) 
+                ? variants.find((v: any) => v.id === item.variantId)
+                : null;
+              if (variant) {
+                if (variant.startDate) enrollmentStartDate = variant.startDate;
+                if (variant.endDate) enrollmentEndDate = variant.endDate;
+                console.log('📅 Using variant dates for enrollment:', {
+                  variantId: item.variantId,
+                  startDate: enrollmentStartDate,
+                  endDate: enrollmentEndDate
+                });
+              }
+            } catch (e) {
+              console.warn('Could not parse price variants for date resolution:', e);
+            }
+          }
+          
+          console.log('📅 Enrollment dates resolved:', {
+            classId: actualClassId,
+            variantId: item.variantId || 'none',
+            startDate: enrollmentStartDate,
+            endDate: enrollmentEndDate
+          });
+          
           enrollment = await storage.createProgramEnrollment({
             schoolId: enrollmentSchoolId,
             classType: item.classType || 'regular',
@@ -934,7 +970,7 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
             childId: item.childId,
             childName: item.childName,
             className: item.className,
-            variantId: null,
+            variantId: item.variantId || null,
             parentId: parent.id,
             parentEmail: userEmail,
             totalCost: item.totalCost,
@@ -945,8 +981,8 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
             paymentPlan: dbPaymentPlan,
             paymentSystemVersion: 'v2_stripe',
             paymentFrequency: paymentFrequency,
-            programStartDate: formatDate(classData.startDate),
-            programEndDate: formatDate(classData.endDate),
+            programStartDate: formatDate(enrollmentStartDate),
+            programEndDate: formatDate(enrollmentEndDate),
             stripeSubscriptionId: null,
             stripeCustomerId: null,
             notes: null,
