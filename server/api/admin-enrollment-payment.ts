@@ -834,4 +834,138 @@ router.delete('/:enrollmentId', async (req: any, res) => {
   }
 });
 
+/**
+ * PATCH /api/admin/enrollments/scheduled-payments/:paymentId/reschedule
+ * Update the scheduled date for a specific pending payment
+ * Requires school admin role - auth middleware applied at router registration
+ * 
+ * Body: { 
+ *   newDate: string (ISO date),
+ *   adminComment: string (required - justification for change)
+ * }
+ */
+router.patch('/scheduled-payments/:paymentId/reschedule', async (req: any, res) => {
+  try {
+    const paymentId = parseInt(req.params.paymentId);
+    const { newDate, adminComment } = req.body;
+
+    // Get authenticated user email
+    const userEmail = req.user?.email || req.auth?.email;
+    if (!userEmail) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    // Verify user is a school admin
+    const user = await storage.getUserByEmail(userEmail);
+    if (!user || (user.role !== 'schoolAdmin' && user.role !== 'admin' && user.role !== 'superAdmin')) {
+      return res.status(403).json({ error: 'Only administrators can modify payment dates' });
+    }
+
+    // Validate input
+    if (!newDate) {
+      return res.status(400).json({ error: 'New date is required' });
+    }
+
+    if (!adminComment || adminComment.trim().length === 0) {
+      return res.status(400).json({ error: 'Admin comment is required to justify date changes' });
+    }
+
+    const parsedDate = new Date(newDate);
+    if (isNaN(parsedDate.getTime())) {
+      return res.status(400).json({ error: 'Invalid date format' });
+    }
+
+    // Get the scheduled payment
+    const scheduledPayment = await storage.getScheduledPaymentById(paymentId);
+    if (!scheduledPayment) {
+      return res.status(404).json({ error: 'Scheduled payment not found' });
+    }
+
+    // Verify payment belongs to admin's school (multi-tenant isolation)
+    if (scheduledPayment.schoolId !== user.schoolId && user.role !== 'superAdmin') {
+      return res.status(403).json({ error: 'Cannot modify payments from other schools' });
+    }
+
+    // Only allow modifying pending payments
+    if (scheduledPayment.status !== 'pending') {
+      return res.status(400).json({ 
+        error: `Cannot reschedule a payment with status '${scheduledPayment.status}'. Only pending payments can be rescheduled.` 
+      });
+    }
+
+    // Get enrollment to validate date is within program bounds
+    const enrollment = await storage.getProgramEnrollmentById(scheduledPayment.enrollmentId);
+    if (!enrollment) {
+      return res.status(404).json({ error: 'Associated enrollment not found' });
+    }
+
+    // Validate new date is within program dates
+    if (enrollment.programStartDate && parsedDate < new Date(enrollment.programStartDate)) {
+      return res.status(400).json({ 
+        error: 'New date cannot be before program start date',
+        programStartDate: enrollment.programStartDate
+      });
+    }
+
+    if (enrollment.programEndDate && parsedDate > new Date(enrollment.programEndDate)) {
+      return res.status(400).json({ 
+        error: 'New date cannot be after program end date',
+        programEndDate: enrollment.programEndDate
+      });
+    }
+
+    // Store old date for audit log
+    const oldDate = scheduledPayment.scheduledDate;
+
+    // Create audit log entry in metadata
+    const existingMetadata = scheduledPayment.metadata as Record<string, any> || {};
+    const auditLog = existingMetadata.auditLog || [];
+    auditLog.push({
+      action: 'reschedule',
+      timestamp: new Date().toISOString(),
+      adminEmail: userEmail,
+      adminId: user.id,
+      adminComment: adminComment.trim(),
+      oldDate: oldDate,
+      newDate: parsedDate.toISOString()
+    });
+
+    // Update the scheduled payment
+    const updatedPayment = await storage.updateScheduledPayment(paymentId, {
+      scheduledDate: parsedDate,
+      metadata: {
+        ...existingMetadata,
+        auditLog,
+        lastModifiedBy: userEmail,
+        lastModifiedAt: new Date().toISOString()
+      }
+    });
+
+    if (!updatedPayment) {
+      return res.status(500).json({ error: 'Failed to update payment date' });
+    }
+
+    console.log(`📅 Payment ${paymentId} rescheduled by ${userEmail}: ${oldDate} -> ${parsedDate.toISOString()}`);
+
+    res.json({
+      success: true,
+      message: 'Payment date updated successfully',
+      payment: {
+        id: paymentId,
+        oldDate: oldDate,
+        newDate: parsedDate,
+        enrollment: {
+          id: enrollment.id,
+          childName: enrollment.childName,
+          className: enrollment.className
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Error rescheduling payment:', error);
+    res.status(500).json({ error: 'Failed to reschedule payment' });
+  }
+});
+
 export default router;

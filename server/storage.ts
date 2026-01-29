@@ -380,6 +380,7 @@ export interface IStorage {
 
   // Scheduled Payment methods
   createScheduledPayment(payment: any): Promise<any>;
+  getScheduledPaymentById(id: number): Promise<any | undefined>;
   getScheduledPaymentsByParentEmail(parentEmail: string): Promise<any[]>;
   getScheduledPaymentsByEnrollmentId(enrollmentId: number): Promise<any[]>;
   getAllScheduledPayments(): Promise<any[]>;
@@ -3606,6 +3607,10 @@ export class MemStorage implements IStorage {
     return newScheduledPayment;
   }
 
+  async getScheduledPaymentById(id: number): Promise<ScheduledPayment | undefined> {
+    return this.scheduledPaymentsStore.get(id);
+  }
+
   async getScheduledPaymentsByParentEmail(parentEmail: string): Promise<ScheduledPayment[]> {
     // Debug: check if scheduled payments are loaded
     console.log('🔍 MemStorage: scheduledPaymentsStore size:', this.scheduledPaymentsStore.size);
@@ -6601,6 +6606,18 @@ import { DatabaseStorage } from "./dbStorage";
         } catch (error) {
           console.error('❌ Error creating scheduled payment in database, falling back to file storage:', error);
           return await this.fileStorage.createScheduledPayment(scheduledPayment);
+        }
+      }
+
+      async getScheduledPaymentById(id: number): Promise<ScheduledPayment | undefined> {
+        try {
+          if (this.dbStorage && typeof this.dbStorage.getScheduledPaymentById === 'function') {
+            return await this.dbStorage.getScheduledPaymentById(id);
+          } else {
+            return await this.fileStorage.getScheduledPaymentById(id);
+          }
+        } catch (error) {
+          return await this.fileStorage.getScheduledPaymentById(id);
         }
       }
 

@@ -154,6 +154,8 @@ interface ParentProfile {
     status: string;
     description: string;
     enrollmentId: number | null;
+    childName?: string;
+    className?: string;
   }>;
   emergencyContacts: Array<{
     childId: number;
@@ -523,6 +525,14 @@ export default function ParentProfilePage() {
   const [compPercentage, setCompPercentage] = useState('100');
   const [compReason, setCompReason] = useState('');
   
+  // Reschedule payment state
+  const [reschedulePaymentDialog, setReschedulePaymentDialog] = useState<{ 
+    open: boolean; 
+    payment: ParentProfile['scheduledPayments'][0] | null 
+  }>({ open: false, payment: null });
+  const [rescheduleDate, setRescheduleDate] = useState('');
+  const [rescheduleComment, setRescheduleComment] = useState('');
+  
   // Edit parent state
   const [editParentDialogOpen, setEditParentDialogOpen] = useState(false);
   const [editParentFirstName, setEditParentFirstName] = useState('');
@@ -561,6 +571,33 @@ export default function ParentProfilePage() {
       toast({
         title: "Error",
         description: error.message || "Failed to record membership payment",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Reschedule payment mutation
+  const reschedulePaymentMutation = useMutation({
+    mutationFn: async ({ paymentId, newDate, adminComment }: { paymentId: number; newDate: string; adminComment: string }) => {
+      return apiRequest("PATCH", `/api/admin/enrollments/scheduled-payments/${paymentId}/reschedule`, {
+        newDate,
+        adminComment
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Payment Rescheduled",
+        description: "The payment due date has been updated successfully."
+      });
+      queryClient.invalidateQueries({ queryKey: [`/api/parent-profile/${parentId}`] });
+      setReschedulePaymentDialog({ open: false, payment: null });
+      setRescheduleDate('');
+      setRescheduleComment('');
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to reschedule payment",
         variant: "destructive",
       });
     },
@@ -2332,6 +2369,7 @@ export default function ParentProfilePage() {
                             <TableHead>Description</TableHead>
                             <TableHead>Amount</TableHead>
                             <TableHead>Status</TableHead>
+                            <TableHead className="text-right">Actions</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -2346,6 +2384,21 @@ export default function ParentProfilePage() {
                                 <Badge variant={getPaymentStatusBadgeVariant(payment.status)}>
                                   {payment.status}
                                 </Badge>
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {payment.status === 'pending' && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                      setReschedulePaymentDialog({ open: true, payment });
+                                      setRescheduleDate(new Date(payment.dueDate).toISOString().split('T')[0]);
+                                    }}
+                                  >
+                                    <Pencil className="h-4 w-4 mr-1" />
+                                    Edit Date
+                                  </Button>
+                                )}
                               </TableCell>
                             </TableRow>
                           ))}
@@ -2444,6 +2497,101 @@ export default function ParentProfilePage() {
                 disabled={markMembershipPaidMutation.isPending}
               >
                 {markMembershipPaidMutation.isPending ? "Processing..." : "Mark as Paid"}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Reschedule Payment Dialog */}
+        <Dialog 
+          open={reschedulePaymentDialog.open} 
+          onOpenChange={(open) => {
+            setReschedulePaymentDialog({ open, payment: open ? reschedulePaymentDialog.payment : null });
+            if (!open) {
+              setRescheduleDate('');
+              setRescheduleComment('');
+            }
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Reschedule Payment</DialogTitle>
+              <DialogDescription>
+                Change the due date for this scheduled payment. A comment is required to document the change.
+              </DialogDescription>
+            </DialogHeader>
+            {reschedulePaymentDialog.payment && (
+              <div className="space-y-4">
+                <div className="p-4 bg-gray-50 rounded-lg">
+                  <h4 className="font-semibold mb-2">Payment Details</h4>
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <span className="text-gray-600">Amount:</span>
+                      <p className="font-medium">${reschedulePaymentDialog.payment.amount.toFixed(2)}</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Current Due Date:</span>
+                      <p className="font-medium">{new Date(reschedulePaymentDialog.payment.dueDate).toLocaleDateString()}</p>
+                    </div>
+                    <div className="col-span-2">
+                      <span className="text-gray-600">Description:</span>
+                      <p className="font-medium">{reschedulePaymentDialog.payment.description}</p>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">New Due Date</label>
+                  <input
+                    type="date"
+                    className="w-full px-3 py-2 border rounded-md"
+                    value={rescheduleDate}
+                    onChange={(e) => setRescheduleDate(e.target.value)}
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Reason for Change (Required)</label>
+                  <textarea
+                    className="w-full px-3 py-2 border rounded-md"
+                    rows={3}
+                    placeholder="Enter reason for rescheduling this payment..."
+                    value={rescheduleComment}
+                    onChange={(e) => setRescheduleComment(e.target.value)}
+                  />
+                </div>
+              </div>
+            )}
+            <div className="flex justify-end space-x-2">
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setReschedulePaymentDialog({ open: false, payment: null });
+                  setRescheduleDate('');
+                  setRescheduleComment('');
+                }}
+                disabled={reschedulePaymentMutation.isPending}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  if (reschedulePaymentDialog.payment && rescheduleDate && rescheduleComment.trim()) {
+                    reschedulePaymentMutation.mutate({
+                      paymentId: reschedulePaymentDialog.payment.id,
+                      newDate: rescheduleDate,
+                      adminComment: rescheduleComment.trim()
+                    });
+                  }
+                }}
+                disabled={reschedulePaymentMutation.isPending || !rescheduleDate || !rescheduleComment.trim()}
+              >
+                {reschedulePaymentMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Saving...
+                  </>
+                ) : "Save New Date"}
               </Button>
             </div>
           </DialogContent>
