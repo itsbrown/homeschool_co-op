@@ -899,19 +899,57 @@ router.patch('/scheduled-payments/:paymentId/reschedule', async (req: any, res) 
       return res.status(404).json({ error: 'Associated enrollment not found' });
     }
 
-    // Validate new date is within program dates
-    if (enrollment.programStartDate && parsedDate < new Date(enrollment.programStartDate)) {
-      return res.status(400).json({ 
-        error: 'New date cannot be before program start date',
-        programStartDate: enrollment.programStartDate
-      });
+    // Get current class dates - prefer class dates over enrollment's potentially stale dates
+    // Note: marketplaceClassId references the 'classes' table which has startDate/endDate
+    // classId references 'school_classes' which doesn't have these fields
+    let programStartDate: Date | null = null;
+    let programEndDate: Date | null = null;
+    let foundClassDates = false;
+    
+    // Try to get current class dates from the classes table (marketplaceClassId)
+    if (enrollment.marketplaceClassId) {
+      const classData = await storage.getClassById(enrollment.marketplaceClassId);
+      if (classData) {
+        programStartDate = classData.startDate ? new Date(classData.startDate) : null;
+        programEndDate = classData.endDate ? new Date(classData.endDate) : null;
+        foundClassDates = !!(programStartDate && programEndDate);
+        console.log(`📅 Using class dates for validation (marketplaceClassId=${enrollment.marketplaceClassId}): ${programStartDate?.toISOString()} to ${programEndDate?.toISOString()}`);
+      }
     }
+    
+    // For school_classes enrollments, try to find matching class in classes table by classId
+    // (The unified classes table may have entries with matching IDs)
+    if (!foundClassDates && enrollment.classId) {
+      const classData = await storage.getClassById(enrollment.classId);
+      if (classData && classData.startDate && classData.endDate) {
+        programStartDate = new Date(classData.startDate);
+        programEndDate = new Date(classData.endDate);
+        foundClassDates = true;
+        console.log(`📅 Using class dates from classId=${enrollment.classId}: ${programStartDate?.toISOString()} to ${programEndDate?.toISOString()}`);
+      }
+    }
+    
+    // Skip date validation if we couldn't get reliable class dates
+    // Enrollment dates may be stale, so we allow admin override with proper audit logging
+    if (!foundClassDates) {
+      console.log(`⚠️ Could not retrieve current class dates for enrollment ${enrollment.id} (marketplaceClassId: ${enrollment.marketplaceClassId}, classId: ${enrollment.classId})`);
+      console.log(`   Skipping date validation - admin ${userEmail} is authorized to reschedule with documented reason`);
+      // Continue without date validation - admin is authenticated and providing audit comment
+    } else {
+      // Validate new date is within program dates (only when we have reliable class dates)
+      if (programStartDate && parsedDate < programStartDate) {
+        return res.status(400).json({ 
+          error: 'New date cannot be before program start date',
+          programStartDate: programStartDate.toISOString().split('T')[0]
+        });
+      }
 
-    if (enrollment.programEndDate && parsedDate > new Date(enrollment.programEndDate)) {
-      return res.status(400).json({ 
-        error: 'New date cannot be after program end date',
-        programEndDate: enrollment.programEndDate
-      });
+      if (programEndDate && parsedDate > programEndDate) {
+        return res.status(400).json({ 
+          error: 'New date cannot be after program end date',
+          programEndDate: programEndDate.toISOString().split('T')[0]
+        });
+      }
     }
 
     // Store old date for audit log
