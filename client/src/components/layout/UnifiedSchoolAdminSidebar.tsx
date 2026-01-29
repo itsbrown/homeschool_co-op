@@ -63,6 +63,30 @@ interface NavGroup {
   items: NavItem[];
 }
 
+// Helper function to determine if a nav item should be active
+// This prevents parent routes from being highlighted when a child route is active
+// For example: /schools/staff should not be active when /schools/staff/hours is the current route
+const isNavItemActive = (currentLocation: string, itemHref: string, allNavHrefs: string[]): boolean => {
+  // Exact match is always active
+  if (currentLocation === itemHref) {
+    return true;
+  }
+  
+  // Check if the current location starts with the item's href
+  if (currentLocation.startsWith(`${itemHref}/`)) {
+    // But only if there isn't a more specific nav item that matches
+    // Find if any other nav item is a more specific match (longer prefix)
+    const hasMoreSpecificMatch = allNavHrefs.some(otherHref => 
+      otherHref !== itemHref && 
+      otherHref.startsWith(`${itemHref}/`) && 
+      (currentLocation === otherHref || currentLocation.startsWith(`${otherHref}/`))
+    );
+    return !hasMoreSpecificMatch;
+  }
+  
+  return false;
+};
+
 // Grouped navigation items for school administrators - mobile-first design
 const adminNavGroups: NavGroup[] = [
   {
@@ -196,6 +220,12 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
   });
   const { user, isAuthenticated, signOut } = useAuth();
   const { activeRole, availableRoles } = useRole();
+
+  // Collect all nav hrefs for smart active state matching
+  const allNavHrefs = [
+    ...adminNavGroups.flatMap(group => group.items.map(item => item.href)),
+    ...educatorNavItems.map(item => item.href)
+  ];
 
   // Auto-expand group containing current route
   useEffect(() => {
@@ -421,7 +451,7 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
                   <CollapsibleContent className="overflow-hidden transition-all data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 duration-200">
                     <div className={cn("ml-4 mt-1 grid gap-0.5", isCollapsed && "ml-0")}>
                       {group.items.map((item) => {
-                        const isActive = location === item.href || location.startsWith(`${item.href}/`);
+                        const isActive = isNavItemActive(location, item.href, allNavHrefs);
                         return (
                           <Link key={item.href} href={item.href}>
                             <div
@@ -450,7 +480,7 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
             {activeRole === 'educator' && educatorNavItems.filter(item => 
               item.href !== '/dashboard' && item.href !== '/schools/settings'
             ).map((item) => {
-              const isActive = location === item.href || location.startsWith(`${item.href}/`);
+              const isActive = isNavItemActive(location, item.href, allNavHrefs);
               return (
                 <Link key={item.href} href={item.href}>
                   <div
@@ -642,7 +672,7 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
                         <CollapsibleContent className="overflow-hidden transition-all data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 duration-200">
                           <div className="ml-4 mt-1 grid gap-0.5">
                             {group.items.map((item) => {
-                              const isActive = location === item.href || location.startsWith(`${item.href}/`);
+                              const isActive = isNavItemActive(location, item.href, allNavHrefs);
                               return (
                                 <Link key={item.href} href={item.href}>
                                   <div
@@ -671,7 +701,7 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
                   {activeRole === 'educator' && educatorNavItems.filter(item => 
                     item.href !== '/dashboard' && item.href !== '/schools/settings'
                   ).map((item) => {
-                    const isActive = location === item.href || location.startsWith(`${item.href}/`);
+                    const isActive = isNavItemActive(location, item.href, allNavHrefs);
                     return (
                       <Link key={item.href} href={item.href}>
                         <div
