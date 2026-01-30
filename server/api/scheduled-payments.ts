@@ -695,7 +695,50 @@ router.post('/:id/confirm', supabaseAuth, async (req: any, res) => {
     });
     console.log(`✅ Marked scheduled payment ${paymentId} as completed`);
 
-    // UPDATE ENROLLMENT BALANCE (matching webhook logic)
+    // COMPUTE AUTHORITATIVE PAYMENT SPLIT (single source of truth for allocations)
+    // Reuse originalAmountCents from verification above, use creditsApplied for consistency
+    const totalPaymentReceived = creditsApplied > 0 ? originalAmountCents : paymentIntent.amount;
+    
+    const hasMembership = paymentIntent.metadata?.hasMembership === 'true';
+    const membershipAmount = hasMembership ? parseInt(paymentIntent.metadata?.membershipAmount || '0') : 0;
+    const enrollmentAmount = Math.max(0, totalPaymentReceived - membershipAmount);
+    
+    // Validate split sums correctly (fail-safe check)
+    if (membershipAmount + enrollmentAmount !== totalPaymentReceived) {
+      console.warn(`⚠️ Allocation mismatch: membership(${membershipAmount}) + enrollment(${enrollmentAmount}) != total(${totalPaymentReceived}). Using enrollment=${totalPaymentReceived - membershipAmount}`);
+    }
+    
+    console.log(`💰 Payment split: total=${totalPaymentReceived}, membership=${membershipAmount}, enrollment=${enrollmentAmount}`);
+
+    // ENSURE PAYMENT HISTORY EXISTS for audit trail (create if missing)
+    let paymentHistory = await storage.getStripePaymentByIntentId(paymentIntent.id);
+    if (!paymentHistory) {
+      try {
+        const userId = parseInt(paymentIntent.metadata?.userId || '0');
+        paymentHistory = await (storage as any).saveStripePayment({
+          userId: userId > 0 ? userId : null,
+          paymentIntentId: paymentIntent.id,
+          customerId: (paymentIntent.customer as string) || `cus_scheduled_${Date.now()}`,
+          subscriptionId: null,
+          amount: totalPaymentReceived,
+          currency: paymentIntent.currency || 'usd',
+          status: 'succeeded',
+          description: `Scheduled payment ${paymentId} - ${scheduledPayment.installmentNumber}/${scheduledPayment.totalInstallments}`,
+          receiptEmail: paymentIntent.receipt_email || null,
+          metadata: {
+            ...paymentIntent.metadata,
+            scheduledPaymentId: paymentId,
+            processedVia: 'scheduled_payment_confirm'
+          }
+        });
+        console.log(`✅ Created payment history record: ${paymentHistory?.id}`);
+      } catch (historyError) {
+        console.error('⚠️ Failed to create payment history:', historyError);
+        // Continue - allocation tracking is best-effort
+      }
+    }
+
+    // UPDATE ENROLLMENT BALANCE
     const targetEnrollmentId = scheduledPayment.enrollmentId;
     
     if (targetEnrollmentId) {
@@ -704,21 +747,7 @@ router.post('/:id/confirm', supabaseAuth, async (req: any, res) => {
         
         if (enrollment) {
           const currentAmountPaid = enrollment.totalPaid || 0;
-          // Use original amount (may include credits) or Stripe amount
-          const creditsAppliedCents = parseInt(paymentIntent.metadata?.creditsAppliedCents || '0');
-          const originalAmount = parseInt(paymentIntent.metadata?.originalAmountCents || '0') || paymentIntent.amount;
-          
-          // If this payment includes membership, subtract membership from enrollment allocation
-          const membershipAmountForThisPayment = paymentIntent.metadata?.hasMembership === 'true' 
-            ? parseInt(paymentIntent.metadata?.membershipAmount || '0')
-            : 0;
-          
-          const totalPaymentAmount = creditsAppliedCents > 0 
-            ? originalAmount - membershipAmountForThisPayment
-            : paymentIntent.amount - membershipAmountForThisPayment;
-          
-          const enrollmentPaymentAmount = Math.max(0, totalPaymentAmount);
-          const newAmountPaid = currentAmountPaid + enrollmentPaymentAmount;
+          const newAmountPaid = currentAmountPaid + enrollmentAmount;
           const newBalance = Math.max(0, (enrollment.totalCost || 0) - newAmountPaid);
           
           await storage.updateProgramEnrollment(targetEnrollmentId, {
@@ -727,30 +756,29 @@ router.post('/:id/confirm', supabaseAuth, async (req: any, res) => {
             paymentStatus: newBalance <= 0 ? 'completed' : 'partial_payment'
           });
           
-          console.log(`✅ Updated enrollment ${targetEnrollmentId}: paid=${newAmountPaid}, balance=${newBalance} (membership deducted: ${membershipAmountForThisPayment})`);
+          console.log(`✅ Updated enrollment ${targetEnrollmentId}: paid=${newAmountPaid}, balance=${newBalance}`);
           
           // Create payment allocation record for enrollment audit trail
-          if (enrollmentPaymentAmount > 0) {
+          if (enrollmentAmount > 0 && paymentHistory) {
             try {
-              const paymentHistory = await storage.getStripePaymentByIntentId(paymentIntent.id);
-              if (paymentHistory) {
-                await storage.createPaymentAllocation({
-                  paymentHistoryId: paymentHistory.id,
-                  enrollmentId: targetEnrollmentId,
-                  membershipEnrollmentId: null,
-                  allocatedAmountCents: enrollmentPaymentAmount,
-                  allocationType: 'payment',
-                  sourceAllocationId: null,
-                  adminComment: null,
-                  metadata: {
-                    scheduledPaymentId: paymentId,
-                    installmentNumber: scheduledPayment.installmentNumber,
-                    totalInstallments: scheduledPayment.totalInstallments,
-                    processedVia: 'scheduled_payment_confirm'
-                  }
-                });
-                console.log(`✅ Created enrollment payment allocation for ${enrollmentPaymentAmount} cents`);
-              }
+              await storage.createPaymentAllocation({
+                paymentHistoryId: paymentHistory.id,
+                enrollmentId: targetEnrollmentId,
+                membershipEnrollmentId: null,
+                allocatedAmountCents: enrollmentAmount,
+                allocationType: 'payment',
+                sourceAllocationId: null,
+                adminComment: null,
+                metadata: {
+                  scheduledPaymentId: paymentId,
+                  installmentNumber: scheduledPayment.installmentNumber,
+                  totalInstallments: scheduledPayment.totalInstallments,
+                  totalPaymentReceived,
+                  membershipDeducted: membershipAmount,
+                  processedVia: 'scheduled_payment_confirm'
+                }
+              });
+              console.log(`✅ Created enrollment payment allocation for ${enrollmentAmount} cents`);
             } catch (allocationError) {
               console.error('⚠️ Failed to create enrollment allocation record:', allocationError);
             }
@@ -763,10 +791,8 @@ router.post('/:id/confirm', supabaseAuth, async (req: any, res) => {
     }
 
     // PROCESS MEMBERSHIP ALLOCATION if this payment includes membership (first biweekly payment)
-    const hasMembership = paymentIntent.metadata?.hasMembership === 'true';
-    if (hasMembership) {
+    if (hasMembership && membershipAmount > 0) {
       try {
-        const membershipAmount = parseInt(paymentIntent.metadata?.membershipAmount || '0');
         const membershipParentUserId = parseInt(paymentIntent.metadata?.membershipParentUserId || '0');
         const membershipSchoolId = parseInt(paymentIntent.metadata?.membershipSchoolId || '0');
         const membershipYear = parseInt(paymentIntent.metadata?.membershipYear || new Date().getFullYear().toString());
@@ -779,7 +805,7 @@ router.post('/:id/confirm', supabaseAuth, async (req: any, res) => {
           paymentId
         });
         
-        if (membershipParentUserId > 0 && membershipSchoolId > 0 && membershipAmount > 0) {
+        if (membershipParentUserId > 0 && membershipSchoolId > 0) {
           // Find existing membership enrollment
           const existingMemberships = await storage.getMembershipEnrollmentsByParentId(membershipParentUserId);
           const membershipEnrollment = existingMemberships.find((m: any) => 
@@ -802,10 +828,9 @@ router.post('/:id/confirm', supabaseAuth, async (req: any, res) => {
             
             console.log(`✅ Updated membership enrollment ${membershipEnrollment.id}: paid=${newPaid}, remaining=${newBalance}`);
             
-            // Create payment allocation record for membership audit trail
-            try {
-              const paymentHistory = await storage.getStripePaymentByIntentId(paymentIntent.id);
-              if (paymentHistory) {
+            // Create payment allocation record for membership audit trail (use pre-fetched paymentHistory)
+            if (paymentHistory) {
+              try {
                 await storage.createPaymentAllocation({
                   paymentHistoryId: paymentHistory.id,
                   enrollmentId: null,
@@ -818,14 +843,15 @@ router.post('/:id/confirm', supabaseAuth, async (req: any, res) => {
                     scheduledPaymentId: paymentId,
                     membershipYear,
                     schoolId: membershipSchoolId,
+                    totalPaymentReceived,
+                    enrollmentAllocated: enrollmentAmount,
                     processedVia: 'scheduled_payment_confirm'
                   }
                 });
                 console.log(`✅ Created membership payment allocation for ${membershipAmount} cents`);
+              } catch (allocationError) {
+                console.error('⚠️ Failed to create membership allocation record:', allocationError);
               }
-            } catch (allocationError) {
-              console.error('⚠️ Failed to create membership allocation record:', allocationError);
-              // Don't fail - allocation is for audit, membership was updated
             }
           } else {
             // Create new membership enrollment (rare case - should exist from checkout)
@@ -866,16 +892,15 @@ router.post('/:id/confirm', supabaseAuth, async (req: any, res) => {
       }
     }
 
-    // CONSUME CREDITS if any were applied
-    const creditsAppliedCents = parseInt(paymentIntent.metadata?.creditsAppliedCents || '0');
+    // CONSUME CREDITS if any were applied (use creditsApplied from verification block)
     const userId = parseInt(paymentIntent.metadata?.userId || '0');
     
-    if (creditsAppliedCents > 0 && userId > 0) {
+    if (creditsApplied > 0 && userId > 0) {
       try {
-        console.log(`💰 Consuming ${creditsAppliedCents} cents of credits for user ${userId}`);
+        console.log(`💰 Consuming ${creditsApplied} cents of credits for user ${userId}`);
         const { usedCredits, totalUsed } = await storage.useCredits(
           userId,
-          creditsAppliedCents,
+          creditsApplied,
           undefined,
           `Scheduled payment ${paymentId} - ${scheduledPayment.installmentNumber}/${scheduledPayment.totalInstallments}`
         );
