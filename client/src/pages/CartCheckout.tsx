@@ -435,6 +435,31 @@ export default function CartCheckout() {
     payableAmount: number; // Grand total minus applied credits
     paymentPlans: PaymentPlanOption[]; // Server-calculated payment plans
   } | null>(null);
+  
+  // Track previous cart items to detect cart changes
+  const prevCartItemsRef = useRef<string>('');
+  
+  // Clear stale authoritative data and promo state when cart items change
+  // This prevents discounts from previous cart sessions from persisting
+  useEffect(() => {
+    // Create a stable identifier for current cart items
+    const currentCartKey = cart.items.map(i => `${i.classId}-${i.childId}-${i.variantId || ''}`).sort().join('|');
+    
+    // If cart items changed (not just initial load), clear stale state
+    if (prevCartItemsRef.current && prevCartItemsRef.current !== currentCartKey) {
+      console.log('🔄 Cart items changed - clearing stale authoritative data and promo state');
+      setAuthoritativeData(null);
+      setAppliedPromo(null);
+      setPromoCode('');
+      setPromoError('');
+      setClientSecret(''); // Force new payment intent
+      setHasCheckoutConflict(false);
+      retryCountRef.current = 0;
+      setRetryCount(0);
+    }
+    
+    prevCartItemsRef.current = currentCartKey;
+  }, [cart.items]);
 
   // Type for authoritative snapshot data
   type AuthoritativeDataType = {
@@ -1003,11 +1028,15 @@ export default function CartCheckout() {
 
   // Get the amount to display on the Pay button (first payment amount)
   const getButtonDisplayAmount = () => {
-    // Use server-provided payable amount when available
-    const payableAmount = authoritativeData?.payableAmount ?? actualPayableAmount;
-    
-    // For biweekly plans, show the FIRST payment amount (total divided by 4)
+    // For biweekly plans, use server-provided first payment amount from payment plans
+    // This ensures button matches the displayed plan amount (server-authoritative)
     if (selectedPaymentPlan === 'biweekly') {
+      const biweeklyPlan = authoritativeData?.paymentPlans?.find(p => p.id === 'biweekly');
+      if (biweeklyPlan?.amount) {
+        return biweeklyPlan.amount;
+      }
+      // Fallback only if server data not available
+      const payableAmount = authoritativeData?.payableAmount ?? actualPayableAmount;
       return Math.ceil(payableAmount / 4);
     }
     
