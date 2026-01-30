@@ -414,6 +414,9 @@ export default function CartCheckout() {
     description: string;
     amount: number;
     features: string[];
+    numberOfPayments?: number;
+    totalAmount?: number;
+    finalPaymentAmount?: number;
   }
 
   // Cached authoritative values from server snapshot
@@ -910,6 +913,7 @@ export default function CartCheckout() {
     // This ensures payment plans correctly reflect applied credits
     if (authoritativeData?.paymentPlans && authoritativeData.paymentPlans.length > 0) {
       // Map server plans to client format with additional UI properties
+      // CRITICAL: Include numberOfPayments from server to ensure correct payment count display
       return authoritativeData.paymentPlans.map(plan => ({
         id: plan.id,
         name: plan.name,
@@ -918,7 +922,11 @@ export default function CartCheckout() {
         popular: plan.id === 'deposit',
         features: plan.features,
         dueDate: plan.id === 'deposit' ? 'Remaining balance due 2 weeks before class start' : undefined,
-        installments: plan.id === 'biweekly' ? { frequency: 'biweekly' } : undefined
+        installments: plan.id === 'biweekly' ? { frequency: 'biweekly' } : undefined,
+        // Server-authoritative payment count - ensures display matches actual schedule
+        numberOfPayments: plan.numberOfPayments,
+        totalAmount: plan.totalAmount,
+        finalPaymentAmount: plan.finalPaymentAmount
       }));
     }
 
