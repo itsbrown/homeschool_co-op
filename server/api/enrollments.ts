@@ -656,6 +656,83 @@ router.post('/confirm', async (req: any, res) => {
           }
         } else if (existingUser.length > 0 && existingUser[0].memberId) {
           console.log(`🎫 User ${parentUserId} already has Member ID: ${existingUser[0].memberId}`);
+          
+          // User has member ID - check for existing unpaid membership to update
+          // Match any unpaid status (pending_payment, pending) or check remainingBalance > 0
+          const existingMemberships = await storage.getMembershipEnrollmentsByParentId(parentUserId);
+          const unpaidMembership = existingMemberships?.find(
+            (m: any) => m.schoolId === membershipSchoolId && 
+                       m.membershipYear === membershipYear && 
+                       (m.status === 'pending_payment' || m.status === 'pending' || (m.remainingBalance && m.remainingBalance > 0))
+          );
+          
+          if (unpaidMembership) {
+            // Check idempotency - if notes already contain this paymentIntent, skip update
+            if (unpaidMembership.notes?.includes(paymentIntent.id)) {
+              console.log(`🎫 Membership ${unpaidMembership.id} already updated with payment ${paymentIntent.id} - skipping`);
+            } else {
+              console.log(`🎫 Found unpaid membership ${unpaidMembership.id} (status: ${unpaidMembership.status}) - updating to enrolled`);
+              
+              await storage.updateMembershipEnrollment(unpaidMembership.id, {
+                status: 'enrolled',
+                amount: membershipAmount,
+                totalAmount: membershipAmount,
+                amountPaid: membershipAmount,
+                remainingBalance: 0,
+                balanceDue: 0,
+                paymentMethod: 'other',
+                stripeCustomerId: (paymentIntent.customer as string) || unpaidMembership.stripeCustomerId,
+                notes: `${unpaidMembership.notes || ''} | Updated via cart checkout (${paymentIntent.id})${membershipDiscountName ? ` - Discount: ${membershipDiscountName}` : ''}`
+              });
+              
+              membershipCreated = true;
+              console.log(`🎫 ✅ Updated membership ${unpaidMembership.id} to enrolled status`);
+              
+              // Track discount usage for updated membership with idempotency check
+              if (membershipDiscountId && membershipDiscountAmount > 0) {
+                try {
+                  // Check if discount was already tracked for this membership/payment
+                  const existingApplications = await storage.getDiscountApplicationsByDiscountId(membershipDiscountId);
+                  const alreadyTracked = existingApplications?.some(
+                    (app: any) => app.parentEmail === userEmail && 
+                                 app.finalAmount === membershipAmount
+                  );
+                  
+                  if (alreadyTracked) {
+                    console.log(`🎫 Discount ${membershipDiscountId} already tracked for this parent/amount - skipping`);
+                  } else {
+                    const schoolDiscounts = await storage.getDiscountsBySchoolId(membershipSchoolId);
+                    const discount = schoolDiscounts.find(d => d.id === membershipDiscountId);
+                    
+                    if (discount) {
+                      const incrementSuccess = await storage.incrementDiscountUsageAtomic(membershipDiscountId);
+                      if (incrementSuccess) {
+                        await storage.createDiscountApplication({
+                          discountId: membershipDiscountId,
+                          parentEmail: userEmail || '',
+                          childId: null,
+                          schoolEnrollmentId: null,
+                          programEnrollmentId: null,
+                          paymentId: null,
+                          classId: null,
+                          originalAmount: membershipOriginalAmount || membershipAmount + membershipDiscountAmount,
+                          discountAmount: membershipDiscountAmount,
+                          finalAmount: membershipAmount,
+                          applicationMethod: 'automatic',
+                          appliedBy: null,
+                        });
+                        console.log(`🎫 ✅ Tracked membership discount usage: ${membershipDiscountName}`);
+                      }
+                    }
+                  }
+                } catch (discountTrackError) {
+                  console.error('⚠️ Error tracking membership discount for updated membership:', discountTrackError);
+                }
+              }
+            }
+          } else {
+            console.log(`🎫 User ${parentUserId} has no unpaid membership to update for school ${membershipSchoolId} year ${membershipYear}`);
+          }
         }
       }
     } catch (membershipError) {
