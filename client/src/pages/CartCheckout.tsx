@@ -360,9 +360,11 @@ export default function CartCheckout() {
     }
     
     // When cart total changes (e.g., discount applied), recreate payment intent
-    console.log('💳 Cart total changed, recreating payment intent with new amount:', cart.total);
+    // CRITICAL: Pass forceRefresh=true to ensure fresh snapshot includes the promo code
+    // Without this, stale authoritativeData with null promo code would be used
+    console.log('💳 Cart total changed, recreating payment intent with new amount:', cart.total, 'promoCode:', cart.appliedPromoCode?.code || 'none');
     setClientSecret(''); // Clear to show loading state
-    createPaymentIntent();
+    createPaymentIntent(null, true); // Force fresh snapshot to include promo code
   }, [cart.total]); // Re-run when cart total changes
   
   // Separate effect to handle payment plan changes with debouncing
