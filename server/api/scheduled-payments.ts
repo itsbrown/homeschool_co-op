@@ -707,10 +707,18 @@ router.post('/:id/confirm', supabaseAuth, async (req: any, res) => {
           // Use original amount (may include credits) or Stripe amount
           const creditsAppliedCents = parseInt(paymentIntent.metadata?.creditsAppliedCents || '0');
           const originalAmount = parseInt(paymentIntent.metadata?.originalAmountCents || '0') || paymentIntent.amount;
+          
+          // If this payment includes membership, subtract membership from enrollment allocation
+          const membershipAmountForThisPayment = paymentIntent.metadata?.hasMembership === 'true' 
+            ? parseInt(paymentIntent.metadata?.membershipAmount || '0')
+            : 0;
+          
           const totalPaymentAmount = creditsAppliedCents > 0 
-            ? originalAmount
-            : paymentIntent.amount;
-          const newAmountPaid = currentAmountPaid + totalPaymentAmount;
+            ? originalAmount - membershipAmountForThisPayment
+            : paymentIntent.amount - membershipAmountForThisPayment;
+          
+          const enrollmentPaymentAmount = Math.max(0, totalPaymentAmount);
+          const newAmountPaid = currentAmountPaid + enrollmentPaymentAmount;
           const newBalance = Math.max(0, (enrollment.totalCost || 0) - newAmountPaid);
           
           await storage.updateProgramEnrollment(targetEnrollmentId, {
@@ -719,11 +727,142 @@ router.post('/:id/confirm', supabaseAuth, async (req: any, res) => {
             paymentStatus: newBalance <= 0 ? 'completed' : 'partial_payment'
           });
           
-          console.log(`✅ Updated enrollment ${targetEnrollmentId}: paid=${newAmountPaid}, balance=${newBalance}`);
+          console.log(`✅ Updated enrollment ${targetEnrollmentId}: paid=${newAmountPaid}, balance=${newBalance} (membership deducted: ${membershipAmountForThisPayment})`);
+          
+          // Create payment allocation record for enrollment audit trail
+          if (enrollmentPaymentAmount > 0) {
+            try {
+              const paymentHistory = await storage.getStripePaymentByIntentId(paymentIntent.id);
+              if (paymentHistory) {
+                await storage.createPaymentAllocation({
+                  paymentHistoryId: paymentHistory.id,
+                  enrollmentId: targetEnrollmentId,
+                  membershipEnrollmentId: null,
+                  allocatedAmountCents: enrollmentPaymentAmount,
+                  allocationType: 'payment',
+                  sourceAllocationId: null,
+                  adminComment: null,
+                  metadata: {
+                    scheduledPaymentId: paymentId,
+                    installmentNumber: scheduledPayment.installmentNumber,
+                    totalInstallments: scheduledPayment.totalInstallments,
+                    processedVia: 'scheduled_payment_confirm'
+                  }
+                });
+                console.log(`✅ Created enrollment payment allocation for ${enrollmentPaymentAmount} cents`);
+              }
+            } catch (allocationError) {
+              console.error('⚠️ Failed to create enrollment allocation record:', allocationError);
+            }
+          }
         }
       } catch (enrollmentError) {
         console.error(`⚠️ Error updating enrollment ${targetEnrollmentId}:`, enrollmentError);
         // Don't fail the whole request - enrollment can be reconciled later
+      }
+    }
+
+    // PROCESS MEMBERSHIP ALLOCATION if this payment includes membership (first biweekly payment)
+    const hasMembership = paymentIntent.metadata?.hasMembership === 'true';
+    if (hasMembership) {
+      try {
+        const membershipAmount = parseInt(paymentIntent.metadata?.membershipAmount || '0');
+        const membershipParentUserId = parseInt(paymentIntent.metadata?.membershipParentUserId || '0');
+        const membershipSchoolId = parseInt(paymentIntent.metadata?.membershipSchoolId || '0');
+        const membershipYear = parseInt(paymentIntent.metadata?.membershipYear || new Date().getFullYear().toString());
+        
+        console.log('🎫 Processing membership allocation from scheduled payment:', {
+          parentUserId: membershipParentUserId,
+          schoolId: membershipSchoolId,
+          amount: membershipAmount,
+          year: membershipYear,
+          paymentId
+        });
+        
+        if (membershipParentUserId > 0 && membershipSchoolId > 0 && membershipAmount > 0) {
+          // Find existing membership enrollment
+          const existingMemberships = await storage.getMembershipEnrollmentsByParentId(membershipParentUserId);
+          const membershipEnrollment = existingMemberships.find((m: any) => 
+            m.schoolId === membershipSchoolId && 
+            (m.membershipYear === membershipYear || m.membershipYear === membershipYear + 1)
+          );
+          
+          if (membershipEnrollment) {
+            // Update existing membership
+            const currentPaid = membershipEnrollment.amountPaid || 0;
+            const newPaid = currentPaid + membershipAmount;
+            const newBalance = Math.max(0, (membershipEnrollment.amount || 0) - newPaid);
+            
+            await storage.updateMembershipEnrollment(membershipEnrollment.id, {
+              amountPaid: newPaid,
+              remainingBalance: newBalance,
+              balanceDue: newBalance,
+              status: newBalance <= 0 ? 'enrolled' : membershipEnrollment.status
+            });
+            
+            console.log(`✅ Updated membership enrollment ${membershipEnrollment.id}: paid=${newPaid}, remaining=${newBalance}`);
+            
+            // Create payment allocation record for membership audit trail
+            try {
+              const paymentHistory = await storage.getStripePaymentByIntentId(paymentIntent.id);
+              if (paymentHistory) {
+                await storage.createPaymentAllocation({
+                  paymentHistoryId: paymentHistory.id,
+                  enrollmentId: null,
+                  membershipEnrollmentId: membershipEnrollment.id,
+                  allocatedAmountCents: membershipAmount,
+                  allocationType: 'membership',
+                  sourceAllocationId: null,
+                  adminComment: null,
+                  metadata: {
+                    scheduledPaymentId: paymentId,
+                    membershipYear,
+                    schoolId: membershipSchoolId,
+                    processedVia: 'scheduled_payment_confirm'
+                  }
+                });
+                console.log(`✅ Created membership payment allocation for ${membershipAmount} cents`);
+              }
+            } catch (allocationError) {
+              console.error('⚠️ Failed to create membership allocation record:', allocationError);
+              // Don't fail - allocation is for audit, membership was updated
+            }
+          } else {
+            // Create new membership enrollment (rare case - should exist from checkout)
+            console.log(`⚠️ No existing membership found for parent ${membershipParentUserId} - creating new one`);
+            const school = await storage.getSchool(membershipSchoolId);
+            const now = new Date();
+            const expirationDate = new Date(now);
+            expirationDate.setFullYear(expirationDate.getFullYear() + 1);
+            
+            await storage.createMembershipEnrollment({
+              schoolId: membershipSchoolId,
+              parentUserId: membershipParentUserId,
+              membershipYear,
+              membershipTier: 'basic',
+              amount: school?.membershipFeeAmount || membershipAmount,
+              amountPaid: membershipAmount,
+              remainingBalance: Math.max(0, (school?.membershipFeeAmount || membershipAmount) - membershipAmount),
+              totalAmount: school?.membershipFeeAmount || membershipAmount,
+              balanceDue: Math.max(0, (school?.membershipFeeAmount || membershipAmount) - membershipAmount),
+              status: 'enrolled',
+              stripeCustomerId: (paymentIntent.customer as string) || null,
+              stripeSubscriptionId: null,
+              dueDate: now,
+              endDate: expirationDate,
+              expirationDate: expirationDate,
+              gracePeriodEnd: null,
+              paymentMethod: 'other',
+              notes: `Scheduled payment confirmation (${paymentIntent.id})`,
+              startDate: now,
+              renewalDate: expirationDate
+            });
+            console.log(`✅ Created new membership enrollment for parent ${membershipParentUserId}`);
+          }
+        }
+      } catch (membershipError) {
+        console.error('❌ Error processing membership allocation:', membershipError);
+        // Don't fail the whole request - membership can be reconciled later
       }
     }
 
