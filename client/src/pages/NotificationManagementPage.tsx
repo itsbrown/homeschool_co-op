@@ -27,7 +27,9 @@ import {
   User,
   Building2,
   Shield,
-  Plus
+  Plus,
+  Eye,
+  RefreshCw
 } from "lucide-react";
 import { UserLookup, type UserResult } from "@/components/ui/user-lookup";
 
@@ -82,6 +84,7 @@ export default function NotificationManagementPage() {
   const [isComposeDialogOpen, setIsComposeDialogOpen] = useState(false);
   const [selectedTab, setSelectedTab] = useState("individual");
   const [editingNotification, setEditingNotification] = useState<Notification | null>(null);
+  const [selectedNotificationId, setSelectedNotificationId] = useState<number | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -105,6 +108,39 @@ export default function NotificationManagementPage() {
   // Fetch staff positions for role targeting
   const { data: staffPositions = [] } = useQuery<StaffPosition[]>({
     queryKey: ["/api/school-admin/staff-positions"],
+  });
+
+  // Fetch selected notification details
+  const { data: selectedNotification, isLoading: isLoadingDetails } = useQuery<Notification>({
+    queryKey: [`/api/notifications/${selectedNotificationId}`],
+    enabled: !!selectedNotificationId,
+  });
+
+  // Resend notification mutation
+  const resendMutation = useMutation({
+    mutationFn: async (notificationId: number) => {
+      const response = await apiRequest("POST", `/api/notifications/${notificationId}/resend`);
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(error);
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications?view=sent"] });
+      setSelectedNotificationId(null);
+      toast({
+        title: "Success",
+        description: "Notification resent successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to resend notification",
+        variant: "destructive",
+      });
+    },
   });
 
   // Send individual notification mutation
@@ -298,11 +334,13 @@ export default function NotificationManagementPage() {
     },
   });
 
-  // Handle clicking on a draft notification to edit it
+  // Handle clicking on a notification to view or edit it
   const handleNotificationClick = (notification: Notification) => {
     if (notification.status === "draft") {
       setEditingNotification(notification);
       setIsComposeDialogOpen(true);
+    } else {
+      setSelectedNotificationId(notification.id);
     }
   };
 
@@ -516,7 +554,7 @@ export default function NotificationManagementPage() {
                 notifications.map((notification: Notification) => (
                   <TableRow 
                     key={notification.id}
-                    className={notification.status === "draft" ? "cursor-pointer hover:bg-muted/50" : ""}
+                    className="cursor-pointer hover:bg-muted/50"
                     onClick={() => handleNotificationClick(notification)}
                   >
                     <TableCell>
@@ -580,6 +618,101 @@ export default function NotificationManagementPage() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Notification Detail Dialog */}
+      <Dialog open={!!selectedNotificationId} onOpenChange={(open) => !open && setSelectedNotificationId(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Eye className="h-5 w-5" />
+              Notification Details
+            </DialogTitle>
+            <DialogDescription>
+              View the full notification content and resend if needed
+            </DialogDescription>
+          </DialogHeader>
+          
+          {isLoadingDetails ? (
+            <div className="py-8 text-center text-muted-foreground">Loading...</div>
+          ) : selectedNotification ? (
+            <div className="space-y-4">
+              <div>
+                <Label className="text-sm font-medium text-muted-foreground">Subject</Label>
+                <p className="text-lg font-medium">{selectedNotification.subject}</p>
+              </div>
+              
+              <div>
+                <Label className="text-sm font-medium text-muted-foreground">Message</Label>
+                <div className="mt-1 p-4 bg-muted rounded-lg whitespace-pre-wrap">
+                  {selectedNotification.content}
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">Delivery Method</Label>
+                  <div className="flex items-center gap-2 mt-1">
+                    {selectedNotification.type === "email" && <Mail className="h-4 w-4" />}
+                    {selectedNotification.type === "in_app" && <MessageSquare className="h-4 w-4" />}
+                    {selectedNotification.type === "both" && (
+                      <>
+                        <Mail className="h-4 w-4" />
+                        <MessageSquare className="h-4 w-4" />
+                      </>
+                    )}
+                    <span className="capitalize">{selectedNotification.type?.replace("_", " ")}</span>
+                  </div>
+                </div>
+                
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">Priority</Label>
+                  <p className="capitalize mt-1">{selectedNotification.priority}</p>
+                </div>
+                
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">Target</Label>
+                  <p className="capitalize mt-1">{selectedNotification.targetType}</p>
+                </div>
+                
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">Sent</Label>
+                  <p className="mt-1">
+                    {selectedNotification.sentAt 
+                      ? new Date(selectedNotification.sentAt).toLocaleString()
+                      : "Not sent yet"}
+                  </p>
+                </div>
+              </div>
+              
+              {selectedNotification.deliveryStats && (
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">Delivery Stats</Label>
+                  <div className="flex items-center gap-4 mt-1">
+                    <div className="flex items-center gap-1">
+                      <Users className="h-4 w-4 text-muted-foreground" />
+                      <span>{selectedNotification.deliveryStats.totalRecipients || 0} recipients</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : null}
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSelectedNotificationId(null)}>
+              Close
+            </Button>
+            <Button 
+              onClick={() => selectedNotificationId && resendMutation.mutate(selectedNotificationId)}
+              disabled={resendMutation.isPending || selectedNotification?.status !== "sent"}
+              title={selectedNotification?.status !== "sent" ? "Can only resend notifications that have been sent" : undefined}
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${resendMutation.isPending ? "animate-spin" : ""}`} />
+              {resendMutation.isPending ? "Resending..." : "Resend Notification"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

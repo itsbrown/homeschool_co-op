@@ -696,6 +696,59 @@ async function markAllNotificationsAsRead(userId: number): Promise<void> {
   }
 }
 
+// GET /api/notifications/:id - Get a single notification by ID
+router.get("/:id", async (req, res) => {
+  try {
+    const notificationId = parseInt(req.params.id);
+    if (isNaN(notificationId)) {
+      return res.status(400).json({ message: "Invalid notification ID" });
+    }
+
+    // Authorization check
+    const email = (req as any).auth?.payload?.email || (req as any).auth?.email || (req as any).user?.email;
+    if (!email) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
+    
+    const user = await storage.getUserByEmail(email);
+    if (!user) {
+      return res.status(401).json({ message: "User not found" });
+    }
+    
+    // Verify user has admin role
+    const userRoles = await storage.getUserRolesByUserId(user.id);
+    const adminRoles = userRoles.filter(r => 
+      r.role?.toLowerCase() === 'admin' || 
+      r.role?.toLowerCase() === 'school_admin' ||
+      r.role?.toLowerCase() === 'schooladmin' ||
+      r.role?.toLowerCase() === 'superadmin'
+    );
+    
+    if (adminRoles.length === 0) {
+      return res.status(403).json({ message: "Admin role required" });
+    }
+
+    const notification = await storage.getNotificationById(notificationId);
+    if (!notification) {
+      return res.status(404).json({ message: "Notification not found" });
+    }
+
+    // Check school scope (unless superadmin)
+    const isSuperAdmin = adminRoles.some(r => r.role?.toLowerCase() === 'superadmin');
+    if (!isSuperAdmin && notification.schoolId) {
+      const adminSchoolIds = adminRoles.filter(r => r.schoolId).map(r => r.schoolId!);
+      if (!adminSchoolIds.includes(notification.schoolId)) {
+        return res.status(404).json({ message: "Notification not found" });
+      }
+    }
+
+    res.json(notification);
+  } catch (error) {
+    console.error("Error fetching notification:", error);
+    res.status(500).json({ message: "Failed to fetch notification" });
+  }
+});
+
 // PUT /api/notifications/:id - Update a draft notification
 router.put("/:id", async (req, res) => {
   try {
@@ -795,6 +848,86 @@ router.delete("/:id", async (req, res) => {
   } catch (error) {
     console.error("Error deleting notification:", error);
     res.status(500).json({ message: "Failed to delete notification" });
+  }
+});
+
+// POST /api/notifications/:id/resend - Resend an existing notification
+router.post("/:id/resend", async (req, res) => {
+  try {
+    const notificationId = parseInt(req.params.id);
+    if (isNaN(notificationId)) {
+      return res.status(400).json({ message: "Invalid notification ID" });
+    }
+
+    // Authorization check
+    const email = (req as any).auth?.payload?.email || (req as any).auth?.email || (req as any).user?.email;
+    if (!email) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
+    
+    const user = await storage.getUserByEmail(email);
+    if (!user) {
+      return res.status(401).json({ message: "User not found" });
+    }
+    
+    // Verify user has admin role
+    const userRoles = await storage.getUserRolesByUserId(user.id);
+    const adminRoles = userRoles.filter(r => 
+      r.role?.toLowerCase() === 'admin' || 
+      r.role?.toLowerCase() === 'school_admin' ||
+      r.role?.toLowerCase() === 'schooladmin' ||
+      r.role?.toLowerCase() === 'superadmin'
+    );
+    
+    if (adminRoles.length === 0) {
+      return res.status(403).json({ message: "Admin role required to resend notifications" });
+    }
+
+    // Get the existing notification
+    const existingNotification = await storage.getNotificationById(notificationId);
+    if (!existingNotification) {
+      return res.status(404).json({ message: "Notification not found" });
+    }
+
+    // Check school scope (unless superadmin)
+    const isSuperAdmin = adminRoles.some(r => r.role?.toLowerCase() === 'superadmin');
+    if (!isSuperAdmin && existingNotification.schoolId) {
+      const adminSchoolIds = adminRoles.filter(r => r.schoolId).map(r => r.schoolId!);
+      if (!adminSchoolIds.includes(existingNotification.schoolId)) {
+        return res.status(404).json({ message: "Notification not found" });
+      }
+    }
+
+    // Only allow resending sent notifications
+    if (existingNotification.status !== "sent") {
+      return res.status(400).json({ message: "Can only resend notifications that have been sent" });
+    }
+
+    // Create a new notification with the same content
+    const newNotification = await storage.createNotification({
+      senderId: existingNotification.senderId,
+      type: existingNotification.type,
+      priority: existingNotification.priority,
+      subject: existingNotification.subject,
+      content: existingNotification.content,
+      targetType: existingNotification.targetType,
+      targetData: existingNotification.targetData as any,
+      schoolId: existingNotification.schoolId,
+      status: "sent",
+      sentAt: new Date(),
+      expiresAt: null,
+    });
+
+    // Process the notification to deliver to recipients
+    await processNotification(newNotification);
+
+    res.json({ 
+      message: "Notification resent successfully",
+      notification: newNotification 
+    });
+  } catch (error) {
+    console.error("Error resending notification:", error);
+    res.status(500).json({ message: "Failed to resend notification" });
   }
 });
 
