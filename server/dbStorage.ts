@@ -4461,6 +4461,13 @@ export class DatabaseStorage implements IStorage {
       .orderBy(asc(paymentAllocations.createdAt));
   }
 
+  async getPaymentAllocationsByMembershipEnrollmentId(membershipEnrollmentId: number): Promise<PaymentAllocation[]> {
+    const db = await getDb();
+    return db.select().from(paymentAllocations)
+      .where(eq(paymentAllocations.membershipEnrollmentId, membershipEnrollmentId))
+      .orderBy(asc(paymentAllocations.createdAt));
+  }
+
   async getPaymentAllocationsByPaymentHistoryId(paymentHistoryId: number): Promise<PaymentAllocation[]> {
     const db = await getDb();
     return db.select().from(paymentAllocations)
@@ -4487,6 +4494,16 @@ export class DatabaseStorage implements IStorage {
     })
     .from(paymentAllocations)
     .where(eq(paymentAllocations.enrollmentId, enrollmentId));
+    return Number(result[0]?.total || 0);
+  }
+
+  async getTotalPaidForMembershipEnrollment(membershipEnrollmentId: number): Promise<number> {
+    const db = await getDb();
+    const result = await db.select({
+      total: sql<number>`COALESCE(SUM(${paymentAllocations.allocatedAmountCents}), 0)`
+    })
+    .from(paymentAllocations)
+    .where(eq(paymentAllocations.membershipEnrollmentId, membershipEnrollmentId));
     return Number(result[0]?.total || 0);
   }
 

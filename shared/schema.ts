@@ -983,10 +983,17 @@ export type PaymentDiscount = typeof paymentDiscounts.$inferSelect;
 
 // Payment Allocations table - links payments to enrollments for deriving totals
 // This is the source of truth for "how much has been paid toward each enrollment"
+// Can link to either a class enrollment OR a membership enrollment (but not both)
 export const paymentAllocations = pgTable("payment_allocations", {
   id: serial("id").primaryKey(),
   paymentHistoryId: integer("payment_history_id").notNull().references(() => stripePaymentHistory.id, { onDelete: 'cascade' }),
-  enrollmentId: integer("enrollment_id").notNull().references(() => schoolClassEnrollments.id, { onDelete: 'cascade' }),
+  
+  // Class enrollment - nullable to support membership-only allocations
+  enrollmentId: integer("enrollment_id").references(() => schoolClassEnrollments.id, { onDelete: 'cascade' }),
+  
+  // Membership enrollment - nullable to support class-only allocations
+  // One of enrollmentId or membershipEnrollmentId should be set
+  membershipEnrollmentId: integer("membership_enrollment_id").references(() => membershipEnrollments.id, { onDelete: 'cascade' }),
   
   // Amount allocated to this enrollment (in cents)
   // Positive for payments, negative for refunds
@@ -994,7 +1001,7 @@ export const paymentAllocations = pgTable("payment_allocations", {
   
   // Allocation type for audit trail
   allocationType: text("allocation_type", {
-    enum: ["payment", "refund", "reallocation_out", "reallocation_in", "adjustment"]
+    enum: ["payment", "refund", "reallocation_out", "reallocation_in", "adjustment", "membership"]
   }).notNull().default("payment"),
   
   // Optional reference to source allocation (for reallocations)
@@ -1012,6 +1019,8 @@ export const paymentAllocations = pgTable("payment_allocations", {
 export const insertPaymentAllocationSchema = createInsertSchema(paymentAllocations)
   .omit({ id: true, createdAt: true })
   .extend({
+    enrollmentId: z.number().nullable().default(null),
+    membershipEnrollmentId: z.number().nullable().default(null),
     sourceAllocationId: z.number().nullable().default(null),
     adminComment: z.string().nullable().default(null),
     metadata: z.any().nullable().default(null),

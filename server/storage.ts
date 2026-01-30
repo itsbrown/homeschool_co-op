@@ -702,10 +702,12 @@ export interface IStorage {
   
   getPaymentAllocationById(id: number): Promise<PaymentAllocation | undefined>;
   getPaymentAllocationsByEnrollmentId(enrollmentId: number): Promise<PaymentAllocation[]>;
+  getPaymentAllocationsByMembershipEnrollmentId(membershipEnrollmentId: number): Promise<PaymentAllocation[]>;
   getPaymentAllocationsByPaymentHistoryId(paymentHistoryId: number): Promise<PaymentAllocation[]>;
   createPaymentAllocation(allocation: InsertPaymentAllocation): Promise<PaymentAllocation>;
   createPaymentAllocations(allocations: InsertPaymentAllocation[]): Promise<PaymentAllocation[]>;
   getTotalPaidForEnrollment(enrollmentId: number): Promise<number>;
+  getTotalPaidForMembershipEnrollment(membershipEnrollmentId: number): Promise<number>;
   
   // ==================== ASSESSMENT TRACKING ====================
   // Assessment Types
@@ -5009,6 +5011,11 @@ export class MemStorage implements IStorage {
       .filter(a => a.enrollmentId === enrollmentId);
   }
 
+  async getPaymentAllocationsByMembershipEnrollmentId(membershipEnrollmentId: number): Promise<PaymentAllocation[]> {
+    return Array.from(this.paymentAllocationsStore.values())
+      .filter(a => a.membershipEnrollmentId === membershipEnrollmentId);
+  }
+
   async getPaymentAllocationsByPaymentHistoryId(paymentHistoryId: number): Promise<PaymentAllocation[]> {
     return Array.from(this.paymentAllocationsStore.values())
       .filter(a => a.paymentHistoryId === paymentHistoryId);
@@ -5019,6 +5026,8 @@ export class MemStorage implements IStorage {
     const newAllocation: PaymentAllocation = {
       ...allocation,
       id,
+      enrollmentId: allocation.enrollmentId || null,
+      membershipEnrollmentId: allocation.membershipEnrollmentId || null,
       allocationType: allocation.allocationType || 'payment',
       sourceAllocationId: allocation.sourceAllocationId || null,
       adminComment: allocation.adminComment || null,
@@ -5039,6 +5048,11 @@ export class MemStorage implements IStorage {
 
   async getTotalPaidForEnrollment(enrollmentId: number): Promise<number> {
     const allocations = await this.getPaymentAllocationsByEnrollmentId(enrollmentId);
+    return allocations.reduce((sum, a) => sum + a.allocatedAmountCents, 0);
+  }
+
+  async getTotalPaidForMembershipEnrollment(membershipEnrollmentId: number): Promise<number> {
+    const allocations = await this.getPaymentAllocationsByMembershipEnrollmentId(membershipEnrollmentId);
     return allocations.reduce((sum, a) => sum + a.allocatedAmountCents, 0);
   }
 
@@ -7833,6 +7847,10 @@ import { DatabaseStorage } from "./dbStorage";
         return this.dbStorage.getPaymentAllocationsByEnrollmentId(enrollmentId);
       }
 
+      async getPaymentAllocationsByMembershipEnrollmentId(membershipEnrollmentId: number): Promise<PaymentAllocation[]> {
+        return this.dbStorage.getPaymentAllocationsByMembershipEnrollmentId(membershipEnrollmentId);
+      }
+
       async getPaymentAllocationsByPaymentHistoryId(paymentHistoryId: number): Promise<PaymentAllocation[]> {
         return this.dbStorage.getPaymentAllocationsByPaymentHistoryId(paymentHistoryId);
       }
@@ -7847,6 +7865,10 @@ import { DatabaseStorage } from "./dbStorage";
 
       async getTotalPaidForEnrollment(enrollmentId: number): Promise<number> {
         return this.dbStorage.getTotalPaidForEnrollment(enrollmentId);
+      }
+
+      async getTotalPaidForMembershipEnrollment(membershipEnrollmentId: number): Promise<number> {
+        return this.dbStorage.getTotalPaidForMembershipEnrollment(membershipEnrollmentId);
       }
 
       // ==================== STRIPE PAYMENT HISTORY ====================
