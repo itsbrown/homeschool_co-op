@@ -1477,7 +1477,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         rawTotal: number,
         rawDiscounts: Cart['discounts'],
         rawMembership: MembershipFee | null,
-        rawSchoolSettings: Cart['schoolSettings'] | undefined
+        rawSchoolSettings: Cart['schoolSettings'] | undefined,
+        existingPromoCode: Cart['appliedPromoCode'] = null
       ): Cart => {
         // Validate numeric fields with Number.isFinite (stricter than !isNaN)
         const safeSubtotal = Number.isFinite(rawSubtotal) ? rawSubtotal : calculateBasicSubtotal(items);
@@ -1491,11 +1492,15 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
           discounts: safeDiscounts,
           total: safeTotal,
           membership: rawMembership,
-          appliedPromoCode: null,
+          appliedPromoCode: existingPromoCode,
           schoolSettings: rawSchoolSettings,
         };
       };
 
+      // CRITICAL FIX: Preserve any existing promo code from current cart state
+      // This prevents promo codes from being lost during cart rehydration from API
+      const existingPromoCode = state.cart.appliedPromoCode;
+      
       // Use server-authoritative pricing from /api/cart/calculate
       // This is the SINGLE SOURCE OF TRUTH, preventing client-server price mismatches
       let subtotal = 0;
@@ -1504,7 +1509,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       let schoolSettings: Cart['schoolSettings'] | undefined = undefined;
       
       try {
-        const serverPricing = await fetchServerCartPricing(cartItems, getAccessToken, null);
+        // Pass existing promo code to server for correct pricing calculation
+        const serverPricing = await fetchServerCartPricing(cartItems, getAccessToken, existingPromoCode?.code || null);
         subtotal = serverPricing.subtotal;
         total = serverPricing.total;
         discounts = serverPricing.discounts;
@@ -1513,7 +1519,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.warn('🛒 Error fetching server cart pricing, using client calculation fallback:', totalsError);
         // Fallback to client-side calculation if server is unavailable
         try {
-          const fallbackTotals = await calculateCartTotalsWithDiscounts(cartItems, getAccessToken, null, userRolesList);
+          const fallbackTotals = await calculateCartTotalsWithDiscounts(cartItems, getAccessToken, existingPromoCode?.code || null, userRolesList);
           subtotal = typeof fallbackTotals.subtotal === 'number' ? fallbackTotals.subtotal : 0;
           total = typeof fallbackTotals.total === 'number' ? fallbackTotals.total : subtotal;
           discounts = normalizeDiscounts(fallbackTotals.discounts);
@@ -1534,17 +1540,19 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // CRITICAL: Always replace cart with API data (no localStorage merge)
       // This ensures API is the single source of truth and prevents stale data conflicts
       if (cartItems.length > 0 || membership) {
-        // Build validated cart payload - all fields are sanitized before dispatch/storage
+        // Build validated cart payload - preserve existing promo code during rehydration
         const cartPayload = buildValidatedCartPayload(
           cartItems,
           subtotal,
           total,
           discounts,
           membership,
-          schoolSettings
+          schoolSettings,
+          existingPromoCode
         );
         
         // API returned enrollments or user needs membership - replace cart state entirely
+        console.log('🛒 LOAD_CART with preserved promo code:', existingPromoCode?.code || 'none');
         dispatch({
           type: 'LOAD_CART',
           payload: cartPayload,
@@ -1572,7 +1580,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       processingRef.current = false;
     }
-  }, [user?.email, getAccessToken, userRolesList, fetchMembershipForCart]);
+  }, [user?.email, getAccessToken, userRolesList, fetchMembershipForCart, state.cart.appliedPromoCode]);
 
   // Process enrollments data when query result changes
   useEffect(() => {
