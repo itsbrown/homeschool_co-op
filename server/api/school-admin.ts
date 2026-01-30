@@ -352,7 +352,9 @@ function transformUserRoleStaffToFrontend(
   const status = hasPendingInvitation ? 'Pending' : (user.isActive !== false ? 'Active' : 'Inactive');
   
   return {
-    id: userRole.id, // Use user_roles.id as staff ID
+    id: user.id, // User ID - the actual user identifier
+    roleId: userRole.id, // user_roles.id for role management
+    staffId: staffRecord?.id || null, // school_staff.id for staff record reference
     email: user.email,
     firstName: user.firstName || user.name?.split(' ')[0] || '',
     lastName: user.lastName || user.name?.split(' ').slice(1).join(' ') || '',
@@ -360,13 +362,15 @@ function transformUserRoleStaffToFrontend(
     role: userRole.role, // The role/position from user_roles
     department: staffRecord?.department || userRole.role || '', // Use department from school_staff if available
     status: status,
+    isActive: user.isActive !== false,
     joinDate: userRole.createdAt ? new Date(userRole.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
     avatar: user.avatar || '',
     phone: user.phone || '',
     subjects: [],
     classIds: classes.map(c => c.id.toString()),
     locationId: userLocationId !== undefined ? userLocationId : (staffRecord?.locationId || null), // Prefer user_locations, fallback to school_staff
-    userId: user.id // Include user ID for reference
+    userId: user.id, // Legacy field for backward compatibility
+    hasPendingInvitation,
   };
 }
 
@@ -1506,40 +1510,35 @@ router.get("/staff", supabaseAuth, async (req: any, res: any) => {
   }
 });
 
-// Get single staff member by ID (now using user_roles.id)
+// Get single staff member by ID (using school_staff.id as sent by UsersPage)
 router.get("/staff/:id", supabaseAuth, async (req: any, res) => {
   try {
     const schoolId = await getSchoolIdFromRequest(req, res);
     if (schoolId === null) return;
 
-    const roleId = parseInt(req.params.id, 10);
-    console.log(`🔍 Looking for staff member with user_roles ID: ${roleId}`);
+    const staffId = parseInt(req.params.id, 10);
+    console.log(`🔍 Looking for staff member with school_staff ID: ${staffId}`);
     
-    if (isNaN(roleId)) {
+    if (isNaN(staffId)) {
       return res.status(400).json({ message: "Invalid staff ID format" });
     }
 
-    // Get role record from user_roles
-    const db = await getDb();
-    const roleRecords = await db
-      .select()
-      .from(userRoles)
-      .where(eq(userRoles.id, roleId));
+    // Get staff record from school_staff table (this is what UsersPage sends)
+    const staffRecord = await storage.getSchoolStaffById(staffId);
     
-    const roleRecord = roleRecords[0];
-    if (!roleRecord) {
+    if (!staffRecord) {
       return res.status(404).json({ message: "Staff member not found" });
     }
 
-    // Verify role belongs to authenticated school
-    if (roleRecord.schoolId !== schoolId) {
+    // Verify staff belongs to authenticated school
+    if (staffRecord.schoolId !== schoolId) {
       return res.status(403).json({ message: 'Access denied to this staff member' });
     }
 
-    // Get user details
-    const user = await storage.getUser(roleRecord.userId);
+    // Get user details using the userId from the staff record
+    const user = await storage.getUser(staffRecord.userId);
     if (!user) {
-      console.error(`❌ User not found for role record ${roleId}`);
+      console.error(`❌ User not found for staff record ${staffId}`);
       return res.status(404).json({ message: "User details not found for staff member" });
     }
 
@@ -1553,10 +1552,6 @@ router.get("/staff/:id", supabaseAuth, async (req: any, res) => {
     const pendingInvitationsMap = await storage.getPendingRoleInvitationsByEmails([user.email]);
     const hasPendingInvitation = pendingInvitationsMap.get(user.email) || false;
 
-    // Fetch school_staff record for enrichment (department only)
-    const schoolStaffRecords = await storage.getSchoolStaffBySchoolId(schoolId);
-    const staffRecord = schoolStaffRecords.find((s: any) => s.userId === roleRecord.userId);
-
     // Fetch locationId from user_locations (source of truth)
     const schoolLocations = await storage.getLocationsBySchoolId(schoolId);
     const schoolLocationIds = schoolLocations.map(loc => loc.id);
@@ -1564,7 +1559,48 @@ router.get("/staff/:id", supabaseAuth, async (req: any, res) => {
     const schoolUserLocations = userLocations.filter(ul => schoolLocationIds.includes(ul.locationId));
     const userLocationId = schoolUserLocations.length > 0 ? schoolUserLocations[0].locationId : null;
 
-    const staffMember = transformUserRoleStaffToFrontend(roleRecord, user, assignedClasses, hasPendingInvitation, staffRecord, userLocationId);
+    // Get user's role record for this school to pass to transform function
+    const db = await getDb();
+    const roleRecords = await db
+      .select()
+      .from(userRoles)
+      .where(and(
+        eq(userRoles.userId, user.id),
+        eq(userRoles.schoolId, schoolId)
+      ));
+    const roleRecord = roleRecords[0];
+
+    // Build staff member response using existing transform function if role record exists,
+    // otherwise build response directly from staff record
+    let staffMember;
+    if (roleRecord) {
+      staffMember = transformUserRoleStaffToFrontend(roleRecord, user, assignedClasses, hasPendingInvitation, staffRecord, userLocationId);
+    } else {
+      // Fallback: build response directly from staff record and user (when no user_roles record exists)
+      // Match the transform function's contract exactly: id = user.id, roleId/staffId included
+      const nameParts = user.name ? user.name.split(' ') : [user.firstName || '', user.lastName || ''];
+      staffMember = {
+        id: user.id, // User ID - the actual user identifier (consistent with transform function)
+        roleId: null, // No user_roles record exists
+        staffId: staffRecord.id, // school_staff.id for staff record reference
+        name: user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim(),
+        firstName: user.firstName || nameParts[0] || '',
+        lastName: user.lastName || nameParts.slice(1).join(' ') || '',
+        email: user.email,
+        phone: user.phone || '',
+        role: staffRecord.position || 'Staff',
+        department: staffRecord.department || '',
+        status: staffRecord.isActive ? 'Active' : 'Inactive',
+        isActive: staffRecord.isActive,
+        joinDate: staffRecord.startDate ? new Date(staffRecord.startDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+        avatar: user.avatar || '',
+        subjects: [],
+        classIds: assignedClasses.map(c => c.id.toString()),
+        locationId: userLocationId,
+        userId: user.id, // Legacy field for backward compatibility
+        hasPendingInvitation,
+      };
+    }
     
     console.log(`✅ Found staff member: ${staffMember.name}, locationId: ${userLocationId}`);
     res.json(staffMember);
