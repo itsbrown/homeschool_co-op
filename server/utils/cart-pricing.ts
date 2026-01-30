@@ -1056,12 +1056,33 @@ export async function calculateCartSnapshot(
   // Check if user already has active membership using shared helper for consistency
   const existingMemberships = await storage.getMembershipEnrollmentsByParentId(userId);
   const currentYear = new Date().getFullYear();
+  
+  // Debug log for membership check
+  console.log(`🎫 Membership check for user ${userId}, school ${schoolId}:`, {
+    currentYear,
+    existingMemberships: existingMemberships?.map((m: any) => ({
+      year: m.membershipYear,
+      status: m.status,
+      schoolId: m.schoolId,
+      isActive: isActiveMembership(m.status),
+      schoolMatch: Number(m.schoolId) === Number(schoolId)
+    }))
+  });
+  
+  // Use Number() to ensure type-safe comparison for schoolId
+  // Check for active membership (enrolled or grace_period status)
+  // OR membership with remainingBalance = 0 (already paid but status not updated yet)
   const activeMembership = existingMemberships?.find((m: any) => 
     (m.membershipYear === currentYear || m.membershipYear === currentYear + 1) && 
-    isActiveMembership(m.status) &&
-    m.schoolId === schoolId
+    Number(m.schoolId) === Number(schoolId) &&
+    (isActiveMembership(m.status) || (m.remainingBalance !== undefined && m.remainingBalance <= 0))
   );
   const alreadyPaid = !!activeMembership;
+  console.log(`🎫 Active membership found: ${alreadyPaid}`, activeMembership ? { 
+    year: activeMembership.membershipYear, 
+    status: activeMembership.status,
+    remainingBalance: activeMembership.remainingBalance 
+  } : null);
   
   // Calculate membership discount if applicable
   let discountedMembershipAmount = membershipFeeAmount;

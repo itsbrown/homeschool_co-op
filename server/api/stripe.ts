@@ -1784,12 +1784,12 @@ router.get('/payment-history', supabaseAuth, async (req: any, res) => {
     // Format payment history for frontend
     const formattedPayments = paymentHistory.map((payment: any) => ({
       id: payment.id,
-      paymentIntentId: payment.paymentIntentId,
+      paymentIntentId: payment.paymentIntentId || payment.stripePaymentIntentId,
       customerId: payment.customerId,
       amount: payment.amount,
       status: payment.status,
       subscriptionId: payment.subscriptionId,
-      createdDate: payment.createdDate,
+      createdDate: payment.createdAt || payment.paymentDate || payment.createdDate,
       paymentMethod: payment.paymentMethod,
       description: payment.description
     }));
