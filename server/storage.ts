@@ -484,6 +484,7 @@ export interface IStorage {
   getDiscountApplicationsByChild(childId: number): Promise<DiscountApplication[]>;
   createDiscountApplication(application: InsertDiscountApplication): Promise<DiscountApplication>;
   updateDiscountApplication(id: number, application: Partial<InsertDiscountApplication>): Promise<DiscountApplication | undefined>;
+  getDiscountUsageCountByUser(discountId: number, parentEmail: string): Promise<number>;
 
   // Daily Flow Template methods
   getDailyFlowTemplates(filters?: { schoolId?: number; gradeLevel?: string; subject?: string }): Promise<DailyFlowTemplate[]>;
@@ -7179,6 +7180,10 @@ import { DatabaseStorage } from "./dbStorage";
 
       async updateDiscountApplication(id: number, application: Partial<InsertDiscountApplication>): Promise<DiscountApplication | undefined> {
         return this.dbStorage.updateDiscountApplication(id, application);
+      }
+
+      async getDiscountUsageCountByUser(discountId: number, parentEmail: string): Promise<number> {
+        return this.dbStorage.getDiscountUsageCountByUser(discountId, parentEmail);
       }
 
       // Membership Enrollment methods

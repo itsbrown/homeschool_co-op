@@ -84,7 +84,8 @@ router.post('/snapshot', supabaseAuth, async (req: any, res) => {
       user.id,
       effectiveSchoolId,
       appliedPromoCode,
-      creditsToApply
+      creditsToApply,
+      userEmail // Pass parent email for per-user discount usage limit validation
     );
 
     console.log('📸 Cart snapshot generated:', {
@@ -180,7 +181,8 @@ router.post('/calculate', supabaseAuth, async (req: any, res) => {
       cartItems,
       user.id,
       effectiveSchoolId,
-      appliedPromoCode
+      appliedPromoCode,
+      userEmail // Pass parent email for per-user discount usage limit validation
     );
 
     console.log('📊 Cart calculation response:', {

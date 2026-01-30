@@ -3011,6 +3011,20 @@ export class DatabaseStorage implements IStorage {
     return updatedApplication;
   }
 
+  async getDiscountUsageCountByUser(discountId: number, parentEmail: string): Promise<number> {
+    const db = await getDb();
+    const result = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(discountApplications)
+      .where(
+        and(
+          eq(discountApplications.discountId, discountId),
+          eq(discountApplications.parentEmail, parentEmail)
+        )
+      );
+    return result[0]?.count ?? 0;
+  }
+
   // ============================================
   // Staff Position Methods
   // ============================================

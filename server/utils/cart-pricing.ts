@@ -180,6 +180,62 @@ function isDiscountCurrentlyValid(discount: Discount): boolean {
   return true;
 }
 
+/**
+ * Check if a user has exceeded their per-user usage limit for a discount.
+ * Returns true if the discount can still be used by this user.
+ * 
+ * SECURITY: This function fails CLOSED - if the discount has a usageLimitPerUser
+ * but we cannot verify the user's usage (missing email or DB error), the discount
+ * is rejected to prevent abuse.
+ */
+async function checkPerUserUsageLimit(discount: Discount, parentEmail: string | undefined): Promise<{ allowed: boolean; reason?: string }> {
+  // If no per-user limit is set, the discount is allowed
+  if (!discount.usageLimitPerUser) {
+    return { allowed: true };
+  }
+  
+  // FAIL CLOSED: If the discount has a per-user limit but no email to verify,
+  // reject the discount to prevent bypassing the limit
+  if (!parentEmail) {
+    console.log('🚫 Discount per-user limit enforcement: rejecting discount due to missing parentEmail', {
+      discountId: discount.id,
+      discountName: discount.name,
+      usageLimitPerUser: discount.usageLimitPerUser
+    });
+    return { 
+      allowed: false, 
+      reason: 'Unable to verify per-user usage limit - please ensure you are logged in' 
+    };
+  }
+  
+  try {
+    const userUsageCount = await storage.getDiscountUsageCountByUser(discount.id, parentEmail);
+    
+    if (userUsageCount >= discount.usageLimitPerUser) {
+      console.log('🚫 Discount per-user limit exceeded:', {
+        discountId: discount.id,
+        discountName: discount.name,
+        parentEmail,
+        usageLimitPerUser: discount.usageLimitPerUser,
+        userUsageCount
+      });
+      return { 
+        allowed: false, 
+        reason: `You have already used this promo code ${userUsageCount} time${userUsageCount !== 1 ? 's' : ''}. Maximum allowed is ${discount.usageLimitPerUser}.`
+      };
+    }
+    
+    return { allowed: true };
+  } catch (error) {
+    // FAIL CLOSED: On DB error, reject the discount to prevent potential abuse
+    console.error('🚫 Error checking per-user discount usage limit - REJECTING discount for safety:', error);
+    return { 
+      allowed: false, 
+      reason: 'Unable to verify per-user usage limit at this time. Please try again later.' 
+    };
+  }
+}
+
 function isDiscountApplicable(
   discount: Discount,
   items: Array<{ classId: number; price: number }>,
@@ -347,7 +403,8 @@ export async function calculateCartPricing(
   items: CartItem[],
   userId: number,
   schoolId: number,
-  appliedPromoCode?: string
+  appliedPromoCode?: string,
+  parentEmail?: string
 ): Promise<CartPricingResult> {
   console.log('🧮 Server-side cart pricing calculation:', {
     itemCount: items.length,
@@ -594,6 +651,13 @@ export async function calculateCartPricing(
         continue;
       }
 
+      // Check per-user usage limit (usageLimitPerUser validation)
+      const perUserCheck = await checkPerUserUsageLimit(discount, parentEmail);
+      if (!perUserCheck.allowed) {
+        console.log(`🚫 Skipping discount ${discount.name} (ID: ${discount.id}) - per-user limit: ${perUserCheck.reason}`);
+        continue;
+      }
+
       const discountAmount = calculateDiscountAmount(discount, subtotal, itemsForDiscount);
 
       if (discountAmount > 0) {
@@ -675,34 +739,44 @@ export async function calculateCartPricing(
         }));
 
         if (isDiscountApplicable(promoDiscount, itemsForDiscount, subtotal)) {
-          const discountAmount = calculateDiscountAmount(promoDiscount, subtotal, itemsForDiscount);
-
-          if (discountAmount > 0) {
-            appliedDiscounts.push({
-              id: promoDiscount.id,
-              name: promoDiscount.name,
-              type: promoDiscount.bundleRule ? 'bundle' : promoDiscount.type as 'percentage' | 'fixed_amount',
-              value: promoDiscount.value,
-              discountAmount,
-              priority: promoDiscount.priority ?? 0,
-              bundleRule: promoDiscount.bundleRule || undefined,
-              sourceType: 'promo'
-            });
-
-            autoAndPromoDiscountAmount += discountAmount;
-            
-            // Mark promo code as successfully applied
+          // Check per-user usage limit for promo code (usageLimitPerUser validation)
+          const promoPerUserCheck = await checkPerUserUsageLimit(promoDiscount, parentEmail);
+          if (!promoPerUserCheck.allowed) {
             promoCodeValidation = {
               promoCodeProvided: appliedPromoCode!,
-              promoCodeApplied: true
+              promoCodeApplied: false,
+              reason: promoPerUserCheck.reason || 'You have already used this promo code the maximum allowed times'
             };
-            
-            console.log('✅ Promo code successfully applied:', {
-              promoCode: appliedPromoCode,
-              discountId: promoDiscount.id,
-              discountName: promoDiscount.name,
-              discountAmount
-            });
+          } else {
+            const discountAmount = calculateDiscountAmount(promoDiscount, subtotal, itemsForDiscount);
+
+            if (discountAmount > 0) {
+              appliedDiscounts.push({
+                id: promoDiscount.id,
+                name: promoDiscount.name,
+                type: promoDiscount.bundleRule ? 'bundle' : promoDiscount.type as 'percentage' | 'fixed_amount',
+                value: promoDiscount.value,
+                discountAmount,
+                priority: promoDiscount.priority ?? 0,
+                bundleRule: promoDiscount.bundleRule || undefined,
+                sourceType: 'promo'
+              });
+
+              autoAndPromoDiscountAmount += discountAmount;
+              
+              // Mark promo code as successfully applied
+              promoCodeValidation = {
+                promoCodeProvided: appliedPromoCode!,
+                promoCodeApplied: true
+              };
+              
+              console.log('✅ Promo code successfully applied:', {
+                promoCode: appliedPromoCode,
+                discountId: promoDiscount.id,
+                discountName: promoDiscount.name,
+                discountAmount
+              });
+            }
           }
         }
       }
@@ -748,9 +822,10 @@ export async function validateCartTotal(
   userId: number,
   schoolId: number,
   clientTotal: number,
-  appliedPromoCode?: string
+  appliedPromoCode?: string,
+  parentEmail?: string
 ): Promise<{ valid: boolean; serverTotal: number; discrepancy: number; result: CartPricingResult }> {
-  const result = await calculateCartPricing(items, userId, schoolId, appliedPromoCode);
+  const result = await calculateCartPricing(items, userId, schoolId, appliedPromoCode, parentEmail);
   
   const discrepancy = clientTotal - result.total;
   const discrepancyPercent = result.total > 0 ? Math.abs(discrepancy) / result.total * 100 : 0;
@@ -967,10 +1042,11 @@ export async function calculateCartSnapshot(
   userId: number,
   schoolId: number,
   appliedPromoCode?: string,
-  creditsToApply?: number
+  creditsToApply?: number,
+  parentEmail?: string
 ): Promise<CartSnapshot> {
   // Calculate cart pricing
-  const pricing = await calculateCartPricing(items, userId, schoolId, appliedPromoCode);
+  const pricing = await calculateCartPricing(items, userId, schoolId, appliedPromoCode, parentEmail);
   
   // Get membership info
   const school = await storage.getSchool(schoolId);

@@ -293,6 +293,10 @@ export class StripePaymentPlanService {
     }>;
     const totalInstallments = parseInt(metadata.totalInstallments || '1', 10);
     
+    // Parse discount snapshot for audit trail in scheduled payments
+    const discountSnapshot = metadata.discountSnapshot ? JSON.parse(metadata.discountSnapshot) : null;
+    const creditsAppliedCents = metadata.creditsAppliedCents ? parseInt(metadata.creditsAppliedCents, 10) : 0;
+    
     if (!enrollmentIds.length || !parentEmail) {
       console.log('⚠️ Missing enrollment IDs or parent email in metadata, skipping scheduled payment creation');
       return { created: 0, skipped: true };
@@ -367,6 +371,22 @@ export class StripePaymentPlanService {
     // Create scheduled payments for each future phase
     let createdCount = 0;
     
+    // Log discount info if present
+    if (discountSnapshot) {
+      const promoDiscount = discountSnapshot.appliedDiscounts?.find((d: any) => d.source === 'promo');
+      console.log('🎟️ Discount snapshot for scheduled payments:', {
+        promoCode: promoDiscount?.code || null,
+        promoDiscountId: promoDiscount?.discountId || null,
+        promoDiscountAmount: promoDiscount?.amount || 0,
+        subtotal: discountSnapshot.subtotal,
+        discountTotal: discountSnapshot.discountTotal,
+        totalDiscounts: discountSnapshot.appliedDiscounts?.length || 0
+      });
+    }
+    if (creditsAppliedCents > 0) {
+      console.log('💰 Credits applied to original payment:', creditsAppliedCents);
+    }
+    
     for (const phase of futurePhases) {
       const phaseDate = new Date(phase.dueDate);
       let allocatedAmount = 0;
@@ -407,7 +427,20 @@ export class StripePaymentPlanService {
             isProportionalSplit: enrollmentCount > 1,
             proportion: enrollment.proportion,
             enrollmentTotalCost: enrollment.totalCost,
-            createdFromConfirmation: true
+            createdFromConfirmation: true,
+            // Promo code and discount audit trail
+            ...(discountSnapshot && {
+              discountSnapshot: discountSnapshot,
+              appliedPromoCode: discountSnapshot.appliedDiscounts?.find((d: any) => d.source === 'promo')?.code || null,
+              promoDiscountId: discountSnapshot.appliedDiscounts?.find((d: any) => d.source === 'promo')?.discountId || null,
+              promoDiscountAmount: discountSnapshot.appliedDiscounts?.find((d: any) => d.source === 'promo')?.amount || 0,
+              subtotalBeforeDiscounts: discountSnapshot.subtotal,
+              totalDiscountAmount: discountSnapshot.discountTotal
+            }),
+            // Credits audit trail
+            ...(creditsAppliedCents > 0 && {
+              creditsAppliedCents: creditsAppliedCents
+            })
           }
         });
         createdCount++;

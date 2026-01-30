@@ -486,7 +486,8 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
         cartItems,
         parentForMembership?.id || 0,
         effectiveSchoolIdForPayment || 0,
-        appliedPromoCode
+        appliedPromoCode,
+        userEmail // Pass parent email for per-user discount usage limit validation
       );
       
       console.log('🧮 Server-side cart pricing with discounts:', {
