@@ -948,7 +948,7 @@ async function calculatePaymentPlans(
   // Get class dates from cart items to calculate actual payment schedule
   for (const item of items) {
     try {
-      const classData = await storage.getClass(item.classId);
+      const classData = await storage.getClassById(item.classId) as any;
       if (classData) {
         // Get dates from variant or class level
         let startDate = classData.startDate ? new Date(classData.startDate) : null;
