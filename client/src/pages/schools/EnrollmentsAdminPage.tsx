@@ -335,10 +335,13 @@ export default function EnrollmentsAdminPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/school-admin/enrollments"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/enrollments", selectedEnrollment?.id] });
       
-      // Invalidate parent profile to refresh scheduled payments display
-      if (data.parent?.id) {
-        queryClient.invalidateQueries({ queryKey: [`/api/parent-profile/${data.parent.id}`] });
-      }
+      // Invalidate parent profile queries to refresh scheduled payments display
+      // Uses predicate to match any parent profile URL (consistent with ManualPaymentEntryPage pattern)
+      queryClient.invalidateQueries({ 
+        predicate: (query) => 
+          typeof query.queryKey[0] === 'string' && 
+          query.queryKey[0].startsWith('/api/parent-profile')
+      });
       
       // Invalidate scheduled payments queries
       queryClient.invalidateQueries({ queryKey: ["/api/scheduled-payments"] });
