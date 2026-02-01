@@ -331,8 +331,19 @@ export default function EnrollmentsAdminPage() {
         });
       }
       
+      // Invalidate enrollment-related queries
       queryClient.invalidateQueries({ queryKey: ["/api/school-admin/enrollments"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/enrollments", selectedEnrollment?.id] });
+      
+      // Invalidate parent profile to refresh scheduled payments display
+      if (data.parent?.id) {
+        queryClient.invalidateQueries({ queryKey: [`/api/parent-profile/${data.parent.id}`] });
+      }
+      
+      // Invalidate scheduled payments queries
+      queryClient.invalidateQueries({ queryKey: ["/api/scheduled-payments"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/scheduled-payments/upcoming"] });
+      
       setEditDialogOpen(false);
       setSelectedEnrollment(null);
       setAdminComment("");

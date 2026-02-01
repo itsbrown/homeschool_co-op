@@ -222,6 +222,11 @@ router.patch('/:enrollmentId/payment-plan', async (req: any, res) => {
     // Fetch updated enrollment
     const updatedEnrollment = await storage.getProgramEnrollmentById(enrollmentId);
 
+    // Get parent user info for cache invalidation on frontend
+    const parentUser = enrollment.parentEmail 
+      ? await storage.getUserByEmail(enrollment.parentEmail)
+      : null;
+
     console.log(`✅ Updated payment plan for enrollment ${enrollmentId}: ${oldFrequency} → ${paymentFrequency}`);
 
     res.json({
@@ -238,7 +243,12 @@ router.patch('/:enrollmentId/payment-plan', async (req: any, res) => {
       scheduledPaymentsCreated: createdPayments.length,
       scheduledPaymentsDeleted: deletedCount,
       stripeUpdate: stripeUpdateResult,
-      auditLog: auditEntry
+      auditLog: auditEntry,
+      // Include parent info for frontend cache invalidation
+      parent: parentUser ? {
+        id: parentUser.id,
+        email: parentUser.email
+      } : null
     });
 
   } catch (error) {
