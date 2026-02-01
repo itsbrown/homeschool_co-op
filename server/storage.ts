@@ -388,6 +388,7 @@ export interface IStorage {
   updateScheduledPaymentStatus(id: number, status: string): Promise<any | undefined>;
   updateScheduledPaymentReminderCount(id: number, count: number): Promise<any | undefined>;
   deleteScheduledPayment(id: number): Promise<void>;
+  deletePendingScheduledPaymentsByEnrollmentId(enrollmentId: number): Promise<number>;
 
   // Refund methods
   createRefund(refund: InsertRefund): Promise<Refund>;
@@ -3680,6 +3681,21 @@ export class MemStorage implements IStorage {
     }
   }
 
+  async deletePendingScheduledPaymentsByEnrollmentId(enrollmentId: number): Promise<number> {
+    let deletedCount = 0;
+    for (const [id, payment] of this.scheduledPaymentsStore.entries()) {
+      if (payment.enrollmentId === enrollmentId && payment.status === 'pending') {
+        this.scheduledPaymentsStore.delete(id);
+        deletedCount++;
+      }
+    }
+    if (deletedCount > 0) {
+      await this.saveScheduledPaymentsToFile();
+      console.log(`🗑️ Deleted ${deletedCount} pending scheduled payments for enrollment ${enrollmentId}`);
+    }
+    return deletedCount;
+  }
+
   private async saveScheduledPaymentsToFile(): Promise<void> {
     try {
       const fs = await import('fs');
@@ -6713,6 +6729,19 @@ import { DatabaseStorage } from "./dbStorage";
         } catch (error) {
           console.error('Failed to delete scheduled payment from DB, trying memStorage:', error);
           return await this.memStorage.deleteScheduledPayment(id);
+        }
+      }
+
+      async deletePendingScheduledPaymentsByEnrollmentId(enrollmentId: number): Promise<number> {
+        try {
+          if (this.dbStorage && typeof (this.dbStorage as any).deletePendingScheduledPaymentsByEnrollmentId === 'function') {
+            return await (this.dbStorage as any).deletePendingScheduledPaymentsByEnrollmentId(enrollmentId);
+          } else {
+            return await this.memStorage.deletePendingScheduledPaymentsByEnrollmentId(enrollmentId);
+          }
+        } catch (error) {
+          console.error('Failed to delete pending scheduled payments from DB, trying memStorage:', error);
+          return await this.memStorage.deletePendingScheduledPaymentsByEnrollmentId(enrollmentId);
         }
       }
 

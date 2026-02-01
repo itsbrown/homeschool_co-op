@@ -1546,9 +1546,11 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
 
     } catch (error: any) {
       console.error('❌ Error in enrollment creation or payment plan:', error);
+      console.error('❌ Stack trace:', error.stack);
       res.status(500).json({
         message: 'Failed to create enrollment or payment plan',
-        error: error.message
+        error: error.message,
+        details: process.env.NODE_ENV === 'development' ? error.stack : undefined
       });
     }
   } catch (error: any) {

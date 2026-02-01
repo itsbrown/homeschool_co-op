@@ -186,6 +186,39 @@ router.patch('/:enrollmentId/payment-plan', async (req: any, res) => {
       }
     });
 
+    // CRITICAL: Regenerate scheduled_payments records
+    // 1. Delete all pending scheduled payments for this enrollment
+    const deletedCount = await storage.deletePendingScheduledPaymentsByEnrollmentId(enrollmentId);
+    console.log(`🗑️ Deleted ${deletedCount} old pending scheduled payments for enrollment ${enrollmentId}`);
+    
+    // 2. Create new scheduled payments based on recalculated schedule
+    const createdPayments = [];
+    for (let i = 0; i < newSchedule.paymentDates.length; i++) {
+      const paymentDate = newSchedule.paymentDates[i];
+      const isLastPayment = i === newSchedule.paymentDates.length - 1;
+      const amount = isLastPayment ? newSchedule.finalPaymentAmount : newSchedule.paymentAmount;
+      
+      const newPayment = await storage.createScheduledPayment({
+        enrollmentId: enrollment.id,
+        parentEmail: enrollment.parentEmail,
+        amount,
+        scheduledDate: paymentDate,
+        status: 'pending',
+        schoolId: enrollment.schoolId,
+        metadata: {
+          createdFromPaymentPlanChange: true,
+          paymentFrequency,
+          paymentNumber: i + 1,
+          totalPayments: newSchedule.numberOfPayments,
+          adminEmail: userEmail,
+          createdAt: new Date().toISOString()
+        }
+      });
+      createdPayments.push(newPayment);
+      console.log(`📅 Created scheduled payment ${newPayment.id}: $${(amount / 100).toFixed(2)} on ${paymentDate.toISOString().split('T')[0]}`);
+    }
+    console.log(`✅ Created ${createdPayments.length} new scheduled payments for enrollment ${enrollmentId}`);
+
     // Fetch updated enrollment
     const updatedEnrollment = await storage.getProgramEnrollmentById(enrollmentId);
 
@@ -202,6 +235,8 @@ router.patch('/:enrollmentId/payment-plan', async (req: any, res) => {
         paymentDates: newSchedule.paymentDates,
         totalAmount: newSchedule.totalAmount
       },
+      scheduledPaymentsCreated: createdPayments.length,
+      scheduledPaymentsDeleted: deletedCount,
       stripeUpdate: stripeUpdateResult,
       auditLog: auditEntry
     });
@@ -1021,5 +1056,121 @@ router.patch('/scheduled-payments/:paymentId/reschedule', async (req: any, res) 
     res.status(500).json({ error: 'Failed to reschedule payment' });
   }
 });
+
+/**
+ * GET /api/admin/enrollments/diagnose/:parentEmail
+ * Diagnostic endpoint to trace a parent's payment data
+ * Requires school admin role - auth middleware applied at router registration
+ */
+router.get('/diagnose/:parentEmail', async (req: any, res) => {
+  try {
+    const { parentEmail } = req.params;
+    
+    // Get authenticated user email
+    const userEmail = req.user?.email || req.auth?.email;
+    if (!userEmail) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    // Verify user is a school admin
+    const user = await storage.getUserByEmail(userEmail);
+    if (!user || (user.role !== 'schoolAdmin' && user.role !== 'admin' && user.role !== 'superAdmin')) {
+      return res.status(403).json({ error: 'Only administrators can access diagnostic data' });
+    }
+
+    // Find the parent
+    const parent = await storage.getUserByEmail(parentEmail);
+    if (!parent) {
+      return res.status(404).json({ error: 'Parent not found' });
+    }
+
+    // Check school access (unless superadmin)
+    if (user.role !== 'superAdmin' && parent.schoolId !== user.schoolId) {
+      return res.status(403).json({ error: 'Cannot access data for parents from other schools' });
+    }
+
+    // Get enrollments
+    const enrollments = await storage.getProgramEnrollmentsByParentEmail(parentEmail);
+    
+    // Get all scheduled payments for each enrollment
+    const enrollmentData = await Promise.all(enrollments.map(async (enrollment) => {
+      const scheduledPayments = await storage.getScheduledPaymentsByEnrollmentId(enrollment.id);
+      return {
+        enrollmentId: enrollment.id,
+        childName: enrollment.childName,
+        className: enrollment.className,
+        status: enrollment.status,
+        paymentStatus: enrollment.paymentStatus,
+        paymentPlan: enrollment.paymentPlan,
+        paymentFrequency: enrollment.paymentFrequency,
+        totalCostCents: enrollment.totalCost,
+        totalPaidCents: enrollment.totalPaid,
+        remainingBalanceCents: enrollment.remainingBalance,
+        programStartDate: enrollment.programStartDate,
+        programEndDate: enrollment.programEndDate,
+        scheduledPayments: scheduledPayments.map(p => ({
+          id: p.id,
+          amountCents: p.amount,
+          scheduledDate: p.scheduledDate,
+          status: p.status,
+          metadata: p.metadata
+        })),
+        issues: detectPaymentIssues(enrollment, scheduledPayments)
+      };
+    }));
+
+    res.json({
+      parent: {
+        id: parent.id,
+        email: parent.email,
+        name: `${parent.firstName || ''} ${parent.lastName || ''}`.trim(),
+        schoolId: parent.schoolId
+      },
+      enrollments: enrollmentData,
+      generatedAt: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('Error in diagnostic endpoint:', error);
+    res.status(500).json({ error: 'Failed to generate diagnostic data' });
+  }
+});
+
+// Helper function to detect payment issues
+function detectPaymentIssues(enrollment: any, scheduledPayments: any[]): string[] {
+  const issues: string[] = [];
+  
+  // No scheduled payments for biweekly plan
+  if (enrollment.paymentFrequency === 'biweekly' && scheduledPayments.length === 0) {
+    issues.push('MISSING_SCHEDULED_PAYMENTS: Biweekly plan has no scheduled payments');
+  }
+  
+  // Check for improper spacing in biweekly plans
+  if (enrollment.paymentFrequency === 'biweekly' && scheduledPayments.length > 1) {
+    const pendingPayments = scheduledPayments
+      .filter(p => p.status === 'pending')
+      .sort((a, b) => new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime());
+    
+    for (let i = 1; i < pendingPayments.length; i++) {
+      const prev = new Date(pendingPayments[i-1].scheduledDate);
+      const curr = new Date(pendingPayments[i].scheduledDate);
+      const daysDiff = Math.round((curr.getTime() - prev.getTime()) / (1000 * 60 * 60 * 24));
+      if (daysDiff !== 14 && daysDiff !== 0) {
+        issues.push(`INCORRECT_SPACING: Payment ${pendingPayments[i].id} is ${daysDiff} days after previous (expected 14)`);
+      }
+    }
+  }
+  
+  // Check for pending payments past due
+  const now = new Date();
+  const overduePayments = scheduledPayments.filter(p => 
+    p.status === 'pending' && new Date(p.scheduledDate) < now
+  );
+  if (overduePayments.length > 0) {
+    issues.push(`OVERDUE_PAYMENTS: ${overduePayments.length} payment(s) past due date`);
+  }
+  
+  return issues;
+}
 
 export default router;
