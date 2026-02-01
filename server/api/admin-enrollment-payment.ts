@@ -1066,16 +1066,22 @@ router.get('/diagnose/:parentEmail', async (req: any, res) => {
   try {
     const { parentEmail } = req.params;
     
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!parentEmail || !emailRegex.test(parentEmail)) {
+      return res.status(400).json({ error: 'Invalid email format' });
+    }
+    
     // Get authenticated user email
     const userEmail = req.user?.email || req.auth?.email;
     if (!userEmail) {
       return res.status(401).json({ error: 'Authentication required' });
     }
 
-    // Verify user is a school admin
+    // Verify user is a school admin or superadmin
     const user = await storage.getUserByEmail(userEmail);
-    if (!user || (user.role !== 'schoolAdmin' && user.role !== 'admin' && user.role !== 'superAdmin')) {
-      return res.status(403).json({ error: 'Only administrators can access diagnostic data' });
+    if (!user || (user.role !== 'schoolAdmin' && user.role !== 'superAdmin')) {
+      return res.status(403).json({ error: 'Only school administrators can access diagnostic data' });
     }
 
     // Find the parent
@@ -1145,29 +1151,45 @@ function detectPaymentIssues(enrollment: any, scheduledPayments: any[]): string[
     issues.push('MISSING_SCHEDULED_PAYMENTS: Biweekly plan has no scheduled payments');
   }
   
-  // Check for improper spacing in biweekly plans
+  // Check for improper spacing in biweekly plans - check ALL payments, not just pending
   if (enrollment.paymentFrequency === 'biweekly' && scheduledPayments.length > 1) {
-    const pendingPayments = scheduledPayments
-      .filter(p => p.status === 'pending')
+    const sortedPayments = [...scheduledPayments]
       .sort((a, b) => new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime());
     
-    for (let i = 1; i < pendingPayments.length; i++) {
-      const prev = new Date(pendingPayments[i-1].scheduledDate);
-      const curr = new Date(pendingPayments[i].scheduledDate);
+    for (let i = 1; i < sortedPayments.length; i++) {
+      const prev = new Date(sortedPayments[i-1].scheduledDate);
+      const curr = new Date(sortedPayments[i].scheduledDate);
       const daysDiff = Math.round((curr.getTime() - prev.getTime()) / (1000 * 60 * 60 * 24));
-      if (daysDiff !== 14 && daysDiff !== 0) {
-        issues.push(`INCORRECT_SPACING: Payment ${pendingPayments[i].id} is ${daysDiff} days after previous (expected 14)`);
+      
+      // Flag duplicate dates (0-day spacing)
+      if (daysDiff === 0) {
+        issues.push(`DUPLICATE_DATE: Payment ${sortedPayments[i].id} has same date as ${sortedPayments[i-1].id}`);
+      } else if (daysDiff !== 14) {
+        issues.push(`INCORRECT_SPACING: Payment ${sortedPayments[i].id} is ${daysDiff} days after previous (expected 14)`);
       }
     }
   }
   
-  // Check for pending payments past due
-  const now = new Date();
-  const overduePayments = scheduledPayments.filter(p => 
-    p.status === 'pending' && new Date(p.scheduledDate) < now
-  );
+  // Check for pending payments past due (use start of today to avoid time-of-day false positives)
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const overduePayments = scheduledPayments.filter(p => {
+    if (p.status !== 'pending') return false;
+    const dueDate = new Date(p.scheduledDate);
+    dueDate.setHours(0, 0, 0, 0);
+    return dueDate < today;
+  });
   if (overduePayments.length > 0) {
     issues.push(`OVERDUE_PAYMENTS: ${overduePayments.length} payment(s) past due date`);
+  }
+  
+  // Check if total scheduled amounts match remaining balance
+  const totalScheduledPending = scheduledPayments
+    .filter(p => p.status === 'pending')
+    .reduce((sum, p) => sum + (p.amount || 0), 0);
+  const remainingBalance = enrollment.remainingBalance || 0;
+  if (totalScheduledPending > 0 && remainingBalance > 0 && Math.abs(totalScheduledPending - remainingBalance) > 1) {
+    issues.push(`AMOUNT_MISMATCH: Scheduled pending total ($${(totalScheduledPending/100).toFixed(2)}) doesn't match remaining balance ($${(remainingBalance/100).toFixed(2)})`);
   }
   
   return issues;
