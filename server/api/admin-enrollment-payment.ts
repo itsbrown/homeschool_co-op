@@ -187,6 +187,19 @@ router.patch('/:enrollmentId/payment-plan', async (req: any, res) => {
     });
 
     // CRITICAL: Regenerate scheduled_payments records
+    // 0. Get parent user info (needed for parentId in scheduled payments AND cache invalidation)
+    const parentUser = enrollment.parentEmail 
+      ? await storage.getUserByEmail(enrollment.parentEmail)
+      : null;
+    
+    if (!parentUser) {
+      console.error(`❌ Cannot find parent user for email: ${enrollment.parentEmail}`);
+      return res.status(400).json({ 
+        error: 'Parent user not found',
+        message: `Could not find user account for email: ${enrollment.parentEmail}` 
+      });
+    }
+    
     // 1. Delete all pending scheduled payments for this enrollment
     const deletedCount = await storage.deletePendingScheduledPaymentsByEnrollmentId(enrollmentId);
     console.log(`🗑️ Deleted ${deletedCount} old pending scheduled payments for enrollment ${enrollmentId}`);
@@ -200,11 +213,22 @@ router.patch('/:enrollmentId/payment-plan', async (req: any, res) => {
       
       const newPayment = await storage.createScheduledPayment({
         enrollmentId: enrollment.id,
+        parentId: parentUser.id,
         parentEmail: enrollment.parentEmail,
         amount,
         scheduledDate: paymentDate,
         status: 'pending',
         schoolId: enrollment.schoolId,
+        currency: 'usd',
+        frequency: 'one_time',
+        installmentNumber: i + 1,
+        totalInstallments: newSchedule.numberOfPayments,
+        stripePaymentIntentId: null,
+        processedAt: null,
+        failureReason: null,
+        retryCount: 0,
+        reminderCount: 0,
+        lastReminderSentAt: null,
         metadata: {
           createdFromPaymentPlanChange: true,
           paymentFrequency,
@@ -221,11 +245,6 @@ router.patch('/:enrollmentId/payment-plan', async (req: any, res) => {
 
     // Fetch updated enrollment
     const updatedEnrollment = await storage.getProgramEnrollmentById(enrollmentId);
-
-    // Get parent user info for cache invalidation on frontend
-    const parentUser = enrollment.parentEmail 
-      ? await storage.getUserByEmail(enrollment.parentEmail)
-      : null;
 
     console.log(`✅ Updated payment plan for enrollment ${enrollmentId}: ${oldFrequency} → ${paymentFrequency}`);
 
