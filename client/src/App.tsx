@@ -523,8 +523,8 @@ function Router() {
       </Route>
       
       {/* Parent routes */}
-      <Route path="/parent/programs" component={ProgramsParentPage} />
       <Route path="/parent/programs/browse" component={ProgramsBrowseRedirect} />
+      <Route path="/parent/programs/:rest*" component={ProgramsParentPage} />
       <Route path="/parent/classes/:id" component={ParentClassDetailsPage} />
       <Route path="/parent/documents" component={MyDocumentsPage} />
       <Route path="/parent/documents/:id" component={DocumentDetailPage} />
