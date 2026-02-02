@@ -1218,10 +1218,17 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
         });
       }
       
-      // CREDIT-ONLY CHECKOUT: Handle $0 total after credits are applied
-      // When credits fully cover the order, skip Stripe and process directly with admin approval
-      if (totalWithMembership === 0 && validatedCreditsToApply > 0) {
-        console.log('🎫 CREDIT-ONLY CHECKOUT: Total is $0 after credits, skipping Stripe');
+      // CREDIT-ONLY CHECKOUT: Handle $0 or below-minimum total after credits are applied
+      // When credits fully cover the order (or bring it below Stripe's $0.50 minimum), 
+      // skip Stripe and process directly with admin approval
+      // Using <= 0 to handle edge cases where credits might exceed cart total slightly
+      const STRIPE_MINIMUM_CENTS = 50; // Stripe requires minimum $0.50 charge
+      if ((totalWithMembership <= 0 || totalWithMembership < STRIPE_MINIMUM_CENTS) && validatedCreditsToApply > 0) {
+        console.log('🎫 CREDIT-ONLY CHECKOUT: Total is $0 or below Stripe minimum after credits, skipping Stripe', {
+          totalWithMembership,
+          validatedCreditsToApply,
+          belowMinimum: totalWithMembership < STRIPE_MINIMUM_CENTS
+        });
         
         // Generate a unique checkout session ID for credit hold tracking
         const checkoutSessionId = `credit_only_${Date.now()}_${parent.id}`;
