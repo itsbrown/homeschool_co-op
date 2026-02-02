@@ -22,6 +22,7 @@ router.get('/upcoming', supabaseAuth, async (req: any, res) => {
     );
     
     console.log(`📊 Found ${pendingPayments.length} pending/processing scheduled payments for ${userEmail}`);
+    console.log(`📋 Payment IDs returned: [${pendingPayments.map(p => `${p.id}(e:${p.enrollmentId})`).join(', ')}]`);
 
     // Get enrollment details for enrichment
     const enrichedPayments = await Promise.all(pendingPayments.map(async (payment) => {
