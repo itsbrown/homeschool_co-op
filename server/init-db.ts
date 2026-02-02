@@ -2063,6 +2063,18 @@ async function runMigrations() {
       console.log('Migration note (snapshot columns):', snapshotError.message || String(snapshotError));
     }
     
+    // Make customer_id nullable to support credit-only checkouts (no Stripe customer)
+    try {
+      console.log('Running migration: Making customer_id nullable in stripe_payment_history...');
+      await db.execute(sql`
+        ALTER TABLE stripe_payment_history 
+        ALTER COLUMN customer_id DROP NOT NULL;
+      `);
+      console.log('✅ Migration completed: customer_id is now nullable in stripe_payment_history');
+    } catch (customerIdError: any) {
+      console.log('Migration note (customer_id nullable):', customerIdError.message || String(customerIdError));
+    }
+    
   } catch (fundraiserError) {
     const errorMessage = fundraiserError instanceof Error ? fundraiserError.message : String(fundraiserError);
     if (!errorMessage.includes('Database connection not available')) {

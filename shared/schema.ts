@@ -890,7 +890,7 @@ export const stripePaymentHistory = pgTable("stripe_payment_history", {
   
   // Stripe identifiers
   paymentIntentId: text("payment_intent_id").notNull().unique(), // Stripe payment_intent ID
-  customerId: text("customer_id").notNull(), // Stripe customer ID
+  customerId: text("customer_id"), // Stripe customer ID (nullable for credit-only checkouts)
   subscriptionId: text("subscription_id"), // Stripe subscription ID if applicable
   
   // Payment details (amounts in cents)
