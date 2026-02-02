@@ -1082,10 +1082,36 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(programEnrollments).where(eq(programEnrollments.childId, childId));
   }
 
-  async getProgramEnrollmentsByChildIds(childIds: number[]): Promise<ProgramEnrollment[]> {
+  async getProgramEnrollmentsByChildIds(childIds: number[]): Promise<any[]> {
     if (childIds.length === 0) return [];
     const db = await getDb();
-    return await db.select().from(programEnrollments).where(inArray(programEnrollments.childId, childIds));
+    
+    // Join with children table to include child data in result
+    const results = await db
+      .select({
+        enrollment: programEnrollments,
+        child: {
+          id: children.id,
+          firstName: children.firstName,
+          lastName: children.lastName,
+        }
+      })
+      .from(programEnrollments)
+      .leftJoin(children, eq(programEnrollments.childId, children.id))
+      .where(inArray(programEnrollments.childId, childIds));
+    
+    // Transform results to include child and program as nested properties
+    // Program data is constructed from denormalized enrollment fields
+    return results.map(row => ({
+      ...row.enrollment,
+      child: row.child,
+      program: {
+        id: row.enrollment.classId || row.enrollment.marketplaceClassId || row.enrollment.programId,
+        title: row.enrollment.className,
+        startDate: row.enrollment.programStartDate,
+        endDate: row.enrollment.programEndDate,
+      }
+    }));
   }
 
   async getProgramEnrollmentsByClassId(classId: number): Promise<ProgramEnrollment[]> {
