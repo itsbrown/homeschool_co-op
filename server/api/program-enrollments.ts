@@ -32,7 +32,36 @@ export const getMyChildrenEnrollments = async (req: any, res: Response) => {
     
     // Get enrollments for all children
     const enrollments = await storage.getEnrollmentsByChildIds(childIds);
-    res.json(enrollments);
+    
+    // Create a map of childId -> child for efficient lookup
+    const childMap = new Map(children.map(child => [child.id, child]));
+    
+    // Enrich enrollments with child and program data for frontend consumption
+    const enrichedEnrollments = enrollments.map(enrollment => {
+      const child = childMap.get(enrollment.childId);
+      return {
+        ...enrollment,
+        // Add child object with firstName/lastName for display
+        child: child ? {
+          id: child.id,
+          firstName: child.firstName,
+          lastName: child.lastName,
+        } : {
+          id: enrollment.childId,
+          firstName: enrollment.childName?.split(' ')[0] || 'Unknown',
+          lastName: enrollment.childName?.split(' ').slice(1).join(' ') || '',
+        },
+        // Add program object from denormalized enrollment fields
+        program: {
+          id: enrollment.classId || enrollment.marketplaceClassId || enrollment.programId,
+          title: enrollment.className || 'Unknown Class',
+          startDate: enrollment.programStartDate,
+          endDate: enrollment.programEndDate,
+        }
+      };
+    });
+    
+    res.json(enrichedEnrollments);
   } catch (error: any) {
     console.error("Error fetching enrollments:", error);
     res.status(500).json({ message: "Error fetching enrollments", error: error.message });
