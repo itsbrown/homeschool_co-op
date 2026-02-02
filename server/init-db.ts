@@ -2050,6 +2050,19 @@ async function runMigrations() {
       console.log('Migration note (source column):', sourceError.message || String(sourceError));
     }
     
+    // Add snapshot_json and snapshot_checksum columns to stripe_payment_history for unified payment processing
+    try {
+      console.log('Running migration: Adding snapshot columns to stripe_payment_history...');
+      await db.execute(sql`
+        ALTER TABLE stripe_payment_history 
+        ADD COLUMN IF NOT EXISTS snapshot_json JSONB,
+        ADD COLUMN IF NOT EXISTS snapshot_checksum TEXT;
+      `);
+      console.log('✅ Migration completed: snapshot_json and snapshot_checksum columns added to stripe_payment_history');
+    } catch (snapshotError: any) {
+      console.log('Migration note (snapshot columns):', snapshotError.message || String(snapshotError));
+    }
+    
   } catch (fundraiserError) {
     const errorMessage = fundraiserError instanceof Error ? fundraiserError.message : String(fundraiserError);
     if (!errorMessage.includes('Database connection not available')) {
