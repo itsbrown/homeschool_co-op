@@ -2026,6 +2026,18 @@ async function runMigrations() {
       console.log('Migration note (cancellation columns):', cancellationError.message || String(cancellationError));
     }
     
+    // Add idempotency_key column to stripe_payment_history for unified payment processing
+    try {
+      console.log('Running migration: Adding idempotency_key column to stripe_payment_history...');
+      await db.execute(sql`
+        ALTER TABLE stripe_payment_history 
+        ADD COLUMN IF NOT EXISTS idempotency_key TEXT UNIQUE;
+      `);
+      console.log('✅ Migration completed: idempotency_key column added to stripe_payment_history');
+    } catch (idempotencyError: any) {
+      console.log('Migration note (idempotency_key):', idempotencyError.message || String(idempotencyError));
+    }
+    
   } catch (fundraiserError) {
     const errorMessage = fundraiserError instanceof Error ? fundraiserError.message : String(fundraiserError);
     if (!errorMessage.includes('Database connection not available')) {
