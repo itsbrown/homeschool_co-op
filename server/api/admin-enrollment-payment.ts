@@ -231,6 +231,7 @@ router.patch('/:enrollmentId/payment-plan', async (req: any, res) => {
         lastReminderSentAt: null,
         metadata: {
           createdFromPaymentPlanChange: true,
+          paymentPlan: newPaymentPlan,
           paymentFrequency,
           paymentNumber: i + 1,
           totalPayments: newSchedule.numberOfPayments,

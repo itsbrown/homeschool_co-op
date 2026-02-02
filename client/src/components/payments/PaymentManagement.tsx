@@ -918,6 +918,7 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
   };
   
   // Format date with validation for invalid dates
+  // Use UTC timezone to prevent date shifting when displaying scheduled payment dates
   const formatDate = (dateString: string | null | undefined) => {
     if (!dateString) return 'N/A';
     const date = new Date(dateString);
@@ -925,7 +926,8 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
     return date.toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
-      day: 'numeric'
+      day: 'numeric',
+      timeZone: 'UTC'
     });
   };
   
