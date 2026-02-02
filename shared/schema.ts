@@ -914,13 +914,13 @@ export const stripePaymentHistory = pgTable("stripe_payment_history", {
   // Unified payment processing fields (PaymentProcessorService)
   idempotencyKey: text("idempotency_key").unique(), // Prevent duplicate processing
   source: text("source", { 
-    enum: ["stripe", "manual", "payment_plan"] 
-  }), // Payment source type
+    enum: ["stripe", "manual", "payment_plan", "credit"] 
+  }), // Payment source type (credit = credit-only checkout with no Stripe payment)
   snapshotJson: jsonb("snapshot_json"), // Canonical cart snapshot at payment time
   snapshotChecksum: text("snapshot_checksum"), // HMAC checksum for integrity verification
   
   // Timestamps
-  stripeCreatedAt: timestamp("stripe_created_at").notNull(), // When payment was created in Stripe
+  stripeCreatedAt: timestamp("stripe_created_at"), // When payment was created in Stripe (nullable for credit-only checkouts)
   createdAt: timestamp("created_at").defaultNow().notNull(), // When we synced it to our DB
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

@@ -2075,6 +2075,18 @@ async function runMigrations() {
       console.log('Migration note (customer_id nullable):', customerIdError.message || String(customerIdError));
     }
     
+    // Make stripe_created_at nullable to support credit-only checkouts (no Stripe payment)
+    try {
+      console.log('Running migration: Making stripe_created_at nullable in stripe_payment_history...');
+      await db.execute(sql`
+        ALTER TABLE stripe_payment_history 
+        ALTER COLUMN stripe_created_at DROP NOT NULL;
+      `);
+      console.log('✅ Migration completed: stripe_created_at is now nullable in stripe_payment_history');
+    } catch (stripeCreatedAtError: any) {
+      console.log('Migration note (stripe_created_at nullable):', stripeCreatedAtError.message || String(stripeCreatedAtError));
+    }
+    
   } catch (fundraiserError) {
     const errorMessage = fundraiserError instanceof Error ? fundraiserError.message : String(fundraiserError);
     if (!errorMessage.includes('Database connection not available')) {

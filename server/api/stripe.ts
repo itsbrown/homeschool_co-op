@@ -1400,6 +1400,7 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
           amount: validatedCreditsToApply,
           currency: 'usd',
           status: 'succeeded',
+          source: 'credit', // Credit-only checkout - no Stripe payment involved
           metadata: {
             creditOnlyCheckout: true,
             enrollmentIds,
