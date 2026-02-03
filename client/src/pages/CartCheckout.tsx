@@ -808,14 +808,10 @@ export default function CartCheckout() {
           cart.total
         );
         
-        // Show success message and redirect
-        toast({
-          title: "Enrollment Submitted",
-          description: data.message || "Your enrollment has been submitted for admin approval. Your credits have been applied.",
-        });
-        
-        // Redirect to success/enrollments page
-        setLocation('/parent/programs/enrollments');
+        // Redirect to success page with credit-only flag (matches Stripe payment flow)
+        // The success page will show appropriate messaging and handle cleanup
+        const creditsApplied = data.creditsApplied || 0;
+        setLocation(`/cart/success?creditOnly=true&creditsApplied=${creditsApplied}`);
         return;
       }
       

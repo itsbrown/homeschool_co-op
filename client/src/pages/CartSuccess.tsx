@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useLocation } from 'wouter';
-import { CheckCircle, ArrowRight, Calendar, CreditCard, Loader2, AlertCircle } from 'lucide-react';
+import { CheckCircle, ArrowRight, Calendar, CreditCard, Loader2, AlertCircle, Coins } from 'lucide-react';
 import ParentAppShell from '@/components/layout/ParentAppShell';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
@@ -18,22 +18,80 @@ export default function CartSuccess() {
   const [processing, setProcessing] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [processedEnrollments, setProcessedEnrollments] = useState<number>(0);
+  const [isCreditOnly, setIsCreditOnly] = useState(false);
+  const [creditsApplied, setCreditsApplied] = useState(0);
 
   useEffect(() => {
-    const processStripeRedirect = async () => {
+    const processCheckoutSuccess = async () => {
       try {
-        // Check if this is a Stripe redirect by looking for URL parameters
+        // Check URL parameters for checkout type
         const urlParams = new URLSearchParams(window.location.search);
+        const creditOnly = urlParams.get('creditOnly') === 'true';
+        const creditsAppliedParam = urlParams.get('creditsApplied');
         const paymentIntent = urlParams.get('payment_intent');
         const paymentIntentClientSecret = urlParams.get('payment_intent_client_secret');
         const redirectStatus = urlParams.get('redirect_status');
 
-        console.log('🔄 CartSuccess: Checking for Stripe redirect params:', {
+        console.log('🔄 CartSuccess: Checking checkout params:', {
+          creditOnly,
+          creditsApplied: creditsAppliedParam,
           paymentIntent,
           redirectStatus,
           hasClientSecret: !!paymentIntentClientSecret
         });
 
+        // Handle credit-only checkout
+        if (creditOnly) {
+          console.log('🎫 Processing credit-only checkout success');
+          setIsCreditOnly(true);
+          setCreditsApplied(creditsAppliedParam ? parseInt(creditsAppliedParam, 10) : 0);
+          
+          // Get cart data for item count
+          let cartData = localStorage.getItem('cart') || sessionStorage.getItem('cart_backup');
+          let itemCount = 1;
+          
+          if (cartData) {
+            try {
+              const cart = JSON.parse(cartData);
+              itemCount = cart.items?.length || 1;
+              console.log(`🛒 Credit-only checkout: ${itemCount} items`);
+            } catch (e) {
+              console.error('Failed to parse cart data:', e);
+            }
+          }
+          
+          setProcessedEnrollments(itemCount);
+          
+          // Clear ALL cart data
+          localStorage.removeItem('cart');
+          localStorage.removeItem('asa_cart');
+          localStorage.removeItem('selectedPaymentPlan');
+          sessionStorage.removeItem('cart_backup');
+          
+          // Clear cart in context - skip cancellation since enrollments are already processed
+          try {
+            await clearCart(true);
+          } catch (cartError) {
+            console.error('❌ Failed to clear cart context:', cartError);
+          }
+          
+          // Invalidate queries to refresh data
+          queryClient.invalidateQueries({ queryKey: ['/api/enrollments'] });
+          queryClient.invalidateQueries({ queryKey: ['/api/my-credits'] });
+          queryClient.invalidateQueries({ queryKey: ['billing-summary'] });
+          
+          toast({
+            title: "Credits Applied Successfully!",
+            description: `Your credits have been applied and enrollment submitted for approval.`,
+            duration: 5000,
+          });
+          
+          console.log('✅ Credit-only checkout processed successfully');
+          setProcessing(false);
+          return;
+        }
+
+        // Handle Stripe payment redirect
         if (paymentIntent && redirectStatus === 'succeeded') {
           console.log('✅ Payment succeeded! PaymentIntent:', paymentIntent);
           
@@ -149,7 +207,7 @@ export default function CartSuccess() {
       }
     };
 
-    processStripeRedirect();
+    processCheckoutSuccess();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Run once on mount - processes Stripe redirect URL parameters which are static after page load
 
@@ -219,75 +277,131 @@ export default function CartSuccess() {
     <ParentAppShell>
       <div className="container mx-auto px-4 py-8 max-w-2xl">
         <div className="text-center mb-8">
-          <div className="mx-auto w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
-            <CheckCircle className="h-8 w-8 text-green-600" />
+          <div className={`mx-auto w-16 h-16 ${isCreditOnly ? 'bg-amber-100' : 'bg-green-100'} rounded-full flex items-center justify-center mb-4`}>
+            {isCreditOnly ? (
+              <Coins className="h-8 w-8 text-amber-600" />
+            ) : (
+              <CheckCircle className="h-8 w-8 text-green-600" />
+            )}
           </div>
-          <h1 className="text-3xl font-bold tracking-tight text-green-600">
-            Enrollment Complete!
+          <h1 className={`text-3xl font-bold tracking-tight ${isCreditOnly ? 'text-amber-600' : 'text-green-600'}`}>
+            {isCreditOnly ? 'Credits Applied!' : 'Enrollment Complete!'}
           </h1>
           <p className="text-muted-foreground mt-2">
-            Your payment has been processed and your children have been enrolled
+            {isCreditOnly 
+              ? `Your credits have been applied and your enrollment has been submitted for admin approval`
+              : 'Your payment has been processed and your children have been enrolled'}
           </p>
+          {isCreditOnly && creditsApplied > 0 && (
+            <p className="text-amber-600 font-medium mt-2">
+              ${(creditsApplied / 100).toFixed(2)} in credits applied
+            </p>
+          )}
         </div>
 
         <Card className="mb-8">
           <CardHeader>
             <CardTitle>What's Next?</CardTitle>
             <CardDescription>
-              Here's what you can expect after enrollment
+              {isCreditOnly 
+                ? "Here's what to expect after using your credits"
+                : "Here's what you can expect after enrollment"}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex items-start gap-3">
-              <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
-                <CreditCard className="h-4 w-4 text-blue-600" />
-              </div>
-              <div>
-                <h3 className="font-medium">Payment Confirmation</h3>
-                <p className="text-sm text-muted-foreground">
-                  You'll receive an email receipt with payment details and enrollment confirmation
-                </p>
-              </div>
-            </div>
+            {isCreditOnly ? (
+              <>
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center flex-shrink-0">
+                    <Coins className="h-4 w-4 text-amber-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-medium">Credits Applied</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Your credits have been applied to cover the enrollment cost
+                    </p>
+                  </div>
+                </div>
 
-            <div className="flex items-start gap-3">
-              <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center flex-shrink-0">
-                <Calendar className="h-4 w-4 text-purple-600" />
-              </div>
-              <div>
-                <h3 className="font-medium">Class Information</h3>
-                <p className="text-sm text-muted-foreground">
-                  Detailed class schedules and additional information will be sent to your email
-                </p>
-              </div>
-            </div>
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                    <CheckCircle className="h-4 w-4 text-blue-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-medium">Pending Approval</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Your enrollment is pending admin approval. You'll be notified once it's reviewed.
+                    </p>
+                  </div>
+                </div>
 
-            <div className="flex items-start gap-3">
-              <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
-                <CheckCircle className="h-4 w-4 text-green-600" />
-              </div>
-              <div>
-                <h3 className="font-medium">Enrollment Active</h3>
-                <p className="text-sm text-muted-foreground">
-                  Your children's enrollments are now active and visible in your dashboard
-                </p>
-              </div>
-            </div>
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center flex-shrink-0">
+                    <Calendar className="h-4 w-4 text-purple-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-medium">Class Information</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Once approved, detailed class schedules and information will be sent to your email
+                    </p>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                    <CreditCard className="h-4 w-4 text-blue-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-medium">Payment Confirmation</h3>
+                    <p className="text-sm text-muted-foreground">
+                      You'll receive an email receipt with payment details and enrollment confirmation
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center flex-shrink-0">
+                    <Calendar className="h-4 w-4 text-purple-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-medium">Class Information</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Detailed class schedules and additional information will be sent to your email
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
+                    <CheckCircle className="h-4 w-4 text-green-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-medium">Enrollment Active</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Your children's enrollments are now active and visible in your dashboard
+                    </p>
+                  </div>
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
 
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
           <Button 
             onClick={async () => {
-              // Force refresh billing data before navigation
+              // Force refresh data before navigation
               await queryClient.invalidateQueries({ queryKey: ['billing-summary'] });
               await queryClient.invalidateQueries({ queryKey: ['payment-history'] });
               await queryClient.invalidateQueries({ queryKey: ['scheduled-payments-upcoming'] });
-              setTimeout(() => setLocation('/billing'), 100); // Small delay to ensure cache refresh
+              await queryClient.invalidateQueries({ queryKey: ['/api/my-credits'] });
+              setTimeout(() => setLocation(isCreditOnly ? '/parent/programs/enrollments' : '/billing'), 100);
             }}
             className="flex items-center gap-2"
           >
-            View Updated Billing
+            {isCreditOnly ? 'View My Enrollments' : 'View Updated Billing'}
             <ArrowRight className="h-4 w-4" />
           </Button>
           <Button 
