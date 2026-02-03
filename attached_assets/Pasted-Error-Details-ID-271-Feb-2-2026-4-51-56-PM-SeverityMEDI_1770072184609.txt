@@ -1,0 +1,95 @@
+Error Details
+ID: 271 | Feb 2, 2026, 4:51:56 PM
+
+SeverityMEDIUM
+Type
+frontend
+
+Route
+/parent/programs/enrollments
+
+Method
+N/A
+
+User
+Anonymous
+
+School ID
+N/A
+
+Message
+Error: Cannot cancel pending_admin_approval enrollment. Only pending_payment enrollments can be cancelled.
+
+Metadata
+{
+  "online": true,
+  "source": "toast",
+  "userId": 3,
+  "network": {
+    "rtt": 100,
+    "downlink": 2.35,
+    "saveData": false,
+    "effectiveType": "4g"
+  },
+  "language": "en-US",
+  "referrer": "https://accounts.google.com/",
+  "schoolId": null,
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36",
+  "activeRole": null,
+  "hasSession": true,
+  "toastTitle": "Error",
+  "breadcrumbs": [
+    {
+      "route": "/",
+      "title": "",
+      "timestamp": "2026-02-02T21:50:13.087Z",
+      "timeOnPage": 606
+    },
+    {
+      "route": "/",
+      "title": "",
+      "timestamp": "2026-02-02T21:50:13.693Z"
+    }
+  ],
+  "formContext": null,
+  "memoryUsage": {
+    "usedJSHeapSize": 149,
+    "totalJSHeapSize": 159
+  },
+  "pageLoadTime": 4964,
+  "sessionStart": "2026-02-01T22:26:18.623Z",
+  "correlationId": "e67bbf90-3f4b-44b0-93b8-c417c4b6d0fc",
+  "recentActions": [
+    {
+      "type": "click",
+      "target": "button.inline-flex",
+      "secondsAgo": 22
+    },
+    {
+      "type": "click",
+      "target": "button.inline-flex",
+      "secondsAgo": 15
+    },
+    {
+      "type": "scroll",
+      "target": "0%",
+      "secondsAgo": 15
+    },
+    {
+      "type": "click",
+      "target": "[data-testid=\"checkbox-apply-credits\"]",
+      "secondsAgo": 7
+    },
+    {
+      "type": "input",
+      "target": "[data-testid=\"checkbox-apply-credits\"]",
+      "secondsAgo": 7
+    }
+  ],
+  "userEmailHint": "cor***",
+  "viewportWidth": 1920,
+  "viewportHeight": 1020,
+  "toastDescription": "Cannot cancel pending_admin_approval enrollment. Only pending_payment enrollments can be cancelled.",
+  "sessionErrorCount": 1,
+  "timeOnCurrentPage": 102327
+}

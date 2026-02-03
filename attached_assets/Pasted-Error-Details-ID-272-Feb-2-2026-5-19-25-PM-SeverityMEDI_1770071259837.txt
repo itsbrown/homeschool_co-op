@@ -1,0 +1,92 @@
+Error Details
+ID: 272 | Feb 2, 2026, 5:19:25 PM
+
+SeverityMEDIUM
+Type
+frontend
+
+Route
+/parent/programs/enrollments
+
+Method
+N/A
+
+User
+Anonymous
+
+School ID
+N/A
+
+Message
+Error: Cannot cancel pending_admin_approval enrollment. Only pending_payment enrollments can be cancelled.
+
+Metadata
+{
+  "online": true,
+  "source": "toast",
+  "userId": 3,
+  "network": {
+    "rtt": 100,
+    "downlink": 10,
+    "saveData": false,
+    "effectiveType": "4g"
+  },
+  "language": "en-US",
+  "referrer": "https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/parent/programs/enrollments",
+  "schoolId": null,
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36",
+  "activeRole": null,
+  "hasSession": true,
+  "toastTitle": "Error",
+  "breadcrumbs": [
+    {
+      "route": "/",
+      "title": "",
+      "timestamp": "2026-02-02T22:16:17.770Z"
+    }
+  ],
+  "formContext": null,
+  "memoryUsage": {
+    "usedJSHeapSize": 152,
+    "totalJSHeapSize": 163
+  },
+  "pageLoadTime": 12555,
+  "sessionStart": "2026-02-01T22:26:18.623Z",
+  "correlationId": "66c73d5a-c11c-446b-92be-2ec46a983c79",
+  "recentActions": [
+    {
+      "type": "click",
+      "target": "select.w-full",
+      "secondsAgo": 17
+    },
+    {
+      "type": "click",
+      "target": "button.inline-flex",
+      "secondsAgo": 17
+    },
+    {
+      "type": "click",
+      "target": "button.inline-flex",
+      "secondsAgo": 12
+    },
+    {
+      "type": "click",
+      "target": "[data-testid=\"checkbox-apply-credits\"]",
+      "secondsAgo": 6
+    },
+    {
+      "type": "input",
+      "target": "[data-testid=\"checkbox-apply-credits\"]",
+      "secondsAgo": 6
+    }
+  ],
+  "userEmailHint": "cor***",
+  "viewportWidth": 1920,
+  "viewportHeight": 1020,
+  "toastDescription": "Cannot cancel pending_admin_approval enrollment. Only pending_payment enrollments can be cancelled.",
+  "sessionErrorCount": 1,
+  "timeOnCurrentPage": 187894
+}
+Update Status
+New
+Resolution Notes
