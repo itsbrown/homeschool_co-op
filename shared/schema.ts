@@ -935,7 +935,7 @@ export const insertStripePaymentHistorySchema = createInsertSchema(stripePayment
     discountTotal: z.number().nullable().default(null),
     discountSnapshot: z.any().nullable().default(null),
     idempotencyKey: z.string().nullable().default(null),
-    source: z.enum(["stripe", "manual", "payment_plan"]).nullable().default(null),
+    source: z.enum(["stripe", "manual", "payment_plan", "credit"]).nullable().default(null),
     snapshotJson: z.any().nullable().default(null),
     snapshotChecksum: z.string().nullable().default(null),
   });
