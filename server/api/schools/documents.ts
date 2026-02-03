@@ -413,44 +413,75 @@ router.get('/:id/download', supabaseAuth, async (req: any, res) => {
       });
     }
 
-    // Build the file path from the stored filePath
-    // filePath is stored as: /uploads/school-documents/{schoolId}/{filename}
-    const relativePath = document.filePath.startsWith('/') 
-      ? document.filePath.substring(1) 
-      : document.filePath;
-    const absolutePath = path.join(process.cwd(), relativePath);
-
-    // Check if file exists
-    if (!fs.existsSync(absolutePath)) {
-      console.error(`Document file not found: ${absolutePath}`);
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Document file not found on server' 
-      });
-    }
-
-    // Get file stats
-    const stats = fs.statSync(absolutePath);
-
-    // Set proper headers for file download
-    res.setHeader('Content-Type', document.mimeType || 'application/octet-stream');
-    res.setHeader('Content-Length', stats.size);
-    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(document.fileName)}"`);
-    res.setHeader('Cache-Control', 'no-cache');
-
-    // Stream the file to the response
-    const fileStream = fs.createReadStream(absolutePath);
-    fileStream.pipe(res);
-
-    fileStream.on('error', (err) => {
-      console.error('Error streaming file:', err);
-      if (!res.headersSent) {
-        res.status(500).json({ 
+    // Check if this is an object storage path (new uploads use /objects/ prefix for private documents)
+    const isObjectStoragePath = document.filePath.startsWith('/objects/');
+    
+    if (isObjectStoragePath) {
+      // Fetch from object storage (private documents)
+      try {
+        const objectStorageService = new ObjectStorageService();
+        const objectFile = await objectStorageService.getObjectEntityFile(document.filePath);
+        
+        // Set Content-Disposition header for download before streaming
+        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(document.fileName)}"`);
+        
+        // Use the downloadObject method to stream the file to the response
+        await objectStorageService.downloadObject(objectFile, res, 0); // 0 cache TTL for downloads
+        console.log(`📥 Downloaded document from object storage: ${document.filePath}`);
+        return; // Response already sent by downloadObject
+      } catch (downloadError: any) {
+        console.error(`❌ Failed to download from object storage: ${document.filePath}`, downloadError);
+        // Distinguish between not-found and other errors
+        if (downloadError.name === 'ObjectNotFoundError') {
+          return res.status(404).json({ 
+            success: false, 
+            message: 'Document file not found in storage' 
+          });
+        }
+        return res.status(500).json({ 
           success: false, 
-          message: 'Error streaming file' 
+          message: 'Failed to retrieve document from storage' 
         });
       }
-    });
+    } else {
+      // Legacy: fetch from local filesystem
+      const relativePath = document.filePath.startsWith('/') 
+        ? document.filePath.substring(1) 
+        : document.filePath;
+      const absolutePath = path.join(process.cwd(), relativePath);
+
+      // Check if file exists
+      if (!fs.existsSync(absolutePath)) {
+        console.error(`Document file not found: ${absolutePath}`);
+        return res.status(404).json({ 
+          success: false, 
+          message: 'Document file not found on server' 
+        });
+      }
+
+      // Get file stats
+      const stats = fs.statSync(absolutePath);
+
+      // Set proper headers for file download
+      res.setHeader('Content-Type', document.mimeType || 'application/octet-stream');
+      res.setHeader('Content-Length', stats.size);
+      res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(document.fileName)}"`);
+      res.setHeader('Cache-Control', 'no-cache');
+
+      // Stream the file to the response
+      const fileStream = fs.createReadStream(absolutePath);
+      fileStream.pipe(res);
+
+      fileStream.on('error', (err: any) => {
+        console.error('Error streaming file:', err);
+        if (!res.headersSent) {
+          res.status(500).json({ 
+            success: false, 
+            message: 'Error streaming file' 
+          });
+        }
+      });
+    }
   } catch (error) {
     console.error('Error downloading document:', error);
     res.status(500).json({ 
