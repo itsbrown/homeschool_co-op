@@ -792,7 +792,8 @@ export default function CartCheckout() {
         setRetryCount(0);
         
         // Clear the cart since credits have been consumed
-        clearCart();
+        // Skip cancellation since enrollments are now pending_admin_approval (not pending_payment)
+        clearCart(true);
         
         // Track purchase event for GA4
         trackBeginCheckout(
@@ -903,7 +904,8 @@ export default function CartCheckout() {
         setFreeEnrollmentRequested(true);
         
         // Clear the cart after successful request
-        await clearCart();
+        // Skip cancellation since enrollments are now pending_admin_approval
+        await clearCart(true);
         
         toast({
           title: "Enrollment Request Submitted",
