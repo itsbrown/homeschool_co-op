@@ -44,7 +44,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { AlertCircle, CreditCard, DollarSign, Calendar, Check, Clock, FileText, Search, ChevronDown, Award } from "lucide-react";
+import { AlertCircle, CreditCard, DollarSign, Calendar, Check, Clock, FileText, Search, ChevronDown, Award, Coins } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
@@ -796,6 +796,30 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
       return data.success ? data.payments : [];
     },
   });
+
+  // Get credits data for the parent (using existing endpoint that matches ParentDashboard)
+  const { data: creditsData, isLoading: isLoadingCredits } = useQuery({
+    queryKey: ["/api/parent/credits"],
+    queryFn: async () => {
+      const token = localStorage.getItem('supabase_token');
+      if (!token) {
+        throw new Error('No authentication token');
+      }
+
+      const response = await fetch('/api/parent/credits', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch credits: ${response.status}`);
+      }
+
+      return await response.json();
+    },
+  });
   
   // Filter payments based on search and status
   const filteredPayments = React.useMemo(() => {
@@ -972,12 +996,13 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
           <TabsTrigger value="overview" className="w-full sm:w-auto sm:mr-2">Overview</TabsTrigger>
           <TabsTrigger value="all-payments" className="w-full sm:w-auto sm:mr-2">All Payments</TabsTrigger>
           <TabsTrigger value="stripe-payments" className="w-full sm:w-auto sm:mr-2">Stripe Payments</TabsTrigger>
-          <TabsTrigger value="upcoming" className="w-full sm:w-auto">Upcoming Payments</TabsTrigger>
+          <TabsTrigger value="upcoming" className="w-full sm:w-auto sm:mr-2">Upcoming Payments</TabsTrigger>
+          <TabsTrigger value="credits" className="w-full sm:w-auto">Credits</TabsTrigger>
         </TabsList>
         
         {/* Overview Tab */}
         <TabsContent value="overview" className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium">Total Paid</CardTitle>
@@ -1024,6 +1049,20 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
                 <div className="text-2xl font-bold">{isLoading ? "Loading..." : paymentStats.total}</div>
                 <p className="text-xs text-muted-foreground mt-1">
                   Total payments
+                </p>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Available Credits</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-amber-600">
+                  {isLoadingCredits ? "Loading..." : (creditsData?.totalAvailableFormatted || '$0.00')}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {creditsData?.credits?.length || 0} credit{(creditsData?.credits?.length || 0) !== 1 ? 's' : ''} on account
                 </p>
               </CardContent>
             </Card>
@@ -1467,6 +1506,92 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
                     </div>
                   );
                 })()
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Credits Tab */}
+        <TabsContent value="credits" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <div className="flex justify-between items-start">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Coins className="h-5 w-5 text-amber-600" />
+                    Your Credits
+                  </CardTitle>
+                  <CardDescription>View and manage your credit balance</CardDescription>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm text-muted-foreground">Available Balance</p>
+                  <p className="text-2xl font-bold text-amber-600">
+                    {creditsData?.totalAvailableFormatted || '$0.00'}
+                  </p>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {isLoadingCredits ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
+                  <p>Loading credits...</p>
+                </div>
+              ) : !creditsData?.credits || creditsData.credits.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Coins className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
+                  <p>No credits on your account</p>
+                  <p className="text-sm mt-2">Credits can be earned through volunteer work, referrals, and other activities.</p>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Description</TableHead>
+                      <TableHead>Amount</TableHead>
+                      <TableHead>Used</TableHead>
+                      <TableHead>Remaining</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Expires</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {creditsData.credits.map((credit: any) => (
+                        <TableRow key={credit.id}>
+                          <TableCell>
+                            <Badge variant="outline" className="capitalize">
+                              {credit.creditType?.replace(/_/g, ' ') || 'Credit'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="max-w-[200px]">
+                            <p className="font-medium truncate">{credit.title || 'Credit'}</p>
+                          </TableCell>
+                          <TableCell className="font-medium">{formatCurrency(credit.creditAmountCents)}</TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {credit.usedAmountCents > 0 ? formatCurrency(credit.usedAmountCents) : '-'}
+                          </TableCell>
+                          <TableCell className={(credit.remainingCents || 0) > 0 ? 'text-amber-600 font-medium' : 'text-muted-foreground'}>
+                            {formatCurrency(credit.remainingCents || 0)}
+                          </TableCell>
+                          <TableCell>
+                            {credit.status === 'approved' && <Badge className="bg-green-100 text-green-700 hover:bg-green-100">Active</Badge>}
+                            {credit.status === 'partially_used' && <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100">Partially Used</Badge>}
+                            {credit.status === 'used' && <Badge variant="secondary">Fully Used</Badge>}
+                            {credit.status === 'pending' && <Badge className="bg-yellow-100 text-yellow-700 hover:bg-yellow-100">Pending Approval</Badge>}
+                            {credit.status === 'expired' && <Badge variant="destructive">Expired</Badge>}
+                            {credit.status === 'rejected' && <Badge variant="destructive">Rejected</Badge>}
+                            {credit.status === 'revoked' && <Badge variant="destructive">Revoked</Badge>}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {credit.expiresAt 
+                              ? formatDate(credit.expiresAt)
+                              : <span className="text-green-600">Never</span>}
+                          </TableCell>
+                        </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               )}
             </CardContent>
           </Card>
