@@ -38,6 +38,23 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
 
     const { items, subtotal, discounts, total, parentEmail, paymentPlan = 'full', paymentFrequency = 'one_time', membership, promoCode, creditsToApply = 0 } = req.body;
     
+    // DETAILED REQUEST LOGGING for debugging production issues (PII redacted)
+    const checkoutRequestId = `checkout_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
+    console.log(`🔍 [${checkoutRequestId}] CHECKOUT REQUEST START ==================`);
+    console.log(`🔍 [${checkoutRequestId}] User: ${userEmail}`);
+    console.log(`🔍 [${checkoutRequestId}] Request summary:`, JSON.stringify({
+      itemsCount: items?.length || 0,
+      itemIds: items?.map((i: any) => ({ classId: i.classId, childId: i.childId, variantId: i.variantId })),
+      subtotal,
+      total,
+      paymentPlan,
+      paymentFrequency,
+      hasMembership: !!(membership?.amount > 0),
+      membershipAmount: membership?.amount || 0,
+      hasPromoCode: !!promoCode,
+      creditsToApply
+    }, null, 2));
+    
     // Log received promo code for debugging
     console.log('🎟️ Received promoCode from client:', promoCode);
     console.log('💰 Received creditsToApply from client:', creditsToApply);
@@ -1394,7 +1411,8 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
           });
         }
         
-        const paymentHistoryEntry = await (storage as any).saveStripePayment({
+        console.log(`🔍 [${checkoutRequestId}] About to call saveStripePayment with source='credit'...`);
+        const paymentHistoryPayload = {
           userId: parent.id,
           paymentIntentId: checkoutSessionId, // Use the checkout session ID for tracking
           amount: validatedCreditsToApply,
@@ -1413,7 +1431,10 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
               details: creditAllocationDetails
             }
           }
-        });
+        };
+        console.log(`🔍 [${checkoutRequestId}] saveStripePayment: userId=${parent.id}, amount=${validatedCreditsToApply}, source=credit, enrollmentCount=${enrollmentIds.length}`);
+        
+        const paymentHistoryEntry = await (storage as any).saveStripePayment(paymentHistoryPayload);
         
         console.log('📝 Payment history created:', {
           id: paymentHistoryEntry.id,
@@ -1553,19 +1574,29 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
       });
 
     } catch (error: any) {
-      console.error('❌ Error in enrollment creation or payment plan:', error);
-      console.error('❌ Stack trace:', error.stack);
+      console.error(`❌ [${checkoutRequestId}] CHECKOUT FAILED ==================`);
+      console.error(`❌ [${checkoutRequestId}] Error type: ${error.constructor?.name || 'Unknown'}`);
+      console.error(`❌ [${checkoutRequestId}] Error message: ${error.message}`);
+      console.error(`❌ [${checkoutRequestId}] Error code: ${error.code || 'N/A'}`);
+      console.error(`❌ [${checkoutRequestId}] Full error:`, JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
+      console.error(`❌ [${checkoutRequestId}] Stack trace:`, error.stack);
+      
       res.status(500).json({
         message: 'Failed to create enrollment or payment plan',
         error: error.message,
+        checkoutRequestId,
         details: process.env.NODE_ENV === 'development' ? error.stack : undefined
       });
     }
   } catch (error: any) {
-    console.error('❌ Error creating payment intent:', error);
+    console.error('❌ OUTER CATCH - Error creating payment intent:', error);
+    console.error('❌ OUTER CATCH - Error type:', error.constructor?.name);
+    console.error('❌ OUTER CATCH - Full error:', JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
+    console.error('❌ OUTER CATCH - Stack:', error.stack);
     res.status(500).json({
       message: 'Failed to create payment intent',
-      error: error.message
+      error: error.message,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 });
