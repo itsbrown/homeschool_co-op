@@ -642,16 +642,16 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
     },
   });
 
-  // Get outstanding balances from enrollments
+  // Get outstanding balances from enrollments using Supabase-authenticated endpoint
   const { data: enrollments, isLoading: isLoadingEnrollments } = useQuery({
-    queryKey: ["/api/enrollments", childId],
+    queryKey: ["/api/parent/enrollments", childId],
     queryFn: async () => {
       const token = localStorage.getItem('supabase_token');
       if (!token) {
         throw new Error('No authentication token');
       }
 
-      const response = await fetch('/api/enrollments', {
+      const response = await fetch('/api/parent/enrollments', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -662,7 +662,9 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
         throw new Error(`Failed to fetch enrollments: ${response.status}`);
       }
 
-      return await response.json();
+      const data = await response.json();
+      // The parent endpoint returns { enrollments: [...] } format
+      return data.enrollments || data;
     },
   });
 

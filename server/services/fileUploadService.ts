@@ -29,7 +29,14 @@ export const uploadCategories: Record<string, UploadCategoryConfig> = {
   },
   documents: {
     maxSizeBytes: 25 * 1024 * 1024,
-    allowedTypes: ["application/pdf", "image/png", "image/jpeg"],
+    allowedTypes: [
+      "application/pdf",
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "image/png",
+      "image/jpeg",
+      "image/gif"
+    ],
     folder: "documents",
     public: false,
     description: "School documents, waivers, policies",

@@ -4,6 +4,8 @@ import fs from 'fs';
 import { storage } from '../../storage';
 import { UploadedFile } from 'express-fileupload';
 import { supabaseAuth } from '../../middleware/supabase-auth';
+import { fileUploadService } from '../../services/fileUploadService';
+import { ObjectStorageService } from '../../replit_integrations/object_storage';
 
 const router = express.Router();
 
@@ -295,24 +297,31 @@ router.post('/upload', supabaseAuth, async (req: any, res) => {
       });
     }
 
-    // Create uploads directory if it doesn't exist
-    const uploadDir = path.join(process.cwd(), 'uploads', 'school-documents', schoolId.toString());
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
+    // Upload file to object storage using fileUploadService
+    let uploadResult;
+    try {
+      uploadResult = await fileUploadService.uploadBuffer(documentFile.data, {
+        category: 'documents',
+        originalFilename: documentFile.name,
+        mimeType: documentFile.mimetype,
+        userId: uploadedBy,
+        schoolId: schoolId,
+        metadata: {
+          title: title,
+          category: category || 'other',
+        },
+      });
+      console.log('📤 Document uploaded to object storage:', uploadResult.objectPath);
+    } catch (uploadError: any) {
+      console.error('❌ Failed to upload document to object storage:', uploadError);
+      return res.status(500).json({
+        success: false,
+        message: uploadError.message || 'Failed to upload document to storage'
+      });
     }
 
-    // Generate unique filename
-    const timestamp = Date.now();
-    const ext = path.extname(documentFile.name);
-    const safeTitle = title.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-    const filename = `${safeTitle}-${timestamp}${ext}`;
-    const filepath = path.join(uploadDir, filename);
-
-    // Save the file
-    await documentFile.mv(filepath);
-
-    // Generate the URL for the uploaded file
-    const fileUrl = `/uploads/school-documents/${schoolId}/${filename}`;
+    // Use the object storage path as the file URL
+    const fileUrl = uploadResult.objectPath;
 
     // Create document record in database
     const document = await storage.createSchoolDocument({

@@ -2,14 +2,14 @@ import { Router } from 'express';
 import fs from 'fs';
 import path from 'path';
 import { storage } from '../storage';
-import { jwtCheck } from '../middleware/auth0-auth';
+import { supabaseAuth } from '../middleware/supabase-auth';
 import { sendNewStudentNotificationEmail } from '../lib/email-service';
 import { isActiveMembership } from '@shared/schema';
 
 const router = Router();
 
 // Get children for the authenticated parent
-router.get('/children', jwtCheck, async (req: any, res) => {
+router.get('/children', supabaseAuth, async (req: any, res) => {
   try {
     console.log('👨‍👩‍👧‍👦 Children API called - Headers:', Object.keys(req.headers));
 
@@ -82,7 +82,7 @@ router.get('/children', jwtCheck, async (req: any, res) => {
 });
 
 // Get a specific child by ID (parent must own the child)
-router.get('/children/:id', jwtCheck, async (req: any, res) => {
+router.get('/children/:id', supabaseAuth, async (req: any, res) => {
   try {
     const childId = parseInt(req.params.id);
     const userEmail = req.auth?.email || req.user?.email;
@@ -130,7 +130,7 @@ router.get('/children/:id', jwtCheck, async (req: any, res) => {
 });
 
 // Register a new child
-router.post('/children', jwtCheck, async (req: any, res) => {
+router.post('/children', supabaseAuth, async (req: any, res) => {
   try {
     console.log('👶 Child registration API called');
 
@@ -350,7 +350,7 @@ router.post('/children', jwtCheck, async (req: any, res) => {
 });
 
 // Get enrollments for the authenticated parent's children
-router.get('/enrollments', jwtCheck, async (req: any, res) => {
+router.get('/enrollments', supabaseAuth, async (req: any, res) => {
   try {
     console.log('📚 Parent enrollments API called');
 
@@ -388,7 +388,7 @@ router.get('/enrollments', jwtCheck, async (req: any, res) => {
 });
 
 // Get membership enrollments for the authenticated parent
-router.get('/memberships', jwtCheck, async (req: any, res) => {
+router.get('/memberships', supabaseAuth, async (req: any, res) => {
   try {
     console.log('🎫 Parent memberships API called');
 
@@ -443,7 +443,7 @@ router.get('/memberships', jwtCheck, async (req: any, res) => {
 });
 
 // Get membership details after successful Stripe payment
-router.get('/memberships/confirm', jwtCheck, async (req: any, res) => {
+router.get('/memberships/confirm', supabaseAuth, async (req: any, res) => {
   try {
     console.log('✅ Confirming membership payment');
 
@@ -554,7 +554,7 @@ router.get('/memberships/confirm', jwtCheck, async (req: any, res) => {
 });
 
 // Create Stripe checkout session for parent's membership payment
-router.post('/memberships/checkout', jwtCheck, async (req: any, res) => {
+router.post('/memberships/checkout', supabaseAuth, async (req: any, res) => {
   try {
     console.log('💳 Parent membership checkout API called');
 
@@ -716,7 +716,7 @@ router.post('/memberships/checkout', jwtCheck, async (req: any, res) => {
 });
 
 // Get parent's member ID and membership status
-router.get('/member-id', jwtCheck, async (req: any, res) => {
+router.get('/member-id', supabaseAuth, async (req: any, res) => {
   try {
     console.log('🎫 Get member ID API called');
 
@@ -767,7 +767,7 @@ router.get('/member-id', jwtCheck, async (req: any, res) => {
 });
 
 // Save/update parent's member ID (used when parent enters an existing member ID)
-router.put('/member-id', jwtCheck, async (req: any, res) => {
+router.put('/member-id', supabaseAuth, async (req: any, res) => {
   try {
     console.log('🎫 Update member ID API called');
 
@@ -823,7 +823,7 @@ router.put('/member-id', jwtCheck, async (req: any, res) => {
 });
 
 // Get school documents published for parents
-router.get('/school-documents', jwtCheck, async (req: any, res) => {
+router.get('/school-documents', supabaseAuth, async (req: any, res) => {
   try {
     console.log('📄 Get parent school documents API called');
 
@@ -881,7 +881,7 @@ router.get('/school-documents', jwtCheck, async (req: any, res) => {
 });
 
 // Get parent's available credits balance
-router.get('/credits', jwtCheck, async (req: any, res) => {
+router.get('/credits', supabaseAuth, async (req: any, res) => {
   try {
     console.log('💰 Get parent credits API called');
 
@@ -965,7 +965,7 @@ router.get('/credits', jwtCheck, async (req: any, res) => {
 });
 
 // Get payment receipts for the parent
-router.get('/payment-receipts', jwtCheck, async (req: any, res) => {
+router.get('/payment-receipts', supabaseAuth, async (req: any, res) => {
   try {
     console.log('🧾 Get parent payment receipts API called');
 
