@@ -68,9 +68,9 @@ async function runMigrations() {
     await db.execute(sql`
       ALTER TABLE program_enrollments 
       ADD CONSTRAINT program_enrollments_status_check 
-      CHECK (status IN ('pending_payment', 'enrolled', 'waitlist', 'cancelled', 'completed', 'withdrawn', 'failed'));
+      CHECK (status IN ('pending_payment', 'pending_admin_approval', 'enrolled', 'waitlist', 'cancelled', 'completed', 'withdrawn', 'failed'));
     `);
-    console.log('✅ Migration completed: status constraint now allows pending_payment, waitlist, and cancelled statuses');
+    console.log('✅ Migration completed: status constraint now allows pending_payment, pending_admin_approval, waitlist, and cancelled statuses');
     
     // Add "Free After Threshold" discount configuration columns to schools table
     console.log('Running migration: Adding free_after_threshold columns to schools table...');
