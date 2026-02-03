@@ -816,7 +816,10 @@ export const scheduledPayments = pgTable("scheduled_payments", {
   
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (table) => ({
+  uniqueEnrollmentSchedule: unique("scheduled_payments_enrollment_date_installment_unique")
+    .on(table.enrollmentId, table.scheduledDate, table.installmentNumber)
+}));
 
 export const insertScheduledPaymentSchema = createInsertSchema(scheduledPayments)
   .omit({ id: true, createdAt: true, updatedAt: true })
