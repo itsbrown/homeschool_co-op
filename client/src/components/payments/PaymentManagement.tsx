@@ -668,70 +668,7 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
     },
   });
 
-  // Get subscription schedules for upcoming payments tab (Stripe-managed)
-  const { data: scheduledPayments, isLoading: isLoadingScheduled } = useQuery({
-    queryKey: ["/api/stripe/subscription-schedules", childId],
-    queryFn: async () => {
-      const token = localStorage.getItem('supabase_token');
-      if (!token) {
-        throw new Error('No authentication token');
-      }
-
-      const response = await fetch('/api/stripe/subscription-schedules', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch subscription schedules: ${response.status}`);
-      }
-
-      const data = await response.json();
-      if (!data.success || !data.schedules) {
-        return [];
-      }
-
-      // Transform Stripe schedules to match payment structure expected by UI
-      return data.schedules
-        .filter((schedule: any) => schedule.status === 'active')
-        .map((schedule: any) => {
-          // Get the current phase using the numeric index
-          const currentPhaseIndex = schedule.currentPhaseIndex || 0;
-          const currentPhase = schedule.phases?.[currentPhaseIndex];
-          const nextPhase = schedule.phases?.[currentPhaseIndex + 1];
-          
-          // Calculate next payment date from next phase start or current phase end
-          const dueDate = nextPhase?.start_date 
-            ? new Date(nextPhase.start_date * 1000)
-            : currentPhase?.end_date 
-            ? new Date(currentPhase.end_date * 1000)
-            : new Date();
-
-          // Get amount from current phase items (in cents)
-          const amount = currentPhase?.items?.[0]?.price_data?.unit_amount 
-            || currentPhase?.items?.[0]?.price?.unit_amount 
-            || 0;
-          
-          return {
-            id: schedule.id,
-            amount: amount,
-            dueDate: dueDate,
-            status: 'pending',
-            childName: schedule.metadata?.childName || 'Child',
-            className: schedule.metadata?.className || 'Class',
-            description: schedule.metadata?.description || 'Upcoming payment',
-            stripeScheduleId: schedule.id,
-            installmentNumber: currentPhaseIndex + 1,
-            totalInstallments: schedule.phases?.length || 0,
-            source: 'stripe' as const
-          };
-        });
-    },
-  });
-
-  // Get database-stored scheduled payments (class enrollments)
+  // Get database-stored scheduled payments (single source of truth for upcoming payments)
   const { data: dbScheduledPayments, isLoading: isLoadingDbScheduled, refetch: refetchDbScheduledPayments } = useQuery({
     queryKey: ['scheduled-payments-upcoming'],
     queryFn: async () => {
@@ -890,7 +827,6 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
   const paymentStats = React.useMemo(() => {
     const paymentData = payments || [];
     const outstandingData = outstandingBalances || [];
-    const stripeScheduledData = scheduledPayments || [];
     const dbScheduledData = dbScheduledPayments || [];
     
     const stats = paymentData.reduce((acc: any, payment: Payment) => {
@@ -915,25 +851,22 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
     );
     stats.outstandingCount = outstandingData.length;
     
-    // Add scheduled/upcoming payments (from both Stripe schedules and database)
-    // Only count pending scheduled payments
-    const pendingStripeScheduled = stripeScheduledData.filter((p: any) => p.status === 'pending');
+    // Add scheduled/upcoming payments from database (single source of truth)
     const pendingDbScheduled = dbScheduledData.filter((p: any) => p.status === 'pending');
     
-    const scheduledTotal = [
-      ...pendingStripeScheduled.map((p: any) => p.amount || 0),
-      ...pendingDbScheduled.map((p: any) => p.amount || 0)
-    ].reduce((sum, amount) => sum + amount, 0);
+    const scheduledTotal = pendingDbScheduled
+      .map((p: any) => p.amount || 0)
+      .reduce((sum: number, amount: number) => sum + amount, 0);
     
     stats.scheduledPaymentsTotal = scheduledTotal;
-    stats.scheduledPaymentsCount = pendingStripeScheduled.length + pendingDbScheduled.length;
+    stats.scheduledPaymentsCount = pendingDbScheduled.length;
     
     // Include scheduled payments in the outstanding balance so parents see true amount owed
     stats.totalOutstanding += scheduledTotal;
     stats.outstandingCount += stats.scheduledPaymentsCount;
     
     return stats;
-  }, [payments, outstandingBalances, scheduledPayments, dbScheduledPayments]);
+  }, [payments, outstandingBalances, dbScheduledPayments]);
   
   // Format currency amount
   const formatCurrency = (amount: number) => {
@@ -1373,14 +1306,14 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
               <CardDescription>Payments scheduled for the future</CardDescription>
             </CardHeader>
             <CardContent>
-              {isLoading || isLoadingScheduled || isLoadingDbScheduled ? (
+              {isLoading || isLoadingDbScheduled ? (
                 <div className="text-center py-8">
                   <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
                   <p>Loading upcoming payments...</p>
                 </div>
               ) : (
                 (() => {
-                  // Combine payment history items with due dates and scheduled payments
+                  // Combine payment history items with due dates and database scheduled payments
                   const pendingPayments = filteredPayments
                     .filter((p: Payment) => p.status === 'pending' && p.dueDate)
                     .map((p: Payment) => ({
@@ -1388,22 +1321,7 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
                       source: 'payment_history'
                     }));
                   
-                  // Stripe-managed scheduled payments
-                  const scheduledPaymentItems = (scheduledPayments || [])
-                    .map((sp: any) => ({
-                      id: sp.id,
-                      description: sp.description || `${sp.className} - ${sp.childName}`,
-                      amount: sp.amount,
-                      dueDate: sp.dueDate,
-                      status: 'pending',
-                      childName: sp.childName,
-                      programName: sp.className,
-                      source: 'stripe_scheduled',
-                      installmentNumber: sp.installmentNumber,
-                      totalInstallments: sp.totalInstallments
-                    }));
-                  
-                  // Database-stored scheduled payments (class enrollments)
+                  // Database-stored scheduled payments (single source of truth)
                   const dbScheduledPaymentItems = (dbScheduledPayments || [])
                     .map((sp: any) => ({
                       id: sp.id,
@@ -1419,7 +1337,7 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
                       paymentPlan: sp.paymentPlan
                     }));
                   
-                  const allUpcomingPayments = [...pendingPayments, ...scheduledPaymentItems, ...dbScheduledPaymentItems]
+                  const allUpcomingPayments = [...pendingPayments, ...dbScheduledPaymentItems]
                     .sort((a, b) => new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime());
                   
                   return allUpcomingPayments.length === 0 ? (
@@ -1436,8 +1354,6 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
                           className={`flex justify-between items-center p-4 border rounded-lg ${
                             payment.source === 'database_scheduled' 
                               ? 'border-l-4 border-l-blue-500' 
-                              : payment.source === 'stripe_scheduled'
-                              ? 'border-l-4 border-l-purple-500'
                               : ''
                           }`}
                         >
@@ -1445,8 +1361,6 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
                             <div className={`h-10 w-10 rounded-full flex items-center justify-center ${
                               payment.source === 'database_scheduled'
                                 ? 'bg-blue-100 text-blue-700'
-                                : payment.source === 'stripe_scheduled'
-                                ? 'bg-purple-100 text-purple-700'
                                 : 'bg-yellow-100 text-yellow-700'
                             }`}>
                               <Calendar className="h-5 w-5" />
@@ -1457,11 +1371,6 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
                                 {payment.source === 'database_scheduled' && (
                                   <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
                                     Class Enrollment
-                                  </Badge>
-                                )}
-                                {payment.source === 'stripe_scheduled' && (
-                                  <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-200">
-                                    Stripe Managed
                                   </Badge>
                                 )}
                               </div>
