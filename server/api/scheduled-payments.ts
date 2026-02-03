@@ -570,8 +570,12 @@ router.post('/pay-with-credits', supabaseAuth, async (req: any, res) => {
       status: 'completed',
       paymentMethod: 'other',  // 'credits' is not a valid type, use 'other' with description
       description: `Credit payment for ${scheduledPayment.installmentNumber}/${scheduledPayment.totalInstallments}`,
-      enrollmentId: scheduledPayment.enrollmentId || undefined,
+      enrollmentIds: scheduledPayment.enrollmentId ? [scheduledPayment.enrollmentId] : [],
       stripePaymentIntentId: `credit_${Date.now()}_${scheduledPayment.id}`,
+      metadata: { scheduledPaymentId: scheduledPayment.id, paymentType: 'credits' },
+      stripeChargeId: null,
+      stripeRefundId: null,
+      originalPaymentId: null,
     });
 
     console.log('✅ Credit-only payment completed successfully for scheduled payment:', scheduledPayment.id);
@@ -737,6 +741,47 @@ router.post('/:id/confirm', supabaseAuth, async (req: any, res) => {
         console.error('⚠️ Failed to create payment history:', historyError);
         // Continue - allocation tracking is best-effort
       }
+    }
+
+    // CREATE PAYMENT RECORD for payment history display (using payments table)
+    // This follows the same pattern as credit-only payments (line 562-575)
+    try {
+      const parentUser = await storage.getUserByEmail(userEmail);
+      let childName = 'Child';
+      let className = 'Class';
+      
+      if (scheduledPayment.enrollmentId) {
+        const enrollmentForPayment = await storage.getProgramEnrollmentById(scheduledPayment.enrollmentId);
+        if (enrollmentForPayment) {
+          childName = enrollmentForPayment.childName || 'Child';
+          className = enrollmentForPayment.className || 'Class';
+        }
+      }
+      
+      if (parentUser) {
+        await storage.createPayment({
+          schoolId: scheduledPayment.schoolId,
+          parentId: parentUser.id,
+          parentEmail: userEmail,
+          childName,
+          className,
+          amount: totalPaymentReceived,
+          paymentDate: new Date(),
+          status: 'completed',
+          paymentMethod: 'stripe',
+          description: `Scheduled payment ${scheduledPayment.installmentNumber}/${scheduledPayment.totalInstallments}`,
+          enrollmentIds: scheduledPayment.enrollmentId ? [scheduledPayment.enrollmentId] : [],
+          stripePaymentIntentId: paymentIntent.id,
+          metadata: { scheduledPaymentId: paymentId, paymentType: 'biweekly' },
+          stripeChargeId: null,
+          stripeRefundId: null,
+          originalPaymentId: null,
+        });
+        console.log(`✅ Created payment record in payments table for history display`);
+      }
+    } catch (paymentRecordError) {
+      console.error('⚠️ Failed to create payment record:', paymentRecordError);
+      // Continue - this is for display purposes, not critical
     }
 
     // UPDATE ENROLLMENT BALANCE
