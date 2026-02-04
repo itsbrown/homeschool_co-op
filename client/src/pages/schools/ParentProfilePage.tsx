@@ -535,6 +535,14 @@ export default function ParentProfilePage() {
   const [rescheduleDate, setRescheduleDate] = useState('');
   const [rescheduleComment, setRescheduleComment] = useState('');
   
+  // Delete payment plan state
+  const [deletePaymentPlanDialog, setDeletePaymentPlanDialog] = useState<{
+    open: boolean;
+    enrollmentId: number | null;
+    enrollmentName: string;
+    paymentCount: number;
+  }>({ open: false, enrollmentId: null, enrollmentName: '', paymentCount: 0 });
+  
   // Edit parent state
   const [editParentDialogOpen, setEditParentDialogOpen] = useState(false);
   const [editParentFirstName, setEditParentFirstName] = useState('');
@@ -600,6 +608,33 @@ export default function ParentProfilePage() {
       toast({
         title: "Error",
         description: error.message || "Failed to reschedule payment",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Delete payment plan mutation
+  const deletePaymentPlanMutation = useMutation({
+    mutationFn: async ({ enrollmentId }: { enrollmentId: number }) => {
+      const response = await apiRequest("DELETE", `/api/admin/enrollments/${enrollmentId}/scheduled-payments`);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Failed to delete payment plan');
+      }
+      return response.json();
+    },
+    onSuccess: (data: { deletedCount: number }) => {
+      toast({
+        title: "Payment Plan Deleted",
+        description: `Successfully removed ${data.deletedCount} scheduled payment(s).`
+      });
+      queryClient.invalidateQueries({ queryKey: [`/api/parent-profile/${parentId}`] });
+      setDeletePaymentPlanDialog({ open: false, enrollmentId: null, enrollmentName: '', paymentCount: 0 });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete payment plan",
         variant: "destructive",
       });
     },
@@ -2363,59 +2398,107 @@ export default function ParentProfilePage() {
                   {profile.scheduledPayments.length === 0 ? (
                     <p className="text-center text-muted-foreground py-8">No scheduled payments found.</p>
                   ) : (
-                    <div className="border rounded-md">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Due Date</TableHead>
-                            <TableHead>Description</TableHead>
-                            <TableHead>Program Dates</TableHead>
-                            <TableHead>Amount</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead className="text-right">Actions</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {profile.scheduledPayments.map((payment) => (
-                            <TableRow key={payment.id}>
-                              <TableCell>
-                                {new Date(payment.dueDate).toLocaleDateString()}
-                              </TableCell>
-                              <TableCell>{payment.description}</TableCell>
-                              <TableCell className="text-sm">
-                                {payment.programStartDate && payment.programEndDate ? (
-                                  <span className="text-muted-foreground">
-                                    {new Date(payment.programStartDate).toLocaleDateString()} - {new Date(payment.programEndDate).toLocaleDateString()}
-                                  </span>
-                                ) : (
-                                  <span className="text-muted-foreground">—</span>
-                                )}
-                              </TableCell>
-                              <TableCell>${payment.amount.toFixed(2)}</TableCell>
-                              <TableCell>
-                                <Badge variant={getPaymentStatusBadgeVariant(payment.status)}>
-                                  {payment.status}
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="text-right">
-                                {payment.status === 'pending' && (
+                    <div className="space-y-6">
+                      {/* Group payments by enrollmentId */}
+                      {(() => {
+                        const groupedPayments = profile.scheduledPayments.reduce((acc, payment) => {
+                          const key = payment.enrollmentId || 'other';
+                          if (!acc[key]) {
+                            acc[key] = {
+                              enrollmentId: payment.enrollmentId,
+                              className: payment.className || payment.description,
+                              childName: payment.childName,
+                              payments: []
+                            };
+                          }
+                          acc[key].payments.push(payment);
+                          return acc;
+                        }, {} as Record<string | number, { enrollmentId: number | null; className: string; childName?: string; payments: typeof profile.scheduledPayments }>);
+                        
+                        return Object.entries(groupedPayments).map(([key, group]) => {
+                          const pendingCount = group.payments.filter(p => p.status === 'pending').length;
+                          return (
+                            <div key={key} className="border rounded-lg">
+                              <div className="flex items-center justify-between p-4 bg-muted/50 border-b">
+                                <div>
+                                  <h4 className="font-medium">{group.className}</h4>
+                                  {group.childName && (
+                                    <p className="text-sm text-muted-foreground">Student: {group.childName}</p>
+                                  )}
+                                </div>
+                                {group.enrollmentId && pendingCount > 0 && (
                                   <Button
-                                    variant="ghost"
+                                    variant="outline"
                                     size="sm"
-                                    onClick={() => {
-                                      setReschedulePaymentDialog({ open: true, payment });
-                                      setRescheduleDate(new Date(payment.dueDate).toISOString().split('T')[0]);
-                                    }}
+                                    className="text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                                    onClick={() => setDeletePaymentPlanDialog({
+                                      open: true,
+                                      enrollmentId: group.enrollmentId!,
+                                      enrollmentName: group.className,
+                                      paymentCount: pendingCount
+                                    })}
                                   >
-                                    <Pencil className="h-4 w-4 mr-1" />
-                                    Edit Date
+                                    <Trash2 className="h-4 w-4 mr-1" />
+                                    Delete Plan ({pendingCount})
                                   </Button>
                                 )}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
+                              </div>
+                              <Table>
+                                <TableHeader>
+                                  <TableRow>
+                                    <TableHead>Due Date</TableHead>
+                                    <TableHead>Description</TableHead>
+                                    <TableHead>Program Dates</TableHead>
+                                    <TableHead>Amount</TableHead>
+                                    <TableHead>Status</TableHead>
+                                    <TableHead className="text-right">Actions</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {group.payments.map((payment) => (
+                                    <TableRow key={payment.id}>
+                                      <TableCell>
+                                        {new Date(payment.dueDate).toLocaleDateString()}
+                                      </TableCell>
+                                      <TableCell>{payment.description}</TableCell>
+                                      <TableCell className="text-sm">
+                                        {payment.programStartDate && payment.programEndDate ? (
+                                          <span className="text-muted-foreground">
+                                            {new Date(payment.programStartDate).toLocaleDateString()} - {new Date(payment.programEndDate).toLocaleDateString()}
+                                          </span>
+                                        ) : (
+                                          <span className="text-muted-foreground">—</span>
+                                        )}
+                                      </TableCell>
+                                      <TableCell>${payment.amount.toFixed(2)}</TableCell>
+                                      <TableCell>
+                                        <Badge variant={getPaymentStatusBadgeVariant(payment.status)}>
+                                          {payment.status}
+                                        </Badge>
+                                      </TableCell>
+                                      <TableCell className="text-right">
+                                        {payment.status === 'pending' && (
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => {
+                                              setReschedulePaymentDialog({ open: true, payment });
+                                              setRescheduleDate(new Date(payment.dueDate).toISOString().split('T')[0]);
+                                            }}
+                                          >
+                                            <Pencil className="h-4 w-4 mr-1" />
+                                            Edit Date
+                                          </Button>
+                                        )}
+                                      </TableCell>
+                                    </TableRow>
+                                  ))}
+                                </TableBody>
+                              </Table>
+                            </div>
+                          );
+                        });
+                      })()}
                     </div>
                   )}
                 </CardContent>
@@ -2676,6 +2759,46 @@ export default function ParentProfilePage() {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Delete Payment Plan Confirmation Dialog */}
+        <AlertDialog 
+          open={deletePaymentPlanDialog.open} 
+          onOpenChange={(open) => {
+            if (!open) {
+              setDeletePaymentPlanDialog({ open: false, enrollmentId: null, enrollmentName: '', paymentCount: 0 });
+            }
+          }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Payment Plan</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete all {deletePaymentPlanDialog.paymentCount} pending scheduled payment(s) for <strong>{deletePaymentPlanDialog.enrollmentName}</strong>?
+                <br /><br />
+                This action cannot be undone. The enrollment will remain active but will have no scheduled payments.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deletePaymentPlanMutation.isPending}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                disabled={deletePaymentPlanMutation.isPending}
+                onClick={() => {
+                  if (deletePaymentPlanDialog.enrollmentId) {
+                    deletePaymentPlanMutation.mutate({ enrollmentId: deletePaymentPlanDialog.enrollmentId });
+                  }
+                }}
+              >
+                {deletePaymentPlanMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Deleting...
+                  </>
+                ) : "Delete Payment Plan"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </SchoolAdminLayout>
   );

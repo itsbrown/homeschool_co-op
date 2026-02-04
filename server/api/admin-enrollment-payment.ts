@@ -900,6 +900,58 @@ router.delete('/:enrollmentId', async (req: any, res) => {
 });
 
 /**
+ * DELETE /api/admin/enrollments/:enrollmentId/scheduled-payments
+ * Delete all pending scheduled payments for an enrollment (payment plan deletion)
+ * Requires school admin role - auth middleware applied at router registration
+ */
+router.delete('/:enrollmentId/scheduled-payments', async (req: any, res) => {
+  try {
+    const enrollmentId = parseInt(req.params.enrollmentId);
+    
+    if (isNaN(enrollmentId)) {
+      return res.status(400).json({ message: 'Invalid enrollment ID' });
+    }
+    
+    const userEmail = req.user?.email || req.auth?.email;
+    if (!userEmail) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    const user = await storage.getUserByEmail(userEmail);
+    if (!user || (user.role !== 'schoolAdmin' && user.role !== 'admin' && user.role !== 'superAdmin')) {
+      return res.status(403).json({ message: 'Only administrators can delete payment plans' });
+    }
+    
+    console.log(`🗑️  Admin ${userEmail} attempting to delete payment plan for enrollment ID: ${enrollmentId}`);
+    
+    const enrollment = await storage.getProgramEnrollmentById(enrollmentId);
+    
+    if (!enrollment) {
+      return res.status(404).json({ message: 'Enrollment not found' });
+    }
+
+    if (enrollment.schoolId !== user.schoolId && user.role === 'schoolAdmin') {
+      return res.status(403).json({ message: 'Cannot modify payment plans from other schools' });
+    }
+
+    // Delete all pending scheduled payments for this enrollment
+    const deletedCount = await storage.deletePendingScheduledPaymentsByEnrollmentId(enrollmentId);
+    
+    console.log(`✅ Deleted ${deletedCount} pending scheduled payments for enrollment ${enrollmentId}`);
+    
+    res.json({ 
+      success: true,
+      message: `Deleted ${deletedCount} scheduled payment(s)`,
+      deletedCount,
+      enrollmentId
+    });
+  } catch (error) {
+    console.error('Error deleting payment plan:', error);
+    res.status(500).json({ message: 'Failed to delete payment plan' });
+  }
+});
+
+/**
  * PATCH /api/admin/enrollments/scheduled-payments/:paymentId/reschedule
  * Update the scheduled date for a specific pending payment
  * Requires school admin role - auth middleware applied at router registration
