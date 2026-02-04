@@ -543,6 +543,12 @@ export default function ParentProfilePage() {
     paymentCount: number;
   }>({ open: false, enrollmentId: null, enrollmentName: '', paymentCount: 0 });
   
+  // Delete single scheduled payment state
+  const [deleteScheduledPaymentDialog, setDeleteScheduledPaymentDialog] = useState<{
+    open: boolean;
+    payment: ParentProfile['scheduledPayments'][0] | null;
+  }>({ open: false, payment: null });
+  
   // Edit parent state
   const [editParentDialogOpen, setEditParentDialogOpen] = useState(false);
   const [editParentFirstName, setEditParentFirstName] = useState('');
@@ -653,6 +659,34 @@ export default function ParentProfilePage() {
       toast({
         title: "Error",
         description: error.message || "Failed to delete payment plan",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Delete single scheduled payment mutation
+  const deleteScheduledPaymentMutation = useMutation({
+    mutationFn: async ({ paymentId }: { paymentId: number }) => {
+      const response = await apiRequest("DELETE", `/api/admin/enrollments/scheduled-payments/${paymentId}`);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Failed to delete scheduled payment');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Payment Deleted",
+        description: "The scheduled payment has been removed successfully."
+      });
+      queryClient.invalidateQueries({ queryKey: [`/api/parent-profile/${parentId}`] });
+      queryClient.invalidateQueries({ queryKey: ['scheduled-payments-upcoming'] });
+      setDeleteScheduledPaymentDialog({ open: false, payment: null });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete scheduled payment",
         variant: "destructive",
       });
     },
@@ -2494,18 +2528,39 @@ export default function ParentProfilePage() {
                                           {payment.status}
                                         </Badge>
                                       </TableCell>
-                                      <TableCell className="text-right">
+                                      <TableCell className="text-right space-x-1">
                                         {payment.status === 'pending' && (
+                                          <>
+                                            <Button
+                                              variant="ghost"
+                                              size="sm"
+                                              onClick={() => {
+                                                setReschedulePaymentDialog({ open: true, payment });
+                                                setRescheduleDate(new Date(payment.dueDate).toISOString().split('T')[0]);
+                                              }}
+                                            >
+                                              <Pencil className="h-4 w-4 mr-1" />
+                                              Edit Date
+                                            </Button>
+                                            <Button
+                                              variant="ghost"
+                                              size="sm"
+                                              className="text-destructive hover:text-destructive"
+                                              onClick={() => setDeleteScheduledPaymentDialog({ open: true, payment })}
+                                            >
+                                              <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                          </>
+                                        )}
+                                        {payment.status === 'processing' && (
                                           <Button
                                             variant="ghost"
                                             size="sm"
-                                            onClick={() => {
-                                              setReschedulePaymentDialog({ open: true, payment });
-                                              setRescheduleDate(new Date(payment.dueDate).toISOString().split('T')[0]);
-                                            }}
+                                            className="text-destructive hover:text-destructive"
+                                            onClick={() => setDeleteScheduledPaymentDialog({ open: true, payment })}
                                           >
-                                            <Pencil className="h-4 w-4 mr-1" />
-                                            Edit Date
+                                            <Trash2 className="h-4 w-4 mr-1" />
+                                            Delete
                                           </Button>
                                         )}
                                       </TableCell>
@@ -2709,6 +2764,62 @@ export default function ParentProfilePage() {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Delete Scheduled Payment Dialog */}
+        <AlertDialog 
+          open={deleteScheduledPaymentDialog.open} 
+          onOpenChange={(open) => setDeleteScheduledPaymentDialog({ open, payment: open ? deleteScheduledPaymentDialog.payment : null })}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Scheduled Payment</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete this scheduled payment? This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            {deleteScheduledPaymentDialog.payment && (
+              <div className="p-4 bg-gray-50 rounded-lg my-4">
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-gray-600">Amount:</span>
+                    <p className="font-medium">${deleteScheduledPaymentDialog.payment.amount.toFixed(2)}</p>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Due Date:</span>
+                    <p className="font-medium">{formatDate(deleteScheduledPaymentDialog.payment.dueDate)}</p>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Status:</span>
+                    <p className="font-medium">{deleteScheduledPaymentDialog.payment.status}</p>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Description:</span>
+                    <p className="font-medium">{deleteScheduledPaymentDialog.payment.description}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deleteScheduledPaymentMutation.isPending}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={() => {
+                  if (deleteScheduledPaymentDialog.payment) {
+                    deleteScheduledPaymentMutation.mutate({ paymentId: deleteScheduledPaymentDialog.payment.id });
+                  }
+                }}
+                disabled={deleteScheduledPaymentMutation.isPending}
+              >
+                {deleteScheduledPaymentMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Deleting...
+                  </>
+                ) : "Delete Payment"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         {/* Create Membership Dialog */}
         <Dialog open={createMembershipDialog} onOpenChange={setCreateMembershipDialog}>

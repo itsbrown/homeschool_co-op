@@ -952,6 +952,65 @@ router.delete('/:enrollmentId/scheduled-payments', async (req: any, res) => {
 });
 
 /**
+ * DELETE /api/admin/enrollments/scheduled-payments/:paymentId
+ * Delete a single scheduled payment by ID
+ * Requires school admin role - auth middleware applied at router registration
+ */
+router.delete('/scheduled-payments/:paymentId', async (req: any, res) => {
+  try {
+    const paymentId = parseInt(req.params.paymentId);
+    
+    if (isNaN(paymentId)) {
+      return res.status(400).json({ message: 'Invalid payment ID' });
+    }
+    
+    const userEmail = req.user?.email || req.auth?.email;
+    if (!userEmail) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    const user = await storage.getUserByEmail(userEmail);
+    if (!user || (user.role !== 'schoolAdmin' && user.role !== 'admin' && user.role !== 'superAdmin')) {
+      return res.status(403).json({ message: 'Only administrators can delete scheduled payments' });
+    }
+    
+    console.log(`🗑️  Admin ${userEmail} attempting to delete scheduled payment ID: ${paymentId}`);
+    
+    const scheduledPayment = await storage.getScheduledPaymentById(paymentId);
+    
+    if (!scheduledPayment) {
+      return res.status(404).json({ message: 'Scheduled payment not found' });
+    }
+
+    // Only allow deletion of pending or processing payments (not completed/paid)
+    const allowedStatuses = ['pending', 'processing'];
+    if (!allowedStatuses.includes(scheduledPayment.status)) {
+      return res.status(400).json({ 
+        message: `Cannot delete scheduled payment with status '${scheduledPayment.status}'. Only pending or processing payments can be deleted.` 
+      });
+    }
+
+    const enrollment = await storage.getProgramEnrollmentById(scheduledPayment.enrollmentId);
+    if (enrollment && enrollment.schoolId !== user.schoolId && user.role === 'schoolAdmin') {
+      return res.status(403).json({ message: 'Cannot delete scheduled payments from other schools' });
+    }
+
+    await storage.deleteScheduledPayment(paymentId);
+    
+    console.log(`✅ Deleted scheduled payment ${paymentId}`);
+    
+    res.json({ 
+      success: true,
+      message: `Deleted scheduled payment ${paymentId}`,
+      paymentId
+    });
+  } catch (error) {
+    console.error('Error deleting scheduled payment:', error);
+    res.status(500).json({ message: 'Failed to delete scheduled payment' });
+  }
+});
+
+/**
  * PATCH /api/admin/enrollments/scheduled-payments/:paymentId/reschedule
  * Update the scheduled date for a specific pending payment
  * Requires school admin role - auth middleware applied at router registration
