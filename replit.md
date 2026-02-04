@@ -37,7 +37,7 @@ The platform is built on a full-stack architecture prioritizing scalability, sec
 -   **Student Management System**: Tracks students across schools.
 -   **Notification System**: In-app notifications with PostgreSQL storage and real-time unread counts.
 -   **System Error Monitoring**: Comprehensive error tracking with database logging and automatic notifications.
--   **Unified Credit System**: Extensible multi-type credit system (volunteer, referral, achievement, marketing, manual) with admin approval and FIFO consumption.
+-   **Unified Credit System**: Extensible multi-type credit system (volunteer, referral, achievement, marketing, manual, fundraiser) with admin approval, FIFO consumption, and automatic in-app notifications when credits are created/approved/rejected (includes title, amount, description, and expiration date).
 -   **Fundraiser System**: Complete management for product-based campaigns for schools, including storefront and credit integration.
 -   **Refund Management System**: Comprehensive refund processing with pro-rated calculator, structured reason codes, and analytics.
 -   **Payment Reminder Tracking System**: Complete audit logging for automatic and manual payment reminders with school admin visibility.
