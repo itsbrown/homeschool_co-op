@@ -76,6 +76,12 @@ The platform is built on a full-stack architecture prioritizing scalability, sec
 -   `scheduled_payments` with `enrollmentId` pointing to deleted `program_enrollments` may appear in parent views but are filtered out of admin views.
 -   Admin views typically filter by valid enrollment joins only.
 
+**iOS/Safari Compatibility:**
+-   CSS uses `@supports (-webkit-touch-callout: none)` to target iOS Safari and sets `font-size: 16px` on all inputs to prevent auto-zoom on focus.
+-   Stripe payments use `confirmPayment` with `return_url` redirects (not popups), making them Safari-compatible.
+-   Mobile-first responsive design with `grid-cols-1 md:grid-cols-2` patterns for form layouts.
+-   Platform uses `100dvh`/`svh` viewport units for consistent iOS viewport handling.
+
 ## External Dependencies
 -   **Supabase**: Authentication.
 -   **Replit App Storage**: Object storage for file uploads.
