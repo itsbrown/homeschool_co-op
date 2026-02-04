@@ -276,6 +276,57 @@ router.post('/manual', requireSchoolContext, async (req: any, res) => {
     
     console.log(`✅ Manual credit created: ${creditAmountCents} cents for user ${userId} by admin ${adminUserId}`);
     
+    // Send notification to user about their new credit
+    try {
+      const amountDollars = (creditAmountCents / 100).toFixed(2);
+      
+      // Build notification content with all available details
+      let notificationContent = `You have received a credit of $${amountDollars}.\n\nTitle: ${title}`;
+      
+      if (description) {
+        notificationContent += `\nDescription: ${description}`;
+      }
+      
+      if (expiresAt) {
+        const expirationDate = new Date(expiresAt).toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        });
+        notificationContent += `\nExpires: ${expirationDate}`;
+      }
+      
+      if (autoApprove) {
+        notificationContent += `\n\nThis credit is available immediately and will be automatically applied to your next purchase.`;
+      } else {
+        notificationContent += `\n\nThis credit is pending approval and will be available once approved.`;
+      }
+      
+      const notification = await storage.createNotification({
+        senderId: adminUserId,
+        schoolId,
+        type: 'in_app',
+        priority: 'normal',
+        subject: autoApprove ? 'Credit Added to Your Account' : 'Credit Pending Approval',
+        content: notificationContent,
+        targetType: 'individual',
+        targetData: { userId, creditId: credit.id, creditType: 'manual', amountCents: creditAmountCents },
+        scheduledFor: null,
+        expiresAt: null
+      });
+      
+      await storage.createNotificationRecipient({
+        notificationId: notification.id,
+        recipientId: userId,
+        deliveryType: 'in_app',
+        status: 'pending'
+      });
+      
+      console.log(`📧 Notification sent to user ${userId} about manual credit ${credit.id}`);
+    } catch (notifyError) {
+      console.error('⚠️ Error sending credit notification (non-blocking):', notifyError);
+    }
+    
     res.status(201).json(credit);
   } catch (error: any) {
     console.error('Error creating manual credit:', error);
@@ -311,6 +362,57 @@ router.post('/approve', requireSchoolContext, async (req: any, res) => {
     
     console.log(`✅ Credit ${creditId} approved by admin ${adminUserId}`);
     
+    // Send notification to user about approved credit
+    try {
+      const amountDollars = (credit.creditAmountCents / 100).toFixed(2);
+      
+      // Build notification content with all available details
+      let notificationContent = `Your credit of $${amountDollars} has been approved and is now available.`;
+      
+      if (credit.title) {
+        notificationContent += `\n\nTitle: ${credit.title}`;
+      }
+      
+      if (credit.description) {
+        notificationContent += `\nDescription: ${credit.description}`;
+      }
+      
+      if (credit.expiresAt) {
+        const expirationDate = new Date(credit.expiresAt).toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        });
+        notificationContent += `\nExpires: ${expirationDate}`;
+      }
+      
+      notificationContent += `\n\nThis credit will be automatically applied to your next purchase.`;
+      
+      const notification = await storage.createNotification({
+        senderId: adminUserId,
+        schoolId,
+        type: 'in_app',
+        priority: 'normal',
+        subject: 'Your Credit Has Been Approved',
+        content: notificationContent,
+        targetType: 'individual',
+        targetData: { userId: credit.userId, creditId, creditType: credit.creditType, amountCents: credit.creditAmountCents },
+        scheduledFor: null,
+        expiresAt: null
+      });
+      
+      await storage.createNotificationRecipient({
+        notificationId: notification.id,
+        recipientId: credit.userId,
+        deliveryType: 'in_app',
+        status: 'pending'
+      });
+      
+      console.log(`📧 Notification sent to user ${credit.userId} about approved credit ${creditId}`);
+    } catch (notifyError) {
+      console.error('⚠️ Error sending credit approval notification (non-blocking):', notifyError);
+    }
+    
     res.json(approvedCredit);
   } catch (error: any) {
     console.error('Error approving credit:', error);
@@ -345,6 +447,58 @@ router.post('/reject', requireSchoolContext, async (req: any, res) => {
     const rejectedCredit = await storage.rejectCredit(creditId, adminUserId, reason);
     
     console.log(`❌ Credit ${creditId} rejected by admin ${adminUserId}: ${reason}`);
+    
+    // Send notification to user about rejected credit
+    try {
+      const amountDollars = (credit.creditAmountCents / 100).toFixed(2);
+      
+      // Build notification content with all available details
+      let notificationContent = `Your credit request of $${amountDollars} has not been approved.`;
+      
+      if (credit.title) {
+        notificationContent += `\n\nTitle: ${credit.title}`;
+      }
+      
+      if (credit.description) {
+        notificationContent += `\nDescription: ${credit.description}`;
+      }
+      
+      if (credit.expiresAt) {
+        const expirationDate = new Date(credit.expiresAt).toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        });
+        notificationContent += `\nExpiration was set for: ${expirationDate}`;
+      }
+      
+      notificationContent += `\n\nReason: ${reason}`;
+      notificationContent += `\n\nIf you have questions about this decision, please contact your school administrator.`;
+      
+      const notification = await storage.createNotification({
+        senderId: adminUserId,
+        schoolId,
+        type: 'in_app',
+        priority: 'normal',
+        subject: 'Credit Request Not Approved',
+        content: notificationContent,
+        targetType: 'individual',
+        targetData: { userId: credit.userId, creditId, creditType: credit.creditType, amountCents: credit.creditAmountCents, rejectionReason: reason },
+        scheduledFor: null,
+        expiresAt: null
+      });
+      
+      await storage.createNotificationRecipient({
+        notificationId: notification.id,
+        recipientId: credit.userId,
+        deliveryType: 'in_app',
+        status: 'pending'
+      });
+      
+      console.log(`📧 Notification sent to user ${credit.userId} about rejected credit ${creditId}`);
+    } catch (notifyError) {
+      console.error('⚠️ Error sending credit rejection notification (non-blocking):', notifyError);
+    }
     
     res.json(rejectedCredit);
   } catch (error: any) {
