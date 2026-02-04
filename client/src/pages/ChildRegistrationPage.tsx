@@ -3,13 +3,15 @@ import { useLocation, useParams } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import ParentAppShell from "@/components/layout/ParentAppShell";
 import ChildRegistrationForm from "@/components/registration/ChildRegistrationForm";
-import { useAuth } from "@/hooks/useAuth0";
+import { useAuth } from "@/components/SupabaseProvider";
+import { useRole } from "@/contexts/RoleContext";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function ChildRegistrationPage() {
   const { childId } = useParams();
   const [, setLocation] = useLocation();
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
+  const { activeRole } = useRole();
   
   // Redirect if not authenticated
   React.useEffect(() => {
@@ -43,12 +45,12 @@ export default function ChildRegistrationPage() {
   }
   
   // Ensure only parents can access this page
-  if (user && user.role !== 'parent') {
+  if (user && activeRole !== 'parent') {
     return (
       <ParentAppShell>
         <div className="container mx-auto p-4 text-center">
           <h1 className="text-2xl font-bold mb-4">Access Denied</h1>
-          <p>Only parents can register children in the system.</p>
+          <p>Only parents can register children in the system. Please switch to your Parent role using the dropdown above.</p>
         </div>
       </ParentAppShell>
     );

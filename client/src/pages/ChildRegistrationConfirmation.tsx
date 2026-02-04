@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { useAuth } from "@/hooks/useAuth0";
+import { useAuth } from "@/components/SupabaseProvider";
+import { useRole } from "@/contexts/RoleContext";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import AppShell from "@/components/layout/AppShell";
@@ -27,6 +28,7 @@ interface ChildFormData {
 
 export default function ChildRegistrationConfirmation() {
   const { user, isLoading } = useAuth();
+  const { activeRole } = useRole();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -74,18 +76,18 @@ export default function ChildRegistrationConfirmation() {
         setLocation("/login");
       }, 0);
     }
-    // Verify user is a parent
-    else if (user && user.role !== "parent") {
+    // Verify user has parent role active
+    else if (user && activeRole !== "parent") {
       toast({
         title: "Access Denied",
-        description: "Only parent accounts can register children.",
+        description: "Only parent accounts can register children. Please switch to your Parent role.",
         variant: "destructive",
       });
       setTimeout(() => {
         setLocation("/dashboard");
       }, 0);
     }
-  }, [isLoading, user, toast, setLocation]);
+  }, [isLoading, user, activeRole, toast, setLocation]);
 
   const formatDate = (dateString: string) => {
     if (!dateString) return "";
