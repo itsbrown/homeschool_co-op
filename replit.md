@@ -54,6 +54,28 @@ The platform is built on a full-stack architecture prioritizing scalability, sec
 -   **Server-Authoritative Enrollment Payment Display**: `totalPaid` and `remainingBalance` fields on enrollment are the single source of truth for payment display.
 -   **Promo Code Validation**: Checkout endpoint validates promo codes server-side and rejects payments if a provided promo code cannot be applied (returns detailed error reason).
 
+## Development Patterns
+
+**Multi-Role Access Control (Frontend):**
+-   Always import `useAuth` from `@/components/SupabaseProvider` (NOT from `@/hooks/useAuth0`).
+-   For role-based access checks, use `activeRole` from `useRole()` context (`@/contexts/RoleContext`), NOT `user.role`.
+-   `user.role` is the user's primary role; `activeRole` is the currently selected role (users can switch roles via dropdown).
+-   Include `activeRole` in useEffect dependency arrays when using it for access control.
+-   Reference pattern: `client/src/pages/SchedulePage.tsx`
+
+**Object Storage Paths:**
+-   New uploads use `/objects/.private/documents/...` format (Replit App Storage).
+-   Legacy uploads use local filesystem paths.
+-   Delete endpoints should check for `/objects/` prefix to determine storage type.
+
+**Database Column Naming:**
+-   Database uses snake_case (`enrollment_id`, `scheduled_date`).
+-   Drizzle schema uses camelCase (`enrollmentId`, `scheduledDate`).
+
+**Orphaned Data Patterns:**
+-   `scheduled_payments` with `enrollmentId` pointing to deleted `program_enrollments` may appear in parent views but are filtered out of admin views.
+-   Admin views typically filter by valid enrollment joins only.
+
 ## External Dependencies
 -   **Supabase**: Authentication.
 -   **Replit App Storage**: Object storage for file uploads.
