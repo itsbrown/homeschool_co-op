@@ -553,6 +553,20 @@ export default function ParentProfilePage() {
   const queryClient = useQueryClient();
   const { schoolId } = useSchoolAdmin();
 
+  // Helper to format dates consistently with local timezone
+  // Prevents off-by-one day display when dates are stored as ISO date strings (YYYY-MM-DD)
+  const formatDate = (dateValue: string | Date) => {
+    if (!dateValue) return 'N/A';
+    const dateStr = typeof dateValue === 'string' ? dateValue : dateValue.toISOString();
+    // If it's a date-only string (no time component), append T00:00:00 to interpret as local time
+    const normalizedDate = dateStr.includes('T') ? dateStr : dateStr + 'T00:00:00';
+    return new Date(normalizedDate).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric', 
+      year: 'numeric'
+    });
+  };
+
   const { data: profile, isLoading, error } = useQuery<ParentProfile>({
     queryKey: [`/api/parent-profile/${parentId}`],
     enabled: !!parentId,
@@ -600,6 +614,8 @@ export default function ParentProfilePage() {
         description: "The payment due date has been updated successfully."
       });
       queryClient.invalidateQueries({ queryKey: [`/api/parent-profile/${parentId}`] });
+      // Also invalidate parent's upcoming payments view to keep data in sync
+      queryClient.invalidateQueries({ queryKey: ['scheduled-payments-upcoming'] });
       setReschedulePaymentDialog({ open: false, payment: null });
       setRescheduleDate('');
       setRescheduleComment('');
@@ -629,6 +645,8 @@ export default function ParentProfilePage() {
         description: `Successfully removed ${data.deletedCount} scheduled payment(s).`
       });
       queryClient.invalidateQueries({ queryKey: [`/api/parent-profile/${parentId}`] });
+      // Also invalidate parent's upcoming payments view to remove stale data
+      queryClient.invalidateQueries({ queryKey: ['scheduled-payments-upcoming'] });
       setDeletePaymentPlanDialog({ open: false, enrollmentId: null, enrollmentName: '', paymentCount: 0 });
     },
     onError: (error: any) => {
@@ -2458,13 +2476,13 @@ export default function ParentProfilePage() {
                                   {group.payments.map((payment) => (
                                     <TableRow key={payment.id}>
                                       <TableCell>
-                                        {new Date(payment.dueDate).toLocaleDateString()}
+                                        {formatDate(payment.dueDate)}
                                       </TableCell>
                                       <TableCell>{payment.description}</TableCell>
                                       <TableCell className="text-sm">
                                         {payment.programStartDate && payment.programEndDate ? (
                                           <span className="text-muted-foreground">
-                                            {new Date(payment.programStartDate).toLocaleDateString()} - {new Date(payment.programEndDate).toLocaleDateString()}
+                                            {formatDate(payment.programStartDate)} - {formatDate(payment.programEndDate)}
                                           </span>
                                         ) : (
                                           <span className="text-muted-foreground">—</span>
@@ -2626,7 +2644,7 @@ export default function ParentProfilePage() {
                     </div>
                     <div>
                       <span className="text-gray-600">Current Due Date:</span>
-                      <p className="font-medium">{new Date(reschedulePaymentDialog.payment.dueDate).toLocaleDateString()}</p>
+                      <p className="font-medium">{formatDate(reschedulePaymentDialog.payment.dueDate)}</p>
                     </div>
                     <div className="col-span-2">
                       <span className="text-gray-600">Description:</span>
