@@ -643,10 +643,26 @@ router.delete('/:id', supabaseAuth, async (req: any, res) => {
       });
     }
 
-    // Delete the file from disk
-    const filePath = path.join(process.cwd(), document.filePath);
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
+    // Delete the file from storage (object storage or legacy filesystem)
+    const isObjectStoragePath = document.filePath.startsWith('/objects/');
+    
+    if (isObjectStoragePath) {
+      // Delete from object storage
+      try {
+        const objectStorageService = new ObjectStorageService();
+        await objectStorageService.deleteObject(document.filePath);
+        console.log(`🗑️ Deleted document from object storage: ${document.filePath}`);
+      } catch (deleteError: any) {
+        // Log but don't fail - the database record still needs to be removed
+        console.error(`⚠️ Failed to delete from object storage: ${document.filePath}`, deleteError);
+      }
+    } else {
+      // Legacy: delete from local filesystem
+      const filePath = path.join(process.cwd(), document.filePath);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+        console.log(`🗑️ Deleted document from filesystem: ${filePath}`);
+      }
     }
 
     // Delete from database

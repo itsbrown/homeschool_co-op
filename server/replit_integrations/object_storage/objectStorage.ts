@@ -237,6 +237,33 @@ export class ObjectStorageService {
       requestedPermission: requestedPermission ?? ObjectPermission.READ,
     });
   }
+
+  // Deletes an object from object storage by its path (e.g., /objects/documents/...)
+  async deleteObject(objectPath: string): Promise<void> {
+    if (!objectPath.startsWith("/objects/")) {
+      throw new Error("Invalid object path: must start with /objects/");
+    }
+
+    const parts = objectPath.slice(1).split("/");
+    if (parts.length < 2) {
+      throw new Error("Invalid object path format");
+    }
+
+    const entityId = parts.slice(1).join("/");
+    let entityDir = this.getPrivateObjectDir();
+    if (!entityDir.endsWith("/")) {
+      entityDir = `${entityDir}/`;
+    }
+    const objectEntityPath = `${entityDir}${entityId}`;
+    const { bucketName, objectName } = parseObjectPath(objectEntityPath);
+    const bucket = objectStorageClient.bucket(bucketName);
+    const objectFile = bucket.file(objectName);
+    
+    const [exists] = await objectFile.exists();
+    if (exists) {
+      await objectFile.delete();
+    }
+  }
 }
 
 function parseObjectPath(path: string): {

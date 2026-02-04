@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -201,6 +202,8 @@ export default function DocumentManagementPage() {
 
   const [isNotifyDialogOpen, setIsNotifyDialogOpen] = useState(false);
   const [documentToNotify, setDocumentToNotify] = useState<SchoolDocument | null>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [documentToDelete, setDocumentToDelete] = useState<SchoolDocument | null>(null);
   const [notifyTargetType, setNotifyTargetType] = useState<NotificationTargetType>('all_parents');
   const [notifySelectedClasses, setNotifySelectedClasses] = useState<number[]>([]);
   const [notifySelectedUsers, setNotifySelectedUsers] = useState<UserResult[]>([]);
@@ -587,9 +590,8 @@ export default function DocumentManagementPage() {
                       variant="outline"
                       size="sm"
                       onClick={() => {
-                        if (confirm('Are you sure you want to delete this document?')) {
-                          deleteMutation.mutate(doc.id);
-                        }
+                        setDocumentToDelete(doc);
+                        setDeleteConfirmOpen(true);
                       }}
                       className="text-destructive hover:text-destructive"
                       data-testid={`button-delete-${doc.id}`}
@@ -798,6 +800,44 @@ export default function DocumentManagementPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* Delete Confirmation Dialog */}
+        <AlertDialog open={deleteConfirmOpen} onOpenChange={(open) => {
+          setDeleteConfirmOpen(open);
+          if (!open) setDocumentToDelete(null);
+        }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Document</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete "{documentToDelete?.title}"? This action cannot be undone and will remove the document from all parents' document tabs.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setDocumentToDelete(null)}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={() => {
+                  if (documentToDelete) {
+                    deleteMutation.mutate(documentToDelete.id);
+                    setDocumentToDelete(null);
+                    setDeleteConfirmOpen(false);
+                  }
+                }}
+                disabled={deleteMutation.isPending}
+              >
+                {deleteMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  'Delete'
+                )}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </AppShell>
   );
