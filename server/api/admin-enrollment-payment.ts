@@ -964,15 +964,9 @@ router.delete('/scheduled-payments/:paymentId', async (req: any, res) => {
       return res.status(400).json({ message: 'Invalid payment ID' });
     }
     
-    const userEmail = req.user?.email || req.auth?.email;
-    if (!userEmail) {
-      return res.status(401).json({ message: 'Authentication required' });
-    }
-
-    const user = await storage.getUserByEmail(userEmail);
-    if (!user || (user.role !== 'schoolAdmin' && user.role !== 'admin' && user.role !== 'superAdmin')) {
-      return res.status(403).json({ message: 'Only administrators can delete scheduled payments' });
-    }
+    // Auth and role check handled by router middleware (jwtCheck + requireRole)
+    const user = req.user;
+    const userEmail = user?.email;
     
     console.log(`🗑️  Admin ${userEmail} attempting to delete scheduled payment ID: ${paymentId}`);
     
@@ -990,8 +984,9 @@ router.delete('/scheduled-payments/:paymentId', async (req: any, res) => {
       });
     }
 
+    // School isolation: schoolAdmin can only delete payments from their own school
     const enrollment = await storage.getProgramEnrollmentById(scheduledPayment.enrollmentId);
-    if (enrollment && enrollment.schoolId !== user.schoolId && user.role === 'schoolAdmin') {
+    if (user?.role === 'schoolAdmin' && enrollment && enrollment.schoolId !== user.schoolId) {
       return res.status(403).json({ message: 'Cannot delete scheduled payments from other schools' });
     }
 
