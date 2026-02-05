@@ -480,7 +480,148 @@ export const webhookHandler = async (req: Request, res: Response) => {
           }
         }
         
-        if (paymentType === 'scheduled_payment') {
+        if (paymentType === 'combined_scheduled_payment') {
+          const scheduledPaymentIdsStr = paymentIntent.metadata.scheduledPaymentIds;
+          const parentEmail = paymentIntent.metadata.parentEmail;
+          
+          console.log(`💰 Processing combined scheduled payment for ${parentEmail}: ${scheduledPaymentIdsStr}`);
+          
+          if (!scheduledPaymentIdsStr || !parentEmail) {
+            console.error('❌ Combined payment missing scheduledPaymentIds or parentEmail metadata');
+            break;
+          }
+          
+          const scheduledPaymentIds = scheduledPaymentIdsStr.split(',').map((id: string) => parseInt(id.trim()));
+          const creditsAppliedCents = parseInt(paymentIntent.metadata.creditsAppliedCents || '0');
+          const originalAmountCents = parseInt(paymentIntent.metadata.originalAmountCents || '0') || paymentIntent.amount;
+          const userId = parseInt(paymentIntent.metadata.userId || '0');
+          
+          let perPaymentAmounts: Record<string, number> = {};
+          try {
+            perPaymentAmounts = JSON.parse(paymentIntent.metadata.perPaymentAmounts || '{}');
+          } catch { /* ignore parse errors */ }
+          
+          const allScheduledPayments = await storage.getScheduledPaymentsByParentEmail(parentEmail);
+          const parentUser = await storage.getUserByEmail(parentEmail);
+          
+          for (const spId of scheduledPaymentIds) {
+            const scheduledPayment = allScheduledPayments.find(p => p.id === spId);
+            if (!scheduledPayment) {
+              console.error(`❌ Combined: Scheduled payment ${spId} not found - skipping`);
+              continue;
+            }
+            
+            if (scheduledPayment.status === 'completed') {
+              console.log(`✅ Combined: Payment ${spId} already completed (idempotent) - skipping`);
+              continue;
+            }
+            
+            await storage.updateScheduledPayment(spId, {
+              status: 'completed',
+              processedAt: new Date(),
+            });
+            console.log(`✅ Combined webhook: Marked scheduled payment ${spId} as completed`);
+            
+            const paymentAmount = perPaymentAmounts[spId.toString()] || scheduledPayment.amount;
+            
+            if (scheduledPayment.enrollmentId) {
+              try {
+                const enrollment = await storage.getProgramEnrollmentById(scheduledPayment.enrollmentId);
+                if (enrollment) {
+                  const currentAmountPaid = enrollment.totalPaid || 0;
+                  const newAmountPaid = currentAmountPaid + paymentAmount;
+                  const newBalance = Math.max(0, (enrollment.totalCost || 0) - newAmountPaid);
+                  
+                  await storage.updateProgramEnrollment(scheduledPayment.enrollmentId, {
+                    totalPaid: newAmountPaid,
+                    remainingBalance: newBalance,
+                    paymentStatus: newBalance <= 0 ? 'completed' : 'partial_payment'
+                  });
+                  console.log(`✅ Combined webhook: Updated enrollment ${scheduledPayment.enrollmentId}: paid=${newAmountPaid}, balance=${newBalance}`);
+                }
+              } catch (enrollmentError) {
+                console.error(`❌ Combined webhook: Error updating enrollment ${scheduledPayment.enrollmentId}:`, enrollmentError);
+              }
+            }
+            
+            try {
+              let childName = 'Child';
+              let className = 'Class';
+              if (scheduledPayment.enrollmentId) {
+                const enrollmentForPayment = await storage.getProgramEnrollmentById(scheduledPayment.enrollmentId);
+                if (enrollmentForPayment) {
+                  childName = enrollmentForPayment.childName || 'Child';
+                  className = enrollmentForPayment.className || 'Class';
+                }
+              }
+              
+              const schoolId = scheduledPayment.schoolId || parentUser?.schoolId || 1;
+              
+              await storage.createPayment({
+                schoolId,
+                parentId: parentUser?.id || null,
+                parentEmail,
+                childName,
+                className,
+                description: `Combined payment - installment ${scheduledPayment.installmentNumber}/${scheduledPayment.totalInstallments}`,
+                amount: paymentAmount,
+                currency: paymentIntent.currency || 'usd',
+                status: 'completed' as const,
+                stripePaymentIntentId: paymentIntent.id,
+                stripeChargeId: null,
+                stripeRefundId: null,
+                originalPaymentId: null,
+                enrollmentIds: scheduledPayment.enrollmentId ? [scheduledPayment.enrollmentId] : [],
+                metadata: {
+                  scheduledPaymentId: spId,
+                  paymentType: 'combined_biweekly',
+                  combinedPaymentIds: scheduledPaymentIds
+                },
+                paymentDate: new Date()
+              });
+              console.log(`✅ Combined webhook: Created payment record for scheduled payment ${spId}`);
+            } catch (paymentRecordError) {
+              console.error(`⚠️ Combined webhook: Failed to create payment record for ${spId}:`, paymentRecordError);
+            }
+          }
+          
+          if (creditsAppliedCents > 0 && userId > 0) {
+            try {
+              const { usedCredits, totalUsed } = await storage.useCredits(
+                userId,
+                creditsAppliedCents,
+                undefined,
+                `Combined payment for ${scheduledPaymentIds.length} installments`
+              );
+              console.log(`💰 ✅ Combined webhook: Consumed ${totalUsed} cents across ${usedCredits.length} credits`);
+            } catch (creditError) {
+              console.error('❌ Combined webhook: Failed to consume credits:', creditError);
+            }
+          }
+          
+          try {
+            const { dataLayer } = await import('./services/dataLayer.js');
+            dataLayer.broadcastBillingUpdate(parentEmail, {
+              type: 'combined_payment_complete',
+              paymentIds: scheduledPaymentIdsStr,
+              amount: paymentIntent.amount,
+              timestamp: new Date().toISOString()
+            });
+            dataLayer.broadcastPaymentComplete(parentEmail, {
+              amount: paymentIntent.amount,
+              paymentId: scheduledPaymentIdsStr,
+              description: `Combined payment for ${scheduledPaymentIds.length} installments`,
+              timestamp: new Date().toISOString()
+            });
+            await dataLayer.refreshUserData(parentEmail);
+          } catch (rtError) {
+            console.error('❌ Combined webhook: Failed to push real-time update:', rtError);
+          }
+          
+          console.log(`✅ Combined scheduled payment processing complete: ${scheduledPaymentIds.length} payments`);
+          break;
+          
+        } else if (paymentType === 'scheduled_payment') {
           // Handle scheduled payment completion
           const scheduledPaymentId = paymentIntent.metadata.scheduledPaymentId;
           const parentEmail = paymentIntent.metadata.parentEmail;
@@ -929,6 +1070,38 @@ export const webhookHandler = async (req: Request, res: Response) => {
             console.log(`✅ Reset scheduled payment ${failedScheduledPaymentId} to pending after failure`);
           } catch (resetError) {
             console.error(`❌ Failed to reset scheduled payment ${failedScheduledPaymentId}:`, resetError);
+          }
+        }
+      }
+      
+      if (failedPayment.metadata.paymentType === 'combined_scheduled_payment') {
+        const failedPaymentIdsStr = failedPayment.metadata.scheduledPaymentIds;
+        if (failedPaymentIdsStr) {
+          try {
+            const failedIds = failedPaymentIdsStr.split(',').map((id: string) => parseInt(id.trim()));
+            const parentEmail = failedPayment.metadata.parentEmail;
+            console.log(`🔓 Releasing credit reservations for ${failedIds.length} failed combined payments`);
+            
+            const existingPayments = await storage.getScheduledPaymentsByParentEmail(parentEmail);
+            
+            for (const spId of failedIds) {
+              const existing = existingPayments.find(p => p.id === spId);
+              if (existing && existing.status === 'processing') {
+                const existingMeta = (existing.metadata as Record<string, any>) || {};
+                await storage.updateScheduledPayment(spId, {
+                  status: 'pending',
+                  metadata: {
+                    ...existingMeta,
+                    combinedPaymentGroup: undefined,
+                    lastFailedAt: new Date().toISOString(),
+                    failureReason: failedPayment.last_payment_error?.message || 'Combined payment failed'
+                  }
+                });
+              }
+            }
+            console.log(`✅ Reset ${failedIds.length} combined scheduled payments to pending after failure`);
+          } catch (resetError) {
+            console.error('❌ Failed to reset combined scheduled payments:', resetError);
           }
         }
       }

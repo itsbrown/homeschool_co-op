@@ -92,25 +92,21 @@ The platform is built on a full-stack architecture prioritizing scalability, sec
 -   **SendGrid**: Email service.
 -   **Twilio**: SMS service.
 
-## Future Features
+## Recent Changes
 
-### Consolidated Family Payments
-Parents with multiple children each having enrollments currently manage separate payment plans per enrollment. This feature consolidates payments into a single family payment experience.
+### Consolidated Family Payments (Implemented Feb 2026)
+Parents with multiple children can now pay all installments due on the same date as a single combined Stripe transaction.
 
-**Problem:** Parents with 2+ children make 2+ separate payments on the same due date, creating friction and confusion.
-
-**Solution:** Keep existing `scheduled_payments` structure (one record per enrollment) but add a presentation/checkout layer that groups payments by due date.
-
-**Implementation Tasks:**
-1. Create GET `/api/scheduled-payments/grouped` endpoint - server groups payments by due date, calculates combined totals
-2. Create POST `/api/scheduled-payments/pay-combined` endpoint - accepts array of payment IDs, validates ownership, creates single Stripe PaymentIntent with payment IDs in metadata
-3. Create POST `/api/scheduled-payments/confirm-combined` endpoint - verifies Stripe payment, marks all payments completed, creates `payment_allocation` records with cross-reference metadata
-4. Update BillingPage.tsx - use grouped endpoint, add "Pay All Due [Date]" buttons with server-provided totals
-5. Add confirmation flow with breakdown - show children/classes included before payment
-6. End-to-end Playwright test with multi-child family scenario
+**Endpoints:**
+- `GET /api/scheduled-payments/grouped` - Groups pending payments by due date with per-payment details and combined totals
+- `POST /api/scheduled-payments/pay-combined` - Creates single Stripe PaymentIntent for multiple scheduled payments with server-authoritative totals, per-payment credit application, and combined metadata
+- `POST /api/scheduled-payments/confirm-combined` - Server-side confirmation: marks all payments completed, updates enrollment balances, creates payment allocation audit records with idempotency
 
 **Architectural Notes:**
-- Server-authoritative: All grouping and totals calculated server-side
-- Maintains existing audit trail via `payment_allocations` table
-- Individual `scheduled_payments` records remain unchanged (grouping is query-time)
-- Follows immediate payment confirmation pattern with combined confirmation endpoint
+- Server-authoritative: All grouping, totals, and credit application calculated server-side
+- Metadata stores `scheduledPaymentIds` (comma-separated), `perPaymentAmounts` (JSON), `paymentType: combined_scheduled_payment`
+- Webhook handler acts as backup for combined payments with full idempotent per-payment processing
+- Individual `scheduled_payments` records remain unchanged (grouping is query-time only)
+- Follows immediate payment confirmation pattern: client calls confirm-combined after Stripe payment succeeds
+- Payment failure handler resets all combined payments from `processing` back to `pending`
+- UI falls back to non-grouped individual payment view if grouped endpoint fails

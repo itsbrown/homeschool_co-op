@@ -977,6 +977,562 @@ router.post('/:id/confirm', supabaseAuth, async (req: any, res) => {
   }
 });
 
+// Get scheduled payments grouped by due date for consolidated family payments
+router.get('/grouped', supabaseAuth, async (req: any, res) => {
+  try {
+    const userEmail = req.user.email;
+    console.log('📅 Fetching grouped scheduled payments for:', userEmail);
+
+    const allScheduledPayments = await storage.getScheduledPaymentsByParentEmail(userEmail);
+    const pendingPayments = allScheduledPayments.filter(
+      p => p.status === 'pending' || p.status === 'processing'
+    );
+
+    if (pendingPayments.length === 0) {
+      return res.json({ success: true, groups: [] });
+    }
+
+    const enrichedPayments = await Promise.all(pendingPayments.map(async (payment) => {
+      let enrollmentDetails = null;
+      if (payment.enrollmentId) {
+        const enrollment = await storage.getProgramEnrollmentById(payment.enrollmentId);
+        if (enrollment) {
+          enrollmentDetails = {
+            className: enrollment.className,
+            childName: enrollment.childName
+          };
+        }
+      }
+      const metadata = payment.metadata as any || {};
+      return {
+        id: payment.id,
+        amount: payment.amount,
+        dueDate: payment.scheduledDate,
+        status: payment.status,
+        installmentNumber: payment.installmentNumber,
+        totalInstallments: payment.totalInstallments,
+        enrollmentId: payment.enrollmentId,
+        schoolId: payment.schoolId,
+        className: enrollmentDetails?.className || 'Class',
+        childName: enrollmentDetails?.childName || '',
+        paymentPlan: metadata.paymentPlan || 'biweekly',
+        description: metadata.description || `Payment ${payment.installmentNumber} of ${payment.totalInstallments}`,
+      };
+    }));
+
+    const groupMap: Record<string, {
+      dueDate: string;
+      dueDateFormatted: string;
+      payments: typeof enrichedPayments;
+      totalAmount: number;
+      paymentCount: number;
+      schoolId: number;
+    }> = {};
+
+    for (const payment of enrichedPayments) {
+      const dateKey = new Date(payment.dueDate).toISOString().split('T')[0];
+      if (!groupMap[dateKey]) {
+        groupMap[dateKey] = {
+          dueDate: dateKey,
+          dueDateFormatted: new Date(payment.dueDate).toLocaleDateString('en-US', {
+            year: 'numeric', month: 'long', day: 'numeric'
+          }),
+          payments: [],
+          totalAmount: 0,
+          paymentCount: 0,
+          schoolId: payment.schoolId,
+        };
+      }
+      groupMap[dateKey].payments.push(payment);
+      groupMap[dateKey].totalAmount += payment.amount;
+      groupMap[dateKey].paymentCount += 1;
+    }
+
+    const groups = Object.values(groupMap).sort(
+      (a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()
+    );
+
+    console.log(`📊 Grouped ${pendingPayments.length} payments into ${groups.length} date groups for ${userEmail}`);
+
+    res.json({ success: true, groups });
+  } catch (error) {
+    console.error('❌ Error fetching grouped scheduled payments:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to fetch grouped payments'
+    });
+  }
+});
+
+// Pay multiple scheduled payments in a single combined Stripe charge
+router.post('/pay-combined', supabaseAuth, async (req: any, res) => {
+  try {
+    const { scheduledPaymentIds, creditsToApply = 0 } = req.body;
+    const userEmail = req.user.email;
+
+    console.log('💳 Processing combined payment:', { scheduledPaymentIds, userEmail, creditsToApply });
+
+    if (!scheduledPaymentIds || !Array.isArray(scheduledPaymentIds) || scheduledPaymentIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'scheduledPaymentIds array is required'
+      });
+    }
+
+    if (scheduledPaymentIds.length > 50) {
+      return res.status(400).json({
+        success: false,
+        error: 'Cannot combine more than 50 payments at once'
+      });
+    }
+
+    const allScheduledPayments = await storage.getScheduledPaymentsByParentEmail(userEmail);
+    const paymentsToProcess: any[] = [];
+
+    for (const id of scheduledPaymentIds) {
+      const payment = allScheduledPayments.find(p => p.id === parseInt(id));
+      if (!payment) {
+        return res.status(404).json({
+          success: false,
+          error: `Scheduled payment ${id} not found`
+        });
+      }
+      if (payment.parentEmail !== userEmail) {
+        return res.status(403).json({
+          success: false,
+          error: `Payment ${id} does not belong to this user`
+        });
+      }
+      if (payment.status === 'completed') {
+        return res.status(400).json({
+          success: false,
+          error: `Payment ${id} has already been completed`
+        });
+      }
+      paymentsToProcess.push(payment);
+    }
+
+    const schoolIds = [...new Set(paymentsToProcess.map(p => p.schoolId))];
+    if (schoolIds.length > 1) {
+      return res.status(400).json({
+        success: false,
+        error: 'Cannot combine payments from different schools'
+      });
+    }
+
+    const combinedAmount = paymentsToProcess.reduce((sum, p) => sum + p.amount, 0);
+    console.log('💰 Server-authoritative combined amount:', combinedAmount);
+
+    const parentUser = await storage.getUserByEmail(userEmail);
+    if (!parentUser) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    let validatedCreditsToApply = 0;
+    if (creditsToApply > 0) {
+      const availableCredits = await storage.getAvailableCredits(parentUser.id);
+      const totalAvailable = availableCredits.reduce((sum, c) => sum + (c.creditAmountCents - (c.usedAmountCents || 0)), 0);
+      validatedCreditsToApply = Math.min(creditsToApply, totalAvailable, combinedAmount);
+      console.log('💰 Credit validation:', { requested: creditsToApply, available: totalAvailable, validated: validatedCreditsToApply });
+    }
+
+    const chargeAmount = Math.max(0, combinedAmount - validatedCreditsToApply);
+
+    if (chargeAmount === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Payment fully covered by credits. Use pay-with-credits endpoint instead.'
+      });
+    }
+
+    for (const payment of paymentsToProcess) {
+      await storage.updateScheduledPayment(payment.id, {
+        status: 'processing',
+        metadata: {
+          ...((payment.metadata as Record<string, any>) || {}),
+          combinedPaymentGroup: scheduledPaymentIds.join(','),
+          paymentIntentCreatedAt: new Date().toISOString()
+        }
+      });
+    }
+    console.log(`🔒 Marked ${paymentsToProcess.length} payments as processing`);
+
+    const firstEnrollment = paymentsToProcess[0].enrollmentId
+      ? await storage.getProgramEnrollmentById(paymentsToProcess[0].enrollmentId)
+      : null;
+
+    let stripeCustomerId = firstEnrollment?.stripeCustomerId || parentUser?.stripeCustomerId || null;
+
+    const enrollmentIds = paymentsToProcess
+      .map(p => p.enrollmentId)
+      .filter((id): id is number => id != null);
+
+    const perPaymentAmounts: Record<string, number> = {};
+    for (const p of paymentsToProcess) {
+      perPaymentAmounts[p.id.toString()] = p.amount;
+    }
+
+    const stripe = await getStripeClient();
+    const paymentIntentParams: any = {
+      amount: Math.round(chargeAmount),
+      currency: 'usd',
+      metadata: {
+        type: 'scheduled_payment',
+        paymentType: 'combined_scheduled_payment',
+        scheduledPaymentIds: scheduledPaymentIds.join(','),
+        parentEmail: userEmail,
+        description: `Combined payment for ${paymentsToProcess.length} installments`,
+        enrollmentIds: JSON.stringify(enrollmentIds),
+        schoolId: schoolIds[0].toString(),
+        createdBy: 'asa_payment_system',
+        version: 'v2_combined_scheduled_payment',
+        originalAmountCents: combinedAmount.toString(),
+        creditsAppliedCents: validatedCreditsToApply.toString(),
+        userId: parentUser.id.toString(),
+        perPaymentAmounts: JSON.stringify(perPaymentAmounts),
+      },
+      automatic_payment_methods: { enabled: true }
+    };
+
+    if (stripeCustomerId) {
+      paymentIntentParams.customer = stripeCustomerId;
+    }
+
+    const paymentIntent = await stripe.paymentIntents.create(paymentIntentParams);
+    console.log('✅ Created combined payment intent:', paymentIntent.id, 'for', paymentsToProcess.length, 'payments, chargeAmount:', chargeAmount);
+
+    res.json({
+      success: true,
+      clientSecret: paymentIntent.client_secret,
+      paymentIntentId: paymentIntent.id,
+      chargeAmount,
+      combinedAmount,
+      creditsApplied: validatedCreditsToApply,
+      paymentCount: paymentsToProcess.length
+    });
+
+  } catch (error) {
+    console.error('❌ Error processing combined payment:', error);
+
+    try {
+      const { scheduledPaymentIds } = req.body;
+      if (scheduledPaymentIds && Array.isArray(scheduledPaymentIds)) {
+        const allPayments = await storage.getScheduledPaymentsByParentEmail(req.user.email);
+        for (const id of scheduledPaymentIds) {
+          const payment = allPayments.find(p => p.id === parseInt(id));
+          if (payment && payment.status === 'processing') {
+            await storage.updateScheduledPayment(parseInt(id), {
+              status: 'pending',
+              metadata: {
+                ...((payment.metadata as Record<string, any>) || {}),
+                combinedPaymentGroup: undefined,
+                lastErrorAt: new Date().toISOString(),
+                errorReason: error instanceof Error ? error.message : 'Unknown error'
+              }
+            });
+          }
+        }
+        console.log(`✅ Reset ${scheduledPaymentIds.length} scheduled payments to pending after failure`);
+      }
+    } catch (rollbackError) {
+      console.error('❌ Failed to rollback combined payment statuses:', rollbackError);
+    }
+
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to process combined payment'
+    });
+  }
+});
+
+// Confirm a combined scheduled payment after successful Stripe payment
+router.post('/confirm-combined', supabaseAuth, async (req: any, res) => {
+  try {
+    const { paymentIntentId } = req.body;
+    const userEmail = req.user.email;
+
+    console.log('🔐 Confirming combined scheduled payment:', { paymentIntentId: paymentIntentId?.substring(0, 20) + '...', userEmail });
+
+    if (!paymentIntentId) {
+      return res.status(400).json({ success: false, error: 'PaymentIntent ID is required' });
+    }
+
+    const stripe = await getStripeClient();
+    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+
+    if (paymentIntent.status !== 'succeeded') {
+      return res.status(400).json({
+        success: false,
+        error: `Payment not yet successful. Status: ${paymentIntent.status}`
+      });
+    }
+
+    if (paymentIntent.metadata?.parentEmail !== userEmail) {
+      return res.status(403).json({ success: false, error: 'Payment does not belong to this user' });
+    }
+
+    const metadataScheduledPaymentIds = paymentIntent.metadata?.scheduledPaymentIds;
+    if (!metadataScheduledPaymentIds) {
+      return res.status(400).json({
+        success: false,
+        error: 'PaymentIntent does not contain combined payment metadata'
+      });
+    }
+
+    const scheduledPaymentIds = metadataScheduledPaymentIds.split(',').map((id: string) => parseInt(id.trim()));
+    const creditsApplied = parseInt(paymentIntent.metadata?.creditsAppliedCents || '0');
+    const originalAmountCents = parseInt(paymentIntent.metadata?.originalAmountCents || '0') || paymentIntent.amount;
+    const totalPaymentReceived = creditsApplied > 0 ? originalAmountCents : paymentIntent.amount;
+    const perPaymentAmounts: Record<string, number> = {};
+
+    try {
+      const parsed = JSON.parse(paymentIntent.metadata?.perPaymentAmounts || '{}');
+      Object.assign(perPaymentAmounts, parsed);
+    } catch {
+      console.warn('⚠️ Could not parse perPaymentAmounts metadata');
+    }
+
+    const allScheduledPayments = await storage.getScheduledPaymentsByParentEmail(userEmail);
+    const completedIds: number[] = [];
+    const skippedIds: number[] = [];
+
+    const parentUser = await storage.getUserByEmail(userEmail);
+
+    let paymentHistory = await storage.getStripePaymentByIntentId(paymentIntent.id);
+    if (!paymentHistory) {
+      try {
+        const userId = parseInt(paymentIntent.metadata?.userId || '0');
+        paymentHistory = await (storage as any).saveStripePayment({
+          userId: userId > 0 ? userId : null,
+          paymentIntentId: paymentIntent.id,
+          customerId: (paymentIntent.customer as string) || `cus_combined_${Date.now()}`,
+          subscriptionId: null,
+          amount: totalPaymentReceived,
+          currency: paymentIntent.currency || 'usd',
+          status: 'succeeded',
+          description: `Combined payment for ${scheduledPaymentIds.length} installments`,
+          receiptEmail: paymentIntent.receipt_email || null,
+          metadata: {
+            ...paymentIntent.metadata,
+            processedVia: 'combined_payment_confirm'
+          }
+        });
+        console.log(`✅ Created payment history record: ${paymentHistory?.id}`);
+      } catch (historyError) {
+        console.error('⚠️ Failed to create payment history:', historyError);
+      }
+    }
+
+    for (const paymentId of scheduledPaymentIds) {
+      const scheduledPayment = allScheduledPayments.find(p => p.id === paymentId);
+
+      if (!scheduledPayment) {
+        console.warn(`⚠️ Scheduled payment ${paymentId} not found - skipping`);
+        continue;
+      }
+
+      if (scheduledPayment.status === 'completed' || scheduledPayment.status === 'paid') {
+        console.log(`✅ Payment ${paymentId} already completed - skipping (idempotent)`);
+        skippedIds.push(paymentId);
+        continue;
+      }
+
+      await storage.updateScheduledPayment(paymentId, {
+        status: 'completed',
+        processedAt: new Date(),
+      });
+      console.log(`✅ Marked scheduled payment ${paymentId} as completed`);
+
+      const paymentAmount = perPaymentAmounts[paymentId.toString()] || scheduledPayment.amount;
+
+      const hasMembership = paymentIntent.metadata?.hasMembership === 'true';
+      const membershipAmount = hasMembership
+        ? parseInt(paymentIntent.metadata?.membershipAmount || '0')
+        : 0;
+
+      let perPaymentMembershipAmount = 0;
+      let perPaymentEnrollmentAmount = paymentAmount;
+      if (hasMembership && scheduledPayment.installmentNumber === 1 && membershipAmount > 0) {
+        perPaymentMembershipAmount = Math.min(membershipAmount, paymentAmount);
+        perPaymentEnrollmentAmount = Math.max(0, paymentAmount - perPaymentMembershipAmount);
+      }
+
+      try {
+        let childName = 'Child';
+        let className = 'Class';
+        if (scheduledPayment.enrollmentId) {
+          const enrollmentForPayment = await storage.getProgramEnrollmentById(scheduledPayment.enrollmentId);
+          if (enrollmentForPayment) {
+            childName = enrollmentForPayment.childName || 'Child';
+            className = enrollmentForPayment.className || 'Class';
+          }
+        }
+
+        if (parentUser) {
+          await storage.createPayment({
+            schoolId: scheduledPayment.schoolId,
+            parentId: parentUser.id,
+            parentEmail: userEmail,
+            childName,
+            className,
+            amount: paymentAmount,
+            paymentDate: new Date(),
+            status: 'completed',
+            paymentMethod: 'stripe',
+            description: `Combined payment - installment ${scheduledPayment.installmentNumber}/${scheduledPayment.totalInstallments}`,
+            enrollmentIds: scheduledPayment.enrollmentId ? [scheduledPayment.enrollmentId] : [],
+            stripePaymentIntentId: paymentIntent.id,
+            metadata: {
+              scheduledPaymentId: paymentId,
+              paymentType: 'combined_biweekly',
+              combinedPaymentIds: scheduledPaymentIds
+            },
+            stripeChargeId: null,
+            stripeRefundId: null,
+            originalPaymentId: null,
+          });
+        }
+      } catch (paymentRecordError) {
+        console.error('⚠️ Failed to create payment record for scheduled payment', paymentId, ':', paymentRecordError);
+      }
+
+      if (scheduledPayment.enrollmentId) {
+        try {
+          const enrollment = await storage.getProgramEnrollmentById(scheduledPayment.enrollmentId);
+          if (enrollment) {
+            const currentAmountPaid = enrollment.totalPaid || 0;
+            const newAmountPaid = currentAmountPaid + perPaymentEnrollmentAmount;
+            const newBalance = Math.max(0, (enrollment.totalCost || 0) - newAmountPaid);
+
+            await storage.updateProgramEnrollment(scheduledPayment.enrollmentId, {
+              totalPaid: newAmountPaid,
+              remainingBalance: newBalance,
+              paymentStatus: newBalance <= 0 ? 'completed' : 'partial_payment'
+            });
+            console.log(`✅ Updated enrollment ${scheduledPayment.enrollmentId}: paid=${newAmountPaid}, balance=${newBalance}`);
+
+            if (perPaymentEnrollmentAmount > 0 && paymentHistory) {
+              try {
+                await storage.createPaymentAllocation({
+                  paymentHistoryId: paymentHistory.id,
+                  enrollmentId: scheduledPayment.enrollmentId,
+                  membershipEnrollmentId: null,
+                  allocatedAmountCents: perPaymentEnrollmentAmount,
+                  allocationType: 'payment',
+                  sourceAllocationId: null,
+                  adminComment: null,
+                  metadata: {
+                    scheduledPaymentId: paymentId,
+                    installmentNumber: scheduledPayment.installmentNumber,
+                    totalInstallments: scheduledPayment.totalInstallments,
+                    totalPaymentReceived: paymentAmount,
+                    membershipDeducted: perPaymentMembershipAmount,
+                    processedVia: 'combined_payment_confirm'
+                  }
+                });
+              } catch (allocationError) {
+                console.error('⚠️ Failed to create enrollment allocation:', allocationError);
+              }
+            }
+          }
+        } catch (enrollmentError) {
+          console.error(`⚠️ Error updating enrollment for payment ${paymentId}:`, enrollmentError);
+        }
+      }
+
+      if (perPaymentMembershipAmount > 0) {
+        try {
+          const membershipParentUserId = parseInt(paymentIntent.metadata?.membershipParentUserId || '0');
+          const membershipSchoolId = parseInt(paymentIntent.metadata?.membershipSchoolId || '0');
+          const membershipYear = parseInt(paymentIntent.metadata?.membershipYear || new Date().getFullYear().toString());
+
+          if (membershipParentUserId > 0 && membershipSchoolId > 0) {
+            const existingMemberships = await storage.getMembershipEnrollmentsByParentId(membershipParentUserId);
+            const membershipEnrollment = existingMemberships.find((m: any) =>
+              m.schoolId === membershipSchoolId &&
+              (m.membershipYear === membershipYear || m.membershipYear === membershipYear + 1)
+            );
+
+            if (membershipEnrollment) {
+              const currentPaid = membershipEnrollment.amountPaid || 0;
+              const newPaid = currentPaid + perPaymentMembershipAmount;
+              const newBalance = Math.max(0, (membershipEnrollment.amount || 0) - newPaid);
+
+              await storage.updateMembershipEnrollment(membershipEnrollment.id, {
+                amountPaid: newPaid,
+                remainingBalance: newBalance,
+                balanceDue: newBalance,
+                status: newBalance <= 0 ? 'enrolled' : membershipEnrollment.status
+              });
+
+              if (paymentHistory) {
+                try {
+                  await storage.createPaymentAllocation({
+                    paymentHistoryId: paymentHistory.id,
+                    enrollmentId: null,
+                    membershipEnrollmentId: membershipEnrollment.id,
+                    allocatedAmountCents: perPaymentMembershipAmount,
+                    allocationType: 'membership',
+                    sourceAllocationId: null,
+                    adminComment: null,
+                    metadata: {
+                      scheduledPaymentId: paymentId,
+                      membershipYear,
+                      schoolId: membershipSchoolId,
+                      totalPaymentReceived: paymentAmount,
+                      enrollmentAllocated: perPaymentEnrollmentAmount,
+                      processedVia: 'combined_payment_confirm'
+                    }
+                  });
+                } catch (allocationError) {
+                  console.error('⚠️ Failed to create membership allocation:', allocationError);
+                }
+              }
+            }
+          }
+        } catch (membershipError) {
+          console.error('❌ Error processing membership allocation for combined payment:', membershipError);
+        }
+      }
+
+      completedIds.push(paymentId);
+    }
+
+    const userId = parseInt(paymentIntent.metadata?.userId || '0');
+    if (creditsApplied > 0 && userId > 0) {
+      try {
+        console.log(`💰 Consuming ${creditsApplied} cents of credits for combined payment`);
+        const { usedCredits, totalUsed } = await storage.useCredits(
+          userId,
+          creditsApplied,
+          undefined,
+          `Combined payment for ${scheduledPaymentIds.length} installments`
+        );
+        console.log(`💰 ✅ Consumed ${totalUsed} cents across ${usedCredits.length} credit records`);
+      } catch (creditError) {
+        console.error('❌ Failed to consume credits for combined payment:', creditError);
+      }
+    }
+
+    console.log(`✅ Combined payment confirmation complete: ${completedIds.length} completed, ${skippedIds.length} skipped`);
+
+    res.json({
+      success: true,
+      message: `Combined payment confirmed: ${completedIds.length} payments completed`,
+      completedPayments: completedIds,
+      skippedPayments: skippedIds,
+      totalAmount: paymentIntent.amount
+    });
+
+  } catch (error) {
+    console.error('❌ Error confirming combined scheduled payment:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to confirm combined payment'
+    });
+  }
+});
+
 // Mark a scheduled payment as paid (for when someone pays early)
 router.patch('/:id/paid', supabaseAuth, async (req: any, res) => {
   try {
