@@ -164,10 +164,35 @@ interface ParentProfile {
     childName: string;
     emergencyContact: string;
   }>;
+  credits: Array<{
+    id: number;
+    creditType: string;
+    title: string;
+    description: string | null;
+    creditAmountCents: number;
+    usedAmountCents: number;
+    remainingAmountCents: number;
+    status: string;
+    expiresAt: string | null;
+    createdAt: string;
+    approvedAt: string | null;
+    usageLogs: Array<{
+      id: number;
+      amountCents: number;
+      description: string | null;
+      createdAt: string;
+      enrollmentId?: number;
+      childName?: string;
+      className?: string;
+    }>;
+  }>;
   summary: {
     totalChildren: number;
     totalEnrollments: number;
     totalMemberships: number;
+    totalCredits: number;
+    totalCreditAmountCents: number;
+    totalCreditUsedCents: number;
     totalAmountPaid: number;
     totalAmountDue: number;
     activeEnrollments: number;
@@ -1556,12 +1581,13 @@ export default function ParentProfilePage() {
 
         {/* Detailed Information */}
         <Tabs defaultValue="children" className="w-full">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-6">
             <TabsTrigger value="children">Children</TabsTrigger>
             <TabsTrigger value="enrollments">Enrollments</TabsTrigger>
             <TabsTrigger value="memberships">Memberships</TabsTrigger>
             <TabsTrigger value="payments">Payments</TabsTrigger>
-            <TabsTrigger value="emergency">Emergency Contacts</TabsTrigger>
+            <TabsTrigger value="credits">Credits</TabsTrigger>
+            <TabsTrigger value="emergency">Emergency</TabsTrigger>
           </TabsList>
 
           <TabsContent value="children">
@@ -2577,6 +2603,119 @@ export default function ParentProfilePage() {
                 </CardContent>
               </Card>
             </div>
+          </TabsContent>
+
+          <TabsContent value="credits">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Gift className="h-5 w-5" />
+                  Credits
+                </CardTitle>
+                <CardDescription>
+                  Account credits and usage history
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {(!profile.credits || profile.credits.length === 0) ? (
+                  <p className="text-center text-muted-foreground py-8">No credits found for this account.</p>
+                ) : (
+                  <div className="space-y-4">
+                    {profile.credits.map((credit) => (
+                      <Card key={credit.id} className="p-4">
+                        <div className="flex justify-between items-start mb-3">
+                          <div>
+                            <h3 className="font-semibold flex items-center gap-2">
+                              {credit.title || 'Credit'}
+                              <Badge variant={
+                                credit.status === 'approved' ? 'default' :
+                                credit.status === 'used' ? 'secondary' :
+                                credit.status === 'partially_used' ? 'outline' :
+                                credit.status === 'pending' ? 'secondary' :
+                                'destructive'
+                              }>
+                                {credit.status}
+                              </Badge>
+                            </h3>
+                            <p className="text-sm text-muted-foreground mt-1">
+                              Type: {credit.creditType} | Created: {new Date(credit.createdAt).toLocaleDateString()}
+                            </p>
+                            {credit.description && (
+                              <p className="text-sm text-muted-foreground">{credit.description}</p>
+                            )}
+                          </div>
+                          <div className="text-right">
+                            <p className="font-semibold text-lg">
+                              ${(credit.creditAmountCents / 100).toFixed(2)}
+                            </p>
+                            {credit.usedAmountCents > 0 && (
+                              <p className="text-sm text-muted-foreground">
+                                Used: ${(credit.usedAmountCents / 100).toFixed(2)}
+                              </p>
+                            )}
+                            {credit.remainingAmountCents > 0 && credit.status !== 'used' && (
+                              <p className="text-sm text-green-600">
+                                Remaining: ${(credit.remainingAmountCents / 100).toFixed(2)}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        
+                        {credit.expiresAt && (
+                          <p className="text-xs text-muted-foreground mb-2">
+                            Expires: {new Date(credit.expiresAt).toLocaleDateString()}
+                          </p>
+                        )}
+                        
+                        {credit.usageLogs && credit.usageLogs.length > 0 && (
+                          <div className="mt-3 pt-3 border-t">
+                            <p className="text-sm font-medium mb-2">Usage History:</p>
+                            <div className="space-y-2">
+                              {credit.usageLogs.map((log) => (
+                                <div key={log.id} className="flex justify-between items-center text-sm bg-muted/50 rounded p-2">
+                                  <div>
+                                    <p className="font-medium">
+                                      {log.childName && log.className 
+                                        ? `Applied to ${log.childName} – ${log.className}`
+                                        : log.description || 'Credit applied'}
+                                    </p>
+                                    {log.childName && log.className && log.description && (
+                                      <p className="text-xs text-muted-foreground">{log.description}</p>
+                                    )}
+                                    <p className="text-xs text-muted-foreground">
+                                      {new Date(log.createdAt).toLocaleDateString()} at {new Date(log.createdAt).toLocaleTimeString()}
+                                    </p>
+                                  </div>
+                                  <p className="font-semibold text-red-600">
+                                    -${(log.amountCents / 100).toFixed(2)}
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </Card>
+                    ))}
+                    
+                    {/* Credit Summary */}
+                    <div className="mt-4 p-4 bg-muted/30 rounded-lg">
+                      <div className="flex justify-between items-center">
+                        <span className="font-medium">Total Credits:</span>
+                        <span className="font-semibold">${((profile.summary?.totalCreditAmountCents || 0) / 100).toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-muted-foreground">
+                        <span>Total Used:</span>
+                        <span>${((profile.summary?.totalCreditUsedCents || 0) / 100).toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-green-600 font-medium border-t mt-2 pt-2">
+                        <span>Available Balance:</span>
+                        <span>${(((profile.summary?.totalCreditAmountCents || 0) - (profile.summary?.totalCreditUsedCents || 0)) / 100).toFixed(2)}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
 
           <TabsContent value="emergency">

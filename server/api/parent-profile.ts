@@ -301,6 +301,76 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
     
     console.log(`🏅 Found ${allMembershipEnrollments.length} total memberships, ${membershipEnrollments.length} visible to admin`);
 
+    // Get credits with usage logs for this parent
+    // Filter by admin's schools for multi-tenant isolation
+    const allCredits = await storage.getCredits({ userId: parent.id });
+    const credits = isSuperAdmin
+      ? allCredits
+      : allCredits.filter(c => adminSchoolIds.includes(c.schoolId));
+    
+    // Fetch usage logs for each credit with enrollment/payment context
+    const creditsWithUsage = await Promise.all(credits.map(async (credit) => {
+      const usageLogs = await storage.getUnifiedCreditUsageLogsByCreditId(credit.id);
+      
+      // Enrich usage logs with enrollment/payment context
+      const enrichedUsageLogs = await Promise.all(usageLogs.map(async (log) => {
+        let enrollmentContext: { enrollmentId?: number; childName?: string; className?: string } = {};
+        
+        // Try to extract scheduled payment ID from description (e.g., "Scheduled payment 82 - 2/2")
+        const scheduledPaymentMatch = log.description?.match(/Scheduled payment (\d+)/i);
+        if (scheduledPaymentMatch) {
+          const scheduledPaymentId = parseInt(scheduledPaymentMatch[1]);
+          try {
+            const scheduledPayment = await storage.getScheduledPaymentById(scheduledPaymentId);
+            // Multi-tenant isolation: only show context if payment is from admin's allowed schools
+            const paymentSchoolAllowed = scheduledPayment && 
+              (isSuperAdmin || (scheduledPayment.schoolId && adminSchoolIds.includes(scheduledPayment.schoolId)));
+            
+            if (scheduledPayment && scheduledPayment.enrollmentId && paymentSchoolAllowed) {
+              const enrollment = await storage.getEnrollmentById(scheduledPayment.enrollmentId);
+              if (enrollment) {
+                enrollmentContext = {
+                  enrollmentId: enrollment.id,
+                  childName: enrollment.childName,
+                  className: enrollment.className
+                };
+              }
+            }
+          } catch (e) {
+            console.warn(`Could not fetch scheduled payment ${scheduledPaymentId} context:`, e);
+          }
+        }
+        
+        // Note: paymentHistoryId is available but would require additional joins
+        // The scheduled payment context above provides sufficient enrollment linkage
+        
+        return {
+          id: log.id,
+          amountCents: log.amountCents,
+          description: log.description,
+          createdAt: log.createdAt,
+          ...enrollmentContext
+        };
+      }));
+      
+      return {
+        id: credit.id,
+        creditType: credit.creditType,
+        title: credit.title,
+        description: credit.description,
+        creditAmountCents: credit.creditAmountCents,
+        usedAmountCents: credit.usedAmountCents,
+        remainingAmountCents: credit.creditAmountCents - credit.usedAmountCents,
+        status: credit.status,
+        expiresAt: credit.expiresAt,
+        createdAt: credit.createdAt,
+        approvedAt: credit.approvedAt,
+        usageLogs: enrichedUsageLogs
+      };
+    }));
+    
+    console.log(`💰 Found ${allCredits.length} total credits, ${credits.length} visible to admin`);
+
     // Get payment history from BOTH database AND Stripe (like the parent view does)
     // This ensures admin sees all the same payments the parent can see
     const dbPayments = await storage.getPaymentsByParentEmail(parent.email);
@@ -597,11 +667,15 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
           programEndDate: enrollment?.programEndDate
         };
       }),
+      credits: creditsWithUsage,
       emergencyContacts,
       summary: {
         totalChildren: children.length,
         totalEnrollments: filteredEnrollments.length,
         totalMemberships: membershipEnrollments.length,
+        totalCredits: credits.length,
+        totalCreditAmountCents: credits.reduce((sum, c) => sum + c.creditAmountCents, 0),
+        totalCreditUsedCents: credits.reduce((sum, c) => sum + c.usedAmountCents, 0),
         totalAmountPaid: CurrencyUtils.toDisplay(totalAmountPaid),
         totalAmountDue: CurrencyUtils.toDisplay(totalAmountDue),
         activeEnrollments: filteredEnrollments.filter(e => ['enrolled', 'pending_payment'].includes(e.status)).length,
