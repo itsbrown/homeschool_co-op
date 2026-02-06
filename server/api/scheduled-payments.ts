@@ -596,6 +596,175 @@ router.post('/pay-with-credits', supabaseAuth, async (req: any, res) => {
   }
 });
 
+// Pay multiple combined scheduled payments using credits only (no Stripe needed)
+// Mirrors pay-with-credits pattern but loops across all payments in the combined group
+router.post('/pay-combined-with-credits', supabaseAuth, async (req: any, res) => {
+  try {
+    const { scheduledPaymentIds, creditsToApply } = req.body;
+    const userEmail = req.user.email;
+
+    console.log('🎫 Processing combined credit-only payment:', { scheduledPaymentIds, creditsToApply, userEmail });
+
+    if (!scheduledPaymentIds || !Array.isArray(scheduledPaymentIds) || scheduledPaymentIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'scheduledPaymentIds array is required'
+      });
+    }
+
+    if (!creditsToApply || creditsToApply <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Credits amount is required'
+      });
+    }
+
+    const allScheduledPayments = await storage.getScheduledPaymentsByParentEmail(userEmail);
+    const paymentsToProcess: any[] = [];
+
+    for (const id of scheduledPaymentIds) {
+      const payment = allScheduledPayments.find(p => p.id === parseInt(id));
+      if (!payment) {
+        return res.status(404).json({
+          success: false,
+          error: `Scheduled payment ${id} not found`
+        });
+      }
+      if (payment.parentEmail !== userEmail) {
+        return res.status(403).json({
+          success: false,
+          error: `Payment ${id} does not belong to this user`
+        });
+      }
+      if (payment.status === 'completed') {
+        return res.status(400).json({
+          success: false,
+          error: `Payment ${id} has already been completed`
+        });
+      }
+      paymentsToProcess.push(payment);
+    }
+
+    const combinedAmount = paymentsToProcess.reduce((sum, p) => sum + p.amount, 0);
+
+    if (creditsToApply < combinedAmount) {
+      return res.status(400).json({
+        success: false,
+        error: 'Credits do not fully cover the combined payment amount. Use pay-combined endpoint for partial credit payments.'
+      });
+    }
+
+    const parentUser = await storage.getUserByEmail(userEmail);
+    if (!parentUser) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    const availableCredits = await storage.getAvailableCredits(parentUser.id);
+    const totalAvailable = availableCredits.reduce((sum, c) => sum + (c.creditAmountCents - (c.usedAmountCents || 0)), 0);
+
+    if (totalAvailable < combinedAmount) {
+      return res.status(400).json({
+        success: false,
+        error: `Insufficient credits. Available: ${totalAvailable} cents, Required: ${combinedAmount} cents`
+      });
+    }
+
+    console.log('💰 Combined credit-only payment validation passed:', {
+      combinedAmount,
+      creditsToApply,
+      totalAvailable,
+      paymentCount: paymentsToProcess.length
+    });
+
+    let totalCreditsUsed = 0;
+
+    for (const payment of paymentsToProcess) {
+      const paymentAmount = payment.amount;
+
+      const { usedCredits, totalUsed } = await storage.useCredits(
+        parentUser.id,
+        paymentAmount,
+        undefined,
+        `Combined credit payment - Scheduled payment ${payment.id} - ${payment.installmentNumber}/${payment.totalInstallments}`
+      );
+
+      totalCreditsUsed += totalUsed;
+      console.log(`💰 ✅ Consumed ${totalUsed} cents for scheduled payment ${payment.id}`);
+
+      await storage.updateScheduledPayment(payment.id, {
+        status: 'completed',
+        processedAt: new Date(),
+      });
+
+      if (payment.enrollmentId) {
+        const enrollment = await storage.getProgramEnrollmentById(payment.enrollmentId);
+        if (enrollment) {
+          const newTotalPaid = (enrollment.totalPaid || 0) + paymentAmount;
+          const classData = enrollment.programId ? await storage.getClassById(enrollment.programId) : null;
+          const totalCost = classData?.price || 0;
+          const remainingBalance = Math.max(0, totalCost - newTotalPaid);
+
+          await storage.updateProgramEnrollment(enrollment.id, {
+            totalPaid: newTotalPaid,
+            remainingBalance
+          });
+
+          console.log(`✅ Updated enrollment ${enrollment.id}: totalPaid=${newTotalPaid}, remaining=${remainingBalance}`);
+        }
+      }
+
+      let childName = 'Child';
+      let className = 'Class';
+      if (payment.enrollmentId) {
+        const enrollment = await storage.getProgramEnrollmentById(payment.enrollmentId);
+        if (enrollment) {
+          childName = enrollment.childName || 'Child';
+          className = enrollment.className || 'Class';
+        }
+      }
+
+      await storage.createPayment({
+        schoolId: payment.schoolId,
+        parentId: parentUser.id,
+        parentEmail: userEmail,
+        childName,
+        className,
+        amount: paymentAmount,
+        paymentDate: new Date(),
+        status: 'completed',
+        paymentMethod: 'other',
+        description: `Credit payment for ${payment.installmentNumber}/${payment.totalInstallments} (combined)`,
+        enrollmentIds: payment.enrollmentId ? [payment.enrollmentId] : [],
+        stripePaymentIntentId: `credit_combined_${Date.now()}_${payment.id}`,
+        metadata: { scheduledPaymentId: payment.id, paymentType: 'credits_combined' },
+        stripeChargeId: null,
+        stripeRefundId: null,
+        originalPaymentId: null,
+      });
+    }
+
+    console.log('✅ Combined credit-only payment completed:', {
+      paymentsProcessed: paymentsToProcess.length,
+      totalCreditsUsed
+    });
+
+    res.json({
+      success: true,
+      message: `${paymentsToProcess.length} payments completed using credits`,
+      creditsUsed: totalCreditsUsed,
+      remainingCredits: totalAvailable - totalCreditsUsed,
+      paymentsProcessed: paymentsToProcess.length
+    });
+
+  } catch (error) {
+    console.error('❌ Error processing combined credit-only payment:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to process combined credit payment'
+    });
+  }
+});
+
 // Confirm a scheduled payment after successful Stripe payment
 // This endpoint verifies with Stripe that the PaymentIntent succeeded before updating status
 // Provides immediate status update without waiting for webhook (server-authoritative)
