@@ -44,8 +44,9 @@ import {
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { AlertCircle, CreditCard, DollarSign, Calendar, Check, Clock, FileText, Search, ChevronDown, Award, Coins } from "lucide-react";
+import { AlertCircle, CreditCard, DollarSign, Calendar, Check, Clock, FileText, Search, ChevronDown, Award, Coins, Users } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 interface Payment {
@@ -570,6 +571,296 @@ function ScheduledPaymentDialog({
   );
 }
 
+function CombinedPaymentForm({ 
+  onSuccess, 
+  onError,
+  onCancel,
+  amount,
+  scheduledPaymentIds
+}: { 
+  onSuccess: (paymentIntentId: string) => void; 
+  onError: (error: string) => void;
+  onCancel: () => void;
+  amount: number;
+  scheduledPaymentIds: number[];
+}) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [elementsReady, setElementsReady] = useState(false);
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!stripe || !elements) {
+      onError('Payment system not ready. Please try again.');
+      return;
+    }
+    if (!elementsReady) {
+      onError('Please wait for the payment form to load.');
+      return;
+    }
+    setIsProcessing(true);
+    try {
+      const { error, paymentIntent } = await stripe.confirmPayment({
+        elements,
+        confirmParams: {
+          return_url: window.location.origin + '/payments'
+        },
+        redirect: 'if_required'
+      });
+      if (error) {
+        onError(error.message || 'Payment failed');
+        setIsProcessing(false);
+      } else if (paymentIntent && paymentIntent.status === 'succeeded') {
+        try {
+          const token = localStorage.getItem('supabase_token');
+          const confirmResponse = await fetch('/api/scheduled-payments/confirm-combined', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ paymentIntentId: paymentIntent.id })
+          });
+          const confirmData = await confirmResponse.json();
+          if (!confirmResponse.ok) {
+            console.warn('Failed to confirm combined payment immediately:', confirmData.error);
+          } else {
+            console.log('Combined payment confirmed immediately:', confirmData);
+          }
+        } catch (confirmError) {
+          console.warn('Error confirming combined payment:', confirmError);
+        }
+        onSuccess(paymentIntent.id);
+      } else if (paymentIntent && paymentIntent.status === 'requires_action') {
+        onError('Additional verification required. Please try again.');
+        setIsProcessing(false);
+      } else {
+        onError('Payment status unknown. Please check your payment history.');
+        setIsProcessing(false);
+      }
+    } catch (err: any) {
+      onError(err.message || 'An error occurred during payment');
+      setIsProcessing(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <PaymentElement 
+        onReady={() => setElementsReady(true)}
+        onLoadError={() => setElementsReady(false)}
+      />
+      <div className="flex gap-2 pt-2">
+        <Button 
+          type="button" 
+          variant="outline" 
+          onClick={onCancel}
+          disabled={isProcessing}
+          className="flex-1"
+        >
+          Cancel
+        </Button>
+        <Button 
+          type="submit" 
+          disabled={!stripe || !elementsReady || isProcessing} 
+          className="flex-1"
+        >
+          {isProcessing ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Processing...
+            </>
+          ) : (
+            <>
+              <CreditCard className="mr-2 h-4 w-4" />
+              Pay ${(amount / 100).toFixed(2)}
+            </>
+          )}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+interface CombinedPaymentDialogProps {
+  payments: any[];
+  group: any;
+  isOpen: boolean;
+  onClose: () => void;
+  onSuccess: () => void;
+  formatCurrency: (amount: number) => string;
+  formatDate: (date: string) => string;
+}
+
+function CombinedPaymentDialog({
+  payments,
+  group,
+  isOpen,
+  onClose,
+  onSuccess,
+  formatCurrency,
+  formatDate,
+}: CombinedPaymentDialogProps) {
+  const { toast } = useToast();
+  const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [showStripeForm, setShowStripeForm] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setClientSecret(null);
+      setError(null);
+      setShowStripeForm(false);
+    }
+  }, [isOpen]);
+
+  const handlePayCombined = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const token = localStorage.getItem('supabase_token');
+      if (!token) throw new Error('Please sign in to make a payment');
+
+      const scheduledPaymentIds = payments.map((p: any) => p.id);
+      const response = await fetch('/api/scheduled-payments/pay-combined', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ scheduledPaymentIds })
+      });
+
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Failed to initialize combined payment');
+      }
+
+      setClientSecret(data.clientSecret);
+      setShowStripeForm(true);
+    } catch (err: any) {
+      setError(err.message || 'Failed to initialize payment');
+      toast({
+        title: "Payment Error",
+        description: err.message || 'Failed to initialize combined payment',
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSuccess = (paymentIntentId: string) => {
+    toast({
+      title: "Payment Successful",
+      description: `Combined payment for ${payments.length} installments processed successfully.`,
+    });
+    queryClient.invalidateQueries({ queryKey: ['/api/payment-history'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments'] });
+    queryClient.invalidateQueries({ queryKey: ['scheduled-payments-upcoming'] });
+    queryClient.invalidateQueries({ queryKey: ['scheduled-payments-grouped'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/parent/credits'] });
+    onSuccess();
+    onClose();
+  };
+
+  const handleError = (errorMessage: string) => {
+    toast({
+      title: "Payment Failed",
+      description: errorMessage,
+      variant: "destructive",
+    });
+  };
+
+  const totalAmount = payments.reduce((sum: number, p: any) => sum + p.amount, 0);
+
+  return (
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Users className="h-5 w-5" />
+            Combined Payment
+          </DialogTitle>
+          <DialogDescription>
+            Pay {payments.length} installments due on {group?.dueDateFormatted || 'this date'} in a single transaction
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-4">
+          <div className="space-y-2">
+            <h3 className="text-sm font-medium">Payment Breakdown</h3>
+            <div className="bg-muted p-4 rounded-lg space-y-3">
+              {payments.map((payment: any) => (
+                <div key={payment.id} className="flex justify-between items-start text-sm">
+                  <div>
+                    <p className="font-medium">{payment.childName || 'Child'}</p>
+                    <p className="text-muted-foreground text-xs">{payment.className || 'Class'} - Installment {payment.installmentNumber}/{payment.totalInstallments}</p>
+                  </div>
+                  <span className="font-medium">{formatCurrency(payment.amount)}</span>
+                </div>
+              ))}
+              <div className="border-t pt-2 flex justify-between items-center font-semibold">
+                <span>Total</span>
+                <span className="text-green-700 text-lg">{formatCurrency(totalAmount)}</span>
+              </div>
+            </div>
+          </div>
+
+          {error && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+
+          {!showStripeForm ? (
+            <div className="flex gap-2 pt-2">
+              <Button variant="outline" onClick={onClose} className="flex-1" disabled={isLoading}>
+                Cancel
+              </Button>
+              <Button onClick={handlePayCombined} disabled={isLoading} className="flex-1 bg-green-600 hover:bg-green-700">
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Preparing...
+                  </>
+                ) : (
+                  <>
+                    <CreditCard className="mr-2 h-4 w-4" />
+                    Pay {formatCurrency(totalAmount)}
+                  </>
+                )}
+              </Button>
+            </div>
+          ) : clientSecret ? (
+            <Elements
+              stripe={stripePromise}
+              options={{
+                clientSecret,
+                appearance: {
+                  theme: 'stripe',
+                  variables: { colorPrimary: '#1e3a5f' }
+                }
+              }}
+            >
+              <CombinedPaymentForm
+                onSuccess={handleSuccess}
+                onError={handleError}
+                onCancel={onClose}
+                amount={totalAmount}
+                scheduledPaymentIds={payments.map((p: any) => p.id)}
+              />
+            </Elements>
+          ) : null}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function PaymentManagement({ childId }: PaymentManagementProps) {
   const { toast } = useToast();
   const [selectedPaymentId, setSelectedPaymentId] = useState<string | null>(null);
@@ -579,6 +870,11 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
   // State for the Stripe payment dialog
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const [selectedPaymentForDialog, setSelectedPaymentForDialog] = useState<any>(null);
+  
+  // State for combined payment dialog
+  const [combinedDialogOpen, setCombinedDialogOpen] = useState(false);
+  const [selectedCombinedGroup, setSelectedCombinedGroup] = useState<any>(null);
+  const [selectedCombinedPayments, setSelectedCombinedPayments] = useState<any[]>([]);
   
   // Detect Stripe redirect completion (e.g., after 3D Secure verification)
   // When Stripe redirects back, URL contains payment_intent and redirect_status params
@@ -708,6 +1004,26 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
         paymentPlan: payment.paymentPlan,
         source: 'database' as const
       }));
+    },
+  });
+
+  // Get grouped scheduled payments for combined payment view
+  const { data: groupedPayments, isLoading: isLoadingGrouped, refetch: refetchGrouped } = useQuery({
+    queryKey: ['scheduled-payments-grouped'],
+    queryFn: async () => {
+      const token = localStorage.getItem('supabase_token');
+      if (!token) throw new Error('No authentication token');
+
+      const response = await fetch('/api/scheduled-payments/grouped', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) return [];
+      const data = await response.json();
+      return data.success ? data.groups : [];
     },
   });
 
@@ -1300,126 +1616,158 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
         
         {/* Upcoming Payments Tab */}
         <TabsContent value="upcoming" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Upcoming Payments</CardTitle>
-              <CardDescription>Payments scheduled for the future</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {isLoading || isLoadingDbScheduled ? (
-                <div className="text-center py-8">
-                  <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
-                  <p>Loading upcoming payments...</p>
+          {isLoading || isLoadingDbScheduled || isLoadingGrouped ? (
+            <div className="text-center py-8">
+              <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
+              <p>Loading upcoming payments...</p>
+            </div>
+          ) : (() => {
+            const groups = groupedPayments || [];
+            const hasMultiplePaymentsInAnyGroup = groups.some((g: any) => g.paymentCount > 1);
+
+            if (groups.length === 0) {
+              return (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Calendar className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
+                  <p>No upcoming payments scheduled</p>
+                  <p className="text-sm mt-1">All your payments are currently up to date</p>
                 </div>
-              ) : (
-                (() => {
-                  // Combine payment history items with due dates and database scheduled payments
-                  const pendingPayments = filteredPayments
-                    .filter((p: Payment) => p.status === 'pending' && p.dueDate)
-                    .map((p: Payment) => ({
-                      ...p,
-                      source: 'payment_history'
-                    }));
-                  
-                  // Database-stored scheduled payments (single source of truth)
-                  const dbScheduledPaymentItems = (dbScheduledPayments || [])
-                    .map((sp: any) => ({
-                      id: sp.id,
-                      description: sp.description || `${sp.className} - ${sp.childName}`,
-                      amount: sp.amount,
-                      dueDate: sp.dueDate,
-                      status: sp.status || 'pending',
-                      childName: sp.childName,
-                      programName: sp.className,
-                      source: 'database_scheduled',
-                      installmentNumber: sp.installmentNumber,
-                      totalInstallments: sp.totalInstallments,
-                      paymentPlan: sp.paymentPlan
-                    }));
-                  
-                  const allUpcomingPayments = [...pendingPayments, ...dbScheduledPaymentItems]
-                    .sort((a, b) => new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime());
-                  
-                  return allUpcomingPayments.length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground">
-                      <Calendar className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
-                      <p>No upcoming payments scheduled</p>
-                      <p className="text-sm mt-1">All your payments are currently up to date</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {allUpcomingPayments.map((payment: any) => (
-                        <div 
-                          key={`${payment.source}-${payment.id}`} 
-                          className={`flex justify-between items-center p-4 border rounded-lg ${
-                            payment.source === 'database_scheduled' 
-                              ? 'border-l-4 border-l-blue-500' 
-                              : ''
-                          }`}
-                        >
-                          <div className="flex items-center gap-4">
-                            <div className={`h-10 w-10 rounded-full flex items-center justify-center ${
-                              payment.source === 'database_scheduled'
-                                ? 'bg-blue-100 text-blue-700'
-                                : 'bg-yellow-100 text-yellow-700'
-                            }`}>
-                              <Calendar className="h-5 w-5" />
-                            </div>
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <h3 className="font-medium">{payment.description}</h3>
-                                {payment.source === 'database_scheduled' && (
+              );
+            }
+
+            return (
+              <div className="space-y-4">
+                {hasMultiplePaymentsInAnyGroup && (
+                  <Alert className="border-blue-200 bg-blue-50">
+                    <Users className="h-4 w-4 text-blue-600" />
+                    <AlertDescription className="text-blue-700">
+                      <strong>Family Payments Available!</strong> You have multiple payments due on the same date. 
+                      Use "Pay All" to combine them into a single transaction.
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+                {groups.map((group: any) => (
+                  <Card key={group.dueDate} className="border-l-4 border-l-blue-500">
+                    <CardHeader className="pb-3">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <CardTitle className="text-base flex items-center gap-2">
+                            <Calendar className="h-4 w-4" />
+                            Due: {group.dueDateFormatted}
+                          </CardTitle>
+                          <CardDescription>
+                            {group.paymentCount} payment{group.paymentCount > 1 ? 's' : ''} due
+                          </CardDescription>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-2xl font-bold text-green-600">
+                            {formatCurrency(group.totalAmount)}
+                          </div>
+                          {group.paymentCount > 1 && (
+                            <Badge variant="secondary" className="mt-1 bg-blue-100 text-blue-700">
+                              <Users className="h-3 w-3 mr-1" />
+                              Combined
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="pt-0">
+                      <div className="space-y-3">
+                        {group.payments.map((payment: any) => (
+                          <div key={payment.id} className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
+                            <div className="flex items-center gap-3">
+                              <div className="h-8 w-8 rounded-full flex items-center justify-center bg-blue-100 text-blue-700">
+                                <Calendar className="h-4 w-4" />
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <h4 className="font-medium text-sm">{payment.childName || 'Child'}</h4>
                                   <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
                                     Class Enrollment
                                   </Badge>
-                                )}
-                              </div>
-                              <p className="text-sm text-muted-foreground">
-                                Due: {formatDate(payment.dueDate!)} • {payment.childName}
-                                {payment.installmentNumber && payment.totalInstallments && (
-                                  <span> • Installment {payment.installmentNumber} of {payment.totalInstallments}</span>
-                                )}
-                              </p>
-                              {payment.paymentPlan && (
-                                <p className="text-xs text-muted-foreground mt-0.5">
-                                  Plan: {payment.paymentPlan}
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                  {payment.className || 'Class'} - Installment {payment.installmentNumber}/{payment.totalInstallments}
+                                  {payment.paymentPlan && <span> ({payment.paymentPlan})</span>}
                                 </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <p className="font-medium">{formatCurrency(payment.amount)}</p>
+                              {group.paymentCount === 1 && (
+                                <Button
+                                  size="sm"
+                                  onClick={() => {
+                                    setSelectedPaymentForDialog({
+                                      id: payment.id,
+                                      amount: payment.amount,
+                                      description: payment.description || `${payment.className} - ${payment.childName}`,
+                                      programName: payment.className,
+                                      childName: payment.childName,
+                                      dueDate: group.dueDate,
+                                      installmentNumber: payment.installmentNumber,
+                                      totalInstallments: payment.totalInstallments,
+                                      paymentPlan: payment.paymentPlan
+                                    });
+                                    setPaymentDialogOpen(true);
+                                  }}
+                                  data-testid={`button-pay-upcoming-${payment.id}`}
+                                >
+                                  Pay Now
+                                </Button>
                               )}
                             </div>
                           </div>
-                        <div className="flex items-center gap-3">
-                          <div className="text-right">
-                            <p className="font-medium">{formatCurrency(payment.amount)}</p>
-                          </div>
-                          <Button 
-                            size="sm"
-                            onClick={() => {
-                              setSelectedPaymentForDialog({
-                                id: payment.id,
-                                amount: payment.amount,
-                                description: payment.description,
-                                programName: payment.programName,
-                                childName: payment.childName,
-                                dueDate: payment.dueDate,
-                                installmentNumber: payment.installmentNumber,
-                                totalInstallments: payment.totalInstallments,
-                                paymentPlan: payment.paymentPlan
-                              });
-                              setPaymentDialogOpen(true);
-                            }}
-                            data-testid={`button-pay-upcoming-${payment.id}`}
-                          >
-                            Pay Now
-                          </Button>
-                        </div>
+                        ))}
                       </div>
-                      ))}
-                    </div>
-                  );
-                })()
-              )}
-            </CardContent>
-          </Card>
+                      {group.paymentCount > 1 && (
+                        <div className="mt-4 flex flex-col sm:flex-row gap-2">
+                          <Button
+                            className="flex-1 bg-green-600 hover:bg-green-700"
+                            onClick={() => {
+                              setSelectedCombinedGroup(group);
+                              setSelectedCombinedPayments(group.payments);
+                              setCombinedDialogOpen(true);
+                            }}
+                            data-testid={`button-pay-all-${group.dueDate}`}
+                          >
+                            <Users className="h-4 w-4 mr-2" />
+                            Pay All Due {group.dueDateFormatted} ({formatCurrency(group.totalAmount)})
+                          </Button>
+                          {group.payments.map((payment: any) => (
+                            <Button
+                              key={payment.id}
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setSelectedPaymentForDialog({
+                                  id: payment.id,
+                                  amount: payment.amount,
+                                  description: payment.description || `${payment.className} - ${payment.childName}`,
+                                  programName: payment.className,
+                                  childName: payment.childName,
+                                  dueDate: group.dueDate,
+                                  installmentNumber: payment.installmentNumber,
+                                  totalInstallments: payment.totalInstallments,
+                                  paymentPlan: payment.paymentPlan
+                                });
+                                setPaymentDialogOpen(true);
+                              }}
+                              data-testid={`button-pay-individual-${payment.id}`}
+                            >
+                              Pay {payment.childName} Only
+                            </Button>
+                          ))}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            );
+          })()}
         </TabsContent>
 
         {/* Credits Tab */}
@@ -1521,6 +1869,28 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
           onSuccess={() => {
             refetch();
             refetchDbScheduledPayments();
+            refetchGrouped();
+          }}
+          formatCurrency={formatCurrency}
+          formatDate={formatDate}
+        />
+      )}
+
+      {/* Combined Payment Dialog */}
+      {selectedCombinedGroup && (
+        <CombinedPaymentDialog
+          payments={selectedCombinedPayments}
+          group={selectedCombinedGroup}
+          isOpen={combinedDialogOpen}
+          onClose={() => {
+            setCombinedDialogOpen(false);
+            setSelectedCombinedGroup(null);
+            setSelectedCombinedPayments([]);
+          }}
+          onSuccess={() => {
+            refetch();
+            refetchDbScheduledPayments();
+            refetchGrouped();
           }}
           formatCurrency={formatCurrency}
           formatDate={formatDate}
