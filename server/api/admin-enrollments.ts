@@ -4,7 +4,7 @@ import { storage } from '../storage';
 const router = Router();
 
 // GET enrollment details by ID
-router.get('/enrollments/:id', async (req, res) => {
+router.get('/:id', async (req, res) => {
   try {
     const enrollmentId = parseInt(req.params.id);
     
@@ -27,7 +27,7 @@ router.get('/enrollments/:id', async (req, res) => {
 
 // DELETE enrollment by ID (soft-delete: sets status to 'cancelled')
 // Preserves enrollment record for payment history and audit trail
-router.delete('/enrollments/:id', async (req: any, res) => {
+router.delete('/:id', async (req: any, res) => {
   try {
     const enrollmentId = parseInt(req.params.id);
     const { reason } = req.body || {};
@@ -113,7 +113,7 @@ router.delete('/enrollments/:id', async (req: any, res) => {
 });
 
 // POST comp enrollment - apply percentage-based discount and activate enrollment
-router.post('/enrollments/:id/comp', async (req: any, res) => {
+router.post('/:id/comp', async (req: any, res) => {
   try {
     const enrollmentId = parseInt(req.params.id);
     const { compPercentage, compReason } = req.body;
@@ -237,7 +237,7 @@ router.post('/enrollments/:id/comp', async (req: any, res) => {
 });
 
 // GET enrollments by parent email (for investigation)
-router.get('/enrollments/parent/:email', async (req, res) => {
+router.get('/parent/:email', async (req, res) => {
   try {
     const parentEmail = decodeURIComponent(req.params.email);
     

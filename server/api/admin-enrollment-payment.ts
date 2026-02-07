@@ -29,7 +29,15 @@ router.patch('/:enrollmentId/payment-plan', async (req: any, res) => {
 
     // Verify user is a school admin
     const user = await storage.getUserByEmail(userEmail);
-    if (!user || user.role !== 'schoolAdmin') {
+    if (!user) {
+      return res.status(403).json({ error: 'Only school administrators can modify payment plans' });
+    }
+
+    // MULTI-ROLE CHECK: Check both user_roles table (new system) and users.role (legacy)
+    const userRoles = await storage.getUserRolesByUserId(user.id);
+    const hasSchoolAdminRole = userRoles.some(r => r.role === 'schoolAdmin') || user.role === 'schoolAdmin';
+    const hasAdminRole = userRoles.some(r => r.role === 'admin' || r.role === 'superAdmin') || user.role === 'admin' || user.role === 'superAdmin';
+    if (!hasSchoolAdminRole && !hasAdminRole) {
       return res.status(403).json({ error: 'Only school administrators can modify payment plans' });
     }
 
@@ -53,8 +61,10 @@ router.patch('/:enrollmentId/payment-plan', async (req: any, res) => {
       return res.status(404).json({ error: 'Enrollment not found' });
     }
 
-    // Verify enrollment belongs to admin's school
-    if (enrollment.schoolId !== user.schoolId) {
+    // Verify enrollment belongs to admin's school (check user_roles school context for multi-role users)
+    const schoolAdminRole = userRoles.find(r => r.role === 'schoolAdmin');
+    const effectiveSchoolId = schoolAdminRole?.schoolId || user.schoolId;
+    if (!hasAdminRole && enrollment.schoolId !== effectiveSchoolId) {
       return res.status(403).json({ error: 'Cannot modify enrollments from other schools' });
     }
 
@@ -297,7 +307,15 @@ router.get('/:enrollmentId/payment-plan', async (req: any, res) => {
 
     // Verify user is a school admin
     const user = await storage.getUserByEmail(userEmail);
-    if (!user || user.role !== 'schoolAdmin') {
+    if (!user) {
+      return res.status(403).json({ error: 'Only school administrators can view payment plans' });
+    }
+
+    // MULTI-ROLE CHECK: Check both user_roles table (new system) and users.role (legacy)
+    const userRoles = await storage.getUserRolesByUserId(user.id);
+    const hasSchoolAdminRole = userRoles.some(r => r.role === 'schoolAdmin') || user.role === 'schoolAdmin';
+    const hasAdminRole = userRoles.some(r => r.role === 'admin' || r.role === 'superAdmin') || user.role === 'admin' || user.role === 'superAdmin';
+    if (!hasSchoolAdminRole && !hasAdminRole) {
       return res.status(403).json({ error: 'Only school administrators can view payment plans' });
     }
 
@@ -307,8 +325,10 @@ router.get('/:enrollmentId/payment-plan', async (req: any, res) => {
       return res.status(404).json({ error: 'Enrollment not found' });
     }
 
-    // Verify enrollment belongs to admin's school
-    if (enrollment.schoolId !== user.schoolId) {
+    // Verify enrollment belongs to admin's school (check user_roles school context for multi-role users)
+    const schoolAdminRole = userRoles.find(r => r.role === 'schoolAdmin');
+    const effectiveSchoolId = schoolAdminRole?.schoolId || user.schoolId;
+    if (!hasAdminRole && enrollment.schoolId !== effectiveSchoolId) {
       return res.status(403).json({ error: 'Cannot view enrollments from other schools' });
     }
 
@@ -417,7 +437,15 @@ router.post('/:enrollmentId/reallocate-payment', async (req: any, res) => {
 
     // Verify user is a school admin
     const user = await storage.getUserByEmail(userEmail);
-    if (!user || user.role !== 'schoolAdmin') {
+    if (!user) {
+      return res.status(403).json({ error: 'Only school administrators can reallocate payments' });
+    }
+
+    // MULTI-ROLE CHECK: Check both user_roles table (new system) and users.role (legacy)
+    const userRoles = await storage.getUserRolesByUserId(user.id);
+    const hasSchoolAdminRole = userRoles.some(r => r.role === 'schoolAdmin') || user.role === 'schoolAdmin';
+    const hasAdminRole = userRoles.some(r => r.role === 'admin' || r.role === 'superAdmin') || user.role === 'admin' || user.role === 'superAdmin';
+    if (!hasSchoolAdminRole && !hasAdminRole) {
       return res.status(403).json({ error: 'Only school administrators can reallocate payments' });
     }
 
@@ -444,8 +472,10 @@ router.post('/:enrollmentId/reallocate-payment', async (req: any, res) => {
       return res.status(404).json({ error: 'Source enrollment not found' });
     }
 
-    // Verify source enrollment belongs to admin's school
-    if (sourceEnrollment.schoolId !== user.schoolId) {
+    // Verify source enrollment belongs to admin's school (check user_roles school context for multi-role users)
+    const schoolAdminRole = userRoles.find(r => r.role === 'schoolAdmin');
+    const effectiveSchoolId = schoolAdminRole?.schoolId || user.schoolId;
+    if (!hasAdminRole && sourceEnrollment.schoolId !== effectiveSchoolId) {
       return res.status(403).json({ error: 'Cannot reallocate payments from enrollments in other schools' });
     }
 
@@ -488,8 +518,8 @@ router.post('/:enrollmentId/reallocate-payment', async (req: any, res) => {
         return res.status(404).json({ error: 'Target enrollment not found' });
       }
 
-      // Verify target enrollment belongs to same school
-      if (targetEnrollment.schoolId !== user.schoolId) {
+      // Verify target enrollment belongs to same school (check user_roles school context for multi-role users)
+      if (!hasAdminRole && targetEnrollment.schoolId !== effectiveSchoolId) {
         return res.status(403).json({ error: 'Cannot transfer payments to enrollments in other schools' });
       }
 
@@ -836,7 +866,15 @@ router.delete('/:enrollmentId', async (req: any, res) => {
     }
 
     const user = await storage.getUserByEmail(userEmail);
-    if (!user || (user.role !== 'schoolAdmin' && user.role !== 'admin' && user.role !== 'superAdmin')) {
+    if (!user) {
+      return res.status(403).json({ message: 'Only administrators can delete enrollments' });
+    }
+
+    // MULTI-ROLE CHECK: Check both user_roles table (new system) and users.role (legacy)
+    const userRoles = await storage.getUserRolesByUserId(user.id);
+    const hasSchoolAdminRole = userRoles.some(r => r.role === 'schoolAdmin') || user.role === 'schoolAdmin';
+    const hasAdminRole = userRoles.some(r => r.role === 'admin' || r.role === 'superAdmin') || user.role === 'admin' || user.role === 'superAdmin';
+    if (!hasSchoolAdminRole && !hasAdminRole) {
       return res.status(403).json({ message: 'Only administrators can delete enrollments' });
     }
     
@@ -848,7 +886,10 @@ router.delete('/:enrollmentId', async (req: any, res) => {
       return res.status(404).json({ message: 'Enrollment not found' });
     }
 
-    if (enrollment.schoolId !== user.schoolId && user.role === 'schoolAdmin') {
+    // Verify enrollment belongs to admin's school (check user_roles school context for multi-role users)
+    const schoolAdminRole = userRoles.find(r => r.role === 'schoolAdmin');
+    const effectiveSchoolId = schoolAdminRole?.schoolId || user.schoolId;
+    if (!hasAdminRole && enrollment.schoolId !== effectiveSchoolId) {
       return res.status(403).json({ message: 'Cannot delete enrollments from other schools' });
     }
 
@@ -918,7 +959,15 @@ router.delete('/:enrollmentId/scheduled-payments', async (req: any, res) => {
     }
 
     const user = await storage.getUserByEmail(userEmail);
-    if (!user || (user.role !== 'schoolAdmin' && user.role !== 'admin' && user.role !== 'superAdmin')) {
+    if (!user) {
+      return res.status(403).json({ message: 'Only administrators can delete payment plans' });
+    }
+
+    // MULTI-ROLE CHECK: Check both user_roles table (new system) and users.role (legacy)
+    const userRoles = await storage.getUserRolesByUserId(user.id);
+    const hasSchoolAdminRole = userRoles.some(r => r.role === 'schoolAdmin') || user.role === 'schoolAdmin';
+    const hasAdminRole = userRoles.some(r => r.role === 'admin' || r.role === 'superAdmin') || user.role === 'admin' || user.role === 'superAdmin';
+    if (!hasSchoolAdminRole && !hasAdminRole) {
       return res.status(403).json({ message: 'Only administrators can delete payment plans' });
     }
     
@@ -930,7 +979,10 @@ router.delete('/:enrollmentId/scheduled-payments', async (req: any, res) => {
       return res.status(404).json({ message: 'Enrollment not found' });
     }
 
-    if (enrollment.schoolId !== user.schoolId && user.role === 'schoolAdmin') {
+    // Verify enrollment belongs to admin's school (check user_roles school context for multi-role users)
+    const schoolAdminRole = userRoles.find(r => r.role === 'schoolAdmin');
+    const effectiveSchoolId = schoolAdminRole?.schoolId || user.schoolId;
+    if (!hasAdminRole && enrollment.schoolId !== effectiveSchoolId) {
       return res.status(403).json({ message: 'Cannot modify payment plans from other schools' });
     }
 
@@ -964,9 +1016,24 @@ router.delete('/scheduled-payments/:paymentId', async (req: any, res) => {
       return res.status(400).json({ message: 'Invalid payment ID' });
     }
     
-    // Auth and role check handled by router middleware (jwtCheck + requireRole)
-    const user = req.user;
-    const userEmail = user?.email;
+    // Get authenticated user email and look up full user
+    const userEmail = req.user?.email || req.auth?.email;
+    if (!userEmail) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    const user = await storage.getUserByEmail(userEmail);
+    if (!user) {
+      return res.status(403).json({ message: 'Only administrators can delete scheduled payments' });
+    }
+
+    // MULTI-ROLE CHECK: Check both user_roles table (new system) and users.role (legacy)
+    const userRoles = await storage.getUserRolesByUserId(user.id);
+    const hasSchoolAdminRole = userRoles.some(r => r.role === 'schoolAdmin') || user.role === 'schoolAdmin';
+    const hasAdminRole = userRoles.some(r => r.role === 'admin' || r.role === 'superAdmin') || user.role === 'admin' || user.role === 'superAdmin';
+    if (!hasSchoolAdminRole && !hasAdminRole) {
+      return res.status(403).json({ message: 'Only administrators can delete scheduled payments' });
+    }
     
     console.log(`🗑️  Admin ${userEmail} attempting to delete scheduled payment ID: ${paymentId}`);
     
@@ -986,7 +1053,9 @@ router.delete('/scheduled-payments/:paymentId', async (req: any, res) => {
 
     // School isolation: schoolAdmin can only delete payments from their own school
     const enrollment = await storage.getProgramEnrollmentById(scheduledPayment.enrollmentId);
-    if (user?.role === 'schoolAdmin' && enrollment && enrollment.schoolId !== user.schoolId) {
+    const schoolAdminRole = userRoles.find(r => r.role === 'schoolAdmin');
+    const effectiveSchoolId = schoolAdminRole?.schoolId || user.schoolId;
+    if (!hasAdminRole && enrollment && enrollment.schoolId !== effectiveSchoolId) {
       return res.status(403).json({ message: 'Cannot delete scheduled payments from other schools' });
     }
 
@@ -1028,7 +1097,15 @@ router.patch('/scheduled-payments/:paymentId/reschedule', async (req: any, res) 
 
     // Verify user is a school admin
     const user = await storage.getUserByEmail(userEmail);
-    if (!user || (user.role !== 'schoolAdmin' && user.role !== 'admin' && user.role !== 'superAdmin')) {
+    if (!user) {
+      return res.status(403).json({ error: 'Only administrators can modify payment dates' });
+    }
+
+    // MULTI-ROLE CHECK: Check both user_roles table (new system) and users.role (legacy)
+    const userRoles = await storage.getUserRolesByUserId(user.id);
+    const hasSchoolAdminRole = userRoles.some(r => r.role === 'schoolAdmin') || user.role === 'schoolAdmin';
+    const hasAdminRole = userRoles.some(r => r.role === 'admin' || r.role === 'superAdmin') || user.role === 'admin' || user.role === 'superAdmin';
+    if (!hasSchoolAdminRole && !hasAdminRole) {
       return res.status(403).json({ error: 'Only administrators can modify payment dates' });
     }
 
@@ -1066,8 +1143,10 @@ router.patch('/scheduled-payments/:paymentId/reschedule', async (req: any, res) 
       return res.status(404).json({ error: 'Scheduled payment not found' });
     }
 
-    // Verify payment belongs to admin's school (multi-tenant isolation)
-    if (scheduledPayment.schoolId !== user.schoolId && user.role !== 'superAdmin') {
+    // Verify payment belongs to admin's school (multi-tenant isolation, check user_roles school context)
+    const schoolAdminRole = userRoles.find(r => r.role === 'schoolAdmin');
+    const effectiveSchoolId = schoolAdminRole?.schoolId || user.schoolId;
+    if (!hasAdminRole && scheduledPayment.schoolId !== effectiveSchoolId) {
       return res.status(403).json({ error: 'Cannot modify payments from other schools' });
     }
 
@@ -1216,7 +1295,15 @@ router.get('/diagnose/:parentEmail', async (req: any, res) => {
 
     // Verify user is a school admin or superadmin
     const user = await storage.getUserByEmail(userEmail);
-    if (!user || (user.role !== 'schoolAdmin' && user.role !== 'superAdmin')) {
+    if (!user) {
+      return res.status(403).json({ error: 'Only school administrators can access diagnostic data' });
+    }
+
+    // MULTI-ROLE CHECK: Check both user_roles table (new system) and users.role (legacy)
+    const userRoles = await storage.getUserRolesByUserId(user.id);
+    const hasSchoolAdminRole = userRoles.some(r => r.role === 'schoolAdmin') || user.role === 'schoolAdmin';
+    const hasAdminRole = userRoles.some(r => r.role === 'admin' || r.role === 'superAdmin') || user.role === 'admin' || user.role === 'superAdmin';
+    if (!hasSchoolAdminRole && !hasAdminRole) {
       return res.status(403).json({ error: 'Only school administrators can access diagnostic data' });
     }
 
@@ -1226,8 +1313,10 @@ router.get('/diagnose/:parentEmail', async (req: any, res) => {
       return res.status(404).json({ error: 'Parent not found' });
     }
 
-    // Check school access (unless superadmin)
-    if (user.role !== 'superAdmin' && parent.schoolId !== user.schoolId) {
+    // Check school access (unless admin/superadmin, check user_roles school context)
+    const schoolAdminRole = userRoles.find(r => r.role === 'schoolAdmin');
+    const effectiveSchoolId = schoolAdminRole?.schoolId || user.schoolId;
+    if (!hasAdminRole && parent.schoolId !== effectiveSchoolId) {
       return res.status(403).json({ error: 'Cannot access data for parents from other schools' });
     }
 

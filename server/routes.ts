@@ -2114,9 +2114,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Register /api/admin/educators BEFORE /api/admin to ensure specific route matches first
   // (admin-educators uses Supabase auth, while admin uses Auth0 auth)
   app.use("/api/admin/educators", adminEducatorsRouter);
-  // Mount enrollment routers BEFORE the Auth0 admin router so Supabase-authed
-  // enrollment routes match first (Express checks in registration order)
-  app.use("/api/admin", supabaseAuth, adminEnrollmentsRouter); // Admin enrollment management (Supabase auth)
+  // Mount enrollment routers at /api/admin/enrollments with Supabase auth
+  // These are separate from the Auth0-based admin router at /api/admin
+  app.use("/api/admin/enrollments", supabaseAuth, adminEnrollmentsRouter); // Admin enrollment CRUD + comp (Supabase auth)
   app.use("/api/admin/enrollments", supabaseAuth, adminEnrollmentPaymentRouter); // Admin enrollment payment management (Supabase auth)
   app.use("/api/admin", adminRouter);
   app.use("/api/admin-classes", adminClassesRouter); // Add duplicate route for backwards compatibility
