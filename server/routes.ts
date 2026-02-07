@@ -24,6 +24,7 @@ import aiPricingRouter from "./api/ai-pricing";
 import adminClassesRouter from "./api/admin-classes";
 import adminRouter from "./api/admin";
 import adminEnrollmentsRouter from "./api/admin-enrollments";
+import adminEnrollmentPaymentRouter from "./api/admin-enrollment-payment";
 import adminUsersRouter from "./api/admin-users";
 import classesRouter from "./api/classes";
 import activitiesRouter from "./api/activities";
@@ -2113,9 +2114,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Register /api/admin/educators BEFORE /api/admin to ensure specific route matches first
   // (admin-educators uses Supabase auth, while admin uses Auth0 auth)
   app.use("/api/admin/educators", adminEducatorsRouter);
+  // Mount enrollment routers BEFORE the Auth0 admin router so Supabase-authed
+  // enrollment routes match first (Express checks in registration order)
+  app.use("/api/admin", supabaseAuth, adminEnrollmentsRouter); // Admin enrollment management (Supabase auth)
+  app.use("/api/admin/enrollments", supabaseAuth, adminEnrollmentPaymentRouter); // Admin enrollment payment management (Supabase auth)
   app.use("/api/admin", adminRouter);
   app.use("/api/admin-classes", adminClassesRouter); // Add duplicate route for backwards compatibility
-  app.use("/api/admin-enrollments", adminEnrollmentsRouter); // Admin enrollment management
   app.use("/api/admin-users", adminUsersRouter); // Admin user management
   app.use("/api/activities", activitiesRouter);
   app.use("/api/migration", migrationRouter);

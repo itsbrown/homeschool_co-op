@@ -42,9 +42,16 @@ router.delete('/enrollments/:id', async (req: any, res) => {
       return res.status(401).json({ message: 'Authentication required' });
     }
 
-    // Verify user is a school admin
     const user = await storage.getUserByEmail(userEmail);
-    if (!user || user.role !== 'schoolAdmin') {
+    if (!user) {
+      return res.status(403).json({ message: 'User not found' });
+    }
+
+    // MULTI-ROLE CHECK: Check both user_roles table (new system) and users.role (legacy)
+    const userRoles = await storage.getUserRolesByUserId(user.id);
+    const hasSchoolAdminRole = userRoles.some(r => r.role === 'schoolAdmin') || user.role === 'schoolAdmin';
+    const hasAdminRole = userRoles.some(r => r.role === 'admin' || r.role === 'superAdmin') || user.role === 'admin' || user.role === 'superAdmin';
+    if (!hasSchoolAdminRole && !hasAdminRole) {
       return res.status(403).json({ message: 'Only school administrators can unenroll students' });
     }
     
@@ -62,8 +69,10 @@ router.delete('/enrollments/:id', async (req: any, res) => {
       return res.status(400).json({ message: 'Enrollment is already cancelled or withdrawn' });
     }
 
-    // Verify enrollment belongs to admin's school
-    if (enrollment.schoolId !== user.schoolId) {
+    // Verify enrollment belongs to admin's school (check user_roles school context for multi-role users)
+    const schoolAdminRole = userRoles.find(r => r.role === 'schoolAdmin');
+    const effectiveSchoolId = schoolAdminRole?.schoolId || user.schoolId;
+    if (!hasAdminRole && enrollment.schoolId !== effectiveSchoolId) {
       return res.status(403).json({ message: 'Cannot unenroll students from other schools' });
     }
 
@@ -125,9 +134,16 @@ router.post('/enrollments/:id/comp', async (req: any, res) => {
       return res.status(401).json({ message: 'Authentication required' });
     }
 
-    // Verify user is a school admin
     const user = await storage.getUserByEmail(userEmail);
-    if (!user || user.role !== 'schoolAdmin') {
+    if (!user) {
+      return res.status(403).json({ message: 'User not found' });
+    }
+
+    // MULTI-ROLE CHECK: Check both user_roles table (new system) and users.role (legacy)
+    const compUserRoles = await storage.getUserRolesByUserId(user.id);
+    const hasCompSchoolAdminRole = compUserRoles.some(r => r.role === 'schoolAdmin') || user.role === 'schoolAdmin';
+    const hasCompAdminRole = compUserRoles.some(r => r.role === 'admin' || r.role === 'superAdmin') || user.role === 'admin' || user.role === 'superAdmin';
+    if (!hasCompSchoolAdminRole && !hasCompAdminRole) {
       return res.status(403).json({ message: 'Only school administrators can comp enrollments' });
     }
     
@@ -140,8 +156,10 @@ router.post('/enrollments/:id/comp', async (req: any, res) => {
       return res.status(404).json({ message: 'Enrollment not found' });
     }
 
-    // Verify enrollment belongs to admin's school
-    if (enrollment.schoolId !== user.schoolId) {
+    // Verify enrollment belongs to admin's school (check user_roles school context for multi-role users)
+    const compSchoolAdminRole = compUserRoles.find(r => r.role === 'schoolAdmin');
+    const compEffectiveSchoolId = compSchoolAdminRole?.schoolId || user.schoolId;
+    if (!hasCompAdminRole && enrollment.schoolId !== compEffectiveSchoolId) {
       return res.status(403).json({ message: 'Cannot comp enrollments from other schools' });
     }
 
