@@ -3287,3 +3287,27 @@ export const paymentReminderLogsRelations = relations(paymentReminderLogs, ({ on
   scheduledPayment: one(scheduledPayments, { fields: [paymentReminderLogs.scheduledPaymentId], references: [scheduledPayments.id] }),
   sentByUser: one(users, { fields: [paymentReminderLogs.sentBy], references: [users.id] }),
 }));
+
+export const childGuardians = pgTable("child_guardians", {
+  id: serial("id").primaryKey(),
+  childId: integer("child_id").notNull().references(() => children.id, { onDelete: 'cascade' }),
+  guardianUserId: integer("guardian_user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  relationship: text("relationship", {
+    enum: ["mother", "father", "stepmother", "stepfather", "grandmother", "grandfather", "aunt", "uncle", "legal_guardian", "other"]
+  }).notNull(),
+  isPrimary: boolean("is_primary").default(false).notNull(),
+  addedBy: integer("added_by").references(() => users.id),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertChildGuardianSchema = createInsertSchema(childGuardians)
+  .omit({ id: true, createdAt: true });
+export type InsertChildGuardian = z.infer<typeof insertChildGuardianSchema>;
+export type ChildGuardian = typeof childGuardians.$inferSelect;
+
+export const childGuardiansRelations = relations(childGuardians, ({ one }) => ({
+  child: one(children, { fields: [childGuardians.childId], references: [children.id] }),
+  guardian: one(users, { fields: [childGuardians.guardianUserId], references: [users.id] }),
+  addedByUser: one(users, { fields: [childGuardians.addedBy], references: [users.id] }),
+}));

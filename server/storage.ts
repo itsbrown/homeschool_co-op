@@ -64,7 +64,8 @@ import {
   fundraiserFamilyLinks, type FundraiserFamilyLink, type InsertFundraiserFamilyLink,
   fundraiserOrders, type FundraiserOrder, type InsertFundraiserOrder,
   fundraiserOrderItems, type FundraiserOrderItem, type InsertFundraiserOrderItem,
-  paymentReminderLogs, type PaymentReminderLog, type InsertPaymentReminderLog
+  paymentReminderLogs, type PaymentReminderLog, type InsertPaymentReminderLog,
+  childGuardians, type ChildGuardian, type InsertChildGuardian
 } from "@shared/schema";
 import { eq, inArray } from 'drizzle-orm';
 import { getDb } from './db';
@@ -241,6 +242,14 @@ export interface IStorage {
   createChild(child: InsertChild & { parentId: number }): Promise<Child>;
   updateChild(id: number, child: Partial<InsertChild>): Promise<Child | undefined>;
   deleteChild(id: number): Promise<void>;
+
+  // Child Guardian methods
+  getGuardiansByChildId(childId: number): Promise<ChildGuardian[]>;
+  getChildrenByGuardianUserId(guardianUserId: number): Promise<Child[]>;
+  addChildGuardian(guardian: InsertChildGuardian): Promise<ChildGuardian>;
+  removeChildGuardian(id: number): Promise<void>;
+  getChildGuardianById(id: number): Promise<ChildGuardian | undefined>;
+  deleteGuardiansByChildId(childId: number): Promise<void>;
 
   // Role invitation methods
   createRoleInvitation(invitation: any): Promise<any>;
