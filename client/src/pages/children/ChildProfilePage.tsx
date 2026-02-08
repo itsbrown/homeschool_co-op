@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { ArrowLeft, User, Calendar, GraduationCap, Mail, Phone, MapPin, Heart, AlertTriangle, BookOpen, X, Clock } from "lucide-react";
+import { ArrowLeft, User, Calendar, GraduationCap, Mail, Phone, MapPin, Heart, AlertTriangle, BookOpen, X, Clock, Users, UserPlus, Trash2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -27,6 +27,10 @@ export function ChildProfileContent({ activeRole }: ChildProfileContentProps) {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [confirmDialog, setConfirmDialog] = useState({ open: false, enrollmentId: null, className: "" });
+  const [guardianDialog, setGuardianDialog] = useState(false);
+  const [guardianEmail, setGuardianEmail] = useState('');
+  const [guardianRelationship, setGuardianRelationship] = useState('');
+  const [guardianNotes, setGuardianNotes] = useState('');
 
   // Calculate age from birthdate
   const calculateAge = (birthdate: string) => {
@@ -90,6 +94,11 @@ export function ChildProfileContent({ activeRole }: ChildProfileContentProps) {
     enabled: !!id
   });
 
+  const { data: guardians = [], isLoading: guardiansLoading } = useQuery<any[]>({
+    queryKey: ['/api/children', id, 'guardians'],
+    enabled: !!id
+  });
+
   // Unenrollment mutation
   const unenrollmentMutation = useMutation({
     mutationFn: async (enrollmentId: number) => {
@@ -115,6 +124,36 @@ export function ChildProfileContent({ activeRole }: ChildProfileContentProps) {
         description: error.message || "There was an error removing the child from the class.",
         variant: "destructive",
       });
+    },
+  });
+
+  const addGuardianMutation = useMutation({
+    mutationFn: async (data: { email: string; relationship: string; notes?: string }) => {
+      return apiRequest('POST', `/api/children/${id}/guardians`, data);
+    },
+    onSuccess: () => {
+      toast({ title: "Guardian Added", description: "The guardian has been successfully added." });
+      setGuardianDialog(false);
+      setGuardianEmail('');
+      setGuardianRelationship('');
+      setGuardianNotes('');
+      queryClient.invalidateQueries({ queryKey: ['/api/children', id, 'guardians'] });
+    },
+    onError: (error: any) => {
+      toast({ title: "Failed to Add Guardian", description: error.message || "Could not add the guardian.", variant: "destructive" });
+    },
+  });
+
+  const removeGuardianMutation = useMutation({
+    mutationFn: async (guardianId: number) => {
+      return apiRequest('DELETE', `/api/children/${id}/guardians/${guardianId}`);
+    },
+    onSuccess: () => {
+      toast({ title: "Guardian Removed", description: "The guardian has been removed." });
+      queryClient.invalidateQueries({ queryKey: ['/api/children', id, 'guardians'] });
+    },
+    onError: (error: any) => {
+      toast({ title: "Failed to Remove Guardian", description: error.message || "Could not remove the guardian.", variant: "destructive" });
     },
   });
 
@@ -199,11 +238,12 @@ export function ChildProfileContent({ activeRole }: ChildProfileContentProps) {
 
         {/* Detailed Information */}
         <Tabs defaultValue="overview" className="space-y-4 sm:space-y-6">
-          <TabsList className="w-full sm:w-auto grid grid-cols-2 sm:flex h-auto gap-1">
+          <TabsList className="w-full sm:w-auto grid grid-cols-3 sm:flex h-auto gap-1">
             <TabsTrigger value="overview" className="text-xs sm:text-sm">Overview</TabsTrigger>
             <TabsTrigger value="academic" className="text-xs sm:text-sm">Academic</TabsTrigger>
             <TabsTrigger value="health" className="text-xs sm:text-sm whitespace-nowrap">Health & Safety</TabsTrigger>
             <TabsTrigger value="enrollments" className="text-xs sm:text-sm">Enrollments</TabsTrigger>
+            <TabsTrigger value="guardians" className="text-xs sm:text-sm">Guardians</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="space-y-4 sm:space-y-6">
@@ -438,6 +478,73 @@ export function ChildProfileContent({ activeRole }: ChildProfileContentProps) {
               </CardContent>
             </Card>
           </TabsContent>
+
+          <TabsContent value="guardians" className="space-y-4 sm:space-y-6">
+            <Card>
+              <CardHeader className="p-4 sm:p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                      <Users className="h-4 w-4 sm:h-5 sm:w-5" />
+                      Guardians
+                    </CardTitle>
+                    <CardDescription>People authorized to manage this child's account</CardDescription>
+                  </div>
+                  {(activeRole === 'parent' || activeRole === 'schoolAdmin') && (
+                    <Button size="sm" onClick={() => setGuardianDialog(true)}>
+                      <UserPlus className="h-4 w-4 mr-1" />
+                      <span className="hidden sm:inline">Add Guardian</span>
+                      <span className="sm:hidden">Add</span>
+                    </Button>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent className="p-4 sm:p-6 pt-0">
+                {guardiansLoading ? (
+                  <div className="text-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                    <p className="text-muted-foreground">Loading guardians...</p>
+                  </div>
+                ) : guardians && guardians.length > 0 ? (
+                  <div className="space-y-3">
+                    {guardians.map((guardian: any) => (
+                      <div key={guardian.id} className="flex items-center justify-between border rounded-lg p-3 sm:p-4">
+                        <div className="flex items-center gap-3">
+                          <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                            <User className="h-5 w-5 text-primary" />
+                          </div>
+                          <div>
+                            <p className="font-medium text-sm sm:text-base">{guardian.guardianName || guardian.guardianEmail}</p>
+                            <p className="text-xs sm:text-sm text-muted-foreground">{guardian.guardianEmail}</p>
+                            <Badge variant="outline" className="mt-1 text-xs capitalize">
+                              {guardian.relationship?.replace('_', ' ')}
+                            </Badge>
+                          </div>
+                        </div>
+                        {(activeRole === 'parent' || activeRole === 'schoolAdmin') && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeGuardianMutation.mutate(guardian.id)}
+                            disabled={removeGuardianMutation.isPending}
+                            className="text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>No additional guardians added yet.</p>
+                    <p className="text-sm mt-2">Add another guardian to give them access to this child's information.</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
         </Tabs>
       </div>
 
@@ -468,6 +575,79 @@ export function ChildProfileContent({ activeRole }: ChildProfileContentProps) {
             >
               {unenrollmentMutation.isPending ? "Removing..." : "Remove"}
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={guardianDialog} onOpenChange={setGuardianDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Guardian</DialogTitle>
+            <DialogDescription>
+              Enter the email address of the person you want to add as a guardian. They must already have an account.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 mt-4">
+            <div>
+              <label className="text-sm font-medium">Email Address</label>
+              <input
+                type="email"
+                value={guardianEmail}
+                onChange={(e) => setGuardianEmail(e.target.value)}
+                placeholder="guardian@example.com"
+                className="w-full mt-1 px-3 py-2 border rounded-md text-base focus:outline-none focus:ring-2 focus:ring-primary"
+                style={{ fontSize: '16px' }}
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Relationship</label>
+              <select
+                value={guardianRelationship}
+                onChange={(e) => setGuardianRelationship(e.target.value)}
+                className="w-full mt-1 px-3 py-2 border rounded-md text-base focus:outline-none focus:ring-2 focus:ring-primary"
+                style={{ fontSize: '16px' }}
+              >
+                <option value="">Select relationship...</option>
+                <option value="mother">Mother</option>
+                <option value="father">Father</option>
+                <option value="stepmother">Stepmother</option>
+                <option value="stepfather">Stepfather</option>
+                <option value="grandmother">Grandmother</option>
+                <option value="grandfather">Grandfather</option>
+                <option value="aunt">Aunt</option>
+                <option value="uncle">Uncle</option>
+                <option value="legal_guardian">Legal Guardian</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-sm font-medium">Notes (optional)</label>
+              <input
+                type="text"
+                value={guardianNotes}
+                onChange={(e) => setGuardianNotes(e.target.value)}
+                placeholder="Any additional notes..."
+                className="w-full mt-1 px-3 py-2 border rounded-md text-base focus:outline-none focus:ring-2 focus:ring-primary"
+                style={{ fontSize: '16px' }}
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setGuardianDialog(false)}>
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  if (!guardianEmail || !guardianRelationship) {
+                    toast({ title: "Missing Information", description: "Please enter an email and select a relationship.", variant: "destructive" });
+                    return;
+                  }
+                  addGuardianMutation.mutate({ email: guardianEmail, relationship: guardianRelationship, notes: guardianNotes || undefined });
+                }}
+                disabled={addGuardianMutation.isPending}
+              >
+                {addGuardianMutation.isPending ? "Adding..." : "Add Guardian"}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

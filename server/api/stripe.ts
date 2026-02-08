@@ -1455,6 +1455,39 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
           totalFinalized: finalizeResult.totalFinalized
         });
         
+        // Track discount usage for credit-only checkout
+        try {
+          if (cartPricingResult && cartPricingResult.discounts && cartPricingResult.discounts.appliedDiscounts && cartPricingResult.discounts.appliedDiscounts.length > 0) {
+            for (const discount of cartPricingResult.discounts.appliedDiscounts) {
+              const discId = (discount as any).discountId || discount.id;
+              if (discId) {
+                try {
+                  await storage.incrementDiscountUsageAtomic(discId);
+                  await storage.createDiscountApplication({
+                    discountId: discId,
+                    parentEmail: userEmail,
+                    childId: items?.[0]?.childId || null,
+                    schoolEnrollmentId: null,
+                    programEnrollmentId: enrollmentIds[0] || null,
+                    paymentId: null,
+                    classId: null,
+                    originalAmount: cartPricingResult.subtotal,
+                    discountAmount: discount.discountAmount,
+                    finalAmount: cartPricingResult.total,
+                    applicationMethod: 'automatic',
+                    appliedBy: null,
+                  });
+                  console.log(`✅ Discount usage tracked for discount ${discId} (credit-only checkout)`);
+                } catch (discountTrackErr) {
+                  console.error(`⚠️ Failed to track usage for discount ${discId} (credit-only checkout):`, discountTrackErr);
+                }
+              }
+            }
+          }
+        } catch (discountTrackingError) {
+          console.error('⚠️ Discount usage tracking failed (credit-only checkout), continuing:', discountTrackingError);
+        }
+
         // Return success response for credit-only checkout
         return res.json({
           creditOnlyCheckout: true,
@@ -1545,6 +1578,39 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
         scheduledPaymentsCount: paymentPlanResult.scheduledPayments.length,
         paymentPlan
       });
+
+      // Track discount usage after successful payment plan creation
+      try {
+        if (cartPricingResult && cartPricingResult.discounts && cartPricingResult.discounts.appliedDiscounts && cartPricingResult.discounts.appliedDiscounts.length > 0) {
+          for (const discount of cartPricingResult.discounts.appliedDiscounts) {
+            const discId = (discount as any).discountId || discount.id;
+            if (discId) {
+              try {
+                await storage.incrementDiscountUsageAtomic(discId);
+                await storage.createDiscountApplication({
+                  discountId: discId,
+                  parentEmail: userEmail,
+                  childId: items?.[0]?.childId || null,
+                  schoolEnrollmentId: null,
+                  programEnrollmentId: enrollmentIds[0] || null,
+                  paymentId: null,
+                  classId: null,
+                  originalAmount: cartPricingResult.subtotal,
+                  discountAmount: discount.discountAmount,
+                  finalAmount: cartPricingResult.total,
+                  applicationMethod: 'automatic',
+                  appliedBy: null,
+                });
+                console.log(`✅ Discount usage tracked for discount ${discId} (Stripe payment)`);
+              } catch (discountTrackErr) {
+                console.error(`⚠️ Failed to track usage for discount ${discId} (Stripe payment):`, discountTrackErr);
+              }
+            }
+          }
+        }
+      } catch (discountTrackingError) {
+        console.error('⚠️ Discount usage tracking failed (Stripe payment), continuing:', discountTrackingError);
+      }
 
       // All payment plans now return clientSecret 🎉
       res.json({

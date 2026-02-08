@@ -94,6 +94,27 @@ The platform is built on a full-stack architecture prioritizing scalability, sec
 
 ## Recent Changes
 
+### Multi-Guardian System (Implemented Feb 2026)
+Multiple guardians can be linked to each child account, allowing shared access for family members.
+
+**Database:**
+- `child_guardians` table with `childId`, `guardianUserId`, `relationship`, `isPrimary`, `addedBy`, `notes`, `createdAt`
+- Unique constraint on (`child_id`, `guardian_user_id`) prevents duplicates
+- Cascade delete on both `child_id` and `guardian_user_id` foreign keys
+
+**Endpoints:**
+- `GET /api/children/:childId/guardians` - List guardians for a child (parent, guardian, or admin access)
+- `POST /api/children/:childId/guardians` - Add guardian by email (parent or admin only)
+- `DELETE /api/children/:childId/guardians/:guardianId` - Remove guardian (parent or admin only)
+
+**Architectural Notes:**
+- Permission checks use `getUserRolesByUserId()` for multi-role + legacy `user.role` fallback
+- Guardian-linked children appear in `/api/parent/children` response with `isGuardianLinked: true` flag
+- `/api/parent/children/:id` allows guardian access (checks `child_guardians` table)
+- Guardian UI tab on child profile page with add/remove functionality
+- iOS/Safari compatible inputs with 16px font-size
+- Routes mounted at `/api/children` with `supabaseAuth` middleware
+
 ### Consolidated Family Payments (Implemented Feb 2026)
 Parents with multiple children can now pay all installments due on the same date as a single combined Stripe transaction.
 

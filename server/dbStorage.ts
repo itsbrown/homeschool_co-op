@@ -64,7 +64,8 @@ import {
   FundraiserOrder, InsertFundraiserOrder, fundraiserOrders,
   FundraiserOrderItem, InsertFundraiserOrderItem, fundraiserOrderItems,
   piiAccessLogs,
-  PaymentReminderLog, InsertPaymentReminderLog, paymentReminderLogs
+  PaymentReminderLog, InsertPaymentReminderLog, paymentReminderLogs,
+  ChildGuardian, InsertChildGuardian, childGuardians
 } from '../shared/schema';
 
 /**
@@ -1569,6 +1570,44 @@ export class DatabaseStorage implements IStorage {
   async deleteChild(id: number): Promise<void> {
     const db = await getDb();
     await db.delete(children).where(eq(children.id, id));
+  }
+
+  async getGuardiansByChildId(childId: number): Promise<ChildGuardian[]> {
+    const db = await getDb();
+    return await db.select().from(childGuardians).where(eq(childGuardians.childId, childId));
+  }
+
+  async getChildrenByGuardianUserId(guardianUserId: number): Promise<Child[]> {
+    const db = await getDb();
+    const guardianLinks = await db.select().from(childGuardians).where(eq(childGuardians.guardianUserId, guardianUserId));
+    if (guardianLinks.length === 0) return [];
+    const childIds = guardianLinks.map(g => g.childId);
+    return await db.select().from(children).where(inArray(children.id, childIds));
+  }
+
+  async addChildGuardian(guardian: InsertChildGuardian): Promise<ChildGuardian> {
+    const db = await getDb();
+    const [newGuardian] = await db.insert(childGuardians).values({
+      ...guardian,
+      createdAt: new Date()
+    }).returning();
+    return newGuardian;
+  }
+
+  async removeChildGuardian(id: number): Promise<void> {
+    const db = await getDb();
+    await db.delete(childGuardians).where(eq(childGuardians.id, id));
+  }
+
+  async getChildGuardianById(id: number): Promise<ChildGuardian | undefined> {
+    const db = await getDb();
+    const [guardian] = await db.select().from(childGuardians).where(eq(childGuardians.id, id));
+    return guardian;
+  }
+
+  async deleteGuardiansByChildId(childId: number): Promise<void> {
+    const db = await getDb();
+    await db.delete(childGuardians).where(eq(childGuardians.childId, childId));
   }
 
   async getAllChildren(): Promise<Child[]> {

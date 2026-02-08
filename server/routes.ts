@@ -61,6 +61,7 @@ import userSearchRouter from "./api/user-search";
 import assessmentsRouter from "./api/assessments";
 import assessmentUploadRouter from "./api/assessment-upload";
 import fundraisersRouter from "./api/fundraisers";
+import guardiansRouter from "./api/guardians";
 import archiver from 'archiver';
 import fs from 'fs';
 import path from 'path';
@@ -2132,6 +2133,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/enrollments", supabaseAuth, enrollmentsRouter.default);
   // Also mount at /api/parent/enrollments for frontend compatibility
   app.use("/api/parent/enrollments", supabaseAuth, enrollmentsRouter.default);
+
+  // Mount guardians router for child guardian management (Supabase auth)
+  app.use("/api/children", supabaseAuth, guardiansRouter);
 
   // Add children enrollments endpoint (protected - requires parent ownership)
   app.get("/api/children/:id/enrollments", supabaseAuth, async (req: any, res) => {

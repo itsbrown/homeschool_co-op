@@ -30,25 +30,28 @@ router.get('/children', supabaseAuth, async (req: any, res) => {
     // Get children by parent email from storage
     console.log('🔍 Attempting to fetch children from storage...');
     
-    // Debug: Get all children to see what's in storage
-    const allChildren = await storage.getAllChildren();
-    console.log('🔍 All children in storage:', allChildren.map(c => ({ 
-      id: c.id, 
-      firstName: c.firstName, 
-      lastName: c.lastName 
-    })));
-    
     const children = await storage.getChildrenByParentEmail(userEmail);
 
     console.log(`🔍 Found ${children.length} children for parent ${userEmail}:`, children);
 
-    if (!children || children.length === 0) {
+    let guardianChildren: any[] = [];
+    const user = await storage.getUserByEmail(userEmail);
+    if (user) {
+      guardianChildren = await storage.getChildrenByGuardianUserId(user.id);
+    }
+
+    const directChildIds = new Set(children.map(c => c.id));
+    const allChildren = [
+      ...children,
+      ...guardianChildren.filter(c => !directChildIds.has(c.id))
+    ];
+
+    if (!allChildren || allChildren.length === 0) {
       console.log('ℹ️ No children found for this user.');
       return res.status(200).json([]);
     }
 
-    // Transform children data to ensure consistent format
-    const transformedChildren = children.map(child => ({
+    const transformedChildren = allChildren.map(child => ({
       id: child.id,
       firstName: child.firstName,
       lastName: child.lastName,
@@ -67,7 +70,8 @@ router.get('/children', supabaseAuth, async (req: any, res) => {
       additionalLanguages: child.additionalLanguages,
       notes: child.notes,
       createdAt: child.createdAt,
-      updatedAt: child.updatedAt
+      updatedAt: child.updatedAt,
+      isGuardianLinked: !directChildIds.has(child.id)
     }));
 
     return res.status(200).json(transformedChildren);
@@ -111,12 +115,20 @@ router.get('/children/:id', supabaseAuth, async (req: any, res) => {
       });
     }
     
-    // 🔒 SECURITY: Verify parent owns this child
+    // 🔒 SECURITY: Verify parent owns this child or is a guardian
     if (child.parentEmail !== userEmail) {
-      return res.status(403).json({ 
-        message: 'Access denied: You can only view your own children',
-        error: 'NOT_YOUR_CHILD'
-      });
+      const user = await storage.getUserByEmail(userEmail);
+      let isGuardian = false;
+      if (user) {
+        const guardians = await storage.getGuardiansByChildId(childId);
+        isGuardian = guardians.some(g => g.guardianUserId === user.id);
+      }
+      if (!isGuardian) {
+        return res.status(403).json({ 
+          message: 'Access denied: You can only view your own children',
+          error: 'NOT_YOUR_CHILD'
+        });
+      }
     }
     
     return res.status(200).json(child);

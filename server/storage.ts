@@ -1764,6 +1764,30 @@ export class MemStorage implements IStorage {
     await this.saveChildrenToDisk();
   }
 
+  async getGuardiansByChildId(childId: number): Promise<ChildGuardian[]> {
+    return [];
+  }
+
+  async getChildrenByGuardianUserId(guardianUserId: number): Promise<Child[]> {
+    return [];
+  }
+
+  async addChildGuardian(guardian: InsertChildGuardian): Promise<ChildGuardian> {
+    throw new Error('Guardian management requires database storage');
+  }
+
+  async removeChildGuardian(id: number): Promise<void> {
+    // No-op in memory storage
+  }
+
+  async getChildGuardianById(id: number): Promise<ChildGuardian | undefined> {
+    return undefined;
+  }
+
+  async deleteGuardiansByChildId(childId: number): Promise<void> {
+    // No-op in memory storage
+  }
+
   private async saveChildrenToDisk(): Promise<void> {
     try {
       const fs = await import('fs');
@@ -6025,6 +6049,29 @@ import { DatabaseStorage } from "./dbStorage";
       }
     }
 
+    async getGuardiansByChildId(childId: number): Promise<ChildGuardian[]> {
+      return this.dbStorage.getGuardiansByChildId(childId);
+    }
+
+    async getChildrenByGuardianUserId(guardianUserId: number): Promise<Child[]> {
+      return this.dbStorage.getChildrenByGuardianUserId(guardianUserId);
+    }
+
+    async addChildGuardian(guardian: InsertChildGuardian): Promise<ChildGuardian> {
+      return this.dbStorage.addChildGuardian(guardian);
+    }
+
+    async removeChildGuardian(id: number): Promise<void> {
+      return this.dbStorage.removeChildGuardian(id);
+    }
+
+    async getChildGuardianById(id: number): Promise<ChildGuardian | undefined> {
+      return this.dbStorage.getChildGuardianById(id);
+    }
+
+    async deleteGuardiansByChildId(childId: number): Promise<void> {
+      return this.dbStorage.deleteGuardiansByChildId(childId);
+    }
 
     async revokeRoleInvitation(id: number): Promise<void> {
       return this.dbStorage.revokeRoleInvitation(id);
