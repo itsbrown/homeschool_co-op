@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Plus, Calendar, Clock, MapPin, Trash2, CreditCard, User, Mail, Phone } from "lucide-react";
+import { ArrowLeft, Plus, Calendar, Clock, MapPin, Trash2, CreditCard, User, Mail, Phone, Users, GraduationCap } from "lucide-react";
 import { Link } from "wouter";
 import ParentAppShell from "@/components/layout/ParentAppShell";
 import { useToast } from "@/hooks/use-toast";
@@ -23,6 +23,13 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface Instructor {
   id: number;
@@ -64,6 +71,8 @@ export default function ChildEnrollmentsPage() {
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
   const { refreshCart } = useCart();
+  const [rosterClassId, setRosterClassId] = useState<number | null>(null);
+  const [rosterClassName, setRosterClassName] = useState<string>('');
 
   // Fetch child data
   const { data: child, isLoading: childLoading } = useQuery<Child>({
@@ -402,15 +411,31 @@ export default function ChildEnrollmentsPage() {
                           Enrolled on {formatDate(enrollment.enrollmentDate)}
                         </p>
                         <div className="flex flex-col sm:flex-row gap-2 w-full">
+                          {(enrollment.status === 'enrolled' || enrollment.status === 'completed') && (
+                            <Button 
+                              variant="outline"
+                              size="sm"
+                              className="w-full sm:w-auto"
+                              onClick={() => {
+                                const enrollmentAny = enrichedEnrollment as any;
+                                const resolvedClassId = enrollmentAny.marketplaceClassId || enrollment.classId;
+                                setRosterClassId(resolvedClassId);
+                                setRosterClassName(details.className);
+                              }}
+                              data-testid={`btn-view-roster-${enrollment.id || index}`}
+                            >
+                              <Users className="h-4 w-4 mr-2" />
+                              View Roster
+                            </Button>
+                          )}
                           {enrollment.status === 'pending_payment' && (
                             <>
                               <Button 
                                 size="sm"
                                 className="bg-green-600 hover:bg-green-700 w-full sm:w-auto"
                                 onClick={async () => {
-                                  // Refresh cart to load pending enrollments, then navigate to checkout
                                   console.log('🛒 Complete Payment clicked - refreshing cart');
-                                  await refreshCart(); // CRITICAL: Await cart refresh before navigation
+                                  await refreshCart();
                                   console.log('🛒 Cart refresh complete - navigating to checkout');
                                   setLocation('/cart/checkout');
                                 }}
@@ -490,7 +515,96 @@ export default function ChildEnrollmentsPage() {
             </Card>
           )}
         </div>
+
+        <RosterDialog
+          classId={rosterClassId}
+          className={rosterClassName}
+          open={rosterClassId !== null}
+          onOpenChange={(open) => {
+            if (!open) {
+              setRosterClassId(null);
+              setRosterClassName('');
+            }
+          }}
+        />
       </div>
     </ParentAppShell>
+  );
+}
+
+function RosterDialog({ classId, className: classTitle, open, onOpenChange }: {
+  classId: number | null;
+  className: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const { data, isLoading } = useQuery({
+    queryKey: ["/api/parent/class-roster", classId],
+    queryFn: async () => {
+      const token = localStorage.getItem('supabase_token');
+      const response = await fetch(`/api/parent/class-roster/${classId}`, {
+        headers: {
+          ...(token && { Authorization: `Bearer ${token}` })
+        },
+        credentials: "include"
+      });
+      if (!response.ok) return null;
+      return response.json();
+    },
+    enabled: open && classId !== null,
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Users className="h-5 w-5" />
+            Class Roster
+          </DialogTitle>
+          <DialogDescription>
+            {classTitle}
+            {data?.totalStudents != null && (
+              <span className="ml-1">
+                — {data.totalStudents} {data.totalStudents === 1 ? 'student' : 'students'} enrolled
+              </span>
+            )}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="mt-2">
+          {isLoading ? (
+            <div className="space-y-2">
+              <Skeleton className="h-8 w-full" />
+              <Skeleton className="h-8 w-full" />
+              <Skeleton className="h-8 w-3/4" />
+            </div>
+          ) : !data?.students || data.students.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-4">
+              No students found in this class roster.
+            </p>
+          ) : (
+            <div className="space-y-1 max-h-[60vh] overflow-y-auto">
+              {data.students.map((student: any, index: number) => (
+                <div
+                  key={index}
+                  className="flex items-center gap-2 p-2 rounded-lg hover:bg-muted/50 transition-colors"
+                  data-testid={`roster-student-${index}`}
+                >
+                  <GraduationCap className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                  <span className="text-sm font-medium">
+                    {student.firstName} {student.lastInitial}
+                  </span>
+                  {student.gradeLevel && (
+                    <Badge variant="outline" className="text-xs ml-auto">
+                      {student.gradeLevel}
+                    </Badge>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
