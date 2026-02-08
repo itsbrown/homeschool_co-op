@@ -3318,6 +3318,32 @@ router.put('/students/:id', supabaseAuth, async (req: any, res) => {
       specialNeeds: updateData.specialNeeds,
     });
 
+    if (updateData.secondaryParentEmail) {
+      try {
+        const secondaryParent = await storage.getUserByEmail(updateData.secondaryParentEmail);
+        if (secondaryParent) {
+          const existingGuardians = await storage.getGuardiansByChildId(studentId);
+          const alreadyLinked = existingGuardians.some(g => g.guardianUserId === secondaryParent.id);
+          if (!alreadyLinked) {
+            const adminUser = await storage.getUserByEmail(req.user?.email);
+            await storage.addChildGuardian({
+              childId: studentId,
+              guardianUserId: secondaryParent.id,
+              relationship: 'other',
+              isPrimary: false,
+              addedBy: adminUser?.id || null,
+              notes: 'Added by school admin',
+            });
+            console.log(`Guardian linked: ${updateData.secondaryParentEmail} -> child ${studentId}`);
+          }
+        } else {
+          console.log(`Secondary parent email not found in system: ${updateData.secondaryParentEmail}`);
+        }
+      } catch (guardianError) {
+        console.error('Error linking secondary parent:', guardianError);
+      }
+    }
+
     console.log('Student updated successfully:', updatedStudent);
     res.json(updatedStudent);
   } catch (error) {

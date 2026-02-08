@@ -23,7 +23,7 @@ interface StudentData {
   locationId?: number | null;
   parentEmail?: string;
   parentPhone?: string;
-  emergencyContact?: string;
+  emergencyContact?: string | { name?: string; relationship?: string; phone?: string; email?: string };
   emergencyPhone?: string;
   medicalNotes?: string;
   specialNeeds?: string;
@@ -39,6 +39,18 @@ interface LocationData {
   name: string;
   city: string;
   state: string;
+}
+
+function getEmergencyContactName(ec: StudentData['emergencyContact']): string {
+  if (!ec) return '';
+  if (typeof ec === 'string') return ec;
+  return ec.name || '';
+}
+
+function getEmergencyContactPhone(ec: StudentData['emergencyContact']): string {
+  if (!ec) return '';
+  if (typeof ec === 'string') return '';
+  return ec.phone || '';
 }
 
 export default function StudentRegistrationPage() {
@@ -103,6 +115,7 @@ export default function StudentRegistrationPage() {
         medicalNotes: formData.get('medicalNotes'),
         specialNeeds: formData.get('specialNeeds'),
         sendInvitation: sendInvitation,
+        ...(isEditMode && formData.get('secondaryParentEmail') ? { secondaryParentEmail: formData.get('secondaryParentEmail') } : {}),
       };
 
       console.log('Form submission data:', submissionData);
@@ -276,6 +289,7 @@ export default function StudentRegistrationPage() {
                       type="email"
                       placeholder="parent@example.com"
                       defaultValue={studentData?.parentEmail || ""}
+                      style={{ fontSize: '16px' }}
                     />
                   </div>
                   <div className="space-y-2">
@@ -286,9 +300,27 @@ export default function StudentRegistrationPage() {
                       type="tel"
                       placeholder="(555) 123-4567"
                       defaultValue={studentData?.parentPhone || ""}
+                      style={{ fontSize: '16px' }}
                     />
                   </div>
                 </div>
+                {isEditMode && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="secondaryParentEmail">Secondary Parent/Guardian Email</Label>
+                      <Input
+                        id="secondaryParentEmail"
+                        name="secondaryParentEmail"
+                        type="email"
+                        placeholder="second-parent@example.com"
+                        style={{ fontSize: '16px' }}
+                      />
+                      <p className="text-sm text-muted-foreground">
+                        Add another parent or guardian's email to give them access to this student's account. They must already have an account.
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="space-y-4">
@@ -300,7 +332,8 @@ export default function StudentRegistrationPage() {
                       id="emergencyContact"
                       name="emergencyContact"
                       placeholder="Enter emergency contact name"
-                      defaultValue={studentData?.emergencyContact || ""}
+                      defaultValue={getEmergencyContactName(studentData?.emergencyContact)}
+                      style={{ fontSize: '16px' }}
                     />
                   </div>
                   <div className="space-y-2">
@@ -310,7 +343,8 @@ export default function StudentRegistrationPage() {
                       name="emergencyPhone"
                       type="tel"
                       placeholder="(555) 123-4567"
-                      defaultValue={studentData?.emergencyPhone || ""}
+                      defaultValue={studentData?.emergencyPhone || getEmergencyContactPhone(studentData?.emergencyContact)}
+                      style={{ fontSize: '16px' }}
                     />
                   </div>
                 </div>
