@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import ParentAppShell from '@/components/layout/ParentAppShell';
@@ -27,6 +28,8 @@ export function ChildProfileContent({ activeRole }: ChildProfileContentProps) {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [confirmDialog, setConfirmDialog] = useState({ open: false, enrollmentId: null, className: "" });
+  const [rosterClassId, setRosterClassId] = useState<number | null>(null);
+  const [rosterClassName, setRosterClassName] = useState<string>('');
   const [guardianDialog, setGuardianDialog] = useState(false);
   const [guardianEmail, setGuardianEmail] = useState('');
   const [guardianRelationship, setGuardianRelationship] = useState('');
@@ -427,7 +430,20 @@ export function ChildProfileContent({ activeRole }: ChildProfileContentProps) {
                           </div>
                           <div className="flex items-center gap-2">
                             <Badge variant="default">{enrollment.status}</Badge>
-                            {/* Only show Remove button for school admins and only for pending_payment enrollments */}
+                            {(enrollment.status === 'enrolled' || enrollment.status === 'completed') && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setRosterClassId(enrollment.marketplaceClassId || enrollment.classId);
+                                  setRosterClassName(enrollment.className);
+                                }}
+                                data-testid={`btn-view-roster-${enrollment.id}`}
+                              >
+                                <Users className="h-4 w-4 mr-1" />
+                                View Roster
+                              </Button>
+                            )}
                             {activeRole === 'schoolAdmin' && enrollment.status === 'pending_payment' && (
                               <Button
                                 variant="outline"
@@ -651,7 +667,96 @@ export function ChildProfileContent({ activeRole }: ChildProfileContentProps) {
           </div>
         </DialogContent>
       </Dialog>
+
+      <RosterDialog
+        classId={rosterClassId}
+        className={rosterClassName}
+        open={rosterClassId !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setRosterClassId(null);
+            setRosterClassName('');
+          }
+        }}
+      />
     </>
+  );
+}
+
+function RosterDialog({ classId, className: classTitle, open, onOpenChange }: {
+  classId: number | null;
+  className: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const { data, isLoading } = useQuery({
+    queryKey: ["/api/parent/class-roster", classId],
+    queryFn: async () => {
+      const token = localStorage.getItem('supabase_token');
+      const response = await fetch(`/api/parent/class-roster/${classId}`, {
+        headers: {
+          ...(token && { Authorization: `Bearer ${token}` })
+        },
+        credentials: "include"
+      });
+      if (!response.ok) return null;
+      return response.json();
+    },
+    enabled: open && classId !== null,
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Users className="h-5 w-5" />
+            Class Roster
+          </DialogTitle>
+          <DialogDescription>
+            {classTitle}
+            {data?.totalStudents != null && (
+              <span className="ml-1">
+                — {data.totalStudents} {data.totalStudents === 1 ? 'student' : 'students'} enrolled
+              </span>
+            )}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="mt-2">
+          {isLoading ? (
+            <div className="space-y-2">
+              <Skeleton className="h-8 w-full" />
+              <Skeleton className="h-8 w-full" />
+              <Skeleton className="h-8 w-3/4" />
+            </div>
+          ) : !data?.students || data.students.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-4">
+              No students found in this class roster.
+            </p>
+          ) : (
+            <div className="space-y-1 max-h-[60vh] overflow-y-auto">
+              {data.students.map((student: any, index: number) => (
+                <div
+                  key={index}
+                  className="flex items-center gap-2 p-2 rounded-lg hover:bg-muted/50 transition-colors"
+                  data-testid={`roster-student-${index}`}
+                >
+                  <GraduationCap className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                  <span className="text-sm font-medium">
+                    {student.firstName} {student.lastInitial}
+                  </span>
+                  {student.gradeLevel && (
+                    <Badge variant="outline" className="text-xs ml-auto">
+                      {student.gradeLevel}
+                    </Badge>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
