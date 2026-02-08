@@ -19,114 +19,13 @@ import EmbeddedLogin from "@/components/auth/EmbeddedLogin";
 import DirectAuth0Login from "@/components/auth/DirectAuth0Login";
 import Register from "@/pages/Register";
 
-import SchoolAdminLogin from "@/pages/SchoolAdminLogin";
-import Dashboard from "@/pages/Dashboard";
-import PaymentsPage from "@/pages/PaymentsPage";
-import SchedulePage from "@/pages/SchedulePage";
-import Curriculum from "@/pages/Curriculum";
-import CurriculumDetail from "@/pages/CurriculumDetail";
-import Lessons from "@/pages/Lessons";
-import AILessonGenerator from "@/pages/AILessonGenerator";
-import AIWorksheetGenerator from "@/pages/AIWorksheetGenerator";
-import OCRWorksheetGenerator from "@/pages/OCRWorksheetGenerator";
-import KnowledgeBase from "@/pages/KnowledgeBase";
-import KnowledgeBaseDetail from "@/pages/KnowledgeBaseDetail";
-import KnowledgeBaseEdit from "@/pages/KnowledgeBaseEdit";
-import Checkout from "@/pages/Checkout";
-import CheckoutSuccess from "@/pages/CheckoutSuccess";
-import CartCheckout from "@/pages/CartCheckout";
-import CartSuccess from "@/pages/CartSuccess";
-import MembershipSuccess from "@/pages/MembershipSuccess";
-import MembershipAgreementPage from "@/pages/MembershipAgreementPage";
-import { RegistrationPage } from "@/pages/RegistrationPage";
-import { ProgramsPage } from "@/pages/ProgramsPage";
-import ProgramsParentPage from "@/pages/ProgramsParentPage";
-import ParentClassDetailsPage from "@/pages/parents/ParentClassDetailsPage";
-import MyDocumentsPage from "@/pages/parent/MyDocumentsPage";
-import DocumentDetailPage from "@/pages/parent/DocumentDetailPage";
-import MyAssessmentsPage from "@/pages/parent/MyAssessmentsPage";
-import { SimpleClassesPage } from "./pages/SimpleClassesPage";
-import StaffInvitePage from "./pages/schools/StaffInvitePage";
-import StaffPositionsPage from "./pages/schools/StaffPositionsPage";
-import KnowledgeBaseCreationPage from "./pages/schools/KnowledgeBaseCreationPage";
-import FormBuilderPage from "./pages/schooladmin/FormBuilderPage";
-import FormEditorPage from "./pages/schooladmin/FormEditorPage";
-import PreviewFormPage from "./pages/schooladmin/PreviewFormPage";
-import SubmissionsPage from "./pages/schooladmin/SubmissionsPage";
-import DocumentManagementPage from "./pages/schooladmin/DocumentManagementPage";
-import AssessmentManagementPage from "./pages/schooladmin/AssessmentManagementPage";
-import CreditManagementPage from "./pages/schooladmin/CreditManagementPage";
-import FundraiserManagementPage from "./pages/schooladmin/FundraiserManagementPage";
-import StaffPermissionsPage from "./pages/schooladmin/StaffPermissionsPage";
-import LocationEnrollmentsPage from "./pages/schooladmin/LocationEnrollmentsPage";
-import RefundHistoryPage from "./pages/schooladmin/RefundHistoryPage";
-import FinancialReportsPage from "./pages/schooladmin/FinancialReportsPage";
-import FundraiserStorePage from "./pages/FundraiserStorePage";
-import FundraiserSuccessPage from "./pages/FundraiserSuccessPage";
-import DynamicFormPage from "./pages/DynamicFormPage";
-import ProductOrderFormPage from "./pages/ProductOrderFormPage";
-import ProductOrderPaymentPage from "./pages/ProductOrderPaymentPage";
-import OrderConfirmationPage from "./pages/OrderConfirmationPage";
-import RolesAndPermissionsPage from "@/pages/admin/RolesAndPermissionsPage";
-import RoleManagementPage from "@/pages/admin/RoleManagementPage";
-import FeaturesOverviewPage from "@/pages/admin/FeaturesOverviewPage";
-import SystemErrorsPage from "@/pages/admin/SystemErrorsPage";
-import VolunteerCreditsPage from "@/pages/admin/VolunteerCreditsPage";
-import ChildRegistrationPage from "@/pages/ChildRegistrationPage";
-import ChildRegistrationConfirmation from "@/pages/ChildRegistrationConfirmation";
-import ChildRegistrationSuccess from "@/pages/ChildRegistrationSuccess";
-import ChildrenPage from "@/pages/ChildrenPage";
-import ChildrenViewPage from "@/pages/children/ChildrenViewPage";
-import ChildProfilePage from "@/pages/children/ChildProfilePage";
-import ChildProfileEditPage from "@/pages/ChildProfileEditPage";
-import ChildEnrollmentsPage from "@/pages/children/ChildEnrollmentsPage";
-import ClassesUploadPage from "./pages/admin/ClassesUploadPage";
-import ClassCreationPage from "./pages/admin/ClassCreationPage";
-import ContactImportPage from "./pages/admin/ContactImportPage";
-import SchoolContactImportPage from "./pages/schools/ContactImportPage";
-import UsersPage from "./pages/schools/UsersPage";
-import ParentProfilePage from "./pages/schools/ParentProfilePage";
-import EducatorProfilePage from "./pages/schools/EducatorProfilePage";
-import StaffProfilePage from "./pages/schools/StaffProfilePage";
-import AdminProfilePage from "./pages/schools/AdminProfilePage";
-import ClassesPage from "./pages/ClassesPage";
-import CalendarPage from "./pages/CalendarPage";
-import ProgramsBrowseRedirect from "@/pages/ProgramsBrowseRedirect";
-import EnrollmentAssistantPage from "@/pages/EnrollmentAssistantPage";
-import AIInsightsDashboard from "@/pages/AIInsightsDashboard";
 import { SupportAssistantTrigger } from "@/components/AISupportAssistant";
-import SchoolRegistrationPage from "@/pages/SchoolRegistrationPage";
-import SchoolRegistrationConfirmationPage from "@/pages/SchoolRegistrationConfirmationPage";
-import SchoolLandingPage from "@/pages/SchoolLandingPage";
-import SchoolRegistrationFormPage from "@/pages/SchoolRegistrationFormPage";
-import RegistrationSuccessPage from "@/pages/RegistrationSuccessPage";
 import LogoutPage from "@/pages/LogoutPage";
 import AuthCallback from "@/pages/AuthCallback";
 import AcceptInvitationPage from "@/pages/AcceptInvitationPage";
 import AcceptEducatorInvitationPage from "./pages/AcceptEducatorInvitationPage";
-import BillingPage from "@/pages/BillingPage";
-import PaymentSuccess from "@/pages/PaymentSuccess";
-import PaymentHistoryPage from "@/pages/PaymentHistoryPage";
-import PlatformSubscriptionPlans from "@/pages/PaymentPlans";
-import ClassPaymentPlans from "@/pages/ClassPaymentPlans";
-import SettingsPage from "@/pages/SettingsPage";
-import NotificationsPage from "@/pages/NotificationsPage";
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
-import EducatorClassesPage from './pages/educator/EducatorClassesPage';
-import EducatorClassDetailsPage from './pages/educator/EducatorClassDetailsPage';
-import EducatorStudentsPage from './pages/educator/EducatorStudentsPage';
-import EducatorStudentDetailPage from './pages/educator/EducatorStudentDetailPage';
-import EducatorNotificationsPage from './pages/educator/EducatorNotificationsPage';
-import EducatorDashboardPage from './pages/educator/EducatorDashboard';
-import EducatorSchedulePage from './pages/educator/EducatorSchedulePage';
-import EducatorSettingsPage from './pages/educator/EducatorSettingsPage';
-import MyClassesPage from './pages/educator/MyClasses';
-import WeeklyCalendarPage from './pages/educator/WeeklyCalendar';
-import MyHoursPage from './pages/educator/MyHours';
-import ActiveSessionPage from './pages/educator/ActiveSession';
-import StartSessionPage from './pages/educator/StartSession';
-import EducatorAssessmentsPage from './pages/educator/EducatorAssessmentsPage';
 
 // Eagerly imported to avoid suspension errors with wouter's synchronous navigation
 import SchoolClassEnrollmentsPage from './pages/schools/ClassEnrollmentsPage';
@@ -134,6 +33,108 @@ import AdminClassEnrollmentsPage from './pages/admin/ClassEnrollmentsPage';
 import AnnouncementsPage from './pages/schools/AnnouncementsPage';
 import NotificationTrackingPage from './pages/schools/NotificationTrackingPage';
 import SchoolCalendarPage from './pages/schools/CalendarPage';
+
+// Lazy-loaded pages for code splitting
+const SchoolAdminLogin = lazy(() => import("@/pages/SchoolAdminLogin"));
+const Dashboard = lazy(() => import("@/pages/Dashboard"));
+const PaymentsPage = lazy(() => import("@/pages/PaymentsPage"));
+const SchedulePage = lazy(() => import("@/pages/SchedulePage"));
+const Curriculum = lazy(() => import("@/pages/Curriculum"));
+const CurriculumDetail = lazy(() => import("@/pages/CurriculumDetail"));
+const Lessons = lazy(() => import("@/pages/Lessons"));
+const AILessonGenerator = lazy(() => import("@/pages/AILessonGenerator"));
+const AIWorksheetGenerator = lazy(() => import("@/pages/AIWorksheetGenerator"));
+const OCRWorksheetGenerator = lazy(() => import("@/pages/OCRWorksheetGenerator"));
+const KnowledgeBase = lazy(() => import("@/pages/KnowledgeBase"));
+const KnowledgeBaseDetail = lazy(() => import("@/pages/KnowledgeBaseDetail"));
+const KnowledgeBaseEdit = lazy(() => import("@/pages/KnowledgeBaseEdit"));
+const Checkout = lazy(() => import("@/pages/Checkout"));
+const CheckoutSuccess = lazy(() => import("@/pages/CheckoutSuccess"));
+const CartCheckout = lazy(() => import("@/pages/CartCheckout"));
+const CartSuccess = lazy(() => import("@/pages/CartSuccess"));
+const MembershipSuccess = lazy(() => import("@/pages/MembershipSuccess"));
+const MembershipAgreementPage = lazy(() => import("@/pages/MembershipAgreementPage"));
+const RegistrationPage = lazy(() => import("@/pages/RegistrationPage").then(m => ({ default: m.RegistrationPage })));
+const ProgramsParentPage = lazy(() => import("@/pages/ProgramsParentPage"));
+const ParentClassDetailsPage = lazy(() => import("@/pages/parents/ParentClassDetailsPage"));
+const MyDocumentsPage = lazy(() => import("@/pages/parent/MyDocumentsPage"));
+const DocumentDetailPage = lazy(() => import("@/pages/parent/DocumentDetailPage"));
+const MyAssessmentsPage = lazy(() => import("@/pages/parent/MyAssessmentsPage"));
+const SimpleClassesPage = lazy(() => import("./pages/SimpleClassesPage").then(m => ({ default: m.SimpleClassesPage })));
+const StaffInvitePage = lazy(() => import("./pages/schools/StaffInvitePage"));
+const StaffPositionsPage = lazy(() => import("./pages/schools/StaffPositionsPage"));
+const KnowledgeBaseCreationPage = lazy(() => import("./pages/schools/KnowledgeBaseCreationPage"));
+const FormBuilderPage = lazy(() => import("./pages/schooladmin/FormBuilderPage"));
+const FormEditorPage = lazy(() => import("./pages/schooladmin/FormEditorPage"));
+const PreviewFormPage = lazy(() => import("./pages/schooladmin/PreviewFormPage"));
+const SubmissionsPage = lazy(() => import("./pages/schooladmin/SubmissionsPage"));
+const DocumentManagementPage = lazy(() => import("./pages/schooladmin/DocumentManagementPage"));
+const AssessmentManagementPage = lazy(() => import("./pages/schooladmin/AssessmentManagementPage"));
+const CreditManagementPage = lazy(() => import("./pages/schooladmin/CreditManagementPage"));
+const FundraiserManagementPage = lazy(() => import("./pages/schooladmin/FundraiserManagementPage"));
+const StaffPermissionsPage = lazy(() => import("./pages/schooladmin/StaffPermissionsPage"));
+const LocationEnrollmentsPage = lazy(() => import("./pages/schooladmin/LocationEnrollmentsPage"));
+const RefundHistoryPage = lazy(() => import("./pages/schooladmin/RefundHistoryPage"));
+const FinancialReportsPage = lazy(() => import("./pages/schooladmin/FinancialReportsPage"));
+const FundraiserStorePage = lazy(() => import("./pages/FundraiserStorePage"));
+const FundraiserSuccessPage = lazy(() => import("./pages/FundraiserSuccessPage"));
+const DynamicFormPage = lazy(() => import("./pages/DynamicFormPage"));
+const ProductOrderFormPage = lazy(() => import("./pages/ProductOrderFormPage"));
+const ProductOrderPaymentPage = lazy(() => import("./pages/ProductOrderPaymentPage"));
+const OrderConfirmationPage = lazy(() => import("./pages/OrderConfirmationPage"));
+const RolesAndPermissionsPage = lazy(() => import("@/pages/admin/RolesAndPermissionsPage"));
+const RoleManagementPage = lazy(() => import("@/pages/admin/RoleManagementPage"));
+const FeaturesOverviewPage = lazy(() => import("@/pages/admin/FeaturesOverviewPage"));
+const SystemErrorsPage = lazy(() => import("@/pages/admin/SystemErrorsPage"));
+const VolunteerCreditsPage = lazy(() => import("@/pages/admin/VolunteerCreditsPage"));
+const ChildRegistrationPage = lazy(() => import("@/pages/ChildRegistrationPage"));
+const ChildRegistrationConfirmation = lazy(() => import("@/pages/ChildRegistrationConfirmation"));
+const ChildRegistrationSuccess = lazy(() => import("@/pages/ChildRegistrationSuccess"));
+const ChildrenPage = lazy(() => import("@/pages/ChildrenPage"));
+const ChildrenViewPage = lazy(() => import("@/pages/children/ChildrenViewPage"));
+const ChildProfilePage = lazy(() => import("@/pages/children/ChildProfilePage"));
+const ChildProfileEditPage = lazy(() => import("@/pages/ChildProfileEditPage"));
+const ChildEnrollmentsPage = lazy(() => import("@/pages/children/ChildEnrollmentsPage"));
+const ClassesUploadPage = lazy(() => import("./pages/admin/ClassesUploadPage"));
+const ClassCreationPage = lazy(() => import("./pages/admin/ClassCreationPage"));
+const ContactImportPage = lazy(() => import("./pages/admin/ContactImportPage"));
+const SchoolContactImportPage = lazy(() => import("./pages/schools/ContactImportPage"));
+const UsersPage = lazy(() => import("./pages/schools/UsersPage"));
+const ParentProfilePage = lazy(() => import("./pages/schools/ParentProfilePage"));
+const EducatorProfilePage = lazy(() => import("./pages/schools/EducatorProfilePage"));
+const StaffProfilePage = lazy(() => import("./pages/schools/StaffProfilePage"));
+const AdminProfilePage = lazy(() => import("./pages/schools/AdminProfilePage"));
+const ClassesPage = lazy(() => import("./pages/ClassesPage"));
+const CalendarPage = lazy(() => import("./pages/CalendarPage"));
+const ProgramsBrowseRedirect = lazy(() => import("@/pages/ProgramsBrowseRedirect"));
+const EnrollmentAssistantPage = lazy(() => import("@/pages/EnrollmentAssistantPage"));
+const AIInsightsDashboard = lazy(() => import("@/pages/AIInsightsDashboard"));
+const SchoolRegistrationPage = lazy(() => import("@/pages/SchoolRegistrationPage"));
+const SchoolRegistrationConfirmationPage = lazy(() => import("@/pages/SchoolRegistrationConfirmationPage"));
+const SchoolLandingPage = lazy(() => import("@/pages/SchoolLandingPage"));
+const SchoolRegistrationFormPage = lazy(() => import("@/pages/SchoolRegistrationFormPage"));
+const RegistrationSuccessPage = lazy(() => import("@/pages/RegistrationSuccessPage"));
+const BillingPage = lazy(() => import("@/pages/BillingPage"));
+const PaymentSuccess = lazy(() => import("@/pages/PaymentSuccess"));
+const PaymentHistoryPage = lazy(() => import("@/pages/PaymentHistoryPage"));
+const PlatformSubscriptionPlans = lazy(() => import("@/pages/PaymentPlans"));
+const ClassPaymentPlans = lazy(() => import("@/pages/ClassPaymentPlans"));
+const SettingsPage = lazy(() => import("@/pages/SettingsPage"));
+const NotificationsPage = lazy(() => import("@/pages/NotificationsPage"));
+const EducatorClassesPage = lazy(() => import('./pages/educator/EducatorClassesPage'));
+const EducatorClassDetailsPage = lazy(() => import('./pages/educator/EducatorClassDetailsPage'));
+const EducatorStudentsPage = lazy(() => import('./pages/educator/EducatorStudentsPage'));
+const EducatorStudentDetailPage = lazy(() => import('./pages/educator/EducatorStudentDetailPage'));
+const EducatorNotificationsPage = lazy(() => import('./pages/educator/EducatorNotificationsPage'));
+const EducatorDashboardPage = lazy(() => import('./pages/educator/EducatorDashboard'));
+const EducatorSchedulePage = lazy(() => import('./pages/educator/EducatorSchedulePage'));
+const EducatorSettingsPage = lazy(() => import('./pages/educator/EducatorSettingsPage'));
+const MyClassesPage = lazy(() => import('./pages/educator/MyClasses'));
+const WeeklyCalendarPage = lazy(() => import('./pages/educator/WeeklyCalendar'));
+const MyHoursPage = lazy(() => import('./pages/educator/MyHours'));
+const ActiveSessionPage = lazy(() => import('./pages/educator/ActiveSession'));
+const StartSessionPage = lazy(() => import('./pages/educator/StartSession'));
+const EducatorAssessmentsPage = lazy(() => import('./pages/educator/EducatorAssessmentsPage'));
 
 const CallbackPage = () => {
   const { isAuthenticated } = useAuth();
@@ -166,31 +167,7 @@ const Redirect = ({ to }: { to: string }) => {
 };
 import NotFound from "@/pages/not-found";
 import AuthLogin from "@/pages/AuthLogin";
-import RegistrationLandingPage from "@/pages/RegistrationLandingPage";
-import RegistrationPaymentPage from "@/pages/RegistrationPaymentPage";
-
-// School Admin pages
 import MySchoolPage from "./pages/schools/MySchoolPage";
-import SchoolEditPage from "./pages/schools/SchoolEditPage";
-import SchoolClassesPage from "./pages/schools/ClassesPage";
-import SchoolClassCreationPage from "./pages/schools/SchoolClassCreationPage";
-import SchoolClassDetailsPage from "./pages/schools/SchoolClassDetailsPage";
-import ClassRosterPage from "./pages/schools/ClassRosterPage";
-import StaffPage from "./pages/schools/StaffPage";
-import EducatorManagementPage from "./pages/schools/EducatorManagementPage";
-import StaffHoursPage from "./pages/schools/StaffHoursPage";
-import StaffEditPage from "./pages/schools/StaffEditPage";
-import StudentsPage from "./pages/schools/StudentsPage";
-import StudentDetailPage from "./pages/schools/StudentDetailPage";
-import StudentRegistrationPage from "./pages/schools/StudentRegistrationPage";
-import StudentClassesPage from "./pages/schools/StudentClassesPage";
-import KnowledgeBasePage from "./pages/schools/KnowledgeBasePage";
-import KnowledgeBaseDetailsPage from "./pages/schools/KnowledgeBaseDetailsPage";
-import SchoolSettingsPage from "./pages/schools/SchoolSettingsPage";
-import DiscountsPage from "./pages/schools/DiscountsPage";
-import MembershipManagementPage from "./pages/schools/MembershipManagementPage";
-import ManualPaymentEntryPage from "./pages/ManualPaymentEntryPage";
-import MarketingLinksPage from '@/pages/MarketingLinksPage';
 import ParentDashboard from "./components/dashboards/ParentDashboard";
 import ParentAppShell from "./components/layout/ParentAppShell";
 import EducatorAppShell from "./components/layout/EducatorAppShell";
@@ -200,19 +177,43 @@ import EducatorDashboard from "./components/dashboards/EducatorDashboard";
 import AppShell from "./components/layout/AppShell";
 import SchoolAdminLayout from "./components/layout/SchoolAdminLayout";
 import AIStatusPanel from "./components/AIStatusPanel";
-import AllSchoolsPage from "./pages/superadmin/AllSchoolsPage";
-import SchoolDetailsPage from "./pages/superadmin/SchoolDetailsPage";
-import SuperAdminSchoolEditPage from "./pages/superadmin/SchoolEditPage";
-import InvitationsPage from "./pages/superadmin/InvitationsPage";
-import SchoolApplicationsPage from './pages/superadmin/SchoolApplicationsPage';
-import SchoolApplicationPage from './pages/SchoolApplicationPage';
-import SchoolApplicationSuccessPage from './pages/SchoolApplicationSuccessPage';
-import SchoolApplicationStatusPage from './pages/SchoolApplicationStatusPage';
-import LocationManagementPage from "./pages/schools/LocationManagementPage";
-import CategoriesManagementPage from "./pages/schools/CategoriesManagementPage";
-import NotificationManagementPage from "@/pages/NotificationManagementPage";
-import DailyFlowsPage from "./pages/DailyFlows/DailyFlowsPage";
-import EnrollmentsAdminPage from "./pages/schools/EnrollmentsAdminPage";
+
+// Lazy-loaded pages for code splitting (second group)
+const RegistrationLandingPage = lazy(() => import("@/pages/RegistrationLandingPage"));
+const RegistrationPaymentPage = lazy(() => import("@/pages/RegistrationPaymentPage"));
+const SchoolEditPage = lazy(() => import("./pages/schools/SchoolEditPage"));
+const SchoolClassesPage = lazy(() => import("./pages/schools/ClassesPage"));
+const SchoolClassCreationPage = lazy(() => import("./pages/schools/SchoolClassCreationPage"));
+const SchoolClassDetailsPage = lazy(() => import("./pages/schools/SchoolClassDetailsPage"));
+const ClassRosterPage = lazy(() => import("./pages/schools/ClassRosterPage"));
+const StaffPage = lazy(() => import("./pages/schools/StaffPage"));
+const EducatorManagementPage = lazy(() => import("./pages/schools/EducatorManagementPage"));
+const StaffHoursPage = lazy(() => import("./pages/schools/StaffHoursPage"));
+const StaffEditPage = lazy(() => import("./pages/schools/StaffEditPage"));
+const StudentsPage = lazy(() => import("./pages/schools/StudentsPage"));
+const StudentDetailPage = lazy(() => import("./pages/schools/StudentDetailPage"));
+const StudentRegistrationPage = lazy(() => import("./pages/schools/StudentRegistrationPage"));
+const StudentClassesPage = lazy(() => import("./pages/schools/StudentClassesPage"));
+const KnowledgeBasePage = lazy(() => import("./pages/schools/KnowledgeBasePage"));
+const KnowledgeBaseDetailsPage = lazy(() => import("./pages/schools/KnowledgeBaseDetailsPage"));
+const SchoolSettingsPage = lazy(() => import("./pages/schools/SchoolSettingsPage"));
+const DiscountsPage = lazy(() => import("./pages/schools/DiscountsPage"));
+const MembershipManagementPage = lazy(() => import("./pages/schools/MembershipManagementPage"));
+const ManualPaymentEntryPage = lazy(() => import("./pages/ManualPaymentEntryPage"));
+const MarketingLinksPage = lazy(() => import('@/pages/MarketingLinksPage'));
+const AllSchoolsPage = lazy(() => import("./pages/superadmin/AllSchoolsPage"));
+const SchoolDetailsPage = lazy(() => import("./pages/superadmin/SchoolDetailsPage"));
+const SuperAdminSchoolEditPage = lazy(() => import("./pages/superadmin/SchoolEditPage"));
+const InvitationsPage = lazy(() => import("./pages/superadmin/InvitationsPage"));
+const SchoolApplicationsPage = lazy(() => import('./pages/superadmin/SchoolApplicationsPage'));
+const SchoolApplicationPage = lazy(() => import('./pages/SchoolApplicationPage'));
+const SchoolApplicationSuccessPage = lazy(() => import('./pages/SchoolApplicationSuccessPage'));
+const SchoolApplicationStatusPage = lazy(() => import('./pages/SchoolApplicationStatusPage'));
+const LocationManagementPage = lazy(() => import("./pages/schools/LocationManagementPage"));
+const CategoriesManagementPage = lazy(() => import("./pages/schools/CategoriesManagementPage"));
+const NotificationManagementPage = lazy(() => import("@/pages/NotificationManagementPage"));
+const DailyFlowsPage = lazy(() => import("./pages/DailyFlows/DailyFlowsPage"));
+const EnrollmentsAdminPage = lazy(() => import("./pages/schools/EnrollmentsAdminPage"));
 
 function DashboardRouter() {
   const { user } = useAuth();
@@ -403,6 +404,7 @@ function Router() {
   }
 
   return (
+    <React.Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>}>
     <Switch>
       <Route path="/auth/login" component={AuthLogin} />
       <Route path="/logout" component={LogoutPage} />
@@ -480,14 +482,7 @@ function Router() {
       <Route path="/billing">
         <Redirect to="/payments" />
       </Route>
-      <Route path="/payment-plans" component={() => {
-            const PaymentPlansPage = React.lazy(() => import('./pages/PaymentPlansPage'));
-            return (
-              <React.Suspense fallback={<div>Loading...</div>}>
-                <PaymentPlansPage />
-              </React.Suspense>
-            );
-          }} />
+      <Route path="/payment-plans" component={PlatformSubscriptionPlans} />
 
           <Route path="/class-payment-plans/:classId">
             {(params) => {
@@ -624,7 +619,9 @@ function Router() {
       <Route path="/school-admin/location-enrollments" component={LocationEnrollmentsPage} />
       <Route path="/school-admin/refunds" component={RefundHistoryPage} />
       <Route path="/school-admin/financial-reports" component={FinancialReportsPage} />
-      <Route path="/fundraiser/:campaignId/:familySlug" component={FundraiserStorePage} />
+      <Route path="/fundraiser/:campaignId/:familySlug">
+        {(params) => <FundraiserStorePage campaignId={params?.campaignId || ''} familySlug={params?.familySlug || ''} />}
+      </Route>
       <Route path="/fundraiser/success" component={FundraiserSuccessPage} />
       <Route path="/forms/:slug" component={DynamicFormPage} />
       <Route path="/product-order/:slug" component={ProductOrderFormPage} />
@@ -714,6 +711,7 @@ function Router() {
 
       <Route component={NotFound} />
     </Switch>
+    </React.Suspense>
   );
 }
 
