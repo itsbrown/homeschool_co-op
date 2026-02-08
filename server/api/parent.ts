@@ -976,6 +976,79 @@ router.get('/credits', supabaseAuth, async (req: any, res) => {
   }
 });
 
+// Get class roster for a class where parent has an enrolled child (privacy-safe)
+router.get('/class-roster/:classId', supabaseAuth, async (req: any, res) => {
+  try {
+    const userEmail = req.auth?.email || req.user?.email;
+    if (!userEmail) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    const classId = parseInt(req.params.classId);
+    if (isNaN(classId)) {
+      return res.status(400).json({ message: 'Invalid class ID' });
+    }
+
+    const user = await storage.getUserByEmail(userEmail);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const directChildren = await storage.getChildrenByParentEmail(userEmail);
+    const guardianChildren = await storage.getChildrenByGuardianUserId(user.id);
+    const directIds = new Set(directChildren.map(c => c.id));
+    const allChildren = [
+      ...directChildren,
+      ...guardianChildren.filter(c => !directIds.has(c.id))
+    ];
+
+    if (allChildren.length === 0) {
+      return res.status(403).json({ message: 'No children found for this parent' });
+    }
+
+    const childIds = allChildren.map(c => c.id);
+    const enrollments = await storage.getEnrollmentsByChildIds(childIds);
+    const hasEnrolledChild = enrollments.some((e: any) =>
+      (e.classId === classId || e.marketplaceClassId === classId) &&
+      ['enrolled', 'pending_payment', 'completed'].includes(e.status)
+    );
+
+    if (!hasEnrolledChild) {
+      return res.status(403).json({ message: 'You do not have a child enrolled in this class' });
+    }
+
+    const allEnrollments = await storage.getAllEnrollments();
+    const classEnrollments = allEnrollments.filter((e: any) =>
+      (e.classId === classId || e.marketplaceClassId === classId) &&
+      ['enrolled', 'pending_payment', 'completed'].includes(e.status)
+    );
+
+    const seenChildIds = new Set<number>();
+    const students = await Promise.all(classEnrollments.map(async (e: any) => {
+      if (seenChildIds.has(e.childId)) return null;
+      seenChildIds.add(e.childId);
+      const child = await storage.getChildById(e.childId);
+      if (!child) return null;
+      return {
+        firstName: child.firstName,
+        lastInitial: child.lastName ? child.lastName.charAt(0).toUpperCase() + '.' : '',
+        gradeLevel: child.gradeLevel || null,
+      };
+    }));
+
+    const validStudents = students.filter(s => s !== null);
+    validStudents.sort((a: any, b: any) => a.firstName.localeCompare(b.firstName));
+
+    return res.status(200).json({
+      students: validStudents,
+      totalStudents: validStudents.length,
+    });
+  } catch (error: any) {
+    console.error('Error fetching parent class roster:', error);
+    return res.status(500).json({ message: 'Failed to fetch class roster' });
+  }
+});
+
 // Get payment receipts for the parent
 router.get('/payment-receipts', supabaseAuth, async (req: any, res) => {
   try {

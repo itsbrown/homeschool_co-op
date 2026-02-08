@@ -13,7 +13,8 @@ import {
   MapPin, 
   Users,
   DollarSign,
-  BookOpen
+  BookOpen,
+  GraduationCap
 } from "lucide-react";
 
 // Format currency - converts cents to dollars
@@ -337,6 +338,9 @@ export default function ParentClassDetailsPage() {
           </Card>
         )}
 
+        {/* Class Roster */}
+        <ClassRosterSection classId={classId} />
+
         {/* Enroll Now Button */}
         <div className="flex justify-end gap-3">
           <Button 
@@ -349,5 +353,85 @@ export default function ParentClassDetailsPage() {
         </div>
       </div>
     </ParentAppShell>
+  );
+}
+
+function ClassRosterSection({ classId }: { classId: string | undefined }) {
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ["/api/parent/class-roster", classId],
+    queryFn: async () => {
+      const token = localStorage.getItem('supabase_token');
+      const response = await fetch(`/api/parent/class-roster/${classId}`, {
+        headers: {
+          ...(token && { Authorization: `Bearer ${token}` })
+        },
+        credentials: "include"
+      });
+      if (!response.ok) {
+        if (response.status === 403) return null;
+        throw new Error("Failed to fetch roster");
+      }
+      return response.json();
+    },
+    enabled: !!classId,
+  });
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Users className="h-5 w-5" />
+            Class Roster
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2">
+            <Skeleton className="h-6 w-48" />
+            <Skeleton className="h-6 w-40" />
+            <Skeleton className="h-6 w-44" />
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (isError || !data || !data.students || data.students.length === 0) {
+    return null;
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Users className="h-5 w-5" />
+          Class Roster
+        </CardTitle>
+        <CardDescription>
+          {data.totalStudents} {data.totalStudents === 1 ? 'student' : 'students'} enrolled
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+          {data.students.map((student: any, index: number) => (
+            <div
+              key={index}
+              className="flex items-center gap-2 p-2 rounded-lg bg-gray-50 dark:bg-gray-800"
+              data-testid={`roster-student-${index}`}
+            >
+              <GraduationCap className="h-4 w-4 text-gray-400 flex-shrink-0" />
+              <span className="text-sm font-medium">
+                {student.firstName} {student.lastInitial}
+              </span>
+              {student.gradeLevel && (
+                <Badge variant="outline" className="text-xs ml-auto">
+                  {student.gradeLevel}
+                </Badge>
+              )}
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
