@@ -131,9 +131,10 @@ export default function AttendanceManagementPage() {
     enabled: !!schoolId && activeTab === 'records',
   });
 
-  const { data: classes } = useQuery<any[]>({
+  const { data: classes } = useQuery<any>({
     queryKey: ['/api/school-admin/classes'],
     enabled: !!schoolId,
+    select: (data: any) => data?.items ?? [],
   });
 
   const handleGenerateQr = async (sessionId: number) => {
