@@ -34,7 +34,7 @@ const permissionUpdateLimiter = rateLimit({
   skip: (req: any) => !req.user?.id, // Skip rate limiting if no user (will be rejected by auth anyway)
 });
 import { sql, eq, and } from 'drizzle-orm';
-import { users, schools, userRoles, userLocations, locations, type InsertSchool, type UserRole } from '@shared/schema';
+import { users, schools, userRoles, userLocations, locations, classSessions, sessionAttendance, children, classes, type InsertSchool, type UserRole } from '@shared/schema';
 
 const router = Router();
 
@@ -7105,5 +7105,479 @@ router.get('/features', supabaseAuth, async (req: any, res) => {
     res.status(500).json({ error: 'Failed to fetch school features' });
   }
 });
+
+// ==========================================
+// ATTENDANCE MANAGEMENT ENDPOINTS
+// ==========================================
+
+// GET /api/school-admin/attendance/sessions - Get class sessions with educator info and punctuality
+router.get('/attendance/sessions', supabaseAuth, async (req: any, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const userRolesList = await storage.getUserRolesByUserId(userId);
+    const adminRole = userRolesList.find(r => r.role === 'schoolAdmin' || r.role === 'superAdmin');
+
+    if (!adminRole?.schoolId) {
+      return res.status(403).json({ error: 'No school admin role found' });
+    }
+
+    const { startDate, endDate, classId, educatorId, status } = req.query;
+    const db = await getDb();
+
+    const conditions: any[] = [eq(classSessions.schoolId, adminRole.schoolId)];
+
+    if (startDate) {
+      conditions.push(sql`${classSessions.scheduledDate} >= ${startDate}`);
+    }
+    if (endDate) {
+      conditions.push(sql`${classSessions.scheduledDate} <= ${endDate}`);
+    }
+    if (classId) {
+      conditions.push(eq(classSessions.classId, Number(classId)));
+    }
+    if (educatorId) {
+      conditions.push(eq(classSessions.educatorId, Number(educatorId)));
+    }
+    if (status) {
+      conditions.push(sql`${classSessions.status} = ${status}`);
+    }
+
+    const results = await db
+      .select({
+        id: classSessions.id,
+        classId: classSessions.classId,
+        educatorId: classSessions.educatorId,
+        scheduledDate: classSessions.scheduledDate,
+        scheduledStartTime: classSessions.scheduledStartTime,
+        scheduledEndTime: classSessions.scheduledEndTime,
+        actualStartTime: classSessions.actualStartTime,
+        actualEndTime: classSessions.actualEndTime,
+        status: classSessions.status,
+        notes: classSessions.notes,
+        checkInLocationVerified: classSessions.checkInLocationVerified,
+        className: classes.title,
+        educatorFirstName: users.firstName,
+        educatorLastName: users.lastName,
+      })
+      .from(classSessions)
+      .leftJoin(classes, eq(classSessions.classId, classes.id))
+      .leftJoin(users, eq(classSessions.educatorId, users.id))
+      .where(and(...conditions))
+      .orderBy(sql`${classSessions.scheduledDate} DESC, ${classSessions.scheduledStartTime} DESC`);
+
+    const sessions = results.map((row: any) => {
+      let punctuality: string | null = null;
+
+      if (row.actualStartTime) {
+        const scheduledDateTime = new Date(`${row.scheduledDate}T${row.scheduledStartTime}:00`);
+        const actualTime = new Date(row.actualStartTime);
+        const delayMinutes = (actualTime.getTime() - scheduledDateTime.getTime()) / (1000 * 60);
+
+        if (delayMinutes <= 5) {
+          punctuality = 'on_time';
+        } else if (delayMinutes <= 15) {
+          punctuality = 'slightly_late';
+        } else {
+          punctuality = 'late';
+        }
+      }
+
+      return {
+        id: row.id,
+        classId: row.classId,
+        educatorId: row.educatorId,
+        scheduledDate: row.scheduledDate,
+        scheduledStartTime: row.scheduledStartTime,
+        scheduledEndTime: row.scheduledEndTime,
+        actualStartTime: row.actualStartTime,
+        actualEndTime: row.actualEndTime,
+        status: row.status,
+        notes: row.notes,
+        checkInLocationVerified: row.checkInLocationVerified,
+        className: row.className || 'Unknown Class',
+        educatorName: [row.educatorFirstName, row.educatorLastName].filter(Boolean).join(' ') || 'Unknown',
+        punctuality,
+      };
+    });
+
+    res.json(sessions);
+  } catch (error) {
+    console.error('[Attendance] Error fetching sessions:', error);
+    res.status(500).json({ error: 'Failed to fetch attendance sessions' });
+  }
+});
+
+// GET /api/school-admin/attendance/records - Get student attendance records
+router.get('/attendance/records', supabaseAuth, async (req: any, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const userRolesList = await storage.getUserRolesByUserId(userId);
+    const adminRole = userRolesList.find(r => r.role === 'schoolAdmin' || r.role === 'superAdmin');
+
+    if (!adminRole?.schoolId) {
+      return res.status(403).json({ error: 'No school admin role found' });
+    }
+
+    const { startDate, endDate, classId, childId, status } = req.query;
+    const db = await getDb();
+
+    const conditions: any[] = [eq(sessionAttendance.schoolId, adminRole.schoolId)];
+
+    if (startDate) {
+      conditions.push(sql`${classSessions.scheduledDate} >= ${startDate}`);
+    }
+    if (endDate) {
+      conditions.push(sql`${classSessions.scheduledDate} <= ${endDate}`);
+    }
+    if (classId) {
+      conditions.push(eq(classSessions.classId, Number(classId)));
+    }
+    if (childId) {
+      conditions.push(eq(sessionAttendance.childId, Number(childId)));
+    }
+    if (status) {
+      conditions.push(sql`${sessionAttendance.status} = ${status}`);
+    }
+
+    const results = await db
+      .select({
+        id: sessionAttendance.id,
+        status: sessionAttendance.status,
+        checkInTime: sessionAttendance.checkInTime,
+        checkOutTime: sessionAttendance.checkOutTime,
+        tardyMinutes: sessionAttendance.tardyMinutes,
+        notes: sessionAttendance.notes,
+        locationVerified: sessionAttendance.locationVerified,
+        childFirstName: children.firstName,
+        childLastName: children.lastName,
+        className: classes.title,
+        sessionDate: classSessions.scheduledDate,
+        educatorFirstName: users.firstName,
+        educatorLastName: users.lastName,
+      })
+      .from(sessionAttendance)
+      .innerJoin(classSessions, eq(sessionAttendance.sessionId, classSessions.id))
+      .leftJoin(children, eq(sessionAttendance.childId, children.id))
+      .leftJoin(classes, eq(classSessions.classId, classes.id))
+      .leftJoin(users, eq(classSessions.educatorId, users.id))
+      .where(and(...conditions))
+      .orderBy(sql`${classSessions.scheduledDate} DESC`);
+
+    const records = results.map((row: any) => ({
+      id: row.id,
+      status: row.status,
+      checkInTime: row.checkInTime,
+      checkOutTime: row.checkOutTime,
+      tardyMinutes: row.tardyMinutes,
+      notes: row.notes,
+      locationVerified: row.locationVerified,
+      childName: [row.childFirstName, row.childLastName].filter(Boolean).join(' ') || 'Unknown',
+      className: row.className || 'Unknown Class',
+      sessionDate: row.sessionDate,
+      educatorName: [row.educatorFirstName, row.educatorLastName].filter(Boolean).join(' ') || 'Unknown',
+    }));
+
+    res.json(records);
+  } catch (error) {
+    console.error('[Attendance] Error fetching records:', error);
+    res.status(500).json({ error: 'Failed to fetch attendance records' });
+  }
+});
+
+// GET /api/school-admin/attendance/summary - Get dashboard summary stats
+router.get('/attendance/summary', supabaseAuth, async (req: any, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const userRolesList = await storage.getUserRolesByUserId(userId);
+    const adminRole = userRolesList.find(r => r.role === 'schoolAdmin' || r.role === 'superAdmin');
+
+    if (!adminRole?.schoolId) {
+      return res.status(403).json({ error: 'No school admin role found' });
+    }
+
+    const { startDate, endDate } = req.query;
+    const db = await getDb();
+    const schoolId = adminRole.schoolId;
+
+    const sessionConditions: any[] = [eq(classSessions.schoolId, schoolId)];
+    const attendanceConditions: any[] = [eq(sessionAttendance.schoolId, schoolId)];
+
+    if (startDate) {
+      sessionConditions.push(sql`${classSessions.scheduledDate} >= ${startDate}`);
+      attendanceConditions.push(sql`${classSessions.scheduledDate} >= ${startDate}`);
+    }
+    if (endDate) {
+      sessionConditions.push(sql`${classSessions.scheduledDate} <= ${endDate}`);
+      attendanceConditions.push(sql`${classSessions.scheduledDate} <= ${endDate}`);
+    }
+
+    const today = new Date().toISOString().split('T')[0];
+
+    const [totalSessionsResult] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(classSessions)
+      .where(and(...sessionConditions));
+
+    const [sessionsTodayResult] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(classSessions)
+      .where(and(eq(classSessions.schoolId, schoolId), sql`${classSessions.scheduledDate} = ${today}`));
+
+    const [activeSessionsResult] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(classSessions)
+      .where(and(eq(classSessions.schoolId, schoolId), sql`${classSessions.status} = 'in_progress'`));
+
+    const [totalRecordsResult] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(sessionAttendance)
+      .innerJoin(classSessions, eq(sessionAttendance.sessionId, classSessions.id))
+      .where(and(...attendanceConditions));
+
+    const [presentLateResult] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(sessionAttendance)
+      .innerJoin(classSessions, eq(sessionAttendance.sessionId, classSessions.id))
+      .where(and(
+        ...attendanceConditions,
+        sql`${sessionAttendance.status} IN ('present', 'late')`
+      ));
+
+    const totalRecords = totalRecordsResult?.count || 0;
+    const presentLateCount = presentLateResult?.count || 0;
+    const overallAttendanceRate = totalRecords > 0 ? Math.round((presentLateCount / totalRecords) * 10000) / 100 : 0;
+
+    const schoolData = await db
+      .select({ absenteeismThresholdPercent: schools.absenteeismThresholdPercent })
+      .from(schools)
+      .where(eq(schools.id, schoolId))
+      .limit(1);
+
+    const absenteeismThreshold = schoolData[0]?.absenteeismThresholdPercent || 10;
+
+    const childAttendanceStats = await db
+      .select({
+        childId: sessionAttendance.childId,
+        childFirstName: children.firstName,
+        childLastName: children.lastName,
+        totalSessions: sql<number>`count(*)::int`,
+        absences: sql<number>`count(*) FILTER (WHERE ${sessionAttendance.status} = 'absent')::int`,
+      })
+      .from(sessionAttendance)
+      .innerJoin(classSessions, eq(sessionAttendance.sessionId, classSessions.id))
+      .leftJoin(children, eq(sessionAttendance.childId, children.id))
+      .where(and(...attendanceConditions))
+      .groupBy(sessionAttendance.childId, children.firstName, children.lastName);
+
+    const chronicAbsentees = childAttendanceStats
+      .filter((s: any) => s.totalSessions >= 5)
+      .map((s: any) => {
+        const attendanceRate = Math.round(((s.totalSessions - s.absences) / s.totalSessions) * 10000) / 100;
+        return {
+          childId: s.childId,
+          childName: [s.childFirstName, s.childLastName].filter(Boolean).join(' ') || 'Unknown',
+          totalSessions: s.totalSessions,
+          absences: s.absences,
+          attendanceRate,
+        };
+      })
+      .filter((s: any) => s.attendanceRate < (100 - absenteeismThreshold));
+
+    const educatorStats = await db
+      .select({
+        educatorId: classSessions.educatorId,
+        educatorFirstName: users.firstName,
+        educatorLastName: users.lastName,
+        totalSessions: sql<number>`count(*)::int`,
+        onTime: sql<number>`count(*) FILTER (WHERE ${classSessions.actualStartTime} IS NOT NULL AND EXTRACT(EPOCH FROM (${classSessions.actualStartTime} - (${classSessions.scheduledDate}::date + ${classSessions.scheduledStartTime}::time))) / 60 <= 5)::int`,
+        late: sql<number>`count(*) FILTER (WHERE ${classSessions.actualStartTime} IS NOT NULL AND EXTRACT(EPOCH FROM (${classSessions.actualStartTime} - (${classSessions.scheduledDate}::date + ${classSessions.scheduledStartTime}::time))) / 60 > 5)::int`,
+        avgDelayMinutes: sql<number>`COALESCE(AVG(CASE WHEN ${classSessions.actualStartTime} IS NOT NULL THEN GREATEST(EXTRACT(EPOCH FROM (${classSessions.actualStartTime} - (${classSessions.scheduledDate}::date + ${classSessions.scheduledStartTime}::time))) / 60, 0) END)::numeric(10,1), 0)`,
+      })
+      .from(classSessions)
+      .leftJoin(users, eq(classSessions.educatorId, users.id))
+      .where(and(...sessionConditions))
+      .groupBy(classSessions.educatorId, users.firstName, users.lastName);
+
+    const educatorPunctuality = educatorStats.map((e: any) => ({
+      educatorId: e.educatorId,
+      educatorName: [e.educatorFirstName, e.educatorLastName].filter(Boolean).join(' ') || 'Unknown',
+      totalSessions: e.totalSessions,
+      onTime: e.onTime,
+      late: e.late,
+      avgDelayMinutes: Number(e.avgDelayMinutes),
+    }));
+
+    res.json({
+      totalSessions: totalSessionsResult?.count || 0,
+      sessionsToday: sessionsTodayResult?.count || 0,
+      activeSessionsNow: activeSessionsResult?.count || 0,
+      overallAttendanceRate,
+      totalStudentRecords: totalRecords,
+      chronicAbsentees,
+      educatorPunctuality,
+    });
+  } catch (error) {
+    console.error('[Attendance] Error fetching summary:', error);
+    res.status(500).json({ error: 'Failed to fetch attendance summary' });
+  }
+});
+
+// GET /api/school-admin/attendance/export - Export attendance records as CSV
+router.get('/attendance/export', supabaseAuth, async (req: any, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const userRolesList = await storage.getUserRolesByUserId(userId);
+    const adminRole = userRolesList.find(r => r.role === 'schoolAdmin' || r.role === 'superAdmin');
+
+    if (!adminRole?.schoolId) {
+      return res.status(403).json({ error: 'No school admin role found' });
+    }
+
+    const { startDate, endDate, classId, childId, status } = req.query;
+    const db = await getDb();
+
+    const conditions: any[] = [eq(sessionAttendance.schoolId, adminRole.schoolId)];
+
+    if (startDate) {
+      conditions.push(sql`${classSessions.scheduledDate} >= ${startDate}`);
+    }
+    if (endDate) {
+      conditions.push(sql`${classSessions.scheduledDate} <= ${endDate}`);
+    }
+    if (classId) {
+      conditions.push(eq(classSessions.classId, Number(classId)));
+    }
+    if (childId) {
+      conditions.push(eq(sessionAttendance.childId, Number(childId)));
+    }
+    if (status) {
+      conditions.push(sql`${sessionAttendance.status} = ${status}`);
+    }
+
+    const results = await db
+      .select({
+        sessionDate: classSessions.scheduledDate,
+        className: classes.title,
+        childFirstName: children.firstName,
+        childLastName: children.lastName,
+        status: sessionAttendance.status,
+        checkInTime: sessionAttendance.checkInTime,
+        checkOutTime: sessionAttendance.checkOutTime,
+        tardyMinutes: sessionAttendance.tardyMinutes,
+        locationVerified: sessionAttendance.locationVerified,
+        notes: sessionAttendance.notes,
+        educatorFirstName: users.firstName,
+        educatorLastName: users.lastName,
+      })
+      .from(sessionAttendance)
+      .innerJoin(classSessions, eq(sessionAttendance.sessionId, classSessions.id))
+      .leftJoin(children, eq(sessionAttendance.childId, children.id))
+      .leftJoin(classes, eq(classSessions.classId, classes.id))
+      .leftJoin(users, eq(classSessions.educatorId, users.id))
+      .where(and(...conditions))
+      .orderBy(sql`${classSessions.scheduledDate} DESC`);
+
+    const csvHeader = 'Date,Class,Student,Status,Check-In Time,Check-Out Time,Tardy Minutes,Location Verified,Notes,Educator\n';
+    const csvRows = results.map((row: any) => {
+      const escapeCsv = (val: any) => {
+        if (val === null || val === undefined) return '';
+        const str = String(val);
+        if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+          return `"${str.replace(/"/g, '""')}"`;
+        }
+        return str;
+      };
+
+      return [
+        escapeCsv(row.sessionDate),
+        escapeCsv(row.className || 'Unknown Class'),
+        escapeCsv([row.childFirstName, row.childLastName].filter(Boolean).join(' ') || 'Unknown'),
+        escapeCsv(row.status),
+        escapeCsv(row.checkInTime ? new Date(row.checkInTime).toISOString() : ''),
+        escapeCsv(row.checkOutTime ? new Date(row.checkOutTime).toISOString() : ''),
+        escapeCsv(row.tardyMinutes ?? ''),
+        escapeCsv(row.locationVerified != null ? (row.locationVerified ? 'Yes' : 'No') : ''),
+        escapeCsv(row.notes || ''),
+        escapeCsv([row.educatorFirstName, row.educatorLastName].filter(Boolean).join(' ') || 'Unknown'),
+      ].join(',');
+    }).join('\n');
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename=attendance-export.csv');
+    res.send(csvHeader + csvRows);
+  } catch (error) {
+    console.error('[Attendance] Error exporting records:', error);
+    res.status(500).json({ error: 'Failed to export attendance records' });
+  }
+});
+
+// POST /api/school-admin/sessions/:sessionId/generate-qr - Generate QR token for a session
+router.post('/sessions/:sessionId/generate-qr', supabaseAuth, async (req: any, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const userRolesList = await storage.getUserRolesByUserId(userId);
+    const adminRole = userRolesList.find(r => r.role === 'schoolAdmin' || r.role === 'superAdmin');
+
+    if (!adminRole?.schoolId) {
+      return res.status(403).json({ error: 'No school admin role found' });
+    }
+
+    const sessionId = Number(req.params.sessionId);
+    if (isNaN(sessionId)) {
+      return res.status(400).json({ error: 'Invalid session ID' });
+    }
+
+    const db = await getDb();
+
+    const [session] = await db
+      .select()
+      .from(classSessions)
+      .where(and(eq(classSessions.id, sessionId), eq(classSessions.schoolId, adminRole.schoolId)))
+      .limit(1);
+
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found or does not belong to your school' });
+    }
+
+    const qrToken = crypto.randomBytes(32).toString('hex');
+
+    const endDateTime = new Date(`${session.scheduledDate}T${session.scheduledEndTime}:00`);
+    endDateTime.setMinutes(endDateTime.getMinutes() + 15);
+    const expiresAt = endDateTime;
+
+    await db
+      .update(classSessions)
+      .set({ qrToken, qrTokenExpiresAt: expiresAt })
+      .where(eq(classSessions.id, sessionId));
+
+    res.json({ qrToken, expiresAt: expiresAt.toISOString() });
+  } catch (error) {
+    console.error('[Attendance] Error generating QR token:', error);
+    res.status(500).json({ error: 'Failed to generate QR token' });
+  }
+});
+
+// NOTE: POST /api/educator/qr-checkin should be added to server/api/educator.ts, not here.
+// That endpoint would validate the QR token, check expiry, verify geolocation, and record attendance.
 
 export default router;

@@ -41,7 +41,8 @@ import {
   Building2,
   Wallet,
   FolderOpen,
-  ClipboardCheck
+  ClipboardCheck,
+  UserCheck
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -100,6 +101,7 @@ const adminNavGroups: NavGroup[] = [
     icon: ClipboardCheck,
     items: [
       { title: 'Assessments', href: '/school-admin/assessments', icon: ClipboardCheck },
+      { title: 'Attendance', href: '/school-admin/attendance', icon: UserCheck },
     ],
   },
   {

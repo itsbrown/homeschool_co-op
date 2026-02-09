@@ -131,3 +131,32 @@ Parents with multiple children can now pay all installments due on the same date
 - Follows immediate payment confirmation pattern: client calls confirm-combined after Stripe payment succeeds
 - Payment failure handler resets all combined payments from `processing` back to `pending`
 - UI falls back to non-grouped individual payment view if grouped endpoint fails
+
+### Attendance & Check-In Management (Implemented Feb 2026)
+Comprehensive attendance tracking with QR code check-in, geolocation verification, and educator punctuality monitoring.
+
+**Database:**
+- `schools` table: `latitude`, `longitude`, `geofenceRadiusMeters` (default 150m) for geofencing
+- `class_sessions` table: `qrToken`, `qrTokenExpiresAt`, `actualStartTime`, `actualEndTime`, `checkInLatitude`, `checkInLongitude`, `checkInLocationVerified` for session tracking
+- `session_attendance` table: `checkInLatitude`, `checkInLongitude`, `locationVerified`, `tardyMinutes` for student attendance with geolocation
+
+**School Admin Endpoints (mounted at `/api/school-admin`):**
+- `GET /attendance/sessions` - List sessions with educator punctuality, filters: classId, status, startDate, endDate
+- `GET /attendance/records` - Individual attendance records with filters
+- `GET /attendance/summary` - Dashboard: totals, average attendance rate, chronic absenteeism alerts, educator punctuality
+- `GET /attendance/export` - CSV export of attendance records
+- `POST /sessions/:sessionId/generate-qr` - Generate one-time QR token (expires at session end + 15min)
+
+**Educator Endpoint (mounted at `/api/educator`):**
+- `POST /qr-checkin` - Educator check-in via QR token with geolocation verification (Haversine distance)
+
+**Frontend:**
+- `AttendanceManagementPage` with 3 tabs: Summary (dashboard cards + chronic absenteeism + educator punctuality), Sessions (list with QR generation), Records (filterable + CSV export)
+- Route: `/school-admin/attendance`
+- Sidebar: Under "Academics" section with UserCheck icon
+
+**Architectural Notes:**
+- QR tokens are one-time use, cleared after check-in
+- Geolocation verification uses Haversine formula against school coordinates
+- Chronic absenteeism threshold configurable per school (default 10%)
+- Educator punctuality: on_time ≤5min, slightly_late ≤15min, late >15min

@@ -3,8 +3,11 @@ import { storage } from "../storage";
 import { supabaseAuth, requireEducatorRole } from "../middleware/supabase-auth";
 import { z } from "zod";
 import type { InsertClassSession, ClassSession, EducatorClassAssignment, InsertAuditLog, InsertSessionAttendance, SessionAttendance } from "@shared/schema";
+import { classSessions } from "@shared/schema";
 import { formatScheduleString } from "../utils/schedule";
 import { fileUploadService } from "../services/fileUploadService";
+import { getDb } from "../db";
+import { eq, isNull, and } from "drizzle-orm";
 
 const router = express.Router();
 
@@ -3200,5 +3203,112 @@ router.get('/notifications/history', async (req, res) => {
 });
 
 // ==================== END NOTIFICATION ENDPOINTS ====================
+
+// ==================== QR CODE CHECK-IN ====================
+
+function haversineDistanceMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371e3;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
+}
+
+router.post('/qr-checkin', async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: 'Authentication required' });
+
+    const schema = z.object({
+      qrToken: z.string(),
+      latitude: z.number().optional(),
+      longitude: z.number().optional(),
+    });
+
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid request body', details: parsed.error.errors });
+    }
+
+    const { qrToken, latitude, longitude } = parsed.data;
+
+    const db = await getDb();
+    const [session] = await db
+      .select()
+      .from(classSessions)
+      .where(eq(classSessions.qrToken, qrToken))
+      .limit(1);
+
+    if (!session) {
+      return res.status(404).json({ error: 'Invalid QR code token' });
+    }
+
+    if (session.qrTokenExpiresAt && new Date(session.qrTokenExpiresAt) < new Date()) {
+      return res.status(400).json({ error: 'QR code has expired' });
+    }
+
+    if (session.educatorId !== userId && session.substituteEducatorId !== userId) {
+      return res.status(403).json({ error: 'You are not authorized to check in to this session' });
+    }
+
+    if (session.status !== 'scheduled') {
+      return res.status(400).json({ error: `Cannot check in to a session with status '${session.status}'` });
+    }
+
+    let checkInLocationVerified: boolean | null = null;
+    const school = await storage.getSchool(session.schoolId);
+
+    if (school && school.latitude != null && school.longitude != null && latitude != null && longitude != null) {
+      const distance = haversineDistanceMeters(latitude, longitude, school.latitude, school.longitude);
+      const radius = school.geofenceRadiusMeters ?? 150;
+      checkInLocationVerified = distance <= radius;
+    }
+
+    const userRoles = await storage.getUserRolesByUserId(userId);
+    const hasRoleInSchool = userRoles.some((r: any) => r.schoolId === session.schoolId);
+    if (!hasRoleInSchool) {
+      return res.status(403).json({ error: 'You do not have access to this school' });
+    }
+
+    const now = new Date();
+    const updated = await db
+      .update(classSessions)
+      .set({
+        actualStartTime: now,
+        status: 'in_progress',
+        checkInLatitude: latitude ?? null,
+        checkInLongitude: longitude ?? null,
+        checkInLocationVerified,
+        qrToken: null,
+        qrTokenExpiresAt: null,
+        updatedAt: now,
+      })
+      .where(and(
+        eq(classSessions.id, session.id),
+        eq(classSessions.qrToken, qrToken),
+        eq(classSessions.status, 'scheduled')
+      ))
+      .returning();
+
+    if (!updated.length) {
+      return res.status(409).json({ error: 'Session has already been checked in or token was already used' });
+    }
+
+    const [updatedSession] = updated;
+
+    res.json({
+      ...updatedSession,
+      locationVerified: checkInLocationVerified,
+    });
+  } catch (error) {
+    console.error('[QRCheckin] Error processing QR check-in:', error);
+    res.status(500).json({ error: 'Failed to process QR check-in' });
+  }
+});
+
+// ==================== END QR CODE CHECK-IN ====================
 
 export default router;

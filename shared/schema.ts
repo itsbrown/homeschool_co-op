@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, jsonb, timestamp, date, varchar, pgEnum, unique } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, jsonb, timestamp, date, varchar, pgEnum, unique, doublePrecision } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations } from "drizzle-orm";
@@ -112,6 +112,13 @@ export const schools = pgTable("schools", {
   
   // Premium Feature Toggles (controlled by Super Admin)
   enabledFeatures: jsonb("enabled_features").default({}).notNull(), // { financialReports: true, aiInsights: true, ... }
+  
+  // Geolocation & Attendance Configuration
+  latitude: doublePrecision("latitude"),
+  longitude: doublePrecision("longitude"),
+  geofenceRadiusMeters: integer("geofence_radius_meters").default(150),
+  absenteeismThresholdPercent: integer("absenteeism_threshold_percent").default(10),
+  timezone: text("timezone").default("America/New_York"),
 });
 
 export const insertSchoolSchema = createInsertSchema(schools)
@@ -2383,6 +2390,15 @@ export const classSessions = pgTable("class_sessions", {
   notes: text("notes"), // Educator notes about the session
   dailyFlowEntryId: integer("daily_flow_entry_id").references(() => dailyFlowEntries.id), // Link to lesson plan
   
+  // QR Code Check-in
+  qrToken: text("qr_token"),
+  qrTokenExpiresAt: timestamp("qr_token_expires_at"),
+  
+  // Educator check-in geolocation
+  checkInLatitude: doublePrecision("check_in_latitude"),
+  checkInLongitude: doublePrecision("check_in_longitude"),
+  checkInLocationVerified: boolean("check_in_location_verified"),
+  
   // Metadata
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -2543,14 +2559,19 @@ export const sessionAttendance = pgTable("session_attendance", {
   }).default("present").notNull(),
   
   // Timestamps
-  checkInTime: timestamp("check_in_time"), // Actual arrival time
-  checkOutTime: timestamp("check_out_time"), // Actual departure time
+  checkInTime: timestamp("check_in_time"),
+  checkOutTime: timestamp("check_out_time"),
+  
+  // Geolocation (captured at check-in)
+  checkInLatitude: doublePrecision("check_in_latitude"),
+  checkInLongitude: doublePrecision("check_in_longitude"),
+  locationVerified: boolean("location_verified"),
   
   // Additional info
-  tardyMinutes: integer("tardy_minutes"), // How many minutes late
-  earlyDepartureMinutes: integer("early_departure_minutes"), // How many minutes early left
-  excuseReason: text("excuse_reason"), // Reason for absence/early departure
-  notes: text("notes"), // Educator notes about attendance
+  tardyMinutes: integer("tardy_minutes"),
+  earlyDepartureMinutes: integer("early_departure_minutes"),
+  excuseReason: text("excuse_reason"),
+  notes: text("notes"),
   
   // Who recorded the attendance
   recordedBy: integer("recorded_by").notNull().references(() => users.id),
@@ -2559,7 +2580,9 @@ export const sessionAttendance = pgTable("session_attendance", {
   // Tracking
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (table) => ({
+  uniqueSessionChild: unique().on(table.sessionId, table.childId),
+}));
 
 export const insertSessionAttendanceSchema = createInsertSchema(sessionAttendance)
   .omit({ id: true, createdAt: true, updatedAt: true, recordedAt: true });

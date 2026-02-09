@@ -197,6 +197,7 @@ const StudentClassesPage = lazy(() => import("./pages/schools/StudentClassesPage
 const KnowledgeBasePage = lazy(() => import("./pages/schools/KnowledgeBasePage"));
 const KnowledgeBaseDetailsPage = lazy(() => import("./pages/schools/KnowledgeBaseDetailsPage"));
 const SchoolSettingsPage = lazy(() => import("./pages/schools/SchoolSettingsPage"));
+const AttendanceManagementPage = lazy(() => import("./pages/schools/AttendanceManagementPage"));
 const DiscountsPage = lazy(() => import("./pages/schools/DiscountsPage"));
 const MembershipManagementPage = lazy(() => import("./pages/schools/MembershipManagementPage"));
 const ManualPaymentEntryPage = lazy(() => import("./pages/ManualPaymentEntryPage"));
@@ -613,6 +614,7 @@ function Router() {
       <Route path="/school-admin/forms/:id/submissions" component={SubmissionsPage} />
       <Route path="/school-admin/documents" component={DocumentManagementPage} />
       <Route path="/school-admin/assessments" component={AssessmentManagementPage} />
+      <Route path="/school-admin/attendance" component={AttendanceManagementPage} />
       <Route path="/school-admin/credits" component={CreditManagementPage} />
       <Route path="/school-admin/fundraisers" component={FundraiserManagementPage} />
       <Route path="/school-admin/staff-permissions" component={StaffPermissionsPage} />
