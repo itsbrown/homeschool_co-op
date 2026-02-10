@@ -128,6 +128,14 @@ app.use((req, res, next) => {
   next();
 });
 
+// Apply fileUpload middleware for knowledge base file uploads
+app.use('/api/file-upload', fileUpload({
+  useTempFiles: false,
+  limits: { fileSize: 50 * 1024 * 1024 },
+  abortOnLimit: true,
+  createParentPath: true,
+}));
+
 // Register file upload routes
 app.use('/api/file-upload', fileUploadRouter);
 app.use('/api/school-admin/marketing-links', marketingLinksRouter);
