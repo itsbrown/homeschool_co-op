@@ -23,7 +23,7 @@ export const uploadKnowledgeBaseFiles = async (req: Request, res: Response) => {
     const knowledgeBaseId = parseInt(req.params.id);
     const authData = (req as any).auth;
 
-    if (!authData?.userId) {
+    if (!authData?.dbUserId) {
       return res.status(401).json({ message: "Authentication required" });
     }
 
@@ -33,7 +33,7 @@ export const uploadKnowledgeBaseFiles = async (req: Request, res: Response) => {
       return res.status(404).json({ message: "Knowledge base not found" });
     }
 
-    if (knowledgeBase.authorId !== authData.userId) {
+    if (knowledgeBase.authorId !== authData.dbUserId) {
       return res.status(403).json({ message: "Permission denied" });
     }
 
@@ -116,7 +116,7 @@ export const getProcessingStatus = async (req: Request, res: Response) => {
     const { jobId } = req.params;
     const authData = (req as any).auth;
 
-    if (!authData?.userId) {
+    if (!authData?.dbUserId) {
       return res.status(401).json({ message: "Authentication required" });
     }
 
@@ -127,7 +127,7 @@ export const getProcessingStatus = async (req: Request, res: Response) => {
 
     // Verify user has permission to view this job
     const knowledgeBase = await storage.getKnowledgeBase(job.knowledgeBaseId);
-    if (!knowledgeBase || knowledgeBase.authorId !== authData.userId) {
+    if (!knowledgeBase || knowledgeBase.authorId !== authData.dbUserId) {
       return res.status(403).json({ message: "Permission denied" });
     }
 
@@ -170,7 +170,7 @@ export const getProcessingStats = async (req: Request, res: Response) => {
   try {
     const authData = (req as any).auth;
 
-    if (!authData?.userId) {
+    if (!authData?.dbUserId) {
       return res.status(401).json({ message: "Authentication required" });
     }
 

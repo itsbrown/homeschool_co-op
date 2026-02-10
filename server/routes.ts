@@ -619,7 +619,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/curricula/generate", isAuthenticated, async (req, res) => {
     try {
       const authData = (req as any).auth;
-      const userId = authData?.userId || 'dev-user';
+      const userId = authData?.dbUserId || 'dev-user';
       console.log("AI Curriculum Generation - Request received", { userId });
       const { subject, gradeLevel, learningStyles, additionalDetails, knowledgeBaseIds } = req.body;
 
@@ -1044,8 +1044,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try {
         // Get user's knowledge bases if user is authenticated
         const authData = (req as any).auth;
-        if (authData?.userId) {
-          userKnowledgeBases = await storage.getKnowledgeBasesByAuthor(authData.userId);
+        if (authData?.dbUserId) {
+          userKnowledgeBases = await storage.getKnowledgeBasesByAuthor(authData.dbUserId);
         }
       } catch (userError) {
         console.error("Error fetching user knowledge bases:", userError);
@@ -1082,7 +1082,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Check if knowledge base is public or user is authenticated and is the author
       const authData = (req as any).auth;
-      const isAuthor = authData?.userId && String(knowledgeBase.authorId) === String(authData.userId);
+      const isAuthor = authData?.dbUserId && String(knowledgeBase.authorId) === String(authData.dbUserId);
       if (!knowledgeBase.isPublic && !isAuthor) {
         return res.status(403).json({ message: "You don't have permission to access this knowledge base" });
       }
@@ -1097,12 +1097,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/knowledge-bases", isAuthenticated, async (req, res) => {
     try {
       const authData = (req as any).auth;
-      console.log("Received knowledge base creation request from:", authData?.userId);
+      console.log("Received knowledge base creation request from:", authData?.dbUserId);
       console.log("Request body:", JSON.stringify(req.body, null, 2));
       console.log("Auth:", JSON.stringify(authData, null, 2));
 
       // Check if user ID is available in auth
-      if (!authData?.userId) {
+      if (!authData?.dbUserId) {
         console.log("User not authenticated in auth");
         return res.status(401).json({ message: "User not authenticated" });
       }
@@ -1118,7 +1118,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         try {
           const knowledgeBase = await storage.createKnowledgeBase({
             ...validatedData,
-            authorId: authData.userId
+            authorId: authData.dbUserId
           });
 
           console.log("Knowledge base created with ID:", knowledgeBase.id);
@@ -1155,7 +1155,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const knowledgeBase = {
               id: newId,
               ...validatedData,
-              authorId: authData.userId,
+              authorId: authData.dbUserId,
               downloadCount: 0,
               purchasedBy: [],
               createdAt: new Date().toISOString(),
@@ -1212,7 +1212,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Check if user is the author
       const authData = (req as any).auth;
-      if (knowledgeBase.authorId !== authData?.userId) {
+      if (knowledgeBase.authorId !== authData?.dbUserId) {
         return res.status(403).json({ message: "You don't have permission to update this knowledge base" });
       }
 
@@ -4302,8 +4302,8 @@ async function getCombinedKnowledgeBases(req: any, res: any) {
         try {
             // Get user's knowledge bases if user is authenticated
             const authData = (req as any).auth;
-            if (authData?.userId) {
-                userKnowledgeBases = await storage.getKnowledgeBasesByAuthor(authData.userId);
+            if (authData?.dbUserId) {
+                userKnowledgeBases = await storage.getKnowledgeBasesByAuthor(authData.dbUserId);
             }
         } catch (userError) {
             console.error("Error fetching user knowledge bases:", userError);
