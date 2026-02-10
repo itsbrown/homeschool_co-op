@@ -227,7 +227,7 @@ export interface IStorage {
   getKnowledgeBasesByAuthor(authorId: number): Promise<KnowledgeBase[]>;
   getKnowledgeBasesBySubject(subject: string): Promise<KnowledgeBase[]>;
   getPublicKnowledgeBases(limit?: number): Promise<KnowledgeBase[]>;
-  createKnowledgeBase(knowledgeBase: InsertKnowledgeBase): Promise<KnowledgeBase>;
+  createKnowledgeBase(knowledgeBase: InsertKnowledgeBase & { authorId: number }): Promise<KnowledgeBase>;
   updateKnowledgeBase(id: number, knowledgeBase: Partial<KnowledgeBase>): Promise<KnowledgeBase | undefined>;
   incrementDownloadCount(id: number): Promise<KnowledgeBase | undefined>;
   addPurchaser(id: number, userId: number): Promise<KnowledgeBase | undefined>;
@@ -5976,7 +5976,7 @@ import { DatabaseStorage } from "./dbStorage";
       return this.dbStorage.getPublicKnowledgeBases(limit);
     }
 
-    async createKnowledgeBase(knowledgeBase: InsertKnowledgeBase): Promise<KnowledgeBase> {
+    async createKnowledgeBase(knowledgeBase: InsertKnowledgeBase & { authorId: number }): Promise<KnowledgeBase> {
       return this.dbStorage.createKnowledgeBase(knowledgeBase);
     }
 

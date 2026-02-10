@@ -40,7 +40,7 @@ export const getKnowledgeBasesByAuthor = async (req: Request, res: Response) => 
     const { authorId } = req.params;
 
     // If requesting own knowledge bases, use session user ID
-    const targetAuthorId = authorId === "me" ? req.session.userId : parseInt(authorId);
+    const targetAuthorId = authorId === "me" ? req.session.userId! : parseInt(authorId);
 
     const knowledgeBases = await storage.getKnowledgeBasesByAuthor(targetAuthorId);
     res.status(200).json(knowledgeBases);
@@ -84,7 +84,7 @@ export const createKnowledgeBase = async (req: Request, res: Response) => {
 
     const knowledgeBase = await storage.createKnowledgeBase({
       ...validatedData,
-      authorId: req.session.userId
+      authorId: req.session.userId!
     });
 
     res.status(201).json(knowledgeBase);
@@ -171,7 +171,7 @@ export const recordPurchase = async (req: Request, res: Response) => {
     }
 
     // Record the purchase
-    await storage.addPurchaser(knowledgeBaseId, req.session.userId);
+    await storage.addPurchaser(knowledgeBaseId, req.session.userId!);
 
     res.status(200).json({ success: true });
   } catch (error) {
@@ -188,7 +188,7 @@ export const recordPurchase = async (req: Request, res: Response) => {
 export const getCombinedKnowledgeBases = async (req: Request, res: Response) => {
   try {
     let publicKnowledgeBases = [];
-    let userKnowledgeBases = [];
+    let userKnowledgeBases: Awaited<ReturnType<typeof storage.getKnowledgeBasesByAuthor>> = [];
 
     // Get public knowledge bases
     publicKnowledgeBases = await storage.getPublicKnowledgeBases();

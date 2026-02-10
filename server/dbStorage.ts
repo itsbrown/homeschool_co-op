@@ -931,7 +931,7 @@ export class DatabaseStorage implements IStorage {
     return await query;
   }
 
-  async createKnowledgeBase(insertKnowledgeBase: InsertKnowledgeBase): Promise<KnowledgeBase> {
+  async createKnowledgeBase(insertKnowledgeBase: InsertKnowledgeBase & { authorId: number }): Promise<KnowledgeBase> {
     const db = await getDb();
     const [knowledgeBase] = await db
       .insert(knowledgeBases)
