@@ -934,6 +934,78 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/knowledge-bases/subjects", async (req, res) => {
+    try {
+      const knowledgeBases = await storage.getPublicKnowledgeBases();
+      let subjects = [...new Set(knowledgeBases.map(kb => kb.subject))];
+      if (!subjects.length) {
+        subjects = ["Mathematics", "Science", "Language Arts", "History", "Computer Science"];
+      }
+      res.status(200).json(subjects);
+    } catch (error) {
+      console.error("Error fetching subjects:", error);
+      res.status(500).json({ message: "Error fetching subjects" });
+    }
+  });
+
+  app.get("/api/knowledge-bases/subject/:subject", async (req, res) => {
+    try {
+      const { subject } = req.params;
+      const knowledgeBases = await storage.getKnowledgeBasesBySubject(subject);
+      res.status(200).json(knowledgeBases);
+    } catch (error) {
+      console.error("Error fetching knowledge bases by subject:", error);
+      res.status(500).json({ message: "Error fetching knowledge bases" });
+    }
+  });
+
+  app.get("/api/knowledge-bases/author/:authorId", isAuthenticated, async (req, res) => {
+    try {
+      const { authorId } = req.params;
+      const targetAuthorId = authorId === "me" ? req.session.userId : parseInt(authorId);
+      const knowledgeBases = await storage.getKnowledgeBasesByAuthor(targetAuthorId);
+      res.status(200).json(knowledgeBases);
+    } catch (error) {
+      console.error("Error fetching knowledge bases by author:", error);
+      res.status(500).json({ message: "Error fetching knowledge bases" });
+    }
+  });
+
+  // Combined endpoint to get all accessible knowledge bases for the user (public + owned)
+  app.get("/api/knowledge-bases/all", isAuthenticated, async (req, res) => {
+    try {
+      let publicKnowledgeBases: any[] = [];
+      let userKnowledgeBases: any[] = [];
+
+      try {
+        publicKnowledgeBases = await storage.getPublicKnowledgeBases();
+      } catch (publicError) {
+        console.error("Error fetching public knowledge bases:", publicError);
+      }
+
+      try {
+        const authData = (req as any).auth;
+        if (authData?.dbUserId) {
+          userKnowledgeBases = await storage.getKnowledgeBasesByAuthor(authData.dbUserId);
+        }
+      } catch (userError) {
+        console.error("Error fetching user knowledge bases:", userError);
+      }
+
+      const combinedKnowledgeBases = [...publicKnowledgeBases];
+      userKnowledgeBases.forEach(userKb => {
+        if (!combinedKnowledgeBases.some(kb => kb.id === userKb.id)) {
+          combinedKnowledgeBases.push(userKb);
+        }
+      });
+
+      res.status(200).json(combinedKnowledgeBases);
+    } catch (error) {
+      console.error("Error fetching combined knowledge bases:", error);
+      res.status(200).json([]);
+    }
+  });
+
   // GET individual knowledge base by ID (public access)
   app.get("/api/knowledge-bases/:id", async (req, res) => {
     try {
@@ -978,96 +1050,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching knowledge base:", error);
       res.status(500).json({ message: "Error fetching knowledge base" });
-    }
-  });
-
-  app.get("/api/knowledge-bases/subjects", async (req, res) => {
-    try {
-      // Get all public knowledge bases to extract unique subjects
-      const knowledgeBases = await storage.getPublicKnowledgeBases();
-
-      // Extract unique subjects
-      let subjects = [...new Set(knowledgeBases.map(kb => kb.subject))];
-
-      // Add some default subjects if none found (for a better UX)
-      if (!subjects.length) {
-        subjects = ["Mathematics", "Science", "Language Arts", "History", "Computer Science"];
-      }
-
-      res.status(200).json(subjects);
-    } catch (error) {
-      console.error("Error fetching subjects:", error);
-      res.status(500).json({ message: "Error fetching subjects" });
-    }
-  });
-
-  app.get("/api/knowledge-bases/subject/:subject", async (req, res) => {
-    try {
-      const { subject } = req.params;
-      const knowledgeBases = await storage.getKnowledgeBasesBySubject(subject);
-      res.status(200).json(knowledgeBases);
-    } catch (error) {
-      console.error("Error fetching knowledge bases by subject:", error);
-      res.status(500).json({ message: "Error fetching knowledge bases" });
-    }
-  });
-
-  app.get("/api/knowledge-bases/author/:authorId", isAuthenticated, async (req, res) => {
-    try {
-      const { authorId } = req.params;
-
-      // If requesting own knowledge bases, use session user ID
-      const targetAuthorId = authorId === "me" ? req.session.userId : parseInt(authorId);
-
-      const knowledgeBases = await storage.getKnowledgeBasesByAuthor(targetAuthorId);
-      res.status(200).json(knowledgeBases);
-    } catch (error) {
-      console.error("Error fetching knowledge bases by author:", error);
-      res.status(500).json({ message: "Error fetching knowledge bases" });
-    }
-  });
-
-  // Combined endpoint to get all accessible knowledge bases for the user (public + owned)
-  app.get("/api/knowledge-bases/all", isAuthenticated, async (req, res) => {
-    try {
-      let publicKnowledgeBases = [];
-      let userKnowledgeBases = [];
-
-      try {
-        // Get public knowledge bases
-        publicKnowledgeBases = await storage.getPublicKnowledgeBases();
-      } catch (publicError) {
-        console.error("Error fetching public knowledge bases:", publicError);
-        // Continue with empty array if failed
-      }
-
-      try {
-        // Get user's knowledge bases if user is authenticated
-        const authData = (req as any).auth;
-        if (authData?.dbUserId) {
-          userKnowledgeBases = await storage.getKnowledgeBasesByAuthor(authData.dbUserId);
-        }
-      } catch (userError) {
-        console.error("Error fetching user knowledge bases:", userError);
-        // Continue with empty array if failed
-      }
-
-      // Combine and deduplicate knowledge bases
-      const combinedKnowledgeBases = [...publicKnowledgeBases];
-
-      // Add user's knowledge bases that aren't already in the list
-      userKnowledgeBases.forEach(userKb => {
-        if (!combinedKnowledgeBases.some(kb => kb.id === userKb.id)) {
-          combinedKnowledgeBases.push(userKb);
-        }
-      });
-
-      // Return empty array if none found
-      res.status(200).json(combinedKnowledgeBases);
-    } catch (error) {
-      console.error("Error fetching combined knowledge bases:", error);
-      // Return empty array instead of error status to avoid breaking the UI
-      res.status(200).json([]);
     }
   });
 

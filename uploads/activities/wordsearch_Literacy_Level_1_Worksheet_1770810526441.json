@@ -1,0 +1,51 @@
+{
+  "title": "Literacy Skills Word Explorer",
+  "description": "This challenging word search focuses on commonly confused words and important literacy concepts. Students will search for words related to homophones, prefixes, and vocabulary building while reinforcing their understanding of these terms.",
+  "instructions": "Find all the hidden words in the grid. Words can be placed horizontally, vertically, diagonally, forwards, or backwards. Circle each word when you find it and check it off the list. Challenge: After finding all words, write a sentence using each one correctly.",
+  "content": {
+    "words": [
+      "elephant",
+      "accept",
+      "except",
+      "exception",
+      "accident",
+      "invite",
+      "invitation",
+      "possible",
+      "impossible",
+      "office",
+      "officer",
+      "official",
+      "estimate"
+    ],
+    "gridSize": {
+      "width": 15,
+      "height": 15
+    },
+    "clues": [
+      "A large mammal with a trunk",
+      "To receive willingly",
+      "To leave out or exclude",
+      "Something that doesn't follow the rule",
+      "An unexpected and unplanned event",
+      "To ask someone to come to an event",
+      "A written or verbal request to attend something",
+      "Something that can be done",
+      "Something that cannot be done",
+      "A place where people work at desks",
+      "A person who works in law enforcement",
+      "Relating to an office or position of authority",
+      "To make an approximate calculation"
+    ]
+  },
+  "targetSkills": [
+    "Vocabulary development",
+    "Word recognition",
+    "Distinguishing between homophones",
+    "Understanding prefixes",
+    "Visual discrimination"
+  ],
+  "ageRange": "9-11",
+  "difficulty": "advanced",
+  "timeRequired": "25-30 minutes"
+}

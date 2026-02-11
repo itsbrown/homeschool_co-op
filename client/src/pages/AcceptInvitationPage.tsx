@@ -48,19 +48,30 @@ export default function AcceptInvitationPage() {
             ...data.invitation,
             requiresPassword: data.requiresPassword
           });
+          setLoading(false);
         } else {
+          try {
+            const staffResponse = await fetch(`/api/public/staff-invitations/validate?token=${token}`);
+            const staffData = await staffResponse.json();
+            if (staffData.valid) {
+              setLocation(`/accept-educator-invitation?token=${token}`);
+              return;
+            }
+          } catch (staffErr) {
+            console.error("Error checking staff invitation:", staffErr);
+          }
           setError(data.message || "Invalid or expired invitation token");
+          setLoading(false);
         }
       } catch (err) {
         console.error("Error validating invitation:", err);
         setError("Failed to validate invitation");
-      } finally {
         setLoading(false);
       }
     };
 
     validateInvitation();
-  }, [token]);
+  }, [token, setLocation]);
 
   const validatePassword = () => {
     if (!invitation?.requiresPassword) return true;
