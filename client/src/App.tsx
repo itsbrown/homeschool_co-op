@@ -64,6 +64,7 @@ const SimpleClassesPage = lazy(() => import("./pages/SimpleClassesPage").then(m 
 const StaffInvitePage = lazy(() => import("./pages/schools/StaffInvitePage"));
 const StaffPositionsPage = lazy(() => import("./pages/schools/StaffPositionsPage"));
 const KnowledgeBaseCreationPage = lazy(() => import("./pages/schools/KnowledgeBaseCreationPage"));
+const KnowledgeBaseUsePage = lazy(() => import("./pages/schools/KnowledgeBaseUsePage"));
 const FormBuilderPage = lazy(() => import("./pages/schooladmin/FormBuilderPage"));
 const FormEditorPage = lazy(() => import("./pages/schooladmin/FormEditorPage"));
 const PreviewFormPage = lazy(() => import("./pages/schooladmin/PreviewFormPage"));
@@ -644,6 +645,7 @@ function Router() {
         </SchoolAdminLayout>
       </Route>
       <Route path="/schools/knowledge-base/create" component={KnowledgeBaseCreationPage} />
+      <Route path="/schools/knowledge-base/:id/use" component={KnowledgeBaseUsePage} />
       <Route path="/schools/knowledge-base/:id" component={KnowledgeBaseDetailsPage} />
       <Route path="/schools/knowledge-base" component={KnowledgeBasePage} />
       <Route path="/schools/announcements" component={AnnouncementsPage} />
