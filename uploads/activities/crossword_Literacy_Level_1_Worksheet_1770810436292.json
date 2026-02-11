@@ -1,0 +1,107 @@
+{
+  "title": "English Word Wizards Challenge",
+  "description": "This crossword puzzle helps students practice spelling and understand word meanings related to common English vocabulary, focusing on homophones, prefixes, and word families.",
+  "instructions": "Fill in the crossword puzzle using the clues provided. Each word must fit in the grid where the numbered spaces indicate. Some letters may be shared between words that cross each other.",
+  "content": {
+    "words": [
+      {
+        "word": "elephant",
+        "clue": "A large mammal with a long trunk and tusks",
+        "row": 1,
+        "col": 1,
+        "direction": "across"
+      },
+      {
+        "word": "accept",
+        "clue": "To receive willingly or to agree with",
+        "row": 3,
+        "col": 5,
+        "direction": "down"
+      },
+      {
+        "word": "except",
+        "clue": "Not including; other than",
+        "row": 1,
+        "col": 8,
+        "direction": "down"
+      },
+      {
+        "word": "accident",
+        "clue": "An unfortunate event that happens unexpectedly",
+        "row": 5,
+        "col": 1,
+        "direction": "across"
+      },
+      {
+        "word": "invite",
+        "clue": "To ask someone to come or participate",
+        "row": 3,
+        "col": 1,
+        "direction": "down"
+      },
+      {
+        "word": "invitation",
+        "clue": "A written or verbal request to attend an event",
+        "row": 7,
+        "col": 1,
+        "direction": "across"
+      },
+      {
+        "word": "possible",
+        "clue": "Something that can be done or achieved",
+        "row": 8,
+        "col": 5,
+        "direction": "across"
+      },
+      {
+        "word": "impossible",
+        "clue": "Not able to occur, exist, or be done",
+        "row": 1,
+        "col": 5,
+        "direction": "across"
+      },
+      {
+        "word": "office",
+        "clue": "A room or building where people work at desks",
+        "row": 4,
+        "col": 7,
+        "direction": "down"
+      },
+      {
+        "word": "officer",
+        "clue": "A person who holds a position of authority",
+        "row": 9,
+        "col": 1,
+        "direction": "across"
+      },
+      {
+        "word": "official",
+        "clue": "Relating to an authority or public body",
+        "row": 6,
+        "col": 3,
+        "direction": "across"
+      },
+      {
+        "word": "estimate",
+        "clue": "To roughly calculate or judge the value of something",
+        "row": 2,
+        "col": 3,
+        "direction": "across"
+      }
+    ],
+    "size": {
+      "width": 12,
+      "height": 12
+    }
+  },
+  "targetSkills": [
+    "spelling",
+    "vocabulary",
+    "word families",
+    "homophones",
+    "prefixes"
+  ],
+  "ageRange": "9-11",
+  "difficulty": "advanced",
+  "timeRequired": "30"
+}
