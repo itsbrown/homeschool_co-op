@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import {
@@ -41,15 +41,7 @@ export function KnowledgeBaseSelector({ selectedIds, onChange }: KnowledgeBaseSe
 
   const { data: knowledgeBases, isLoading, isError } = useQuery<KnowledgeBase[]>({
     queryKey: ["/api/schools/knowledge-bases"],
-    queryFn: () => fetch('/api/schools/knowledge-bases').then(res => res.json()),
   });
-
-  // Debug logging
-  useEffect(() => {
-    if (knowledgeBases) {
-      console.log('📚 Loaded knowledge bases:', knowledgeBases.length, knowledgeBases);
-    }
-  }, [knowledgeBases]);
 
   const handleAddSelection = () => {
     if (currentSelection && !selectedIds.includes(Number(currentSelection))) {
