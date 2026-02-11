@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useParams, Link } from "wouter";
 import {
   Loader2,
@@ -390,9 +391,32 @@ export default function KnowledgeBaseDetailsPage() {
   };
   
   // Fetch knowledge base details based on ID
-  const { data: knowledgeBase, isLoading, error } = useQuery({
+  const { data: knowledgeBase, isLoading, error, refetch } = useQuery({
     queryKey: [`/api/knowledge-bases/${id}`],
     enabled: !!id,
+  });
+
+  const togglePublishMutation = useMutation({
+    mutationFn: async (publish: boolean) => {
+      await apiRequest('PATCH', `/api/knowledge-bases/${id}`, { isPublic: publish });
+    },
+    onSuccess: (_data, publish) => {
+      queryClient.invalidateQueries({ queryKey: [`/api/knowledge-bases/${id}`] });
+      queryClient.invalidateQueries({ queryKey: ['/api/knowledge-bases'] });
+      toast({
+        title: publish ? "Knowledge Base Published" : "Knowledge Base Unpublished",
+        description: publish
+          ? "This knowledge base is now visible to others."
+          : "This knowledge base is now private (draft).",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update knowledge base visibility.",
+        variant: "destructive",
+      });
+    },
   });
 
   // Transform the fetched knowledge base data to match UI expectations
@@ -633,16 +657,21 @@ export default function KnowledgeBaseDetailsPage() {
                   <Tag className="mr-2 h-4 w-4" />
                   Edit Tags
                 </DropdownMenuItem>
-                {knowledgeBase.status !== "Published" && (
-                  <DropdownMenuItem>
-                    <Upload className="mr-2 h-4 w-4" />
-                    Publish
+                {!knowledgeBase.isPublic ? (
+                  <DropdownMenuItem
+                    onClick={() => togglePublishMutation.mutate(true)}
+                    disabled={togglePublishMutation.isPending}
+                  >
+                    <Eye className="mr-2 h-4 w-4" />
+                    {togglePublishMutation.isPending ? "Publishing..." : "Publish"}
                   </DropdownMenuItem>
-                )}
-                {knowledgeBase.status === "Published" && (
-                  <DropdownMenuItem>
-                    <Upload className="mr-2 h-4 w-4" />
-                    Unpublish
+                ) : (
+                  <DropdownMenuItem
+                    onClick={() => togglePublishMutation.mutate(false)}
+                    disabled={togglePublishMutation.isPending}
+                  >
+                    <X className="mr-2 h-4 w-4" />
+                    {togglePublishMutation.isPending ? "Unpublishing..." : "Unpublish"}
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuSeparator />
@@ -661,25 +690,22 @@ export default function KnowledgeBaseDetailsPage() {
                   <div className="flex flex-wrap gap-2 mb-2">
                     <Badge 
                       variant="outline" 
-                      className={knowledgeBase.status === "Published" ? "bg-green-100 text-green-800 border-green-200" :
-                        knowledgeBase.status === "Draft" ? "bg-yellow-100 text-yellow-800 border-yellow-200" :
-                        knowledgeBase.status === "Archived" ? "bg-gray-100 text-gray-800 border-gray-200" :
-                        knowledgeBase.status === "Under Review" ? "bg-blue-100 text-blue-800 border-blue-200" :
-                        "bg-gray-100 text-gray-800 border-gray-200"}
+                      className={knowledgeBase.isPublic
+                        ? "bg-green-100 text-green-800 border-green-200"
+                        : "bg-yellow-100 text-yellow-800 border-yellow-200"}
                     >
-                      {knowledgeBase.status}
+                      {knowledgeBase.isPublic ? "Published" : "Draft"}
                     </Badge>
                     <Badge 
                       variant="outline" 
-                      className={knowledgeBase.visibility === "Public" ? "bg-green-100 text-green-800 border-green-200" :
-                        knowledgeBase.visibility === "School" ? "bg-blue-100 text-blue-800 border-blue-200" :
-                        knowledgeBase.visibility === "Private" ? "bg-gray-100 text-gray-800 border-gray-200" :
-                        "bg-gray-100 text-gray-800 border-gray-200"}
+                      className={knowledgeBase.isPublic
+                        ? "bg-green-100 text-green-800 border-green-200"
+                        : "bg-gray-100 text-gray-800 border-gray-200"}
                     >
-                      {knowledgeBase.visibility}
+                      {knowledgeBase.isPublic ? "Public" : "Private"}
                     </Badge>
-                    <Badge variant="secondary">{knowledgeBase.subjectArea}</Badge>
-                    {knowledgeBase.gradeLevel && knowledgeBase.gradeLevel.map((grade, i) => (
+                    <Badge variant="secondary">{displayKnowledgeBase.subjectArea}</Badge>
+                    {displayKnowledgeBase.gradeLevel && displayKnowledgeBase.gradeLevel.map((grade: string, i: number) => (
                       <Badge key={i} variant="outline">Grades {grade}</Badge>
                     ))}
                   </div>
@@ -688,7 +714,7 @@ export default function KnowledgeBaseDetailsPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="flex flex-wrap gap-2 mb-4">
-                    {knowledgeBase.tags && knowledgeBase.tags.map((tag, i) => (
+                    {displayKnowledgeBase.tags && displayKnowledgeBase.tags.map((tag: string, i: number) => (
                       <Badge key={i} variant="outline" className="bg-secondary/30">{tag}</Badge>
                     ))}
                   </div>
@@ -696,19 +722,19 @@ export default function KnowledgeBaseDetailsPage() {
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                     <div className="flex flex-col">
                       <span className="text-muted-foreground">Created</span>
-                      <span className="font-medium">{knowledgeBase.createdAt}</span>
+                      <span className="font-medium">{displayKnowledgeBase.createdAt}</span>
                     </div>
                     <div className="flex flex-col">
                       <span className="text-muted-foreground">Last Updated</span>
-                      <span className="font-medium">{knowledgeBase.updatedAt}</span>
+                      <span className="font-medium">{displayKnowledgeBase.updatedAt}</span>
                     </div>
                     <div className="flex flex-col">
                       <span className="text-muted-foreground">Files</span>
-                      <span className="font-medium">{knowledgeBase.fileCount}</span>
+                      <span className="font-medium">{displayKnowledgeBase.fileCount}</span>
                     </div>
                     <div className="flex flex-col">
                       <span className="text-muted-foreground">Size</span>
-                      <span className="font-medium">{knowledgeBase.size}</span>
+                      <span className="font-medium">{displayKnowledgeBase.size}</span>
                     </div>
                   </div>
                 </CardContent>
@@ -724,19 +750,19 @@ export default function KnowledgeBaseDetailsPage() {
                   <div className="space-y-4">
                     <div>
                       <h4 className="text-sm font-medium text-muted-foreground mb-1">Created by</h4>
-                      <p>{knowledgeBase.creator}</p>
+                      <p>{displayKnowledgeBase.creator}</p>
                     </div>
                     
                     <div>
                       <h4 className="text-sm font-medium text-muted-foreground mb-1">Usage Statistics</h4>
                       <div className="flex items-center gap-2 mb-2">
                         <Eye className="h-4 w-4 text-muted-foreground" />
-                        <span>{knowledgeBase.usageCount} uses in lessons/curricula</span>
+                        <span>{displayKnowledgeBase.usageCount} uses in lessons/curricula</span>
                       </div>
-                      {knowledgeBase.rating > 0 && (
+                      {displayKnowledgeBase.rating > 0 && (
                         <div className="flex items-center gap-2">
                           <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
-                          <span>{knowledgeBase.rating} average rating</span>
+                          <span>{displayKnowledgeBase.rating} average rating</span>
                         </div>
                       )}
                     </div>
