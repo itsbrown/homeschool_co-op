@@ -163,10 +163,18 @@ router.post('/:id/comp', async (req: any, res) => {
       return res.status(403).json({ message: 'Cannot comp enrollments from other schools' });
     }
 
-    // Check enrollment status - only allow comping pending_payment enrollments
-    if (enrollment.status !== 'pending_payment') {
+    // Check enrollment status - allow comping pending_payment or enrolled enrollments with remaining balance
+    const allowedStatuses = ['pending_payment', 'enrolled', 'pending_admin_approval'];
+    if (!allowedStatuses.includes(enrollment.status || '')) {
       return res.status(400).json({ 
-        message: `Can only comp enrollments with 'pending_payment' status. Current status: ${enrollment.status}` 
+        message: `Can only comp enrollments with pending or enrolled status. Current status: ${enrollment.status}` 
+      });
+    }
+
+    // For enrolled enrollments, verify there's a remaining balance to comp
+    if (enrollment.status === 'enrolled' && (enrollment.remainingBalance || 0) <= 0) {
+      return res.status(400).json({ 
+        message: 'This enrollment has no remaining balance to comp' 
       });
     }
 

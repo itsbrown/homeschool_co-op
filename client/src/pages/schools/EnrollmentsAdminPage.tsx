@@ -46,7 +46,8 @@ import {
   Eye,
   LayoutGrid,
   LayoutList,
-  TrendingUp
+  TrendingUp,
+  Gift
 } from "lucide-react";
 import { formatCurrency } from "@/utils/currency";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -68,6 +69,7 @@ interface Enrollment {
   programStartDate?: string;
   programEndDate?: string;
   parentEmail?: string;
+  compPercentage?: number | null;
   metadata?: {
     paymentPlanHistory?: Array<{
       timestamp: string;
@@ -208,6 +210,10 @@ export default function EnrollmentsAdminPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [searchTerm, setSearchTerm] = useState("");
   const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
+  const [compDialogOpen, setCompDialogOpen] = useState(false);
+  const [compEnrollment, setCompEnrollment] = useState<Enrollment | null>(null);
+  const [compPercentage, setCompPercentage] = useState("100");
+  const [compReason, setCompReason] = useState("");
 
   // Fetch all enrollments for the school
   const { data: enrollments = [], isLoading, refetch } = useQuery<Enrollment[]>({
@@ -359,6 +365,72 @@ export default function EnrollmentsAdminPage() {
       });
     },
   });
+
+  const compMutation = useMutation({
+    mutationFn: async ({
+      enrollmentId,
+      compPercentage,
+      compReason,
+    }: {
+      enrollmentId: number;
+      compPercentage: number;
+      compReason: string;
+    }) => {
+      const response = await apiRequest(
+        "POST",
+        `/api/admin/enrollments/${enrollmentId}/comp`,
+        { compPercentage, compReason }
+      );
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Failed to comp enrollment");
+      }
+      return response.json();
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Comp Applied",
+        description: data.message,
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/school-admin/enrollments"] });
+      setCompDialogOpen(false);
+      setCompEnrollment(null);
+      setCompPercentage("100");
+      setCompReason("");
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to Apply Comp",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleCompClick = (enrollment: Enrollment) => {
+    setCompEnrollment(enrollment);
+    setCompPercentage("100");
+    setCompReason("");
+    setCompDialogOpen(true);
+  };
+
+  const handleSaveComp = () => {
+    if (!compEnrollment) return;
+    const pct = parseInt(compPercentage);
+    if (isNaN(pct) || pct < 1 || pct > 100) {
+      toast({
+        title: "Invalid Percentage",
+        description: "Comp percentage must be between 1 and 100",
+        variant: "destructive",
+      });
+      return;
+    }
+    compMutation.mutate({
+      enrollmentId: compEnrollment.id,
+      compPercentage: pct,
+      compReason: compReason.trim() || "Comped by school administrator",
+    });
+  };
 
   const handleEditClick = (enrollment: Enrollment) => {
     setSelectedEnrollment(enrollment);
@@ -698,6 +770,12 @@ export default function EnrollmentsAdminPage() {
                                         Approve Enrollment
                                       </DropdownMenuItem>
                                     )}
+                                    {['pending_payment', 'enrolled', 'pending_admin_approval'].includes(enrollment.status || '') && !enrollment.compPercentage && enrollment.remainingBalance > 0 && (
+                                      <DropdownMenuItem onClick={() => handleCompClick(enrollment)}>
+                                        <Gift className="h-4 w-4 mr-2" />
+                                        Comp
+                                      </DropdownMenuItem>
+                                    )}
                                     {enrollment.totalPaid > 0 && (
                                       <>
                                         <DropdownMenuSeparator />
@@ -787,6 +865,16 @@ export default function EnrollmentsAdminPage() {
                                 <Edit className="h-4 w-4 mr-2" />
                                 Edit Plan
                               </Button>
+                              {['pending_payment', 'enrolled', 'pending_admin_approval'].includes(enrollment.status || '') && !enrollment.compPercentage && enrollment.remainingBalance > 0 && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleCompClick(enrollment)}
+                                  className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                                >
+                                  <Gift className="h-4 w-4" />
+                                </Button>
+                              )}
                               {enrollment.totalPaid > 0 && (
                                 <Button
                                   variant="ghost"
@@ -1023,6 +1111,114 @@ export default function EnrollmentsAdminPage() {
             setRefundEnrollment(null);
           }}
         />
+
+        {/* Comp Dialog */}
+        <Dialog open={compDialogOpen} onOpenChange={(open) => {
+          setCompDialogOpen(open);
+          if (!open) {
+            setCompEnrollment(null);
+            setCompPercentage("100");
+            setCompReason("");
+          }
+        }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Gift className="h-5 w-5 text-green-600" />
+                Comp Enrollment
+              </DialogTitle>
+              <DialogDescription>
+                Apply a complimentary discount to waive some or all of the remaining balance.
+              </DialogDescription>
+            </DialogHeader>
+            {compEnrollment && (
+              <div className="space-y-4 py-4">
+                <div className="bg-muted p-4 rounded-lg space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span>Student:</span>
+                    <span className="font-medium">{compEnrollment.childName}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Class:</span>
+                    <span className="font-medium">{compEnrollment.className}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Total Cost:</span>
+                    <span className="font-medium">{formatCurrency(compEnrollment.totalCost)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Paid:</span>
+                    <span className="font-medium">{formatCurrency(compEnrollment.totalPaid)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Remaining:</span>
+                    <span className="font-medium text-orange-600">{formatCurrency(compEnrollment.remainingBalance)}</span>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="comp-percentage">Comp Percentage</Label>
+                  <Select value={compPercentage} onValueChange={setCompPercentage}>
+                    <SelectTrigger id="comp-percentage">
+                      <SelectValue placeholder="Select percentage" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="25">25% - Quarter Off</SelectItem>
+                      <SelectItem value="50">50% - Half Off</SelectItem>
+                      <SelectItem value="75">75% - Three Quarters Off</SelectItem>
+                      <SelectItem value="100">100% - Full Comp</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {compPercentage && (
+                    <p className="text-sm text-muted-foreground">
+                      Comp amount: {formatCurrency(Math.round((compEnrollment.totalCost * parseInt(compPercentage)) / 100))}
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="comp-reason">Reason (Optional)</Label>
+                  <Textarea
+                    id="comp-reason"
+                    placeholder="Why is this enrollment being comped?"
+                    value={compReason}
+                    onChange={(e) => setCompReason(e.target.value)}
+                    rows={3}
+                    style={{ fontSize: '16px' }}
+                  />
+                </div>
+              </div>
+            )}
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setCompDialogOpen(false);
+                  setCompEnrollment(null);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSaveComp}
+                disabled={compMutation.isPending}
+                className="bg-green-600 hover:bg-green-700 text-white"
+              >
+                {compMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Applying...
+                  </>
+                ) : (
+                  <>
+                    <Gift className="mr-2 h-4 w-4" />
+                    Apply Comp
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </SchoolAdminLayout>
   );

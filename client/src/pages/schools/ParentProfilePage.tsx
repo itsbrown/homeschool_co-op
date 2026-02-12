@@ -1826,8 +1826,8 @@ export default function ParentProfilePage() {
                                     Reallocate
                                   </Button>
                                 )}
-                                {/* Comp button - only show for pending_payment enrollments without existing comp */}
-                                {enrollment.status === 'pending_payment' && !enrollment.compPercentage && (
+                                {/* Comp button - show for pending or enrolled enrollments with remaining balance and no existing comp */}
+                                {['pending_payment', 'enrolled', 'pending_admin_approval'].includes(enrollment.status) && !enrollment.compPercentage && enrollment.remainingBalance > 0 && (
                                   <Button
                                     variant="outline"
                                     size="sm"

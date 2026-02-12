@@ -3142,7 +3142,7 @@ router.get('/enrollments', supabaseAuth, async (req: any, res) => {
       programStartDate: enrollment.programStartDate,
       programEndDate: enrollment.programEndDate,
       metadata: enrollment.metadata || {},
-      // Include cancellation info if cancelled
+      compPercentage: enrollment.compPercentage || null,
       cancelledAt: enrollment.cancelledAt,
       cancellationReason: enrollment.cancellationReason,
     }));
