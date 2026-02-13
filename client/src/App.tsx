@@ -136,6 +136,7 @@ const MyHoursPage = lazy(() => import('./pages/educator/MyHours'));
 const ActiveSessionPage = lazy(() => import('./pages/educator/ActiveSession'));
 const StartSessionPage = lazy(() => import('./pages/educator/StartSession'));
 const EducatorAssessmentsPage = lazy(() => import('./pages/educator/EducatorAssessmentsPage'));
+const StaffGuidePage = lazy(() => import('./pages/educator/StaffGuidePage'));
 
 const CallbackPage = () => {
   const { isAuthenticated } = useAuth();
@@ -544,6 +545,7 @@ function Router() {
       <Route path="/educator/settings" component={() => <EducatorAppShell><EducatorSettingsPage /></EducatorAppShell>} />
       <Route path="/educator/notifications" component={() => <EducatorAppShell><EducatorNotificationsPage /></EducatorAppShell>} />
       <Route path="/educator/assessments" component={() => <EducatorAppShell><EducatorAssessmentsPage /></EducatorAppShell>} />
+      <Route path="/educator/staff-guide" component={() => <EducatorAppShell><StaffGuidePage /></EducatorAppShell>} />
       
       {/* Daily Flow routes */}
       <Route path="/educator/daily-flows" component={() => <EducatorAppShell><DailyFlowsPage /></EducatorAppShell>} />

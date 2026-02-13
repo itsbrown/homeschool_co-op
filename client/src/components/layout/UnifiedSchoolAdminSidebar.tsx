@@ -42,7 +42,8 @@ import {
   Wallet,
   FolderOpen,
   ClipboardCheck,
-  UserCheck
+  UserCheck,
+  HelpCircle
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -172,6 +173,11 @@ const educatorNavItems: NavItem[] = [
     title: 'Settings',
     href: '/educator/settings',
     icon: Settings,
+  },
+  {
+    title: 'Staff Guide',
+    href: '/educator/staff-guide',
+    icon: HelpCircle,
   },
 ];
 

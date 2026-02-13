@@ -28,7 +28,8 @@ import {
   Clock,
   Percent,
   ClipboardList,
-  BarChart3
+  BarChart3,
+  HelpCircle
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -265,6 +266,11 @@ const educatorNavItems: {
     title: 'Settings',
     href: '/educator/settings',
     icon: Settings,
+  },
+  {
+    title: 'Staff Guide',
+    href: '/educator/staff-guide',
+    icon: HelpCircle,
   },
 ];
 
