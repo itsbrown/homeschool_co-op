@@ -1,6 +1,8 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { QrCode, ClipboardCheck, UserPlus, LogOut as LogOutIcon, ArrowRight, BookOpen } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { QrCode, ClipboardCheck, UserPlus, LogOut as LogOutIcon, ArrowRight, BookOpen, ExternalLink } from "lucide-react";
+import { Link } from "wouter";
 
 const steps = [
   {
@@ -9,7 +11,10 @@ const steps = [
     icon: QrCode,
     color: "bg-emerald-500",
     badgeColor: "bg-emerald-100 text-emerald-700",
+    borderColor: "#10b981",
     description: "Start your day by checking in at your assigned school location.",
+    href: "/educator/my-classes",
+    actionLabel: "Go to My Classes",
     details: [
       "Open your Dashboard and tap \"Start Session\" for your scheduled class.",
       "If your school uses QR check-in, scan the QR code displayed at the front desk or classroom.",
@@ -23,7 +28,10 @@ const steps = [
     icon: ClipboardCheck,
     color: "bg-blue-500",
     badgeColor: "bg-blue-100 text-blue-700",
+    borderColor: "#3b82f6",
     description: "Mark each student as present, absent, or tardy for the active session.",
+    href: "/educator/my-classes",
+    actionLabel: "Go to My Classes",
     details: [
       "From your active session, tap the \"Attendance\" tab to see the student roster.",
       "Tap each student's name to toggle their status: Present, Absent, or Tardy.",
@@ -37,7 +45,10 @@ const steps = [
     icon: UserPlus,
     color: "bg-purple-500",
     badgeColor: "bg-purple-100 text-purple-700",
+    borderColor: "#a855f7",
     description: "Log any aides or volunteers assisting in your classroom for the session.",
+    href: "/educator/my-classes",
+    actionLabel: "Go to My Classes",
     details: [
       "In your active session, look for the \"Aides & Volunteers\" section.",
       "Tap \"Add Aide\" or \"Add Volunteer\" and enter their name and role.",
@@ -51,7 +62,10 @@ const steps = [
     icon: LogOutIcon,
     color: "bg-amber-500",
     badgeColor: "bg-amber-100 text-amber-700",
+    borderColor: "#f59e0b",
     description: "End your session when class is over to log your hours.",
+    href: "/educator/my-hours",
+    actionLabel: "Go to My Hours",
     details: [
       "When class ends, return to your active session and tap \"End Session.\"",
       "Confirm the end time — it defaults to now, but you can adjust if needed.",
@@ -81,37 +95,41 @@ export default function StaffGuidePage() {
           {steps.map((step, index) => {
             const Icon = step.icon;
             return (
-              <Card key={step.number} className="relative overflow-hidden border-l-4" style={{ borderLeftColor: step.color.replace('bg-', '').includes('emerald') ? '#10b981' : step.color.includes('blue') ? '#3b82f6' : step.color.includes('purple') ? '#a855f7' : '#f59e0b' }}>
-                <CardHeader className="pb-2">
-                  <div className="flex items-center gap-3">
-                    <div className={`flex h-10 w-10 items-center justify-center rounded-full ${step.color} text-white shrink-0`}>
-                      <Icon className="h-5 w-5" />
+              <Link key={step.number} href={step.href}>
+                <Card className="relative overflow-hidden border-l-4 cursor-pointer hover:shadow-md transition-shadow group" style={{ borderLeftColor: step.borderColor }}>
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center gap-3">
+                      <div className={`flex h-10 w-10 items-center justify-center rounded-full ${step.color} text-white shrink-0`}>
+                        <Icon className="h-5 w-5" />
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap flex-1">
+                        <Badge variant="outline" className={step.badgeColor}>
+                          Step {step.number}
+                        </Badge>
+                        <CardTitle className="text-lg md:text-xl">{step.title}</CardTitle>
+                      </div>
+                      <ExternalLink className="h-4 w-4 text-gray-400 group-hover:text-gray-600 shrink-0 transition-colors" />
                     </div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <Badge variant="outline" className={step.badgeColor}>
-                        Step {step.number}
-                      </Badge>
-                      <CardTitle className="text-lg md:text-xl">{step.title}</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-gray-600 mb-4 text-sm md:text-base">{step.description}</p>
+                    <ul className="space-y-2">
+                      {step.details.map((detail, i) => (
+                        <li key={i} className="flex items-start gap-2 text-sm md:text-base text-gray-700">
+                          <ArrowRight className="h-4 w-4 mt-0.5 text-gray-400 shrink-0" />
+                          <span>{detail}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    <div className="mt-4 flex justify-end">
+                      <Button variant="outline" size="sm" className="gap-1 group-hover:bg-gray-50">
+                        {step.actionLabel}
+                        <ArrowRight className="h-3 w-3" />
+                      </Button>
                     </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-gray-600 mb-4 text-sm md:text-base">{step.description}</p>
-                  <ul className="space-y-2">
-                    {step.details.map((detail, i) => (
-                      <li key={i} className="flex items-start gap-2 text-sm md:text-base text-gray-700">
-                        <ArrowRight className="h-4 w-4 mt-0.5 text-gray-400 shrink-0" />
-                        <span>{detail}</span>
-                      </li>
-                    ))}
-                  </ul>
-                  {index < steps.length - 1 && (
-                    <div className="mt-4 flex justify-end md:hidden">
-                      <span className="text-xs text-gray-400 italic">Next: {steps[index + 1].title}</span>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
+              </Link>
             );
           })}
         </div>
