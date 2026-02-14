@@ -10,6 +10,7 @@ import {
   EducatorEmptyState,
   EducatorErrorState 
 } from '@/components/educator/EducatorErrorBoundary';
+import StaffGuideHighlight from '@/components/StaffGuideHighlight';
 
 interface ClassAssignment {
   assignmentId: number;
@@ -63,15 +64,15 @@ function MyClassesContent() {
   const hasActiveSession = !!activeSessionData?.activeSession;
 
   return (
-    <div className="grid gap-4">
-      {classes.map((classItem) => {
+    <div className="grid gap-4" data-testid="class-cards-list">
+      {classes.map((classItem, index) => {
         const isActiveClass = activeSessionData?.activeSession?.classId === classItem.classId;
         
         return (
           <Card 
             key={classItem.assignmentId} 
             className={isActiveClass ? 'border-green-500 bg-green-50 dark:bg-green-950' : ''}
-            data-testid={`class-card-${classItem.classId}`}
+            data-testid={index === 0 ? "first-class-card" : `class-card-${classItem.classId}`}
           >
             <CardHeader className="pb-2">
               <div className="flex items-start justify-between">
@@ -186,6 +187,10 @@ export default function MyClasses() {
           </p>
         </div>
         <MyClassesContent />
+
+        <StaffGuideHighlight stepNumber={1} targetTestId="first-class-card" position="bottom" />
+        <StaffGuideHighlight stepNumber={2} targetTestId="first-class-card" position="top" />
+        <StaffGuideHighlight stepNumber={3} targetTestId="first-class-card" position="bottom" />
       </div>
     </EducatorErrorBoundary>
   );

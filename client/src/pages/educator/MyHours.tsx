@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useLocation } from 'wouter';
+import StaffGuideHighlight from '@/components/StaffGuideHighlight';
 import { 
   Clock, 
   Calendar,
@@ -409,6 +410,7 @@ export default function MyHours() {
     <EducatorErrorBoundary>
       <div className="container mx-auto px-4 py-6 max-w-4xl">
         <MyHoursContent />
+        <StaffGuideHighlight stepNumber={4} targetTestId="button-back" position="bottom" />
       </div>
     </EducatorErrorBoundary>
   );

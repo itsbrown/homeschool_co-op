@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetTrigger, SheetClose } from "@/components/ui/sheet";
 import { LogOut, Menu, User, Bell, Home, BookOpen, Calendar, Clock, Users, Settings, GraduationCap, PlayCircle, Shield, HelpCircle } from "lucide-react";
 import StaffGuideModal from "@/components/StaffGuideModal";
+import { StaffGuideProvider } from "@/contexts/StaffGuideContext";
 import { cn } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { Link, useLocation } from "wouter";
@@ -268,6 +269,7 @@ export default function EducatorAppShell({ children }: EducatorAppShellProps) {
   };
 
   return (
+    <StaffGuideProvider>
     <div className="min-h-screen bg-gray-50">
       <div className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-64 lg:flex-col">
         <EducatorSidebar />
@@ -455,5 +457,6 @@ export default function EducatorAppShell({ children }: EducatorAppShellProps) {
 
       <StaffGuideModal />
     </div>
+    </StaffGuideProvider>
   );
 }

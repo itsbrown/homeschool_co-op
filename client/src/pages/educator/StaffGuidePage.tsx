@@ -2,7 +2,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { QrCode, ClipboardCheck, UserPlus, LogOut as LogOutIcon, ArrowRight, BookOpen, ExternalLink } from "lucide-react";
-import { Link } from "wouter";
+import { useLocation } from "wouter";
+import { useStaffGuide } from "@/contexts/StaffGuideContext";
 
 const steps = [
   {
@@ -76,6 +77,14 @@ const steps = [
 ];
 
 export default function StaffGuidePage() {
+  const [, setLocation] = useLocation();
+  const { setActiveStep } = useStaffGuide();
+
+  const handleStepClick = (step: typeof steps[0]) => {
+    setActiveStep({ number: step.number, title: step.title, summary: step.description });
+    setLocation(step.href);
+  };
+
   return (
     <div className="p-4 md:p-8 max-w-4xl mx-auto">
       <div className="mb-8">
@@ -95,8 +104,8 @@ export default function StaffGuidePage() {
           {steps.map((step, index) => {
             const Icon = step.icon;
             return (
-              <Link key={step.number} href={step.href}>
-                <Card className="relative overflow-hidden border-l-4 cursor-pointer hover:shadow-md transition-shadow group" style={{ borderLeftColor: step.borderColor }}>
+              <div key={step.number} onClick={() => handleStepClick(step)} className="cursor-pointer">
+                <Card className="relative overflow-hidden border-l-4 hover:shadow-md transition-shadow group" style={{ borderLeftColor: step.borderColor }}>
                   <CardHeader className="pb-2">
                     <div className="flex items-center gap-3">
                       <div className={`flex h-10 w-10 items-center justify-center rounded-full ${step.color} text-white shrink-0`}>
@@ -129,7 +138,7 @@ export default function StaffGuidePage() {
                     </div>
                   </CardContent>
                 </Card>
-              </Link>
+              </div>
             );
           })}
         </div>

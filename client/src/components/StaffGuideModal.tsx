@@ -5,6 +5,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { QrCode, ClipboardCheck, UserPlus, LogOut as LogOutIcon, ArrowRight, BookOpen, ChevronRight } from "lucide-react";
 import { Link, useLocation } from "wouter";
+import { useStaffGuide } from "@/contexts/StaffGuideContext";
 
 const STORAGE_KEY = "staff_guide_dismissed";
 
@@ -47,6 +48,7 @@ export default function StaffGuideModal() {
   const [open, setOpen] = useState(false);
   const [doNotShowAgain, setDoNotShowAgain] = useState(false);
   const [, setLocation] = useLocation();
+  const { setActiveStep } = useStaffGuide();
 
   useEffect(() => {
     const dismissed = localStorage.getItem(STORAGE_KEY);
@@ -89,6 +91,7 @@ export default function StaffGuideModal() {
                 className="flex items-start gap-3 p-3 rounded-lg bg-gray-50 border w-full text-left cursor-pointer hover:bg-gray-100 hover:border-gray-300 transition-colors group"
                 onClick={() => {
                   handleClose();
+                  setActiveStep({ number: step.number, title: step.title, summary: step.summary });
                   setLocation(step.href);
                 }}
                 data-testid={`staff-guide-step-${step.number}`}
