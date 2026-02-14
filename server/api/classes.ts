@@ -270,13 +270,29 @@ router.post('/:id/enroll', async (req, res) => {
       }
     }
 
-    const depositAmount = Math.round(classPrice * 0.1); // 10% deposit
+    let finalPrice = classPrice;
+    let prorateFields: any = {};
+    if (classItem.prorateEnabled && classItem.startDate && classItem.endDate) {
+      const { calculateProratedPrice } = await import('../lib/prorate-calculator.js');
+      const prorateResult = calculateProratedPrice(classPrice, classItem.startDate, classItem.endDate);
+      if (prorateResult.proratePercentage < 100) {
+        finalPrice = prorateResult.proratedPriceCents;
+        prorateFields = {
+          proratedFromCents: classPrice,
+          proratePercentage: prorateResult.proratePercentage,
+          prorateDate: new Date().toISOString(),
+          prorateReason: prorateResult.reason,
+        };
+        console.log(`📊 Pro-rated: ${classPrice} → ${finalPrice} cents (${prorateResult.proratePercentage}%)`);
+      }
+    }
 
-    // Create PENDING enrollment record (will be confirmed after payment)
+    const depositAmount = Math.round(finalPrice * 0.1); // 10% deposit
+
     const enrollmentData = createEnrollmentDataSimple({
       schoolId: classItem.schoolId || 1,
       classType: 'marketplace',
-      classId: null, // Not a school_class
+      classId: null,
       marketplaceClassId: classId,
       childId: childId,
       childName: `${child.firstName} ${child.lastName}`,
@@ -284,9 +300,9 @@ router.post('/:id/enroll', async (req, res) => {
       variantId: variantId || null,
       parentId: child.parentId,
       parentEmail: child.parentEmail || '',
-      totalCost: classPrice,
+      totalCost: finalPrice,
       totalPaid: 0,
-      remainingBalance: classPrice,
+      remainingBalance: finalPrice,
       depositRequired: depositAmount,
       paymentStatus: 'pending',
       paymentPlan: 'deposit_only',
@@ -299,11 +315,14 @@ router.post('/:id/enroll', async (req, res) => {
       stripeCustomerId: null
     });
     
-    console.log(`💰 Enrollment created with variant: ${variantId || 'none'}, variantName: "${selectedVariantName || 'none'}", price: ${classPrice} cents`);
+    if (Object.keys(prorateFields).length > 0) {
+      Object.assign(enrollmentData, prorateFields);
+    }
+
+    console.log(`💰 Enrollment created with variant: ${variantId || 'none'}, variantName: "${selectedVariantName || 'none'}", price: ${finalPrice} cents${prorateFields.proratedFromCents ? ` (prorated from ${prorateFields.proratedFromCents})` : ''}`);
 
     console.log(`📝 PENDING ENROLLMENT CREATED (will be confirmed after payment):`, enrollmentData);
 
-    // Save enrollment to storage
     const savedEnrollment = await storage.createProgramEnrollment(enrollmentData);
     console.log(`📝 ENROLLMENT SAVED with ID ${savedEnrollment.id}, status: ${enrollmentStatus}`);
 

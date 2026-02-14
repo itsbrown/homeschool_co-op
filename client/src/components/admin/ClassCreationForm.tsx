@@ -61,6 +61,7 @@ const classFormSchema = z.object({
   capacity: z.string().transform(val => parseInt(val, 10)),
   isPublished: z.boolean().default(false),
   isAdminOnly: z.boolean().default(false),
+  prorateEnabled: z.boolean().default(false),
   isOnline: z.boolean().default(false),
   hasMaterials: z.boolean().default(false),
   materials: z.string().optional(),
@@ -173,6 +174,7 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
     capacity: (initialData.capacity || initialData.maxEnrollment || 20).toString(),
     isPublished: initialData.isPublished || initialData.status === "published" || false,
     isAdminOnly: initialData.isAdminOnly || false,
+    prorateEnabled: initialData.prorateEnabled || false,
     isOnline: initialData.isOnline || initialData.location === "Online" || false,
     hasMaterials: initialData.hasMaterials || false,
     materials: initialData.materials || "",
@@ -211,6 +213,7 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
     price: "0",
     capacity: "20",
     isPublished: false,
+    prorateEnabled: false,
     isOnline: false,
     hasMaterials: false,
     materials: "",
@@ -273,6 +276,7 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
         capacity: (initialData.capacity || initialData.maxEnrollment || 20).toString(),
         isPublished: initialData.isPublished || initialData.status === "published" || false,
         isAdminOnly: initialData.isAdminOnly || false,
+        prorateEnabled: initialData.prorateEnabled || false,
         isOnline: initialData.isOnline || initialData.location === "Online" || false,
         hasMaterials: initialData.hasMaterials || false,
         materials: initialData.materials || "",
@@ -348,6 +352,7 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
         categoryName: "Spring 2025",
         isPublished: data.isPublished,
         isAdminOnly: data.isAdminOnly,
+        prorateEnabled: data.prorateEnabled,
         hasMaterials: data.hasMaterials,
         materials: data.materials || "",
         isOnline: data.isOnline,
@@ -833,6 +838,28 @@ export function ClassCreationForm({ onSuccess, initialData, classId }: ClassCrea
                 <FormLabel className="text-base">Admin Only Class</FormLabel>
                 <FormDescription>
                   Only admins can see this class and manually assign students to it
+                </FormDescription>
+              </div>
+              <FormControl>
+                <Switch
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                />
+              </FormControl>
+            </FormItem>
+          )}
+        />
+
+        {/* Pro-Rate Enabled */}
+        <FormField
+          control={form.control}
+          name="prorateEnabled"
+          render={({ field }) => (
+            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+              <div className="space-y-0.5">
+                <FormLabel className="text-base">Enable Pro-Rating</FormLabel>
+                <FormDescription>
+                  Automatically adjust tuition for students who enroll after the class has started, based on remaining days
                 </FormDescription>
               </div>
               <FormControl>

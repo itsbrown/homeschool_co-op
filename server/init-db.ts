@@ -2086,6 +2086,26 @@ async function runMigrations() {
     } catch (stripeCreatedAtError: any) {
       console.log('Migration note (stripe_created_at nullable):', stripeCreatedAtError.message || String(stripeCreatedAtError));
     }
+
+    // Add prorate_enabled column to classes table
+    console.log('Running migration: Adding prorate_enabled column to classes table...');
+    await db.execute(sql`
+      ALTER TABLE classes
+      ADD COLUMN IF NOT EXISTS prorate_enabled BOOLEAN NOT NULL DEFAULT false;
+    `);
+    console.log('✅ Migration completed: prorate_enabled column added to classes table');
+
+    // Add proration tracking columns to program_enrollments table
+    console.log('Running migration: Adding proration tracking columns to program_enrollments...');
+    await db.execute(sql`
+      ALTER TABLE program_enrollments
+      ADD COLUMN IF NOT EXISTS prorated_from_cents INTEGER,
+      ADD COLUMN IF NOT EXISTS prorate_percentage INTEGER,
+      ADD COLUMN IF NOT EXISTS prorate_date TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS prorate_by INTEGER REFERENCES users(id),
+      ADD COLUMN IF NOT EXISTS prorate_reason TEXT;
+    `);
+    console.log('✅ Migration completed: proration tracking columns added to program_enrollments');
     
   } catch (fundraiserError) {
     const errorMessage = fundraiserError instanceof Error ? fundraiserError.message : String(fundraiserError);

@@ -47,7 +47,8 @@ import {
   LayoutGrid,
   LayoutList,
   TrendingUp,
-  Gift
+  Gift,
+  Percent
 } from "lucide-react";
 import { formatCurrency } from "@/utils/currency";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -70,6 +71,11 @@ interface Enrollment {
   programEndDate?: string;
   parentEmail?: string;
   compPercentage?: number | null;
+  proratedFromCents?: number | null;
+  proratePercentage?: number | null;
+  prorateDate?: string | null;
+  prorateBy?: number | null;
+  prorateReason?: string | null;
   metadata?: {
     paymentPlanHistory?: Array<{
       timestamp: string;
@@ -732,6 +738,12 @@ export default function EnrollmentsAdminPage() {
                               <div className="text-xs text-muted-foreground">
                                 {formatCurrency(enrollment.totalPaid)} / {formatCurrency(enrollment.totalCost)}
                               </div>
+                              {enrollment.proratedFromCents && (
+                                <div className="text-xs text-blue-600 flex items-center gap-1" title={enrollment.prorateReason || ''}>
+                                  <Percent className="h-3 w-3" />
+                                  Pro-rated from {formatCurrency(enrollment.proratedFromCents)} ({enrollment.proratePercentage}%)
+                                </div>
+                              )}
                             </div>
                           </TableCell>
                           <TableCell>
@@ -836,6 +848,12 @@ export default function EnrollmentsAdminPage() {
                             <span>{formatCurrency(enrollment.totalPaid)} paid</span>
                             <span>{formatCurrency(enrollment.remainingBalance)} remaining</span>
                           </div>
+                          {enrollment.proratedFromCents && (
+                            <div className="text-xs text-blue-600 flex items-center gap-1 mt-1" title={enrollment.prorateReason || ''}>
+                              <Percent className="h-3 w-3" />
+                              Pro-rated from {formatCurrency(enrollment.proratedFromCents)} ({enrollment.proratePercentage}%)
+                            </div>
+                          )}
                         </div>
                         
                         <div className="flex items-center justify-between text-sm">
@@ -931,6 +949,12 @@ export default function EnrollmentsAdminPage() {
                       <span>Total Cost:</span>
                       <span className="font-medium">{formatCurrency(paymentPlanDetails.enrollment.totalCost)}</span>
                     </div>
+                    {paymentPlanDetails.enrollment.proratedFromCents && (
+                      <div className="flex justify-between text-blue-600">
+                        <span className="flex items-center gap-1"><Percent className="h-3 w-3" /> Original Price:</span>
+                        <span className="font-medium">{formatCurrency(paymentPlanDetails.enrollment.proratedFromCents)} ({paymentPlanDetails.enrollment.proratePercentage}% remaining)</span>
+                      </div>
+                    )}
                     <div className="flex justify-between">
                       <span>Total Paid:</span>
                       <span className="font-medium">{formatCurrency(paymentPlanDetails.enrollment.totalPaid)}</span>

@@ -609,6 +609,13 @@ export const programEnrollments = pgTable("program_enrollments", {
   compBy: integer("comp_by").references(() => users.id),
   compAt: timestamp("comp_at"),
   
+  // Proration tracking (for mid-session enrollments with reduced pricing)
+  proratedFromCents: integer("prorated_from_cents"), // Original full price before proration
+  proratePercentage: integer("prorate_percentage"), // 0-100, percentage of class remaining
+  prorateDate: timestamp("prorate_date"), // Date proration was calculated/applied
+  prorateBy: integer("prorate_by").references(() => users.id),
+  prorateReason: text("prorate_reason"),
+  
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -645,6 +652,11 @@ export const updateProgramEnrollmentSchema = insertProgramEnrollmentSchema.parti
   compReason: z.string().nullable().optional(),
   compBy: z.number().nullable().optional(),
   compAt: z.date().nullable().optional(),
+  proratedFromCents: z.number().nullable().optional(),
+  proratePercentage: z.number().min(0).max(100).nullable().optional(),
+  prorateDate: z.date().nullable().optional(),
+  prorateBy: z.number().nullable().optional(),
+  prorateReason: z.string().nullable().optional(),
 });
 export type UpdateProgramEnrollment = z.infer<typeof updateProgramEnrollmentSchema>;
 
@@ -1616,6 +1628,9 @@ export const classes = pgTable("classes", {
   
   // Volunteer waiver - document that volunteers must sign before assisting
   volunteerWaiverId: integer("volunteer_waiver_id").references(() => schoolDocuments.id),
+  
+  // Prorate option - when enabled, mid-session enrollments auto-calculate reduced pricing
+  prorateEnabled: boolean("prorate_enabled").default(false).notNull(),
 });
 
 export const insertClassSchema = createInsertSchema(classes)
@@ -1661,6 +1676,7 @@ export const insertClassSchema = createInsertSchema(classes)
     totalDiscounted: z.number().optional(),
     totalCollected: z.number().optional(),
     isAdminOnly: z.boolean().optional(),
+    prorateEnabled: z.boolean().optional().default(false),
     
     // Marketplace specific fields (optional)
     ageRange: z.string().optional(),

@@ -908,7 +908,6 @@ router.put("/classes/:id", supabaseAuth, async (req: any, res) => {
       }
     }
 
-    // Prepare update data
     const updateData: any = {
       title: req.body.title || existingClass.title,
       description: req.body.description || existingClass.description,
@@ -923,10 +922,10 @@ router.put("/classes/:id", supabaseAuth, async (req: any, res) => {
       instructorName: instructorName,
       instructorId: instructorId,
       price: req.body.price !== undefined ? req.body.price : existingClass.price,
-      isAdminOnly: req.body.isAdminOnly !== undefined ? req.body.isAdminOnly : existingClass.isAdminOnly
+      isAdminOnly: req.body.isAdminOnly !== undefined ? req.body.isAdminOnly : existingClass.isAdminOnly,
+      prorateEnabled: req.body.prorateEnabled !== undefined ? req.body.prorateEnabled : existingClass.prorateEnabled
     };
 
-    // Update the main class in database
     const updatedClass = await storage.updateClass(classId, updateData);
     
     if (!updatedClass) {
@@ -1045,7 +1044,8 @@ router.patch("/classes/:id", supabaseAuth, async (req: any, res) => {
       instructorName: instructorName,
       instructorId: instructorId,
       price: req.body.price !== undefined ? req.body.price : existingClass.price,
-      isAdminOnly: req.body.isAdminOnly !== undefined ? req.body.isAdminOnly : existingClass.isAdminOnly
+      isAdminOnly: req.body.isAdminOnly !== undefined ? req.body.isAdminOnly : existingClass.isAdminOnly,
+      prorateEnabled: req.body.prorateEnabled !== undefined ? req.body.prorateEnabled : existingClass.prorateEnabled
     };
 
     const updatedClass = await storage.updateClass(classId, updateData);
@@ -1139,6 +1139,47 @@ router.delete("/classes/:id", supabaseAuth, async (req: any, res) => {
     
     // For other errors, return 500
     res.status(500).json({ message: errorMessage });
+  }
+});
+
+router.get("/classes/:id/prorate-preview", supabaseAuth, async (req: any, res) => {
+  try {
+    const schoolId = await getSchoolIdFromRequest(req, res);
+    if (schoolId === null) return;
+
+    const classId = parseInt(req.params.id);
+    const enrollmentDate = req.query.enrollmentDate as string || new Date().toISOString().split('T')[0];
+
+    const classData = await storage.getClassById(classId);
+    if (!classData) {
+      return res.status(404).json({ message: 'Class not found' });
+    }
+    if (classData.schoolId !== schoolId) {
+      return res.status(403).json({ message: 'Access denied to this class' });
+    }
+
+    const { calculateProratedPrice } = await import('../lib/prorate-calculator.js');
+
+    const priceCents = classData.price ? Math.round(parseFloat(classData.price) * 100) : 0;
+    const result = calculateProratedPrice(
+      priceCents,
+      classData.startDate!,
+      classData.endDate!,
+      enrollmentDate
+    );
+
+    res.json({
+      ...result,
+      classId,
+      className: classData.title,
+      prorateEnabled: classData.prorateEnabled || false,
+      enrollmentDate,
+      classStartDate: classData.startDate,
+      classEndDate: classData.endDate,
+    });
+  } catch (error: any) {
+    console.error('Error calculating prorate preview:', error);
+    res.status(500).json({ message: error.message || 'Failed to calculate proration' });
   }
 });
 
