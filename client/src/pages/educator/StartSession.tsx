@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useLocation, useParams } from 'wouter';
 import { PlayCircle, ArrowLeft, Clock, Users, AlertCircle, UserPlus, X, UserCheck } from 'lucide-react';
@@ -15,6 +15,7 @@ import {
   EducatorLoadingState, 
   EducatorErrorState 
 } from '@/components/educator/EducatorErrorBoundary';
+import { useStaffGuide } from '@/contexts/StaffGuideContext';
 
 interface ClassInfo {
   id: number;
@@ -65,9 +66,14 @@ function formatTimeLocal(date: Date): string {
 function StartSessionContent({ classId }: { classId: number }) {
   const [, navigate] = useLocation();
   const { toast } = useToast();
+  const { clearStep } = useStaffGuide();
   const [isStarting, setIsStarting] = useState(false);
   const [showVolunteerSection, setShowVolunteerSection] = useState(false);
   const [selectedVolunteers, setSelectedVolunteers] = useState<SelectedVolunteer[]>([]);
+
+  useEffect(() => {
+    clearStep();
+  }, [clearStep]);
 
   const { data: classInfo, isLoading, error } = useQuery<ClassInfo>({
     queryKey: [`/api/educator/classes/${classId}`],

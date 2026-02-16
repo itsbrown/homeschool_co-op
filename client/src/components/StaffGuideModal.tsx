@@ -8,6 +8,12 @@ import { Link, useLocation } from "wouter";
 import { useStaffGuide } from "@/contexts/StaffGuideContext";
 
 const STORAGE_KEY = "staff_guide_dismissed";
+const SESSION_KEY = "staff_guide_shown_this_session";
+
+const SUPPRESSED_PATH_PREFIXES = [
+  "/educator/classes/",
+  "/educator/session/",
+];
 
 const steps = [
   {
@@ -47,22 +53,35 @@ const steps = [
 export default function StaffGuideModal() {
   const [open, setOpen] = useState(false);
   const [doNotShowAgain, setDoNotShowAgain] = useState(false);
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const { setActiveStep } = useStaffGuide();
 
   useEffect(() => {
-    const dismissed = localStorage.getItem(STORAGE_KEY);
-    if (dismissed !== "true") {
-      const timer = setTimeout(() => setOpen(true), 500);
-      return () => clearTimeout(timer);
-    }
-  }, []);
+    const permanentlyDismissed = localStorage.getItem(STORAGE_KEY) === "true";
+    const shownThisSession = sessionStorage.getItem(SESSION_KEY) === "true";
+    if (permanentlyDismissed || shownThisSession) return;
+
+    const onSuppressedPage = SUPPRESSED_PATH_PREFIXES.some(prefix => location.startsWith(prefix));
+    if (onSuppressedPage) return;
+
+    sessionStorage.setItem(SESSION_KEY, "true");
+    const timer = setTimeout(() => setOpen(true), 500);
+    return () => clearTimeout(timer);
+  }, [location]);
 
   const handleClose = () => {
     if (doNotShowAgain) {
       localStorage.setItem(STORAGE_KEY, "true");
     }
     setOpen(false);
+  };
+
+  const handleStepClick = (step: typeof steps[0]) => {
+    handleClose();
+    setActiveStep({ number: step.number, title: step.title, summary: step.summary });
+    if (!location.startsWith(step.href)) {
+      setLocation(step.href);
+    }
   };
 
   return (
@@ -89,11 +108,7 @@ export default function StaffGuideModal() {
                 key={step.number}
                 type="button"
                 className="flex items-start gap-3 p-3 rounded-lg bg-gray-50 border w-full text-left cursor-pointer hover:bg-gray-100 hover:border-gray-300 transition-colors group"
-                onClick={() => {
-                  handleClose();
-                  setActiveStep({ number: step.number, title: step.title, summary: step.summary });
-                  setLocation(step.href);
-                }}
+                onClick={() => handleStepClick(step)}
                 data-testid={`staff-guide-step-${step.number}`}
               >
                 <div className={`flex h-9 w-9 items-center justify-center rounded-full ${step.color} text-white shrink-0`}>
