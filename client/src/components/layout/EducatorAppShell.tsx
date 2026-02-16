@@ -185,10 +185,10 @@ function EducatorSidebar() {
         </nav>
       </ScrollArea>
 
-      <div className="border-t border-slate-700 p-4">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="h-10 w-10 rounded-full bg-emerald-600 flex items-center justify-center">
-            <User className="h-5 w-5 text-white" />
+      <div className="border-t border-slate-700 p-3 space-y-2">
+        <div className="flex items-center gap-3">
+          <div className="h-9 w-9 rounded-full bg-emerald-600 flex items-center justify-center shrink-0">
+            <User className="h-4 w-4 text-white" />
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium truncate text-white">{user?.user_metadata?.full_name || user?.email}</p>
@@ -196,11 +196,14 @@ function EducatorSidebar() {
           </div>
         </div>
 
-        <RoleSwitcher />
+        <div className="[&_button]:w-full [&_button]:border-slate-600 [&_button]:text-slate-300 [&_button]:bg-slate-800/50 [&_button]:hover:bg-slate-700 [&_button]:hover:text-white [&_.text-muted-foreground]:text-slate-400">
+          <RoleSwitcher />
+        </div>
 
         <Button
           variant="ghost"
-          className="w-full mt-3 text-slate-300 hover:text-white hover:bg-slate-800"
+          size="sm"
+          className="w-full text-slate-400 hover:text-white hover:bg-slate-800"
           onClick={handleLogout}
           data-testid="button-logout-sidebar"
         >
@@ -350,24 +353,25 @@ export default function EducatorAppShell({ children }: EducatorAppShellProps) {
                     </nav>
                   </ScrollArea>
 
-                  <div className="border-t border-slate-700 p-4">
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="h-10 w-10 rounded-full bg-emerald-600 flex items-center justify-center">
-                        <User className="h-5 w-5 text-white" />
+                  <div className="border-t border-slate-700 p-3 space-y-2">
+                    <div className="flex items-center gap-3">
+                      <div className="h-9 w-9 rounded-full bg-emerald-600 flex items-center justify-center shrink-0">
+                        <User className="h-4 w-4 text-white" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate text-white">{user?.email}</p>
+                        <p className="text-sm font-medium truncate text-white">{user?.user_metadata?.full_name || user?.email}</p>
                         <p className="text-xs text-slate-400">{getRoleLabel(activeRole)}</p>
                       </div>
                     </div>
 
-                    <div className="mb-3">
+                    <div className="[&_button]:w-full [&_button]:border-slate-600 [&_button]:text-slate-300 [&_button]:bg-slate-800/50 [&_button]:hover:bg-slate-700 [&_button]:hover:text-white [&_.text-muted-foreground]:text-slate-400">
                       <RoleSwitcher />
                     </div>
 
                     <Button
-                      variant="outline"
-                      className="w-full border-slate-600 text-slate-300 hover:bg-slate-800 hover:text-white"
+                      variant="ghost"
+                      size="sm"
+                      className="w-full text-slate-400 hover:text-white hover:bg-slate-800"
                       onClick={handleLogout}
                       data-testid="button-logout-mobile"
                     >

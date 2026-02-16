@@ -77,11 +77,16 @@ export default function StaffGuideModal() {
   };
 
   const handleStepClick = (step: typeof steps[0]) => {
-    handleClose();
     setActiveStep({ number: step.number, title: step.title, summary: step.summary });
-    if (!location.startsWith(step.href)) {
-      setLocation(step.href);
+    setOpen(false);
+    if (doNotShowAgain) {
+      localStorage.setItem(STORAGE_KEY, "true");
     }
+    setTimeout(() => {
+      if (!location.startsWith(step.href)) {
+        setLocation(step.href);
+      }
+    }, 100);
   };
 
   return (
