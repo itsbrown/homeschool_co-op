@@ -182,7 +182,7 @@ export default function ParentAppShell({ children }: ParentAppShellProps) {
                           }}
                         />
                       )}
-                      <h2 className="text-lg font-semibold">{userSchool?.name || 'LearnSphere'}</h2>
+                      <h2 className="text-lg font-semibold">{userSchool?.name || 'American Seekers Academy'}</h2>
                     </div>
 
                     {/* Mobile Menu Navigation */}
@@ -265,7 +265,7 @@ export default function ParentAppShell({ children }: ParentAppShellProps) {
                     }}
                   />
                 ) : (
-                  <h1 className="text-lg font-semibold">{userSchool?.name || 'LearnSphere'}</h1>
+                  <h1 className="text-lg font-semibold">{userSchool?.name || 'American Seekers Academy'}</h1>
                 )}
               </div>
 

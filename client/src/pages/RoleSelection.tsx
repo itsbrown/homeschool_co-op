@@ -115,7 +115,7 @@ export default function RoleSelection() {
     <div className="min-h-screen flex items-center justify-center bg-secondary p-4">
       <Card className="w-full max-w-2xl">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold">Welcome to LearnSphere!</CardTitle>
+          <CardTitle className="text-2xl font-bold">Welcome to American Seekers Academy!</CardTitle>
           <CardDescription>
             Please select your role to customize your experience
           </CardDescription>

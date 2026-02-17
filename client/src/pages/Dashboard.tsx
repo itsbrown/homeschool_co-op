@@ -10,6 +10,10 @@ export default function Dashboard() {
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const [, setLocation] = useLocation();
 
+  useEffect(() => {
+    document.title = "Dashboard - American Seekers Academy";
+  }, []);
+
   // Redirect to login if not authenticated
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {

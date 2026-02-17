@@ -51,7 +51,7 @@ export function AdminShell({ children }: PropsWithChildren) {
       <aside className="fixed left-0 top-0 z-10 hidden h-full w-56 flex-col border-r bg-background sm:flex">
         <div className="border-b p-4">
           <Link href="/">
-            <h2 className="text-xl font-bold text-primary">LearnSphere</h2>
+            <h2 className="text-xl font-bold text-primary">American Seekers Academy</h2>
           </Link>
         </div>
         <div className="flex-1 overflow-auto p-3">

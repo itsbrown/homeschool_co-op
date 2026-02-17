@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { useAuth } from '@/components/SupabaseProvider';
@@ -37,6 +37,11 @@ export default function SchoolSettings() {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    document.title = "School Settings - American Seekers Academy";
+  }, []);
+
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [membershipDialogOpen, setMembershipDialogOpen] = useState(false);

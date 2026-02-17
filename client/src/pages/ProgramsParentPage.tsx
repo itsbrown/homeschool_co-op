@@ -757,6 +757,10 @@ export default function ProgramsParentPage() {
   const { user, isAuthenticated, isLoading } = useAuth();
   const isAdmin = user?.role === 'admin';
 
+  useEffect(() => {
+    document.title = "Programs & Classes - American Seekers Academy";
+  }, []);
+
   // Redirect if not authenticated using useEffect instead of during render
   React.useEffect(() => {
     if (!isAuthenticated && !isLoading) {

@@ -46,9 +46,9 @@ export default function Layout({ children }: LayoutProps) {
   };
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex h-screen bg-muted">
       {/* Sidebar */}
-      <div className="w-64 bg-white shadow-lg flex flex-col">
+      <div className="w-64 bg-background shadow-lg flex flex-col">
         {/* Logo */}
         <div className="p-6 border-b">
           {schoolData?.success && schoolData?.school?.logo ? (
@@ -64,14 +64,14 @@ export default function Layout({ children }: LayoutProps) {
                 }}
               />
               <div style={{ display: 'none' }}>
-                <h1 className="text-xl font-bold text-gray-900">{schoolData.school.name}</h1>
+                <h1 className="text-xl font-bold text-foreground">{schoolData.school.name}</h1>
               </div>
-              <h1 className="text-xl font-bold text-gray-900">{schoolData.school.name}</h1>
+              <h1 className="text-xl font-bold text-foreground">{schoolData.school.name}</h1>
             </div>
           ) : schoolData?.success && schoolData?.school?.name ? (
-            <h1 className="text-2xl font-bold text-gray-900">{schoolData.school.name}</h1>
+            <h1 className="text-2xl font-bold text-foreground">{schoolData.school.name}</h1>
           ) : (
-            <h1 className="text-2xl font-bold text-gray-900">LearnSphere</h1>
+            <h1 className="text-2xl font-bold text-foreground">American Seekers Academy</h1>
           )}
         </div>
 
@@ -87,7 +87,7 @@ export default function Layout({ children }: LayoutProps) {
                   className={`flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors ${
                     isActive
                       ? "bg-blue-50 text-blue-700"
-                      : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
                   }`}
                 >
                   <Icon className="h-5 w-5" />
@@ -108,10 +108,10 @@ export default function Layout({ children }: LayoutProps) {
               </AvatarFallback>
             </Avatar>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-900 truncate">
+              <p className="text-sm font-medium text-foreground truncate">
                 {user?.name || "User"}
               </p>
-              <p className="text-xs text-gray-500">Parent Account</p>
+              <p className="text-xs text-muted-foreground">Parent Account</p>
             </div>
           </div>
           
@@ -119,7 +119,7 @@ export default function Layout({ children }: LayoutProps) {
             variant="ghost"
             size="sm"
             onClick={handleLogout}
-            className="w-full justify-start text-gray-600 hover:text-gray-900"
+            className="w-full justify-start text-muted-foreground hover:text-foreground"
           >
             <LogOut className="h-4 w-4 mr-2" />
             Log Out

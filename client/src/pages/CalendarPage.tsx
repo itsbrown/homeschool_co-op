@@ -45,6 +45,10 @@ export default function CalendarPage() {
   const [monthOffset, setMonthOffset] = useState(0);
   const [filter, setFilter] = useState<string>("all");
 
+  useEffect(() => {
+    document.title = "Family Schedule - American Seekers Academy";
+  }, []);
+
   // Handle authentication checks
   useEffect(() => {
     if (!isLoading && !user) {

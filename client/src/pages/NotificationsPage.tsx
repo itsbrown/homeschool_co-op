@@ -21,7 +21,7 @@ import {
 import { formatDistanceToNow } from "date-fns";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 interface Notification {
   id: number;
@@ -53,6 +53,10 @@ export default function NotificationsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<"all" | "unread">("all");
+
+  useEffect(() => {
+    document.title = "Notifications - American Seekers Academy";
+  }, []);
 
   // Fetch notifications from API (backend will use authenticated user's ID from middleware)
   const { data: notifications = [], isLoading } = useQuery<Notification[]>({

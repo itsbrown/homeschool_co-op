@@ -43,6 +43,10 @@ export default function Login() {
   const [registrationRequired, setRegistrationRequired] = useState<{message: string, email: string} | null>(null);
   const setLocation = navigate; // Alias for clarity in the change
 
+  useEffect(() => {
+    document.title = "Sign In - American Seekers Academy";
+  }, []);
+
   // Check for registration required error from URL and sessionStorage
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
@@ -137,7 +141,7 @@ export default function Login() {
       <div className="max-w-md w-full">
         <Card className="shadow-xl">
           <CardHeader className="text-center">
-            <CardTitle className="text-2xl font-bold text-gray-800">
+            <CardTitle className="text-2xl font-bold text-foreground">
               Welcome Back
             </CardTitle>
             <CardDescription>
@@ -261,9 +265,10 @@ export default function Login() {
               </form>
             </Form>
 
-            {/* Test Accounts */}
+            {/* Test Accounts - only visible in development */}
+            {import.meta.env.DEV && (
             <div className="space-y-3">
-              <p className="text-sm text-gray-600 text-center">
+              <p className="text-sm text-muted-foreground text-center">
                 Quick access for testing:
               </p>
               <div className="grid gap-2">
@@ -286,6 +291,7 @@ export default function Login() {
                 })}
               </div>
             </div>
+            )}
 
             {error && (
               <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md">
@@ -296,7 +302,7 @@ export default function Login() {
 
           <CardFooter className="text-center">
             <div className="w-full">
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-muted-foreground">
                 <Button variant="link" className="p-0 h-auto" onClick={() => setLocation('/forgot-password')}>
                   Forgot your password?
                 </Button>

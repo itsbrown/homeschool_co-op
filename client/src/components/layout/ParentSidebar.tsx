@@ -289,7 +289,7 @@ export default function ParentSidebar() {
                   ) : schoolData?.success && schoolData?.school?.name ? (
                     <span className="text-xl">{schoolData.school.name}</span>
                   ) : (
-                    <span className="text-xl">LearnSphere</span>
+                    <span className="text-xl">American Seekers Academy</span>
                   )}
                 </a>
                 <Button
@@ -356,7 +356,7 @@ export default function ParentSidebar() {
               ) : schoolData?.success && schoolData?.school?.name ? (
                 <span className="text-xl">{schoolData.school.name}</span>
               ) : (
-                <span className="text-xl">LearnSphere</span>
+                <span className="text-xl">American Seekers Academy</span>
               )}
             </a>
           </div>

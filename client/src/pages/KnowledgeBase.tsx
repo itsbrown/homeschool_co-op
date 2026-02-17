@@ -235,6 +235,10 @@ export default function KnowledgeBasePage() {
   };
 
   useEffect(() => {
+    document.title = "Knowledge Base - American Seekers Academy";
+  }, []);
+
+  useEffect(() => {
     console.log("Knowledge Base page: showCreateDialog state changed to:", showCreateDialog);
   }, [showCreateDialog]);
   

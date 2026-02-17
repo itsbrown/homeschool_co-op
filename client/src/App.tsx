@@ -495,7 +495,7 @@ function Router() {
                 title: 'Sample Class',
                 price: 50000, // $500 in cents
                 depositRequired: 5000, // $50 in cents
-                school: 'LearnSphere Academy',
+                school: 'American Seekers Academy',
                 schedule: 'Mon, Wed, Fri 10:00-11:00 AM'
               };
 

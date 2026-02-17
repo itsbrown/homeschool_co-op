@@ -12,7 +12,7 @@ import { History, Loader2, RefreshCw, DollarSign, ChevronDown } from "lucide-rea
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import ParentAppShell from "@/components/layout/ParentAppShell";
 import { apiRequest } from "@/lib/queryClient";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { formatCurrency, centsToDollars } from "@/utils/currency";
 
 interface PaymentHistoryItem {
@@ -57,6 +57,11 @@ export default function PaymentHistoryPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    document.title = "Payment History - American Seekers Academy";
+  }, []);
+
   const [refundDialog, setRefundDialog] = useState<{ open: boolean; payment: PaymentHistoryItem | null }>({ open: false, payment: null });
   const [refundAmount, setRefundAmount] = useState('');
   const [refundReason, setRefundReason] = useState('');

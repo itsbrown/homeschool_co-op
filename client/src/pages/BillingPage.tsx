@@ -1334,6 +1334,10 @@ export default function BillingPage() {
   const [currentPayment, setCurrentPayment] = useState<any>(null);
   const [isPending, startTransition] = useTransition();
 
+  useEffect(() => {
+    document.title = "Billing & Payments - American Seekers Academy";
+  }, []);
+
   // Detect Stripe redirect completion (e.g., after 3D Secure verification)
   // When Stripe redirects back, URL contains payment_intent and redirect_status params
   useEffect(() => {

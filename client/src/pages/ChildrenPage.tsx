@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { useAuth } from "@/components/SupabaseProvider";
 import { Redirect, Link } from "wouter";
 import ParentAppShell from "@/components/layout/ParentAppShell";
@@ -143,6 +143,10 @@ interface Child {
 
 export default function ChildrenPage() {
   const { user, isAuthenticated } = useAuth();
+
+  useEffect(() => {
+    document.title = "My Children - American Seekers Academy";
+  }, []);
   
   // Fetch children data - always call the hook
   const { data: children = [], isLoading: isLoadingChildren } = useQuery<Child[]>({

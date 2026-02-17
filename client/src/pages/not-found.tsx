@@ -9,6 +9,10 @@ export default function NotFound() {
   const [location, setLocation] = useLocation();
 
   useEffect(() => {
+    document.title = "Page Not Found - American Seekers Academy";
+  }, []);
+
+  useEffect(() => {
     capture404(location, {
       timestamp: new Date().toISOString(),
       userAgent: navigator.userAgent,
@@ -16,15 +20,15 @@ export default function NotFound() {
   }, [location]);
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-gray-50">
+    <div className="min-h-screen w-full flex items-center justify-center bg-muted">
       <Card className="w-full max-w-md mx-4">
         <CardContent className="pt-6">
           <div className="flex mb-4 gap-2">
-            <AlertCircle className="h-8 w-8 text-red-500" />
-            <h1 className="text-2xl font-bold text-gray-900">404 Page Not Found</h1>
+            <AlertCircle className="h-8 w-8 text-destructive" />
+            <h1 className="text-2xl font-bold text-foreground">404 Page Not Found</h1>
           </div>
 
-          <p className="mt-4 text-sm text-gray-600">
+          <p className="mt-4 text-sm text-muted-foreground">
             The page you're looking for doesn't exist or has been moved.
           </p>
 
