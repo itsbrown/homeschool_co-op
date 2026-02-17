@@ -252,8 +252,14 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
   });
 
   // Transform school admin classes data to match expected format
+  // Filter out expired classes (endDate < today) for parent-facing view
+  const now = new Date();
   const classesData: ClassesResponse = {
     classes: ((schoolClassesResponse as any)?.items || [])
+      .filter((item: any) => {
+        if (item.endDate && new Date(item.endDate) < now) return false;
+        return true;
+      })
       .map((item: any) => ({
         id: item.id,
         title: item.title,
@@ -272,11 +278,12 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
         variants: item.variants || []
       })),
     pagination: {
-      currentPage: (schoolClassesResponse as any)?.page || 1,
-      totalPages: (schoolClassesResponse as any)?.totalPages || 1,
-      totalItems: (schoolClassesResponse as any)?.total || 0
+      currentPage: 1,
+      totalPages: 1,
+      totalItems: 0
     }
   };
+  classesData.pagination.totalItems = classesData.classes.length;
 
   // Debug logging
   console.log('School classes response:', schoolClassesResponse);

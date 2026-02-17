@@ -138,9 +138,32 @@ const mutation = useMutation({
 - Don't use `100vh` for full-height layouts — use `100dvh` or `svh` for iOS Safari viewport consistency
 - Don't use stock images as full-width section backgrounds — use gradients or solid colors instead
 
+## Class Data Fetching Pattern (Important)
+
+Two separate pages list classes for parents, each using a **different API endpoint**:
+
+| Page | Route | API Endpoint | Filtering |
+|------|-------|-------------|-----------|
+| `ProgramsPage.tsx` | `/programs` | `/api/classes` (public) | Server-side: hides expired (`endDate < now`), admin-only classes |
+| `ProgramsParentPage.tsx` | `/parent/programs` | `/api/school-admin/classes` (admin) | Client-side: must filter expired classes in the `.map()` transformation step |
+
+**Why this matters:** Any server-side class visibility filtering (expired classes, admin-only, etc.) applied to public `/api/classes` endpoints will **NOT** automatically apply to the parent programs page. The `ProgramsParentPage` fetches from `/api/school-admin/classes` and transforms the response client-side (lines ~254-279). Filtering must be applied in **both** places.
+
+**Other public class endpoints with server-side end-date filtering:**
+- `GET /api/classes/category/:categoryName`
+- `GET /api/classes/categories/names`
+- `GET /api/classes/published`
+- `GET /api/registration/classes`
+
+**Admin endpoints (intentionally unfiltered):**
+- `GET /api/school-admin/classes` — used by admin views AND `ProgramsParentPage`
+- `GET /api/admin/classes` — platform admin
+
 ## Key Files
 - `client/src/lib/queryClient.ts` — `apiRequest`, default fetcher, `queryClient`, token refresh
 - `client/src/App.tsx` — route definitions, lazy imports, provider tree
+- `client/src/pages/ProgramsPage.tsx` — public class listing (uses `/api/classes`)
+- `client/src/pages/ProgramsParentPage.tsx` — parent class listing (uses `/api/school-admin/classes`, needs client-side filtering)
 - `client/src/components/layout/EducatorAppShell.tsx` — educator layout shell with sidebar
 - `client/src/components/SupabaseProvider.tsx` — `useAuth()` hook, Supabase session management
 - `client/src/contexts/RoleContext.tsx` — `useRole()` hook, role switching logic
