@@ -533,9 +533,38 @@ router.get('/classes/:id/students', async (req, res) => {
       enrollment.marketplaceClassId === classId
     );
 
-    const students = classEnrollments.map((enrollment: any) => {
-      const child = allChildren.find(c => c.id === enrollment.childId);
-      if (child) {
+    const students = await Promise.all(
+      classEnrollments.map(async (enrollment: any) => {
+        const child = allChildren.find(c => c.id === enrollment.childId);
+        if (!child) return null;
+
+        let parentPhone = null;
+        let emergencyContactName = null;
+        let emergencyContactPhone = null;
+        let emergencyContactRelationship = null;
+
+        if (child.parentId) {
+          const parent = await storage.getUser(child.parentId);
+          if (parent) {
+            parentPhone = parent.phone || null;
+            emergencyContactName = [parent.emergencyContactFirstName, parent.emergencyContactLastName].filter(Boolean).join(' ') || null;
+            emergencyContactPhone = parent.emergencyContactPhone || null;
+            emergencyContactRelationship = parent.emergencyContactRelationship || null;
+          }
+
+          const emergencyContacts = await storage.getEmergencyContactsByUserId(child.parentId);
+          if (emergencyContacts.length > 0 && !emergencyContactName) {
+            const ec = emergencyContacts[0];
+            emergencyContactName = `${ec.firstName} ${ec.lastName}`;
+            emergencyContactPhone = ec.phoneNumber;
+            emergencyContactRelationship = ec.relationship;
+          }
+        }
+
+        if (!emergencyContactName && child.emergencyContact) {
+          emergencyContactName = child.emergencyContact;
+        }
+
         return {
           id: child.id,
           firstName: child.firstName,
@@ -543,18 +572,23 @@ router.get('/classes/:id/students', async (req, res) => {
           gradeLevel: child.gradeLevel,
           birthdate: child.birthdate,
           parentEmail: child.parentEmail,
+          parentPhone,
+          emergencyContactName,
+          emergencyContactPhone,
+          emergencyContactRelationship,
           enrollmentDate: enrollment.enrollmentDate,
           enrollmentStatus: enrollment.status
         };
-      }
-      return null;
-    }).filter(Boolean);
+      })
+    );
 
-    console.log(`[EducatorDashboard] Found ${students.length} students for class ${classId}`);
+    const filteredStudents = students.filter(Boolean);
+
+    console.log(`[EducatorDashboard] Found ${filteredStudents.length} students for class ${classId}`);
     
     res.json({
-      students,
-      totalStudents: students.length
+      students: filteredStudents,
+      totalStudents: filteredStudents.length
     });
   } catch (error) {
     console.error('[EducatorDashboard] Error fetching class students:', error);

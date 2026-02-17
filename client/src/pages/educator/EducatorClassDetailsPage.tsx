@@ -16,10 +16,40 @@ import {
   ArrowLeft,
   GraduationCap,
   DollarSign,
-  User
+  User,
+  Download,
+  Phone,
+  AlertCircle
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatDate, formatClassSchedule } from "@/lib/utils";
+
+function exportStudentsCSV(students: StudentData[], className: string) {
+  const headers = ['Student Name', 'Age', 'Grade Level', 'Parent Email', 'Parent Phone', 'Emergency Contact', 'Emergency Phone', 'Relationship', 'Enrollment Date'];
+  const rows = students.map(s => {
+    const age = s.birthdate ? String(Math.floor((Date.now() - new Date(s.birthdate).getTime()) / (365.25 * 24 * 60 * 60 * 1000))) : '';
+    return [
+      `${s.firstName} ${s.lastName}`,
+      age,
+      s.gradeLevel || '',
+      s.parentEmail || '',
+      s.parentPhone || '',
+      s.emergencyContactName || '',
+      s.emergencyContactPhone || '',
+      s.emergencyContactRelationship || '',
+      s.enrollmentDate ? formatDate(s.enrollmentDate) : ''
+    ];
+  });
+  const csvContent = [headers, ...rows].map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `${className.replace(/\s+/g, '_')}_roster_${new Date().toISOString().split('T')[0]}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
 
 interface ClassData {
   id: number;
@@ -43,9 +73,15 @@ interface StudentData {
   firstName: string;
   lastName: string;
   gradeLevel?: string;
+  birthdate?: string;
   enrollmentStatus?: string;
   parentName?: string;
   parentEmail?: string;
+  parentPhone?: string;
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
+  emergencyContactRelationship?: string;
+  enrollmentDate?: string;
 }
 
 interface StudentsResponse {
@@ -226,14 +262,26 @@ export default function EducatorClassDetailsPage() {
 
         <TabsContent value="students">
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <Users className="h-5 w-5 mr-2" />
-                Enrolled Students
-              </CardTitle>
-              <CardDescription>
-                Students enrolled in this class
-              </CardDescription>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center">
+                  <Users className="h-5 w-5 mr-2" />
+                  Enrolled Students
+                </CardTitle>
+                <CardDescription>
+                  Students enrolled in this class
+                </CardDescription>
+              </div>
+              {(studentsData?.students?.length ?? 0) > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => exportStudentsCSV(studentsData!.students, classData.title || 'class')}
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  Export CSV
+                </Button>
+              )}
             </CardHeader>
             <CardContent>
               {studentsLoading ? (
@@ -243,38 +291,78 @@ export default function EducatorClassDetailsPage() {
                   ))}
                 </div>
               ) : studentsData?.students?.length > 0 ? (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Student Name</TableHead>
-                      <TableHead>Age</TableHead>
-                      <TableHead>Grade Level</TableHead>
-                      <TableHead>Parent Email</TableHead>
-                      <TableHead>Enrollment Date</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {studentsData.students.map((student: any) => (
-                      <TableRow key={student.id}>
-                        <TableCell className="font-medium">
-                          <div className="flex items-center">
-                            <User className="h-4 w-4 mr-2 text-gray-400" />
-                            {student.firstName} {student.lastName}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          {student.birthdate ? 
-                            new Date().getFullYear() - new Date(student.birthdate).getFullYear() 
-                            : 'N/A'
-                          }
-                        </TableCell>
-                        <TableCell>{student.gradeLevel}</TableCell>
-                        <TableCell>{student.parentEmail}</TableCell>
-                        <TableCell>{formatDate(student.enrollmentDate)}</TableCell>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Student Name</TableHead>
+                        <TableHead>Age</TableHead>
+                        <TableHead>Grade Level</TableHead>
+                        <TableHead>Parent Email</TableHead>
+                        <TableHead>Parent Phone</TableHead>
+                        <TableHead>Emergency Contact</TableHead>
+                        <TableHead>Enrollment Date</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {studentsData.students.map((student: any) => (
+                        <TableRow key={student.id}>
+                          <TableCell className="font-medium">
+                            <div className="flex items-center">
+                              <User className="h-4 w-4 mr-2 text-gray-400" />
+                              {student.firstName} {student.lastName}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {student.birthdate ? 
+                              Math.floor((Date.now() - new Date(student.birthdate).getTime()) / (365.25 * 24 * 60 * 60 * 1000))
+                              : 'N/A'
+                            }
+                          </TableCell>
+                          <TableCell>{student.gradeLevel}</TableCell>
+                          <TableCell>{student.parentEmail || '—'}</TableCell>
+                          <TableCell>
+                            {student.parentPhone ? (
+                              <div className="flex items-center gap-1">
+                                <Phone className="h-3 w-3 text-gray-400" />
+                                <span className="text-sm">{student.parentPhone}</span>
+                              </div>
+                            ) : (
+                              <span className="text-gray-400">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {student.emergencyContactName ? (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <div className="flex items-center gap-1 cursor-help">
+                                      <AlertCircle className="h-3 w-3 text-orange-500" />
+                                      <span className="text-sm">{student.emergencyContactName}</span>
+                                    </div>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <div className="space-y-1 text-xs">
+                                      {student.emergencyContactRelationship && (
+                                        <p>Relationship: {student.emergencyContactRelationship}</p>
+                                      )}
+                                      {student.emergencyContactPhone && (
+                                        <p>Phone: {student.emergencyContactPhone}</p>
+                                      )}
+                                    </div>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            ) : (
+                              <span className="text-gray-400">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell>{formatDate(student.enrollmentDate)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
               ) : (
                 <div className="text-center py-8">
                   <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
