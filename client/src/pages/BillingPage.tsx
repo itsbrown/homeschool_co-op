@@ -1328,7 +1328,7 @@ export default function BillingPage() {
   const { isConnected } = useRealTimeUpdates();
   const [selectedEnrollments, setSelectedEnrollments] = useState<number[]>([]);
   const [selectedPaymentOptions, setSelectedPaymentOptions] = useState<{[enrollmentId: number]: number}>({});
-  const [selectedPaymentPlan, setSelectedPaymentPlan] = useState<string>('deposit_all');
+  const [selectedPaymentPlan, setSelectedPaymentPlan] = useState<string>('full_payment');
   const [showPayment, setShowPayment] = useState(false);
   const [clientSecret, setClientSecret] = useState<string>('');
   const [currentPayment, setCurrentPayment] = useState<any>(null);
@@ -1467,9 +1467,6 @@ export default function BillingPage() {
     const totalBalance = enrollmentsToCalculate.reduce((total, detail) => total + detail.balance, 0);
 
     switch (selectedPaymentPlan) {
-      case 'deposit_all':
-        // Pay 10% deposit for selected enrollments
-        return Math.round(totalBalance * 0.1);
       case 'half_now':
         // Pay 50% now, 50% later
         return Math.round(totalBalance * 0.5);
@@ -1494,8 +1491,6 @@ export default function BillingPage() {
     const totalBalance = enrollmentsToCalculate.reduce((total, detail) => total + detail.balance, 0);
 
     switch (selectedPaymentPlan) {
-      case 'deposit_all':
-        return `Pay 10% deposit (${formatCurrency(Math.round(totalBalance * 0.1))}) to secure selected enrollments. Remaining balance due before classes start.`;
       case 'half_now':
         return `Pay 50% now (${formatCurrency(Math.round(totalBalance * 0.5))}), remaining 50% in 30 days.`;
       case 'full_payment':
@@ -1822,26 +1817,6 @@ export default function BillingPage() {
                       <input
                         type="radio"
                         name="paymentPlan"
-                        value="deposit_all"
-                        checked={selectedPaymentPlan === 'deposit_all'}
-                        onChange={(e) => setSelectedPaymentPlan(e.target.value)}
-                        className="mt-1"
-                      />
-                      <div className="flex-1">
-                        <div className="font-medium">Pay Deposits Only</div>
-                        <div className="text-sm text-muted-foreground mt-1">
-                          Pay 10% deposit for all enrollments - {formatCurrency(Math.round(getSelectedTotal() * 0.1))}
-                        </div>
-                        <div className="text-xs text-blue-600 mt-1">
-                          Secures all spots, remaining balance due before classes start
-                        </div>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start space-x-3 cursor-pointer p-4 border rounded-lg hover:bg-gray-50">
-                      <input
-                        type="radio"
-                        name="paymentPlan"
                         value="half_now"
                         checked={selectedPaymentPlan === 'half_now'}
                         onChange={(e) => setSelectedPaymentPlan(e.target.value)}
@@ -1918,8 +1893,7 @@ export default function BillingPage() {
                         : `All ${billingSummary.enrollmentDetails.length} enrollments will be included`}
                     </p>
                     <p className="text-sm font-medium text-blue-600">
-                      Payment Plan: {selectedPaymentPlan === 'deposit_all' ? 'Deposits Only' :
-                                   selectedPaymentPlan === 'half_now' ? 'Split Payment' :
+                      Payment Plan: {selectedPaymentPlan === 'half_now' ? 'Split Payment' :
                                    selectedPaymentPlan === 'full_payment' ? 'Pay in Full' :
                                    selectedPaymentPlan === 'three_payments' ? 'Monthly Installments' : 'Custom'}
                     </p>
@@ -1961,8 +1935,7 @@ export default function BillingPage() {
                     Secure Payment
                   </CardTitle>
                   <CardDescription>
-                    Complete your {selectedPaymentPlan === 'deposit_all' ? 'deposit payment' :
-                                  selectedPaymentPlan === 'half_now' ? 'first payment (50%)' :
+                    Complete your {selectedPaymentPlan === 'half_now' ? 'first payment (50%)' :
                                   selectedPaymentPlan === 'full_payment' ? 'full payment' :
                                   selectedPaymentPlan === 'three_payments' ? 'first monthly payment' : 'payment'} of {formatCurrency(getPaymentPlanAmount())}
                   </CardDescription>
