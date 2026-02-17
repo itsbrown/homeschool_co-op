@@ -60,7 +60,15 @@ interface Payment {
   childName: string;
   receiptUrl?: string;
   dueDate?: string;
-  // Discount tracking fields
+  metadata?: {
+    creditsApplied?: number;
+    creditAllocation?: {
+      enrollmentCredits: number;
+      membershipCredits: number;
+    };
+    creditOnlyCheckout?: boolean;
+    [key: string]: any;
+  };
   subtotalAmount?: number;
   discountTotal?: number;
   discountSnapshot?: {
@@ -1651,7 +1659,7 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
                                       <span className="text-gray-600">Original Subtotal</span>
                                       <span>{formatCurrency(payment.discountSnapshot.subtotal)}</span>
                                     </div>
-                                    {payment.discountSnapshot.appliedDiscounts.map((discount, discountIndex) => (
+                                    {payment.discountSnapshot.appliedDiscounts.map((discount: any, discountIndex: number) => (
                                       <div key={discountIndex} className="flex justify-between items-center text-sm text-green-700">
                                         <span className="flex items-center gap-2">
                                           <Badge variant="outline" className="text-xs bg-green-100 border-green-300">
@@ -1674,6 +1682,53 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
                                     <div className="flex justify-between items-center text-sm font-semibold">
                                       <span>Amount Paid</span>
                                       <span>{formatCurrency(payment.amount)}</span>
+                                    </div>
+                                  </div>
+                                </CollapsibleContent>
+                              </Collapsible>
+                            </TableCell>
+                          </TableRow>
+                        )}
+                        {payment.metadata?.creditsApplied && payment.metadata.creditsApplied > 0 && (
+                          <TableRow className="bg-purple-50 hover:bg-purple-100" data-testid={`credits-row-${payment.id}`}>
+                            <TableCell colSpan={6} className="py-2">
+                              <Collapsible>
+                                <CollapsibleTrigger className="flex items-center gap-2 text-sm font-medium text-purple-700 hover:text-purple-800 cursor-pointer w-full">
+                                  <ChevronDown className="h-4 w-4 transition-transform duration-200 [&[data-state=open]]:rotate-180" />
+                                  <span>Credits Applied: -{formatCurrency(payment.metadata.creditsApplied)}</span>
+                                </CollapsibleTrigger>
+                                <CollapsibleContent className="mt-2 ml-6">
+                                  <div className="space-y-1 bg-purple-100 p-3 rounded-md">
+                                    {payment.metadata.creditAllocation ? (
+                                      <>
+                                        {payment.metadata.creditAllocation.enrollmentCredits > 0 && (
+                                          <div className="flex justify-between items-center text-sm text-purple-700">
+                                            <span className="flex items-center gap-2">
+                                              <Badge variant="outline" className="text-xs bg-purple-100 border-purple-300">Classes</Badge>
+                                              Enrollment Credits
+                                            </span>
+                                            <span className="font-medium">-{formatCurrency(payment.metadata.creditAllocation.enrollmentCredits)}</span>
+                                          </div>
+                                        )}
+                                        {payment.metadata.creditAllocation.membershipCredits > 0 && (
+                                          <div className="flex justify-between items-center text-sm text-purple-700">
+                                            <span className="flex items-center gap-2">
+                                              <Badge variant="outline" className="text-xs bg-purple-100 border-purple-300">Membership</Badge>
+                                              Membership Fee
+                                            </span>
+                                            <span className="font-medium">-{formatCurrency(payment.metadata.creditAllocation.membershipCredits)}</span>
+                                          </div>
+                                        )}
+                                      </>
+                                    ) : (
+                                      <div className="flex justify-between items-center text-sm text-purple-700">
+                                        <span>Credits Used</span>
+                                        <span className="font-medium">-{formatCurrency(payment.metadata.creditsApplied)}</span>
+                                      </div>
+                                    )}
+                                    <div className="flex justify-between items-center text-sm font-semibold border-t border-purple-200 pt-2 mt-2">
+                                      <span>Total Credits Used</span>
+                                      <span className="text-purple-700">-{formatCurrency(payment.metadata.creditsApplied)}</span>
                                     </div>
                                   </div>
                                 </CollapsibleContent>

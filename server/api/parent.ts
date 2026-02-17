@@ -892,7 +892,6 @@ router.get('/school-documents', supabaseAuth, async (req: any, res) => {
   }
 });
 
-// Get parent's available credits balance
 router.get('/credits', supabaseAuth, async (req: any, res) => {
   try {
     console.log('💰 Get parent credits API called');
@@ -914,32 +913,20 @@ router.get('/credits', supabaseAuth, async (req: any, res) => {
       });
     }
 
-    // Get available credits for this user from unified credit system
-    const availableCredits = await storage.getAvailableCredits(user.id);
+    const allCredits = await storage.getCredits({ userId: user.id });
     
-    // Detailed logging for debugging
-    console.log(`💰 [DEBUG] Raw credits from getAvailableCredits for user ${user.id}:`, 
-      availableCredits.map(c => ({
-        id: c.id,
-        type: c.creditType,
-        amount: c.creditAmountCents,
-        used: c.usedAmountCents,
-        remaining: c.creditAmountCents - c.usedAmountCents,
-        status: c.status
-      }))
-    );
-    
-    // Calculate total available balance (approved credits minus used amounts)
-    const totalAvailableCents = availableCredits.reduce((sum, credit) => {
-      const remaining = (credit.creditAmountCents || 0) - (credit.usedAmountCents || 0);
-      return sum + Math.max(0, remaining);
+    const totalAvailableCents = allCredits.reduce((sum, credit) => {
+      if (credit.status === 'approved' || credit.status === 'partially_used') {
+        const remaining = (credit.creditAmountCents || 0) - (credit.usedAmountCents || 0);
+        return sum + Math.max(0, remaining);
+      }
+      return sum;
     }, 0);
 
-    // Group credits by type for display
     const creditsByType: Record<string, { count: number; totalCents: number }> = {};
-    for (const credit of availableCredits) {
+    for (const credit of allCredits) {
       const remaining = (credit.creditAmountCents || 0) - (credit.usedAmountCents || 0);
-      if (remaining > 0) {
+      if (remaining > 0 && (credit.status === 'approved' || credit.status === 'partially_used')) {
         if (!creditsByType[credit.creditType]) {
           creditsByType[credit.creditType] = { count: 0, totalCents: 0 };
         }
@@ -948,20 +935,20 @@ router.get('/credits', supabaseAuth, async (req: any, res) => {
       }
     }
 
-    console.log(`💰 Found ${availableCredits.length} credits totaling $${(totalAvailableCents / 100).toFixed(2)} for ${userEmail}`);
+    console.log(`💰 Found ${allCredits.length} credits (${totalAvailableCents} cents available) for ${userEmail}`);
 
     return res.status(200).json({
       success: true,
       totalAvailableCents,
       totalAvailableFormatted: `$${(totalAvailableCents / 100).toFixed(2)}`,
       creditsByType,
-      credits: availableCredits.map(c => ({
+      credits: allCredits.map(c => ({
         id: c.id,
         creditType: c.creditType,
         title: c.title,
         creditAmountCents: c.creditAmountCents,
         usedAmountCents: c.usedAmountCents,
-        remainingCents: (c.creditAmountCents || 0) - (c.usedAmountCents || 0),
+        remainingCents: Math.max(0, (c.creditAmountCents || 0) - (c.usedAmountCents || 0)),
         status: c.status,
         expiresAt: c.expiresAt,
         createdAt: c.createdAt

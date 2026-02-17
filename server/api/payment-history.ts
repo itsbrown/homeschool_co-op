@@ -262,18 +262,34 @@ router.get('/history', supabaseAuth, async (req: any, res) => {
           }
         }
         
+        let parsedMetadata: any = intent.metadata || null;
+        if (intent.metadata?.creditsAppliedCents) {
+          const creditsApplied = parseInt(intent.metadata.creditsAppliedCents) || 0;
+          let creditAllocation = null;
+          if (intent.metadata.creditAllocation) {
+            try {
+              creditAllocation = JSON.parse(intent.metadata.creditAllocation);
+            } catch (e) {}
+          }
+          parsedMetadata = {
+            ...parsedMetadata,
+            creditsApplied,
+            creditAllocation
+          };
+        }
+        
         return {
-          id: -1, // Synthetic ID (frontend should use stripePaymentIntentId as key)
-          amount: intent.amount, // Send raw cents (number) - validated above
+          id: -1,
+          amount: intent.amount,
           currency: intent.currency || 'usd',
           status: intent.status || 'unknown',
           description: intent.description || (intent.metadata?.className ? `Payment for ${intent.metadata.className}` : 'Stripe payment'),
           date: createdDate,
           createdAt: createdDate,
           updatedAt: createdDate,
-          stripePaymentIntentId: intent.id, // CRITICAL: Set this for unique React keys
+          stripePaymentIntentId: intent.id,
           enrollmentIds: [],
-          metadata: intent.metadata || null,
+          metadata: parsedMetadata,
           childName: intent.metadata?.childName || '',
           programName: intent.metadata?.className || '',
           paymentMethod: intent.payment_method_types?.[0] || 'card',
