@@ -187,6 +187,38 @@ Parents can pay multiple children's installments in a single Stripe transaction:
 - Stripe payments must include `return_url` for iOS redirect flow
 - Date inputs use `fontSize: '16px'` to prevent Safari auto-zoom
 
+## Payment Schedule Consistency
+
+### Single Source of Truth: `calculateCheckoutBiweeklySchedule()`
+The biweekly payment schedule MUST be calculated by a single shared function: `calculateCheckoutBiweeklySchedule()` in `server/lib/payment-calculator.ts`.
+
+**Both of these code paths MUST use this function:**
+1. `server/utils/cart-pricing.ts` → `calculatePaymentPlans()` — generates the schedule shown to the user on checkout
+2. `server/services/stripe-payment-plans.ts` → `buildPaymentPhases()` — generates the actual payment phases charged to Stripe
+
+### Schedule Calculation Rules
+- First payment is ALWAYS collected today (immediately at enrollment)
+- If the class starts in the future: today's payment + biweekly payments from class start to end
+- If the class already started: biweekly payments from today to class end
+- Total is divided evenly across ALL payments (including today's first payment)
+- Final payment absorbs any rounding remainder
+
+### Date Source Fallback Chain
+When resolving class dates for schedule calculation:
+1. **Enrollment dates** (`programStartDate` / `programEndDate`) — preferred, set during checkout
+2. **Class dates** (via `storage.getClassById()`) — fallback if enrollment dates are null
+3. **Variant dates** — override class dates when a `variantId` is specified
+4. **Default 4-payment fallback** — last resort if no dates are available at all
+
+### Enrollment Date Backfill
+During checkout, if an existing pending enrollment is found without `programStartDate`/`programEndDate`, the checkout code backfills these from the class data. This prevents the payment processor from falling back to a different calculation path.
+
+### Server-Side Guard
+The frontend sends `expectedSchedule` (firstPaymentAmount + numberOfPayments from the cart snapshot) to the server. Before creating the PaymentIntent, the server recalculates the schedule and compares. If the amounts diverge by more than $0.02 or the payment count differs, the server returns a `409 PRICING_CHANGED` error, which triggers the client's auto-retry with refreshed data.
+
+### Why This Matters
+Previously, the cart display and payment processor used independent calculation logic with different date sources. This caused the user to see "5 payments of $1,035" but be charged "2 payments of $2,587.50 + $810.00". The shared helper eliminates this class of bug.
+
 ## Best Practices
 
 ### Do
@@ -218,6 +250,7 @@ Parents can pay multiple children's installments in a single Stripe transaction:
 - Always include `return_url` for iOS/Safari compatibility
 
 ## Key Files
+- `server/lib/payment-calculator.ts` — shared payment schedule calculator (`calculateCheckoutBiweeklySchedule` is the single source of truth)
 - `server/services/stripe-payment-plans.ts` — payment plan creation, phase building, scheduled payment creation
 - `server/utils/cart-pricing.ts` — server-side cart pricing, discount calculation, membership fees
 - `server/lib/prorate-calculator.ts` — proration date math

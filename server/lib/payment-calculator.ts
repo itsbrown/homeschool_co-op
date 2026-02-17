@@ -168,6 +168,75 @@ export function calculatePaymentSchedule(
 }
 
 /**
+ * Calculate the biweekly checkout schedule — SINGLE SOURCE OF TRUTH
+ * Used by both cart-pricing.ts (for display) and stripe-payment-plans.ts (for charging).
+ * 
+ * This function handles the "first payment today + remaining from class start" pattern:
+ * - First payment is ALWAYS collected today (immediately at enrollment)
+ * - Remaining payments are spaced biweekly starting from class start date
+ * - Total is divided evenly across ALL payments (today + future)
+ * 
+ * Both the checkout display and the payment processor MUST use this function
+ * to prevent display-vs-charge mismatches.
+ */
+export interface CheckoutBiweeklySchedule {
+  firstPaymentAmount: number;
+  numberOfPayments: number;
+  paymentAmount: number;
+  finalPaymentAmount: number;
+  paymentDates: Date[];
+  totalAmount: number;
+}
+
+export function calculateCheckoutBiweeklySchedule(
+  totalAmountCents: number,
+  classStartDate: Date,
+  classEndDate: Date,
+  anchorDate?: Date
+): CheckoutBiweeklySchedule {
+  const now = anchorDate || new Date();
+  const classStartsInFuture = classStartDate > now;
+  
+  const scheduleStartDate = classStartsInFuture ? classStartDate : now;
+  
+  const schedule = calculatePaymentSchedule(totalAmountCents, scheduleStartDate, classEndDate, 'biweekly');
+  
+  if (schedule.frequency === 'one_time' || schedule.numberOfPayments < 2) {
+    return {
+      firstPaymentAmount: totalAmountCents,
+      numberOfPayments: 1,
+      paymentAmount: totalAmountCents,
+      finalPaymentAmount: totalAmountCents,
+      paymentDates: [now],
+      totalAmount: totalAmountCents
+    };
+  }
+  
+  let allPaymentDates: Date[];
+  
+  if (classStartsInFuture) {
+    allPaymentDates = [now, ...schedule.paymentDates];
+  } else {
+    allPaymentDates = schedule.paymentDates;
+  }
+  
+  const totalPayments = allPaymentDates.length;
+  
+  const basePaymentAmount = Math.floor(totalAmountCents / totalPayments);
+  const remainder = totalAmountCents - (basePaymentAmount * totalPayments);
+  const finalPaymentAmount = basePaymentAmount + remainder;
+  
+  return {
+    firstPaymentAmount: basePaymentAmount,
+    numberOfPayments: totalPayments,
+    paymentAmount: basePaymentAmount,
+    finalPaymentAmount,
+    paymentDates: allPaymentDates,
+    totalAmount: totalAmountCents
+  };
+}
+
+/**
  * Format payment schedule for display
  */
 export function formatPaymentSchedule(schedule: PaymentSchedule): string {

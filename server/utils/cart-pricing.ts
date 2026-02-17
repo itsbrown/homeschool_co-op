@@ -992,17 +992,14 @@ async function calculatePaymentPlans(
     }
   }
   
-  // Calculate actual payment schedule using the same calculator as payment creation
-  // This ensures display amounts match what will actually be charged
   let biweeklyAmount = Math.round(payableAmount / numberOfBiweeklyPayments);
   let finalPaymentAmount = biweeklyAmount;
   
   if (earliestStartDate && latestEndDate) {
     try {
-      const { calculatePaymentSchedule } = await import('../lib/payment-calculator');
-      const schedule = calculatePaymentSchedule(payableAmount, earliestStartDate, latestEndDate, 'biweekly');
+      const { calculateCheckoutBiweeklySchedule } = await import('../lib/payment-calculator');
+      const schedule = calculateCheckoutBiweeklySchedule(payableAmount, earliestStartDate, latestEndDate);
       numberOfBiweeklyPayments = schedule.numberOfPayments;
-      // Use the actual payment amounts from the schedule for server-authoritative pricing
       biweeklyAmount = schedule.paymentAmount;
       finalPaymentAmount = schedule.finalPaymentAmount;
     } catch (e) {

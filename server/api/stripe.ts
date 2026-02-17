@@ -36,7 +36,7 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
     
     console.log('💳 Creating payment intent for authenticated user:', userEmail);
 
-    const { items, subtotal, discounts, total, parentEmail, paymentPlan = 'full', paymentFrequency = 'one_time', membership, promoCode, creditsToApply = 0 } = req.body;
+    const { items, subtotal, discounts, total, parentEmail, paymentPlan = 'full', paymentFrequency = 'one_time', membership, promoCode, creditsToApply = 0, expectedSchedule } = req.body;
     
     // DETAILED REQUEST LOGGING for debugging production issues (PII redacted)
     const checkoutRequestId = `checkout_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
@@ -906,12 +906,62 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
           }
           
           console.log(`✅ Found existing pending enrollment ${enrollment.id} for child ${item.childId}`);
-          // Update the existing enrollment with payment plan details
-          await storage.updateProgramEnrollment(enrollment.id, {
+          
+          const updateData: any = {
             paymentPlan: dbPaymentPlan,
             paymentFrequency: paymentFrequency,
             paymentSystemVersion: 'v2_stripe'
-          });
+          };
+          
+          if (!enrollment.programStartDate || !enrollment.programEndDate) {
+            const actualClassId = item.marketplaceClassId || item.classId;
+            if (actualClassId) {
+              try {
+                const classData = await storage.getClassById(actualClassId);
+                if (classData) {
+                  const formatDate = (date: any): string | null => {
+                    if (!date) return null;
+                    if (typeof date === 'string') return date;
+                    if (date instanceof Date) return date.toISOString().split('T')[0];
+                    return String(date);
+                  };
+                  
+                  let enrollmentStartDate = (classData as any).startDate;
+                  let enrollmentEndDate = (classData as any).endDate;
+                  
+                  const classPriceVariants = (classData as any).priceVariants;
+                  if (item.variantId && classPriceVariants) {
+                    try {
+                      const variants = typeof classPriceVariants === 'string' 
+                        ? JSON.parse(classPriceVariants) 
+                        : classPriceVariants;
+                      const variant = Array.isArray(variants) 
+                        ? variants.find((v: any) => v.id === item.variantId)
+                        : null;
+                      if (variant) {
+                        if (variant.startDate) enrollmentStartDate = variant.startDate;
+                        if (variant.endDate) enrollmentEndDate = variant.endDate;
+                      }
+                    } catch (e) {
+                      console.warn('Could not parse price variants for enrollment date backfill:', e);
+                    }
+                  }
+                  
+                  if (enrollmentStartDate) updateData.programStartDate = formatDate(enrollmentStartDate);
+                  if (enrollmentEndDate) updateData.programEndDate = formatDate(enrollmentEndDate);
+                  console.log('📅 Backfilling enrollment dates from class data:', {
+                    enrollmentId: enrollment.id,
+                    startDate: updateData.programStartDate,
+                    endDate: updateData.programEndDate
+                  });
+                }
+              } catch (e) {
+                console.warn('Could not fetch class for enrollment date backfill:', e);
+              }
+            }
+          }
+          
+          await storage.updateProgramEnrollment(enrollment.id, updateData);
           enrollmentIds.push(enrollment.id);
         } else {
           // Get class data for new enrollments
@@ -1561,16 +1611,69 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
         console.log('📊 Credit allocation for Stripe payment:', creditAllocationForPayment);
       }
       
+      if (expectedSchedule && paymentPlan === 'biweekly') {
+        const { calculateCheckoutBiweeklySchedule } = await import('../lib/payment-calculator');
+        
+        const anchorDate = expectedSchedule.snapshotGeneratedAt 
+          ? new Date(expectedSchedule.snapshotGeneratedAt) 
+          : new Date();
+        
+        let verifyStartDate: Date | null = null;
+        let verifyEndDate: Date | null = null;
+        
+        if (enrollmentIds.length > 0) {
+          const firstEnrollment = await storage.getProgramEnrollmentById(enrollmentIds[0]);
+          if (firstEnrollment?.programStartDate && firstEnrollment?.programEndDate) {
+            verifyStartDate = new Date(firstEnrollment.programStartDate);
+            verifyEndDate = new Date(firstEnrollment.programEndDate);
+          }
+          if ((!verifyStartDate || !verifyEndDate) && firstEnrollment) {
+            const classId = (firstEnrollment as any).marketplaceClassId || (firstEnrollment as any).classId || (firstEnrollment as any).programId;
+            if (classId) {
+              const classData = await storage.getClassById(classId) as any;
+              if (classData?.startDate && classData?.endDate) {
+                verifyStartDate = new Date(classData.startDate);
+                verifyEndDate = new Date(classData.endDate);
+              }
+            }
+          }
+        }
+        
+        if (verifyStartDate && verifyEndDate) {
+          const serverSchedule = calculateCheckoutBiweeklySchedule(totalWithMembership, verifyStartDate, verifyEndDate, anchorDate);
+          const amountDiff = Math.abs(serverSchedule.firstPaymentAmount - expectedSchedule.firstPaymentAmount);
+          const countDiff = serverSchedule.numberOfPayments !== expectedSchedule.numberOfPayments;
+          
+          if (amountDiff > 2 || countDiff) {
+            console.warn(`🚨 [${checkoutRequestId}] PAYMENT SCHEDULE MISMATCH DETECTED:`, {
+              expected: { amount: expectedSchedule.firstPaymentAmount, count: expectedSchedule.numberOfPayments },
+              actual: { amount: serverSchedule.firstPaymentAmount, count: serverSchedule.numberOfPayments },
+              amountDiff,
+              totalWithMembership,
+              anchorDate: anchorDate.toISOString()
+            });
+            return res.status(409).json({
+              message: 'Payment schedule has changed. Please refresh your cart and try again.',
+              error: 'PRICING_CHANGED',
+              serverSchedule: {
+                firstPaymentAmount: serverSchedule.firstPaymentAmount,
+                numberOfPayments: serverSchedule.numberOfPayments,
+              }
+            });
+          }
+        }
+      }
+      
       const paymentPlanResult = await paymentPlanService.createEducationalPaymentPlan({
         parentEmail: userEmail,
         enrollmentIds,
-        totalAmount: totalWithMembership, // Include membership fee in total (already reduced by credits)
+        totalAmount: totalWithMembership,
         paymentPlan: paymentPlan as 'deposit' | 'biweekly' | 'full',
         paymentFrequency: paymentFrequency as 'weekly' | 'biweekly' | 'monthly' | 'one_time',
-        membership: serverMembership, // Pass server-validated membership data
-        discountSnapshot, // Pass discount tracking data
-        creditsAppliedCents: validatedCreditsToApply, // Pass credits for metadata storage (unified credit system)
-        creditAllocation: creditAllocationForPayment // Pass credit breakdown for payment history
+        membership: serverMembership,
+        discountSnapshot,
+        creditsAppliedCents: validatedCreditsToApply,
+        creditAllocation: creditAllocationForPayment
       });
 
       console.log('✅ Payment plan created successfully:', {

@@ -419,49 +419,6 @@ export default function CartCheckout() {
     finalPaymentAmount?: number;
   }
 
-  // Cached authoritative values from server snapshot
-  // These override client values when creating payment intent
-  const [authoritativeData, setAuthoritativeData] = useState<{
-    itemsTotal: number;
-    membershipAmount: number;
-    membershipAlreadyPaid: boolean;
-    membershipRequired: boolean;
-    membershipSchoolId: number | null;
-    membershipSchoolName: string;
-    membershipYear: number;
-    discounts: any;
-    schoolSettings: any;
-    appliedPromoCode: string | null; // Store promo code to avoid stale closure issues
-    payableAmount: number; // Grand total minus applied credits
-    paymentPlans: PaymentPlanOption[]; // Server-calculated payment plans
-  } | null>(null);
-  
-  // Track previous cart items to detect cart changes
-  const prevCartItemsRef = useRef<string>('');
-  
-  // Clear stale authoritative data and promo state when cart items change
-  // This prevents discounts from previous cart sessions from persisting
-  useEffect(() => {
-    // Create a stable identifier for current cart items
-    const currentCartKey = cart.items.map(i => `${i.classId}-${i.childId}-${i.variantId || ''}`).sort().join('|');
-    
-    // If cart items changed (not just initial load), clear stale state
-    if (prevCartItemsRef.current && prevCartItemsRef.current !== currentCartKey) {
-      console.log('🔄 Cart items changed - clearing stale authoritative data and promo state');
-      setAuthoritativeData(null);
-      setAppliedPromo(null);
-      setPromoCode('');
-      setPromoError('');
-      setClientSecret(''); // Force new payment intent
-      setHasCheckoutConflict(false);
-      retryCountRef.current = 0;
-      setRetryCount(0);
-    }
-    
-    prevCartItemsRef.current = currentCartKey;
-  }, [cart.items]);
-
-  // Type for authoritative snapshot data
   type AuthoritativeDataType = {
     itemsTotal: number;
     membershipAmount: number;
@@ -475,7 +432,30 @@ export default function CartCheckout() {
     appliedPromoCode: string | null;
     payableAmount: number;
     paymentPlans: PaymentPlanOption[];
+    snapshotGeneratedAt?: number;
   };
+
+  const [authoritativeData, setAuthoritativeData] = useState<AuthoritativeDataType | null>(null);
+  
+  const prevCartItemsRef = useRef<string>('');
+  
+  useEffect(() => {
+    const currentCartKey = cart.items.map(i => `${i.classId}-${i.childId}-${i.variantId || ''}`).sort().join('|');
+    
+    if (prevCartItemsRef.current && prevCartItemsRef.current !== currentCartKey) {
+      console.log('🔄 Cart items changed - clearing stale authoritative data and promo state');
+      setAuthoritativeData(null);
+      setAppliedPromo(null);
+      setPromoCode('');
+      setPromoError('');
+      setClientSecret('');
+      setHasCheckoutConflict(false);
+      retryCountRef.current = 0;
+      setRetryCount(0);
+    }
+    
+    prevCartItemsRef.current = currentCartKey;
+  }, [cart.items]);
 
   // Fetch cart snapshot from server to get authoritative pricing
   // IMPORTANT: promoCodeOverride parameter is used to pass fresh promo code
@@ -538,7 +518,8 @@ export default function CartCheckout() {
           schoolSettings: snapshot.pricing.schoolSettings,
           appliedPromoCode: promoCode, // Store the promo code used for this snapshot
           payableAmount: snapshot.totals.payableAmount,
-          paymentPlans: snapshot.paymentPlans || []
+          paymentPlans: snapshot.paymentPlans || [],
+          snapshotGeneratedAt: snapshot.generatedAt
         };
         
         // Store authoritative data in state for UI components
@@ -669,8 +650,19 @@ export default function CartCheckout() {
             totalDiscountAmount: discounts.totalDiscountAmount || 0
           },
           total: itemsTotal, // Use authoritative items total if available
-          paymentPlan: selectedPaymentPlan, // Include payment plan info
-          paymentFrequency: paymentFrequency, // Include payment frequency for date-based scheduling
+          paymentPlan: selectedPaymentPlan,
+          paymentFrequency: paymentFrequency,
+          expectedSchedule: selectedPaymentPlan === 'biweekly' ? (() => {
+            const biweeklyPlan = currentAuthData?.paymentPlans?.find((p: any) => p.id === 'biweekly');
+            if (biweeklyPlan) {
+              return {
+                firstPaymentAmount: biweeklyPlan.amount,
+                numberOfPayments: biweeklyPlan.numberOfPayments,
+                snapshotGeneratedAt: currentAuthData?.snapshotGeneratedAt,
+              };
+            }
+            return undefined;
+          })() : undefined,
           parentEmail: user?.email,
           // Include membership fee - use authoritative amount or null if already paid
           membership: membershipPayload,

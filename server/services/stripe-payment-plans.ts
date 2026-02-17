@@ -2,7 +2,7 @@ import Stripe from 'stripe';
 import { IStorage } from '../storage';
 import { CurrencyUtils } from '../../shared/currency-utils';
 import { InsertScheduledPayment } from '@shared/schema';
-import { calculatePaymentSchedule, PaymentFrequency } from '../lib/payment-calculator';
+import { calculatePaymentSchedule, calculateCheckoutBiweeklySchedule, PaymentFrequency } from '../lib/payment-calculator';
 import { getStripeClient } from '../config/stripe';
 
 const isTestMode = process.env.NODE_ENV === 'test';
@@ -90,17 +90,16 @@ export class StripePaymentPlanService {
     const customer = await this.getOrCreateCustomer(data.parentEmail);
     console.log('👤 Customer ready:', customer.id);
 
-    // Get enrollment data for date-based scheduling if needed
     let programStartDate: Date | null = null;
     let programEndDate: Date | null = null;
     
     if (data.paymentFrequency && data.paymentFrequency !== 'one_time' && data.enrollmentIds.length > 0) {
       const firstEnrollment = await this.storage.getProgramEnrollmentById(data.enrollmentIds[0]);
+      
       if (firstEnrollment?.programStartDate && firstEnrollment?.programEndDate) {
         const parsedStartDate = new Date(firstEnrollment.programStartDate);
         const parsedEndDate = new Date(firstEnrollment.programEndDate);
         
-        // Only use dates if they are valid (not NaN)
         if (!isNaN(parsedStartDate.getTime()) && !isNaN(parsedEndDate.getTime())) {
           programStartDate = parsedStartDate;
           programEndDate = parsedEndDate;
@@ -108,11 +107,49 @@ export class StripePaymentPlanService {
             startDate: programStartDate.toLocaleDateString(),
             endDate: programEndDate.toLocaleDateString()
           });
-        } else {
-          console.warn('⚠️ Invalid enrollment dates, using default payment schedule:', {
-            rawStartDate: firstEnrollment.programStartDate,
-            rawEndDate: firstEnrollment.programEndDate
-          });
+        }
+      }
+      
+      if (!programStartDate || !programEndDate) {
+        const classId = firstEnrollment?.marketplaceClassId || firstEnrollment?.classId || firstEnrollment?.programId;
+        if (classId) {
+          try {
+            const classData = await this.storage.getClassById(classId) as any;
+            if (classData) {
+              let startDate = classData.startDate ? new Date(classData.startDate) : null;
+              let endDate = classData.endDate ? new Date(classData.endDate) : null;
+              
+              const variantId = firstEnrollment?.variantId;
+              if (variantId && classData.priceVariants) {
+                try {
+                  const variants = typeof classData.priceVariants === 'string' 
+                    ? JSON.parse(classData.priceVariants) 
+                    : classData.priceVariants;
+                  const variant = Array.isArray(variants) 
+                    ? variants.find((v: any) => v.id === variantId)
+                    : null;
+                  if (variant) {
+                    if (variant.startDate) startDate = new Date(variant.startDate);
+                    if (variant.endDate) endDate = new Date(variant.endDate);
+                  }
+                } catch (e) {
+                  console.warn('Could not parse price variants for date fallback:', e);
+                }
+              }
+              
+              if (startDate && !isNaN(startDate.getTime()) && endDate && !isNaN(endDate.getTime())) {
+                programStartDate = startDate;
+                programEndDate = endDate;
+                console.log('📅 Fell back to class dates for payment schedule:', {
+                  classId,
+                  startDate: programStartDate.toLocaleDateString(),
+                  endDate: programEndDate.toLocaleDateString()
+                });
+              }
+            }
+          } catch (e) {
+            console.warn('⚠️ Could not fetch class for date fallback:', e);
+          }
         }
       }
     }
@@ -521,30 +558,17 @@ export class StripePaymentPlanService {
   ): PaymentPhase[] {
     console.log('🏗️ Building payment phases for plan:', plan, 'frequency:', frequency, 'amount:', CurrencyUtils.toDisplay(totalAmount));
 
-    // Use date-based calculator if frequency is provided and dates are available
     if (frequency && frequency !== 'one_time' && startDate && endDate) {
       const now = new Date();
-      const classStartsInFuture = startDate > now;
       
-      // Determine the schedule start date for remaining payments (after the first immediate payment)
-      // If class hasn't started yet: remaining payments start from class start date
-      // If class already started: remaining payments continue from today
-      const scheduleStartDate = classStartsInFuture ? startDate : now;
-      
-      console.log('📅 Using date-based payment calculator with enrollment dates', {
+      console.log('📅 Using shared checkout biweekly schedule calculator', {
         classStartDate: startDate.toLocaleDateString(),
-        scheduleStartDate: scheduleStartDate.toLocaleDateString(),
-        endDate: endDate.toLocaleDateString(),
-        classStartsInFuture,
-        firstPaymentCollectedToday: true
+        endDate: endDate.toLocaleDateString()
       });
       
-      // Calculate the schedule from scheduleStartDate to endDate
-      const schedule = calculatePaymentSchedule(totalAmount, scheduleStartDate, endDate, frequency);
+      const schedule = calculateCheckoutBiweeklySchedule(totalAmount, startDate, endDate);
       
-      // If the calculator fell back to one_time (class too short for installments),
-      // just collect full payment today — don't try to create installments
-      if (schedule.frequency === 'one_time' || schedule.numberOfPayments < 2) {
+      if (schedule.numberOfPayments === 1) {
         console.log('📅 Class duration too short for installment plan, collecting full payment today');
         return [{
           amount: totalAmount,
@@ -554,37 +578,14 @@ export class StripePaymentPlanService {
         }];
       }
       
-      // Build the complete payment date list:
-      // 1. Always collect the first payment TODAY (immediately at enrollment)
-      // 2. Use the remaining dates from the calculator for future payments
-      // 3. Divide the total evenly across all payments (first + remaining)
-      
-      let allPaymentDates: Date[];
-      
-      if (classStartsInFuture) {
-        // Class in the future: first payment today + all calculated dates starting from class start
-        allPaymentDates = [now, ...schedule.paymentDates];
-      } else {
-        // Class already started: calculator already starts from today, use as-is
-        allPaymentDates = schedule.paymentDates;
-      }
-      
-      const totalPayments = allPaymentDates.length;
-      
-      // Recalculate even payment amounts across all payments (including today's)
-      const basePaymentAmount = Math.floor(totalAmount / totalPayments);
-      const remainder = totalAmount - (basePaymentAmount * totalPayments);
-      const finalPaymentAmount = basePaymentAmount + remainder;
-      
-      // Validate that all computed payments meet Stripe's minimum
       const hasPaymentBelowMinimum = 
-        basePaymentAmount < STRIPE_MINIMUM_AMOUNT || 
-        finalPaymentAmount < STRIPE_MINIMUM_AMOUNT;
+        schedule.paymentAmount < STRIPE_MINIMUM_AMOUNT || 
+        schedule.finalPaymentAmount < STRIPE_MINIMUM_AMOUNT;
       
       if (hasPaymentBelowMinimum) {
         console.warn(
           `⚠️ Date-based ${frequency} payment plan not viable for amount ${CurrencyUtils.toDisplay(totalAmount)} ` +
-          `(${totalPayments} payments of ${CurrencyUtils.toDisplay(basePaymentAmount)} each would violate Stripe's $0.50 minimum) - ` +
+          `(${schedule.numberOfPayments} payments of ${CurrencyUtils.toDisplay(schedule.paymentAmount)} each would violate Stripe's $0.50 minimum) - ` +
           `using full payment instead`
         );
         return [{
@@ -595,13 +596,13 @@ export class StripePaymentPlanService {
         }];
       }
       
-      return allPaymentDates.map((dueDate, index) => ({
-        amount: index === allPaymentDates.length - 1 
-          ? finalPaymentAmount 
-          : basePaymentAmount,
+      return schedule.paymentDates.map((dueDate, index) => ({
+        amount: index === schedule.paymentDates.length - 1 
+          ? schedule.finalPaymentAmount 
+          : schedule.paymentAmount,
         dueDate,
         installmentNumber: index + 1,
-        description: `${frequency} payment ${index + 1} of ${totalPayments}`
+        description: `${frequency} payment ${index + 1} of ${schedule.numberOfPayments}`
       }));
     }
 
