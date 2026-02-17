@@ -287,8 +287,6 @@ router.post('/:id/enroll', async (req, res) => {
       }
     }
 
-    const depositAmount = Math.round(finalPrice * 0.1); // 10% deposit
-
     const enrollmentData = createEnrollmentDataSimple({
       schoolId: classItem.schoolId || 1,
       classType: 'marketplace',
@@ -303,9 +301,9 @@ router.post('/:id/enroll', async (req, res) => {
       totalCost: finalPrice,
       totalPaid: 0,
       remainingBalance: finalPrice,
-      depositRequired: depositAmount,
+      depositRequired: 0,
       paymentStatus: 'pending',
-      paymentPlan: 'deposit_only',
+      paymentPlan: null,
       paymentFrequency: 'one_time',
       programStartDate: classItem.startDate || null,
       programEndDate: classItem.endDate || null,

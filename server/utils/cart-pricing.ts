@@ -368,6 +368,8 @@ async function getClassPrice(classId: number, variantId?: string): Promise<numbe
     throw new Error(`Class not found: ${classId}`);
   }
 
+  let basePrice = classData.price || 0;
+
   if (classData.schedule) {
     try {
       const schedule = typeof classData.schedule === 'string' 
@@ -378,17 +380,15 @@ async function getClassPrice(classId: number, variantId?: string): Promise<numbe
         if (variantId) {
           const variant = schedule.variants.find((v: any) => v.id === variantId);
           if (variant && typeof variant.price === 'number') {
-            return variant.price;
+            basePrice = variant.price;
           }
-        }
-        
-        const defaultVariant = schedule.variants.find((v: any) => v.id === 'default-variant');
-        if (defaultVariant && typeof defaultVariant.price === 'number') {
-          return defaultVariant.price;
-        }
-        
-        if (schedule.variants[0] && typeof schedule.variants[0].price === 'number') {
-          return schedule.variants[0].price;
+        } else {
+          const defaultVariant = schedule.variants.find((v: any) => v.id === 'default-variant');
+          if (defaultVariant && typeof defaultVariant.price === 'number') {
+            basePrice = defaultVariant.price;
+          } else if (schedule.variants[0] && typeof schedule.variants[0].price === 'number') {
+            basePrice = schedule.variants[0].price;
+          }
         }
       }
     } catch (e) {
@@ -396,7 +396,20 @@ async function getClassPrice(classId: number, variantId?: string): Promise<numbe
     }
   }
 
-  return classData.price || 0;
+  if (classData.prorateEnabled && classData.startDate && classData.endDate) {
+    try {
+      const { calculateProratedPrice } = await import('../lib/prorate-calculator.js');
+      const prorateResult = calculateProratedPrice(basePrice, classData.startDate, classData.endDate);
+      if (prorateResult.proratePercentage < 100) {
+        console.log(`📊 Cart pricing pro-rated class ${classId}: ${basePrice} → ${prorateResult.proratedPriceCents} cents (${prorateResult.proratePercentage}%)`);
+        return prorateResult.proratedPriceCents;
+      }
+    } catch (e) {
+      console.warn('Failed to calculate proration for cart pricing:', e);
+    }
+  }
+
+  return basePrice;
 }
 
 export async function calculateCartPricing(

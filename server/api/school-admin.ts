@@ -1183,6 +1183,68 @@ router.get("/classes/:id/prorate-preview", supabaseAuth, async (req: any, res) =
   }
 });
 
+router.post("/enrollments/:id/prorate", supabaseAuth, async (req: any, res) => {
+  try {
+    const schoolId = await getSchoolIdFromRequest(req, res);
+    if (schoolId === null) return;
+
+    const enrollmentId = parseInt(req.params.id);
+    const { proratePercentage, prorateReason } = req.body;
+
+    if (typeof proratePercentage !== 'number' || proratePercentage < 0 || proratePercentage > 100) {
+      return res.status(400).json({ message: 'proratePercentage must be a number between 0 and 100' });
+    }
+
+    const enrollment = await storage.getProgramEnrollmentById(enrollmentId);
+    if (!enrollment) {
+      return res.status(404).json({ message: 'Enrollment not found' });
+    }
+
+    if (enrollment.schoolId !== schoolId) {
+      return res.status(403).json({ message: 'Access denied to this enrollment' });
+    }
+
+    const user = await storage.getUserByEmail(req.user?.email);
+    if (!user) {
+      return res.status(401).json({ message: 'User not found' });
+    }
+
+    if (proratePercentage === 0 && (enrollment.totalPaid || 0) > 0) {
+      return res.status(400).json({ message: 'Cannot set proration to 0% when payments have already been made. Consider issuing a refund instead.' });
+    }
+
+    const originalCost = enrollment.proratedFromCents || enrollment.totalCost || 0;
+    const proratedPrice = Math.round((proratePercentage / 100) * originalCost);
+
+    const updateData: any = {
+      proratedFromCents: originalCost,
+      proratePercentage,
+      prorateDate: new Date(),
+      prorateBy: user.id,
+      prorateReason: prorateReason || `Admin override: ${proratePercentage}% of original price`,
+      totalCost: proratedPrice,
+      remainingBalance: Math.max(0, proratedPrice - (enrollment.totalPaid || 0)),
+    };
+
+    const updated = await storage.updateProgramEnrollment(enrollmentId, updateData);
+    console.log(`📊 Admin proration override on enrollment ${enrollmentId}: ${originalCost} → ${proratedPrice} cents (${proratePercentage}%) by user ${user.id}`);
+
+    res.json({
+      message: 'Proration applied successfully',
+      enrollment: updated,
+      proration: {
+        originalPriceCents: originalCost,
+        proratedPriceCents: proratedPrice,
+        proratePercentage,
+        savingsCents: originalCost - proratedPrice,
+      }
+    });
+  } catch (error: any) {
+    console.error('Error applying proration override:', error);
+    res.status(500).json({ message: error.message || 'Failed to apply proration' });
+  }
+});
+
 // Get class roster (students enrolled in a specific class)
 router.get("/classes/:id/roster", supabaseAuth, async (req: any, res) => {
   try {

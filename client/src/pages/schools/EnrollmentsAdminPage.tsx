@@ -220,6 +220,10 @@ export default function EnrollmentsAdminPage() {
   const [compEnrollment, setCompEnrollment] = useState<Enrollment | null>(null);
   const [compPercentage, setCompPercentage] = useState("100");
   const [compReason, setCompReason] = useState("");
+  const [prorateDialogOpen, setProrateDialogOpen] = useState(false);
+  const [prorateEnrollment, setProrateEnrollment] = useState<Enrollment | null>(null);
+  const [proratePercent, setProratePercent] = useState("");
+  const [prorateReason, setProrateReason] = useState("");
 
   // Fetch all enrollments for the school
   const { data: enrollments = [], isLoading, refetch } = useQuery<Enrollment[]>({
@@ -435,6 +439,63 @@ export default function EnrollmentsAdminPage() {
       enrollmentId: compEnrollment.id,
       compPercentage: pct,
       compReason: compReason.trim() || "Comped by school administrator",
+    });
+  };
+
+  const prorateMutation = useMutation({
+    mutationFn: async (data: { enrollmentId: number; proratePercentage: number; prorateReason: string }) => {
+      const res = await apiRequest("POST", `/api/school-admin/enrollments/${data.enrollmentId}/prorate`, {
+        proratePercentage: data.proratePercentage,
+        prorateReason: data.prorateReason,
+      });
+      return res.json();
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Proration Applied",
+        description: data.message,
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/school-admin/enrollments"] });
+      setProrateDialogOpen(false);
+      setProrateEnrollment(null);
+      setProratePercent("");
+      setProrateReason("");
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to Apply Proration",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleProrateClick = (enrollment: Enrollment) => {
+    setProrateEnrollment(enrollment);
+    if (enrollment.proratePercentage) {
+      setProratePercent(enrollment.proratePercentage.toString());
+    } else {
+      setProratePercent("");
+    }
+    setProrateReason("");
+    setProrateDialogOpen(true);
+  };
+
+  const handleSaveProrate = () => {
+    if (!prorateEnrollment) return;
+    const pct = parseFloat(proratePercent);
+    if (isNaN(pct) || pct < 0 || pct > 100) {
+      toast({
+        title: "Invalid Percentage",
+        description: "Prorate percentage must be between 0 and 100",
+        variant: "destructive",
+      });
+      return;
+    }
+    prorateMutation.mutate({
+      enrollmentId: prorateEnrollment.id,
+      proratePercentage: pct,
+      prorateReason: prorateReason.trim() || `Pro-rated to ${pct}% by admin`,
     });
   };
 
@@ -788,6 +849,12 @@ export default function EnrollmentsAdminPage() {
                                         Comp
                                       </DropdownMenuItem>
                                     )}
+                                    {['pending_payment', 'enrolled', 'pending_admin_approval'].includes(enrollment.status || '') && enrollment.remainingBalance > 0 && (
+                                      <DropdownMenuItem onClick={() => handleProrateClick(enrollment)}>
+                                        <Percent className="h-4 w-4 mr-2" />
+                                        {enrollment.proratedFromCents ? 'Adjust Pro-Rate' : 'Pro-Rate'}
+                                      </DropdownMenuItem>
+                                    )}
                                     {enrollment.totalPaid > 0 && (
                                       <>
                                         <DropdownMenuSeparator />
@@ -891,6 +958,17 @@ export default function EnrollmentsAdminPage() {
                                   className="text-green-600 hover:text-green-700 hover:bg-green-50"
                                 >
                                   <Gift className="h-4 w-4" />
+                                </Button>
+                              )}
+                              {['pending_payment', 'enrolled', 'pending_admin_approval'].includes(enrollment.status || '') && enrollment.remainingBalance > 0 && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleProrateClick(enrollment)}
+                                  className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                  title={enrollment.proratedFromCents ? 'Adjust Pro-Rate' : 'Pro-Rate'}
+                                >
+                                  <Percent className="h-4 w-4" />
                                 </Button>
                               )}
                               {enrollment.totalPaid > 0 && (
@@ -1237,6 +1315,124 @@ export default function EnrollmentsAdminPage() {
                   <>
                     <Gift className="mr-2 h-4 w-4" />
                     Apply Comp
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+        <Dialog open={prorateDialogOpen} onOpenChange={(open) => {
+          setProrateDialogOpen(open);
+          if (!open) {
+            setProrateEnrollment(null);
+            setProratePercent("");
+            setProrateReason("");
+          }
+        }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Percent className="h-5 w-5 text-blue-600" />
+                {prorateEnrollment?.proratedFromCents ? 'Adjust Pro-Rate' : 'Pro-Rate Enrollment'}
+              </DialogTitle>
+              <DialogDescription>
+                Adjust the enrollment cost based on a mid-session start date or other proration reason.
+              </DialogDescription>
+            </DialogHeader>
+            {prorateEnrollment && (
+              <div className="space-y-4 py-4">
+                <div className="bg-muted p-4 rounded-lg space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span>Student:</span>
+                    <span className="font-medium">{prorateEnrollment.childName}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Class:</span>
+                    <span className="font-medium">{prorateEnrollment.className}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Original Cost:</span>
+                    <span className="font-medium">
+                      {formatCurrency(prorateEnrollment.proratedFromCents || prorateEnrollment.totalCost)}
+                    </span>
+                  </div>
+                  {prorateEnrollment.proratedFromCents && (
+                    <div className="flex justify-between">
+                      <span>Current Pro-Rated Cost:</span>
+                      <span className="font-medium text-blue-600">
+                        {formatCurrency(prorateEnrollment.totalCost)} ({prorateEnrollment.proratePercentage}%)
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex justify-between">
+                    <span>Paid:</span>
+                    <span className="font-medium">{formatCurrency(prorateEnrollment.totalPaid)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Remaining:</span>
+                    <span className="font-medium text-orange-600">{formatCurrency(prorateEnrollment.remainingBalance)}</span>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="prorate-percentage">Prorate Percentage (%)</Label>
+                  <Input
+                    id="prorate-percentage"
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="1"
+                    placeholder="e.g. 75 means student pays 75% of full price"
+                    value={proratePercent}
+                    onChange={(e) => setProratePercent(e.target.value)}
+                    style={{ fontSize: '16px' }}
+                  />
+                  {proratePercent && !isNaN(parseFloat(proratePercent)) && (
+                    <p className="text-sm text-muted-foreground">
+                      New cost: {formatCurrency(
+                        Math.round(((prorateEnrollment.proratedFromCents || prorateEnrollment.totalCost) * parseFloat(proratePercent)) / 100)
+                      )} (student pays {proratePercent}% of {formatCurrency(prorateEnrollment.proratedFromCents || prorateEnrollment.totalCost)})
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="prorate-reason">Reason (Optional)</Label>
+                  <Textarea
+                    id="prorate-reason"
+                    placeholder="e.g. Mid-session enrollment, started 3 weeks late"
+                    value={prorateReason}
+                    onChange={(e) => setProrateReason(e.target.value)}
+                    rows={3}
+                    style={{ fontSize: '16px' }}
+                  />
+                </div>
+              </div>
+            )}
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setProrateDialogOpen(false);
+                  setProrateEnrollment(null);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSaveProrate}
+                disabled={prorateMutation.isPending || !proratePercent}
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                {prorateMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Applying...
+                  </>
+                ) : (
+                  <>
+                    <Percent className="mr-2 h-4 w-4" />
+                    Apply Pro-Rate
                   </>
                 )}
               </Button>
