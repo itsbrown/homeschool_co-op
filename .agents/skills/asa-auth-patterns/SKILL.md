@@ -161,6 +161,34 @@ if (!isAssigned) {
 | Role switcher not showing | Only one role at current school | Check `user_roles` entries for that school |
 | Wrong data returned | School context mismatch | Verify `schoolId` on user's active role matches expected school |
 
+## Best Practices
+
+### Do
+- Always use `apiRequest` or the default TanStack Query fetcher for authenticated API calls — never bare `fetch()`
+- Always use `authData.dbUserId` (integer) for database queries, not `authData.userId` (Supabase UUID)
+- Always check the `user_roles` table as the source of truth for roles — `users.role` is a legacy fallback only
+- Always validate school membership on the backend before returning school-scoped data
+- Always use `useRole()` for access control checks and `useAuth()` for user identity
+- Always pass `user_roles.id` (not role name string) to `setActiveRole()`
+- Always invalidate relevant TanStack Query caches after role switches
+- Always handle 401 token expiration gracefully — `apiRequest` retries once after refresh
+
+### Don't
+- Don't trust Supabase `user_metadata` for role or school — database is the source of truth
+- Don't use `queryFn` in `useQuery` calls — the default fetcher handles auth automatically
+- Don't hardcode role checks against `users.role` — use `user_roles` table lookups
+- Don't allow cross-school role switching — filter available roles by current school context
+- Don't store sensitive data in Supabase `user_metadata` — it can be modified by users
+- Don't forget to include `X-Active-Role` header — `apiRequest` does this automatically, bare `fetch()` does not
+- Don't redirect to login on every 401 — allow one token refresh retry first
+
+### Multi-Tenant Security Checklist
+- Backend routes validate `schoolId` from auth context before returning data
+- Role checks use `user_roles` table, not client-provided role claims
+- Educator endpoints verify class assignment before exposing student data
+- School admin endpoints restrict to their own school's data
+- Super admin endpoints have explicit role checks (not just "any authenticated user")
+
 ## Key Files
 - `server/middleware/supabase-auth.ts` — auth middleware, ID mapping, metadata sync
 - `client/src/lib/queryClient.ts` — `apiRequest`, default fetcher, token refresh

@@ -131,3 +131,33 @@ Session QR tokens expire at **session end time + 15 minutes**. Atomic database u
 - **Orphaned data**: `scheduled_payments` with deleted `program_enrollments` must be filtered out of admin views
 - **Auth ID mapping**: Use `authData.dbUserId` (integer) NOT `authData.userId` (Supabase UUID) when querying database tables
 - **TanStack Query**: Use the default fetcher (no custom `queryFn`), use `apiRequest` for mutations, always invalidate cache by queryKey after mutations
+
+## Best Practices
+
+### Schema & Data Integrity
+- Always define nullable fields explicitly with `.default(null)` in insert schemas to avoid insertion errors
+- Use `.notNull()` for required fields — don't rely on application-level validation alone
+- Keep denormalized fields (like `parentEmail` on enrollments) updated when the source changes
+- Add unique constraints for natural keys (e.g., enrollment + date + installment number)
+- Never add columns without defaults to tables with existing data — use `.default()` or make nullable
+
+### Storage & Query Patterns
+- Always go through the `IStorage` interface — never import `db` directly in route handlers
+- When adding a new query, check if a similar storage method already exists before creating a new one
+- Use `Promise.all()` for independent lookups (e.g., fetching parent + emergency contacts in parallel)
+- Avoid `getAllX()` methods in hot paths — use filtered queries when possible (e.g., `getEnrollmentsByChildId` instead of filtering `getAllEnrollments()`)
+- Always handle the "not found" case — return `undefined` from storage, check it in the route
+
+### Date Handling
+- Store dates as `date` type (YYYY-MM-DD) for calendar/schedule dates, `timestamp` for event times
+- Use `formatDate()` from `@/lib/utils` for display — it handles timezone edge cases
+- Never construct dates with `new Date('YYYY-MM-DD')` without accounting for timezone offset — use the direct parsing pattern in `formatDate()`
+- For age calculations, use millisecond math with 365.25 divisor, not year subtraction
+- Always normalize dates to midnight (`setHours(0,0,0,0)`) before day-based comparisons
+
+### Migration Safety
+- Always run `npm run db:push` to sync schema — never write raw SQL migrations
+- Test schema changes on development before pushing to production
+- Never rename columns — add the new column, migrate data, then remove the old one
+- Never change column types on primary keys or foreign keys
+- When adding a required column to an existing table, provide a `.default()` value
