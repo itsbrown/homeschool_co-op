@@ -523,8 +523,15 @@ export class StripePaymentPlanService {
 
     // Use date-based calculator if frequency is provided and dates are available
     if (frequency && frequency !== 'one_time' && startDate && endDate) {
-      console.log('📅 Using date-based payment calculator with enrollment dates');
-      const schedule = calculatePaymentSchedule(totalAmount, startDate, endDate, frequency);
+      const now = new Date();
+      const effectiveStartDate = startDate > now ? startDate : now;
+      console.log('📅 Using date-based payment calculator with enrollment dates', {
+        originalStartDate: startDate.toLocaleDateString(),
+        effectiveStartDate: effectiveStartDate.toLocaleDateString(),
+        endDate: endDate.toLocaleDateString(),
+        adjustedForPastStart: startDate <= now
+      });
+      const schedule = calculatePaymentSchedule(totalAmount, effectiveStartDate, endDate, frequency);
       
       // Validate that all computed payments meet Stripe's minimum
       const hasPaymentBelowMinimum = 

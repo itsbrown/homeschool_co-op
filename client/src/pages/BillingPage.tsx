@@ -1467,15 +1467,10 @@ export default function BillingPage() {
     const totalBalance = enrollmentsToCalculate.reduce((total, detail) => total + detail.balance, 0);
 
     switch (selectedPaymentPlan) {
-      case 'half_now':
-        // Pay 50% now, 50% later
-        return Math.round(totalBalance * 0.5);
       case 'full_payment':
-        // Pay everything
         return totalBalance;
-      case 'three_payments':
-        // Split into 3 monthly payments - first payment amount
-        return Math.round(totalBalance / 3);
+      case 'biweekly':
+        return totalBalance;
       default:
         return totalBalance;
     }
@@ -1491,12 +1486,10 @@ export default function BillingPage() {
     const totalBalance = enrollmentsToCalculate.reduce((total, detail) => total + detail.balance, 0);
 
     switch (selectedPaymentPlan) {
-      case 'half_now':
-        return `Pay 50% now (${formatCurrency(Math.round(totalBalance * 0.5))}), remaining 50% in 30 days.`;
       case 'full_payment':
         return `Pay full amount now. No future payments needed.`;
-      case 'three_payments':
-        return `Split into 3 equal monthly payments of ${formatCurrency(Math.round(totalBalance / 3))} each.`;
+      case 'biweekly':
+        return `Pay in bi-weekly installments. First payment today, then every two weeks until the balance is paid.`;
       default:
         return '';
     }
@@ -1817,26 +1810,6 @@ export default function BillingPage() {
                       <input
                         type="radio"
                         name="paymentPlan"
-                        value="half_now"
-                        checked={selectedPaymentPlan === 'half_now'}
-                        onChange={(e) => setSelectedPaymentPlan(e.target.value)}
-                        className="mt-1"
-                      />
-                      <div className="flex-1">
-                        <div className="font-medium">Split Payment (50/50)</div>
-                        <div className="text-sm text-muted-foreground mt-1">
-                          Pay half now, half in 30 days - {formatCurrency(Math.round(getSelectedTotal() * 0.5))}
-                        </div>
-                        <div className="text-xs text-green-600 mt-1">
-                          No additional fees, automatic payment reminders
-                        </div>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start space-x-3 cursor-pointer p-4 border rounded-lg hover:bg-gray-50">
-                      <input
-                        type="radio"
-                        name="paymentPlan"
                         value="full_payment"
                         checked={selectedPaymentPlan === 'full_payment'}
                         onChange={(e) => setSelectedPaymentPlan(e.target.value)}
@@ -1857,18 +1830,18 @@ export default function BillingPage() {
                       <input
                         type="radio"
                         name="paymentPlan"
-                        value="three_payments"
-                        checked={selectedPaymentPlan === 'three_payments'}
+                        value="biweekly"
+                        checked={selectedPaymentPlan === 'biweekly'}
                         onChange={(e) => setSelectedPaymentPlan(e.target.value)}
                         className="mt-1"
                       />
                       <div className="flex-1">
-                        <div className="font-medium">Monthly Installments (3 payments)</div>
+                        <div className="font-medium">Bi-Weekly Payments</div>
                         <div className="text-sm text-muted-foreground mt-1">
-                          Three monthly payments of {formatCurrency(Math.round(getSelectedTotal() / 3))} each
+                          Pay in installments every two weeks
                         </div>
                         <div className="text-xs text-blue-600 mt-1">
-                          First payment today, then monthly auto-payments
+                          First payment today, then automatic bi-weekly payments
                         </div>
                       </div>
                     </label>
@@ -1893,9 +1866,8 @@ export default function BillingPage() {
                         : `All ${billingSummary.enrollmentDetails.length} enrollments will be included`}
                     </p>
                     <p className="text-sm font-medium text-blue-600">
-                      Payment Plan: {selectedPaymentPlan === 'half_now' ? 'Split Payment' :
-                                   selectedPaymentPlan === 'full_payment' ? 'Pay in Full' :
-                                   selectedPaymentPlan === 'three_payments' ? 'Monthly Installments' : 'Custom'}
+                      Payment Plan: {selectedPaymentPlan === 'full_payment' ? 'Pay in Full' :
+                                   selectedPaymentPlan === 'biweekly' ? 'Bi-Weekly Payments' : 'Custom'}
                     </p>
                     {showPayment && (
                       <p className="text-sm text-green-600 font-medium">
@@ -1935,9 +1907,8 @@ export default function BillingPage() {
                     Secure Payment
                   </CardTitle>
                   <CardDescription>
-                    Complete your {selectedPaymentPlan === 'half_now' ? 'first payment (50%)' :
-                                  selectedPaymentPlan === 'full_payment' ? 'full payment' :
-                                  selectedPaymentPlan === 'three_payments' ? 'first monthly payment' : 'payment'} of {formatCurrency(getPaymentPlanAmount())}
+                    Complete your {selectedPaymentPlan === 'full_payment' ? 'full payment' :
+                                  selectedPaymentPlan === 'biweekly' ? 'first bi-weekly payment' : 'payment'} of {formatCurrency(getPaymentPlanAmount())}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
