@@ -159,7 +159,12 @@ router.post('/complete', async (req, res) => {
 router.get('/classes', async (req, res) => {
   try {
     const allClasses = await storage.getClasses();
-    const classes = allClasses.filter((c: any) => c.published || c.status === 'active');
+    const now = new Date();
+    const classes = allClasses.filter((c: any) => {
+      if (!(c.published || c.status === 'active')) return false;
+      if (c.endDate && new Date(c.endDate) < now) return false;
+      return true;
+    });
     
     // Format classes for registration display
     const formattedClasses = classes.map((cls: any) => ({

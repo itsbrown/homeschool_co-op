@@ -35,8 +35,13 @@ router.get('/', async (req, res) => {
     // Get classes with pagination
     let classes = await storage.getClasses(options);
 
-    // Filter out admin-only classes for public API
-    classes = classes.filter(c => !c.isAdminOnly);
+    // Filter out admin-only classes and past classes for public API
+    const now = new Date();
+    classes = classes.filter(c => {
+      if (c.isAdminOnly) return false;
+      if (c.endDate && new Date(c.endDate) < now) return false;
+      return true;
+    });
 
     // Additional filtering by categoryName if provided
     if (categoryName && classes.length > 0) {
@@ -54,14 +59,15 @@ router.get('/', async (req, res) => {
       })
     );
 
-    // Return classes with pagination metadata
+    // Use filtered count for accurate pagination (accounts for hidden past/admin-only classes)
+    const filteredTotal = classes.length;
     res.json({
       classes: classesWithEnrollmentCounts,
       pagination: {
         page,
         limit,
-        total,
-        totalPages: Math.ceil(total / limit)
+        total: filteredTotal,
+        totalPages: Math.ceil(filteredTotal / limit)
       }
     });
   } catch (error) {
@@ -112,8 +118,13 @@ router.get('/category/:categoryName', async (req, res) => {
       status: 'published'
     });
 
-    // Filter by category name and exclude admin-only classes
-    const filteredClasses = allClasses.filter(c => c.categoryName === categoryName && !c.isAdminOnly);
+    // Filter by category name, exclude admin-only and past classes
+    const now = new Date();
+    const filteredClasses = allClasses.filter(c => {
+      if (c.isAdminOnly) return false;
+      if (c.endDate && new Date(c.endDate) < now) return false;
+      return c.categoryName === categoryName;
+    });
 
     // Apply pagination manually
     const startIndex = (page - 1) * limit;
@@ -158,11 +169,12 @@ router.get('/categories/names', async (req, res) => {
       status: 'published'
     });
 
-    // Extract unique category names using an object as a map
+    // Extract unique category names from active classes only (exclude past classes)
+    const now = new Date();
     const categoryNamesMap: {[key: string]: boolean} = {};
 
     allClasses.forEach(c => {
-      if (c.categoryName) {
+      if (c.categoryName && !(c.endDate && new Date(c.endDate) < now)) {
         categoryNamesMap[c.categoryName] = true;
       }
     });
@@ -498,7 +510,12 @@ router.get("/published", async (req, res) => {
   try {
     const { schoolId } = req.query;
     const allClasses = await storage.getAllClasses();
-    let classes = allClasses.filter((c: any) => c.published || c.status === 'active');
+    const now = new Date();
+    let classes = allClasses.filter((c: any) => {
+      if (!(c.published || c.status === 'active')) return false;
+      if (c.endDate && new Date(c.endDate) < now) return false;
+      return true;
+    });
 
     // Filter by school if schoolId is provided
     if (schoolId) {
