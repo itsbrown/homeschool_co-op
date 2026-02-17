@@ -18,14 +18,6 @@ description: Stripe payment integration, payment plan types, scheduled payment l
 - Single payment for the entire amount, due immediately
 - Simplest plan — one installment, one `scheduled_payment` record
 
-### Deposit (`deposit`)
-- **10% deposit** due now (minimum $0.50)
-- **90% balance** due in 30 days
-- Automatic fallback to full payment if:
-  - Total is less than $1.00 (can't split into two viable payments)
-  - Either portion would be below Stripe's $0.50 minimum
-  - Deposit amount equals or exceeds total
-
 ### Biweekly (`biweekly`)
 - **With class dates** (preferred): Date-based calculator divides total evenly across biweekly intervals from program start to end date. Number of payments varies by class duration.
 - **Without class dates** (fallback): 4 equal payments every 14 days
