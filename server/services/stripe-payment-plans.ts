@@ -524,42 +524,84 @@ export class StripePaymentPlanService {
     // Use date-based calculator if frequency is provided and dates are available
     if (frequency && frequency !== 'one_time' && startDate && endDate) {
       const now = new Date();
-      const effectiveStartDate = startDate > now ? startDate : now;
+      const classStartsInFuture = startDate > now;
+      
+      // Determine the schedule start date for remaining payments (after the first immediate payment)
+      // If class hasn't started yet: remaining payments start from class start date
+      // If class already started: remaining payments continue from today
+      const scheduleStartDate = classStartsInFuture ? startDate : now;
+      
       console.log('📅 Using date-based payment calculator with enrollment dates', {
-        originalStartDate: startDate.toLocaleDateString(),
-        effectiveStartDate: effectiveStartDate.toLocaleDateString(),
+        classStartDate: startDate.toLocaleDateString(),
+        scheduleStartDate: scheduleStartDate.toLocaleDateString(),
         endDate: endDate.toLocaleDateString(),
-        adjustedForPastStart: startDate <= now
+        classStartsInFuture,
+        firstPaymentCollectedToday: true
       });
-      const schedule = calculatePaymentSchedule(totalAmount, effectiveStartDate, endDate, frequency);
+      
+      // Calculate the schedule from scheduleStartDate to endDate
+      const schedule = calculatePaymentSchedule(totalAmount, scheduleStartDate, endDate, frequency);
+      
+      // If the calculator fell back to one_time (class too short for installments),
+      // just collect full payment today — don't try to create installments
+      if (schedule.frequency === 'one_time' || schedule.numberOfPayments < 2) {
+        console.log('📅 Class duration too short for installment plan, collecting full payment today');
+        return [{
+          amount: totalAmount,
+          dueDate: now,
+          installmentNumber: 1,
+          description: 'Full Payment (class duration too short for installments)'
+        }];
+      }
+      
+      // Build the complete payment date list:
+      // 1. Always collect the first payment TODAY (immediately at enrollment)
+      // 2. Use the remaining dates from the calculator for future payments
+      // 3. Divide the total evenly across all payments (first + remaining)
+      
+      let allPaymentDates: Date[];
+      
+      if (classStartsInFuture) {
+        // Class in the future: first payment today + all calculated dates starting from class start
+        allPaymentDates = [now, ...schedule.paymentDates];
+      } else {
+        // Class already started: calculator already starts from today, use as-is
+        allPaymentDates = schedule.paymentDates;
+      }
+      
+      const totalPayments = allPaymentDates.length;
+      
+      // Recalculate even payment amounts across all payments (including today's)
+      const basePaymentAmount = Math.floor(totalAmount / totalPayments);
+      const remainder = totalAmount - (basePaymentAmount * totalPayments);
+      const finalPaymentAmount = basePaymentAmount + remainder;
       
       // Validate that all computed payments meet Stripe's minimum
       const hasPaymentBelowMinimum = 
-        schedule.paymentAmount < STRIPE_MINIMUM_AMOUNT || 
-        schedule.finalPaymentAmount < STRIPE_MINIMUM_AMOUNT;
+        basePaymentAmount < STRIPE_MINIMUM_AMOUNT || 
+        finalPaymentAmount < STRIPE_MINIMUM_AMOUNT;
       
       if (hasPaymentBelowMinimum) {
-        // If any date-based payment would be below minimum, fall back to full payment
         console.warn(
           `⚠️ Date-based ${frequency} payment plan not viable for amount ${CurrencyUtils.toDisplay(totalAmount)} ` +
-          `(${schedule.numberOfPayments} payments of ${CurrencyUtils.toDisplay(schedule.paymentAmount)} each would violate Stripe's $0.50 minimum) - ` +
+          `(${totalPayments} payments of ${CurrencyUtils.toDisplay(basePaymentAmount)} each would violate Stripe's $0.50 minimum) - ` +
           `using full payment instead`
         );
         return [{
           amount: totalAmount,
-          dueDate: new Date(),
+          dueDate: now,
           installmentNumber: 1,
           description: 'Full Payment (amount below minimum for payment plans)'
         }];
       }
       
-      return schedule.paymentDates.map((dueDate, index) => ({
-        amount: index === schedule.paymentDates.length - 1 
-          ? schedule.finalPaymentAmount 
-          : schedule.paymentAmount,
+      return allPaymentDates.map((dueDate, index) => ({
+        amount: index === allPaymentDates.length - 1 
+          ? finalPaymentAmount 
+          : basePaymentAmount,
         dueDate,
         installmentNumber: index + 1,
-        description: `${frequency} payment ${index + 1} of ${schedule.numberOfPayments}`
+        description: `${frequency} payment ${index + 1} of ${totalPayments}`
       }));
     }
 
