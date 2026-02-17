@@ -1,0 +1,172 @@
+---
+name: asa-file-storage
+description: Unified file upload system, Replit App Storage (object storage), presigned URL workflow, category-based validation, public vs private paths, download/share patterns, and legacy upload handling for the ASA Learning Platform. Use when working with file uploads, downloads, object storage, presigned URLs, or document management.
+---
+
+# ASA File Uploads & Object Storage
+
+## Core Rules
+
+- **Replit App Storage** (Google Cloud Storage via sidecar) — all file storage uses this, no local filesystem persistence
+- **Category-based validation** — every upload must specify a category that determines size limits, allowed types, and storage path
+- **Presigned URLs** — uploads and downloads use time-limited signed URLs (15-minute TTL for uploads)
+- **Public vs private paths** — public files served directly, private files require presigned download URLs
+- **Never store files on local filesystem** — Replit's ephemeral filesystem loses data on restart
+
+## Object Storage Architecture
+
+### Sidecar Integration
+```
+Client → Backend API → Replit Sidecar (127.0.0.1:1106) → Google Cloud Storage
+```
+- `ObjectStorageService` in `server/replit_integrations/object_storage/objectStorage.ts` wraps GCS client
+- Sidecar handles authentication tokens automatically
+- Environment variables:
+  - `PUBLIC_OBJECT_SEARCH_PATHS` — comma-separated paths for public asset lookup
+  - `PRIVATE_OBJECT_DIR` — base directory for private objects
+  - `DEFAULT_OBJECT_STORAGE_BUCKET_ID` — bucket identifier
+
+### Directory Structure
+```
+bucket/
+├── public/                    ← PUBLIC_OBJECT_SEARCH_PATHS
+│   ├── logos/                 ← School logos (publicly accessible)
+│   ├── fundraiser-products/   ← Product images (publicly accessible)
+│   └── ...
+└── .private/                  ← PRIVATE_OBJECT_DIR
+    ├── documents/             ← School documents, waivers
+    ├── signatures/            ← Waiver signatures
+    ├── knowledge-base/        ← KB content files
+    ├── assessments/           ← Student assessment files
+    ├── profile-photos/        ← User profile photos
+    └── ...
+```
+
+## Upload Categories
+
+Each category defines validation rules and storage path:
+
+| Category | Max Size | Allowed Types | Public | Folder |
+|----------|----------|---------------|--------|--------|
+| `signatures` | 2 MB | PNG, JPEG, SVG | No | `signatures/` |
+| `logos` | 5 MB | PNG, JPEG, SVG, WebP | Yes | `logos/` |
+| `documents` | 25 MB | PDF, DOC, DOCX, PNG, JPEG, GIF | No | `documents/` |
+| `knowledgeBase` | 50 MB | PDF, DOC, DOCX, TXT, PNG, JPEG | No | `knowledge-base/` |
+| `fundraiserProducts` | 5 MB | PNG, JPEG, WebP | Yes | `fundraiser-products/` |
+| `assessments` | 10 MB | PDF, PNG, JPEG | No | `assessments/` |
+| `profilePhotos` | 5 MB | PNG, JPEG, WebP | No | `profile-photos/` |
+
+## Upload Flow (Presigned URL Pattern)
+
+### Step 1: Request Upload URL
+```
+POST /api/unified-uploads/presigned-url
+Body: { category, filename, contentType, sizeBytes }
+Response: { uploadURL, objectPath, validation }
+```
+- Server validates category, size, and content type
+- Generates UUID-based storage path to prevent collisions
+- Returns a time-limited presigned PUT URL (15 min TTL)
+
+### Step 2: Client Uploads Directly to Storage
+```
+PUT <uploadURL>
+Headers: Content-Type: <mimetype>
+Body: <file binary>
+```
+- Client uploads directly to GCS via presigned URL — no backend proxy needed
+- Reduces server load and avoids request body size limits
+
+### Step 3: Confirm Upload (Save Reference)
+```
+POST /api/unified-uploads/confirm
+Body: { objectPath, category, metadata }
+```
+- Backend records the file reference in the database
+- Sets ACL policy (public or private) based on category
+
+## Download & Access
+
+### Public Files
+- Served directly via public object search paths
+- URL pattern: `/objects/public/<folder>/<file>`
+- No authentication required
+
+### Private Files
+- Require presigned download URL
+- Backend generates time-limited GET URL
+- `getDownloadUrl(objectPath)` → returns signed URL with short TTL
+
+### Legacy Upload Paths
+Two path patterns exist in the codebase:
+- **New uploads**: `/objects/.private/documents/...` (standard private path)
+- **Legacy uploads**: Various older patterns from before the unified upload system
+- When reading file paths, handle both patterns gracefully
+
+## ACL (Access Control)
+
+```typescript
+await fileUploadService.setObjectAcl(objectPath, ownerId, isPublic);
+```
+- `objectAcl.ts` manages per-object access policies
+- Owner-based access for private files
+- Public visibility for logos, product images, etc.
+
+## FileUploadService API
+
+```typescript
+import { fileUploadService } from '../services/fileUploadService';
+
+fileUploadService.validateUpload(options)    // Check category, size, type
+fileUploadService.getUploadUrl(options)      // Get presigned PUT URL
+fileUploadService.setObjectAcl(path, owner, isPublic)  // Set access
+fileUploadService.deleteObject(path)         // Delete from storage
+fileUploadService.uploadBuffer(buffer, ...)  // Direct server-side upload
+```
+
+### Upload via `apiRequest` (Frontend)
+```typescript
+const formData = new FormData();
+formData.append('file', file);
+formData.append('category', 'documents');
+await apiRequest('POST', '/api/unified-uploads/upload', formData);
+```
+- `apiRequest` auto-detects `FormData` and omits `Content-Type` header (see `asa-frontend-conventions`)
+
+## Common Pitfalls
+
+- **File too large rejected** → didn't check category's `maxSizeBytes` before upload → validate client-side before requesting presigned URL
+- **Wrong content type rejected** → sent file with mismatched MIME type → verify `contentType` matches the actual file
+- **Presigned URL expired** → upload took longer than 15 minutes → request a new presigned URL and retry
+- **Private file 403** → tried to access private file without presigned download URL → use `getDownloadUrl()` for private files
+- **Legacy path not found** → old upload path format doesn't match new pattern → check for both `/objects/.private/` prefix and raw paths without prefix when resolving stored file references
+- **File lost after restart** → stored file on local filesystem instead of object storage → always use the presigned URL upload flow
+
+## Best Practices
+
+### Do
+- Always validate uploads against category config before requesting a presigned URL
+- Always use the presigned URL pattern — never proxy file uploads through the backend
+- Always set ACL policy after upload confirmation (public for logos/products, private for documents)
+- Always use `randomUUID()` in storage paths to prevent filename collisions
+- Always handle both legacy and new upload path formats when reading stored paths
+- Always use `apiRequest` with `FormData` for frontend uploads — it handles auth headers and content type automatically
+
+### Don't
+- Don't store files on the local filesystem — they'll be lost on restart
+- Don't proxy large file uploads through the Express backend — use presigned URLs for direct-to-storage uploads
+- Don't expose private file paths directly — always generate presigned download URLs
+- Don't skip category validation — it enforces size limits and allowed types
+- Don't hardcode storage paths — use `FileUploadService.buildStoragePath()` for consistent path generation
+- Don't forget to delete objects from storage when the associated database record is deleted
+
+## Key Files
+- `server/services/fileUploadService.ts` — `FileUploadService` class, category configs, validation, presigned URLs
+- `server/replit_integrations/object_storage/objectStorage.ts` — `ObjectStorageService`, GCS client, bucket operations
+- `server/replit_integrations/object_storage/objectAcl.ts` — ACL policy management
+- `server/replit_integrations/object_storage/routes.ts` — object storage HTTP routes
+- `server/api/unified-uploads.ts` — unified upload API endpoints
+- `server/api/file-upload.ts` — legacy file upload endpoints
+- `server/api/knowledge-base-upload.ts` — knowledge base file upload
+- `server/api/schools/documents.ts` — school document management
+- `server/api/schools/upload-logo.ts` — school logo upload
