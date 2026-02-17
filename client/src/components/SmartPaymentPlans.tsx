@@ -9,7 +9,7 @@ import { apiRequest } from '@/lib/queryClient';
 import { useAuth } from '@/components/SupabaseProvider';
 
 interface PaymentPlanSuggestion {
-  planType: 'full' | 'deposit' | 'split' | 'monthly';
+  planType: 'full' | 'split' | 'monthly' | 'biweekly';
   description: string;
   confidence: number;
   reasoning: string;
@@ -67,9 +67,9 @@ export default function SmartPaymentPlans({
   const getPlanTypeLabel = (planType: string) => {
     switch (planType) {
       case 'full': return 'Pay in Full';
-      case 'deposit': return 'Deposit Only';
       case 'split': return 'Split Payment';
       case 'monthly': return 'Monthly Plan';
+      case 'biweekly': return 'Biweekly Payment Plan';
       default: return planType;
     }
   };
@@ -77,9 +77,9 @@ export default function SmartPaymentPlans({
   const getPlanTypeColor = (planType: string) => {
     switch (planType) {
       case 'full': return 'bg-green-100 text-green-800';
-      case 'deposit': return 'bg-blue-100 text-blue-800';
       case 'split': return 'bg-yellow-100 text-yellow-800';
       case 'monthly': return 'bg-purple-100 text-purple-800';
+      case 'biweekly': return 'bg-blue-100 text-blue-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -100,25 +100,11 @@ export default function SmartPaymentPlans({
       recommendedAmount: enrollmentAmount
     },
     {
-      planType: 'deposit' as const,
-      description: 'Pay 10% deposit now, remaining balance due before class starts',
+      planType: 'biweekly' as const,
+      description: 'Automatic payments every 2 weeks until class ends',
       confidence: 0.7,
-      reasoning: 'Popular choice for securing enrollment with minimal upfront cost',
-      recommendedAmount: Math.round(enrollmentAmount * 0.1)
-    },
-    {
-      planType: 'split' as const,
-      description: 'Split payment into two equal installments',
-      confidence: 0.6,
-      reasoning: 'Balanced approach for managing cash flow',
-      recommendedAmount: Math.round(enrollmentAmount / 2)
-    },
-    {
-      planType: 'monthly' as const,
-      description: 'Spread payment over 3 monthly installments',
-      confidence: 0.6,
-      reasoning: 'Easiest on monthly budget',
-      recommendedAmount: Math.round(enrollmentAmount / 3)
+      reasoning: 'Popular choice for managing cash flow with regular payments',
+      recommendedAmount: Math.round(enrollmentAmount / 4)
     }
   ];
 
@@ -219,22 +205,10 @@ export default function SmartPaymentPlans({
                     <span className="text-sm text-green-700">No future payment worries</span>
                   </div>
                 )}
-                {plan.planType === 'deposit' && (
+                {plan.planType === 'biweekly' && (
                   <div className="flex items-center gap-2">
                     <CheckCircle className="h-4 w-4 text-blue-600" />
-                    <span className="text-sm text-blue-700">Secure spot with minimal upfront cost</span>
-                  </div>
-                )}
-                {plan.planType === 'split' && (
-                  <div className="flex items-center gap-2">
-                    <CheckCircle className="h-4 w-4 text-yellow-600" />
-                    <span className="text-sm text-yellow-700">Balanced payment schedule</span>
-                  </div>
-                )}
-                {plan.planType === 'monthly' && (
-                  <div className="flex items-center gap-2">
-                    <CheckCircle className="h-4 w-4 text-purple-600" />
-                    <span className="text-sm text-purple-700">Budget-friendly monthly payments</span>
+                    <span className="text-sm text-blue-700">Manageable biweekly payments</span>
                   </div>
                 )}
               </div>

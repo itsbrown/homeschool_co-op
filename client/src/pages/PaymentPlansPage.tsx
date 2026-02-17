@@ -254,9 +254,9 @@ export default function PaymentPlansPage() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <DollarSign className="h-5 w-5 text-blue-600" />
-                    Deposit Payment
+                    Pay in Full
                   </CardTitle>
-                  <CardDescription>Pay 10% deposit to secure enrollment</CardDescription>
+                  <CardDescription>Complete payment now with no future worries</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <ul className="space-y-2 text-sm">
@@ -266,37 +266,11 @@ export default function PaymentPlansPage() {
                     </li>
                     <li className="flex items-center gap-2">
                       <Check className="h-4 w-4 text-green-500" />
-                      Secure your child's spot
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <Check className="h-4 w-4 text-green-500" />
-                      Payment reminders for balance
-                    </li>
-                  </ul>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <CreditCard className="h-5 w-5" />
-                    Split Payment
-                  </CardTitle>
-                  <CardDescription>Pay 50% now, 50% later</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <ul className="space-y-2 text-sm">
-                    <li className="flex items-center gap-2">
-                      <Check className="h-4 w-4 text-green-500" />
-                      Spread cost over 2 payments
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <Check className="h-4 w-4 text-green-500" />
-                      Automatic reminders
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <Check className="h-4 w-4 text-green-500" />
                       No additional fees
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <Check className="h-4 w-4 text-green-500" />
+                      No future payment worries
                     </li>
                   </ul>
                 </CardContent>
@@ -306,23 +280,23 @@ export default function PaymentPlansPage() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Calendar className="h-5 w-5" />
-                    Monthly Installments
+                    Biweekly Payment Plan
                   </CardTitle>
-                  <CardDescription>Pay in 3 monthly payments</CardDescription>
+                  <CardDescription>Automatic payments every 2 weeks until class ends</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <ul className="space-y-2 text-sm">
                     <li className="flex items-center gap-2">
                       <Check className="h-4 w-4 text-green-500" />
-                      Lowest monthly payment
+                      Pay every 2 weeks based on class schedule
                     </li>
                     <li className="flex items-center gap-2">
                       <Check className="h-4 w-4 text-green-500" />
-                      Budget-friendly option
+                      No additional fees
                     </li>
                     <li className="flex items-center gap-2">
                       <Check className="h-4 w-4 text-green-500" />
-                      Flexible scheduling
+                      Cancel anytime with 30-day notice
                     </li>
                   </ul>
                 </CardContent>

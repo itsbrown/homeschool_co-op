@@ -236,7 +236,7 @@ export default function CartCheckout() {
   useEffect(() => {
     if (selectedPaymentPlan === 'biweekly') {
       setPaymentFrequency('biweekly');
-    } else if (selectedPaymentPlan === 'full' || selectedPaymentPlan === 'deposit') {
+    } else if (selectedPaymentPlan === 'full') {
       setPaymentFrequency('one_time');
     }
     // Split plan allows user to choose frequency (weekly/biweekly/monthly)
@@ -937,14 +937,16 @@ export default function CartCheckout() {
     if (authoritativeData?.paymentPlans && authoritativeData.paymentPlans.length > 0) {
       // Map server plans to client format with additional UI properties
       // CRITICAL: Include numberOfPayments from server to ensure correct payment count display
-      return authoritativeData.paymentPlans.map(plan => ({
+      return authoritativeData.paymentPlans
+        .filter(plan => plan.id !== 'deposit')
+        .map(plan => ({
         id: plan.id,
         name: plan.name,
         description: plan.description,
         amount: plan.amount,
-        popular: plan.id === 'deposit',
+        popular: plan.id === 'full',
         features: plan.features,
-        dueDate: plan.id === 'deposit' ? 'Remaining balance due 2 weeks before class start' : undefined,
+        dueDate: undefined,
         installments: plan.id === 'biweekly' ? { frequency: 'biweekly' } : undefined,
         // Server-authoritative payment count - ensures display matches actual schedule
         numberOfPayments: plan.numberOfPayments,
@@ -957,30 +959,16 @@ export default function CartCheckout() {
     // Use payable amount from authoritative data if available, otherwise calculate from cart
     const totalAmount = authoritativeData?.payableAmount ?? actualPayableAmount;
     
-    const depositAmount = Math.round(totalAmount * 0.1); // 10% deposit
     const fullAmount = totalAmount;
     const biweeklyAmount = Math.round(totalAmount / 4); // Estimated 4 payments
     
     return [
       {
-        id: 'deposit',
-        name: 'Pay Deposit Only',
-        description: 'Secure your spot with a 10% deposit',
-        amount: depositAmount,
-        popular: true,
-        features: [
-          'Immediate enrollment confirmation',
-          'Remaining balance due before class starts',
-          'Full refund if cancelled 30 days before',
-          'Payment reminder emails'
-        ],
-        dueDate: 'Remaining balance due 2 weeks before class start'
-      },
-      {
         id: 'full',
         name: 'Pay in Full',
         description: 'Complete payment now',
         amount: fullAmount,
+        popular: true,
         features: [
           'No additional fees',
           'No future payment worries',
@@ -1543,11 +1531,6 @@ export default function CartCheckout() {
                             <div className="text-lg font-bold text-blue-900">
                               {formatCurrency(getSelectedPlanAmount())}
                             </div>
-                            {selectedPaymentPlan === 'deposit' && (
-                              <div className="text-xs text-blue-600">
-                                Remaining: {formatCurrency(payableAmount - getSelectedPlanAmount())}
-                              </div>
-                            )}
                           </>
                         );
                       })()}

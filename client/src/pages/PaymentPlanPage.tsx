@@ -22,7 +22,7 @@ interface PaymentPlanPageProps {
 
 export default function PaymentPlanPage({ enrollmentData }: PaymentPlanPageProps) {
   const [, navigate] = useLocation();
-  const [selectedPlan, setSelectedPlan] = useState("deposit");
+  const [selectedPlan, setSelectedPlan] = useState("full");
 
   if (!enrollmentData) {
     return (
@@ -41,40 +41,16 @@ export default function PaymentPlanPage({ enrollmentData }: PaymentPlanPageProps
 
   const paymentPlans = [
     {
-      id: "deposit",
-      name: "Pay Deposit Only",
-      description: "Secure your spot with a 10% deposit",
-      amount: enrollmentData.depositRequired,
-      popular: true,
-      features: [
-        "Immediate enrollment confirmation",
-        "Remaining balance due before class starts",
-        "Full refund if cancelled 30 days before",
-        "Payment reminder emails"
-      ]
-    },
-    {
       id: "full",
       name: "Pay in Full",
       description: "Complete payment now",
       amount: enrollmentData.remainingBalance,
+      popular: true,
       features: [
         "No additional fees",
         "No future payment worries",
         "Priority class placement",
         "Full refund if cancelled 30 days before"
-      ]
-    },
-    {
-      id: "split",
-      name: "Split Payment",
-      description: "Pay 50% now, 50% later",
-      amount: Math.round(enrollmentData.remainingBalance / 2),
-      features: [
-        "Pay half now, half in 30 days",
-        "Automatic payment reminders",
-        "No additional fees",
-        "Flexible payment dates"
       ]
     }
   ];

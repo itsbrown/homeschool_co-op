@@ -950,8 +950,6 @@ async function calculatePaymentPlans(
     return [];
   }
 
-  const depositAmount = Math.round(payableAmount * 0.1); // 10% deposit
-  
   // Calculate number of biweekly payments based on actual class dates
   // This ensures display matches the actual payment schedule that will be created
   let numberOfBiweeklyPayments = 4; // Default fallback
@@ -1013,16 +1011,6 @@ async function calculatePaymentPlans(
   }
 
   return [
-    {
-      id: 'deposit',
-      name: 'Pay Deposit Only',
-      description: 'Secure your spot with a 10% deposit',
-      amount: depositAmount,
-      features: [
-        'Immediate enrollment confirmation',
-        'Remaining balance due before class starts'
-      ]
-    },
     {
       id: 'full',
       name: 'Pay in Full',

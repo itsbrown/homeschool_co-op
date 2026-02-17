@@ -40,33 +40,18 @@ interface ClassPaymentPlansProps {
 
 export default function ClassPaymentPlans({ classData, childName, onSelectPlan }: ClassPaymentPlansProps) {
   const [, navigate] = useLocation();
-  const [selectedPlan, setSelectedPlan] = useState("deposit");
+  const [selectedPlan, setSelectedPlan] = useState("full");
 
   // Calculate payment plan options
-  const depositAmount = classData.depositRequired;
   const fullAmount = classData.price;
-  const remainingBalance = fullAmount - depositAmount;
 
   const paymentPlans: ClassPaymentPlan[] = [
-    {
-      id: "deposit",
-      name: "Pay Deposit Only",
-      description: "Secure your spot with a 10% deposit",
-      amount: depositAmount,
-      popular: true,
-      features: [
-        "Immediate enrollment confirmation",
-        "Remaining balance due before class starts",
-        "Full refund if cancelled 30 days before",
-        "Payment reminder emails"
-      ],
-      dueDate: "Remaining balance due 2 weeks before class start"
-    },
     {
       id: "full",
       name: "Pay in Full",
       description: "Complete payment now",
       amount: fullAmount,
+      popular: true,
       features: [
         "No additional fees",
         "No future payment worries",
@@ -75,40 +60,24 @@ export default function ClassPaymentPlans({ classData, childName, onSelectPlan }
       ]
     },
     {
-      id: "split",
-      name: "Split Payment Plan",
-      description: "Pay 50% now, 50% later",
-      amount: Math.round(fullAmount / 2),
+      id: "biweekly",
+      name: "Biweekly Payment Plan",
+      description: "Automatic payments every 2 weeks until class ends",
+      amount: Math.round(fullAmount / 4),
       features: [
-        "Pay half now, half in 30 days",
-        "Automatic payment reminders",
+        "Pay every 2 weeks based on class schedule",
+        "Payments automatically calculated from class start to end date",
         "No additional fees",
-        "Flexible payment dates"
+        "Cancel anytime with 30-day notice"
       ],
       installments: {
-        count: 2,
-        frequency: "monthly",
-        amounts: [Math.round(fullAmount / 2), Math.round(fullAmount / 2)]
-      }
-    },
-    {
-      id: "monthly",
-      name: "Monthly Installments",
-      description: "Spread payment over 3 months",
-      amount: Math.round(fullAmount / 3),
-      features: [
-        "Pay in 3 equal monthly installments",
-        "First payment due today",
-        "Auto-charge on file each month",
-        "Small convenience fee applies"
-      ],
-      installments: {
-        count: 3,
-        frequency: "monthly",
+        count: 4,
+        frequency: "biweekly",
         amounts: [
-          Math.round(fullAmount / 3),
-          Math.round(fullAmount / 3),
-          Math.round(fullAmount / 3)
+          Math.round(fullAmount / 4),
+          Math.round(fullAmount / 4),
+          Math.round(fullAmount / 4),
+          Math.round(fullAmount / 4)
         ]
       }
     }
@@ -238,23 +207,10 @@ export default function ClassPaymentPlans({ classData, childName, onSelectPlan }
                           </div>
                         ) : (
                           <div className="text-sm text-gray-600">
-                            {plan.id === 'deposit' ? (
-                              <div>
-                                <div className="flex justify-between mb-1">
-                                  <span>Today:</span>
-                                  <span className="font-medium">{formatCurrency(plan.amount)}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                  <span>Before class starts:</span>
-                                  <span className="font-medium">{formatCurrency(remainingBalance)}</span>
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="flex justify-between">
-                                <span>Today:</span>
-                                <span className="font-medium">{formatCurrency(plan.amount)}</span>
-                              </div>
-                            )}
+                            <div className="flex justify-between">
+                              <span>Today:</span>
+                              <span className="font-medium">{formatCurrency(plan.amount)}</span>
+                            </div>
                           </div>
                         )}
                         {plan.dueDate && (
