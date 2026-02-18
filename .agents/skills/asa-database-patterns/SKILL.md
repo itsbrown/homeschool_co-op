@@ -40,7 +40,7 @@ school_class_enrollments → school-managed class enrollments
   .classId → school_classes.id
 ```
 
-**Enrollment financial fields** (all in cents): `totalCost`, `totalPaid`, `remainingBalance` — these are the single source of truth for payment display.
+**Enrollment financial fields** (all in cents): `totalCost`, `totalPaid`, `remainingBalance`. Note: `remainingBalance` is a stored convenience field that may be null or stale for some enrollments. Always use the fallback pattern when reading it (see "Derived Financial Fields" below).
 
 ### Multi-Guardian System
 Multiple guardians can be linked to child accounts with shared access. Check guardian relationships when resolving parent data.
@@ -125,8 +125,31 @@ Session QR tokens expire at **session end time + 15 minutes**. Atomic database u
 - Never change primary key column types
 - Schema file: `shared/schema.ts`
 
+## Derived Financial Fields
+
+### The `remainingBalance` Fallback Pattern
+The `remainingBalance` column on `program_enrollments` is a stored convenience field, but it can be **null or stale** for older enrollments or certain creation paths. The authoritative values `totalCost` and `totalPaid` are always reliably populated.
+
+**Rule**: Never rely solely on `remainingBalance`. Always use the fallback pattern:
+```typescript
+const effectiveBalance = enrollment.remainingBalance || ((enrollment.totalCost || 0) - (enrollment.totalPaid || 0));
+```
+
+**For multiple enrollments**, extract a helper to keep it DRY:
+```typescript
+const getEffectiveBalance = (e: any) => e.remainingBalance || ((e.totalCost || 0) - (e.totalPaid || 0));
+```
+
+**Gold-standard pattern** (used in `parent-profile.ts`): Compute dynamically and never read the stored field:
+```typescript
+const actualRemainingBalance = CurrencyUtils.calculateBalance(totalCost, totalPaid + compAmount);
+```
+
+**Where this pattern is established**: `server/api/school-admin.ts` (lines 3242, 3273, 3281), `server/api/admin-enrollments.ts` (comp validation), `server/services/dataLayer.ts` (CFO insights).
+
 ## Common Pitfalls
 
+- **Stored `remainingBalance` can be null**: Never use `enrollment.remainingBalance || 0` as a final value — always fall back to `totalCost - totalPaid`. See "Derived Financial Fields" above.
 - **Express route ordering**: Specific named routes (e.g., `/classes/assignments`) BEFORE parameterized routes (e.g., `/classes/:id`)
 - **Orphaned data**: `scheduled_payments` with deleted `program_enrollments` must be filtered out of admin views
 - **Auth ID mapping**: Use `authData.dbUserId` (integer) NOT `authData.userId` (Supabase UUID) when querying database tables
