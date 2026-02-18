@@ -3574,8 +3574,9 @@ router.get("/metrics/financial", supabaseAuth, async (req: any, res) => {
     );
 
     // Calculate outstanding balance (sum of remaining balances)
+    const getEffectiveBalance = (e: any) => e.remainingBalance || ((e.totalCost || 0) - (e.totalPaid || 0));
     const outstandingBalance = schoolEnrollments.reduce((sum: number, e: any) => 
-      sum + (e.remainingBalance || 0), 0
+      sum + getEffectiveBalance(e), 0
     );
 
     // Calculate average tuition paid per enrollment
@@ -3585,12 +3586,12 @@ router.get("/metrics/financial", supabaseAuth, async (req: any, res) => {
 
     // Count accounts with unpaid balances
     const unpaidAccounts = schoolEnrollments.filter((e: any) => 
-      (e.remainingBalance || 0) > 0
+      getEffectiveBalance(e) > 0
     ).length;
 
     // Calculate collection rate (percentage of enrollments fully paid)
     const fullyPaidEnrollments = schoolEnrollments.filter((e: any) => 
-      (e.remainingBalance || 0) === 0 && (e.totalCost || 0) > 0
+      getEffectiveBalance(e) === 0 && (e.totalCost || 0) > 0
     ).length;
     const collectionRate = schoolEnrollments.length > 0 
       ? (fullyPaidEnrollments / schoolEnrollments.length) * 100 

@@ -184,15 +184,16 @@ class DataLayer {
         const enrollments = await storage.getEnrollmentsByChildId(childId);
         
         for (const enrollment of enrollments) {
-          if (enrollment.status === 'enrolled' && enrollment.remainingBalance > 0) {
-            totalBalance += enrollment.remainingBalance;
+          const effectiveBalance = enrollment.remainingBalance || ((enrollment.totalCost || 0) - (enrollment.totalPaid || 0));
+          if (enrollment.status === 'enrolled' && effectiveBalance > 0) {
+            totalBalance += effectiveBalance;
             enrollmentCount++;
             
             enrollmentDetails.push({
               enrollmentId: enrollment.id,
               childName: enrollment.childName,
               className: enrollment.className,
-              balance: enrollment.remainingBalance,
+              balance: effectiveBalance,
               status: enrollment.status,
               amountPaid: enrollment.amount || 0,
               classPrice: enrollment.totalCost || 0
