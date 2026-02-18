@@ -172,7 +172,8 @@ router.post('/:id/comp', async (req: any, res) => {
     }
 
     // For enrolled enrollments, verify there's a remaining balance to comp
-    if (enrollment.status === 'enrolled' && (enrollment.remainingBalance || 0) <= 0) {
+    const effectiveRemainingBalance = enrollment.remainingBalance || ((enrollment.totalCost || 0) - (enrollment.totalPaid || 0));
+    if (enrollment.status === 'enrolled' && effectiveRemainingBalance <= 0) {
       return res.status(400).json({ 
         message: 'This enrollment has no remaining balance to comp' 
       });
