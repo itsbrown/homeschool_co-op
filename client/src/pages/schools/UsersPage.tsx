@@ -476,10 +476,10 @@ export default function UsersPage() {
                         <Link 
                           href={
                             user.role === 'parent' ? `/schools/parents/${user.id}` :
-                            user.role === 'educator' ? `/schools/educators/${user.id}` :
+                            user.role === 'educator' || user.role === 'mentor' ? `/schools/educators/${user.id}` :
                             user.role === 'staff' ? `/schools/staff/${user.staffId || user.id}` :
                             user.role === 'schoolAdmin' ? `/schools/admins/${user.id}` :
-                            `/schools/users/${user.id}`
+                            `/schools/staff/${user.id}`
                           }
                           data-testid={`link-user-${user.id}`}
                         >
@@ -526,10 +526,10 @@ export default function UsersPage() {
                             <Link 
                               href={
                                 user.role === 'parent' ? `/schools/parents/${user.id}` :
-                                user.role === 'educator' ? `/schools/educators/${user.id}` :
+                                user.role === 'educator' || user.role === 'mentor' ? `/schools/educators/${user.id}` :
                                 user.role === 'staff' ? `/schools/staff/${user.staffId || user.id}` :
                                 user.role === 'schoolAdmin' ? `/schools/admins/${user.id}` :
-                                `/schools/users/${user.id}`
+                                `/schools/staff/${user.id}`
                               }
                             >
                               <DropdownMenuItem data-testid={`button-view-profile-${user.id}`}>
