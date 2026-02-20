@@ -31,6 +31,7 @@ interface PaymentHistoryItem {
     price: number;
     amountPaid: number;
   }>;
+  stripeAmount?: number | null;
   parentEmail?: string;
   childName?: string;
   className?: string;
@@ -314,7 +315,7 @@ export default function PaymentHistoryPage() {
                         <p className={`font-semibold ${
                           payment.amount < 0 ? 'text-red-600' : 'text-gray-900'
                         }`}>
-                          {formatCurrency(payment.amount)}
+                          {formatCurrency(payment.stripeAmount ?? payment.amount)}
                         </p>
                         {getStatusBadge(payment.status)}
                       </div>
@@ -486,7 +487,7 @@ export default function PaymentHistoryPage() {
               Process a refund for payment #{refundDialog.payment?.id}
               {refundDialog.payment && (
                 <div className="mt-2 p-3 bg-gray-50 rounded-md">
-                  <p><strong>Original Amount:</strong> {formatCurrency(refundDialog.payment.amount)}</p>
+                  <p><strong>Original Amount:</strong> {formatCurrency(refundDialog.payment.stripeAmount ?? refundDialog.payment.amount)}</p>
                   <p><strong>Parent:</strong> {refundDialog.payment.parentEmail}</p>
                   <p><strong>Child:</strong> {refundDialog.payment.childName}</p>
                   <p><strong>Class:</strong> {refundDialog.payment.className}</p>

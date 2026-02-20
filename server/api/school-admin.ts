@@ -5012,41 +5012,50 @@ router.get('/users', supabaseAuth, requireSchoolContext, async (req: any, res) =
       staffByUserId.set(staffRecord.userId, staffRecord);
     }
     
+    // Batch-fetch user_roles for all users (source of truth per asa-auth-patterns)
+    const userRolesMap = new Map<number, any[]>();
+    await Promise.all(
+      dbUsers.map(async (user: any) => {
+        try {
+          const roles = await storage.getUserRolesByUserId(user.id);
+          if (roles.length > 0) {
+            userRolesMap.set(user.id, roles);
+          }
+        } catch (e) {
+          // Fallback to legacy role if user_roles lookup fails
+        }
+      })
+    );
+    
     // Track which user IDs we've already processed
     const processedUserIds = new Set<number>();
 
-    // Map users from dbUsers, overriding status for staff users from staff records
+    // Determine the display role for a user using the multi-role hierarchy:
+    // 1. user_roles table (isPrimary=true) — source of truth
+    // 2. users.activeRole — currently selected role
+    // 3. users.role — legacy fallback
+    function resolveDisplayRole(user: any): string {
+      const roles = userRolesMap.get(user.id);
+      if (roles && roles.length > 0) {
+        const primaryRole = roles.find((r: any) => r.isPrimary);
+        if (primaryRole) return primaryRole.role;
+        return roles[0].role;
+      }
+      return user.activeRole || user.role || 'parent';
+    }
+
+    // Map users from dbUsers — use user_roles as source of truth for role display
     const usersFromDb = dbUsers.map((user: any) => {
       processedUserIds.add(user.id);
       const staffRecord = staffByUserId.get(user.id);
+      const displayRole = resolveDisplayRole(user);
       
-      if (staffRecord) {
-        // This user has a staff record - use staff record's isActive status
-        return {
-          id: user.id,
-          staffId: staffRecord.id, // Include staff record ID for resend invite functionality
-          email: user.email,
-          firstName: user.firstName || user.name?.split(' ')[0] || '',
-          lastName: user.lastName || user.name?.split(' ').slice(1).join(' ') || '',
-          role: 'staff', // Standardize role to 'staff'
-          phone: user.phone || '',
-          isActive: staffRecord.isActive, // Use staff record's isActive, NOT user's
-          createdAt: staffRecord.startDate || user.createdAt,
-          department: staffRecord.department,
-          position: staffRecord.position || 'Staff Member',
-          locationId: user.locationId,
-          locationName: user.locationName,
-          locationCode: user.locationCode,
-        };
-      }
-      
-      // Regular user (not staff)
-      return {
+      const baseUser = {
         id: user.id,
         email: user.email,
         firstName: user.firstName || user.name?.split(' ')[0] || '',
         lastName: user.lastName || user.name?.split(' ').slice(1).join(' ') || '',
-        role: user.activeRole || user.role, // Use active role if available, fall back to legacy role
+        role: displayRole,
         phone: user.phone || '',
         isActive: user.isActive !== false,
         createdAt: user.createdAt,
@@ -5054,6 +5063,19 @@ router.get('/users', supabaseAuth, requireSchoolContext, async (req: any, res) =
         locationName: user.locationName,
         locationCode: user.locationCode,
       };
+      
+      if (staffRecord) {
+        return {
+          ...baseUser,
+          staffId: staffRecord.id,
+          isActive: staffRecord.isActive,
+          createdAt: staffRecord.startDate || user.createdAt,
+          department: staffRecord.department,
+          position: staffRecord.position || 'Staff Member',
+        };
+      }
+      
+      return baseUser;
     });
     
     // Add staff members whose user.schoolId doesn't match (they weren't in dbUsers)
@@ -5084,13 +5106,26 @@ router.get('/users', supabaseAuth, requireSchoolContext, async (req: any, res) =
             };
           }
           
+          let userRole = 'staff';
+          try {
+            const roles = await storage.getUserRolesByUserId(staffRecord.userId);
+            if (roles.length > 0) {
+              const primaryRole = roles.find((r: any) => r.isPrimary);
+              userRole = primaryRole ? primaryRole.role : roles[0].role;
+            } else {
+              userRole = (user as any).activeRole || (user as any).role || 'staff';
+            }
+          } catch (e) {
+            userRole = (user as any).activeRole || (user as any).role || 'staff';
+          }
+          
           return {
             id: staffRecord.userId,
             staffId: staffRecord.id,
             email: user.email,
             firstName: user.name?.split(' ')[0] || '',
             lastName: user.name?.split(' ').slice(1).join(' ') || '',
-            role: 'staff',
+            role: userRole,
             phone: user.phone || '',
             isActive: staffRecord.isActive,
             createdAt: staffRecord.startDate,

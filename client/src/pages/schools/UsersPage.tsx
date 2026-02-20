@@ -359,7 +359,7 @@ export default function UsersPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {users.filter((u: any) => u.role === 'staff').length}
+              {users.filter((u: any) => u.staffId).length}
             </div>
           </CardContent>
         </Card>
@@ -557,7 +557,7 @@ export default function UsersPage() {
                               <Send className="h-4 w-4 mr-2" />
                               Resend Welcome Email
                             </DropdownMenuItem>
-                            {user.role === 'staff' && user.staffId && !user.isActive && (
+                            {user.staffId && !user.isActive && (
                               <DropdownMenuItem onClick={() => handleResendStaffInvite(user)}>
                                 <RefreshCw className="h-4 w-4 mr-2" />
                                 Resend Staff Invite
