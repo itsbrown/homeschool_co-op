@@ -31,7 +31,8 @@ The platform features a full-stack architecture designed for scalability, securi
 -   **Payment System**: Stripe-only with subscription schedules, webhooks, smart cart logic, and server-side authoritative pricing.
 -   **Cart & Discount Systems**: TanStack Query-based cart with API-first state management; database-managed comprehensive discount system (19+ types).
 -   **Enrollment & Class Management**: Manages enrollment workflows, prevents duplicates, and allows school administrators to create/manage classes with multi-variant pricing.
--   **AI Integration**: AI Enrollment Assistant, AI Smart Tutorial System (Anthropic Claude), and AI Payment Help Assistant (Anthropic Claude) for personalized guidance and support.
+-   **AI Integration**: AI Enrollment Assistant, AI Smart Tutorial System (Anthropic Claude), AI Payment Help Assistant (Anthropic Claude), and Parent AI Concierge (action-capable conversational assistant as default parent landing page) for personalized guidance and support.
+-   **Parent AI Concierge**: Default parent landing page with Claude tool-use API. Provides 8 action tools (lookup_classes, check_enrollments, check_payments, check_credits, check_waitlist, search_knowledge_base, add_to_cart, register_child). Features context sidebar, quick action chips, proactive alerts, and graceful fallback when AI is unavailable. Routes: `/dashboard` (concierge), `/parent/home` (legacy dashboard).
 -   **Content Management System**: Creation and management of knowledge bases, file uploads, and AI-powered content analysis/generation.
 -   **Student Management System**: Tracks students across schools.
 -   **Notification System**: In-app notifications with real-time unread counts.
