@@ -92,31 +92,24 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
         childId: parseInt(childId),
         variantId: variantId 
       });
-      console.log('🎯 Raw API response:', response);
       
-      // Parse the response as JSON if it's a Response object
       if (response instanceof Response) {
         const jsonData = await response.json();
-        console.log('🎯 Parsed JSON data:', jsonData);
         return jsonData;
       }
       
       return response;
     },
     onSuccess: (data, variables) => {
-      console.log('🎯 Enrollment success! Data:', data);
-      console.log('🎯 Variables:', variables);
-      console.log('🎯 Classes data:', classesData);
-      console.log('🎯 Children:', children);
-      
-      // Check if this is a duplicate enrollment (already in cart)
+      const selectedClass = classesData?.classes?.find(c => c.id === variables.classId);
+      const selectedChild = children?.find(c => c.id === parseInt(variables.childId));
+      const childName = selectedChild?.firstName || 'Your child';
+      const className = selectedClass?.title || 'the class';
+
       if (data.isDuplicate) {
-        const selectedClass = classesData?.classes?.find(c => c.id === variables.classId);
-        const selectedChild = children?.find(c => c.id === parseInt(variables.childId));
-        
         toast({
           title: "Already in Cart",
-          description: `${selectedChild?.firstName || 'Child'} is already enrolled in ${selectedClass?.title || 'this class'}. Check your cart to complete payment.`,
+          description: `${childName} is already enrolled in ${className}. Check your cart to complete payment.`,
           variant: "default",
         });
         
@@ -124,41 +117,29 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
         setSelectedChildId("");
         setSelectedVariantId("");
         
-        // Open cart to show existing item
         setTimeout(() => {
           openCart();
         }, 500);
         
         return;
       }
-      
-      // Find the selected child and class data for cart item
-      const selectedClass = classesData?.classes?.find(c => c.id === variables.classId);
-      const selectedChild = children?.find(c => c.id === parseInt(variables.childId));
-
-      console.log('🎯 Found selected class:', selectedClass);
-      console.log('🎯 Found selected child:', selectedChild);
-      console.log('🎯 Enrollment from API:', data.enrollment);
 
       if (selectedClass && selectedChild && data.enrollment) {
-        // Get the selected variant or use default pricing
         const selectedVariant = variables.variantId ? 
           selectedClass.variants?.find(v => v.id === variables.variantId) : 
           selectedClass.variants?.[0];
         
         const finalPrice = selectedVariant ? selectedVariant.price : selectedClass.price;
         
-        // Close the enrollment dialog
         setEnrollmentDialog({ open: false });
         setSelectedChildId("");
         setSelectedVariantId("");
 
         toast({
-          title: "Added to Cart! 🛒",
-          description: `${selectedChild.firstName} enrolled in ${selectedClass.title}. Complete payment in your cart.`,
+          title: "Added to Cart",
+          description: `${childName} is enrolled in ${className}. Complete payment in your cart.`,
         });
 
-        // Store enrollment data for direct payment plans access
         const enrollmentData = {
           enrollmentId: data.enrollment.id,
           className: selectedClass.title,
@@ -170,8 +151,6 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
         };
         sessionStorage.setItem('enrollmentData', JSON.stringify(enrollmentData));
         
-        // Wait 500ms for database to commit, then refresh cart from API and open it
-        // This prevents race condition where cart would clear due to stale API data
         setTimeout(async () => {
           await refreshCart();
           openCart();
@@ -179,10 +158,9 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
       } else {
         toast({
           title: "Enrollment Successful",
-          description: "Child has been enrolled in the class.",
+          description: `${childName} has been enrolled in ${className}.`,
         });
         
-        // For non-cart enrollments, invalidate queries normally
         setEnrollmentDialog({ open: false });
         setSelectedChildId("");
         setSelectedVariantId("");
@@ -193,18 +171,11 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
         queryClient.invalidateQueries({ queryKey: ["/api/parent/enrollments"] });
         queryClient.invalidateQueries({ queryKey: ["/api/program-enrollments"] });
       }
-
-      if (data.isDuplicate) {
-        // For duplicate enrollments, still close dialog
-        setEnrollmentDialog({ open: false });
-        setSelectedChildId("");
-        setSelectedVariantId("");
-      }
     },
     onError: (error: any) => {
       toast({
         title: "Enrollment Failed",
-        description: error.message || "There was an error enrolling your child in the class.",
+        description: error.message || "We couldn't complete the enrollment. The class may be full or there was a connection issue.",
         variant: "destructive",
       });
     },
@@ -285,12 +256,6 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
   };
   classesData.pagination.totalItems = classesData.classes.length;
 
-  // Debug logging
-  console.log('School classes response:', schoolClassesResponse);
-  console.log('Classes error:', classesError);
-  console.log('Classes loading:', classesLoading);
-  console.log('Active tab:', activeTab);
-  console.log('Transformed classes data:', classesData);
 
   // Format currency (amount is always in cents)
   const formatCurrency = (amount: number, inCents: boolean = true) => {
@@ -368,13 +333,6 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
     return sorted;
   }, [classesData.classes, searchTerm, categoryFilter, sortField, sortDirection]);
 
-  // Debug logging for filtered lists
-  console.log('All classes:', classesData.classes);
-  console.log('Search term:', searchTerm);
-  console.log('Category filter:', categoryFilter);
-  console.log('Filtered classesList:', classesList);
-  console.log('classesLoading:', classesLoading);
-  console.log('classesList.length:', classesList.length);
 
   return (
     <div className="space-y-6">
@@ -456,7 +414,6 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
                           Clear Filters
                         </Button>
                       )}
-                      <Button type="submit">Search</Button>
                     </div>
                   </div>
                 </form>
@@ -489,17 +446,25 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
                           <div className="font-semibold">{formatCurrency(classItem.price)}</div>
                         </div>
 
-                        {classItem.capacity && (
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center"><Users className="h-4 w-4 mr-1 opacity-70" />Capacity:</div>
-                            <div className="font-medium">
-                              <span className={classItem.totalOrders >= classItem.capacity ? "text-red-600" : "text-green-600"}>
-                                {classItem.totalOrders || 0}
-                              </span>
-                              <span className="text-muted-foreground"> / {classItem.capacity}</span>
+                        {classItem.capacity && (() => {
+                          const spotsLeft = Math.max(0, classItem.capacity - (classItem.totalOrders || 0));
+                          const isFull = spotsLeft === 0;
+                          const isLow = spotsLeft > 0 && spotsLeft <= 3;
+                          return (
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center"><Users className="h-4 w-4 mr-1 opacity-70" />Availability:</div>
+                              <div className="font-medium">
+                                {isFull ? (
+                                  <Badge variant="destructive" className="text-xs">Class Full</Badge>
+                                ) : isLow ? (
+                                  <span className="text-amber-600 font-semibold">{spotsLeft} {spotsLeft === 1 ? 'spot' : 'spots'} left</span>
+                                ) : (
+                                  <span className="text-green-600">{spotsLeft} spots available</span>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                        )}
+                          );
+                        })()}
 
                         {classItem.variants && classItem.variants.length > 0 && (
                           <div className="flex items-center justify-between">
@@ -538,15 +503,25 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
                       <Button variant="outline" onClick={() => setLocation(`/parent/classes/${classItem.id}`)}>
                         View Details
                       </Button>
-                      <Button 
-                        onClick={() => {
-                          console.log('🎯 Enroll Now clicked for class:', classItem);
-                          setEnrollmentDialog({ open: true, classId: classItem.id, classTitle: classItem.title, classData: classItem });
-                        }}
-                        className="flex-1"
-                      >
-                        Enroll Now
-                      </Button>
+                      {classItem.capacity && (classItem.totalOrders || 0) >= classItem.capacity ? (
+                        <Button 
+                          variant="secondary"
+                          className="flex-1"
+                          disabled
+                          title="This class is full"
+                        >
+                          Class Full
+                        </Button>
+                      ) : (
+                        <Button 
+                          onClick={() => {
+                            setEnrollmentDialog({ open: true, classId: classItem.id, classTitle: classItem.title, classData: classItem });
+                          }}
+                          className="flex-1"
+                        >
+                          Enroll Now
+                        </Button>
+                      )}
                     </CardFooter>
                   </Card>
                 ))}
@@ -564,50 +539,39 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
 
       {/* Enrollment Dialog */}
       <Dialog open={enrollmentDialog.open} onOpenChange={(open) => {
-        console.log("🔄 Dialog onOpenChange triggered, open:", open);
+        if (!open && enrollmentMutation.isPending) return;
         setEnrollmentDialog({ open });
+        if (!open) {
+          setSelectedChildId("");
+          setSelectedVariantId("");
+        }
       }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Enroll in Class</DialogTitle>
+            <DialogTitle>Enroll in {enrollmentDialog.classTitle || 'Class'}</DialogTitle>
             <DialogDescription>
-              Select which child you would like to enroll in "{enrollmentDialog.classTitle}".
+              Choose which child to enroll and select a time option if available.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
             <div>
                 <Label htmlFor="child-select">Select Child</Label>
-                <div className="text-xs text-muted-foreground mb-2">
-                  Debug: Children: {Array.isArray(children) ? children.length : 0} | Auth: {isAuthenticated ? 'Yes' : 'No'} | Loading: {childrenLoading ? 'Yes' : 'No'} | User: {user?.email || 'None'}
-                </div>
-                {(() => {
-                  console.log("🔄 Enrollment Dialog Debug:");
-                  console.log("  - Children:", children);
-                  console.log("  - Children loading:", childrenLoading);
-                  console.log("  - Children error:", childrenError);
-                  console.log("  - Is authenticated:", isAuthenticated);
-                  console.log("  - User:", user);
-                  return null;
-                })()}
-
                 {!isAuthenticated ? (
-                  <div className="text-sm text-destructive">
-                    Please log in to select a child for enrollment.
+                  <div className="text-sm text-destructive mt-1">
+                    Please log in to enroll your child.
                   </div>
                 ) : childrenLoading ? (
-                  <div className="text-sm text-muted-foreground flex items-center gap-2">
+                  <div className="text-sm text-muted-foreground flex items-center gap-2 mt-1">
                     <div className="animate-spin w-4 h-4 border-2 border-primary border-t-transparent rounded-full"></div>
-                    Loading children...
+                    Loading your children...
                   </div>
                 ) : childrenError ? (
-                  <div className="text-sm text-destructive">
-                    Error loading children: {childrenError?.message || 'Unknown error'}
-                    <br />
-                    <span className="text-xs">Please try logging out and back in.</span>
+                  <div className="text-sm text-destructive mt-1">
+                    We couldn't load your children. Please try logging out and back in.
                   </div>
                 ) : !children || children.length === 0 ? (
-                  <div className="text-sm text-muted-foreground p-4 border border-dashed rounded-lg text-center">
+                  <div className="text-sm text-muted-foreground p-4 border border-dashed rounded-lg text-center mt-1">
                     <p className="mb-2">No children registered yet.</p>
                     <p className="text-xs">You need to register a child before enrolling in classes.</p>
                     <Button 
@@ -616,86 +580,46 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
                       className="mt-2"
                       onClick={() => {
                         setEnrollmentDialog({ open: false });
-                        window.location.href = '/children/register';
+                        setLocation('/children/register');
                       }}
                     >
                       Register a Child
                     </Button>
                   </div>
                 ) : (
-                <div className="relative">
-                  {(() => {
-                    console.log("🔍 Select rendering debug:");
-                    console.log("  - Children array:", children);
-                    console.log("  - Array length:", children?.length);
-                    console.log("  - First child:", children?.[0]);
-                    return null;
-                  })()}
-                  <select 
-                    className="w-full p-2 border border-input bg-background rounded-md"
-                    value={selectedChildId} 
-                    onChange={(e) => {
-                      console.log("🎯 Select value changed:", e.target.value);
-                      setSelectedChildId(e.target.value);
-                    }}
-                  >
-                    <option value="">Choose a child</option>
-                    {Array.isArray(children) && children.length > 0 ? 
-                      children.map((child: any) => {
-                        const childName = `${child.firstName || ''} ${child.lastName || ''}`.trim();
-                        const childValue = String(child.id);
-                        console.log(`🔍 Rendering child: ${childName} (ID: ${childValue})`);
-
-                        return (
-                          <option 
-                            key={child.id}
-                            value={childValue}
-                          >
-                            {childName}
-                          </option>
-                        );
-                      })
-                      : 
-                      <option value="" disabled>
-                        No children found
-                      </option>
-                    }
-                  </select>
-                </div>
+                <Select value={selectedChildId} onValueChange={setSelectedChildId}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Choose a child" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {children.map((child: any) => (
+                      <SelectItem key={child.id} value={String(child.id)}>
+                        {`${child.firstName || ''} ${child.lastName || ''}`.trim()}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               )}
             </div>
 
-            {/* Variant Selection - Show if multiple variants exist */}
-            {(() => {
-              console.log("🔍 VARIANT SELECTOR DEBUG:");
-              console.log("  - enrollmentDialog.classData:", enrollmentDialog.classData);
-              console.log("  - variants exists?:", !!enrollmentDialog.classData?.variants);
-              console.log("  - variants:", enrollmentDialog.classData?.variants);
-              console.log("  - variants length:", enrollmentDialog.classData?.variants?.length);
-              console.log("  - should show?:", enrollmentDialog.classData?.variants && enrollmentDialog.classData.variants.length > 1);
-              return null;
-            })()}
             {enrollmentDialog.classData?.variants && enrollmentDialog.classData.variants.length > 1 && (
               <div>
                 <Label htmlFor="variant-select">Time Option</Label>
-                <div className="text-xs text-muted-foreground mb-2">
-                  Choose your preferred time option with individual pricing
-                </div>
-                <select 
-                  className="w-full p-2 border border-input bg-background rounded-md"
-                  value={selectedVariantId} 
-                  onChange={(e) => {
-                    console.log("🎯 Variant select value changed:", e.target.value);
-                    setSelectedVariantId(e.target.value);
-                  }}
-                >
-                  <option value="">Choose a time option</option>
-                  {enrollmentDialog.classData.variants.map((variant) => (
-                    <option key={variant.id} value={variant.id}>
-                      {variant.name} - {variant.days.join(', ')} • {variant.startTime} - {variant.endTime} • ${(variant.price / 100).toFixed(2)}
-                    </option>
-                  ))}
-                </select>
+                <p className="text-xs text-muted-foreground mb-1">
+                  Choose your preferred schedule and pricing
+                </p>
+                <Select value={selectedVariantId} onValueChange={setSelectedVariantId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choose a time option" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {enrollmentDialog.classData.variants.map((variant) => (
+                      <SelectItem key={variant.id} value={variant.id}>
+                        {variant.name} — {variant.days.join(', ')} {variant.startTime}-{variant.endTime} (${(variant.price / 100).toFixed(2)})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             )}
           </div>
@@ -713,31 +637,22 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
             </Button>
             <Button 
               onClick={() => {
-                console.log('🎯 Enroll button clicked in dialog');
-                console.log('🎯 Selected child ID:', selectedChildId);
-                console.log('🎯 Selected variant ID:', selectedVariantId);
-                console.log('🎯 Class ID:', enrollmentDialog.classId);
-                
-                // Check if variants exist and one is selected
                 const hasVariants = enrollmentDialog.classData?.variants && enrollmentDialog.classData.variants.length > 1;
                 if (hasVariants && !selectedVariantId) {
                   toast({
-                    title: "Error",
-                    description: "Please select a time option",
+                    title: "Missing Time Selection",
+                    description: "Please choose a class time before enrolling.",
                     variant: "destructive",
                   });
                   return;
                 }
                 
                 if (selectedChildId && enrollmentDialog.classId) {
-                  console.log('🎯 Starting enrollment mutation...');
                   enrollmentMutation.mutate({
                     classId: enrollmentDialog.classId,
                     childId: selectedChildId,
                     variantId: selectedVariantId
                   });
-                } else {
-                  console.log('❌ Missing data for enrollment:', { selectedChildId, classId: enrollmentDialog.classId });
                 }
               }}
               disabled={!selectedChildId || enrollmentMutation.isPending || childrenLoading || (enrollmentDialog.classData?.variants && enrollmentDialog.classData.variants.length > 1 && !selectedVariantId)}

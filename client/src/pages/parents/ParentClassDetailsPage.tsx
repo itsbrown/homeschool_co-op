@@ -290,12 +290,17 @@ export default function ParentClassDetailsPage() {
                 </div>
                 <div>
                   <Label className="text-sm text-gray-500 dark:text-gray-400">Spots Left</Label>
-                  <p className="text-2xl font-bold text-green-600" data-testid="text-spots-left">
-                    {classData.capacity || classData.maxStudents ? 
-                      Math.max(0, (classData.capacity || classData.maxStudents) - (classData.totalOrders || 0)) : 
-                      'N/A'
-                    }
-                  </p>
+                  {(() => {
+                    const capacity = classData.capacity || classData.maxStudents;
+                    if (!capacity) return <p className="text-2xl font-bold" data-testid="text-spots-left">N/A</p>;
+                    const spotsLeft = Math.max(0, capacity - (classData.totalOrders || 0));
+                    const colorClass = spotsLeft === 0 ? 'text-red-600' : spotsLeft <= 3 ? 'text-amber-600' : 'text-green-600';
+                    return (
+                      <p className={`text-2xl font-bold ${colorClass}`} data-testid="text-spots-left">
+                        {spotsLeft}
+                      </p>
+                    );
+                  })()}
                 </div>
               </div>
 
@@ -308,15 +313,31 @@ export default function ParentClassDetailsPage() {
                 </div>
               )}
 
-              {/* Full Class Warning */}
-              {(classData.capacity || classData.maxStudents) && 
-               (classData.totalOrders || 0) >= (classData.capacity || classData.maxStudents) && (
-                <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-900/20 rounded border border-red-200 dark:border-red-800">
-                  <span className="text-sm text-red-700 dark:text-red-300 font-medium">
-                    This class is currently full
-                  </span>
-                </div>
-              )}
+              {/* Low Availability Warning */}
+              {(() => {
+                const capacity = classData.capacity || classData.maxStudents;
+                if (!capacity) return null;
+                const spotsLeft = Math.max(0, capacity - (classData.totalOrders || 0));
+                if (spotsLeft === 0) {
+                  return (
+                    <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-900/20 rounded border border-red-200 dark:border-red-800">
+                      <span className="text-sm text-red-700 dark:text-red-300 font-medium">
+                        This class is currently full
+                      </span>
+                    </div>
+                  );
+                }
+                if (spotsLeft <= 3) {
+                  return (
+                    <div className="flex items-center gap-2 p-3 bg-amber-50 dark:bg-amber-900/20 rounded border border-amber-200 dark:border-amber-800">
+                      <span className="text-sm text-amber-700 dark:text-amber-300 font-semibold">
+                        Only {spotsLeft} {spotsLeft === 1 ? 'spot' : 'spots'} remaining — enroll soon!
+                      </span>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
             </div>
           </CardContent>
         </Card>
@@ -341,15 +362,35 @@ export default function ParentClassDetailsPage() {
         {/* Class Roster */}
         <ClassRosterSection classId={classId} />
 
-        {/* Enroll Now Button */}
-        <div className="flex justify-end gap-3">
-          <Button 
-            size="lg"
-            onClick={() => navigate(`/parent/programs?enroll=${classId}`)}
-            data-testid="button-enroll-now"
-          >
-            Enroll Now
-          </Button>
+        {/* Enroll Now Button - Sticky on mobile */}
+        <div className="sticky bottom-0 bg-background border-t p-4 -mx-6 mt-6 flex justify-end gap-3 md:relative md:border-0 md:p-0 md:mx-0 md:mt-0 md:bg-transparent">
+          {(() => {
+            const capacity = classData.capacity || classData.maxStudents;
+            const isFull = capacity && (classData.totalOrders || 0) >= capacity;
+            if (isFull) {
+              return (
+                <Button 
+                  size="lg"
+                  variant="secondary"
+                  disabled
+                  className="w-full md:w-auto"
+                  data-testid="button-enroll-now"
+                >
+                  Class Full
+                </Button>
+              );
+            }
+            return (
+              <Button 
+                size="lg"
+                className="w-full md:w-auto"
+                onClick={() => navigate(`/parent/programs?enroll=${classId}`)}
+                data-testid="button-enroll-now"
+              >
+                Enroll Now
+              </Button>
+            );
+          })()}
         </div>
       </div>
     </ParentAppShell>

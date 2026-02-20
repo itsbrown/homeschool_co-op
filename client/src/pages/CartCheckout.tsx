@@ -12,7 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useLocation } from 'wouter';
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { apiRequest } from '@/lib/queryClient';
-import { ShoppingCart, CreditCard, Percent, Gift, AlertCircle, Check, Loader2, Calendar, DollarSign, Clock, CheckCircle2, Award, RefreshCw } from 'lucide-react';
+import { ShoppingCart, CreditCard, Percent, Gift, AlertCircle, Check, Loader2, Calendar, DollarSign, Clock, CheckCircle2, Award, RefreshCw, ArrowLeft } from 'lucide-react';
 import ParentAppShell from '@/components/layout/ParentAppShell';
 import { formatCurrency } from '@/utils/currency';
 import { formatClassSchedule } from '@/lib/utils';
@@ -1125,10 +1125,39 @@ export default function CartCheckout() {
     <ParentAppShell>
       <div className="container mx-auto px-4 py-8 max-w-4xl">
         <div className="mb-8">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="mb-3 -ml-2 text-muted-foreground hover:text-foreground"
+            onClick={() => setLocation('/parent/programs')}
+          >
+            <ArrowLeft className="h-4 w-4 mr-1" />
+            Back to Classes
+          </Button>
           <h1 className="text-3xl font-bold tracking-tight">Checkout</h1>
           <p className="text-muted-foreground">
             Complete your enrollment for {cart.items.length} class{cart.items.length !== 1 ? 'es' : ''}
           </p>
+
+          {/* Step Indicator */}
+          <div className="flex items-center gap-2 mt-4">
+            <div className="flex items-center gap-1.5">
+              <div className="w-7 h-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-medium">
+                <Check className="h-3.5 w-3.5" />
+              </div>
+              <span className="text-sm font-medium">Cart</span>
+            </div>
+            <div className="h-px flex-1 bg-primary max-w-8" />
+            <div className="flex items-center gap-1.5">
+              <div className="w-7 h-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-medium">2</div>
+              <span className="text-sm font-medium">Review & Pay</span>
+            </div>
+            <div className="h-px flex-1 bg-border max-w-8" />
+            <div className="flex items-center gap-1.5">
+              <div className="w-7 h-7 rounded-full bg-muted text-muted-foreground flex items-center justify-center text-xs font-medium">3</div>
+              <span className="text-sm text-muted-foreground">Confirmation</span>
+            </div>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
