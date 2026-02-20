@@ -245,29 +245,92 @@ class KnowledgeBaseProcessor {
     
     for (const kb of knowledgeBases) {
       try {
-        // Add knowledge base title and description
         contextContent += `\n--- ${kb.title} ---\n`;
         if (kb.description) {
           contextContent += `Description: ${kb.description}\n`;
         }
-        
-        // Extract content from knowledge base files
-        if (kb.files && Array.isArray(kb.files)) {
+
+        let hasContent = false;
+
+        const kbAny = kb as any;
+        if (kbAny.aiInsights && typeof kbAny.aiInsights === 'object') {
+          const insights = kbAny.aiInsights;
+          if (insights.fileAnalyses && Array.isArray(insights.fileAnalyses)) {
+            for (const analysis of insights.fileAnalyses) {
+              if (analysis.summary) {
+                contextContent += `\nFile: ${analysis.fileName || 'Document'}\nSummary: ${analysis.summary}\n`;
+              }
+              if (analysis.keyTopics && Array.isArray(analysis.keyTopics)) {
+                contextContent += `Key Topics: ${analysis.keyTopics.join(', ')}\n`;
+              }
+              if (analysis.concepts && Array.isArray(analysis.concepts)) {
+                contextContent += `Concepts: ${analysis.concepts.join(', ')}\n`;
+              }
+              if (analysis.difficulty) {
+                contextContent += `Difficulty: ${analysis.difficulty}\n`;
+              }
+            }
+            hasContent = true;
+          }
+          if (insights.primarySubjects && Array.isArray(insights.primarySubjects)) {
+            contextContent += `Subjects: ${insights.primarySubjects.join(', ')}\n`;
+          }
+          if (insights.combinedTopics && Array.isArray(insights.combinedTopics)) {
+            contextContent += `All Topics: ${insights.combinedTopics.join(', ')}\n`;
+          }
+          if (insights.suggestedGradeLevel) {
+            contextContent += `Suggested Grade Level: ${insights.suggestedGradeLevel}\n`;
+          }
+        }
+
+        if (kbAny.aiAnalysis && typeof kbAny.aiAnalysis === 'object') {
+          const analysis = kbAny.aiAnalysis;
+          if (analysis.summary) {
+            contextContent += `\nAI Summary: ${analysis.summary}\n`;
+            hasContent = true;
+          }
+          if (analysis.keyTopics && Array.isArray(analysis.keyTopics)) {
+            contextContent += `Topics: ${analysis.keyTopics.join(', ')}\n`;
+            hasContent = true;
+          }
+          if (analysis.extractedText) {
+            contextContent += `Content: ${String(analysis.extractedText).substring(0, 3000)}\n`;
+            hasContent = true;
+          }
+        }
+
+        if (!hasContent && kb.files && Array.isArray(kb.files)) {
           for (const file of kb.files as any[]) {
+            if (file.extractedText) {
+              contextContent += `\nContent from ${file.name || 'file'}:\n${String(file.extractedText).substring(0, 3000)}\n`;
+              hasContent = true;
+              continue;
+            }
             if (file.url) {
-              const fileContent = await this.extractContentFromFile(file.url);
-              if (fileContent) {
-                contextContent += `Content: ${fileContent.substring(0, 2000)}...\n`; // Limit content size
+              try {
+                const fileContent = await this.extractContentFromFile(file.url);
+                if (fileContent) {
+                  contextContent += `\nContent from ${file.name || 'file'}:\n${fileContent.substring(0, 3000)}\n`;
+                  hasContent = true;
+                }
+              } catch (err) {
+                console.error(`Failed to extract content from ${file.name}:`, err);
               }
             }
           }
         }
         
-        // Add metadata tags if available
         if (kb.metadata && typeof kb.metadata === 'object') {
           const metadata = kb.metadata as any;
           if (metadata.tags && Array.isArray(metadata.tags)) {
             contextContent += `Topics: ${metadata.tags.join(', ')}\n`;
+          }
+        }
+
+        if (kb.files && Array.isArray(kb.files)) {
+          const fileNames = (kb.files as any[]).map(f => f.name || f.fileName).filter(Boolean);
+          if (fileNames.length > 0) {
+            contextContent += `Available Documents: ${fileNames.join(', ')}\n`;
           }
         }
         
@@ -287,11 +350,18 @@ class KnowledgeBaseProcessor {
    */
   private async extractContentFromFile(fileUrl: string): Promise<string | null> {
     try {
-      // Handle local file paths
+      if (fileUrl.startsWith('data:')) {
+        return await this.extractContentFromDataUri(fileUrl);
+      }
+
       if (fileUrl.startsWith('/uploads/') || fileUrl.startsWith('uploads/')) {
         const filePath = path.join(process.cwd(), fileUrl.replace(/^\//, ''));
         
         if (fs.existsSync(filePath)) {
+          const ext = path.extname(filePath).toLowerCase();
+          if (ext === '.pdf') {
+            return await this.extractTextFromPdf(fs.readFileSync(filePath));
+          }
           const content = fs.readFileSync(filePath, 'utf-8');
           return this.cleanAndFormatContent(content);
         }
@@ -300,6 +370,44 @@ class KnowledgeBaseProcessor {
       return null;
     } catch (error) {
       console.error('Error reading file:', error);
+      return null;
+    }
+  }
+
+  private async extractContentFromDataUri(dataUri: string): Promise<string | null> {
+    try {
+      const matches = dataUri.match(/^data:([^;]+);base64,(.+)$/);
+      if (!matches) return null;
+
+      const mimeType = matches[1];
+      const base64Data = matches[2];
+      const buffer = Buffer.from(base64Data, 'base64');
+
+      if (mimeType === 'application/pdf') {
+        return await this.extractTextFromPdf(buffer);
+      }
+
+      if (mimeType.startsWith('text/')) {
+        return this.cleanAndFormatContent(buffer.toString('utf-8'));
+      }
+
+      return null;
+    } catch (error) {
+      console.error('Error extracting content from data URI:', error);
+      return null;
+    }
+  }
+
+  private async extractTextFromPdf(buffer: Buffer): Promise<string | null> {
+    try {
+      const pdfParse = (await import('pdf-parse/lib/pdf-parse.js')).default;
+      const data = await pdfParse(buffer);
+      if (data.text && data.text.trim().length > 0) {
+        return this.cleanAndFormatContent(data.text);
+      }
+      return null;
+    } catch (error) {
+      console.error('Error parsing PDF:', error);
       return null;
     }
   }

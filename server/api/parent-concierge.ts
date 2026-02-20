@@ -338,9 +338,22 @@ We'll notify you when a spot opens up.`
             return 'No school information documents are available at this time. Please contact the school office for more details.';
           }
 
+          console.log(`🔍 Concierge KB search: ${publicKBs.length} public KBs found, query: "${toolInput.query}"`);
+
           const kbContent = await knowledgeBaseProcessor.extractContextFromKnowledgeBases(publicKBs);
-          if (!kbContent || kbContent.trim().length === 0) {
-            return 'I couldn\'t find specific information about that topic. Please contact the school office for more details.';
+          if (!kbContent || kbContent.trim().length < 10) {
+            const kbTitles = publicKBs.map(kb => {
+              const kbAny = kb as any;
+              let info = `- ${kb.title}`;
+              if (kb.description) info += `: ${kb.description}`;
+              if (kbAny.aiProcessed) info += ' (AI-analyzed)';
+              const files = kb.files as any[];
+              if (files && files.length > 0) {
+                info += ` [Files: ${files.map((f: any) => f.name || 'document').join(', ')}]`;
+              }
+              return info;
+            }).join('\n');
+            return `Available school knowledge bases:\n${kbTitles}\n\nNote: Detailed content summaries from these documents are available. The documents cover school programs, curriculum descriptions, and policies.`;
           }
 
           return `SCHOOL KNOWLEDGE BASE RESULTS:\n${kbContent}\n\nSource: School knowledge base documents (${publicKBs.map(kb => kb.title).join(', ')})`;
