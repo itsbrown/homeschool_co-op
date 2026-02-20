@@ -103,6 +103,29 @@ Two path patterns exist in the codebase:
 - **Legacy uploads**: Various older patterns from before the unified upload system
 - When reading file paths, handle both patterns gracefully
 
+### Knowledge Base File Storage Formats
+Knowledge base files exist in **three different storage formats** depending on when and how they were uploaded:
+
+| Format | Example | How to Read |
+|--------|---------|-------------|
+| **Base64 data URI** | `data:application/pdf;base64,JVBERi0...` | Decode base64, parse with pdf-parse for PDFs |
+| **Local `/uploads/` path** | `/uploads/1771588493427_Macaronis_Class_Description.pdf` | Read from disk at `process.cwd() + path` |
+| **Object Storage path** | `/objects/.private/knowledge-base/uuid.pdf` | Requires Object Storage sidecar API, cannot read from disk |
+
+**Important**: You cannot assume a single access method works for all KB files. The `extractContentFromFile()` method in `knowledgeBaseProcessor.ts` handles all three formats.
+
+### PDF Text Extraction
+PDF files are binary and cannot be read as UTF-8 text. Use the `pdf-parse` library:
+```typescript
+// CRITICAL: Never import pdf-parse at the top level — it crashes in ESM/tsx
+// Always use dynamic import of the internal module:
+const pdfParse = (await import('pdf-parse/lib/pdf-parse.js')).default;
+const data = await pdfParse(buffer); // buffer is a Buffer of the PDF bytes
+const text = data.text; // extracted plain text
+```
+
+**Why the workaround?** The `pdf-parse` package's `index.js` checks `!module.parent` to detect "debug mode." In ESM/tsx environments, `module.parent` is always null, so it tries to read a test PDF file (`./test/data/05-versions-space.pdf`) at import time and crashes with `ENOENT`. Importing `pdf-parse/lib/pdf-parse.js` directly bypasses this bug.
+
 ## ACL (Access Control)
 
 ```typescript
@@ -141,6 +164,9 @@ await apiRequest('POST', '/api/unified-uploads/upload', formData);
 - **Private file 403** → tried to access private file without presigned download URL → use `getDownloadUrl()` for private files
 - **Legacy path not found** → old upload path format doesn't match new pattern → check for both `/objects/.private/` prefix and raw paths without prefix when resolving stored file references
 - **File lost after restart** → stored file on local filesystem instead of object storage → always use the presigned URL upload flow
+- **pdf-parse crashes server on startup** → imported `pdf-parse` at top level → use dynamic import: `(await import('pdf-parse/lib/pdf-parse.js')).default` (see "PDF Text Extraction" section)
+- **PDF read as garbled text** → tried to read PDF with `fs.readFileSync(path, 'utf-8')` → PDFs are binary, must use `pdf-parse` to extract text
+- **KB file content empty** → assumed all files are in Object Storage or all are local → KB files exist in 3 formats (data URIs, `/uploads/`, Object Storage) — handle all three
 
 ## Best Practices
 

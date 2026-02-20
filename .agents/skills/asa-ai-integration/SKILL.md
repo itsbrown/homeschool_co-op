@@ -1,13 +1,14 @@
 ---
 name: asa-ai-integration
-description: Anthropic Claude AI integration patterns, AI assistant implementations (enrollment, payment help, smart tutorial), content analysis, knowledge base processing, and prompt construction for the ASA Learning Platform. Use when working with AI-powered features, Claude API calls, system prompts, content generation, or any AI assistant functionality.
+description: Anthropic Claude AI integration patterns, AI assistant implementations (enrollment, payment help, smart tutorial, parent concierge), content analysis, knowledge base processing, and prompt construction for the ASA Learning Platform. Use when working with AI-powered features, Claude API calls, system prompts, content generation, or any AI assistant functionality.
 ---
 
 # ASA AI Integration
 
 ## Core Rules
 
-- **Anthropic Claude only** — all AI features use Claude (`claude-3-7-sonnet-20250219`) via the `@anthropic-ai/sdk` package
+- **Anthropic Claude only** — all AI features use Claude via the `@anthropic-ai/sdk` package
+- **Model constants** — conversational assistants use `claude-sonnet-4-20250514`; content generation uses `claude-3-7-sonnet-20250219` via centralized service
 - **API key**: `ANTHROPIC_API_KEY` env var — checked at initialization, features gracefully degrade if unavailable
 - **Rate limiting required** on all AI endpoints — use `express-rate-limit` (typically 15–20 requests/minute per user); see `asa-auth-patterns` for general API request conventions
 - **Always check `isAvailable()`** before calling the Anthropic service — return a helpful fallback message if unavailable
@@ -79,6 +80,7 @@ const response = await anthropic.messages.create({
 - **Services**: `aiContentAnalyzer.ts`, `knowledgeBaseProcessor.ts`, `knowledgeBaseExtraction.ts`
 - **Purpose**: Analyzes uploaded documents, extracts key concepts, generates summaries
 - **Used by**: Knowledge base system for processing uploaded PDFs and documents
+- **Content extraction priority** — see "Knowledge Base Content Extraction" section below
 
 ### 5. Curriculum & Lesson Generation
 - **Functions**: `generateCurriculumPlan()`, `generateLessonPlan()`, `analyzeStudentWork()`
@@ -88,6 +90,65 @@ const response = await anthropic.messages.create({
 ### 6. CFO Insights
 - **Service**: `cfoInsightsService.ts`
 - **Purpose**: Financial analytics and insights for school administrators
+
+### 7. Parent AI Concierge
+- **Purpose**: Default parent landing page — an action-capable AI assistant for managing enrollments, payments, child registration, and school questions through conversational interface
+- **Endpoint**: `POST /api/parent-concierge/chat`
+- **Model**: `claude-sonnet-4-20250514` (tool-use API)
+- **Rate limit**: 20 requests/minute
+- **Route**: `/dashboard` (parent role default), also `/parent/concierge`
+- **Legacy dashboard**: `/parent/home` (non-AI parent dashboard)
+- **Frontend**: `client/src/pages/ParentConciergePage.tsx`
+- **Backend**: `server/api/parent-concierge.ts`
+- **Architecture**: Uses Claude tool-use API — Claude decides which tools to call based on the conversation. The backend executes tool calls in a loop until Claude produces a final text response.
+- **8 action tools**:
+  1. `lookup_classes` — search available classes (optional: search query, child age)
+  2. `check_enrollments` — check enrollment status for parent's children
+  3. `check_payments` — check payment status, upcoming payments, balances
+  4. `check_credits` — check available credit balance (volunteer, referral, etc.)
+  5. `check_waitlist` — check waitlist positions for children
+  6. `search_knowledge_base` — search school KB for policies, curriculum, schedules
+  7. `add_to_cart` — add class enrollment to cart (classId, childId, paymentPlan)
+  8. `register_child` — register a new child (firstName, lastName, age, gradeLevel)
+- **Context injected**: Parent name, children list, membership status, school name — built fresh for each message via `buildSystemPrompt()`
+- **Graceful fallback**: When Anthropic is unavailable, the UI shows a fallback card with quick-action links to browse classes, check payments, etc. instead of the chat interface
+- **XSS prevention**: AI response content must NEVER use `dangerouslySetInnerHTML`. Use safe React rendering with manual string parsing (see `SafeMessageContent` component)
+- **Routing rule**: All "Browse on your own" links in the concierge must point to `/parent/home` (legacy dashboard), not `/dashboard`, to avoid routing loop
+
+## Knowledge Base Content Extraction
+
+### Priority Chain for `extractContextFromKnowledgeBases()`
+The `knowledgeBaseProcessor.extractContextFromKnowledgeBases()` method extracts content for AI context (used by the concierge's `search_knowledge_base` tool). It follows this priority order:
+
+1. **`aiInsights`** (best quality) — pre-processed summaries, topics, concepts from AI analysis during upload. Contains `fileAnalyses[]` with per-file summaries, `combinedTopics`, `primarySubjects`, `suggestedGradeLevel`
+2. **`aiAnalysis`** — older AI analysis format with `summary`, `keyTopics`, `extractedText`
+3. **`files[].extractedText`** — text previously extracted and stored in the file record
+4. **Raw file extraction** (fallback) — reads file content directly:
+   - `/uploads/*.txt` → read as UTF-8 text
+   - `/uploads/*.pdf` → parse with `pdf-parse` library
+   - `data:application/pdf;base64,...` → decode base64, parse with `pdf-parse`
+   - `data:text/*;base64,...` → decode base64, read as UTF-8
+   - Object Storage paths (`/objects/.private/...`) → **cannot be read from disk** — these require the Object Storage sidecar API
+
+### Current Reality
+- Most knowledge bases have `aiProcessed=false` and no `aiInsights` populated
+- The raw file extraction fallback is therefore **critical** for content access
+- KB files exist in three storage formats (see `asa-file-storage` skill for details):
+  - Base64 data URIs in the `files` JSON column
+  - Local paths in `/uploads/`
+  - Object Storage paths (less common for KBs)
+- Per-file content is capped at 3000 characters to keep AI context manageable
+
+### pdf-parse Library Gotcha
+The `pdf-parse` npm package has a known ESM/tsx compatibility bug:
+```typescript
+// BAD — crashes at import time in tsx/ESM environments
+import pdfParse from 'pdf-parse';
+
+// GOOD — dynamic import of internal module avoids the startup crash
+const pdfParse = (await import('pdf-parse/lib/pdf-parse.js')).default;
+```
+The root cause: `pdf-parse/index.js` checks `!module.parent` to detect "debug mode" and tries to read a test PDF file from disk. In ESM/tsx environments `module.parent` is null, so it always triggers.
 
 ## System Prompt Patterns
 
@@ -119,6 +180,10 @@ const messages = [
 - **Stale context in conversation** → parent's data changed mid-conversation but context wasn't refreshed → re-fetch context on each message, don't cache between turns
 - **Token limit exceeded** → long conversation history causes API error → truncate history to last N messages or summarize older turns
 - **Missing API key in production** → `ANTHROPIC_API_KEY` not set → graceful degradation, log warning, return user-friendly error
+- **KB content empty despite files existing** → `aiProcessed` is false and file extraction not handling the storage format → ensure `extractContentFromFile` handles data URIs, PDFs, and `/uploads/` paths
+- **pdf-parse crashes server on startup** → top-level import triggers test file read → use dynamic import of `pdf-parse/lib/pdf-parse.js` (see Knowledge Base section)
+- **XSS from AI content** → used `dangerouslySetInnerHTML` with AI-generated text → use safe React rendering, never trust AI output as raw HTML
+- **Concierge routing loop** → "Browse on your own" links point to `/dashboard` which is the concierge itself → always link to `/parent/home` for the legacy dashboard
 
 ## Best Practices
 
@@ -129,14 +194,18 @@ const messages = [
 - Always include behavioral constraints in system prompts (one step at a time, bold buttons, etc.)
 - Always handle Anthropic API errors gracefully — return a user-friendly fallback message
 - Always use the centralized `anthropicService` for non-conversational AI calls (content generation, analysis)
+- Always use dynamic import for `pdf-parse` — `(await import('pdf-parse/lib/pdf-parse.js')).default`
+- Always sanitize AI-generated content before rendering — never use `dangerouslySetInnerHTML`
 
 ### Don't
 - Don't expose raw Anthropic errors to users — catch and return friendly messages
 - Don't skip rate limiting on any AI endpoint — even internal ones
 - Don't let conversation history grow unbounded — truncate or summarize after ~20 messages
-- Don't hardcode the model name in multiple places — use a constant (`MODEL = 'claude-3-7-sonnet-20250219'`)
+- Don't hardcode the model name in multiple places — use a constant (e.g., `MODEL = 'claude-sonnet-4-20250514'`)
 - Don't inject sensitive data (passwords, payment details, full SSNs) into AI prompts — only contextually relevant info
 - Don't use AI for authoritative decisions (enrollment approval, payment processing) — AI is advisory only
+- Don't import `pdf-parse` at the top level — it crashes in ESM/tsx environments
+- Don't assume KBs have `aiInsights` populated — always implement the full fallback chain
 
 ## Key Files
 - `server/services/anthropic.ts` — centralized AnthropicService class, `generateContent()`, availability check
@@ -145,7 +214,10 @@ const messages = [
 - `server/api/enrollment-assistant.ts` — enrollment assistant API endpoint
 - `server/api/payment-help.ts` — payment help assistant API endpoint
 - `server/api/smart-tutorial.ts` — smart tutorial system API endpoint
+- `server/api/parent-concierge.ts` — Parent AI Concierge API endpoint (tool-use pattern)
+- `client/src/pages/ParentConciergePage.tsx` — Parent AI Concierge frontend (chat UI, context sidebar, fallback)
 - `server/services/aiContentAnalyzer.ts` — document content analysis
-- `server/services/knowledgeBaseProcessor.ts` — knowledge base document processing
+- `server/services/knowledgeBaseProcessor.ts` — knowledge base document processing, content extraction
+- `server/services/knowledgeBaseExtraction.ts` — knowledge base extraction utilities
 - `server/services/curriculumService.ts` — curriculum and lesson plan generation
 - `server/services/cfoInsightsService.ts` — financial insights generation
