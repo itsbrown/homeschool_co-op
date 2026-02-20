@@ -371,12 +371,12 @@ export default function ParentClassDetailsPage() {
               return (
                 <Button 
                   size="lg"
-                  variant="secondary"
-                  disabled
-                  className="w-full md:w-auto"
-                  data-testid="button-enroll-now"
+                  variant="outline"
+                  className="w-full md:w-auto border-amber-500 text-amber-700 hover:bg-amber-50"
+                  onClick={() => navigate(`/parent/programs?enroll=${classId}`)}
+                  data-testid="button-join-waitlist"
                 >
-                  Class Full
+                  Join Waitlist
                 </Button>
               );
             }

@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { CalendarIcon, DollarSign, BookOpen, Users, Filter, Sparkles, CalendarDays, Backpack, ShoppingCart, Plus, MapPin, Clock, ArrowUpDown } from "lucide-react";
+import { CalendarIcon, DollarSign, BookOpen, Users, Filter, Sparkles, CalendarDays, Backpack, ShoppingCart, Plus, MapPin, Clock, ArrowUpDown, ClipboardList } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
@@ -107,9 +107,12 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
       const className = selectedClass?.title || 'the class';
 
       if (data.isDuplicate) {
+        const duplicateMessage = data.isWaitlisted
+          ? `${childName} is already on the waitlist for ${className} at position #${data.waitlistPosition || '?'}.`
+          : `${childName} is already enrolled in ${className}. Check your cart to complete payment.`;
         toast({
-          title: "Already in Cart",
-          description: `${childName} is already enrolled in ${className}. Check your cart to complete payment.`,
+          title: data.isWaitlisted ? "Already on Waitlist" : "Already in Cart",
+          description: duplicateMessage,
           variant: "default",
         });
         
@@ -117,10 +120,26 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
         setSelectedChildId("");
         setSelectedVariantId("");
         
-        setTimeout(() => {
-          openCart();
-        }, 500);
+        if (!data.isWaitlisted) {
+          setTimeout(() => {
+            openCart();
+          }, 500);
+        }
         
+        return;
+      }
+
+      if (data.isWaitlisted) {
+        setEnrollmentDialog({ open: false });
+        setSelectedChildId("");
+        setSelectedVariantId("");
+
+        toast({
+          title: "Added to Waitlist",
+          description: `${childName} is #${data.waitlistPosition || '?'} on the waitlist for ${className}. We'll notify you when a spot opens up.`,
+        });
+
+        queryClient.invalidateQueries({ queryKey: ["/api/classes"] });
         return;
       }
 
@@ -505,12 +524,13 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
                       </Button>
                       {classItem.capacity && (classItem.totalOrders || 0) >= classItem.capacity ? (
                         <Button 
-                          variant="secondary"
-                          className="flex-1"
-                          disabled
-                          title="This class is full"
+                          variant="outline"
+                          className="flex-1 border-amber-500 text-amber-700 hover:bg-amber-50"
+                          onClick={() => {
+                            setEnrollmentDialog({ open: true, classId: classItem.id, classTitle: classItem.title, classData: classItem });
+                          }}
                         >
-                          Class Full
+                          Join Waitlist
                         </Button>
                       ) : (
                         <Button 
@@ -548,11 +568,31 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
       }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Enroll in {enrollmentDialog.classTitle || 'Class'}</DialogTitle>
+            <DialogTitle>
+              {enrollmentDialog.classData?.capacity && (enrollmentDialog.classData?.totalOrders || 0) >= enrollmentDialog.classData?.capacity
+                ? `Join Waitlist — ${enrollmentDialog.classTitle || 'Class'}`
+                : `Enroll in ${enrollmentDialog.classTitle || 'Class'}`
+              }
+            </DialogTitle>
             <DialogDescription>
-              Choose which child to enroll and select a time option if available.
+              {enrollmentDialog.classData?.capacity && (enrollmentDialog.classData?.totalOrders || 0) >= enrollmentDialog.classData?.capacity
+                ? "This class is currently full. You can join the waitlist and we'll notify you when a spot opens up."
+                : "Choose which child to enroll and select a time option if available."
+              }
             </DialogDescription>
           </DialogHeader>
+
+          {enrollmentDialog.classData?.capacity && (enrollmentDialog.classData?.totalOrders || 0) >= enrollmentDialog.classData?.capacity && (
+            <div className="flex items-center gap-2 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
+              <ClipboardList className="h-4 w-4 text-amber-600 flex-shrink-0" />
+              <span className="text-sm text-amber-700 dark:text-amber-300">
+                {(enrollmentDialog.classData?.totalWaitlisted || 0) > 0
+                  ? `${enrollmentDialog.classData.totalWaitlisted} already on waitlist — you'll be #${(enrollmentDialog.classData.totalWaitlisted || 0) + 1}`
+                  : "You'll be first on the waitlist — no payment required until a spot opens."
+                }
+              </span>
+            </div>
+          )}
 
           <div className="space-y-4">
             <div>
@@ -657,7 +697,11 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
               }}
               disabled={!selectedChildId || enrollmentMutation.isPending || childrenLoading || (enrollmentDialog.classData?.variants && enrollmentDialog.classData.variants.length > 1 && !selectedVariantId)}
             >
-              {enrollmentMutation.isPending ? "Enrolling..." : "Enroll"}
+              {(() => {
+                const isClassFull = enrollmentDialog.classData?.capacity && (enrollmentDialog.classData?.totalOrders || 0) >= enrollmentDialog.classData?.capacity;
+                if (enrollmentMutation.isPending) return isClassFull ? "Joining..." : "Enrolling...";
+                return isClassFull ? "Join Waitlist" : "Enroll";
+              })()}
             </Button>
           </DialogFooter>
         </DialogContent>

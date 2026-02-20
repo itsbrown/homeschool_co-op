@@ -48,7 +48,8 @@ import {
   LayoutList,
   TrendingUp,
   Gift,
-  Percent
+  Percent,
+  Bell
 } from "lucide-react";
 import { formatCurrency } from "@/utils/currency";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -507,18 +508,19 @@ export default function EnrollmentsAdminPage() {
   const handlePromoteFromWaitlist = async (enrollment: Enrollment) => {
     try {
       const response = await apiRequest(
-        "PUT",
-        `/api/program-enrollments/${enrollment.id}`,
-        { status: 'pending_payment', waitlistPosition: null }
+        "POST",
+        `/api/admin/enrollments/${enrollment.id}/promote`
       );
       
       if (!response.ok) {
         throw new Error("Failed to promote from waitlist");
       }
+
+      const data = await response.json();
       
       toast({
         title: "Student Promoted",
-        description: `${enrollment.childName} has been promoted from the waitlist for ${enrollment.className}. They can now proceed with payment.`,
+        description: data.message || `${enrollment.childName} has been promoted from the waitlist for ${enrollment.className}. The parent has been notified to complete payment.`,
       });
       
       refetch();
@@ -527,6 +529,33 @@ export default function EnrollmentsAdminPage() {
       toast({
         title: "Error",
         description: "Failed to promote student from waitlist. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleNotifyWaitlist = async (enrollment: Enrollment) => {
+    try {
+      const response = await apiRequest(
+        "POST",
+        `/api/admin/enrollments/${enrollment.id}/notify-waitlist`
+      );
+      
+      if (!response.ok) {
+        throw new Error("Failed to send notification");
+      }
+
+      const data = await response.json();
+      
+      toast({
+        title: "Notification Sent",
+        description: data.message || `Waitlist update sent to ${enrollment.parentEmail}.`,
+      });
+    } catch (error) {
+      console.error("Failed to send waitlist notification:", error);
+      toast({
+        title: "Error",
+        description: "Failed to send waitlist notification. Please try again.",
         variant: "destructive",
       });
     }
@@ -821,10 +850,16 @@ export default function EnrollmentsAdminPage() {
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
                                 {enrollment.status === 'waitlist' ? (
-                                  <DropdownMenuItem onClick={() => handlePromoteFromWaitlist(enrollment)}>
-                                    <CheckCircle2 className="h-4 w-4 mr-2" />
-                                    Promote from Waitlist
-                                  </DropdownMenuItem>
+                                  <>
+                                    <DropdownMenuItem onClick={() => handlePromoteFromWaitlist(enrollment)}>
+                                      <CheckCircle2 className="h-4 w-4 mr-2" />
+                                      Promote from Waitlist
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handleNotifyWaitlist(enrollment)}>
+                                      <Bell className="h-4 w-4 mr-2" />
+                                      Send Waitlist Update
+                                    </DropdownMenuItem>
+                                  </>
                                 ) : (
                                   <>
                                     <DropdownMenuItem onClick={() => handleEditClick(enrollment)}>

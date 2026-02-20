@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { storage } from '../storage';
+import { sendWaitlistPromotedEmail } from '../lib/email-service';
 
 const router = Router();
 
@@ -92,6 +93,88 @@ router.delete('/:id', async (req: any, res) => {
     });
     
     console.log(`✅ Successfully cancelled enrollment ID ${enrollmentId}`);
+
+    // Auto-promote next waitlisted student if one exists (scoped by school + class)
+    let promotedStudent = null;
+    try {
+      const allEnrollments = await storage.getAllEnrollments();
+      const classId = enrollment.marketplaceClassId || enrollment.classId;
+      const enrollmentSchoolId = enrollment.schoolId;
+      const waitlistedForClass = allEnrollments
+        .filter((e: any) => {
+          const eClassId = e.marketplaceClassId || e.classId;
+          const matchesClass = eClassId === classId;
+          const matchesSchool = !enrollmentSchoolId || e.schoolId === enrollmentSchoolId;
+          return matchesClass && matchesSchool && e.status === 'waitlist';
+        })
+        .sort((a: any, b: any) => (a.waitlistPosition || 999) - (b.waitlistPosition || 999));
+
+      if (waitlistedForClass.length > 0) {
+        const nextInLine = waitlistedForClass[0];
+        await storage.updateProgramEnrollment(nextInLine.id, {
+          status: 'pending_payment',
+          waitlistPosition: null,
+        });
+        promotedStudent = nextInLine;
+        console.log(`🎉 Auto-promoted enrollment ${nextInLine.id} (${nextInLine.childName}) from waitlist`);
+
+        // Recalculate positions for remaining waitlisted students
+        for (let i = 1; i < waitlistedForClass.length; i++) {
+          await storage.updateProgramEnrollment(waitlistedForClass[i].id, { waitlistPosition: i });
+        }
+
+        // Send promotion email
+        const parentName = nextInLine.parentEmail ? 'Parent' : 'Parent';
+        const classItem = classId ? await storage.getClassById(classId) : null;
+        try {
+          const parentUser = nextInLine.parentEmail ? await storage.getUserByEmail(nextInLine.parentEmail) : null;
+          const resolvedParentName = parentUser ? `${parentUser.firstName || ''} ${parentUser.lastName || ''}`.trim() || 'Parent' : 'Parent';
+
+          if (nextInLine.parentEmail) {
+            await sendWaitlistPromotedEmail({
+              parentEmail: nextInLine.parentEmail,
+              parentName: resolvedParentName,
+              childName: nextInLine.childName || 'Your child',
+              className: nextInLine.className || 'Class',
+              programStartDate: classItem?.startDate ? new Date(classItem.startDate) : undefined,
+              price: nextInLine.totalCost || 0,
+            });
+            console.log(`📧 Sent waitlist promotion email to ${nextInLine.parentEmail}`);
+          }
+
+          // Create in-app notification
+          if (parentUser) {
+            const notification = await storage.createNotification({
+              senderId: user.id,
+              schoolId: enrollment.schoolId || 1,
+              type: 'both',
+              priority: 'high',
+              subject: `Spot Available — ${nextInLine.className}`,
+              content: `Great news! A spot opened up in ${nextInLine.className} for ${nextInLine.childName}. Please complete payment within 24 hours to secure enrollment.`,
+              targetType: 'individual',
+              targetData: JSON.stringify({ userIds: [parentUser.id] }),
+              targetUserIds: [parentUser.id],
+              status: 'sent',
+              scheduledFor: null,
+              expiresAt: null,
+            });
+
+            await storage.createNotificationRecipient({
+              notificationId: notification.id,
+              recipientId: parentUser.id,
+              deliveryType: 'in_app',
+              status: 'delivered',
+              deliveredAt: new Date(),
+            });
+            console.log(`🔔 Created in-app notification for parent ${parentUser.id} about waitlist promotion`);
+          }
+        } catch (notifError) {
+          console.error('⚠️ Failed to send waitlist promotion notification (non-blocking):', notifError);
+        }
+      }
+    } catch (waitlistError) {
+      console.error('⚠️ Error processing waitlist after cancellation (non-blocking):', waitlistError);
+    }
     
     res.json({ 
       message: 'Student unenrolled successfully',
@@ -104,7 +187,11 @@ router.delete('/:id', async (req: any, res) => {
         totalPaid: totalPaid,
         totalPaidFormatted: totalPaid > 0 ? `$${(totalPaid / 100).toFixed(2)}` : '$0.00',
         canReallocatePayments: totalPaid > 0,
-      }
+      },
+      promotedFromWaitlist: promotedStudent ? {
+        childName: promotedStudent.childName,
+        parentEmail: promotedStudent.parentEmail,
+      } : null,
     });
   } catch (error) {
     console.error('Error cancelling enrollment:', error);
@@ -263,6 +350,256 @@ router.get('/parent/:email', async (req, res) => {
   } catch (error) {
     console.error('Error fetching enrollments by parent:', error);
     res.status(500).json({ message: 'Failed to fetch enrollments' });
+  }
+});
+
+// GET waitlist for a specific class
+router.get('/waitlist/:classId', async (req: any, res) => {
+  try {
+    const classId = parseInt(req.params.classId);
+    if (isNaN(classId)) {
+      return res.status(400).json({ message: 'Invalid class ID' });
+    }
+
+    const userEmail = req.user?.email || req.auth?.email;
+    if (!userEmail) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    const user = await storage.getUserByEmail(userEmail);
+    if (!user) {
+      return res.status(403).json({ message: 'User not found' });
+    }
+
+    const userRoles = await storage.getUserRolesByUserId(user.id);
+    const hasSchoolAdminRole = userRoles.some(r => r.role === 'schoolAdmin') || user.role === 'schoolAdmin';
+    const hasAdminRole = userRoles.some(r => r.role === 'admin' || r.role === 'superAdmin') || user.role === 'admin' || user.role === 'superAdmin';
+    if (!hasSchoolAdminRole && !hasAdminRole) {
+      return res.status(403).json({ message: 'Only school administrators can view waitlists' });
+    }
+
+    const adminSchoolIds = hasAdminRole ? null : userRoles.filter(r => r.role === 'schoolAdmin' && r.schoolId).map(r => r.schoolId);
+
+    const allEnrollments = await storage.getAllEnrollments();
+    const waitlistedEnrollments = allEnrollments
+      .filter((e: any) => {
+        const matchesClass = e.marketplaceClassId === classId || e.classId === classId;
+        const matchesSchool = hasAdminRole || !adminSchoolIds || adminSchoolIds.includes(e.schoolId);
+        return matchesClass && matchesSchool && e.status === 'waitlist';
+      })
+      .sort((a: any, b: any) => (a.waitlistPosition || 0) - (b.waitlistPosition || 0));
+
+    res.json(waitlistedEnrollments);
+  } catch (error) {
+    console.error('Error fetching waitlist:', error);
+    res.status(500).json({ message: 'Failed to fetch waitlist' });
+  }
+});
+
+// POST promote a waitlisted student — sends email + in-app notification
+router.post('/:id/promote', async (req: any, res) => {
+  try {
+    const enrollmentId = parseInt(req.params.id);
+    if (isNaN(enrollmentId)) {
+      return res.status(400).json({ message: 'Invalid enrollment ID' });
+    }
+
+    const userEmail = req.user?.email || req.auth?.email;
+    if (!userEmail) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    const user = await storage.getUserByEmail(userEmail);
+    if (!user) {
+      return res.status(403).json({ message: 'User not found' });
+    }
+
+    const userRoles = await storage.getUserRolesByUserId(user.id);
+    const hasSchoolAdminRole = userRoles.some(r => r.role === 'schoolAdmin') || user.role === 'schoolAdmin';
+    const hasAdminRole = userRoles.some(r => r.role === 'admin' || r.role === 'superAdmin') || user.role === 'admin' || user.role === 'superAdmin';
+    if (!hasSchoolAdminRole && !hasAdminRole) {
+      return res.status(403).json({ message: 'Only school administrators can promote waitlisted students' });
+    }
+
+    const enrollment = await storage.getProgramEnrollmentById(enrollmentId);
+    if (!enrollment) {
+      return res.status(404).json({ message: 'Enrollment not found' });
+    }
+
+    if (enrollment.status !== 'waitlist') {
+      return res.status(400).json({ message: 'Enrollment is not on the waitlist' });
+    }
+
+    // Verify school-scoped access for school admins
+    if (!hasAdminRole && hasSchoolAdminRole) {
+      const adminSchoolIds = userRoles.filter(r => r.role === 'schoolAdmin' && r.schoolId).map(r => r.schoolId);
+      if (enrollment.schoolId && !adminSchoolIds.includes(enrollment.schoolId)) {
+        return res.status(403).json({ message: 'You can only manage waitlists for your school' });
+      }
+    }
+
+    await storage.updateProgramEnrollment(enrollmentId, {
+      status: 'pending_payment',
+      waitlistPosition: null,
+    });
+
+    console.log(`✅ Promoted enrollment ${enrollmentId} from waitlist to pending_payment`);
+
+    // Recalculate waitlist positions for remaining students (scoped by class + school)
+    try {
+      const allEnrollments = await storage.getAllEnrollments();
+      const classId = enrollment.marketplaceClassId || enrollment.classId;
+      const remainingWaitlisted = allEnrollments
+        .filter((e: any) => {
+          const eClassId = e.marketplaceClassId || e.classId;
+          return eClassId === classId && e.schoolId === enrollment.schoolId && e.status === 'waitlist' && e.id !== enrollmentId;
+        })
+        .sort((a: any, b: any) => (a.waitlistPosition || 0) - (b.waitlistPosition || 0));
+
+      for (let i = 0; i < remainingWaitlisted.length; i++) {
+        await storage.updateProgramEnrollment(remainingWaitlisted[i].id, { waitlistPosition: i + 1 });
+      }
+      console.log(`🔄 Recalculated waitlist positions for ${remainingWaitlisted.length} remaining students`);
+    } catch (reorderError) {
+      console.error('⚠️ Error recalculating waitlist positions:', reorderError);
+    }
+
+    // Send email notification
+    try {
+      const classItem = enrollment.marketplaceClassId ? await storage.getClassById(enrollment.marketplaceClassId) : null;
+      const parentUser = enrollment.parentEmail ? await storage.getUserByEmail(enrollment.parentEmail) : null;
+      const parentName = parentUser ? `${parentUser.firstName || ''} ${parentUser.lastName || ''}`.trim() || 'Parent' : 'Parent';
+
+      if (enrollment.parentEmail) {
+        await sendWaitlistPromotedEmail({
+          parentEmail: enrollment.parentEmail,
+          parentName,
+          childName: enrollment.childName || 'Your child',
+          className: enrollment.className || 'Class',
+          programStartDate: classItem?.startDate ? new Date(classItem.startDate) : undefined,
+          price: enrollment.totalCost || 0,
+        });
+        console.log(`📧 Sent waitlist promotion email to ${enrollment.parentEmail}`);
+      }
+    } catch (emailError) {
+      console.error('⚠️ Failed to send promotion email (non-blocking):', emailError);
+    }
+
+    // Create in-app notification
+    try {
+      const parentUser = enrollment.parentEmail ? await storage.getUserByEmail(enrollment.parentEmail) : null;
+      if (parentUser) {
+        const notification = await storage.createNotification({
+          senderId: user.id,
+          schoolId: enrollment.schoolId || 1,
+          type: 'both',
+          priority: 'high',
+          subject: `Spot Available — ${enrollment.className}`,
+          content: `Great news! A spot opened up in ${enrollment.className} for ${enrollment.childName}. Please complete payment within 24 hours to secure enrollment.`,
+          targetType: 'individual',
+          targetData: JSON.stringify({ userIds: [parentUser.id] }),
+          targetUserIds: [parentUser.id],
+          status: 'sent',
+          scheduledFor: null,
+          expiresAt: null,
+        });
+
+        await storage.createNotificationRecipient({
+          notificationId: notification.id,
+          recipientId: parentUser.id,
+          deliveryType: 'in_app',
+          status: 'delivered',
+          deliveredAt: new Date(),
+        });
+        console.log(`🔔 Created in-app notification for parent ${parentUser.id}`);
+      }
+    } catch (notifError) {
+      console.error('⚠️ Failed to create notification (non-blocking):', notifError);
+    }
+
+    res.json({
+      message: `${enrollment.childName} has been promoted from the waitlist for ${enrollment.className}. The parent has been notified to complete payment.`,
+      enrollment: { ...enrollment, status: 'pending_payment', waitlistPosition: null },
+    });
+  } catch (error) {
+    console.error('Error promoting from waitlist:', error);
+    res.status(500).json({ message: 'Failed to promote from waitlist' });
+  }
+});
+
+// POST notify a waitlisted parent manually
+router.post('/:id/notify-waitlist', async (req: any, res) => {
+  try {
+    const enrollmentId = parseInt(req.params.id);
+    if (isNaN(enrollmentId)) {
+      return res.status(400).json({ message: 'Invalid enrollment ID' });
+    }
+
+    const userEmail = req.user?.email || req.auth?.email;
+    if (!userEmail) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    const user = await storage.getUserByEmail(userEmail);
+    if (!user) {
+      return res.status(403).json({ message: 'User not found' });
+    }
+
+    const userRoles = await storage.getUserRolesByUserId(user.id);
+    const hasSchoolAdminRole = userRoles.some(r => r.role === 'schoolAdmin') || user.role === 'schoolAdmin';
+    const hasAdminRole = userRoles.some(r => r.role === 'admin' || r.role === 'superAdmin') || user.role === 'admin' || user.role === 'superAdmin';
+    if (!hasSchoolAdminRole && !hasAdminRole) {
+      return res.status(403).json({ message: 'Only school administrators can send waitlist notifications' });
+    }
+
+    const enrollment = await storage.getProgramEnrollmentById(enrollmentId);
+    if (!enrollment) {
+      return res.status(404).json({ message: 'Enrollment not found' });
+    }
+
+    if (enrollment.status !== 'waitlist') {
+      return res.status(400).json({ message: 'Enrollment is not on the waitlist' });
+    }
+
+    // Verify school-scoped access for school admins
+    if (!hasAdminRole && hasSchoolAdminRole) {
+      const adminSchoolIds = userRoles.filter(r => r.role === 'schoolAdmin' && r.schoolId).map(r => r.schoolId);
+      if (enrollment.schoolId && !adminSchoolIds.includes(enrollment.schoolId)) {
+        return res.status(403).json({ message: 'You can only notify waitlisted students for your school' });
+      }
+    }
+
+    // Send in-app notification
+    const parentUser = enrollment.parentEmail ? await storage.getUserByEmail(enrollment.parentEmail) : null;
+    if (parentUser) {
+      const notification = await storage.createNotification({
+        senderId: user.id,
+        schoolId: enrollment.schoolId || 1,
+        type: 'in_app',
+        priority: 'normal',
+        subject: `Waitlist Update — ${enrollment.className}`,
+        content: `${enrollment.childName} is #${enrollment.waitlistPosition || '?'} on the waitlist for ${enrollment.className}. We'll notify you when a spot opens up.`,
+        targetType: 'individual',
+        targetData: JSON.stringify({ userIds: [parentUser.id] }),
+        targetUserIds: [parentUser.id],
+        status: 'sent',
+        scheduledFor: null,
+        expiresAt: null,
+      });
+
+      await storage.createNotificationRecipient({
+        notificationId: notification.id,
+        recipientId: parentUser.id,
+        deliveryType: 'in_app',
+        status: 'delivered',
+        deliveredAt: new Date(),
+      });
+    }
+
+    res.json({ message: `Notification sent to ${enrollment.parentEmail} about waitlist position for ${enrollment.className}.` });
+  } catch (error) {
+    console.error('Error sending waitlist notification:', error);
+    res.status(500).json({ message: 'Failed to send waitlist notification' });
   }
 });
 

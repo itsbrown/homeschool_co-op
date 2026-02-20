@@ -343,21 +343,25 @@ router.post('/:id/enroll', async (req, res) => {
     
     console.log(`✅ ${enrollmentStatus === 'waitlist' ? 'Waitlisted' : 'Added to cart'} ${child.firstName} ${child.lastName} in class: ${classItem.title}`);
 
-    // Send email notification for waitlist
     if (enrollmentStatus === 'waitlist') {
-      const parentEmail = req.body.parentEmail || '';
-      const parentName = req.body.parentName || 'Parent';
-      
-      if (parentEmail) {
-        await sendWaitlistJoinedEmail({
-          parentEmail,
-          parentName,
-          childName: `${child.firstName} ${child.lastName}`,
-          className: classItem.title,
-          waitlistPosition: waitlistPosition || 0,
-          programStartDate: classItem.startDate ? new Date(classItem.startDate) : undefined
-        });
-        console.log(`📧 Sent waitlist joined email to ${parentEmail}`);
+      try {
+        const parent = child.parentId ? await storage.getUser(child.parentId) : null;
+        const parentEmailAddr = parent?.email || child.parentEmail || '';
+        const parentName = parent ? `${parent.firstName || ''} ${parent.lastName || ''}`.trim() || 'Parent' : 'Parent';
+        
+        if (parentEmailAddr) {
+          await sendWaitlistJoinedEmail({
+            parentEmail: parentEmailAddr,
+            parentName,
+            childName: `${child.firstName} ${child.lastName}`,
+            className: classItem.title,
+            waitlistPosition: waitlistPosition || 0,
+            programStartDate: classItem.startDate ? new Date(classItem.startDate) : undefined
+          });
+          console.log(`📧 Sent waitlist joined email to ${parentEmailAddr}`);
+        }
+      } catch (emailError) {
+        console.error('⚠️ Failed to send waitlist email (non-blocking):', emailError);
       }
     }
 
