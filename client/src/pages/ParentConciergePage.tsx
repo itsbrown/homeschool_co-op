@@ -25,14 +25,24 @@ import {
   Loader2,
   ChevronRight,
   MessageSquare,
+  ShoppingCart,
+  FileText,
+  ExternalLink,
 } from "lucide-react";
 import { Link } from "wouter";
 import { cn } from "@/lib/utils";
+
+interface SuggestedAction {
+  label: string;
+  path: string;
+  icon: 'billing' | 'classes' | 'cart' | 'enrollments' | 'credits' | 'children' | 'info';
+}
 
 interface Message {
   role: "user" | "assistant";
   content: string;
   toolsUsed?: string[];
+  suggestedActions?: SuggestedAction[];
 }
 
 interface QuickAction {
@@ -403,6 +413,37 @@ function QuickActionChips({ actions, onAction }: { actions: QuickAction[]; onAct
   );
 }
 
+const ACTION_ICONS: Record<string, typeof DollarSign> = {
+  billing: DollarSign,
+  classes: BookOpen,
+  cart: ShoppingCart,
+  enrollments: BookOpen,
+  credits: CreditCard,
+  children: Users,
+  info: FileText,
+};
+
+function SuggestedActionButtons({ actions }: { actions: SuggestedAction[] }) {
+  if (!actions || actions.length === 0) return null;
+
+  return (
+    <div className="flex flex-wrap gap-2 mt-2 ml-11">
+      {actions.map((action, i) => {
+        const Icon = ACTION_ICONS[action.icon] || ExternalLink;
+        return (
+          <Link key={i} href={action.path}>
+            <button className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-colors border border-primary/20">
+              <Icon className="h-3.5 w-3.5" />
+              {action.label}
+              <ExternalLink className="h-3 w-3 opacity-50" />
+            </button>
+          </Link>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function ParentConciergePage() {
   const { session } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -491,6 +532,7 @@ export default function ParentConciergePage() {
           role: "assistant",
           content: data.response,
           toolsUsed: data.toolsUsed,
+          suggestedActions: data.suggestedActions,
         }]);
       }
     } catch (error) {
@@ -558,7 +600,12 @@ export default function ParentConciergePage() {
         <ScrollArea className="flex-1 px-4 pt-4">
           <div className="max-w-2xl mx-auto pb-4">
             {messages.map((msg, i) => (
-              <MessageBubble key={i} message={msg} />
+              <div key={i}>
+                <MessageBubble message={msg} />
+                {msg.role === "assistant" && msg.suggestedActions && (
+                  <SuggestedActionButtons actions={msg.suggestedActions} />
+                )}
+              </div>
             ))}
 
             {showQuickActions && context?.quickActions && messages.length <= 1 && (

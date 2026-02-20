@@ -150,13 +150,69 @@ BEHAVIORAL RULES:
 8. Never process payments directly — guide them to the checkout page
 9. When answering from knowledge base, mention the source document
 10. One action at a time — don't overwhelm parents with multiple suggestions
+11. NEVER tell the parent to "log in" or "log into the parent portal" — they are ALREADY logged in and using the app right now
+12. NEVER give step-by-step navigation instructions like "Go to the Billing section" — instead, briefly mention the relevant page name and the app will automatically show a direct link button they can click. For example, say "You can make a payment from your Billing page" instead of listing steps to navigate there.
+13. Keep action guidance brief — the app provides clickable buttons for navigation, so you don't need to explain how to get there
 
 QUICK ACTION GUIDANCE:
-- "Make a payment" → Use check_payments to show what's due, then guide to billing page
+- "Make a payment" → Use check_payments to show what's due, then mention they can go to the Billing page
 - "Enroll in a class" → Ask which child, use lookup_classes, then add_to_cart
 - "Register a child" → Collect info conversationally, then use register_child
 - "Check my balance" → Use check_payments and check_credits together
 - General questions → Use search_knowledge_base first`;
+}
+
+interface SuggestedAction {
+  label: string;
+  path: string;
+  icon: 'billing' | 'classes' | 'cart' | 'enrollments' | 'credits' | 'children' | 'info';
+}
+
+const TOOL_ACTION_MAP: Record<string, SuggestedAction[]> = {
+  check_payments: [
+    { label: 'Go to Billing', path: '/billing', icon: 'billing' },
+  ],
+  lookup_classes: [
+    { label: 'Browse Classes', path: '/programs', icon: 'classes' },
+  ],
+  add_to_cart: [
+    { label: 'Go to Cart', path: '/cart', icon: 'cart' },
+  ],
+  check_enrollments: [
+    { label: 'View My Children', path: '/children', icon: 'children' },
+  ],
+  check_credits: [
+    { label: 'Go to Billing', path: '/billing', icon: 'billing' },
+  ],
+  check_waitlist: [
+    { label: 'View My Children', path: '/children', icon: 'children' },
+  ],
+  register_child: [
+    { label: 'View My Children', path: '/children', icon: 'children' },
+    { label: 'Browse Classes', path: '/programs', icon: 'classes' },
+  ],
+  search_knowledge_base: [
+    { label: 'View Documents', path: '/parent/documents', icon: 'info' },
+  ],
+};
+
+function buildSuggestedActions(toolsUsed: string[]): SuggestedAction[] {
+  const seen = new Set<string>();
+  const actions: SuggestedAction[] = [];
+
+  for (const tool of toolsUsed) {
+    const mapped = TOOL_ACTION_MAP[tool];
+    if (mapped) {
+      for (const action of mapped) {
+        if (!seen.has(action.path)) {
+          seen.add(action.path);
+          actions.push(action);
+        }
+      }
+    }
+  }
+
+  return actions.slice(0, 3);
 }
 
 async function executeToolCall(
@@ -788,9 +844,12 @@ Children: ${children.length > 0 ? children.map(c => `${c.firstName} ${c.lastName
       fullResponse = finalTextBlocks.map(b => b.text).join('\n');
     }
 
+    const suggestedActions = buildSuggestedActions(toolResults.map(t => t.tool));
+
     return res.json({
       response: fullResponse,
       toolsUsed: toolResults.map(t => t.tool),
+      suggestedActions,
     });
   } catch (error: any) {
     console.error('Parent concierge chat error:', error);
