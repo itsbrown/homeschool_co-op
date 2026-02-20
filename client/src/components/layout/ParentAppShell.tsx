@@ -9,7 +9,7 @@ import RoleSwitcher from "@/components/RoleSwitcher.tsx";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetTrigger, SheetClose } from "@/components/ui/sheet";
-import { LogOut, Menu, User, Bell, X, Home, Users, BookOpen, Calendar, DollarSign, Bot, Brain, Settings, FolderOpen } from "lucide-react";
+import { LogOut, Menu, User, Bell, X, Home, Users, BookOpen, Calendar, DollarSign, Bot, Brain, Settings, FolderOpen, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { Link, useLocation } from "wouter";
@@ -29,6 +29,11 @@ interface Notification {
 const mobileNavigationItems = [
   {
     href: "/dashboard",
+    title: "ASA Assistant",
+    icon: Sparkles,
+  },
+  {
+    href: "/parent/home",
     title: "Dashboard",
     icon: Home,
   },

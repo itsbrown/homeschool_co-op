@@ -56,6 +56,7 @@ const MembershipSuccess = lazy(() => import("@/pages/MembershipSuccess"));
 const MembershipAgreementPage = lazy(() => import("@/pages/MembershipAgreementPage"));
 const RegistrationPage = lazy(() => import("@/pages/RegistrationPage").then(m => ({ default: m.RegistrationPage })));
 const ProgramsParentPage = lazy(() => import("@/pages/ProgramsParentPage"));
+const ParentConciergePage = lazy(() => import("@/pages/ParentConciergePage"));
 const ParentClassDetailsPage = lazy(() => import("@/pages/parents/ParentClassDetailsPage"));
 const MyDocumentsPage = lazy(() => import("@/pages/parent/MyDocumentsPage"));
 const DocumentDetailPage = lazy(() => import("@/pages/parent/DocumentDetailPage"));
@@ -228,12 +229,12 @@ function DashboardRouter() {
   // Show dashboard based on selected role (roles come from database via RoleContext)
   console.log(`🏠 Dashboard routing - activeRole:`, activeRole);
 
-  // For parent - route to ParentDashboard with ParentAppShell
+  // For parent - route to AI Concierge as default landing page
   if (activeRole === 'parent') {
-    console.log('🏠 Routing parent to ParentDashboard');
+    console.log('🏠 Routing parent to AI Concierge');
     return (
       <ParentAppShell key={`dashboard-${activeRole}`}>
-        <ParentDashboard />
+        <ParentConciergePage />
       </ParentAppShell>
     );
   }
@@ -521,6 +522,8 @@ function Router() {
       </Route>
       
       {/* Parent routes */}
+      <Route path="/parent/concierge" component={() => <ParentAppShell><ParentConciergePage /></ParentAppShell>} />
+      <Route path="/parent/home" component={() => <ParentAppShell><ParentDashboard /></ParentAppShell>} />
       <Route path="/parent/programs/browse" component={ProgramsBrowseRedirect} />
       <Route path="/parent/programs" component={ProgramsParentPage} />
       <Route path="/parent/programs/:rest*" component={ProgramsParentPage} />

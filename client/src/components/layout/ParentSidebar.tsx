@@ -18,6 +18,7 @@ import {
   Bell,
   FolderOpen,
   Shield,
+  Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -195,6 +196,11 @@ export default function ParentSidebar() {
   const navigationItems = [
     {
       href: "/dashboard",
+      title: "ASA Assistant",
+      icon: <Sparkles className="h-5 w-5" />,
+    },
+    {
+      href: "/parent/home",
       title: "Dashboard",
       icon: <Home className="h-5 w-5" />,
     },
