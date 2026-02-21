@@ -10,8 +10,8 @@ import { queryClient } from "@/lib/queryClient";
 import { CsvMappingDialog } from "@/components/admin/CsvMappingDialog";
 
 const CSV_TEMPLATE = `Class Name,Description,Category,Price,Capacity,Start Date,End Date,Grade Levels,Session Days,Duration (weeks),Sessions Per Week,Session Length (min),Start Time,End Time,Instructor,Location
-Arabic Language Arts,Learn Arabic reading and writing fundamentals,academic,150.00,20,09/01/2025,12/15/2025,K-5,"Monday,Wednesday",14,2,60,09:00,10:00,Staff Instructor,Main Campus
-Islamic Studies,Comprehensive Islamic studies curriculum,islamic_studies,125.00,25,09/01/2025,12/15/2025,3-8,"Tuesday,Thursday",14,2,90,10:30,12:00,Staff Instructor,Main Campus`;
+Math 101,Foundational math skills including arithmetic and problem solving,academic,150.00,20,09/01/2025,12/15/2025,K-5,"Monday,Wednesday",14,2,60,09:00,10:00,Staff Instructor,Main Campus
+Science Basics,Introduction to earth science and the scientific method,academic,125.00,25,09/01/2025,12/15/2025,3-8,"Tuesday,Thursday",14,2,90,10:30,12:00,Staff Instructor,Main Campus`;
 
 function processLine(line: string): string[] {
   const result: string[] = [];
