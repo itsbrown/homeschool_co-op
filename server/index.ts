@@ -136,6 +136,13 @@ app.use('/api/admin/upload/classes', fileUpload({
   createParentPath: true,
 }));
 
+app.use('/api/school-admin/upload/classes', fileUpload({
+  useTempFiles: false,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  abortOnLimit: true,
+  createParentPath: true,
+}));
+
 // Apply fileUpload middleware for knowledge base file uploads
 app.use('/api/file-upload', fileUpload({
   useTempFiles: false,

@@ -148,7 +148,7 @@ export default function SchoolClassesUploadPage() {
       formData.append("file", file);
       formData.append("mapping", JSON.stringify(mapping));
 
-      const response = await apiRequest('POST', '/api/admin/upload/classes', formData);
+      const response = await apiRequest('POST', '/api/school-admin/upload/classes', formData);
       const data = await response.json();
 
       const successCount = data.processedCount || 0;

@@ -3903,6 +3903,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // CSV Upload routes
   app.post('/api/admin/upload/classes', isAuthenticated, requireAdmin, csvUploadApi.uploadClassesCsv);
+  app.post('/api/school-admin/upload/classes', jwtCheck, requireRole(['schoolAdmin', 'superAdmin', 'admin']), csvUploadApi.uploadSchoolClassesCsv);
 
   // Children API endpoint for parents
   app.get("/api/children", jwtCheck, async (req, res) => {
