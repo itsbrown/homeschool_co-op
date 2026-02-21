@@ -1,9 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AdminShell } from "@/components/ui/admin-shell";
 import { useAuth } from "@/hooks/useAuth0";
 import { ClassCreationForm } from "../components/admin/ClassCreationForm";
 import { Route, Switch, useLocation, Link } from "wouter";
+
+const ClassesUploadPage = lazy(() => import("./admin/ClassesUploadPage"));
 import { apiRequest } from "../lib/queryClient";
 import { formatDate, formatCurrency } from "../lib/utils";
 import { useToast } from "../hooks/use-toast";
@@ -62,6 +64,7 @@ import {
   EyeOff,
   Upload,
   UserPlus,
+  Loader2,
 } from "lucide-react";
 
 export function AdminClassesPage() {
@@ -548,13 +551,9 @@ export function AdminClassesPage() {
           </Route>
           
           <Route path="/admin/classes/upload">
-            {({ matches }) => {
-              if (matches) {
-                const ClassesUploadPage = require("../pages/admin/ClassesUploadPage").default;
-                return <ClassesUploadPage />;
-              }
-              return null;
-            }}
+            <Suspense fallback={<div className="flex items-center justify-center py-12"><Loader2 className="h-6 w-6 animate-spin" /></div>}>
+              <ClassesUploadPage />
+            </Suspense>
           </Route>
         </Switch>
       </div>
