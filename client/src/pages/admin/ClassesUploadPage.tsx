@@ -84,6 +84,14 @@ export default function ClassesUploadPage() {
     reader.onload = (event) => {
       try {
         const csvText = event.target?.result as string;
+
+        if (csvText.trimStart().startsWith('{\\rtf')) {
+          throw new Error("This file is in RTF format, not CSV. Please re-export it as a .csv file from your spreadsheet app (File > Export > CSV).");
+        }
+        if (csvText.charCodeAt(0) === 0xD0 || csvText.startsWith('PK')) {
+          throw new Error("This file appears to be a Word or Excel document. Please export it as a .csv file instead.");
+        }
+
         const lines = csvText.split(/\r?\n/).filter(line => line.trim().length > 0);
 
         if (lines.length < 2) {
@@ -148,22 +156,8 @@ export default function ClassesUploadPage() {
       formData.append("file", file);
       formData.append("mapping", JSON.stringify(mapping));
 
-      const response = await fetch("/api/admin/upload/classes", {
-        method: "POST",
-        body: formData,
-        credentials: "include",
-      });
-
-      let data: any;
-      try {
-        data = await response.json();
-      } catch {
-        throw new Error(`Server error (${response.status}). Please try again.`);
-      }
-
-      if (!response.ok) {
-        throw new Error(data.message || "Failed to upload CSV file");
-      }
+      const response = await apiRequest('POST', '/api/admin/upload/classes', formData);
+      const data = await response.json();
 
       const successCount = data.processedCount || 0;
       const failedCount = data.failedCount || 0;

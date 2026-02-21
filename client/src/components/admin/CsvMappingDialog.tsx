@@ -154,7 +154,7 @@ export function CsvMappingDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col">
+      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileSpreadsheet className="h-5 w-5" />
@@ -167,7 +167,7 @@ export function CsvMappingDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 pr-4 -mr-4">
+        <ScrollArea className="flex-1 min-h-0 pr-4 -mr-4">
           <div className="space-y-6 pr-4">
             <div className="space-y-3">
               {CLASS_FIELDS.map((field) => (
