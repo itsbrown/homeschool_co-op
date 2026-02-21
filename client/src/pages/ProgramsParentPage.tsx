@@ -748,6 +748,9 @@ export default function ProgramsParentPage() {
               Browse and enroll your children in educational classes
             </p>
           </div>
+          <Button onClick={() => setLocation("/enroll")} size="lg" className="shrink-0">
+            Enroll Now
+          </Button>
         </div>
 
         <Switch>

@@ -22,6 +22,8 @@ import * as programEnrollmentsApi from "./api/program-enrollments";
 import * as csvUploadApi from "./api/csv-upload";
 import aiPricingRouter from "./api/ai-pricing";
 import adminClassesRouter from "./api/admin-classes";
+import adminSessionsRouter from "./api/admin-sessions";
+import sessionEnrollmentsRouter from "./api/session-enrollments";
 import adminRouter from "./api/admin";
 import adminEnrollmentsRouter from "./api/admin-enrollments";
 import adminEnrollmentPaymentRouter from "./api/admin-enrollment-payment";
@@ -2105,6 +2107,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/admin/enrollments", supabaseAuth, adminEnrollmentPaymentRouter); // Admin enrollment payment management (Supabase auth)
   app.use("/api/admin", adminRouter);
   app.use("/api/admin-classes", adminClassesRouter); // Add duplicate route for backwards compatibility
+  app.use("/api/admin/sessions", adminSessionsRouter); // Session management
+  app.use("/api/session-enrollments", sessionEnrollmentsRouter); // Session-based enrollment
   app.use("/api/admin-users", adminUsersRouter); // Admin user management
   app.use("/api/activities", activitiesRouter);
   app.use("/api/migration", migrationRouter);

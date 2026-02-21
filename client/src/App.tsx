@@ -121,6 +121,7 @@ const PaymentSuccess = lazy(() => import("@/pages/PaymentSuccess"));
 const PaymentHistoryPage = lazy(() => import("@/pages/PaymentHistoryPage"));
 const PlatformSubscriptionPlans = lazy(() => import("@/pages/PaymentPlans"));
 const ClassPaymentPlans = lazy(() => import("@/pages/ClassPaymentPlans"));
+const SessionEnrollmentPage = lazy(() => import("@/pages/SessionEnrollmentPage"));
 const SettingsPage = lazy(() => import("@/pages/SettingsPage"));
 const NotificationsPage = lazy(() => import("@/pages/NotificationsPage"));
 const EducatorClassesPage = lazy(() => import('./pages/educator/EducatorClassesPage'));
@@ -187,6 +188,7 @@ const RegistrationPaymentPage = lazy(() => import("@/pages/RegistrationPaymentPa
 const SchoolEditPage = lazy(() => import("./pages/schools/SchoolEditPage"));
 const SchoolClassesPage = lazy(() => import("./pages/schools/ClassesPage"));
 const SchoolClassCreationPage = lazy(() => import("./pages/schools/SchoolClassCreationPage"));
+const SessionsManagementPage = lazy(() => import("./pages/schools/SessionsManagementPage"));
 const SchoolClassDetailsPage = lazy(() => import("./pages/schools/SchoolClassDetailsPage"));
 const ClassRosterPage = lazy(() => import("./pages/schools/ClassRosterPage"));
 const StaffPage = lazy(() => import("./pages/schools/StaffPage"));
@@ -527,6 +529,8 @@ function Router() {
       <Route path="/parent/programs/browse" component={ProgramsBrowseRedirect} />
       <Route path="/parent/programs" component={ProgramsParentPage} />
       <Route path="/parent/programs/:rest*" component={ProgramsParentPage} />
+      <Route path="/enroll" component={SessionEnrollmentPage} />
+      <Route path="/parent/enroll" component={SessionEnrollmentPage} />
       <Route path="/parent/classes/:id" component={ParentClassDetailsPage} />
       <Route path="/parent/documents" component={MyDocumentsPage} />
       <Route path="/parent/documents/:id" component={DocumentDetailPage} />
@@ -606,6 +610,7 @@ function Router() {
       <Route path="/schools/classes/:id/edit" component={SchoolClassCreationPage} />
       <Route path="/schools/classes/:id/roster" component={ClassRosterPage} />
       <Route path="/schools/classes/:id/enrollments" component={SchoolClassEnrollmentsPage} />
+      <Route path="/schools/sessions" component={SessionsManagementPage} />
       <Route path="/schools/staff" component={StaffPage} />
       <Route path="/schools/staff/invite" component={StaffInvitePage} />
       <Route path="/schools/staff-hours" component={StaffHoursPage} />

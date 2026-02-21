@@ -74,6 +74,7 @@ const adminNavGroups: NavGroup[] = [
       { title: 'My School', href: '/schools/my-school', icon: School },
       { title: 'Locations', href: '/schools/locations', icon: MapPin },
       { title: 'Classes', href: '/schools/classes', icon: BookOpen },
+      { title: 'Sessions', href: '/schools/sessions', icon: Calendar },
       { title: 'Categories', href: '/schools/categories', icon: Tag },
       { title: 'Calendar', href: '/schools/calendar', icon: CalendarDays },
     ],

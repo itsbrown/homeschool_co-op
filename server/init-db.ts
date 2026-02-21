@@ -2107,6 +2107,52 @@ async function runMigrations() {
     `);
     console.log('✅ Migration completed: proration tracking columns added to program_enrollments');
     
+    // Create sessions table for enrollment periods
+    console.log('Running migration: Creating sessions table...');
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS sessions (
+        id SERIAL PRIMARY KEY,
+        school_id INTEGER NOT NULL REFERENCES schools(id),
+        name TEXT NOT NULL,
+        description TEXT,
+        start_date DATE NOT NULL,
+        end_date DATE NOT NULL,
+        status TEXT NOT NULL DEFAULT 'upcoming' CHECK (status IN ('upcoming', 'active', 'completed', 'cancelled')),
+        enrollment_open BOOLEAN NOT NULL DEFAULT false,
+        half_day_price INTEGER,
+        full_day_price INTEGER,
+        half_day_start_time TEXT,
+        half_day_end_time TEXT,
+        full_day_start_time TEXT,
+        full_day_end_time TEXT,
+        half_day_days TEXT[],
+        full_day_days TEXT[],
+        half_day_capacity INTEGER,
+        full_day_capacity INTEGER,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+      );
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_sessions_school_id ON sessions(school_id);
+    `);
+    console.log('✅ Migration completed: sessions table created');
+
+    // Add session_id column to classes table
+    console.log('Running migration: Adding session_id column to classes table...');
+    await db.execute(sql`
+      ALTER TABLE classes ADD COLUMN IF NOT EXISTS session_id INTEGER REFERENCES sessions(id);
+    `);
+    console.log('✅ Migration completed: session_id column added to classes table');
+
+    // Add session_id column to program_enrollments table
+    console.log('Running migration: Adding session_id column to program_enrollments table...');
+    await db.execute(sql`
+      ALTER TABLE program_enrollments ADD COLUMN IF NOT EXISTS session_id INTEGER REFERENCES sessions(id);
+    `);
+    console.log('✅ Migration completed: session_id column added to program_enrollments table');
+    
   } catch (fundraiserError) {
     const errorMessage = fundraiserError instanceof Error ? fundraiserError.message : String(fundraiserError);
     if (!errorMessage.includes('Database connection not available')) {

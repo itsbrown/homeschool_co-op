@@ -609,6 +609,9 @@ export const programEnrollments = pgTable("program_enrollments", {
   compBy: integer("comp_by").references(() => users.id),
   compAt: timestamp("comp_at"),
   
+  // Session enrollment tracking
+  sessionId: integer("session_id").references(() => sessions.id),
+  
   // Proration tracking (for mid-session enrollments with reduced pricing)
   proratedFromCents: integer("prorated_from_cents"), // Original full price before proration
   proratePercentage: integer("prorate_percentage"), // 0-100, percentage of class remaining
@@ -1631,6 +1634,9 @@ export const classes = pgTable("classes", {
   
   // Prorate option - when enabled, mid-session enrollments auto-calculate reduced pricing
   prorateEnabled: boolean("prorate_enabled").default(false).notNull(),
+  
+  // Session linkage - which enrollment session this class belongs to
+  sessionId: integer("session_id"),
 });
 
 export const insertClassSchema = createInsertSchema(classes)
@@ -1692,6 +1698,9 @@ export const insertClassSchema = createInsertSchema(classes)
     
     // Volunteer waiver (optional)
     volunteerWaiverId: z.number().nullable().optional(),
+    
+    // Session linkage (optional)
+    sessionId: z.number().nullable().optional(),
   });
 export type InsertClass = z.infer<typeof insertClassSchema>;
 export type Class = typeof classes.$inferSelect;
@@ -1700,6 +1709,40 @@ export type Class = typeof classes.$inferSelect;
 export const classesRelations = relations(classes, ({ one }) => ({
   instructor: one(users, { fields: [classes.instructorId], references: [users.id] }),
   curriculum: one(curricula, { fields: [classes.curriculumId], references: [curricula.id] }),
+}));
+
+// Sessions - top-level grouping for enrollment periods (Winter, Spring, Fall)
+export const sessions = pgTable("sessions", {
+  id: serial("id").primaryKey(),
+  schoolId: integer("school_id").notNull().references(() => schools.id),
+  name: text("name").notNull(),
+  description: text("description"),
+  startDate: date("start_date").notNull(),
+  endDate: date("end_date").notNull(),
+  status: text("status", { enum: ["upcoming", "active", "completed", "cancelled"] }).default("upcoming").notNull(),
+  enrollmentOpen: boolean("enrollment_open").default(false).notNull(),
+  halfDayPrice: integer("half_day_price"),
+  fullDayPrice: integer("full_day_price"),
+  halfDayStartTime: text("half_day_start_time"),
+  halfDayEndTime: text("half_day_end_time"),
+  fullDayStartTime: text("full_day_start_time"),
+  fullDayEndTime: text("full_day_end_time"),
+  halfDayDays: text("half_day_days").array(),
+  fullDayDays: text("full_day_days").array(),
+  halfDayCapacity: integer("half_day_capacity"),
+  fullDayCapacity: integer("full_day_capacity"),
+  sortOrder: integer("sort_order").default(0).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertSessionSchema = createInsertSchema(sessions)
+  .omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertSession = z.infer<typeof insertSessionSchema>;
+export type Session = typeof sessions.$inferSelect;
+
+export const sessionsRelations = relations(sessions, ({ one }) => ({
+  school: one(schools, { fields: [sessions.schoolId], references: [schools.id] }),
 }));
 
 // Class Inclusions - tracks which classes are included in other classes (e.g., Full Day includes Woodshop, Art, Music)
