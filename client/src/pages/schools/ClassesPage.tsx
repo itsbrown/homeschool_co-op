@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Loader2, PlusCircle, Search, Filter, FileDown, Calendar, Users, Clock, Settings, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { Loader2, PlusCircle, Search, Filter, FileDown, Calendar, Users, Clock, Settings, ArrowUpDown, ArrowUp, ArrowDown, Upload } from "lucide-react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -474,12 +474,20 @@ export default function SchoolClassesPage() {
           <div className="flex flex-col space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between space-y-2 sm:space-y-0">
               <p className="text-muted-foreground">Manage your school's classes and curricula</p>
-              <Link href="/schools/classes/new">
-                <Button data-testid="button-add-new-class">
-                  <PlusCircle className="mr-2 h-4 w-4" />
-                  Add New Class
-                </Button>
-              </Link>
+              <div className="flex items-center gap-2">
+                <Link href="/schools/classes/upload">
+                  <Button variant="outline" data-testid="button-upload-csv">
+                    <Upload className="mr-2 h-4 w-4" />
+                    Import CSV
+                  </Button>
+                </Link>
+                <Link href="/schools/classes/new">
+                  <Button data-testid="button-add-new-class">
+                    <PlusCircle className="mr-2 h-4 w-4" />
+                    Add New Class
+                  </Button>
+                </Link>
+              </div>
             </div>
 
             <Tabs value={activeTab} onValueChange={setActiveTab}>

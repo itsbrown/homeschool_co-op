@@ -188,6 +188,7 @@ const RegistrationPaymentPage = lazy(() => import("@/pages/RegistrationPaymentPa
 const SchoolEditPage = lazy(() => import("./pages/schools/SchoolEditPage"));
 const SchoolClassesPage = lazy(() => import("./pages/schools/ClassesPage"));
 const SchoolClassCreationPage = lazy(() => import("./pages/schools/SchoolClassCreationPage"));
+const SchoolClassesUploadPage = lazy(() => import("./pages/schools/SchoolClassesUploadPage"));
 const SessionsManagementPage = lazy(() => import("./pages/schools/SessionsManagementPage"));
 const SchoolClassDetailsPage = lazy(() => import("./pages/schools/SchoolClassDetailsPage"));
 const ClassRosterPage = lazy(() => import("./pages/schools/ClassRosterPage"));
@@ -606,6 +607,7 @@ function Router() {
       <Route path="/schools/my-school/edit" component={SchoolEditPage} />
       <Route path="/schools/classes" component={SchoolClassesPage} />
       <Route path="/schools/classes/new" component={SchoolClassCreationPage} />
+      <Route path="/schools/classes/upload" component={SchoolClassesUploadPage} />
       <Route path="/schools/classes/:id" component={SchoolClassDetailsPage} />
       <Route path="/schools/classes/:id/edit" component={SchoolClassCreationPage} />
       <Route path="/schools/classes/:id/roster" component={ClassRosterPage} />
