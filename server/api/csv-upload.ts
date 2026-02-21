@@ -5,6 +5,38 @@ import { ZodError } from "zod";
 import { formatZodError } from "../utils";
 import { UploadedFile } from "express-fileupload";
 
+function todayYMD(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function parseDateToYMD(dateStr: string | undefined | null): string | null {
+  if (!dateStr || !dateStr.trim()) return null;
+  const s = dateStr.trim();
+
+  const isoMatch = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (isoMatch) {
+    return `${isoMatch[1]}-${isoMatch[2].padStart(2, '0')}-${isoMatch[3].padStart(2, '0')}`;
+  }
+
+  const usMatch = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+  if (usMatch) {
+    return `${usMatch[3]}-${usMatch[1].padStart(2, '0')}-${usMatch[2].padStart(2, '0')}`;
+  }
+
+  return null;
+}
+
+function addMonthsYMD(dateStr: string, months: number): string {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const newMonth = m - 1 + months;
+  const newYear = y + Math.floor(newMonth / 12);
+  const finalMonth = (newMonth % 12) + 1;
+  const maxDay = new Date(newYear, finalMonth, 0).getDate();
+  const finalDay = Math.min(d, maxDay);
+  return `${newYear}-${String(finalMonth).padStart(2, '0')}-${String(finalDay).padStart(2, '0')}`;
+}
+
 interface CsvProcessOptions {
   instructorId: number;
   schoolId?: number | null;
@@ -96,25 +128,13 @@ async function processClassRecords(
         }
       }
 
-      let startDate: Date | null = null;
       const startDateStr = getValue('startDate', ['Start Date', 'Begin Date', 'Class Start']);
-      try {
-        startDate = startDateStr ? new Date(startDateStr) : new Date();
-      } catch (e) {
-        startDate = new Date();
-      }
+      const startDate = parseDateToYMD(startDateStr) || todayYMD();
 
-      let endDate: Date | null = null;
       const endDateStr = getValue('endDate', ['End Date', 'Finish Date', 'Class End']);
-      try {
-        endDate = endDateStr ? new Date(endDateStr) : new Date(startDate);
-        if (endDate <= startDate) {
-          endDate = new Date(startDate);
-          endDate.setMonth(endDate.getMonth() + 3);
-        }
-      } catch (e) {
-        endDate = new Date(startDate);
-        endDate.setMonth(endDate.getMonth() + 3);
+      let endDate = parseDateToYMD(endDateStr) || startDate;
+      if (endDate <= startDate) {
+        endDate = addMonthsYMD(startDate, 3);
       }
 
       let gradeLevels: string[] = [];
