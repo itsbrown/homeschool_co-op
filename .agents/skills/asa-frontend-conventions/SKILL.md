@@ -118,6 +118,7 @@ const mutation = useMutation({
 - **`SelectItem` crashes at runtime** → missing `value` prop on `<SelectItem>` → always include `value="..."` prop
 - **Cache invalidation doesn't work** → used template literal queryKey `` [`/api/classes/${id}`] `` → use array segments `['/api/classes', id]`
 - **API calls return 401 unexpectedly** → used bare `fetch()` without auth headers → use `apiRequest` or the default TanStack Query fetcher
+- **Hardcoded cultural/religious content in templates** → used specific subjects like "Arabic Language Arts" or "Islamic Studies" as sample data → always use neutral examples like "Math 101", "Science Basics"
 - **iOS Safari auto-zooms on input focus** → input `fontSize` is below 16px → add `style={{ fontSize: '16px' }}` to date/select inputs
 
 ## Best Practices
@@ -137,6 +138,7 @@ const mutation = useMutation({
 - Don't use `process.env` on the frontend — use `import.meta.env.VITE_*` (vars must be prefixed with `VITE_`)
 - Don't use `100vh` for full-height layouts — use `100dvh` or `svh` for iOS Safari viewport consistency
 - Don't use stock images as full-width section backgrounds — use gradients or solid colors instead
+- Don't hardcode cultural, religious, or demographic content in sample data, CSV templates, or placeholder text — always use neutral, generic examples
 
 ## Class Data Fetching Pattern (Important)
 

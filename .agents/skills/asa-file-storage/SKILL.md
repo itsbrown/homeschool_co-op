@@ -167,10 +167,12 @@ await apiRequest('POST', '/api/unified-uploads/upload', formData);
 - **pdf-parse crashes server on startup** → imported `pdf-parse` at top level → use dynamic import: `(await import('pdf-parse/lib/pdf-parse.js')).default` (see "PDF Text Extraction" section)
 - **PDF read as garbled text** → tried to read PDF with `fs.readFileSync(path, 'utf-8')` → PDFs are binary, must use `pdf-parse` to extract text
 - **KB file content empty** → assumed all files are in Object Storage or all are local → KB files exist in 3 formats (data URIs, `/uploads/`, Object Storage) — handle all three
+- **CSV mapping shows garbled RTF content** → user uploaded an RTF file (saved from Mac TextEdit) instead of a real CSV → validate file content before parsing: check for `{\rtf1` header (RTF), `PK` header (DOCX/XLSX), or `\xd0\xcf` (DOC) and show a clear error like "This file is in RTF format, not CSV. Please re-export as a .csv file."
 
 ## Best Practices
 
 ### Do
+- Always validate file content format before parsing — check for non-CSV headers (`{\rtf1`, `PK`, binary signatures) and reject with a user-friendly error
 - Always validate uploads against category config before requesting a presigned URL
 - Always use the presigned URL pattern — never proxy file uploads through the backend
 - Always set ACL policy after upload confirmation (public for logos/products, private for documents)

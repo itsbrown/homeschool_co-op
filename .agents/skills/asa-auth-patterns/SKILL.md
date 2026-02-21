@@ -154,6 +154,7 @@ if (!isAssigned) {
 | Symptom | Likely Cause | Fix |
 |---------|-------------|-----|
 | 401 error | Bare `fetch()` used without auth headers | Use `useQuery` or `apiRequest` |
+| 401 "No token provided" on file upload | Used bare `fetch()` with `FormData` — missing `Authorization` header | Use `apiRequest('POST', url, formData)` which auto-attaches the token, or manually get the token via `supabase.auth.getSession()` and add `Authorization: Bearer ${token}` header |
 | 401 error | Token expired, refresh failed | Check Supabase session, user may need to re-login |
 | 403 error | Role doesn't have permission | Check `user_roles` table for correct role at correct school |
 | 403 `REGISTRATION_REQUIRED` | Unregistered user tried OAuth | User needs school registration link first |
@@ -180,6 +181,7 @@ if (!isAssigned) {
 - Don't allow cross-school role switching — filter available roles by current school context
 - Don't store sensitive data in Supabase `user_metadata` — it can be modified by users
 - Don't forget to include `X-Active-Role` header — `apiRequest` does this automatically, bare `fetch()` does not
+- Don't use bare `fetch()` for file uploads to authenticated endpoints — use `apiRequest('POST', url, formData)` which handles `FormData`, auth token, and role header automatically
 - Don't redirect to login on every 401 — allow one token refresh retry first
 
 ### Multi-Tenant Security Checklist
