@@ -178,6 +178,33 @@ const actualRemainingBalance = CurrencyUtils.calculateBalance(totalCost, totalPa
 - For age calculations, use millisecond math with 365.25 divisor, not year subtraction
 - Always normalize dates to midnight (`setHours(0,0,0,0)`) before day-based comparisons
 
+### CRITICAL: Postgres `date` Columns Require YYYY-MM-DD Strings
+When inserting into Postgres `date` columns (e.g., `startDate`, `endDate` on `classes`), **always pass plain `YYYY-MM-DD` strings — never JavaScript `Date` objects**.
+
+**What goes wrong**: Passing a `Date` object to a Drizzle `date()` column causes the Postgres driver to throw `ERR_INVALID_ARG_TYPE`. If the error is caught silently (e.g., by a try/catch that falls back to in-memory storage), the data appears to save but disappears on page refresh because it never reached the database.
+
+**Safe pattern for parsing external date input** (CSV files, form submissions, API requests):
+```typescript
+function parseDateToYMD(dateStr: string | undefined | null): string | null {
+  if (!dateStr || !dateStr.trim()) return null;
+  const s = dateStr.trim();
+  const isoMatch = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (isoMatch) return `${isoMatch[1]}-${isoMatch[2].padStart(2,'0')}-${isoMatch[3].padStart(2,'0')}`;
+  const usMatch = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+  if (usMatch) return `${usMatch[3]}-${usMatch[1].padStart(2,'0')}-${usMatch[2].padStart(2,'0')}`;
+  return null;
+}
+```
+
+**Key rules**:
+- Parse date strings with regex to extract year/month/day components
+- Reassemble as a `YYYY-MM-DD` string directly
+- Never use `new Date(userInput)` as an intermediate step — timezone offsets shift the date, and the object type breaks the driver
+- Support both `MM/DD/YYYY` (US format from CSV/forms) and `YYYY-MM-DD` (ISO) inputs
+- For date arithmetic (e.g., "add 3 months"), operate on the string components numerically — see `addMonthsYMD()` in `server/api/csv-upload.ts`
+
+**Where this pattern is established**: `server/api/csv-upload.ts` (CSV date parsing), `server/api/school-admin.ts` (class creation passes date strings directly from `req.body`).
+
 ### Migration Safety
 - Always run `npm run db:push` to sync schema — never write raw SQL migrations
 - Test schema changes on development before pushing to production
