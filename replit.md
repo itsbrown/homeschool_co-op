@@ -65,6 +65,9 @@ The platform features a full-stack architecture designed for scalability, securi
 -   **Orphaned Data Patterns:** `scheduled_payments` with deleted `program_enrollments` are filtered out of admin views.
 -   **iOS/Safari Compatibility:** CSS adjustments (`@supports (-webkit-touch-callout: none)` and `font-size: 16px` on inputs) and `return_url` redirects for Stripe payments. Uses `100dvh`/`svh` for consistent iOS viewport handling.
 
+## Documentation
+-   **`docs/FUTURE_FEATURES.md`**: Searchable collection of fully designed future features with implementation plans, safeguards, and architecture decisions. Currently contains the Session-Based Enrollment Transition plan (F001).
+
 ## External Dependencies
 -   **Supabase**: Authentication.
 -   **Replit App Storage**: Object storage for file uploads.
