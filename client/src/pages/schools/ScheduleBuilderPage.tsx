@@ -92,9 +92,10 @@ export default function ScheduleBuilderPage() {
     queryKey: ["/api/admin/sessions"],
   });
 
-  const { data: classesList = [] } = useQuery<any[]>({
+  const { data: classesData } = useQuery<{ items: any[]; classes?: any[] }>({
     queryKey: ["/api/school-admin/classes"],
   });
+  const classesList = classesData?.items ?? classesData?.classes ?? [];
 
   const createTemplateMutation = useMutation({
     mutationFn: (data: any) => apiRequest("POST", "/api/schedule-builder/skeletons", data),
