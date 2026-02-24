@@ -34,6 +34,8 @@ import { errorNotificationService } from "./services/error-notification";
 import { registerObjectStorageRoutes } from "./replit_integrations/object_storage";
 import unifiedUploadsRouter from "./api/unified-uploads";
 import financialReportsRouter from "./api/financial-reports";
+import scheduleBuilderRouter from "./api/schedule-builder";
+import scheduleAiRouter from "./api/schedule-ai";
 
 // 🔒 PRODUCTION SAFETY: Verify NODE_ENV is set and log startup environment
 const currentEnv = process.env.NODE_ENV || 'development';
@@ -167,6 +169,8 @@ app.use("/api/account-import", accountImport);
 app.use("/api/user", userRolesRouter); // Multi-role management endpoints
 app.use("/api/telemetry/errors", errorTelemetryRouter);
 app.use("/api/unified-uploads", unifiedUploadsRouter);
+app.use("/api/schedule-builder", scheduleBuilderRouter);
+app.use("/api/schedule-ai", scheduleAiRouter);
 
 // Register object storage routes for serving uploaded files
 registerObjectStorageRoutes(app);

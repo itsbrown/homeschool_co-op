@@ -62,7 +62,12 @@ import {
   FundraiserOrderItem, InsertFundraiserOrderItem, fundraiserOrderItems,
   piiAccessLogs,
   PaymentReminderLog, InsertPaymentReminderLog, paymentReminderLogs,
-  ChildGuardian, InsertChildGuardian, childGuardians
+  ChildGuardian, InsertChildGuardian, childGuardians,
+  WeeklySkeleton, InsertWeeklySkeleton, weeklySkeletons,
+  SkeletonBlock, InsertSkeletonBlock, skeletonBlocks,
+  WeekPlan, InsertWeekPlan, weekPlans,
+  WeekPlanBlock, InsertWeekPlanBlock, weekPlanBlocks,
+  WeekPlanBlockHistory, InsertWeekPlanBlockHistory, weekPlanBlockHistory
 } from '../shared/schema';
 
 /**
@@ -5008,5 +5013,211 @@ export class DatabaseStorage implements IStorage {
       .where(eq(paymentReminderLogs.schoolId, schoolId))
       .orderBy(desc(paymentReminderLogs.sentAt))
       .limit(limit);
+  }
+
+  // Schedule Builder - Weekly Skeletons
+  async getWeeklySkeletonsBySchool(schoolId: number): Promise<WeeklySkeleton[]> {
+    const db = await getDb();
+    return await db.select().from(weeklySkeletons).where(eq(weeklySkeletons.schoolId, schoolId));
+  }
+
+  async getWeeklySkeletonById(id: number): Promise<WeeklySkeleton | undefined> {
+    const db = await getDb();
+    const [skeleton] = await db.select().from(weeklySkeletons).where(eq(weeklySkeletons.id, id));
+    return skeleton;
+  }
+
+  async createWeeklySkeleton(skeleton: InsertWeeklySkeleton): Promise<WeeklySkeleton> {
+    const db = await getDb();
+    const [newSkeleton] = await db.insert(weeklySkeletons).values(skeleton).returning();
+    return newSkeleton;
+  }
+
+  async updateWeeklySkeleton(id: number, skeleton: Partial<InsertWeeklySkeleton>): Promise<WeeklySkeleton | undefined> {
+    const db = await getDb();
+    const [updated] = await db.update(weeklySkeletons).set({ ...skeleton, updatedAt: new Date() }).where(eq(weeklySkeletons.id, id)).returning();
+    return updated;
+  }
+
+  async deleteWeeklySkeleton(id: number): Promise<void> {
+    const db = await getDb();
+    await db.delete(weeklySkeletons).where(eq(weeklySkeletons.id, id));
+  }
+
+  // Schedule Builder - Skeleton Blocks
+  async getSkeletonBlocksBySkeletonId(skeletonId: number): Promise<SkeletonBlock[]> {
+    const db = await getDb();
+    return await db.select().from(skeletonBlocks)
+      .where(eq(skeletonBlocks.skeletonId, skeletonId))
+      .orderBy(asc(skeletonBlocks.sortOrder), asc(skeletonBlocks.startTime));
+  }
+
+  async getSkeletonBlockById(id: number): Promise<SkeletonBlock | undefined> {
+    const db = await getDb();
+    const [block] = await db.select().from(skeletonBlocks).where(eq(skeletonBlocks.id, id));
+    return block;
+  }
+
+  async createSkeletonBlock(block: InsertSkeletonBlock): Promise<SkeletonBlock> {
+    const db = await getDb();
+    const [newBlock] = await db.insert(skeletonBlocks).values(block).returning();
+    return newBlock;
+  }
+
+  async updateSkeletonBlock(id: number, block: Partial<InsertSkeletonBlock>): Promise<SkeletonBlock | undefined> {
+    const db = await getDb();
+    const [updated] = await db.update(skeletonBlocks).set({ ...block, updatedAt: new Date() }).where(eq(skeletonBlocks.id, id)).returning();
+    return updated;
+  }
+
+  async deleteSkeletonBlock(id: number): Promise<void> {
+    const db = await getDb();
+    await db.delete(skeletonBlocks).where(eq(skeletonBlocks.id, id));
+  }
+
+  async reorderSkeletonBlocks(skeletonId: number, blockIds: number[]): Promise<void> {
+    const db = await getDb();
+    for (let i = 0; i < blockIds.length; i++) {
+      await db.update(skeletonBlocks)
+        .set({ sortOrder: i, updatedAt: new Date() })
+        .where(and(eq(skeletonBlocks.id, blockIds[i]), eq(skeletonBlocks.skeletonId, skeletonId)));
+    }
+  }
+
+  // Schedule Builder - Week Plans
+  async getWeekPlansBySkeletonId(skeletonId: number): Promise<WeekPlan[]> {
+    const db = await getDb();
+    return await db.select().from(weekPlans)
+      .where(eq(weekPlans.skeletonId, skeletonId))
+      .orderBy(asc(weekPlans.weekNumber));
+  }
+
+  async getWeekPlanById(id: number): Promise<WeekPlan | undefined> {
+    const db = await getDb();
+    const [plan] = await db.select().from(weekPlans).where(eq(weekPlans.id, id));
+    return plan;
+  }
+
+  async getPublishedWeekPlansBySchool(schoolId: number): Promise<WeekPlan[]> {
+    const db = await getDb();
+    return await db.select().from(weekPlans)
+      .where(and(eq(weekPlans.schoolId, schoolId), eq(weekPlans.status, 'published')))
+      .orderBy(asc(weekPlans.weekNumber));
+  }
+
+  async createWeekPlan(plan: InsertWeekPlan): Promise<WeekPlan> {
+    const db = await getDb();
+    const [newPlan] = await db.insert(weekPlans).values(plan).returning();
+    return newPlan;
+  }
+
+  async updateWeekPlan(id: number, plan: Partial<InsertWeekPlan>): Promise<WeekPlan | undefined> {
+    const db = await getDb();
+    const [updated] = await db.update(weekPlans).set({ ...plan, updatedAt: new Date() }).where(eq(weekPlans.id, id)).returning();
+    return updated;
+  }
+
+  async deleteWeekPlan(id: number): Promise<void> {
+    const db = await getDb();
+    await db.delete(weekPlans).where(eq(weekPlans.id, id));
+  }
+
+  async cloneWeekPlan(sourceWeekPlanId: number, newWeekNumber: number, newStartDate: string, createdBy: number): Promise<WeekPlan> {
+    const db = await getDb();
+    const [sourcePlan] = await db.select().from(weekPlans).where(eq(weekPlans.id, sourceWeekPlanId));
+    if (!sourcePlan) {
+      throw new Error(`Source week plan ${sourceWeekPlanId} not found`);
+    }
+    const [newPlan] = await db.insert(weekPlans).values({
+      skeletonId: sourcePlan.skeletonId,
+      sessionId: sourcePlan.sessionId,
+      schoolId: sourcePlan.schoolId,
+      weekNumber: newWeekNumber,
+      weekStartDate: newStartDate,
+      status: 'draft',
+      notes: sourcePlan.notes,
+      createdBy,
+    }).returning();
+
+    const sourceBlocks = await db.select().from(weekPlanBlocks).where(eq(weekPlanBlocks.weekPlanId, sourceWeekPlanId));
+    for (const block of sourceBlocks) {
+      await db.insert(weekPlanBlocks).values({
+        weekPlanId: newPlan.id,
+        skeletonBlockId: block.skeletonBlockId,
+        title: block.title,
+        description: block.description,
+        lessonLink: block.lessonLink,
+        attachments: block.attachments,
+        objectives: block.objectives,
+        groups: block.groups,
+        notes: block.notes,
+        isCompleted: false,
+        completedBy: null,
+        completedAt: null,
+        updatedBy: null,
+      });
+    }
+
+    return newPlan;
+  }
+
+  // Schedule Builder - Week Plan Blocks
+  async getWeekPlanBlocksByWeekPlanId(weekPlanId: number): Promise<WeekPlanBlock[]> {
+    const db = await getDb();
+    return await db.select().from(weekPlanBlocks).where(eq(weekPlanBlocks.weekPlanId, weekPlanId));
+  }
+
+  async getWeekPlanBlockById(id: number): Promise<WeekPlanBlock | undefined> {
+    const db = await getDb();
+    const [block] = await db.select().from(weekPlanBlocks).where(eq(weekPlanBlocks.id, id));
+    return block;
+  }
+
+  async createWeekPlanBlock(block: InsertWeekPlanBlock): Promise<WeekPlanBlock> {
+    const db = await getDb();
+    const [newBlock] = await db.insert(weekPlanBlocks).values(block).returning();
+    return newBlock;
+  }
+
+  async updateWeekPlanBlock(id: number, block: Partial<InsertWeekPlanBlock>, updatedBy: number): Promise<WeekPlanBlock | undefined> {
+    const db = await getDb();
+    const [currentBlock] = await db.select().from(weekPlanBlocks).where(eq(weekPlanBlocks.id, id));
+    if (currentBlock) {
+      await db.insert(weekPlanBlockHistory).values({
+        blockId: id,
+        previousTitle: currentBlock.title,
+        previousDescription: currentBlock.description,
+        previousGroups: currentBlock.groups,
+        previousAttachments: currentBlock.attachments,
+        previousObjectives: currentBlock.objectives,
+        changedBy: updatedBy,
+      });
+    }
+    const [updated] = await db.update(weekPlanBlocks).set({ ...block, updatedBy, updatedAt: new Date() }).where(eq(weekPlanBlocks.id, id)).returning();
+    return updated;
+  }
+
+  async deleteWeekPlanBlock(id: number): Promise<void> {
+    const db = await getDb();
+    await db.delete(weekPlanBlocks).where(eq(weekPlanBlocks.id, id));
+  }
+
+  async markBlockCompleted(id: number, completedBy: number): Promise<WeekPlanBlock | undefined> {
+    const db = await getDb();
+    const [updated] = await db.update(weekPlanBlocks).set({
+      isCompleted: true,
+      completedBy,
+      completedAt: new Date(),
+      updatedAt: new Date(),
+    }).where(eq(weekPlanBlocks.id, id)).returning();
+    return updated;
+  }
+
+  // Schedule Builder - Block History
+  async getBlockHistory(blockId: number): Promise<WeekPlanBlockHistory[]> {
+    const db = await getDb();
+    return await db.select().from(weekPlanBlockHistory)
+      .where(eq(weekPlanBlockHistory.blockId, blockId))
+      .orderBy(desc(weekPlanBlockHistory.changedAt));
   }
 }

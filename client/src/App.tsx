@@ -190,6 +190,9 @@ const SchoolClassesPage = lazy(() => import("./pages/schools/ClassesPage"));
 const SchoolClassCreationPage = lazy(() => import("./pages/schools/SchoolClassCreationPage"));
 const SchoolClassesUploadPage = lazy(() => import("./pages/schools/SchoolClassesUploadPage"));
 const SessionsManagementPage = lazy(() => import("./pages/schools/SessionsManagementPage"));
+const ScheduleBuilderPage = lazy(() => import("./pages/schools/ScheduleBuilderPage"));
+const WeekPlannerPage = lazy(() => import("./pages/schools/WeekPlannerPage"));
+const WeeklySchedulePage = lazy(() => import("./pages/parent/WeeklySchedulePage"));
 const SchoolClassDetailsPage = lazy(() => import("./pages/schools/SchoolClassDetailsPage"));
 const ClassRosterPage = lazy(() => import("./pages/schools/ClassRosterPage"));
 const StaffPage = lazy(() => import("./pages/schools/StaffPage"));
@@ -535,6 +538,7 @@ function Router() {
       <Route path="/parent/documents" component={MyDocumentsPage} />
       <Route path="/parent/documents/:id" component={DocumentDetailPage} />
       <Route path="/parent/assessments" component={MyAssessmentsPage} />
+      <Route path="/parent/weekly-schedule" component={WeeklySchedulePage} />
 
       {/* Educator routes - using EducatorAppShell for dedicated navigation */}
       <Route path="/educator" component={() => <EducatorAppShell><EducatorDashboardPage /></EducatorAppShell>} />
@@ -606,6 +610,8 @@ function Router() {
       <Route path="/schools/classes/:id/roster" component={ClassRosterPage} />
       <Route path="/schools/classes/:id/enrollments" component={SchoolClassEnrollmentsPage} />
       <Route path="/schools/sessions" component={SessionsManagementPage} />
+      <Route path="/schools/schedule-builder" component={ScheduleBuilderPage} />
+      <Route path="/schools/week-planner" component={WeekPlannerPage} />
       <Route path="/schools/staff" component={StaffPage} />
       <Route path="/schools/staff/invite" component={StaffInvitePage} />
       <Route path="/schools/staff-hours" component={StaffHoursPage} />

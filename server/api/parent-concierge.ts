@@ -114,6 +114,17 @@ const CONCIERGE_TOOLS: Anthropic.Tool[] = [
       required: ['firstName', 'lastName', 'age', 'gradeLevel'],
     },
   },
+  {
+    name: 'check_schedule',
+    description: 'Look up the current week\'s published schedule for a child. Shows what subjects, activities, and lesson topics are planned for each day.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        child_name: { type: 'string', description: 'Name of the child to check schedule for' },
+      },
+      required: ['child_name'],
+    },
+  },
 ];
 
 function buildSystemPrompt(parentName: string, contextSummary: string): string {
@@ -138,6 +149,7 @@ CAPABILITIES — USE TOOLS TO GET REAL DATA:
 5. **Child Registration**: Register new children by collecting their information. Use register_child tool.
 6. **Add to Cart**: Add classes to the parent's cart for checkout. Use add_to_cart tool.
 7. **School Information**: Answer questions about policies, curriculum, schedules using knowledge base. Use search_knowledge_base tool.
+8. **Schedule Check**: You can check what's on a child's published weekly schedule, including subjects, activities, and planned topics for each day. Use check_schedule tool.
 
 BEHAVIORAL RULES:
 1. Always use tools to fetch REAL data — never make up amounts, dates, or class names
@@ -193,6 +205,9 @@ const TOOL_ACTION_MAP: Record<string, SuggestedAction[]> = {
   ],
   search_knowledge_base: [
     { label: 'View Documents', path: '/parent/documents', icon: 'info' },
+  ],
+  check_schedule: [
+    { label: 'View Schedule', path: '/children', icon: 'children' },
   ],
 };
 
@@ -503,6 +518,87 @@ Grade: ${gradeLevel}
 Age: ${age}
 
 You can now enroll ${firstName} in classes. Would you like me to show you available classes for ${firstName}'s age group?`;
+      }
+
+      case 'check_schedule': {
+        const children = await storage.getChildrenByParentEmail(userEmail);
+        const childName = toolInput.child_name?.toLowerCase();
+        const child = children.find(c =>
+          `${c.firstName} ${c.lastName}`.toLowerCase().includes(childName) ||
+          c.firstName?.toLowerCase().includes(childName)
+        );
+
+        if (!child) {
+          return `Could not find a child named "${toolInput.child_name}" in your account. Your registered children are: ${children.map(c => `${c.firstName} ${c.lastName}`).join(', ') || 'none'}.`;
+        }
+
+        const childSchoolId = child.schoolId || schoolId;
+        if (!childSchoolId) {
+          return `${child.firstName} is not associated with a school yet, so there is no schedule to show.`;
+        }
+
+        const publishedPlans = await storage.getPublishedWeekPlansBySchool(childSchoolId);
+        if (!publishedPlans || publishedPlans.length === 0) {
+          return `No published schedules are available yet for ${child.firstName}'s school. The school may not have published this week's plan yet.`;
+        }
+
+        const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        const results: string[] = [];
+
+        for (const weekPlan of publishedPlans.slice(0, 3)) {
+          const planBlocks = await storage.getWeekPlanBlocksByWeekPlanId(weekPlan.id);
+          const skeleton = await storage.getWeeklySkeletonById(weekPlan.skeletonId);
+          if (!skeleton) continue;
+
+          const skeletonBlocks = await storage.getSkeletonBlocksBySkeletonId(skeleton.id);
+
+          const skeletonBlockMap = new Map<number, any>();
+          for (const sb of skeletonBlocks) {
+            skeletonBlockMap.set(sb.id, sb);
+          }
+
+          const dayGroups = new Map<number, Array<{ time: string; title: string; description: string }>>();
+
+          for (const block of planBlocks) {
+            const sb = skeletonBlockMap.get(block.skeletonBlockId);
+            if (!sb) continue;
+
+            const dayOfWeek = sb.dayOfWeek;
+            if (!dayGroups.has(dayOfWeek)) {
+              dayGroups.set(dayOfWeek, []);
+            }
+
+            dayGroups.get(dayOfWeek)!.push({
+              time: `${sb.startTime} - ${sb.endTime}`,
+              title: block.title || sb.defaultTitle || 'Untitled',
+              description: block.description || '',
+            });
+          }
+
+          let planResult = `📅 **Week of ${weekPlan.weekStartDate}** (${skeleton.name})\n`;
+
+          const sortedDays = Array.from(dayGroups.entries()).sort((a, b) => a[0] - b[0]);
+          for (const [dayOfWeek, blocks] of sortedDays) {
+            const dayName = dayNames[dayOfWeek] || `Day ${dayOfWeek}`;
+            planResult += `\n**${dayName}:**\n`;
+            const sortedBlocks = blocks.sort((a, b) => a.time.localeCompare(b.time));
+            for (const b of sortedBlocks) {
+              planResult += `  • ${b.time} — ${b.title}`;
+              if (b.description) {
+                planResult += `: ${b.description.substring(0, 100)}${b.description.length > 100 ? '...' : ''}`;
+              }
+              planResult += '\n';
+            }
+          }
+
+          results.push(planResult);
+        }
+
+        if (results.length === 0) {
+          return `No published schedules are available yet for ${child.firstName}'s school.`;
+        }
+
+        return `Schedule for **${child.firstName} ${child.lastName}**:\n\n${results.join('\n---\n\n')}`;
       }
 
       default:

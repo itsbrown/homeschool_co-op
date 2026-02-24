@@ -62,7 +62,12 @@ import {
   fundraiserOrders, type FundraiserOrder, type InsertFundraiserOrder,
   fundraiserOrderItems, type FundraiserOrderItem, type InsertFundraiserOrderItem,
   paymentReminderLogs, type PaymentReminderLog, type InsertPaymentReminderLog,
-  childGuardians, type ChildGuardian, type InsertChildGuardian
+  childGuardians, type ChildGuardian, type InsertChildGuardian,
+  weeklySkeletons, type WeeklySkeleton, type InsertWeeklySkeleton,
+  skeletonBlocks, type SkeletonBlock, type InsertSkeletonBlock,
+  weekPlans, type WeekPlan, type InsertWeekPlan,
+  weekPlanBlocks, type WeekPlanBlock, type InsertWeekPlanBlock,
+  weekPlanBlockHistory, type WeekPlanBlockHistory, type InsertWeekPlanBlockHistory
 } from "@shared/schema";
 import { eq, inArray } from 'drizzle-orm';
 import { getDb } from './db';
@@ -755,6 +760,41 @@ export interface IStorage {
   // Payment Reminder Log methods
   createPaymentReminderLog(log: InsertPaymentReminderLog): Promise<PaymentReminderLog>;
   getPaymentReminderLogsBySchool(schoolId: number, limit?: number): Promise<PaymentReminderLog[]>;
+
+  // Schedule Builder - Weekly Skeletons
+  getWeeklySkeletonsBySchool(schoolId: number): Promise<WeeklySkeleton[]>;
+  getWeeklySkeletonById(id: number): Promise<WeeklySkeleton | undefined>;
+  createWeeklySkeleton(skeleton: InsertWeeklySkeleton): Promise<WeeklySkeleton>;
+  updateWeeklySkeleton(id: number, skeleton: Partial<InsertWeeklySkeleton>): Promise<WeeklySkeleton | undefined>;
+  deleteWeeklySkeleton(id: number): Promise<void>;
+
+  // Schedule Builder - Skeleton Blocks
+  getSkeletonBlocksBySkeletonId(skeletonId: number): Promise<SkeletonBlock[]>;
+  getSkeletonBlockById(id: number): Promise<SkeletonBlock | undefined>;
+  createSkeletonBlock(block: InsertSkeletonBlock): Promise<SkeletonBlock>;
+  updateSkeletonBlock(id: number, block: Partial<InsertSkeletonBlock>): Promise<SkeletonBlock | undefined>;
+  deleteSkeletonBlock(id: number): Promise<void>;
+  reorderSkeletonBlocks(skeletonId: number, blockIds: number[]): Promise<void>;
+
+  // Schedule Builder - Week Plans
+  getWeekPlansBySkeletonId(skeletonId: number): Promise<WeekPlan[]>;
+  getWeekPlanById(id: number): Promise<WeekPlan | undefined>;
+  getPublishedWeekPlansBySchool(schoolId: number): Promise<WeekPlan[]>;
+  createWeekPlan(plan: InsertWeekPlan): Promise<WeekPlan>;
+  updateWeekPlan(id: number, plan: Partial<InsertWeekPlan>): Promise<WeekPlan | undefined>;
+  deleteWeekPlan(id: number): Promise<void>;
+  cloneWeekPlan(sourceWeekPlanId: number, newWeekNumber: number, newStartDate: string, createdBy: number): Promise<WeekPlan>;
+
+  // Schedule Builder - Week Plan Blocks
+  getWeekPlanBlocksByWeekPlanId(weekPlanId: number): Promise<WeekPlanBlock[]>;
+  getWeekPlanBlockById(id: number): Promise<WeekPlanBlock | undefined>;
+  createWeekPlanBlock(block: InsertWeekPlanBlock): Promise<WeekPlanBlock>;
+  updateWeekPlanBlock(id: number, block: Partial<InsertWeekPlanBlock>, updatedBy: number): Promise<WeekPlanBlock | undefined>;
+  deleteWeekPlanBlock(id: number): Promise<void>;
+  markBlockCompleted(id: number, completedBy: number): Promise<WeekPlanBlock | undefined>;
+
+  // Schedule Builder - Block History
+  getBlockHistory(blockId: number): Promise<WeekPlanBlockHistory[]>;
 }
 
 export class MemStorage implements IStorage {
@@ -7609,6 +7649,83 @@ import { DatabaseStorage } from "./dbStorage";
       }
       async getPaymentReminderLogsBySchool(schoolId: number, limit: number = 100): Promise<PaymentReminderLog[]> {
         return this.dbStorage.getPaymentReminderLogsBySchool(schoolId, limit);
+      }
+
+      // Schedule Builder methods
+      async getWeeklySkeletonsBySchool(schoolId: number): Promise<WeeklySkeleton[]> {
+        return this.dbStorage.getWeeklySkeletonsBySchool(schoolId);
+      }
+      async getWeeklySkeletonById(id: number): Promise<WeeklySkeleton | undefined> {
+        return this.dbStorage.getWeeklySkeletonById(id);
+      }
+      async createWeeklySkeleton(skeleton: InsertWeeklySkeleton): Promise<WeeklySkeleton> {
+        return this.dbStorage.createWeeklySkeleton(skeleton);
+      }
+      async updateWeeklySkeleton(id: number, skeleton: Partial<InsertWeeklySkeleton>): Promise<WeeklySkeleton | undefined> {
+        return this.dbStorage.updateWeeklySkeleton(id, skeleton);
+      }
+      async deleteWeeklySkeleton(id: number): Promise<void> {
+        return this.dbStorage.deleteWeeklySkeleton(id);
+      }
+      async getSkeletonBlocksBySkeletonId(skeletonId: number): Promise<SkeletonBlock[]> {
+        return this.dbStorage.getSkeletonBlocksBySkeletonId(skeletonId);
+      }
+      async getSkeletonBlockById(id: number): Promise<SkeletonBlock | undefined> {
+        return this.dbStorage.getSkeletonBlockById(id);
+      }
+      async createSkeletonBlock(block: InsertSkeletonBlock): Promise<SkeletonBlock> {
+        return this.dbStorage.createSkeletonBlock(block);
+      }
+      async updateSkeletonBlock(id: number, block: Partial<InsertSkeletonBlock>): Promise<SkeletonBlock | undefined> {
+        return this.dbStorage.updateSkeletonBlock(id, block);
+      }
+      async deleteSkeletonBlock(id: number): Promise<void> {
+        return this.dbStorage.deleteSkeletonBlock(id);
+      }
+      async reorderSkeletonBlocks(skeletonId: number, blockIds: number[]): Promise<void> {
+        return this.dbStorage.reorderSkeletonBlocks(skeletonId, blockIds);
+      }
+      async getWeekPlansBySkeletonId(skeletonId: number): Promise<WeekPlan[]> {
+        return this.dbStorage.getWeekPlansBySkeletonId(skeletonId);
+      }
+      async getWeekPlanById(id: number): Promise<WeekPlan | undefined> {
+        return this.dbStorage.getWeekPlanById(id);
+      }
+      async getPublishedWeekPlansBySchool(schoolId: number): Promise<WeekPlan[]> {
+        return this.dbStorage.getPublishedWeekPlansBySchool(schoolId);
+      }
+      async createWeekPlan(plan: InsertWeekPlan): Promise<WeekPlan> {
+        return this.dbStorage.createWeekPlan(plan);
+      }
+      async updateWeekPlan(id: number, plan: Partial<InsertWeekPlan>): Promise<WeekPlan | undefined> {
+        return this.dbStorage.updateWeekPlan(id, plan);
+      }
+      async deleteWeekPlan(id: number): Promise<void> {
+        return this.dbStorage.deleteWeekPlan(id);
+      }
+      async cloneWeekPlan(sourceWeekPlanId: number, newWeekNumber: number, newStartDate: string, createdBy: number): Promise<WeekPlan> {
+        return this.dbStorage.cloneWeekPlan(sourceWeekPlanId, newWeekNumber, newStartDate, createdBy);
+      }
+      async getWeekPlanBlocksByWeekPlanId(weekPlanId: number): Promise<WeekPlanBlock[]> {
+        return this.dbStorage.getWeekPlanBlocksByWeekPlanId(weekPlanId);
+      }
+      async getWeekPlanBlockById(id: number): Promise<WeekPlanBlock | undefined> {
+        return this.dbStorage.getWeekPlanBlockById(id);
+      }
+      async createWeekPlanBlock(block: InsertWeekPlanBlock): Promise<WeekPlanBlock> {
+        return this.dbStorage.createWeekPlanBlock(block);
+      }
+      async updateWeekPlanBlock(id: number, block: Partial<InsertWeekPlanBlock>, updatedBy: number): Promise<WeekPlanBlock | undefined> {
+        return this.dbStorage.updateWeekPlanBlock(id, block, updatedBy);
+      }
+      async deleteWeekPlanBlock(id: number): Promise<void> {
+        return this.dbStorage.deleteWeekPlanBlock(id);
+      }
+      async markBlockCompleted(id: number, completedBy: number): Promise<WeekPlanBlock | undefined> {
+        return this.dbStorage.markBlockCompleted(id, completedBy);
+      }
+      async getBlockHistory(blockId: number): Promise<WeekPlanBlockHistory[]> {
+        return this.dbStorage.getBlockHistory(blockId);
       }
 
       // Clear all data from storage (for testing)

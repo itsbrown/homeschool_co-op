@@ -29,7 +29,9 @@ import {
   Percent,
   ClipboardList,
   BarChart3,
-  HelpCircle
+  HelpCircle,
+  LayoutGrid,
+  CalendarDays
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -56,6 +58,16 @@ const schoolNavItems: {
     title: 'Classes',
     href: '/schools/classes',
     icon: BookOpen,
+  },
+  {
+    title: 'Schedule Builder',
+    href: '/schools/schedule-builder',
+    icon: LayoutGrid,
+  },
+  {
+    title: 'Week Planner',
+    href: '/schools/week-planner',
+    icon: CalendarDays,
   },
   {
     title: 'Staff',
@@ -156,6 +168,16 @@ const superAdminNavItems: {
     title: 'Classes',
     href: '/schools/classes',
     icon: BookOpen,
+  },
+  {
+    title: 'Schedule Builder',
+    href: '/schools/schedule-builder',
+    icon: LayoutGrid,
+  },
+  {
+    title: 'Week Planner',
+    href: '/schools/week-planner',
+    icon: CalendarDays,
   },
   {
     title: 'Staff',
@@ -280,6 +302,11 @@ const parentNavItems: {
     title: 'Programs',
     href: '/programs',
     icon: BookOpen,
+  },
+  {
+    title: 'Weekly Schedule',
+    href: '/parent/weekly-schedule',
+    icon: CalendarDays,
   },
   {
     title: 'Calendar',

@@ -76,6 +76,21 @@ export const uploadCategories: Record<string, UploadCategoryConfig> = {
     public: false,
     description: "User profile photos",
   },
+  scheduleResources: {
+    maxSizeBytes: 25 * 1024 * 1024,
+    allowedTypes: [
+      "application/pdf",
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "text/csv",
+      "image/png",
+      "image/jpeg",
+      "image/webp"
+    ],
+    folder: "schedule-resources",
+    public: false,
+    description: "Schedule builder lesson resources and attachments",
+  },
 };
 
 export type UploadCategory = keyof typeof uploadCategories;
