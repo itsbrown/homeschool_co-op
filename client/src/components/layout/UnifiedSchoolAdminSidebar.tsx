@@ -43,7 +43,8 @@ import {
   FolderOpen,
   ClipboardCheck,
   UserCheck,
-  HelpCircle
+  HelpCircle,
+  LayoutGrid
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -102,6 +103,8 @@ const adminNavGroups: NavGroup[] = [
     title: 'Academics',
     icon: ClipboardCheck,
     items: [
+      { title: 'Weekly Templates', href: '/schools/schedule-builder', icon: LayoutGrid },
+      { title: 'Week Planner', href: '/schools/week-planner', icon: CalendarDays },
       { title: 'Assessments', href: '/school-admin/assessments', icon: ClipboardCheck },
       { title: 'Attendance', href: '/school-admin/attendance', icon: UserCheck },
     ],

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { AdminShell } from "@/components/ui/admin-shell";
+import SchoolAdminLayout from "@/components/layout/SchoolAdminLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -75,7 +75,7 @@ const emptyBlockForm: BlockFormData = {
 
 export default function WeekPlannerPage() {
   const { toast } = useToast();
-  const [selectedSkeletonId, setSelectedSkeletonId] = useState<string>("");
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
   const [selectedWeekPlanId, setSelectedWeekPlanId] = useState<number | null>(null);
   const [newWeekDialog, setNewWeekDialog] = useState(false);
   const [newWeekNumber, setNewWeekNumber] = useState("");
@@ -95,20 +95,20 @@ export default function WeekPlannerPage() {
   const [gapsDialog, setGapsDialog] = useState(false);
   const [gapsResult, setGapsResult] = useState<any>(null);
 
-  const skeletonId = selectedSkeletonId ? parseInt(selectedSkeletonId) : null;
+  const templateId = selectedTemplateId ? parseInt(selectedTemplateId) : null;
 
-  const { data: skeletons = [], isLoading: skeletonsLoading } = useQuery<WeeklySkeleton[]>({
+  const { data: templates = [], isLoading: templatesLoading } = useQuery<WeeklySkeleton[]>({
     queryKey: ["/api/schedule-builder/skeletons"],
   });
 
   const { data: skeletonBlocks = [] } = useQuery<SkeletonBlock[]>({
-    queryKey: ["/api/schedule-builder/skeletons", skeletonId, "blocks"],
-    enabled: !!skeletonId,
+    queryKey: ["/api/schedule-builder/skeletons", templateId, "blocks"],
+    enabled: !!templateId,
   });
 
   const { data: weekPlans = [] } = useQuery<WeekPlan[]>({
-    queryKey: ["/api/schedule-builder/skeletons", skeletonId, "week-plans"],
-    enabled: !!skeletonId,
+    queryKey: ["/api/schedule-builder/skeletons", templateId, "week-plans"],
+    enabled: !!templateId,
   });
 
   const { data: selectedWeekData } = useQuery<WeekPlan & { blocks?: WeekPlanBlock[] }>({
@@ -128,7 +128,7 @@ export default function WeekPlannerPage() {
   const createWeekMutation = useMutation({
     mutationFn: (data: any) => apiRequest("POST", "/api/schedule-builder/week-plans", data),
     onSuccess: async (res) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/schedule-builder/skeletons", skeletonId, "week-plans"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/schedule-builder/skeletons", templateId, "week-plans"] });
       const newPlan = await res.json();
       setSelectedWeekPlanId(newPlan.id);
       toast({ title: "Week plan created" });
@@ -140,7 +140,7 @@ export default function WeekPlannerPage() {
   const updateWeekMutation = useMutation({
     mutationFn: ({ id, data }: { id: number; data: any }) => apiRequest("PATCH", `/api/schedule-builder/week-plans/${id}`, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/schedule-builder/skeletons", skeletonId, "week-plans"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/schedule-builder/skeletons", templateId, "week-plans"] });
       if (selectedWeekPlanId) queryClient.invalidateQueries({ queryKey: ["/api/schedule-builder/week-plans", selectedWeekPlanId] });
       toast({ title: "Week plan updated" });
     },
@@ -150,7 +150,7 @@ export default function WeekPlannerPage() {
   const deleteWeekMutation = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", `/api/schedule-builder/week-plans/${id}`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/schedule-builder/skeletons", skeletonId, "week-plans"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/schedule-builder/skeletons", templateId, "week-plans"] });
       if (selectedWeekPlanId === deleteWeekId) setSelectedWeekPlanId(null);
       toast({ title: "Week plan deleted" });
       setDeleteWeekId(null);
@@ -161,7 +161,7 @@ export default function WeekPlannerPage() {
   const cloneWeekMutation = useMutation({
     mutationFn: ({ id, data }: { id: number; data: any }) => apiRequest("POST", `/api/schedule-builder/week-plans/${id}/clone`, data),
     onSuccess: async (res) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/schedule-builder/skeletons", skeletonId, "week-plans"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/schedule-builder/skeletons", templateId, "week-plans"] });
       const cloned = await res.json();
       setSelectedWeekPlanId(cloned.id);
       toast({ title: "Week plan cloned" });
@@ -206,7 +206,7 @@ export default function WeekPlannerPage() {
       apiRequest("POST", "/api/schedule-ai/generate-week", data),
     onSuccess: () => {
       if (selectedWeekPlanId) queryClient.invalidateQueries({ queryKey: ["/api/schedule-builder/week-plans", selectedWeekPlanId] });
-      queryClient.invalidateQueries({ queryKey: ["/api/schedule-builder/skeletons", skeletonId, "week-plans"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/schedule-builder/skeletons", templateId, "week-plans"] });
       toast({ title: "Week plan generated with AI" });
     },
     onError: (err: any) => toast({ title: "AI generation failed", description: err.message, variant: "destructive" }),
@@ -287,9 +287,9 @@ export default function WeekPlannerPage() {
   };
 
   const handleCreateWeek = () => {
-    if (!newWeekNumber || !newWeekStartDate || !skeletonId) return;
+    if (!newWeekNumber || !newWeekStartDate || !templateId) return;
     createWeekMutation.mutate({
-      skeletonId,
+      skeletonId: templateId,
       weekNumber: parseInt(newWeekNumber),
       weekStartDate: newWeekStartDate,
       notes: newWeekNotes || null,
@@ -324,25 +324,25 @@ export default function WeekPlannerPage() {
 
   const activeDays = Object.keys(blocksByDay).map(Number).sort();
 
-  const selectedSkeleton = skeletons.find((s) => s.id === skeletonId);
+  const selectedTemplate = templates.find((s) => s.id === templateId);
   const nextWeekNumber = sortedWeekPlans.length > 0 ? sortedWeekPlans[sortedWeekPlans.length - 1].weekNumber + 1 : 1;
   const aiAvailable = aiStatus?.available ?? false;
 
   return (
-    <AdminShell>
-      <div className="flex flex-col space-y-6">
+    <SchoolAdminLayout pageTitle="Week Planner">
+      <div className="flex flex-col space-y-6 p-6">
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Multi-Week Planner</h1>
-            <p className="text-muted-foreground mt-1">Manage week-by-week lesson plans based on schedule skeletons</p>
+            <p className="text-muted-foreground mt-1">Manage week-by-week lesson plans based on weekly templates</p>
           </div>
           <div className="w-64">
-            <Select value={selectedSkeletonId} onValueChange={(v) => { setSelectedSkeletonId(v); setSelectedWeekPlanId(null); }}>
+            <Select value={selectedTemplateId} onValueChange={(v) => { setSelectedTemplateId(v); setSelectedWeekPlanId(null); }}>
               <SelectTrigger>
-                <SelectValue placeholder="Select a skeleton..." />
+                <SelectValue placeholder="Select a template..." />
               </SelectTrigger>
               <SelectContent>
-                {skeletons.map((s) => (
+                {templates.map((s) => (
                   <SelectItem key={s.id} value={String(s.id)}>{s.name} ({s.gradeLevel})</SelectItem>
                 ))}
               </SelectContent>
@@ -350,16 +350,16 @@ export default function WeekPlannerPage() {
           </div>
         </div>
 
-        {skeletonsLoading ? (
+        {templatesLoading ? (
           <div className="flex justify-center py-12">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
-        ) : !skeletonId ? (
+        ) : !templateId ? (
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-12 text-center">
               <Calendar className="h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-2">Select a Skeleton</h3>
-              <p className="text-muted-foreground">Choose a schedule skeleton above to manage weekly lesson plans.</p>
+              <h3 className="text-lg font-semibold mb-2">Select a Template</h3>
+              <p className="text-muted-foreground">Choose a weekly template above to manage weekly lesson plans.</p>
             </CardContent>
           </Card>
         ) : (
@@ -412,7 +412,7 @@ export default function WeekPlannerPage() {
                         <p className="text-sm text-muted-foreground mt-1 flex items-center gap-1">
                           <Calendar className="h-3.5 w-3.5" />
                           {formatDate(selectedWeekData.weekStartDate)}
-                          {selectedSkeleton && <span className="ml-2">• {selectedSkeleton.name}</span>}
+                          {selectedTemplate && <span className="ml-2">• {selectedTemplate.name}</span>}
                         </p>
                         {selectedWeekData.notes && (
                           <p className="text-sm text-muted-foreground mt-2">{selectedWeekData.notes}</p>
@@ -459,7 +459,7 @@ export default function WeekPlannerPage() {
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => skeletonId && generateWeekMutation.mutate({ skeletonId, weekNumber: selectedWeekData.weekNumber })}
+                              onClick={() => templateId && generateWeekMutation.mutate({ skeletonId: templateId, weekNumber: selectedWeekData.weekNumber })}
                               disabled={generateWeekMutation.isPending}
                             >
                               {generateWeekMutation.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Sparkles className="h-4 w-4 mr-1" />}
@@ -579,12 +579,12 @@ export default function WeekPlannerPage() {
                 {activeDays.length === 0 && (
                   <Card>
                     <CardContent className="py-8 text-center text-muted-foreground">
-                      No skeleton blocks found. Add blocks to your skeleton first.
+                      No template blocks found. Add blocks to your template first.
                     </CardContent>
                   </Card>
                 )}
               </div>
-            ) : skeletonId && (
+            ) : templateId && (
               <Card>
                 <CardContent className="py-12 text-center text-muted-foreground">
                   <ChevronRight className="h-8 w-8 mx-auto mb-2 opacity-50" />
@@ -600,7 +600,7 @@ export default function WeekPlannerPage() {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Create New Week Plan</DialogTitle>
-            <DialogDescription>Set up a new week based on the selected skeleton.</DialogDescription>
+            <DialogDescription>Set up a new week based on the selected template.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
@@ -887,6 +887,6 @@ export default function WeekPlannerPage() {
           )}
         </DialogContent>
       </Dialog>
-    </AdminShell>
+    </SchoolAdminLayout>
   );
 }

@@ -60,7 +60,7 @@ const schoolNavItems: {
     icon: BookOpen,
   },
   {
-    title: 'Schedule Builder',
+    title: 'Weekly Templates',
     href: '/schools/schedule-builder',
     icon: LayoutGrid,
   },
@@ -170,7 +170,7 @@ const superAdminNavItems: {
     icon: BookOpen,
   },
   {
-    title: 'Schedule Builder',
+    title: 'Weekly Templates',
     href: '/schools/schedule-builder',
     icon: LayoutGrid,
   },

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { AdminShell } from "@/components/ui/admin-shell";
+import SchoolAdminLayout from "@/components/layout/SchoolAdminLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -31,7 +31,7 @@ const BLOCK_TYPE_COLORS: Record<string, string> = {
   flexible: "bg-amber-100 text-amber-800",
 };
 
-interface SkeletonFormData {
+interface TemplateFormData {
   name: string;
   description: string;
   gradeLevel: string;
@@ -40,7 +40,7 @@ interface SkeletonFormData {
   isActive: boolean;
 }
 
-const emptySkeletonForm: SkeletonFormData = {
+const emptyTemplateForm: TemplateFormData = {
   name: "",
   description: "",
   gradeLevel: "",
@@ -73,18 +73,18 @@ const emptyBlockForm: BlockFormData = {
 
 export default function ScheduleBuilderPage() {
   const { toast } = useToast();
-  const [skeletonDialogOpen, setSkeletonDialogOpen] = useState(false);
-  const [editingSkeletonId, setEditingSkeletonId] = useState<number | null>(null);
-  const [skeletonForm, setSkeletonForm] = useState<SkeletonFormData>(emptySkeletonForm);
-  const [deleteSkeletonId, setDeleteSkeletonId] = useState<number | null>(null);
-  const [expandedSkeletonId, setExpandedSkeletonId] = useState<number | null>(null);
+  const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
+  const [editingTemplateId, setEditingTemplateId] = useState<number | null>(null);
+  const [templateForm, setTemplateForm] = useState<TemplateFormData>(emptyTemplateForm);
+  const [deleteTemplateId, setDeleteTemplateId] = useState<number | null>(null);
+  const [expandedTemplateId, setExpandedTemplateId] = useState<number | null>(null);
   const [blockDialogOpen, setBlockDialogOpen] = useState(false);
   const [editingBlockId, setEditingBlockId] = useState<number | null>(null);
   const [blockForm, setBlockForm] = useState<BlockFormData>(emptyBlockForm);
   const [deleteBlockInfo, setDeleteBlockInfo] = useState<{ skeletonId: number; blockId: number } | null>(null);
-  const [activeSkeletonForBlock, setActiveSkeletonForBlock] = useState<WeeklySkeleton | null>(null);
+  const [activeTemplateForBlock, setActiveTemplateForBlock] = useState<WeeklySkeleton | null>(null);
 
-  const { data: skeletons = [], isLoading } = useQuery<WeeklySkeleton[]>({
+  const { data: templates = [], isLoading } = useQuery<WeeklySkeleton[]>({
     queryKey: ["/api/schedule-builder/skeletons"],
   });
 
@@ -92,40 +92,44 @@ export default function ScheduleBuilderPage() {
     queryKey: ["/api/admin/sessions"],
   });
 
-  const createSkeletonMutation = useMutation({
+  const { data: classesList = [] } = useQuery<any[]>({
+    queryKey: ["/api/school-admin/classes"],
+  });
+
+  const createTemplateMutation = useMutation({
     mutationFn: (data: any) => apiRequest("POST", "/api/schedule-builder/skeletons", data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/schedule-builder/skeletons"] });
-      toast({ title: "Skeleton created" });
-      setSkeletonDialogOpen(false);
+      toast({ title: "Weekly template created" });
+      setTemplateDialogOpen(false);
     },
     onError: (err: any) => {
-      toast({ title: "Error creating skeleton", description: err.message, variant: "destructive" });
+      toast({ title: "Error creating template", description: err.message, variant: "destructive" });
     },
   });
 
-  const updateSkeletonMutation = useMutation({
+  const updateTemplateMutation = useMutation({
     mutationFn: ({ id, data }: { id: number; data: any }) => apiRequest("PATCH", `/api/schedule-builder/skeletons/${id}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/schedule-builder/skeletons"] });
-      toast({ title: "Skeleton updated" });
-      setSkeletonDialogOpen(false);
+      toast({ title: "Weekly template updated" });
+      setTemplateDialogOpen(false);
     },
     onError: (err: any) => {
-      toast({ title: "Error updating skeleton", description: err.message, variant: "destructive" });
+      toast({ title: "Error updating template", description: err.message, variant: "destructive" });
     },
   });
 
-  const deleteSkeletonMutation = useMutation({
+  const deleteTemplateMutation = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", `/api/schedule-builder/skeletons/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/schedule-builder/skeletons"] });
-      toast({ title: "Skeleton deleted" });
-      setDeleteSkeletonId(null);
-      if (expandedSkeletonId === deleteSkeletonId) setExpandedSkeletonId(null);
+      toast({ title: "Weekly template deleted" });
+      setDeleteTemplateId(null);
+      if (expandedTemplateId === deleteTemplateId) setExpandedTemplateId(null);
     },
     onError: (err: any) => {
-      toast({ title: "Error deleting skeleton", description: err.message, variant: "destructive" });
+      toast({ title: "Error deleting template", description: err.message, variant: "destructive" });
     },
   });
 
@@ -168,15 +172,15 @@ export default function ScheduleBuilderPage() {
     },
   });
 
-  const openCreateSkeleton = () => {
-    setEditingSkeletonId(null);
-    setSkeletonForm(emptySkeletonForm);
-    setSkeletonDialogOpen(true);
+  const openCreateTemplate = () => {
+    setEditingTemplateId(null);
+    setTemplateForm(emptyTemplateForm);
+    setTemplateDialogOpen(true);
   };
 
-  const openEditSkeleton = (s: WeeklySkeleton) => {
-    setEditingSkeletonId(s.id);
-    setSkeletonForm({
+  const openEditTemplate = (s: WeeklySkeleton) => {
+    setEditingTemplateId(s.id);
+    setTemplateForm({
       name: s.name,
       description: s.description || "",
       gradeLevel: s.gradeLevel,
@@ -184,31 +188,31 @@ export default function ScheduleBuilderPage() {
       sessionId: s.sessionId ? String(s.sessionId) : "",
       isActive: s.isActive,
     });
-    setSkeletonDialogOpen(true);
+    setTemplateDialogOpen(true);
   };
 
-  const handleSkeletonSubmit = () => {
-    if (!skeletonForm.name || !skeletonForm.gradeLevel || skeletonForm.operatingDays.length === 0) {
-      toast({ title: "Please fill in all required fields (name, grade level, and at least one operating day)", variant: "destructive" });
+  const handleTemplateSubmit = () => {
+    if (!templateForm.name || !templateForm.gradeLevel || templateForm.operatingDays.length === 0) {
+      toast({ title: "Please fill in all required fields (name, class, and at least one operating day)", variant: "destructive" });
       return;
     }
     const payload: any = {
-      name: skeletonForm.name,
-      description: skeletonForm.description || null,
-      gradeLevel: skeletonForm.gradeLevel,
-      operatingDays: skeletonForm.operatingDays,
-      isActive: skeletonForm.isActive,
+      name: templateForm.name,
+      description: templateForm.description || null,
+      gradeLevel: templateForm.gradeLevel,
+      operatingDays: templateForm.operatingDays,
+      isActive: templateForm.isActive,
     };
-    if (skeletonForm.sessionId) payload.sessionId = parseInt(skeletonForm.sessionId);
-    if (editingSkeletonId) {
-      updateSkeletonMutation.mutate({ id: editingSkeletonId, data: payload });
+    if (templateForm.sessionId) payload.sessionId = parseInt(templateForm.sessionId);
+    if (editingTemplateId) {
+      updateTemplateMutation.mutate({ id: editingTemplateId, data: payload });
     } else {
-      createSkeletonMutation.mutate(payload);
+      createTemplateMutation.mutate(payload);
     }
   };
 
   const toggleOperatingDay = (day: string) => {
-    setSkeletonForm((prev) => ({
+    setTemplateForm((prev) => ({
       ...prev,
       operatingDays: prev.operatingDays.includes(day)
         ? prev.operatingDays.filter((d) => d !== day)
@@ -216,10 +220,10 @@ export default function ScheduleBuilderPage() {
     }));
   };
 
-  const openCreateBlock = (skeleton: WeeklySkeleton) => {
-    setActiveSkeletonForBlock(skeleton);
+  const openCreateBlock = (template: WeeklySkeleton) => {
+    setActiveTemplateForBlock(template);
     setEditingBlockId(null);
-    const firstDay = skeleton.operatingDays?.[0];
+    const firstDay = template.operatingDays?.[0];
     setBlockForm({
       ...emptyBlockForm,
       dayOfWeek: firstDay ? String(DAY_NAME_TO_NUMBER[firstDay]) : "",
@@ -227,8 +231,8 @@ export default function ScheduleBuilderPage() {
     setBlockDialogOpen(true);
   };
 
-  const openCreateBlockForDay = (skeleton: WeeklySkeleton, dayNum: number) => {
-    setActiveSkeletonForBlock(skeleton);
+  const openCreateBlockForDay = (template: WeeklySkeleton, dayNum: number) => {
+    setActiveTemplateForBlock(template);
     setEditingBlockId(null);
     setBlockForm({
       ...emptyBlockForm,
@@ -237,8 +241,8 @@ export default function ScheduleBuilderPage() {
     setBlockDialogOpen(true);
   };
 
-  const openEditBlock = (skeleton: WeeklySkeleton, block: SkeletonBlock) => {
-    setActiveSkeletonForBlock(skeleton);
+  const openEditBlock = (template: WeeklySkeleton, block: SkeletonBlock) => {
+    setActiveTemplateForBlock(template);
     setEditingBlockId(block.id);
     setBlockForm({
       dayOfWeek: String(block.dayOfWeek),
@@ -254,7 +258,7 @@ export default function ScheduleBuilderPage() {
   };
 
   const handleBlockSubmit = () => {
-    if (!activeSkeletonForBlock) return;
+    if (!activeTemplateForBlock) return;
     if (!blockForm.dayOfWeek || !blockForm.startTime || !blockForm.endTime || !blockForm.blockType || !blockForm.defaultTitle) {
       toast({ title: "Please fill in all required fields", variant: "destructive" });
       return;
@@ -270,26 +274,26 @@ export default function ScheduleBuilderPage() {
       sortOrder: parseInt(blockForm.sortOrder) || 0,
     };
     if (editingBlockId) {
-      updateBlockMutation.mutate({ skeletonId: activeSkeletonForBlock.id, blockId: editingBlockId, data: payload });
+      updateBlockMutation.mutate({ skeletonId: activeTemplateForBlock.id, blockId: editingBlockId, data: payload });
     } else {
-      createBlockMutation.mutate({ skeletonId: activeSkeletonForBlock.id, data: payload });
+      createBlockMutation.mutate({ skeletonId: activeTemplateForBlock.id, data: payload });
     }
   };
 
-  const skeletonIsPending = createSkeletonMutation.isPending || updateSkeletonMutation.isPending;
+  const templateIsPending = createTemplateMutation.isPending || updateTemplateMutation.isPending;
   const blockIsPending = createBlockMutation.isPending || updateBlockMutation.isPending;
 
   return (
-    <AdminShell>
-      <div className="flex flex-col space-y-6">
+    <SchoolAdminLayout pageTitle="Weekly Templates">
+      <div className="flex flex-col space-y-6 p-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Schedule Skeleton Builder</h1>
+            <h1 className="text-3xl font-bold tracking-tight">Weekly Templates</h1>
             <p className="text-muted-foreground mt-1">Create and manage weekly schedule templates with time blocks</p>
           </div>
-          <Button onClick={openCreateSkeleton}>
+          <Button onClick={openCreateTemplate}>
             <Plus className="h-4 w-4 mr-2" />
-            New Skeleton
+            New Template
           </Button>
         </div>
 
@@ -297,59 +301,71 @@ export default function ScheduleBuilderPage() {
           <div className="flex justify-center py-12">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
           </div>
-        ) : skeletons.length === 0 ? (
+        ) : templates.length === 0 ? (
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-12 text-center">
               <LayoutGrid className="h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No Skeletons Yet</h3>
-              <p className="text-muted-foreground mb-4">Create a weekly schedule skeleton to define your time block structure.</p>
-              <Button onClick={openCreateSkeleton}>
+              <h3 className="text-lg font-semibold mb-2">No Templates Yet</h3>
+              <p className="text-muted-foreground mb-4">Create a weekly schedule template to define your time block structure.</p>
+              <Button onClick={openCreateTemplate}>
                 <Plus className="h-4 w-4 mr-2" />
-                Create First Skeleton
+                Create First Template
               </Button>
             </CardContent>
           </Card>
         ) : (
           <div className="grid gap-4">
-            {skeletons.map((skeleton) => (
-              <SkeletonCard
-                key={skeleton.id}
-                skeleton={skeleton}
+            {templates.map((template) => (
+              <TemplateCard
+                key={template.id}
+                template={template}
                 sessions={sessionsList}
-                isExpanded={expandedSkeletonId === skeleton.id}
-                onToggleExpand={() => setExpandedSkeletonId(expandedSkeletonId === skeleton.id ? null : skeleton.id)}
-                onEdit={() => openEditSkeleton(skeleton)}
-                onDelete={() => setDeleteSkeletonId(skeleton.id)}
-                onAddBlock={() => openCreateBlock(skeleton)}
-                onAddBlockForDay={(dayNum) => openCreateBlockForDay(skeleton, dayNum)}
-                onEditBlock={(block) => openEditBlock(skeleton, block)}
-                onDeleteBlock={(blockId) => setDeleteBlockInfo({ skeletonId: skeleton.id, blockId })}
+                classes={classesList}
+                isExpanded={expandedTemplateId === template.id}
+                onToggleExpand={() => setExpandedTemplateId(expandedTemplateId === template.id ? null : template.id)}
+                onEdit={() => openEditTemplate(template)}
+                onDelete={() => setDeleteTemplateId(template.id)}
+                onAddBlock={() => openCreateBlock(template)}
+                onAddBlockForDay={(dayNum) => openCreateBlockForDay(template, dayNum)}
+                onEditBlock={(block) => openEditBlock(template, block)}
+                onDeleteBlock={(blockId) => setDeleteBlockInfo({ skeletonId: template.id, blockId })}
               />
             ))}
           </div>
         )}
       </div>
 
-      <Dialog open={skeletonDialogOpen} onOpenChange={setSkeletonDialogOpen}>
+      <Dialog open={templateDialogOpen} onOpenChange={setTemplateDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{editingSkeletonId ? "Edit Skeleton" : "Create New Skeleton"}</DialogTitle>
+            <DialogTitle>{editingTemplateId ? "Edit Weekly Template" : "Create New Weekly Template"}</DialogTitle>
             <DialogDescription>
-              {editingSkeletonId ? "Update the weekly schedule skeleton." : "Define a new weekly schedule template."}
+              {editingTemplateId ? "Update the weekly schedule template." : "Define a new weekly schedule template."}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>Name *</Label>
-              <Input placeholder="e.g. K-2 Weekly Schedule" value={skeletonForm.name} onChange={(e) => setSkeletonForm({ ...skeletonForm, name: e.target.value })} />
+              <Input placeholder="e.g. K-2 Weekly Schedule" value={templateForm.name} onChange={(e) => setTemplateForm({ ...templateForm, name: e.target.value })} />
             </div>
             <div className="space-y-2">
               <Label>Description</Label>
-              <Textarea placeholder="Optional description" value={skeletonForm.description} onChange={(e) => setSkeletonForm({ ...skeletonForm, description: e.target.value })} />
+              <Textarea placeholder="Optional description" value={templateForm.description} onChange={(e) => setTemplateForm({ ...templateForm, description: e.target.value })} />
             </div>
             <div className="space-y-2">
-              <Label>Grade Level *</Label>
-              <Input placeholder="e.g. K-2, 3rd-5th, All Grades" value={skeletonForm.gradeLevel} onChange={(e) => setSkeletonForm({ ...skeletonForm, gradeLevel: e.target.value })} />
+              <Label>Class *</Label>
+              <Select value={templateForm.gradeLevel} onValueChange={(v) => setTemplateForm({ ...templateForm, gradeLevel: v })}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a class..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {classesList.map((cls: any) => (
+                    <SelectItem key={cls.id} value={cls.title || cls.name || `Class ${cls.id}`}>
+                      {cls.title || cls.name || `Class ${cls.id}`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label>Operating Days *</Label>
@@ -358,7 +374,7 @@ export default function ScheduleBuilderPage() {
                   <Button
                     key={day}
                     type="button"
-                    variant={skeletonForm.operatingDays.includes(day) ? "default" : "outline"}
+                    variant={templateForm.operatingDays.includes(day) ? "default" : "outline"}
                     size="sm"
                     onClick={() => toggleOperatingDay(day)}
                   >
@@ -369,7 +385,7 @@ export default function ScheduleBuilderPage() {
             </div>
             <div className="space-y-2">
               <Label>Session Link (optional)</Label>
-              <Select value={skeletonForm.sessionId} onValueChange={(v) => setSkeletonForm({ ...skeletonForm, sessionId: v === "none" ? "" : v })}>
+              <Select value={templateForm.sessionId} onValueChange={(v) => setTemplateForm({ ...templateForm, sessionId: v === "none" ? "" : v })}>
                 <SelectTrigger>
                   <SelectValue placeholder="No session linked" />
                 </SelectTrigger>
@@ -382,14 +398,14 @@ export default function ScheduleBuilderPage() {
               </Select>
             </div>
             <div className="flex items-center gap-3">
-              <Switch checked={skeletonForm.isActive} onCheckedChange={(v) => setSkeletonForm({ ...skeletonForm, isActive: v })} />
+              <Switch checked={templateForm.isActive} onCheckedChange={(v) => setTemplateForm({ ...templateForm, isActive: v })} />
               <Label>Active</Label>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setSkeletonDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleSkeletonSubmit} disabled={skeletonIsPending}>
-              {skeletonIsPending ? "Saving..." : editingSkeletonId ? "Update Skeleton" : "Create Skeleton"}
+            <Button variant="outline" onClick={() => setTemplateDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleTemplateSubmit} disabled={templateIsPending}>
+              {templateIsPending ? "Saving..." : editingTemplateId ? "Update Template" : "Create Template"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -400,7 +416,7 @@ export default function ScheduleBuilderPage() {
           <DialogHeader>
             <DialogTitle>{editingBlockId ? "Edit Block" : "Add Block"}</DialogTitle>
             <DialogDescription>
-              {editingBlockId ? "Update time block details." : "Add a new time block to the skeleton."}
+              {editingBlockId ? "Update time block details." : "Add a new time block to the template."}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -411,7 +427,7 @@ export default function ScheduleBuilderPage() {
                   <SelectValue placeholder="Select day" />
                 </SelectTrigger>
                 <SelectContent>
-                  {(activeSkeletonForBlock?.operatingDays || []).map((day) => (
+                  {(activeTemplateForBlock?.operatingDays || []).map((day) => (
                     <SelectItem key={day} value={String(DAY_NAME_TO_NUMBER[day])}>{day}</SelectItem>
                   ))}
                 </SelectContent>
@@ -462,16 +478,16 @@ export default function ScheduleBuilderPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={deleteSkeletonId !== null} onOpenChange={() => setDeleteSkeletonId(null)}>
+      <Dialog open={deleteTemplateId !== null} onOpenChange={() => setDeleteTemplateId(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete Skeleton</DialogTitle>
-            <DialogDescription>Are you sure you want to delete this skeleton? All associated blocks will also be deleted. This cannot be undone.</DialogDescription>
+            <DialogTitle>Delete Template</DialogTitle>
+            <DialogDescription>Are you sure you want to delete this weekly template? All associated blocks will also be deleted. This cannot be undone.</DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteSkeletonId(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={() => deleteSkeletonId && deleteSkeletonMutation.mutate(deleteSkeletonId)} disabled={deleteSkeletonMutation.isPending}>
-              {deleteSkeletonMutation.isPending ? "Deleting..." : "Delete"}
+            <Button variant="outline" onClick={() => setDeleteTemplateId(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={() => deleteTemplateId && deleteTemplateMutation.mutate(deleteTemplateId)} disabled={deleteTemplateMutation.isPending}>
+              {deleteTemplateMutation.isPending ? "Deleting..." : "Delete"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -491,13 +507,14 @@ export default function ScheduleBuilderPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </AdminShell>
+    </SchoolAdminLayout>
   );
 }
 
-function SkeletonCard({
-  skeleton,
+function TemplateCard({
+  template,
   sessions,
+  classes,
   isExpanded,
   onToggleExpand,
   onEdit,
@@ -507,8 +524,9 @@ function SkeletonCard({
   onEditBlock,
   onDeleteBlock,
 }: {
-  skeleton: WeeklySkeleton;
+  template: WeeklySkeleton;
   sessions: Session[];
+  classes: any[];
   isExpanded: boolean;
   onToggleExpand: () => void;
   onEdit: () => void;
@@ -518,7 +536,7 @@ function SkeletonCard({
   onEditBlock: (block: SkeletonBlock) => void;
   onDeleteBlock: (blockId: number) => void;
 }) {
-  const linkedSession = sessions.find((s) => s.id === skeleton.sessionId);
+  const linkedSession = sessions.find((s) => s.id === template.sessionId);
 
   return (
     <Card>
@@ -526,15 +544,15 @@ function SkeletonCard({
         <div className="flex items-start justify-between">
           <div className="flex-1 cursor-pointer" onClick={onToggleExpand}>
             <CardTitle className="text-xl flex items-center gap-2">
-              {skeleton.name}
-              <Badge className={skeleton.isActive ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"}>
-                {skeleton.isActive ? "Active" : "Inactive"}
+              {template.name}
+              <Badge className={template.isActive ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"}>
+                {template.isActive ? "Active" : "Inactive"}
               </Badge>
             </CardTitle>
             <CardDescription className="mt-1 flex items-center gap-3">
               <span className="flex items-center gap-1">
                 <BookOpen className="h-3.5 w-3.5" />
-                {skeleton.gradeLevel}
+                {template.gradeLevel}
               </span>
               {linkedSession && (
                 <span className="flex items-center gap-1">
@@ -543,9 +561,9 @@ function SkeletonCard({
                 </span>
               )}
             </CardDescription>
-            {skeleton.description && <p className="text-sm text-muted-foreground mt-1">{skeleton.description}</p>}
+            {template.description && <p className="text-sm text-muted-foreground mt-1">{template.description}</p>}
             <div className="flex flex-wrap gap-1.5 mt-2">
-              {(skeleton.operatingDays || []).map((day) => (
+              {(template.operatingDays || []).map((day) => (
                 <Badge key={day} variant="outline" className="text-xs">{day.slice(0, 3)}</Badge>
               ))}
             </div>
@@ -567,7 +585,7 @@ function SkeletonCard({
       {isExpanded && (
         <CardContent className="border-t pt-4">
           <BlockEditor
-            skeleton={skeleton}
+            template={template}
             onAddBlock={onAddBlock}
             onAddBlockForDay={onAddBlockForDay}
             onEditBlock={onEditBlock}
@@ -580,20 +598,20 @@ function SkeletonCard({
 }
 
 function BlockEditor({
-  skeleton,
+  template,
   onAddBlock,
   onAddBlockForDay,
   onEditBlock,
   onDeleteBlock,
 }: {
-  skeleton: WeeklySkeleton;
+  template: WeeklySkeleton;
   onAddBlock: () => void;
   onAddBlockForDay: (dayNum: number) => void;
   onEditBlock: (block: SkeletonBlock) => void;
   onDeleteBlock: (blockId: number) => void;
 }) {
   const { data: blocks = [], isLoading } = useQuery<SkeletonBlock[]>({
-    queryKey: ["/api/schedule-builder/skeletons", skeleton.id, "blocks"],
+    queryKey: ["/api/schedule-builder/skeletons", template.id, "blocks"],
   });
 
   if (isLoading) {
@@ -604,7 +622,7 @@ function BlockEditor({
     );
   }
 
-  const operatingDayNumbers = (skeleton.operatingDays || []).map((d) => DAY_NAME_TO_NUMBER[d]).sort((a, b) => a - b);
+  const operatingDayNumbers = (template.operatingDays || []).map((d) => DAY_NAME_TO_NUMBER[d]).sort((a, b) => a - b);
 
   const blocksByDay: Record<number, SkeletonBlock[]> = {};
   operatingDayNumbers.forEach((d) => { blocksByDay[d] = []; });
