@@ -1042,56 +1042,6 @@ router.post('/sessions/:id/cancel', async (req, res) => {
   }
 });
 
-// GET /api/educator/daily-flow/:classId - Get daily flow for a class
-router.get('/daily-flow/:classId', async (req, res) => {
-  try {
-    const userId = req.user?.id;
-    if (!userId) {
-      return res.status(401).json({ error: 'User ID not found' });
-    }
-
-    const classId = parseInt(req.params.classId);
-    const { date } = req.query;
-    const targetDate = date as string || new Date().toISOString().split('T')[0];
-    
-    console.log('[EducatorDashboard] Fetching daily flow for class:', classId, 'date:', targetDate);
-
-    // Verify educator is assigned to this class
-    const assignments = await storage.getEducatorClassAssignmentsByEducatorId(userId);
-    const assignment = assignments.find((a: EducatorClassAssignment) => a.classId === classId);
-
-    if (!assignment) {
-      return res.status(403).json({ 
-        error: 'You are not assigned to this class',
-        code: 'NOT_ASSIGNED'
-      });
-    }
-
-    // Get daily flow entries and filter by class and date
-    const allDailyFlowEntries = await storage.getDailyFlowEntries({ classId, startDate: targetDate, endDate: targetDate });
-    const dailyFlowEntry = allDailyFlowEntries.find((entry: any) => 
-      entry.classId === classId && entry.date === targetDate
-    );
-
-    if (!dailyFlowEntry) {
-      return res.json({
-        message: 'No daily flow entry found for this date',
-        classId,
-        date: targetDate,
-        entry: null
-      });
-    }
-
-    res.json({
-      classId,
-      date: targetDate,
-      entry: dailyFlowEntry
-    });
-  } catch (error) {
-    console.error('[EducatorDashboard] Error fetching daily flow:', error);
-    res.status(500).json({ error: 'Failed to fetch daily flow' });
-  }
-});
 
 // GET /api/educator/active-session - Get currently active session for this educator
 router.get('/active-session', async (req, res) => {

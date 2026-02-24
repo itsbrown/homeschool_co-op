@@ -20,7 +20,6 @@ import educatorRouter from "./api/educator";
 import authRouter from "./api/auth";
 import paymentImport from "./api/payment-import";
 import accountImport from "./api/account-import";
-import dailyFlowsRoutes from "./api/daily-flows";
 import aiPricingRouter from "./api/ai-pricing";
 import stripeMigrationRouter from "./api/stripe-migration";
 // REMOVED: stripeWebhookRouter - Insecure endpoint without signature verification
@@ -165,7 +164,6 @@ app.use("/api/stripe-migration", stripeMigrationRouter);
 // All Stripe webhook events are now routed through /api/stripe/webhook with proper signature verification
 app.use("/api/payment-import", paymentImport);
 app.use("/api/account-import", accountImport);
-app.use("/api/daily-flows", dailyFlowsRoutes);
 app.use("/api/user", userRolesRouter); // Multi-role management endpoints
 app.use("/api/telemetry/errors", errorTelemetryRouter);
 app.use("/api/unified-uploads", unifiedUploadsRouter);

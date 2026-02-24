@@ -2108,95 +2108,146 @@ export type Discount = typeof discounts.$inferSelect;
 export type InsertDiscountApplication = z.infer<typeof insertDiscountApplicationSchema>;
 export type DiscountApplication = typeof discountApplications.$inferSelect;
 
-// Daily Flow Tables
-// Daily Flow Templates - Reusable templates for scheduling
-export const dailyFlowTemplates = pgTable("daily_flow_templates", {
+// Schedule Builder Tables
+// Weekly Skeletons - Reusable weekly schedule structure per grade level
+export const weeklySkeletons = pgTable("weekly_skeletons", {
   id: serial("id").primaryKey(),
+  schoolId: integer("school_id").notNull().references(() => schools.id),
+  sessionId: integer("session_id").references(() => sessions.id),
   name: text("name").notNull(),
   description: text("description"),
-  schoolId: integer("school_id").notNull().references(() => schools.id),
   gradeLevel: text("grade_level").notNull(),
-  subject: text("subject").notNull(),
-  createdBy: text("created_by").notNull(), // Email of creator
+  operatingDays: text("operating_days").array().notNull(),
   isActive: boolean("is_active").default(true).notNull(),
+  createdBy: integer("created_by").notNull().references(() => users.id),
+  updatedBy: integer("updated_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-// Daily Flow Entries - Individual scheduled activities
-export const dailyFlowEntries = pgTable("daily_flow_entries", {
+// Skeleton Blocks - Time blocks within a weekly skeleton
+export const skeletonBlocks = pgTable("skeleton_blocks", {
   id: serial("id").primaryKey(),
-  templateId: integer("template_id").references(() => dailyFlowTemplates.id),
-  classId: integer("class_id").notNull().references(() => classes.id),
-  date: date("date").notNull(), // YYYY-MM-DD
-  startTime: text("start_time").notNull(), // HH:MM format
-  endTime: text("end_time").notNull(), // HH:MM format
-  subject: text("subject").notNull(),
-  lessonTitle: text("lesson_title").notNull(),
-  lessonDescription: text("lesson_description"),
+  skeletonId: integer("skeleton_id").notNull().references(() => weeklySkeletons.id, { onDelete: 'cascade' }),
+  dayOfWeek: integer("day_of_week").notNull(),
+  startTime: text("start_time").notNull(),
+  endTime: text("end_time").notNull(),
+  blockType: text("block_type", { enum: ["anchor", "curriculum", "flexible"] }).notNull(),
+  defaultTitle: text("default_title").notNull(),
+  defaultDescription: text("default_description"),
+  subjectArea: text("subject_area"),
+  sortOrder: integer("sort_order").default(0).notNull(),
+  createdBy: integer("created_by").notNull().references(() => users.id),
+  updatedBy: integer("updated_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Week Plans - A specific week's schedule based on a skeleton
+export const weekPlans = pgTable("week_plans", {
+  id: serial("id").primaryKey(),
+  skeletonId: integer("skeleton_id").notNull().references(() => weeklySkeletons.id, { onDelete: 'cascade' }),
+  sessionId: integer("session_id").references(() => sessions.id),
+  schoolId: integer("school_id").notNull().references(() => schools.id),
+  weekNumber: integer("week_number").notNull(),
+  weekStartDate: date("week_start_date").notNull(),
+  status: text("status", { enum: ["draft", "published", "completed"] }).default("draft").notNull(),
+  notes: text("notes"),
+  createdBy: integer("created_by").notNull().references(() => users.id),
+  updatedBy: integer("updated_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Week Plan Blocks - Individual block content for a specific week
+export const weekPlanBlocks = pgTable("week_plan_blocks", {
+  id: serial("id").primaryKey(),
+  weekPlanId: integer("week_plan_id").notNull().references(() => weekPlans.id, { onDelete: 'cascade' }),
+  skeletonBlockId: integer("skeleton_block_id").notNull().references(() => skeletonBlocks.id),
+  title: text("title"),
+  description: text("description"),
   lessonLink: text("lesson_link"),
-  materials: jsonb("materials").default([]), // Array of strings
-  objectives: jsonb("objectives").default([]), // Array of strings
+  attachments: jsonb("attachments").default([]),
+  objectives: jsonb("objectives").default([]),
+  groups: jsonb("groups").default([]),
   isCompleted: boolean("is_completed").default(false).notNull(),
-  completedBy: text("completed_by"), // Email of who completed it
+  completedBy: integer("completed_by").references(() => users.id),
   completedAt: timestamp("completed_at"),
   notes: text("notes"),
-  createdBy: text("created_by").notNull(), // Email of creator
-  lastModifiedBy: text("last_modified_by"),
+  updatedBy: integer("updated_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-// Daily Flow Schedules - Recurring patterns for automatic scheduling
-export const dailyFlowSchedules = pgTable("daily_flow_schedules", {
+// Week Plan Block History - Version tracking for block edits
+export const weekPlanBlockHistory = pgTable("week_plan_block_history", {
   id: serial("id").primaryKey(),
-  templateId: integer("template_id").notNull().references(() => dailyFlowTemplates.id),
-  classId: integer("class_id").notNull().references(() => classes.id),
-  dayOfWeek: integer("day_of_week").notNull(), // 0 = Sunday, 6 = Saturday
-  startTime: text("start_time").notNull(), // HH:MM format
-  endTime: text("end_time").notNull(), // HH:MM format
-  subject: text("subject").notNull(),
-  lessonTitle: text("lesson_title").notNull(),
-  lessonDescription: text("lesson_description"),
-  lessonLink: text("lesson_link"),
-  isActive: boolean("is_active").default(true).notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  blockId: integer("block_id").notNull().references(() => weekPlanBlocks.id, { onDelete: 'cascade' }),
+  previousTitle: text("previous_title"),
+  previousDescription: text("previous_description"),
+  previousGroups: jsonb("previous_groups"),
+  previousAttachments: jsonb("previous_attachments"),
+  previousObjectives: jsonb("previous_objectives"),
+  changedBy: integer("changed_by").notNull().references(() => users.id),
+  changedAt: timestamp("changed_at").defaultNow().notNull(),
 });
 
-// Define relationships for daily flow tables
-export const dailyFlowTemplateRelations = relations(dailyFlowTemplates, ({ one, many }) => ({
-  school: one(schools, { fields: [dailyFlowTemplates.schoolId], references: [schools.id] }),
-  entries: many(dailyFlowEntries),
-  schedules: many(dailyFlowSchedules),
+// Schedule Builder Relations
+export const weeklySkeletonRelations = relations(weeklySkeletons, ({ one, many }) => ({
+  school: one(schools, { fields: [weeklySkeletons.schoolId], references: [schools.id] }),
+  session: one(sessions, { fields: [weeklySkeletons.sessionId], references: [sessions.id] }),
+  creator: one(users, { fields: [weeklySkeletons.createdBy], references: [users.id] }),
+  blocks: many(skeletonBlocks),
+  weekPlans: many(weekPlans),
 }));
 
-export const dailyFlowEntryRelations = relations(dailyFlowEntries, ({ one }) => ({
-  template: one(dailyFlowTemplates, { fields: [dailyFlowEntries.templateId], references: [dailyFlowTemplates.id] }),
-  class: one(classes, { fields: [dailyFlowEntries.classId], references: [classes.id] }),
+export const skeletonBlockRelations = relations(skeletonBlocks, ({ one }) => ({
+  skeleton: one(weeklySkeletons, { fields: [skeletonBlocks.skeletonId], references: [weeklySkeletons.id] }),
+  creator: one(users, { fields: [skeletonBlocks.createdBy], references: [users.id] }),
 }));
 
-export const dailyFlowScheduleRelations = relations(dailyFlowSchedules, ({ one }) => ({
-  template: one(dailyFlowTemplates, { fields: [dailyFlowSchedules.templateId], references: [dailyFlowTemplates.id] }),
-  class: one(classes, { fields: [dailyFlowSchedules.classId], references: [classes.id] }),
+export const weekPlanRelations = relations(weekPlans, ({ one, many }) => ({
+  skeleton: one(weeklySkeletons, { fields: [weekPlans.skeletonId], references: [weeklySkeletons.id] }),
+  session: one(sessions, { fields: [weekPlans.sessionId], references: [sessions.id] }),
+  school: one(schools, { fields: [weekPlans.schoolId], references: [schools.id] }),
+  creator: one(users, { fields: [weekPlans.createdBy], references: [users.id] }),
+  blocks: many(weekPlanBlocks),
 }));
 
-// Daily Flow schemas for validation
-export const insertDailyFlowTemplateSchema = createInsertSchema(dailyFlowTemplates)
-  .omit({ id: true, createdAt: true, updatedAt: true });
+export const weekPlanBlockRelations = relations(weekPlanBlocks, ({ one, many }) => ({
+  weekPlan: one(weekPlans, { fields: [weekPlanBlocks.weekPlanId], references: [weekPlans.id] }),
+  skeletonBlock: one(skeletonBlocks, { fields: [weekPlanBlocks.skeletonBlockId], references: [skeletonBlocks.id] }),
+  completedByUser: one(users, { fields: [weekPlanBlocks.completedBy], references: [users.id] }),
+  history: many(weekPlanBlockHistory),
+}));
 
-export const insertDailyFlowEntrySchema = createInsertSchema(dailyFlowEntries)
-  .omit({ id: true, createdAt: true, updatedAt: true });
+export const weekPlanBlockHistoryRelations = relations(weekPlanBlockHistory, ({ one }) => ({
+  block: one(weekPlanBlocks, { fields: [weekPlanBlockHistory.blockId], references: [weekPlanBlocks.id] }),
+  changedByUser: one(users, { fields: [weekPlanBlockHistory.changedBy], references: [users.id] }),
+}));
 
-export const insertDailyFlowScheduleSchema = createInsertSchema(dailyFlowSchedules)
+// Schedule Builder schemas for validation
+export const insertWeeklySkeletonSchema = createInsertSchema(weeklySkeletons)
   .omit({ id: true, createdAt: true, updatedAt: true });
+export const insertSkeletonBlockSchema = createInsertSchema(skeletonBlocks)
+  .omit({ id: true, createdAt: true, updatedAt: true });
+export const insertWeekPlanSchema = createInsertSchema(weekPlans)
+  .omit({ id: true, createdAt: true, updatedAt: true });
+export const insertWeekPlanBlockSchema = createInsertSchema(weekPlanBlocks)
+  .omit({ id: true, createdAt: true, updatedAt: true });
+export const insertWeekPlanBlockHistorySchema = createInsertSchema(weekPlanBlockHistory)
+  .omit({ id: true });
 
-export type InsertDailyFlowTemplate = z.infer<typeof insertDailyFlowTemplateSchema>;
-export type DailyFlowTemplate = typeof dailyFlowTemplates.$inferSelect;
-export type InsertDailyFlowEntry = z.infer<typeof insertDailyFlowEntrySchema>;
-export type DailyFlowEntry = typeof dailyFlowEntries.$inferSelect;
-export type InsertDailyFlowSchedule = z.infer<typeof insertDailyFlowScheduleSchema>;
-export type DailyFlowSchedule = typeof dailyFlowSchedules.$inferSelect;
+export type InsertWeeklySkeleton = z.infer<typeof insertWeeklySkeletonSchema>;
+export type WeeklySkeleton = typeof weeklySkeletons.$inferSelect;
+export type InsertSkeletonBlock = z.infer<typeof insertSkeletonBlockSchema>;
+export type SkeletonBlock = typeof skeletonBlocks.$inferSelect;
+export type InsertWeekPlan = z.infer<typeof insertWeekPlanSchema>;
+export type WeekPlan = typeof weekPlans.$inferSelect;
+export type InsertWeekPlanBlock = z.infer<typeof insertWeekPlanBlockSchema>;
+export type WeekPlanBlock = typeof weekPlanBlocks.$inferSelect;
+export type InsertWeekPlanBlockHistory = z.infer<typeof insertWeekPlanBlockHistorySchema>;
+export type WeekPlanBlockHistory = typeof weekPlanBlockHistory.$inferSelect;
 
 // Custom Forms - Form Builder System
 export const customForms = pgTable("custom_forms", {
@@ -2447,7 +2498,7 @@ export const classSessions = pgTable("class_sessions", {
   
   // Session content
   notes: text("notes"), // Educator notes about the session
-  dailyFlowEntryId: integer("daily_flow_entry_id").references(() => dailyFlowEntries.id), // Link to lesson plan
+  dailyFlowEntryId: integer("daily_flow_entry_id"), // Legacy field - no longer FK referenced
   
   // QR Code Check-in
   qrToken: text("qr_token"),
@@ -2480,7 +2531,6 @@ export const classSessionsRelations = relations(classSessions, ({ one }) => ({
   school: one(schools, { fields: [classSessions.schoolId], references: [schools.id] }),
   educator: one(users, { fields: [classSessions.educatorId], references: [users.id] }),
   substituteEducator: one(users, { fields: [classSessions.substituteEducatorId], references: [users.id] }),
-  dailyFlowEntry: one(dailyFlowEntries, { fields: [classSessions.dailyFlowEntryId], references: [dailyFlowEntries.id] }),
 }));
 
 // Push Subscriptions table for web push notifications

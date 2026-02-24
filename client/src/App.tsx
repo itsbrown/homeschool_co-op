@@ -219,7 +219,6 @@ const SchoolApplicationStatusPage = lazy(() => import('./pages/SchoolApplication
 const LocationManagementPage = lazy(() => import("./pages/schools/LocationManagementPage"));
 const CategoriesManagementPage = lazy(() => import("./pages/schools/CategoriesManagementPage"));
 const NotificationManagementPage = lazy(() => import("@/pages/NotificationManagementPage"));
-const DailyFlowsPage = lazy(() => import("./pages/DailyFlows/DailyFlowsPage"));
 const EnrollmentsAdminPage = lazy(() => import("./pages/schools/EnrollmentsAdminPage"));
 
 function DashboardRouter() {
@@ -555,12 +554,6 @@ function Router() {
       <Route path="/educator/assessments" component={() => <EducatorAppShell><EducatorAssessmentsPage /></EducatorAppShell>} />
       <Route path="/educator/staff-guide" component={() => <EducatorAppShell><StaffGuidePage /></EducatorAppShell>} />
       
-      {/* Daily Flow routes */}
-      <Route path="/educator/daily-flows" component={() => <EducatorAppShell><DailyFlowsPage /></EducatorAppShell>} />
-      <Route path="/schools/daily-flows/templates" component={() => <AppShell><DailyFlowsPage /></AppShell>} />
-      <Route path="/schools/daily-flows/entries" component={() => <AppShell><DailyFlowsPage /></AppShell>} />
-      <Route path="/schools/daily-flows/reports" component={() => <AppShell><DailyFlowsPage /></AppShell>} />
-      <Route path="/schools/daily-flows" component={() => <AppShell><DailyFlowsPage /></AppShell>} />
       
       <Route path="/children" component={ChildrenPage} />
       <Route path="/children/view" component={ChildrenViewPage} />

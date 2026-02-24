@@ -24,7 +24,6 @@ import educatorRouter from "./api/educator";
 import authRouter from "./api/auth";
 import paymentImport from "./api/payment-import";
 import accountImport from "./api/account-import";
-import dailyFlowsRoutes from "./api/daily-flows";
 import aiPricingRouter from "./api/ai-pricing";
 import stripeMigrationRouter from "./api/stripe-migration";
 // REMOVED: stripeWebhookRouter - Consolidated into secure webhook-handler.ts
@@ -89,7 +88,6 @@ export async function createTestApp(): Promise<Application> {
   // REMOVED: /api/stripe-webhooks route - Consolidated into secure webhook-handler.ts
   app.use("/api/payment-import", paymentImport);
   app.use("/api/account-import", accountImport);
-  app.use("/api/daily-flows", dailyFlowsRoutes);
 
   // Register parent and admin routes
   app.use('/api/parent', parentRouter);

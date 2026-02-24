@@ -109,16 +109,6 @@ const schoolNavItems: {
     icon: Calendar,
   },
   {
-    title: 'Daily Flows',
-    href: '/schools/daily-flows',
-    icon: Clock,
-    subitems: [
-      { title: 'Templates', href: '/schools/daily-flows/templates' },
-      { title: 'View Entries', href: '/schools/daily-flows/entries' },
-      { title: 'Reports', href: '/schools/daily-flows/reports' }
-    ]
-  },
-  {
     title: 'Discounts',
     href: '/schools/discounts',
     icon: Percent,
@@ -256,11 +246,6 @@ const educatorNavItems: {
     title: 'Notifications',
     href: '/educator/notifications',
     icon: Bell,
-  },
-  {
-    title: 'Daily Flows',
-    href: '/educator/daily-flows',
-    icon: Clock,
   },
   {
     title: 'Settings',
