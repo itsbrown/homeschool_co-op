@@ -2152,6 +2152,97 @@ async function runMigrations() {
       ALTER TABLE program_enrollments ADD COLUMN IF NOT EXISTS session_id INTEGER REFERENCES sessions(id);
     `);
     console.log('✅ Migration completed: session_id column added to program_enrollments table');
+
+    // Create schedule builder tables
+    console.log('Running migration: Creating schedule builder tables...');
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS weekly_skeletons (
+        id SERIAL PRIMARY KEY,
+        school_id INTEGER NOT NULL,
+        class_id INTEGER,
+        title TEXT NOT NULL,
+        grade_level TEXT NOT NULL,
+        operating_days TEXT[] NOT NULL DEFAULT '{"Monday","Wednesday","Friday"}',
+        status TEXT NOT NULL DEFAULT 'draft',
+        created_by INTEGER,
+        updated_by INTEGER,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+      )
+    `);
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS skeleton_blocks (
+        id SERIAL PRIMARY KEY,
+        skeleton_id INTEGER NOT NULL REFERENCES weekly_skeletons(id) ON DELETE CASCADE,
+        day_of_week TEXT NOT NULL,
+        start_time TEXT NOT NULL,
+        end_time TEXT NOT NULL,
+        block_type TEXT NOT NULL DEFAULT 'curriculum',
+        subject TEXT NOT NULL,
+        default_title TEXT,
+        default_description TEXT,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+      )
+    `);
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS week_plans (
+        id SERIAL PRIMARY KEY,
+        skeleton_id INTEGER NOT NULL REFERENCES weekly_skeletons(id) ON DELETE CASCADE,
+        school_id INTEGER NOT NULL,
+        week_number INTEGER NOT NULL,
+        start_date TEXT NOT NULL,
+        end_date TEXT NOT NULL,
+        theme TEXT,
+        notes TEXT,
+        status TEXT NOT NULL DEFAULT 'draft',
+        created_by INTEGER,
+        updated_by INTEGER,
+        published_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+      )
+    `);
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS week_plan_blocks (
+        id SERIAL PRIMARY KEY,
+        week_plan_id INTEGER NOT NULL REFERENCES week_plans(id) ON DELETE CASCADE,
+        skeleton_block_id INTEGER NOT NULL REFERENCES skeleton_blocks(id) ON DELETE CASCADE,
+        custom_title TEXT,
+        custom_description TEXT,
+        content JSONB DEFAULT '{}',
+        materials TEXT[] DEFAULT '{}',
+        homework TEXT,
+        ai_generated BOOLEAN DEFAULT false,
+        ai_prompt TEXT,
+        resources TEXT[] DEFAULT '{}',
+        updated_by INTEGER,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+      )
+    `);
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS week_plan_block_history (
+        id SERIAL PRIMARY KEY,
+        week_plan_block_id INTEGER NOT NULL REFERENCES week_plan_blocks(id) ON DELETE CASCADE,
+        previous_title TEXT,
+        previous_description TEXT,
+        previous_content JSONB DEFAULT '{}',
+        previous_materials TEXT[] DEFAULT '{}',
+        previous_homework TEXT,
+        changed_by INTEGER,
+        change_reason TEXT,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL
+      )
+    `);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_weekly_skeletons_school ON weekly_skeletons(school_id)`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_skeleton_blocks_skeleton ON skeleton_blocks(skeleton_id)`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_week_plans_skeleton ON week_plans(skeleton_id)`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_week_plans_school ON week_plans(school_id)`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_week_plan_blocks_plan ON week_plan_blocks(week_plan_id)`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_week_plan_block_history_block ON week_plan_block_history(week_plan_block_id)`);
+    console.log('✅ Migration completed: schedule builder tables created');
     
   } catch (fundraiserError) {
     const errorMessage = fundraiserError instanceof Error ? fundraiserError.message : String(fundraiserError);

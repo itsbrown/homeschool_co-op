@@ -361,15 +361,19 @@ router.patch(
       if (req.body.status === "published" && existing.status !== "published") {
         try {
           const skeleton = await storage.getWeeklySkeletonById(existing.skeletonId);
-          const notification = await storage.createNotification({
+          const notifData: any = {
+            senderId: req.userId,
             schoolId: schoolId,
-            type: "schedule_published",
-            title: "Weekly Schedule Published",
-            message: `Week ${existing.weekNumber} schedule${skeleton ? ` for ${skeleton.gradeLevel}` : ''} has been published. View the updated lesson plan.`,
-            targetType: "school",
-            targetId: schoolId,
-            createdBy: req.userId,
-          });
+            type: "in_app",
+            subject: "Weekly Schedule Published",
+            content: `Week ${existing.weekNumber} schedule${skeleton ? ` for ${skeleton.gradeLevel}` : ''} has been published. View the updated lesson plan.`,
+            targetType: "all_parents",
+            targetData: { schoolId, weekNumber: existing.weekNumber, skeletonId: existing.skeletonId },
+            status: "sent",
+            scheduledFor: null,
+            expiresAt: null,
+          };
+          const notification = await storage.createNotification(notifData);
           console.log(`Schedule publish notification created: ${notification.id}`);
         } catch (notifError) {
           console.error("Error creating publish notification:", notifError);
