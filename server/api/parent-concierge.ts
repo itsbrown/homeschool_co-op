@@ -230,12 +230,26 @@ function buildSuggestedActions(toolsUsed: string[]): SuggestedAction[] {
   return actions.slice(0, 3);
 }
 
+interface CartAction {
+  classId: number;
+  childId: number;
+  childName: string;
+  className: string;
+  price: number;
+  paymentPlan: string;
+  description?: string;
+  startDate?: string;
+  endDate?: string;
+  schedule?: string;
+}
+
 async function executeToolCall(
   toolName: string,
   toolInput: any,
   userId: number,
   userEmail: string,
-  schoolId: number | null
+  schoolId: number | null,
+  cartActions?: CartAction[]
 ): Promise<string> {
   try {
     switch (toolName) {
@@ -461,36 +475,53 @@ We'll notify you when a spot opens up.`
         const spotsRemaining = (classItem.capacity || 0) - (classItem.enrollmentCount || 0);
         const isWaitlist = spotsRemaining <= 0;
 
-        const enrollmentData: any = {
-          childId,
-          childName: `${child.firstName} ${child.lastName}`,
-          parentEmail: userEmail,
-          parentId: userId,
-          classId: classId,
-          marketplaceClassId: classId,
-          className: classItem.title,
-          schoolId: classItem.schoolId || schoolId,
-          totalCost: classItem.price || 0,
-          totalPaid: 0,
-          remainingBalance: classItem.price || 0,
-          paymentPlan: paymentPlan || 'full',
-          status: isWaitlist ? 'waitlist' : 'pending_payment',
-          paymentStatus: 'pending',
-          waitlistPosition: isWaitlist ? (spotsRemaining * -1 + 1) : null,
-          enrollmentDate: new Date(),
-        };
-
-        await storage.createProgramEnrollment(enrollmentData);
-
         if (isWaitlist) {
+          const waitlistData: any = {
+            childId,
+            childName: `${child.firstName} ${child.lastName}`,
+            parentEmail: userEmail,
+            parentId: userId,
+            classId: classId,
+            marketplaceClassId: classId,
+            className: classItem.title,
+            schoolId: classItem.schoolId || schoolId,
+            totalCost: classItem.price || 0,
+            totalPaid: 0,
+            remainingBalance: classItem.price || 0,
+            paymentPlan: paymentPlan || 'full',
+            status: 'waitlist',
+            paymentStatus: 'pending',
+            waitlistPosition: (spotsRemaining * -1 + 1),
+            enrollmentDate: new Date(),
+          };
+
+          await storage.createProgramEnrollment(waitlistData);
+
           return `${child.firstName} has been added to the waitlist for **${classItem.title}**. The class is currently full — you'll be notified when a spot opens up.`;
         }
 
-        return `✅ **${classItem.title}** has been added to the cart for **${child.firstName}**!
-Price: $${((classItem.price || 0) / 100).toFixed(2)}
-Payment Plan: ${paymentPlan === 'biweekly' ? 'Biweekly Installments' : 'Pay in Full'}
+        const childName = `${child.firstName} ${child.lastName}`;
+        const price = classItem.price || 0;
 
-To complete the enrollment, please head to checkout. You can say "take me to checkout" or click **Browse on your own** and go to the Cart page.`;
+        if (cartActions) {
+          cartActions.push({
+            classId,
+            childId,
+            childName,
+            className: classItem.title || 'Unknown Class',
+            price,
+            paymentPlan: paymentPlan || 'full',
+            description: classItem.description || undefined,
+            startDate: classItem.startDate || undefined,
+            endDate: classItem.endDate || undefined,
+            schedule: classItem.schedule ? (typeof classItem.schedule === 'string' ? classItem.schedule : JSON.stringify(classItem.schedule)) : undefined,
+          });
+        }
+
+        return `✅ **${classItem.title}** has been added to the cart for **${child.firstName}**!
+Price: $${(price / 100).toFixed(2)}
+
+To complete the enrollment, please go to your **Cart** to review and checkout.`;
       }
 
       case 'register_child': {
@@ -879,6 +910,7 @@ Children: ${children.length > 0 ? children.map(c => `${c.firstName} ${c.lastName
 
     let fullResponse = '';
     const toolResults: Array<{ tool: string; result: string }> = [];
+    const cartActions: CartAction[] = [];
     let iterations = 0;
     const maxIterations = 5;
 
@@ -908,7 +940,8 @@ Children: ${children.length > 0 ? children.map(c => `${c.firstName} ${c.lastName
           toolUse.input,
           user.id,
           userEmail,
-          user.schoolId
+          user.schoolId,
+          cartActions
         );
 
         toolResults.push({ tool: toolUse.name, result });
@@ -946,6 +979,7 @@ Children: ${children.length > 0 ? children.map(c => `${c.firstName} ${c.lastName
       response: fullResponse,
       toolsUsed: toolResults.map(t => t.tool),
       suggestedActions,
+      cartActions: cartActions.length > 0 ? cartActions : undefined,
     });
   } catch (error: any) {
     console.error('Parent concierge chat error:', error);

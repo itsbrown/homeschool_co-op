@@ -108,8 +108,9 @@ const response = await anthropic.messages.create({
   4. `check_credits` — check available credit balance (volunteer, referral, etc.)
   5. `check_waitlist` — check waitlist positions for children
   6. `search_knowledge_base` — search school KB for policies, curriculum, schedules
-  7. `add_to_cart` — add class enrollment to cart (classId, childId, paymentPlan)
+  7. `add_to_cart` — add class to parent's cart (classId, childId, paymentPlan). Returns structured `cartActions` in the API response; the frontend `ParentConciergePage` picks these up and calls `addItem()` on `CartContext` so the item goes through the normal cart → checkout → Stripe flow. Does NOT create enrollments directly — AI is advisory only.
   8. `register_child` — register a new child (firstName, lastName, age, gradeLevel)
+- **Cart action flow**: When `add_to_cart` tool executes, the backend returns a `cartActions` array in the JSON response. The frontend processes these by calling `useCart().addItem()` for each action, which adds items to the real cart (localStorage + CartContext). The parent then proceeds to checkout normally.
 - **Context injected**: Parent name, children list, membership status, school name — built fresh for each message via `buildSystemPrompt()`
 - **Graceful fallback**: When Anthropic is unavailable, the UI shows a fallback card with quick-action links to browse classes, check payments, etc. instead of the chat interface
 - **XSS prevention**: AI response content must NEVER use `dangerouslySetInnerHTML`. Use safe React rendering with manual string parsing (see `SafeMessageContent` component)

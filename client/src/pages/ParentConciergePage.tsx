@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import { Link } from "wouter";
 import { cn } from "@/lib/utils";
+import { useCart } from "@/contexts/CartContext";
 
 interface SuggestedAction {
   label: string;
@@ -446,6 +447,7 @@ function SuggestedActionButtons({ actions }: { actions: SuggestedAction[] }) {
 
 export default function ParentConciergePage() {
   const { session } = useAuth();
+  const { addItem } = useCart();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -528,6 +530,22 @@ export default function ParentConciergePage() {
       if (data.error && data.fallbackResponse) {
         setMessages(prev => [...prev, { role: "assistant", content: data.fallbackResponse }]);
       } else {
+        if (data.cartActions && Array.isArray(data.cartActions)) {
+          for (const action of data.cartActions) {
+            addItem({
+              classId: action.classId,
+              childId: action.childId,
+              childName: action.childName,
+              className: action.className,
+              price: action.price,
+              description: action.description,
+              startDate: action.startDate,
+              endDate: action.endDate,
+              schedule: action.schedule,
+            });
+          }
+        }
+
         setMessages(prev => [...prev, {
           role: "assistant",
           content: data.response,
