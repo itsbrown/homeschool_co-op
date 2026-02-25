@@ -2243,6 +2243,58 @@ async function runMigrations() {
     await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_week_plan_blocks_plan ON week_plan_blocks(week_plan_id)`);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_week_plan_block_history_block ON week_plan_block_history(week_plan_block_id)`);
     console.log('✅ Migration completed: schedule builder tables created');
+
+    // Fix schema drift: align schedule builder tables with current Drizzle schema
+    console.log('Running migration: Fixing schedule builder schema drift...');
+
+    // weekly_skeletons: add missing columns
+    await db.execute(sql`ALTER TABLE weekly_skeletons ADD COLUMN IF NOT EXISTS session_id INTEGER REFERENCES sessions(id)`);
+    await db.execute(sql`ALTER TABLE weekly_skeletons ADD COLUMN IF NOT EXISTS name TEXT NOT NULL DEFAULT ''`);
+    await db.execute(sql`ALTER TABLE weekly_skeletons ADD COLUMN IF NOT EXISTS description TEXT`);
+    await db.execute(sql`ALTER TABLE weekly_skeletons ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT true`);
+
+    // skeleton_blocks: add missing columns
+    await db.execute(sql`ALTER TABLE skeleton_blocks ADD COLUMN IF NOT EXISTS subject_area TEXT`);
+    await db.execute(sql`ALTER TABLE skeleton_blocks ADD COLUMN IF NOT EXISTS created_by INTEGER`);
+    await db.execute(sql`ALTER TABLE skeleton_blocks ADD COLUMN IF NOT EXISTS updated_by INTEGER`);
+
+    // skeleton_blocks: convert day_of_week from TEXT to INTEGER (safe on empty table)
+    await db.execute(sql`
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'skeleton_blocks' AND column_name = 'day_of_week' AND data_type = 'text'
+        ) THEN
+          ALTER TABLE skeleton_blocks ALTER COLUMN day_of_week TYPE INTEGER
+            USING CASE WHEN day_of_week ~ '^[0-9]+$' THEN day_of_week::INTEGER ELSE 0 END;
+        END IF;
+      END $$
+    `);
+
+    // week_plans: add missing columns
+    await db.execute(sql`ALTER TABLE week_plans ADD COLUMN IF NOT EXISTS session_id INTEGER REFERENCES sessions(id)`);
+    await db.execute(sql`ALTER TABLE week_plans ADD COLUMN IF NOT EXISTS week_start_date DATE`);
+
+    // week_plan_blocks: add missing columns
+    await db.execute(sql`ALTER TABLE week_plan_blocks ADD COLUMN IF NOT EXISTS title TEXT`);
+    await db.execute(sql`ALTER TABLE week_plan_blocks ADD COLUMN IF NOT EXISTS description TEXT`);
+    await db.execute(sql`ALTER TABLE week_plan_blocks ADD COLUMN IF NOT EXISTS lesson_link TEXT`);
+    await db.execute(sql`ALTER TABLE week_plan_blocks ADD COLUMN IF NOT EXISTS attachments JSONB DEFAULT '[]'`);
+    await db.execute(sql`ALTER TABLE week_plan_blocks ADD COLUMN IF NOT EXISTS objectives JSONB DEFAULT '[]'`);
+    await db.execute(sql`ALTER TABLE week_plan_blocks ADD COLUMN IF NOT EXISTS groups JSONB DEFAULT '[]'`);
+    await db.execute(sql`ALTER TABLE week_plan_blocks ADD COLUMN IF NOT EXISTS is_completed BOOLEAN NOT NULL DEFAULT false`);
+    await db.execute(sql`ALTER TABLE week_plan_blocks ADD COLUMN IF NOT EXISTS completed_by INTEGER`);
+    await db.execute(sql`ALTER TABLE week_plan_blocks ADD COLUMN IF NOT EXISTS completed_at TIMESTAMP`);
+    await db.execute(sql`ALTER TABLE week_plan_blocks ADD COLUMN IF NOT EXISTS notes TEXT`);
+
+    // week_plan_block_history: add missing columns
+    await db.execute(sql`ALTER TABLE week_plan_block_history ADD COLUMN IF NOT EXISTS block_id INTEGER REFERENCES week_plan_blocks(id) ON DELETE CASCADE`);
+    await db.execute(sql`ALTER TABLE week_plan_block_history ADD COLUMN IF NOT EXISTS previous_groups JSONB`);
+    await db.execute(sql`ALTER TABLE week_plan_block_history ADD COLUMN IF NOT EXISTS previous_attachments JSONB`);
+    await db.execute(sql`ALTER TABLE week_plan_block_history ADD COLUMN IF NOT EXISTS changed_at TIMESTAMP DEFAULT NOW() NOT NULL`);
+
+    console.log('✅ Migration completed: schedule builder schema drift fixed');
     
   } catch (fundraiserError) {
     const errorMessage = fundraiserError instanceof Error ? fundraiserError.message : String(fundraiserError);
