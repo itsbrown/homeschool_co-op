@@ -1,7 +1,7 @@
 import express from 'express';
 import { storage } from '../storage';
 import { getDb } from '../db';
-import { payments, scheduledPayments, programEnrollments, users, refunds, schools } from '@shared/schema';
+import { payments, scheduledPayments, programEnrollments, users, refunds, schools, classes } from '@shared/schema';
 import { eq, and, gte, lte, sql, desc, isNull, not, inArray } from 'drizzle-orm';
 import { generateCFOInsights, isAIAvailable } from '../services/cfoInsightsService';
 import { reconcileSchoolScheduledPayments, cleanupScheduledPayments, generateMissingScheduledPayments } from '../services/scheduled-payment-reconciliation';
@@ -579,6 +579,96 @@ router.get('/recent-transactions', async (req: any, res) => {
   } catch (error) {
     console.error('Error fetching recent transactions:', error);
     res.status(500).json({ error: 'Failed to fetch recent transactions' });
+  }
+});
+
+router.get('/class-breakdown', async (req: any, res) => {
+  try {
+    const result = await getSchoolAdminWithFeatureCheck(req, 'financialReports');
+    if (isError(result)) {
+      return res.status(result.status).json({ error: result.error });
+    }
+    const { schoolId } = result;
+
+    const startDateParam = req.query.startDate as string | undefined;
+    const endDateParam = req.query.endDate as string | undefined;
+
+    const db = await getDb();
+
+    const conditions: any[] = [
+      eq(programEnrollments.schoolId, schoolId),
+      not(inArray(programEnrollments.status, ['cancelled', 'waitlist', 'withdrawn', 'failed'])),
+    ];
+    if (startDateParam) conditions.push(gte(classes.startDate, startDateParam));
+    if (endDateParam) conditions.push(lte(classes.startDate, endDateParam));
+
+    const rows = await db
+      .select({
+        className: programEnrollments.className,
+        marketplaceClassId: programEnrollments.marketplaceClassId,
+        totalCost: programEnrollments.totalCost,
+        totalPaid: programEnrollments.totalPaid,
+        remainingBalance: programEnrollments.remainingBalance,
+        compAmountCents: programEnrollments.compAmountCents,
+        classStartDate: classes.startDate,
+        classEndDate: classes.endDate,
+      })
+      .from(programEnrollments)
+      .leftJoin(classes, eq(programEnrollments.marketplaceClassId, classes.id))
+      .where(and(...conditions));
+
+    // Group by class name in JS (handles both school_class and marketplace types via denormalized className)
+    const classMap = new Map<string, {
+      className: string;
+      classStartDate: string | null;
+      classEndDate: string | null;
+      enrollmentCount: number;
+      totalExpectedCents: number;
+      totalCollectedCents: number;
+      totalOutstandingCents: number;
+      totalCompedCents: number;
+    }>();
+
+    for (const row of rows) {
+      const key = row.className || 'Unknown Class';
+      if (!classMap.has(key)) {
+        classMap.set(key, {
+          className: key,
+          classStartDate: row.classStartDate ?? null,
+          classEndDate: row.classEndDate ?? null,
+          enrollmentCount: 0,
+          totalExpectedCents: 0,
+          totalCollectedCents: 0,
+          totalOutstandingCents: 0,
+          totalCompedCents: 0,
+        });
+      }
+      const entry = classMap.get(key)!;
+      entry.enrollmentCount++;
+      entry.totalExpectedCents += row.totalCost ?? 0;
+      entry.totalCollectedCents += row.totalPaid ?? 0;
+      entry.totalOutstandingCents += Math.max(0, row.remainingBalance ?? ((row.totalCost ?? 0) - (row.totalPaid ?? 0)));
+      entry.totalCompedCents += row.compAmountCents ?? 0;
+    }
+
+    const classList = Array.from(classMap.values()).sort((a, b) => {
+      if (!a.classStartDate && !b.classStartDate) return a.className.localeCompare(b.className);
+      if (!a.classStartDate) return 1;
+      if (!b.classStartDate) return -1;
+      return new Date(b.classStartDate).getTime() - new Date(a.classStartDate).getTime();
+    });
+
+    const totals = classList.reduce((acc, c) => ({
+      totalExpectedCents: acc.totalExpectedCents + c.totalExpectedCents,
+      totalCollectedCents: acc.totalCollectedCents + c.totalCollectedCents,
+      totalOutstandingCents: acc.totalOutstandingCents + c.totalOutstandingCents,
+      totalCompedCents: acc.totalCompedCents + c.totalCompedCents,
+    }), { totalExpectedCents: 0, totalCollectedCents: 0, totalOutstandingCents: 0, totalCompedCents: 0 });
+
+    res.json({ classes: classList, totals });
+  } catch (error) {
+    console.error('Error fetching class breakdown:', error);
+    res.status(500).json({ error: 'Failed to fetch class breakdown' });
   }
 });
 

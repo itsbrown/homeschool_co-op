@@ -160,6 +160,33 @@ interface GroupedBalance {
   balances: OutstandingBalance[];
 }
 
+interface ClassBreakdownItem {
+  className: string;
+  classStartDate: string | null;
+  classEndDate: string | null;
+  enrollmentCount: number;
+  totalExpectedCents: number;
+  totalCollectedCents: number;
+  totalOutstandingCents: number;
+  totalCompedCents: number;
+}
+
+interface ClassBreakdownResponse {
+  classes: ClassBreakdownItem[];
+  totals: {
+    totalExpectedCents: number;
+    totalCollectedCents: number;
+    totalOutstandingCents: number;
+    totalCompedCents: number;
+  };
+}
+
+const CLASS_PRESETS: Record<string, { label: string; startDate: string; endDate: string }> = {
+  'fall-2025':   { label: 'Fall 2025',   startDate: '2025-09-01', endDate: '2025-11-30' },
+  'winter-2026': { label: 'Winter 2026', startDate: '2026-01-01', endDate: '2026-03-31' },
+  'spring-2026': { label: 'Spring 2026', startDate: '2026-04-01', endDate: '2026-06-30' },
+};
+
 function formatCurrency(cents: number): string {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
@@ -278,6 +305,16 @@ export default function FinancialReportsPage() {
   const { data: reminderHistoryData, isLoading: reminderHistoryLoading } = useQuery<ReminderLog[]>({
     queryKey: ['/api/admin/financial-reports/reminder-history'],
     enabled: activeTab === 'reminders',
+  });
+
+  const [classDateFilter, setClassDateFilter] = useState<string>('all');
+  const classBreakdownPreset = CLASS_PRESETS[classDateFilter];
+  const classBreakdownUrl = classBreakdownPreset
+    ? `/api/admin/financial-reports/class-breakdown?startDate=${classBreakdownPreset.startDate}&endDate=${classBreakdownPreset.endDate}`
+    : '/api/admin/financial-reports/class-breakdown';
+  const { data: classBreakdownData, isLoading: classBreakdownLoading } = useQuery<ClassBreakdownResponse>({
+    queryKey: [classBreakdownUrl],
+    enabled: activeTab === 'classes',
   });
 
   const sendReminderMutation = useMutation({
@@ -715,6 +752,7 @@ export default function FinancialReportsPage() {
                 <TabsTrigger value="overview">Recent Transactions</TabsTrigger>
                 <TabsTrigger value="balances">Outstanding Balances</TabsTrigger>
                 <TabsTrigger value="plans">Payment Plans</TabsTrigger>
+                <TabsTrigger value="classes">By Class</TabsTrigger>
                 <TabsTrigger value="reminders">
                   <Mail className="h-4 w-4 mr-1" />
                   Reminders
@@ -1009,6 +1047,95 @@ export default function FinancialReportsPage() {
                       <div className="text-center py-8 text-muted-foreground">
                         No active payment plans
                       </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="classes" className="mt-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Revenue by Class</CardTitle>
+                    <CardDescription>Expected, collected, and outstanding amounts per class</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex flex-wrap gap-2 mb-6">
+                      <Button
+                        variant={classDateFilter === 'all' ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setClassDateFilter('all')}
+                      >
+                        All Classes
+                      </Button>
+                      {Object.entries(CLASS_PRESETS).map(([key, preset]) => (
+                        <Button
+                          key={key}
+                          variant={classDateFilter === key ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => setClassDateFilter(key)}
+                        >
+                          {preset.label}
+                        </Button>
+                      ))}
+                    </div>
+
+                    {classBreakdownLoading ? (
+                      <div className="space-y-2">
+                        {[1, 2, 3, 4, 5].map(i => <Skeleton key={i} className="h-12 w-full" />)}
+                      </div>
+                    ) : !classBreakdownData?.classes?.length ? (
+                      <div className="text-center py-10 text-muted-foreground">
+                        <BarChart3 className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+                        <p>No classes found for this period</p>
+                      </div>
+                    ) : (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Class</TableHead>
+                            <TableHead>Dates</TableHead>
+                            <TableHead className="text-center">Students</TableHead>
+                            <TableHead className="text-right">Expected</TableHead>
+                            <TableHead className="text-right">Collected</TableHead>
+                            <TableHead className="text-right">Outstanding</TableHead>
+                            <TableHead className="text-right">Comped</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {classBreakdownData.classes.map((cls) => (
+                            <TableRow key={cls.className}>
+                              <TableCell className="font-medium">{cls.className}</TableCell>
+                              <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                                {cls.classStartDate && cls.classEndDate
+                                  ? `${format(new Date(cls.classStartDate), 'MMM d')} – ${format(new Date(cls.classEndDate), 'MMM d, yyyy')}`
+                                  : cls.classStartDate
+                                  ? format(new Date(cls.classStartDate), 'MMM d, yyyy')
+                                  : '—'}
+                              </TableCell>
+                              <TableCell className="text-center">{cls.enrollmentCount}</TableCell>
+                              <TableCell className="text-right">{formatCurrency(cls.totalExpectedCents)}</TableCell>
+                              <TableCell className="text-right text-green-700">{formatCurrency(cls.totalCollectedCents)}</TableCell>
+                              <TableCell className="text-right">
+                                {cls.totalOutstandingCents > 0 ? (
+                                  <span className="text-amber-600 font-medium">{formatCurrency(cls.totalOutstandingCents)}</span>
+                                ) : (
+                                  <span className="text-green-600">$0.00</span>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-right text-muted-foreground">
+                                {cls.totalCompedCents > 0 ? formatCurrency(cls.totalCompedCents) : '—'}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                          <TableRow className="border-t-2 font-bold bg-slate-50">
+                            <TableCell colSpan={3}>Totals</TableCell>
+                            <TableCell className="text-right">{formatCurrency(classBreakdownData.totals.totalExpectedCents)}</TableCell>
+                            <TableCell className="text-right text-green-700">{formatCurrency(classBreakdownData.totals.totalCollectedCents)}</TableCell>
+                            <TableCell className="text-right text-amber-600">{formatCurrency(classBreakdownData.totals.totalOutstandingCents)}</TableCell>
+                            <TableCell className="text-right text-muted-foreground">{formatCurrency(classBreakdownData.totals.totalCompedCents)}</TableCell>
+                          </TableRow>
+                        </TableBody>
+                      </Table>
                     )}
                   </CardContent>
                 </Card>

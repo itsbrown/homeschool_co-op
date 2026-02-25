@@ -303,7 +303,40 @@ router.post('/:id/comp', async (req: any, res) => {
       status: newStatus,
       paymentStatus: newPaymentStatus,
     });
-    
+
+    // Sync scheduled payments so financial reports reflect the comp immediately
+    try {
+      const allEnrollmentPayments = await storage.getScheduledPaymentsByEnrollmentId(enrollmentId);
+      const pendingPayments = allEnrollmentPayments
+        .filter(p => p.status === 'pending')
+        .sort((a, b) => (b.installmentNumber ?? 0) - (a.installmentNumber ?? 0)); // last installment first
+
+      const pendingTotal = pendingPayments.reduce((sum, p) => sum + (p.amount ?? 0), 0);
+
+      if (isFullyComped || compAmountCents >= pendingTotal) {
+        for (const p of pendingPayments) {
+          await storage.updateScheduledPaymentStatus(p.id, 'cancelled');
+        }
+        console.log(`💳 Cancelled ${pendingPayments.length} pending scheduled payment(s) (full comp)`);
+      } else {
+        let remainingToReduce = compAmountCents;
+        for (const p of pendingPayments) {
+          if (remainingToReduce <= 0) break;
+          const pAmount = p.amount ?? 0;
+          if (pAmount <= remainingToReduce) {
+            await storage.updateScheduledPaymentStatus(p.id, 'cancelled');
+            remainingToReduce -= pAmount;
+          } else {
+            await storage.updateScheduledPayment(p.id, { amount: pAmount - remainingToReduce });
+            remainingToReduce = 0;
+          }
+        }
+        console.log(`💳 Adjusted ${pendingPayments.length} pending scheduled payment(s) for partial comp`);
+      }
+    } catch (schedErr) {
+      console.error('⚠️ Failed to sync scheduled payments for comp (non-fatal):', schedErr);
+    }
+
     console.log(`✅ Successfully comped enrollment ID ${enrollmentId}`);
     
     res.json({ 
