@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { supabaseAuth } from "../middleware/supabase-auth";
-import { requireAdmin } from "../middleware/auth0-auth";
+import { requireRole } from "../middleware/auth0-auth";
 import { requireSchoolContext } from "../middleware/require-school-context";
 import { storage } from "../storage";
 import {
@@ -20,7 +20,7 @@ const router = Router();
 router.get(
   "/skeletons",
   supabaseAuth,
-  requireAdmin,
+  requireRole(['schoolAdmin', 'admin', 'superAdmin']),
   requireSchoolContext,
   async (req: any, res) => {
     try {
@@ -58,12 +58,12 @@ router.get(
 router.post(
   "/skeletons",
   supabaseAuth,
-  requireAdmin,
+  requireRole(['schoolAdmin', 'admin', 'superAdmin']),
   requireSchoolContext,
   async (req: any, res) => {
     try {
       const schoolId = parseInt(req.schoolId);
-      const userId = req.userId;
+      const userId = req.user?.id;
       if (isNaN(schoolId) || !userId) return res.status(400).json({ message: "Missing context" });
       const data = insertWeeklySkeletonSchema.parse({
         ...req.body,
@@ -83,7 +83,7 @@ router.post(
 router.patch(
   "/skeletons/:id",
   supabaseAuth,
-  requireAdmin,
+  requireRole(['schoolAdmin', 'admin', 'superAdmin']),
   requireSchoolContext,
   async (req: any, res) => {
     try {
@@ -95,7 +95,7 @@ router.patch(
       if (existing.schoolId !== schoolId) return res.status(403).json({ message: "Access denied" });
       const updated = await storage.updateWeeklySkeleton(id, {
         ...req.body,
-        updatedBy: req.userId,
+        updatedBy: req.user?.id,
       });
       res.json(updated);
     } catch (error) {
@@ -108,7 +108,7 @@ router.patch(
 router.delete(
   "/skeletons/:id",
   supabaseAuth,
-  requireAdmin,
+  requireRole(['schoolAdmin', 'admin', 'superAdmin']),
   requireSchoolContext,
   async (req: any, res) => {
     try {
@@ -155,12 +155,12 @@ router.get(
 router.post(
   "/skeletons/:skeletonId/blocks",
   supabaseAuth,
-  requireAdmin,
+  requireRole(['schoolAdmin', 'admin', 'superAdmin']),
   requireSchoolContext,
   async (req: any, res) => {
     try {
       const skeletonId = parseInt(req.params.skeletonId);
-      const userId = req.userId;
+      const userId = req.user?.id;
       if (isNaN(skeletonId) || !userId) return res.status(400).json({ message: "Missing context" });
       const skeleton = await storage.getWeeklySkeletonById(skeletonId);
       if (!skeleton) return res.status(404).json({ message: "Skeleton not found" });
@@ -184,7 +184,7 @@ router.post(
 router.patch(
   "/skeletons/:skeletonId/blocks/:blockId",
   supabaseAuth,
-  requireAdmin,
+  requireRole(['schoolAdmin', 'admin', 'superAdmin']),
   requireSchoolContext,
   async (req: any, res) => {
     try {
@@ -198,7 +198,7 @@ router.patch(
       if (skeleton.schoolId !== schoolId) return res.status(403).json({ message: "Access denied" });
       const updated = await storage.updateSkeletonBlock(blockId, {
         ...req.body,
-        updatedBy: req.userId,
+        updatedBy: req.user?.id,
       });
       res.json(updated);
     } catch (error) {
@@ -211,7 +211,7 @@ router.patch(
 router.delete(
   "/skeletons/:skeletonId/blocks/:blockId",
   supabaseAuth,
-  requireAdmin,
+  requireRole(['schoolAdmin', 'admin', 'superAdmin']),
   requireSchoolContext,
   async (req: any, res) => {
     try {
@@ -235,7 +235,7 @@ router.delete(
 router.post(
   "/skeletons/:skeletonId/blocks/reorder",
   supabaseAuth,
-  requireAdmin,
+  requireRole(['schoolAdmin', 'admin', 'superAdmin']),
   requireSchoolContext,
   async (req: any, res) => {
     try {
@@ -318,12 +318,12 @@ router.get(
 router.post(
   "/week-plans",
   supabaseAuth,
-  requireAdmin,
+  requireRole(['schoolAdmin', 'admin', 'superAdmin']),
   requireSchoolContext,
   async (req: any, res) => {
     try {
       const schoolId = parseInt(req.schoolId);
-      const userId = req.userId;
+      const userId = req.user?.id;
       if (isNaN(schoolId) || !userId) return res.status(400).json({ message: "Missing context" });
       const data = insertWeekPlanSchema.parse({
         ...req.body,
@@ -343,7 +343,7 @@ router.post(
 router.patch(
   "/week-plans/:id",
   supabaseAuth,
-  requireAdmin,
+  requireRole(['schoolAdmin', 'admin', 'superAdmin']),
   requireSchoolContext,
   async (req: any, res) => {
     try {
@@ -355,14 +355,14 @@ router.patch(
       if (existing.schoolId !== schoolId) return res.status(403).json({ message: "Access denied" });
       const updated = await storage.updateWeekPlan(id, {
         ...req.body,
-        updatedBy: req.userId,
+        updatedBy: req.user?.id,
       });
 
       if (req.body.status === "published" && existing.status !== "published") {
         try {
           const skeleton = await storage.getWeeklySkeletonById(existing.skeletonId);
           const notifData: any = {
-            senderId: req.userId,
+            senderId: req.user?.id,
             schoolId: schoolId,
             type: "in_app",
             subject: "Weekly Schedule Published",
@@ -391,7 +391,7 @@ router.patch(
 router.delete(
   "/week-plans/:id",
   supabaseAuth,
-  requireAdmin,
+  requireRole(['schoolAdmin', 'admin', 'superAdmin']),
   requireSchoolContext,
   async (req: any, res) => {
     try {
@@ -413,12 +413,12 @@ router.delete(
 router.post(
   "/week-plans/:id/clone",
   supabaseAuth,
-  requireAdmin,
+  requireRole(['schoolAdmin', 'admin', 'superAdmin']),
   requireSchoolContext,
   async (req: any, res) => {
     try {
       const sourceId = parseInt(req.params.id);
-      const userId = req.userId;
+      const userId = req.user?.id;
       if (isNaN(sourceId) || !userId) return res.status(400).json({ message: "Missing context" });
       const existing = await storage.getWeekPlanById(sourceId);
       if (!existing) return res.status(404).json({ message: "Source week plan not found" });
@@ -467,7 +467,7 @@ router.post(
   async (req: any, res) => {
     try {
       const weekPlanId = parseInt(req.params.weekPlanId);
-      const userId = req.userId;
+      const userId = req.user?.id;
       if (isNaN(weekPlanId) || !userId) return res.status(400).json({ message: "Missing context" });
       const plan = await storage.getWeekPlanById(weekPlanId);
       if (!plan) return res.status(404).json({ message: "Week plan not found" });
@@ -494,7 +494,7 @@ router.patch(
   async (req: any, res) => {
     try {
       const id = parseInt(req.params.id);
-      const userId = req.userId;
+      const userId = req.user?.id;
       if (isNaN(id) || !userId) return res.status(400).json({ message: "Missing context" });
       const block = await storage.getWeekPlanBlockById(id);
       if (!block) return res.status(404).json({ message: "Block not found" });
@@ -514,7 +514,7 @@ router.patch(
 router.delete(
   "/week-plan-blocks/:id",
   supabaseAuth,
-  requireAdmin,
+  requireRole(['schoolAdmin', 'admin', 'superAdmin']),
   requireSchoolContext,
   async (req: any, res) => {
     try {
@@ -542,7 +542,7 @@ router.post(
   async (req: any, res) => {
     try {
       const id = parseInt(req.params.id);
-      const userId = req.userId;
+      const userId = req.user?.id;
       if (isNaN(id) || !userId) return res.status(400).json({ message: "Missing context" });
       const block = await storage.getWeekPlanBlockById(id);
       if (!block) return res.status(404).json({ message: "Block not found" });
@@ -605,7 +605,7 @@ router.post(
         filename,
         contentType,
         sizeBytes,
-        userId: req.userId,
+        userId: req.user?.id,
         schoolId: parseInt(req.schoolId),
       });
       if (!result.validation.valid) {

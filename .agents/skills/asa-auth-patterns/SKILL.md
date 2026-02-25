@@ -158,6 +158,8 @@ if (!isAssigned) {
 | 401 error | Token expired, refresh failed | Check Supabase session, user may need to re-login |
 | 403 error | Role doesn't have permission | Check `user_roles` table for correct role at correct school |
 | 403 `REGISTRATION_REQUIRED` | Unregistered user tried OAuth | User needs school registration link first |
+| 403 on school admin routes even with correct role | `requireAdmin` used — allows `'school-admin'` (hyphen) not `'schoolAdmin'` (camelCase) | Replace `requireAdmin` with `requireRole(['schoolAdmin', 'admin', 'superAdmin'])` |
+| 400 "Missing context" on write endpoints | `req.userId` used — never set by any middleware | Replace `req.userId` with `req.user?.id` |
 | "User not found" | Used Supabase UUID instead of DB integer ID | Use `authData.dbUserId` not `authData.userId` |
 | Role switcher not showing | Only one role at current school | Check `user_roles` entries for that school |
 | Wrong data returned | School context mismatch | Verify `schoolId` on user's active role matches expected school |
@@ -167,6 +169,8 @@ if (!isAssigned) {
 ### Do
 - Always use `apiRequest` or the default TanStack Query fetcher for authenticated API calls — never bare `fetch()`
 - Always use `authData.dbUserId` (integer) for database queries, not `authData.userId` (Supabase UUID)
+- In route handlers, use `req.user?.id` for the database integer user ID — `supabaseAuth` sets this on every request
+- Test new features as a real school admin (not superAdmin) — superAdmins bypass role checks and mask authorization bugs
 - Always check the `user_roles` table as the source of truth for roles — `users.role` is a legacy fallback only
 - Always validate school membership on the backend before returning school-scoped data
 - Always use `useRole()` for access control checks and `useAuth()` for user identity
@@ -175,6 +179,8 @@ if (!isAssigned) {
 - Always handle 401 token expiration gracefully — `apiRequest` retries once after refresh
 
 ### Don't
+- Don't use `req.userId` in route handlers — it is never set by any middleware. Use `req.user?.id` (the integer DB ID set by `supabaseAuth`) instead
+- Don't use `requireAdmin` from `auth0-auth.ts` for school admin routes — it allows `'school-admin'` (hyphen) which does NOT match the DB role `'schoolAdmin'` (camelCase). Use `requireRole(['schoolAdmin', 'admin', 'superAdmin'])` directly
 - Don't trust Supabase `user_metadata` for role or school — database is the source of truth
 - Don't use `queryFn` in `useQuery` calls — the default fetcher handles auth automatically
 - Don't hardcode role checks against `users.role` — use `user_roles` table lookups

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { supabaseAuth } from "../middleware/supabase-auth";
-import { requireAdmin } from "../middleware/auth0-auth";
+import { requireRole } from "../middleware/auth0-auth";
 import { requireSchoolContext } from "../middleware/require-school-context";
 import { storage } from "../storage";
 import { scheduleCurriculumAssistant } from "../services/scheduleCurriculumAssistant";
@@ -14,7 +14,7 @@ router.get("/status", supabaseAuth, async (_req, res) => {
 router.post(
   "/generate-week",
   supabaseAuth,
-  requireAdmin,
+  requireRole(['schoolAdmin', 'admin', 'superAdmin']),
   requireSchoolContext,
   async (req: any, res) => {
     try {
@@ -83,7 +83,7 @@ router.post(
 router.post(
   "/analyze-gaps",
   supabaseAuth,
-  requireAdmin,
+  requireRole(['schoolAdmin', 'admin', 'superAdmin']),
   requireSchoolContext,
   async (req: any, res) => {
     try {
