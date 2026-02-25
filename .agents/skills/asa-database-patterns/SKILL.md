@@ -125,6 +125,33 @@ Session QR tokens expire at **session end time + 15 minutes**. Atomic database u
 - Never change primary key column types
 - Schema file: `shared/schema.ts`
 
+### ⚠️ Project-Specific Exception: db:push Is Blocked in This Environment
+
+`npm run db:push` and `npm run db:push --force` both crash in this project due to a drizzle-kit bug:
+- `init-db.ts` created a functional unique index on `user_roles`: `COALESCE(school_id, 0)` as the third index column
+- When drizzle-kit reads database indexes, it cannot parse functional expressions — it returns `null` for the expression field, causing a Zod validation crash before any push occurs
+- This was confirmed in the development environment; `DATABASE_URL` also points to an unreachable Supabase host, requiring the `PGHOST`/`PGUSER`/`PGPASSWORD`/`PGDATABASE` env vars to be used instead (see `server/lib/database-url.ts`)
+
+**Established workaround**: Add idempotent `ALTER TABLE` statements to `server/init-db.ts`. Every schema change in this project must follow this pattern:
+```sql
+-- Adding a new column (idempotent):
+ALTER TABLE my_table ADD COLUMN IF NOT EXISTS my_column TEXT;
+
+-- Dropping a NOT NULL constraint (idempotent — PostgreSQL no-ops if already nullable):
+ALTER TABLE my_table ALTER COLUMN my_column DROP NOT NULL;
+
+-- Converting a column type (wrap in DO $$ BEGIN ... END $$ for safety):
+DO $$ BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'my_table' AND column_name = 'my_col' AND data_type = 'text'
+  ) THEN
+    ALTER TABLE my_table ALTER COLUMN my_col TYPE INTEGER USING my_col::INTEGER;
+  END IF;
+END $$;
+```
+Place all such statements inside the relevant migration try-catch block in `server/init-db.ts`, following the existing patterns throughout the file. The app runs these on startup — they are safe to re-run on every restart.
+
 ## Derived Financial Fields
 
 ### The `remainingBalance` Fallback Pattern

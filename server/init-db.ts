@@ -2294,6 +2294,15 @@ async function runMigrations() {
     await db.execute(sql`ALTER TABLE week_plan_block_history ADD COLUMN IF NOT EXISTS previous_attachments JSONB`);
     await db.execute(sql`ALTER TABLE week_plan_block_history ADD COLUMN IF NOT EXISTS changed_at TIMESTAMP DEFAULT NOW() NOT NULL`);
 
+    // Drop NOT NULL from legacy columns that Drizzle no longer writes to.
+    // These columns were renamed in the Drizzle schema; the old names still exist in the
+    // database with NOT NULL constraints, causing INSERT failures when Drizzle omits them.
+    await db.execute(sql`ALTER TABLE weekly_skeletons ALTER COLUMN title DROP NOT NULL`);
+    await db.execute(sql`ALTER TABLE weekly_skeletons ALTER COLUMN grade_level DROP NOT NULL`);
+    await db.execute(sql`ALTER TABLE skeleton_blocks ALTER COLUMN subject DROP NOT NULL`);
+    await db.execute(sql`ALTER TABLE week_plans ALTER COLUMN start_date DROP NOT NULL`);
+    await db.execute(sql`ALTER TABLE week_plans ALTER COLUMN end_date DROP NOT NULL`);
+
     console.log('✅ Migration completed: schedule builder schema drift fixed');
     
   } catch (fundraiserError) {
