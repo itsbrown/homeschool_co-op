@@ -138,6 +138,7 @@ const MyHoursPage = lazy(() => import('./pages/educator/MyHours'));
 const ActiveSessionPage = lazy(() => import('./pages/educator/ActiveSession'));
 const StartSessionPage = lazy(() => import('./pages/educator/StartSession'));
 const EducatorAssessmentsPage = lazy(() => import('./pages/educator/EducatorAssessmentsPage'));
+const EducatorWeeklySchedulePage = lazy(() => import('./pages/educator/EducatorWeeklySchedulePage'));
 const StaffGuidePage = lazy(() => import('./pages/educator/StaffGuidePage'));
 
 const CallbackPage = () => {
@@ -556,6 +557,7 @@ function Router() {
       <Route path="/educator/settings" component={() => <EducatorAppShell><EducatorSettingsPage /></EducatorAppShell>} />
       <Route path="/educator/notifications" component={() => <EducatorAppShell><EducatorNotificationsPage /></EducatorAppShell>} />
       <Route path="/educator/assessments" component={() => <EducatorAppShell><EducatorAssessmentsPage /></EducatorAppShell>} />
+      <Route path="/educator/week-plans" component={() => <EducatorAppShell><EducatorWeeklySchedulePage /></EducatorAppShell>} />
       <Route path="/educator/staff-guide" component={() => <EducatorAppShell><StaffGuidePage /></EducatorAppShell>} />
       
       

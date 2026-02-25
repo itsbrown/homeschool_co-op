@@ -45,6 +45,11 @@ const educatorNavigationItems = [
     icon: Calendar,
   },
   {
+    href: "/educator/week-plans",
+    title: "Lesson Plans",
+    icon: BookOpen,
+  },
+  {
     href: "/educator/my-hours",
     title: "My Hours",
     icon: Clock,
