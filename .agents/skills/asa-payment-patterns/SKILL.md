@@ -167,6 +167,30 @@ program_enrollments:
 ```
 Proration calculator: `server/lib/prorate-calculator.ts`
 
+### Comp Sync Must Handle Both `pending` AND `overdue` Status
+When cancelling or reducing scheduled payments after applying a comp, **always filter for both statuses**:
+```typescript
+if (p.status === 'pending' || p.status === 'overdue') { ... }
+```
+Overdue payments are the same debt as pending — just past their due date. Filtering only `pending` silently leaves overdue installments on the books, causing stale data in financial reports.
+
+### Never Use `scheduled_payments` for Outstanding Balance Totals
+`scheduled_payments` is a subset of reality — many enrollments have remaining balances with **no scheduled_payment records at all** (pre-scheduling-era enrollments, comped enrollments without sync). Always aggregate from `program_enrollments` directly:
+
+**Wrong:**
+```sql
+SELECT SUM(amount) FROM scheduled_payments WHERE status = 'pending' AND school_id = $1
+```
+
+**Correct:**
+```sql
+SELECT COALESCE(SUM(COALESCE(remaining_balance, total_cost - total_paid)), 0)
+FROM program_enrollments
+WHERE school_id = $1
+  AND status NOT IN ('cancelled', 'waitlist', 'withdrawn', 'failed', 'completed')
+  AND COALESCE(remaining_balance, total_cost - total_paid) > 0
+```
+
 ## Refund Processing
 
 - Pro-rated refund calculator based on time remaining

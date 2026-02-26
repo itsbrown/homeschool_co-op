@@ -2311,6 +2311,28 @@ async function runMigrations() {
       console.log('Fundraiser tables migration note:', errorMessage);
     }
   }
+
+  // Data cleanup: cancel orphaned scheduled payments for fully-comped enrollments
+  // Idempotent — safe to run on every restart
+  try {
+    console.log('Running cleanup: Cancelling orphaned scheduled payments for fully-comped enrollments...');
+    const db = await getDb();
+    const cleanupResult = await db.execute(sql`
+      UPDATE scheduled_payments
+      SET status = 'cancelled', updated_at = NOW()
+      WHERE status IN ('pending', 'overdue')
+        AND enrollment_id IN (
+          SELECT id FROM program_enrollments
+          WHERE comp_percentage > 0 AND remaining_balance = 0
+        )
+    `);
+    const rowCount = (cleanupResult as any).rowCount ?? 0;
+    if (rowCount > 0) {
+      console.log(`Cleanup: ${rowCount} orphaned payment(s) cancelled`);
+    }
+  } catch (cleanupError: any) {
+    console.log('Cleanup note:', cleanupError.message);
+  }
 }
 
 // Initialize database tables

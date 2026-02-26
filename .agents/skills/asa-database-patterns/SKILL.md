@@ -174,9 +174,41 @@ const actualRemainingBalance = CurrencyUtils.calculateBalance(totalCost, totalPa
 
 **Where this pattern is established**: `server/api/school-admin.ts` (lines 3242, 3273, 3281), `server/api/admin-enrollments.ts` (comp validation), `server/services/dataLayer.ts` (CFO insights).
 
+### Financial Report Aggregations — Always Use `program_enrollments`
+
+For outstanding balance totals, active payment plan counts, or any financial summary, query `program_enrollments` directly — **not `scheduled_payments`**. The `scheduled_payments` table is a subset: many enrollments have remaining balances but no scheduled_payment records (legacy enrollments pre-scheduling feature, comped enrollments, plans not yet scheduled).
+
+The authoritative fields are `totalCost`, `totalPaid`, and `remainingBalance` on `program_enrollments`.
+
+**Gold-standard outstanding balance query:**
+```sql
+SELECT COALESCE(SUM(COALESCE(remaining_balance, total_cost - total_paid)), 0)
+FROM program_enrollments
+WHERE school_id = $1
+  AND status NOT IN ('cancelled', 'waitlist', 'withdrawn', 'failed', 'completed')
+  AND COALESCE(remaining_balance, total_cost - total_paid) > 0
+```
+
+**In Drizzle ORM:**
+```typescript
+const result = await db
+  .select({
+    totalOutstanding: sql<number>`COALESCE(SUM(COALESCE(${programEnrollments.remainingBalance}, ${programEnrollments.totalCost} - ${programEnrollments.totalPaid})), 0)::integer`,
+  })
+  .from(programEnrollments)
+  .where(
+    and(
+      eq(programEnrollments.schoolId, schoolId),
+      not(inArray(programEnrollments.status, ['cancelled', 'waitlist', 'withdrawn', 'failed', 'completed'])),
+      sql`COALESCE(${programEnrollments.remainingBalance}, ${programEnrollments.totalCost} - ${programEnrollments.totalPaid}) > 0`
+    )
+  );
+```
+
 ## Common Pitfalls
 
 - **Stored `remainingBalance` can be null**: Never use `enrollment.remainingBalance || 0` as a final value — always fall back to `totalCost - totalPaid`. See "Derived Financial Fields" above.
+- **Outstanding balance undercount in reports**: Querying `SUM(scheduled_payments.amount WHERE status='pending')` misses families with no scheduled_payment records — always use `COALESCE(remaining_balance, total_cost - total_paid) FROM program_enrollments` for financial aggregations.
 - **Express route ordering**: Specific named routes (e.g., `/classes/assignments`) BEFORE parameterized routes (e.g., `/classes/:id`)
 - **Orphaned data**: `scheduled_payments` with deleted `program_enrollments` must be filtered out of admin views
 - **Auth ID mapping**: Use `authData.dbUserId` (integer) NOT `authData.userId` (Supabase UUID) when querying database tables

@@ -308,7 +308,7 @@ router.post('/:id/comp', async (req: any, res) => {
     try {
       const allEnrollmentPayments = await storage.getScheduledPaymentsByEnrollmentId(enrollmentId);
       const pendingPayments = allEnrollmentPayments
-        .filter(p => p.status === 'pending')
+        .filter(p => p.status === 'pending' || p.status === 'overdue')
         .sort((a, b) => (b.installmentNumber ?? 0) - (a.installmentNumber ?? 0)); // last installment first
 
       const pendingTotal = pendingPayments.reduce((sum, p) => sum + (p.amount ?? 0), 0);

@@ -1,10 +1,29 @@
 import express from 'express';
+import Anthropic from '@anthropic-ai/sdk';
+import rateLimit from 'express-rate-limit';
 import { storage } from '../storage';
 import { getDb } from '../db';
 import { payments, scheduledPayments, programEnrollments, users, refunds, schools, classes } from '@shared/schema';
 import { eq, and, gte, lte, sql, desc, isNull, not, inArray } from 'drizzle-orm';
 import { generateCFOInsights, isAIAvailable } from '../services/cfoInsightsService';
 import { reconcileSchoolScheduledPayments, cleanupScheduledPayments, generateMissingScheduledPayments } from '../services/scheduled-payment-reconciliation';
+
+const AI_MODEL = 'claude-sonnet-4-20250514';
+
+let anthropic: Anthropic | null = null;
+try {
+  if (process.env.ANTHROPIC_API_KEY) {
+    anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  }
+} catch (e) {
+  console.error('Failed to initialize Anthropic for financial reports:', e);
+}
+
+const aiChatLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 15,
+  message: { error: 'Too many requests. Please wait a moment before sending another message.' }
+});
 
 const router = express.Router();
 
@@ -29,20 +48,32 @@ async function getSchoolAdminWithFeatureCheck(req: any, featureName: string): Pr
     return { error: 'User not found', status: 404 };
   }
 
-  if (user.role !== 'schoolAdmin' && user.role !== 'superAdmin') {
+  // Check BOTH legacy users.role AND user_roles table (per asa-auth-patterns multi-role pattern)
+  const userRoles = await storage.getUserRolesByUserId(user.id);
+  const hasAdminRole = userRoles.some(r =>
+    r.role === 'schoolAdmin' || r.role === 'admin' || r.role === 'superAdmin'
+  ) || user.role === 'schoolAdmin' || user.role === 'superAdmin';
+
+  if (!hasAdminRole) {
     return { error: 'Only school administrators can access financial reports', status: 403 };
   }
 
-  if (!user.schoolId) {
+  // Prefer schoolId from user_roles entry, fall back to legacy users.schoolId
+  const adminRole = userRoles.find(r =>
+    r.role === 'schoolAdmin' || r.role === 'admin' || r.role === 'superAdmin'
+  );
+  const schoolId = adminRole?.schoolId ?? user.schoolId;
+
+  if (!schoolId) {
     return { error: 'No school associated with this admin account', status: 400 };
   }
 
-  const features = await storage.getSchoolFeatures(user.schoolId);
+  const features = await storage.getSchoolFeatures(schoolId);
   if (!features[featureName]) {
     return { error: 'This feature is not enabled for your school. Please contact support to upgrade.', status: 403 };
   }
 
-  return { user, schoolId: user.schoolId };
+  return { user, schoolId };
 }
 
 function isError(result: FinancialReportUser | FinancialReportError): result is FinancialReportError {
@@ -104,15 +135,28 @@ router.get('/summary', async (req: any, res) => {
 
     const outstandingBalancesResult = await db
       .select({
-        totalOutstanding: sql<number>`COALESCE(SUM(${scheduledPayments.amount}), 0)::integer`,
-        overdueCount: sql<number>`COUNT(CASE WHEN ${scheduledPayments.scheduledDate} < NOW() THEN 1 END)::integer`,
-        overdueAmount: sql<number>`COALESCE(SUM(CASE WHEN ${scheduledPayments.scheduledDate} < NOW() THEN ${scheduledPayments.amount} ELSE 0 END), 0)::integer`,
+        totalOutstanding: sql<number>`COALESCE(SUM(COALESCE(${programEnrollments.remainingBalance}, ${programEnrollments.totalCost} - ${programEnrollments.totalPaid})), 0)::integer`,
+      })
+      .from(programEnrollments)
+      .where(
+        and(
+          eq(programEnrollments.schoolId, schoolId),
+          not(inArray(programEnrollments.status, ['cancelled', 'waitlist', 'withdrawn', 'failed', 'completed'])),
+          sql`COALESCE(${programEnrollments.remainingBalance}, ${programEnrollments.totalCost} - ${programEnrollments.totalPaid}) > 0`
+        )
+      );
+
+    const overdueBalancesResult = await db
+      .select({
+        overdueCount: sql<number>`COUNT(*)::integer`,
+        overdueAmount: sql<number>`COALESCE(SUM(${scheduledPayments.amount}), 0)::integer`,
       })
       .from(scheduledPayments)
       .where(
         and(
           eq(scheduledPayments.schoolId, schoolId),
-          eq(scheduledPayments.status, 'pending')
+          eq(scheduledPayments.status, 'pending'),
+          sql`${scheduledPayments.scheduledDate} < NOW()`
         )
       );
 
@@ -131,13 +175,14 @@ router.get('/summary', async (req: any, res) => {
 
     const activePaymentPlansResult = await db
       .select({
-        activePlans: sql<number>`COUNT(DISTINCT ${scheduledPayments.enrollmentId})::integer`,
+        activePlans: sql<number>`COUNT(*)::integer`,
       })
-      .from(scheduledPayments)
+      .from(programEnrollments)
       .where(
         and(
-          eq(scheduledPayments.schoolId, schoolId),
-          eq(scheduledPayments.status, 'pending')
+          eq(programEnrollments.schoolId, schoolId),
+          not(inArray(programEnrollments.status, ['cancelled', 'waitlist', 'withdrawn', 'failed', 'completed'])),
+          sql`COALESCE(${programEnrollments.remainingBalance}, ${programEnrollments.totalCost} - ${programEnrollments.totalPaid}) > 0`
         )
       );
 
@@ -160,8 +205,8 @@ router.get('/summary', async (req: any, res) => {
         ytdRevenueCents: ytdRevenueResult[0]?.revenue || 0,
         totalPayments: completedPaymentsResult[0]?.paymentCount || 0,
         outstandingBalanceCents: outstandingBalancesResult[0]?.totalOutstanding || 0,
-        overduePayments: outstandingBalancesResult[0]?.overdueCount || 0,
-        overdueAmountCents: outstandingBalancesResult[0]?.overdueAmount || 0,
+        overduePayments: overdueBalancesResult[0]?.overdueCount || 0,
+        overdueAmountCents: overdueBalancesResult[0]?.overdueAmount || 0,
         totalRefundedCents: refundsResult[0]?.totalRefunded || 0,
         refundCount: refundsResult[0]?.refundCount || 0,
         activePaymentPlans: activePaymentPlansResult[0]?.activePlans || 0,
@@ -800,13 +845,14 @@ router.get('/ai-insights', async (req: any, res) => {
 
     const outstandingResult = await db
       .select({
-        outstanding: sql<number>`COALESCE(SUM(${scheduledPayments.amount}), 0)::integer`,
+        outstanding: sql<number>`COALESCE(SUM(COALESCE(${programEnrollments.remainingBalance}, ${programEnrollments.totalCost} - ${programEnrollments.totalPaid})), 0)::integer`,
       })
-      .from(scheduledPayments)
+      .from(programEnrollments)
       .where(
         and(
-          eq(scheduledPayments.schoolId, schoolId),
-          eq(scheduledPayments.status, 'pending')
+          eq(programEnrollments.schoolId, schoolId),
+          not(inArray(programEnrollments.status, ['cancelled', 'waitlist', 'withdrawn', 'failed', 'completed'])),
+          sql`COALESCE(${programEnrollments.remainingBalance}, ${programEnrollments.totalCost} - ${programEnrollments.totalPaid}) > 0`
         )
       );
 
@@ -815,7 +861,12 @@ router.get('/ai-insights', async (req: any, res) => {
         count: sql<number>`COUNT(*)::integer`,
       })
       .from(programEnrollments)
-      .where(eq(programEnrollments.schoolId, schoolId));
+      .where(
+        and(
+          eq(programEnrollments.schoolId, schoolId),
+          not(inArray(programEnrollments.status, ['cancelled', 'waitlist', 'withdrawn', 'failed']))
+        )
+      );
 
     const paymentPlansResult = await db
       .select({
@@ -877,7 +928,7 @@ router.get('/ai-insights', async (req: any, res) => {
     const summary = {
       totalRevenue: summaryResult[0]?.totalRevenue || 0,
       totalCollected: summaryResult[0]?.totalRevenue || 0,
-      outstandingBalance: outstandingResult[0]?.outstanding || 0,
+      outstandingBalance: (outstandingResult[0] as any)?.outstanding || 0,
       paymentPlanProgress: avgProgress,
       enrollmentCount: enrollmentCountResult[0]?.count || 0,
       averagePaymentAmount: summaryResult[0]?.paymentCount > 0 
@@ -1347,6 +1398,127 @@ router.post('/generate-missing-payments', async (req: any, res) => {
   } catch (error) {
     console.error('Error generating missing payments:', error);
     res.status(500).json({ error: 'Failed to generate missing payments' });
+  }
+});
+
+// AI Financial Q&A chat endpoint
+router.post('/ai-chat', aiChatLimiter, async (req: any, res) => {
+  try {
+    const result = await getSchoolAdminWithFeatureCheck(req, 'financialReports');
+    if (isError(result)) {
+      return res.status(result.status).json({ error: result.error });
+    }
+    const { schoolId } = result;
+
+    if (!anthropic) {
+      return res.json({
+        response: 'The AI assistant is temporarily unavailable. Please check the CFO Insights tab for pre-generated analysis, or try again later.',
+        aiAvailable: false,
+      });
+    }
+
+    const { message, history = [] } = req.body;
+    if (!message || typeof message !== 'string') {
+      return res.status(400).json({ error: 'message is required' });
+    }
+
+    const db = await getDb();
+
+    // Fetch accurate financial summary to inject as context
+    const [revenueResult, outstandingResult, overdueResult, enrollmentResult, ytdResult] = await Promise.all([
+      db.select({
+        totalRevenue: sql<number>`COALESCE(SUM(${payments.amount}), 0)::integer`,
+        paymentCount: sql<number>`COUNT(*)::integer`,
+      }).from(payments).where(and(eq(payments.schoolId, schoolId), eq(payments.status, 'completed'))),
+
+      db.select({
+        outstanding: sql<number>`COALESCE(SUM(COALESCE(${programEnrollments.remainingBalance}, ${programEnrollments.totalCost} - ${programEnrollments.totalPaid})), 0)::integer`,
+        activeCount: sql<number>`COUNT(*)::integer`,
+      }).from(programEnrollments).where(
+        and(
+          eq(programEnrollments.schoolId, schoolId),
+          not(inArray(programEnrollments.status, ['cancelled', 'waitlist', 'withdrawn', 'failed', 'completed'])),
+          sql`COALESCE(${programEnrollments.remainingBalance}, ${programEnrollments.totalCost} - ${programEnrollments.totalPaid}) > 0`
+        )
+      ),
+
+      db.select({
+        overdueAmount: sql<number>`COALESCE(SUM(${scheduledPayments.amount}), 0)::integer`,
+        overdueCount: sql<number>`COUNT(*)::integer`,
+      }).from(scheduledPayments).where(
+        and(eq(scheduledPayments.schoolId, schoolId), eq(scheduledPayments.status, 'pending'), sql`${scheduledPayments.scheduledDate} < NOW()`)
+      ),
+
+      db.select({ count: sql<number>`COUNT(*)::integer` }).from(programEnrollments).where(
+        and(eq(programEnrollments.schoolId, schoolId), not(inArray(programEnrollments.status, ['cancelled', 'waitlist', 'withdrawn', 'failed'])))
+      ),
+
+      db.select({
+        ytdRevenue: sql<number>`COALESCE(SUM(${payments.amount}), 0)::integer`,
+      }).from(payments).where(
+        and(eq(payments.schoolId, schoolId), eq(payments.status, 'completed'), gte(payments.createdAt, new Date(new Date().getFullYear(), 0, 1)))
+      ),
+    ]);
+
+    const totalRevenue = revenueResult[0]?.totalRevenue || 0;
+    const outstandingBalance = (outstandingResult[0] as any)?.outstanding || 0;
+    const activeEnrollments = enrollmentResult[0]?.count || 0;
+    const collectionRate = totalRevenue > 0
+      ? ((totalRevenue / (totalRevenue + outstandingBalance)) * 100).toFixed(1)
+      : '0';
+
+    // Fetch school name for context
+    let schoolName = 'your school';
+    try {
+      const school = await storage.getSchoolById(schoolId);
+      if (school?.name) schoolName = school.name;
+    } catch (_) {}
+
+    const systemPrompt = `You are a financial analyst assistant for ${schoolName}, an educational organization. You help the school administrator understand their finances, identify trends, and make informed decisions.
+
+CURRENT FINANCIAL SNAPSHOT (as of ${new Date().toLocaleDateString()}):
+- Total Revenue Collected: $${(totalRevenue / 100).toFixed(2)}
+- YTD Revenue (${new Date().getFullYear()}): $${((ytdResult[0]?.ytdRevenue || 0) / 100).toFixed(2)}
+- Outstanding Balance (all active enrollments): $${(outstandingBalance / 100).toFixed(2)}
+- Overdue Amount: $${((overdueResult[0]?.overdueAmount || 0) / 100).toFixed(2)} (${overdueResult[0]?.overdueCount || 0} overdue installments)
+- Active Enrollments with Balance: ${(outstandingResult[0] as any)?.activeCount || 0}
+- Total Active Enrollments: ${activeEnrollments}
+- Collection Rate: ${collectionRate}%
+- Total Payments Processed: ${revenueResult[0]?.paymentCount || 0}
+
+IMPORTANT:
+- All amounts shown above are accurate and come directly from the database
+- For questions about specific family accounts, explain you have aggregate data only and direct them to the Enrollments section
+- Answer clearly and concisely — the admin is busy
+- Format dollar amounts clearly (e.g., "$1,234.56")
+- If asked about something outside this data, be transparent about your limitations`;
+
+    // Truncate history to last 20 messages to avoid token limits
+    const truncatedHistory = history.slice(-20);
+
+    const messages: Anthropic.MessageParam[] = [
+      ...truncatedHistory,
+      { role: 'user', content: message },
+    ];
+
+    const aiResponse = await anthropic.messages.create({
+      model: AI_MODEL,
+      max_tokens: 1024,
+      system: systemPrompt,
+      messages,
+    });
+
+    const responseText = aiResponse.content[0]?.type === 'text'
+      ? aiResponse.content[0].text
+      : 'I was unable to generate a response. Please try again.';
+
+    res.json({ response: responseText, aiAvailable: true });
+  } catch (error: any) {
+    console.error('Error in financial AI chat:', error);
+    res.json({
+      response: 'I encountered an issue processing your question. Please try again in a moment.',
+      aiAvailable: true,
+    });
   }
 });
 

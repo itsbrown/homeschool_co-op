@@ -269,12 +269,26 @@ function FeatureDisabledState() {
   );
 }
 
+interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+const STARTER_QUESTIONS = [
+  'What is our current collection rate?',
+  'Which families have the largest outstanding balances?',
+  'How does this month compare to last month?',
+  'What percentage of enrollments are fully paid?',
+];
+
 export default function FinancialReportsPage() {
   const [activeTab, setActiveTab] = useState('overview');
   const [groupByParent, setGroupByParent] = useState(false);
   const [sendingReminderId, setSendingReminderId] = useState<number | null>(null);
   const [sendingSummaryEmail, setSendingSummaryEmail] = useState<string | null>(null);
   const [isReconciling, setIsReconciling] = useState(false);
+  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState('');
   const { toast } = useToast();
 
   const { data: summaryData, isLoading: summaryLoading, error: summaryError } = useQuery<{ summary: FinancialSummary }>({
@@ -419,6 +433,30 @@ export default function FinancialReportsPage() {
   const handleReconcile = () => {
     setIsReconciling(true);
     reconcileMutation.mutate();
+  };
+
+  const aiChatMutation = useMutation({
+    mutationFn: async (data: { message: string; history: ChatMessage[] }) => {
+      const response = await apiRequest('POST', '/api/admin/financial-reports/ai-chat', data);
+      return response.json() as Promise<{ response: string; aiAvailable: boolean }>;
+    },
+    onSuccess: (data) => {
+      setChatHistory(prev => [...prev, { role: 'assistant', content: data.response }]);
+    },
+    onError: () => {
+      setChatHistory(prev => [...prev, {
+        role: 'assistant',
+        content: 'I encountered an issue. Please try again in a moment.',
+      }]);
+    },
+  });
+
+  const handleChatSend = (message: string) => {
+    if (!message.trim() || aiChatMutation.isPending) return;
+    const newHistory = [...chatHistory, { role: 'user' as const, content: message }];
+    setChatHistory(newHistory);
+    setChatInput('');
+    aiChatMutation.mutate({ message, history: chatHistory });
   };
 
   if (summaryError && (summaryError as any)?.message?.includes('not enabled')) {
@@ -753,6 +791,10 @@ export default function FinancialReportsPage() {
                 <TabsTrigger value="balances">Outstanding Balances</TabsTrigger>
                 <TabsTrigger value="plans">Payment Plans</TabsTrigger>
                 <TabsTrigger value="classes">By Class</TabsTrigger>
+                <TabsTrigger value="ask-ai">
+                  <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                  Ask AI
+                </TabsTrigger>
                 <TabsTrigger value="reminders">
                   <Mail className="h-4 w-4 mr-1" />
                   Reminders
@@ -1137,6 +1179,110 @@ export default function FinancialReportsPage() {
                         </TableBody>
                       </Table>
                     )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="ask-ai" className="mt-4">
+                <Card>
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <CardTitle className="flex items-center gap-2">
+                          <Sparkles className="h-5 w-5 text-purple-500" />
+                          Ask AI About Your Finances
+                        </CardTitle>
+                        <CardDescription>Ask natural language questions about your school's financial data</CardDescription>
+                      </div>
+                      {chatHistory.length > 0 && (
+                        <Button variant="ghost" size="sm" onClick={() => setChatHistory([])}>
+                          Clear conversation
+                        </Button>
+                      )}
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    {chatHistory.length === 0 && (
+                      <div className="mb-6">
+                        <p className="text-sm text-muted-foreground mb-3">Try asking:</p>
+                        <div className="flex flex-wrap gap-2">
+                          {STARTER_QUESTIONS.map((q) => (
+                            <button
+                              key={q}
+                              className="text-sm px-3 py-1.5 rounded-full border border-gray-200 hover:border-purple-300 hover:bg-purple-50 transition-colors text-left"
+                              onClick={() => handleChatSend(q)}
+                              disabled={aiChatMutation.isPending}
+                            >
+                              {q}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="space-y-4 mb-4 max-h-[400px] overflow-y-auto">
+                      {chatHistory.map((msg, idx) => (
+                        <div
+                          key={idx}
+                          className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                        >
+                          <div
+                            className={`max-w-[80%] rounded-lg px-4 py-2.5 text-sm ${
+                              msg.role === 'user'
+                                ? 'bg-primary text-primary-foreground ml-4'
+                                : 'bg-gray-100 text-gray-900 mr-4'
+                            }`}
+                          >
+                            {msg.role === 'assistant' ? (
+                              <div className="flex items-start gap-2">
+                                <Sparkles className="h-3.5 w-3.5 mt-0.5 text-purple-500 shrink-0" />
+                                <p className="whitespace-pre-wrap">{msg.content}</p>
+                              </div>
+                            ) : (
+                              <p>{msg.content}</p>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                      {aiChatMutation.isPending && (
+                        <div className="flex justify-start">
+                          <div className="bg-gray-100 rounded-lg px-4 py-2.5 text-sm text-gray-500 flex items-center gap-2 mr-4">
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            Analyzing your data...
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex gap-2">
+                      <textarea
+                        className="flex-1 min-h-[44px] max-h-[120px] resize-none rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
+                        placeholder="Ask a question about your finances..."
+                        value={chatInput}
+                        onChange={(e) => setChatInput(e.target.value)}
+                        disabled={aiChatMutation.isPending}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            handleChatSend(chatInput);
+                          }
+                        }}
+                        style={{ fontSize: '16px' }}
+                      />
+                      <Button
+                        onClick={() => handleChatSend(chatInput)}
+                        disabled={!chatInput.trim() || aiChatMutation.isPending}
+                        size="sm"
+                        className="self-end"
+                      >
+                        {aiChatMutation.isPending ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Send className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-2">Press Enter to send, Shift+Enter for new line</p>
                   </CardContent>
                 </Card>
               </TabsContent>
