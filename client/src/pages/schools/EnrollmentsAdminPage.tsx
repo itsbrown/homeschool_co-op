@@ -404,6 +404,8 @@ export default function EnrollmentsAdminPage() {
         description: data.message,
       });
       queryClient.invalidateQueries({ queryKey: ["/api/school-admin/enrollments"] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/financial-reports/summary'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/financial-reports/class-breakdown'] });
       setCompDialogOpen(false);
       setCompEnrollment(null);
       setCompPercentage("100");

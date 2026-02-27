@@ -198,6 +198,13 @@ router.get('/summary', async (req: any, res) => {
         )
       );
 
+    const totalCompedResult = await db
+      .select({
+        totalComped: sql<number>`COALESCE(SUM(${programEnrollments.compAmountCents}), 0)::integer`,
+      })
+      .from(programEnrollments)
+      .where(eq(programEnrollments.schoolId, schoolId));
+
     res.json({
       summary: {
         totalRevenueCents: completedPaymentsResult[0]?.totalRevenue || 0,
@@ -211,6 +218,7 @@ router.get('/summary', async (req: any, res) => {
         refundCount: refundsResult[0]?.refundCount || 0,
         activePaymentPlans: activePaymentPlansResult[0]?.activePlans || 0,
         totalEnrollments: totalEnrollmentsResult[0]?.count || 0,
+        totalCompedCents: totalCompedResult[0]?.totalComped || 0,
       },
       generatedAt: new Date().toISOString(),
     });

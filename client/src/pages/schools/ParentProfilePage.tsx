@@ -966,6 +966,8 @@ export default function ParentProfilePage() {
         description: msg
       });
       queryClient.invalidateQueries({ queryKey: [`/api/parent-profile/${parentId}`] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/financial-reports/summary'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/financial-reports/class-breakdown'] });
       setCompDialogOpen(false);
       setSelectedEnrollment(null);
       setCompPercentage('100');

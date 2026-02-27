@@ -68,6 +68,7 @@ interface FinancialSummary {
   refundCount: number;
   activePaymentPlans: number;
   totalEnrollments: number;
+  totalCompedCents: number;
 }
 
 interface RevenueTrend {
@@ -657,6 +658,12 @@ export default function FinancialReportsPage() {
                     <span className="text-sm text-muted-foreground">Total Refunded</span>
                     <span className="font-semibold text-red-600">{formatCurrency(summary?.totalRefundedCents || 0)}</span>
                   </div>
+                  {(summary?.totalCompedCents || 0) > 0 && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-muted-foreground">Total Comped</span>
+                      <span className="font-semibold text-green-600">{formatCurrency(summary?.totalCompedCents || 0)}</span>
+                    </div>
+                  )}
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-muted-foreground">Refund Count</span>
                     <span className="font-semibold">{summary?.refundCount || 0}</span>
