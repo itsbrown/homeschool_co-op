@@ -348,6 +348,7 @@ router.get('/outstanding-balances', async (req: any, res) => {
           }
         } catch (e) {}
 
+        let enrollmentRemainingBalance: number | undefined;
         try {
           const enrollment = await storage.getProgramEnrollmentById(payment.enrollmentId);
           if (enrollment) {
@@ -356,6 +357,8 @@ router.get('/outstanding-balances', async (req: any, res) => {
               childName: enrollment.childName || null,
               className: enrollment.className || null,
             };
+            // Use fallback per db-patterns: remainingBalance may be null or stale
+            enrollmentRemainingBalance = enrollment.remainingBalance ?? (enrollment.totalCost - enrollment.totalPaid);
           }
         } catch (e) {}
 
@@ -369,21 +372,33 @@ router.get('/outstanding-balances', async (req: any, res) => {
           ...payment,
           parent: parentInfo,
           enrollment: enrollmentInfo,
+          enrollmentRemainingBalance,
           isOverdue,
           daysOverdue,
         };
       })
     );
 
+    // Filter out scheduled payments where the enrollment is already fully paid.
+    // Auto-heal any stale 'pending' records found — cancel them in the background.
+    const validBalances = enrichedBalances.filter(b => {
+      const isFullyPaid = b.enrollmentRemainingBalance !== undefined && b.enrollmentRemainingBalance <= 0;
+      if (isFullyPaid) {
+        storage.updateScheduledPaymentStatus(b.id, 'cancelled').catch(() => {});
+        return false;
+      }
+      return true;
+    });
+
     type FamilyBalance = {
-      parent: typeof enrichedBalances[number]['parent'];
+      parent: typeof validBalances[number]['parent'];
       parentEmail: string;
       totalOutstandingCents: number;
       overdueAmountCents: number;
-      payments: typeof enrichedBalances;
+      payments: typeof validBalances;
     };
 
-    const byParent = enrichedBalances.reduce((acc: Record<string, FamilyBalance>, balance) => {
+    const byParent = validBalances.reduce((acc: Record<string, FamilyBalance>, balance) => {
       const email = balance.parentEmail;
       if (!acc[email]) {
         acc[email] = {
@@ -403,15 +418,15 @@ router.get('/outstanding-balances', async (req: any, res) => {
     }, {});
 
     const summary = {
-      totalOutstandingCents: enrichedBalances.reduce((sum, b) => sum + b.amount, 0),
-      overdueAmountCents: enrichedBalances.filter(b => b.isOverdue).reduce((sum, b) => sum + b.amount, 0),
-      totalPaymentsDue: enrichedBalances.length,
-      overduePayments: enrichedBalances.filter(b => b.isOverdue).length,
+      totalOutstandingCents: validBalances.reduce((sum, b) => sum + b.amount, 0),
+      overdueAmountCents: validBalances.filter(b => b.isOverdue).reduce((sum, b) => sum + b.amount, 0),
+      totalPaymentsDue: validBalances.length,
+      overduePayments: validBalances.filter(b => b.isOverdue).length,
       uniqueFamilies: Object.keys(byParent).length,
     };
 
     res.json({
-      balances: enrichedBalances,
+      balances: validBalances,
       byFamily: Object.values(byParent),
       summary,
     });

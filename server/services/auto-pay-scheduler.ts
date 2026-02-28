@@ -134,6 +134,28 @@ async function processAutoPayments(): Promise<void> {
           continue;
         }
 
+        // Guard: verify enrollment hasn't already been paid in full before charging
+        if (sp.enrollmentId) {
+          try {
+            const enrollment = await storage.getProgramEnrollmentById(sp.enrollmentId);
+            if (enrollment) {
+              // Use fallback per db-patterns: remainingBalance may be null or stale
+              const effectiveBalance = enrollment.remainingBalance ?? (enrollment.totalCost - enrollment.totalPaid);
+              if (effectiveBalance <= 0) {
+                console.log(`[AutoPay] Skipping payment ${sp.id} — enrollment ${sp.enrollmentId} already paid in full (balance: ${effectiveBalance})`);
+                await storage.updateScheduledPaymentStatus(sp.id, 'cancelled');
+                skipped++;
+                continue;
+              }
+            }
+          } catch (e) {
+            console.error(`[AutoPay] Could not verify enrollment balance for payment ${sp.id}:`, e);
+            // Skip rather than risk double-charging
+            skipped++;
+            continue;
+          }
+        }
+
         // Idempotency guard: mark as processing before calling Stripe
         await storage.updateScheduledPaymentStatus(sp.id, 'processing' as any);
         console.log(`[AutoPay] Processing payment ${sp.id} for user ${parent.id} — $${(sp.amount / 100).toFixed(2)}`);
