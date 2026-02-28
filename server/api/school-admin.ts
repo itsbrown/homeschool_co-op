@@ -34,7 +34,7 @@ const permissionUpdateLimiter = rateLimit({
   skip: (req: any) => !req.user?.id, // Skip rate limiting if no user (will be rejected by auth anyway)
 });
 import { sql, eq, and } from 'drizzle-orm';
-import { users, schools, userRoles, userLocations, locations, classSessions, sessionAttendance, children, classes, type InsertSchool, type UserRole } from '@shared/schema';
+import { users, schools, userRoles, userLocations, locations, classSessions, sessionAttendance, children, classes, type InsertSchool, type UserRole, systemRoles } from '@shared/schema';
 
 const router = Router();
 
@@ -5035,13 +5035,24 @@ router.get('/users', supabaseAuth, requireSchoolContext, async (req: any, res) =
     // 2. users.activeRole — currently selected role
     // 3. users.role — legacy fallback
     function resolveDisplayRole(user: any): string {
+      // user_roles table is the source of truth (asa-auth-patterns)
       const roles = userRolesMap.get(user.id);
       if (roles && roles.length > 0) {
         const primaryRole = roles.find((r: any) => r.isPrimary);
         if (primaryRole) return primaryRole.role;
         return roles[0].role;
       }
-      return user.activeRole || user.role || 'parent';
+      // activeRole is always set from user_roles values by the app — safe to trust
+      if (user.activeRole && (systemRoles as readonly string[]).includes(user.activeRole)) {
+        return user.activeRole;
+      }
+      // users.role is a legacy free-text field — only trust it if it's a recognized
+      // system role name. Custom position names like "Mentor" (capital M) are not
+      // system roles and should not drive routing decisions.
+      if (user.role && (systemRoles as readonly string[]).includes(user.role)) {
+        return user.role;
+      }
+      return 'parent';
     }
 
     // Map users from dbUsers — use user_roles as source of truth for role display
