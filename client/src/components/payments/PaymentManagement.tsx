@@ -1249,8 +1249,6 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
     queryKey: ['/api/user/auto-pay-status'],
   });
 
-  const { toast } = useToast();
-
   const toggleAutoPayMutation = useMutation({
     mutationFn: (enabled: boolean) => apiRequest('PATCH', '/api/user/auto-pay', { enabled }),
     onSuccess: (_data, enabled) => {
