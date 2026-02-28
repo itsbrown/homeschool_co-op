@@ -82,7 +82,7 @@ export default function UsersPage() {
     const matchesSearch = user.firstName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          user.lastName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          user.email?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesRole = selectedRole === 'all' || user.role === selectedRole;
+    const matchesRole = selectedRole === 'all' || user.role?.toLowerCase() === selectedRole.toLowerCase();
     const matchesLocation = selectedLocation === 'all' || 
                            (selectedLocation === 'none' && !user.locationId) ||
                            String(user.locationId) === selectedLocation;
@@ -90,8 +90,8 @@ export default function UsersPage() {
   });
 
   const getRoleBadgeVariant = (role: string) => {
-    switch (role) {
-      case 'schoolAdmin':
+    switch ((role || '').toLowerCase()) {
+      case 'schooladmin':
         return 'default';
       case 'educator':
         return 'secondary';
@@ -105,8 +105,8 @@ export default function UsersPage() {
   };
 
   const getRoleDisplayName = (role: string) => {
-    switch (role) {
-      case 'schoolAdmin':
+    switch ((role || '').toLowerCase()) {
+      case 'schooladmin':
         return 'School Admin';
       case 'educator':
         return 'Educator';
@@ -114,9 +114,24 @@ export default function UsersPage() {
         return 'Parent';
       case 'staff':
         return 'Staff';
+      case 'mentor':
+        return 'Mentor';
+      case 'teacher':
+        return 'Teacher';
+      case 'instructor':
+        return 'Instructor';
       default:
         return role;
     }
+  };
+
+  const getProfileUrl = (user: any): string => {
+    const role = (user.role || '').toLowerCase();
+    if (role === 'parent') return `/schools/parents/${user.id}`;
+    if (['educator', 'mentor', 'teacher', 'instructor'].includes(role)) return `/schools/educators/${user.id}`;
+    if (role === 'staff') return `/schools/staff/${user.staffId || user.id}`;
+    if (role === 'schooladmin') return `/schools/admins/${user.id}`;
+    return `/schools/staff/${user.staffId || user.id}`;
   };
 
   const handleEditUser = (user: any) => {
@@ -474,13 +489,7 @@ export default function UsersPage() {
                     <TableRow key={user.id} className="hover:bg-muted/50 transition-colors">
                       <TableCell className="font-medium">
                         <Link 
-                          href={
-                            user.role === 'parent' ? `/schools/parents/${user.id}` :
-                            user.role === 'educator' || user.role === 'mentor' ? `/schools/educators/${user.id}` :
-                            user.role === 'staff' ? `/schools/staff/${user.staffId || user.id}` :
-                            user.role === 'schoolAdmin' ? `/schools/admins/${user.id}` :
-                            `/schools/staff/${user.id}`
-                          }
+                          href={getProfileUrl(user)}
                           data-testid={`link-user-${user.id}`}
                         >
                           <Button variant="link" className="h-auto p-0 font-medium hover:underline">
@@ -523,15 +532,7 @@ export default function UsersPage() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="z-50">
-                            <Link 
-                              href={
-                                user.role === 'parent' ? `/schools/parents/${user.id}` :
-                                user.role === 'educator' || user.role === 'mentor' ? `/schools/educators/${user.id}` :
-                                user.role === 'staff' ? `/schools/staff/${user.staffId || user.id}` :
-                                user.role === 'schoolAdmin' ? `/schools/admins/${user.id}` :
-                                `/schools/staff/${user.id}`
-                              }
-                            >
+                            <Link href={getProfileUrl(user)}>
                               <DropdownMenuItem data-testid={`button-view-profile-${user.id}`}>
                                 <Eye className="h-4 w-4 mr-2" />
                                 View Profile
