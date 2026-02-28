@@ -124,6 +124,7 @@ export function RefundDialog({ enrollment, open, onOpenChange, onSuccess }: Refu
       queryClient.invalidateQueries({ queryKey: ['/api/school-admin/enrollments'] });
       queryClient.invalidateQueries({ queryKey: ['/api/admin/enrollments'] });
       queryClient.invalidateQueries({ queryKey: ['/api/admin/refunds'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/financial-reports/outstanding-balances'] });
       
       resetForm();
       onOpenChange(false);

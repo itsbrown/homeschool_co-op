@@ -647,6 +647,7 @@ export default function ParentProfilePage() {
       queryClient.invalidateQueries({ queryKey: [`/api/parent-profile/${parentId}`] });
       // Also invalidate parent's upcoming payments view to keep data in sync
       queryClient.invalidateQueries({ queryKey: ['scheduled-payments-upcoming'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/financial-reports/outstanding-balances'] });
       setReschedulePaymentDialog({ open: false, payment: null });
       setRescheduleDate('');
       setRescheduleComment('');
@@ -678,6 +679,7 @@ export default function ParentProfilePage() {
       queryClient.invalidateQueries({ queryKey: [`/api/parent-profile/${parentId}`] });
       // Also invalidate parent's upcoming payments view to remove stale data
       queryClient.invalidateQueries({ queryKey: ['scheduled-payments-upcoming'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/financial-reports/outstanding-balances'] });
       setDeletePaymentPlanDialog({ open: false, enrollmentId: null, enrollmentName: '', paymentCount: 0 });
     },
     onError: (error: any) => {
@@ -706,6 +708,7 @@ export default function ParentProfilePage() {
       });
       queryClient.invalidateQueries({ queryKey: [`/api/parent-profile/${parentId}`] });
       queryClient.invalidateQueries({ queryKey: ['scheduled-payments-upcoming'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/financial-reports/outstanding-balances'] });
       setDeleteScheduledPaymentDialog({ open: false, payment: null });
     },
     onError: (error: any) => {
@@ -968,6 +971,7 @@ export default function ParentProfilePage() {
       queryClient.invalidateQueries({ queryKey: [`/api/parent-profile/${parentId}`] });
       queryClient.invalidateQueries({ queryKey: ['/api/admin/financial-reports/summary'] });
       queryClient.invalidateQueries({ queryKey: ['/api/admin/financial-reports/class-breakdown'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/financial-reports/outstanding-balances'] });
       setCompDialogOpen(false);
       setSelectedEnrollment(null);
       setCompPercentage('100');
@@ -1017,6 +1021,7 @@ export default function ParentProfilePage() {
         description
       });
       queryClient.invalidateQueries({ queryKey: [`/api/parent-profile/${parentId}`] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/financial-reports/outstanding-balances'] });
       setReallocateDialogOpen(false);
       setSelectedEnrollment(null);
       resetReallocateForm();
