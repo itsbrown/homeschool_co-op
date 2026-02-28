@@ -33,6 +33,8 @@ export const users = pgTable("users", {
   activeRole: text("active_role"), // Currently active role for multi-role users (NULL means use primary role)
   activeRoleId: integer("active_role_id"), // ID of the currently active role from user_roles table (NULL means use primary role)
   stripeCustomerId: text("stripe_customer_id"), // Stripe customer ID for payments
+  autoPayEnabled: boolean("auto_pay_enabled").default(false).notNull(), // Whether parent has opted in to auto-pay for scheduled installments
+  stripeDefaultPaymentMethodId: text("stripe_default_payment_method_id"), // Saved Stripe payment method ID (pm_xxx) for auto-pay
   hasCompletedOnboarding: boolean("has_completed_onboarding").default(false), // Whether user has completed the onboarding tour
   memberId: text("member_id"), // System-generated or admin-assigned membership ID (e.g., ASA-2025-X7K9M2)
   createdAt: timestamp("created_at").defaultNow().notNull(),

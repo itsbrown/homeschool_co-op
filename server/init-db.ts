@@ -2305,6 +2305,12 @@ async function runMigrations() {
 
     console.log('✅ Migration completed: schedule builder schema drift fixed');
     
+    // Add auto-pay columns to users table
+    console.log('Running migration: Adding auto-pay columns to users table...');
+    await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS auto_pay_enabled BOOLEAN NOT NULL DEFAULT FALSE`);
+    await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_default_payment_method_id TEXT`);
+    console.log('✅ Migration completed: auto-pay columns added to users table');
+    
   } catch (fundraiserError) {
     const errorMessage = fundraiserError instanceof Error ? fundraiserError.message : String(fundraiserError);
     if (!errorMessage.includes('Database connection not available')) {

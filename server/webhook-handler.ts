@@ -1037,6 +1037,30 @@ export const webhookHandler = async (req: Request, res: Response) => {
           // This legacy code path for creating enrollments AFTER payment has been removed to prevent
           // database divergence. All enrollments should exist before the payment intent succeeds.
         }
+
+        // AUTO-PAY: Capture payment method ID for future auto-pay charges
+        // Only saves on the first successful payment — never overwrites an existing saved card
+        try {
+          const parentEmailForAutoPay = paymentIntent.metadata.parentEmail;
+          if (parentEmailForAutoPay) {
+            const parentUserForAutoPay = await storage.getUserByEmail(parentEmailForAutoPay);
+            const paymentMethodId = typeof paymentIntent.payment_method === 'string'
+              ? paymentIntent.payment_method
+              : (paymentIntent.payment_method as any)?.id;
+
+            if (paymentMethodId && parentUserForAutoPay?.stripeCustomerId && !parentUserForAutoPay?.stripeDefaultPaymentMethodId) {
+              await stripe.paymentMethods.attach(paymentMethodId, { customer: parentUserForAutoPay.stripeCustomerId });
+              await stripe.customers.update(parentUserForAutoPay.stripeCustomerId, {
+                invoice_settings: { default_payment_method: paymentMethodId },
+              });
+              await storage.updateUser(parentUserForAutoPay.id, { stripeDefaultPaymentMethodId: paymentMethodId });
+              console.log(`[AutoPay] ✅ Saved payment method ${paymentMethodId} for user ${parentUserForAutoPay.id}`);
+            }
+          }
+        } catch (autoPayErr: any) {
+          console.error('[AutoPay] Failed to save payment method (non-fatal):', autoPayErr.message);
+        }
+
       } catch (error) {
         console.error('❌ Error processing payment:', error);
       }
