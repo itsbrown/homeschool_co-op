@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
@@ -44,7 +44,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { AlertCircle, CreditCard, DollarSign, Calendar, Check, Clock, FileText, Search, ChevronDown, Award, Coins, Users } from "lucide-react";
+import { AlertCircle, CreditCard, DollarSign, Calendar, Check, Clock, FileText, Search, ChevronDown, Award, Coins, Users, Zap } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -1239,6 +1239,37 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
     },
   });
   
+  // Auto-pay: fetch saved card on file
+  const { data: paymentMethodData } = useQuery<{ cardOnFile: { brand: string; last4: string; expMonth: number; expYear: number } | null }>({
+    queryKey: ['/api/user/payment-method'],
+  });
+
+  // Auto-pay: fetch toggle state
+  const { data: autoPayStatusData } = useQuery<{ autoPayEnabled: boolean }>({
+    queryKey: ['/api/user/auto-pay-status'],
+  });
+
+  const { toast } = useToast();
+
+  const toggleAutoPayMutation = useMutation({
+    mutationFn: (enabled: boolean) => apiRequest('PATCH', '/api/user/auto-pay', { enabled }),
+    onSuccess: (_data, enabled) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/user/auto-pay-status'] });
+      toast({ title: enabled ? 'Auto Pay enabled' : 'Auto Pay disabled' });
+    },
+    onError: async (err: any) => {
+      let message = 'Could not update Auto Pay';
+      try {
+        const body = await err.json?.();
+        if (body?.error) message = body.error;
+      } catch {}
+      toast({ title: 'Auto Pay update failed', description: message, variant: 'destructive' });
+    },
+  });
+
+  const cardOnFile = paymentMethodData?.cardOnFile ?? null;
+  const autoPayEnabled = autoPayStatusData?.autoPayEnabled ?? false;
+
   // Filter payments based on search and status
   const filteredPayments = React.useMemo(() => {
     if (!payments) return [];
@@ -1826,6 +1857,52 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
         
         {/* Upcoming Payments Tab */}
         <TabsContent value="upcoming" className="space-y-4">
+          {/* Auto Pay Card */}
+          <Card className={autoPayEnabled ? "border-green-200 bg-green-50/30" : "border-muted"}>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Zap className={`h-5 w-5 ${autoPayEnabled ? "text-green-600" : "text-muted-foreground"}`} />
+                  <CardTitle className="text-base">Auto Pay</CardTitle>
+                  {autoPayEnabled ? (
+                    <Badge className="bg-green-100 text-green-700 border-green-200">Active</Badge>
+                  ) : (
+                    <Badge variant="secondary">Off</Badge>
+                  )}
+                </div>
+                {cardOnFile && (
+                  <Switch
+                    checked={autoPayEnabled}
+                    onCheckedChange={(checked) => toggleAutoPayMutation.mutate(checked)}
+                    disabled={toggleAutoPayMutation.isPending}
+                    aria-label="Toggle Auto Pay"
+                  />
+                )}
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0 space-y-3">
+              {cardOnFile ? (
+                <div className="flex items-center gap-3">
+                  <CreditCard className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <span className="text-sm capitalize">{cardOnFile.brand} ending in {cardOnFile.last4}</span>
+                  <span className="text-sm text-muted-foreground">· Expires {cardOnFile.expMonth}/{cardOnFile.expYear}</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <CreditCard className="h-4 w-4 shrink-0" />
+                  <span>No card on file. Complete a checkout to save your card for auto-pay.</span>
+                </div>
+              )}
+              {autoPayEnabled ? (
+                <p className="text-xs text-green-700">Upcoming installments will be charged automatically on their due date.</p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  {cardOnFile ? "Toggle the switch above to enable automatic payments on due dates." : "A saved card is required to enable auto pay."}
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
           {isLoading || isLoadingDbScheduled || isLoadingGrouped ? (
             <div className="text-center py-8">
               <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
@@ -1892,11 +1969,17 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
                                 <Calendar className="h-4 w-4" />
                               </div>
                               <div>
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2 flex-wrap">
                                   <h4 className="font-medium text-sm">{payment.childName || 'Child'}</h4>
                                   <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
                                     Class Enrollment
                                   </Badge>
+                                  {autoPayEnabled && (
+                                    <Badge variant="secondary" className="text-xs bg-green-50 text-green-700 border-green-200">
+                                      <Zap className="h-2.5 w-2.5 mr-1" />
+                                      Auto
+                                    </Badge>
+                                  )}
                                 </div>
                                 <p className="text-xs text-muted-foreground">
                                   {payment.className || 'Class'} - Installment {payment.installmentNumber}/{payment.totalInstallments}

@@ -456,6 +456,10 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
       
       // Start scheduled payment reconciliation job (syncs payment status daily at 3 AM UTC)
       startReconciliationJob();
+
+      // Start auto-pay job (charges saved cards for due installments every 24 hours)
+      const { startAutoPayJob } = await import('./services/auto-pay-scheduler.js');
+      startAutoPayJob();
       
       // Load notifications and notification recipients from JSON into database
       await storage.initializeNotifications();
