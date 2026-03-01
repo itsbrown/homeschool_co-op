@@ -159,12 +159,13 @@ The `remainingBalance` column on `program_enrollments` is a stored convenience f
 
 **Rule**: Never rely solely on `remainingBalance`. Always use the fallback pattern:
 ```typescript
-const effectiveBalance = enrollment.remainingBalance || ((enrollment.totalCost || 0) - (enrollment.totalPaid || 0));
+// ⚠️ Use ?? not || — || treats 0 as falsy, incorrectly re-evaluating a fully-paid enrollment
+const effectiveBalance = enrollment.remainingBalance ?? (enrollment.totalCost - enrollment.totalPaid);
 ```
 
 **For multiple enrollments**, extract a helper to keep it DRY:
 ```typescript
-const getEffectiveBalance = (e: any) => e.remainingBalance || ((e.totalCost || 0) - (e.totalPaid || 0));
+const getEffectiveBalance = (e: any) => e.remainingBalance ?? ((e.totalCost || 0) - (e.totalPaid || 0));
 ```
 
 **Gold-standard pattern** (used in `parent-profile.ts`): Compute dynamically and never read the stored field:
@@ -179,6 +180,23 @@ const actualRemainingBalance = CurrencyUtils.calculateBalance(totalCost, totalPa
 For outstanding balance totals, active payment plan counts, or any financial summary, query `program_enrollments` directly — **not `scheduled_payments`**. The `scheduled_payments` table is a subset: many enrollments have remaining balances but no scheduled_payment records (legacy enrollments pre-scheduling feature, comped enrollments, plans not yet scheduled).
 
 The authoritative fields are `totalCost`, `totalPaid`, and `remainingBalance` on `program_enrollments`.
+
+### Auto-Heal at Read Time
+
+When a report endpoint already fetches enrollment records, it can self-correct stale `scheduled_payments` in the same pass — no separate reconciliation job needed.
+
+```typescript
+const validBalances = enrichedBalances.filter(b => {
+  const isFullyPaid = b.enrollmentRemainingBalance !== undefined && b.enrollmentRemainingBalance <= 0;
+  if (isFullyPaid) {
+    storage.updateScheduledPaymentStatus(b.id, 'cancelled').catch(() => {}); // fire-and-forget
+    return false;
+  }
+  return true;
+});
+```
+
+Rules: check `!== undefined` before comparing (undefined means lookup failed, not that balance is zero); use `.catch(() => {})` so the background write never throws in a read endpoint; filter stale records out of the response immediately so the UI is accurate before the DB write completes. Pattern used in `server/api/financial-reports.ts` outstanding balances endpoint.
 
 **Gold-standard outstanding balance query:**
 ```sql
@@ -207,7 +225,7 @@ const result = await db
 
 ## Common Pitfalls
 
-- **Stored `remainingBalance` can be null**: Never use `enrollment.remainingBalance || 0` as a final value — always fall back to `totalCost - totalPaid`. See "Derived Financial Fields" above.
+- **Stored `remainingBalance` can be null or zero**: Never use `||` for the fallback — `||` treats `0` as falsy and incorrectly re-evaluates a fully-paid enrollment. Use `enrollment.remainingBalance ?? (enrollment.totalCost - enrollment.totalPaid)` instead. See "Derived Financial Fields" above.
 - **Outstanding balance undercount in reports**: Querying `SUM(scheduled_payments.amount WHERE status='pending')` misses families with no scheduled_payment records — always use `COALESCE(remaining_balance, total_cost - total_paid) FROM program_enrollments` for financial aggregations.
 - **Express route ordering**: Specific named routes (e.g., `/classes/assignments`) BEFORE parameterized routes (e.g., `/classes/:id`)
 - **Orphaned data**: `scheduled_payments` with deleted `program_enrollments` must be filtered out of admin views
@@ -270,3 +288,12 @@ function parseDateToYMD(dateStr: string | undefined | null): string | null {
 - Never rename columns — add the new column, migrate data, then remove the old one
 - Never change column types on primary keys or foreign keys
 - When adding a required column to an existing table, provide a `.default()` value
+
+## Key Files
+- `shared/schema.ts` — all Drizzle table definitions, insert schemas, and inferred types
+- `server/storage.ts` — `IStorage` interface and all storage method implementations
+- `server/init-db.ts` — idempotent `ALTER TABLE` migrations run on startup (replaces `db:push`)
+- `server/lib/database-url.ts` — resolves correct DB connection string (bypasses Supabase host)
+- `server/lib/prorate-calculator.ts` — proration date math
+- `server/api/csv-upload.ts` — `parseDateToYMD()` and `addMonthsYMD()` date string helpers
+- `server/api/financial-reports.ts` — outstanding balances report with auto-heal pattern

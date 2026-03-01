@@ -65,6 +65,14 @@ Each scheduled payment tracks:
 ### 6. Unique Constraint
 `(enrollmentId, scheduledDate, installmentNumber)` ensures no duplicate installments per enrollment per date.
 
+### 7. Sync Gap Risk
+
+Scheduled payment cancellation after a successful payment is wrapped in a non-fatal `try/catch` — it must not roll back a confirmed payment. If it silently fails, `scheduled_payments` can still show `status = 'pending'` while `program_enrollments.remainingBalance` is already $0. Consequences:
+- Financial reports overstate what families owe
+- Auto-pay scheduler may charge a fully-paid enrollment
+
+When cancelling on sync, always cancel both `pending` and `overdue` records — overdue installments are the same debt, just past their due date. Use the auto-heal-at-read-time pattern (see `asa-database-patterns`) in any endpoint that reads pending scheduled payments and can cross-reference enrollment balance.
+
 ## Scheduled Payment Schema
 ```
 scheduled_payments:
@@ -243,6 +251,12 @@ The frontend sends `expectedSchedule` (firstPaymentAmount + numberOfPayments fro
 ### Why This Matters
 Previously, the cart display and payment processor used independent calculation logic with different date sources. This caused the user to see "5 payments of $1,035" but be charged "2 payments of $2,587.50 + $810.00". The shared helper eliminates this class of bug.
 
+## Common Pitfalls
+
+- **Financial report shows balance owed for a fully-paid family** → stale `scheduled_payments` records remain `pending` after enrollment balance reaches zero (sync is non-fatal and can silently fail) → use the auto-heal-at-read-time pattern from `asa-database-patterns`; always verify `effectiveBalance` using the `??` fallback before treating a record as outstanding
+- **Auto-pay double-charges a fully-paid enrollment** → scheduler processes any `pending` scheduled payment without checking enrollment balance first → always call `storage.getProgramEnrollmentById()` and verify `effectiveBalance <= 0` before the Stripe call; skip rather than charge on any lookup error (see `server/services/auto-pay-scheduler.ts`)
+- **Comp leaves overdue installments on the books** → cancellation logic filters only `status = 'pending'`, missing `overdue` records → always filter `p.status === 'pending' || p.status === 'overdue'` when cancelling or reducing scheduled payments after a comp
+
 ## Best Practices
 
 ### Do
@@ -256,6 +270,8 @@ Previously, the cart display and payment processor used independent calculation 
 - Always record comp/prorate audit fields (who, when, reason, original amount) on enrollment
 - Always use `payment_allocations` for disbursement audit trail
 - Always check for orphaned `scheduled_payments` when displaying admin views (filter out those with deleted enrollments)
+- Always verify enrollment balance (using the `??` fallback from `asa-database-patterns`) before any off-session Stripe charge
+- Always skip (never charge) when an enrollment balance lookup fails — a missed charge is recoverable, a double-charge is not
 
 ### Don't
 - Don't trust client-side pricing or discount calculations
