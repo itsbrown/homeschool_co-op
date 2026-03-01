@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { TestDatabase } from '../tests/helpers/testDatabase';
 import { storage } from '../storage';
 import { nanoid } from 'nanoid';
+import { processOneScheduledPayment } from '../services/auto-pay-scheduler';
 
 const router = Router();
 
@@ -474,6 +475,204 @@ router.get('/school-students', async (req: Request, res: Response) => {
     res.status(500).json({ 
       error: 'Failed to fetch school students',
       details: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+/**
+ * POST /api/test/setup-auto-pay-scenario
+ * Seeds a self-contained DB state for a named auto-pay guard scenario.
+ * Uses nanoid for unique emails to avoid conflicts with existing data.
+ *
+ * Body: { scenario: 'autopay-disabled' | 'no-payment-method' | 'amount-too-small' |
+ *                   'enrollment-paid-in-full' | 'already-processing' }
+ * Returns: { scheduledPaymentId, parentId, enrollmentId }
+ *
+ * Note: 'already-processing' tests the idempotency guard:
+ *   A payment already in 'processing' state must not be charged again.
+ *   Guard fires before Stripe: sp.status !== 'pending' → return 'skipped'
+ *   Status is left unchanged at 'processing'.
+ *
+ * Note: DB constraints prevent the 'enrollment-not-found' scenario:
+ *   scheduled_payments.enrollment_id is NOT NULL + FK to program_enrollments.
+ *   Neon also blocks SET session_replication_role = 'replica' (superuser only).
+ *   That guard is covered by the code fix in auto-pay-scheduler.ts.
+ *
+ * Note: DB constraints prevent 'balance-null-still-blocks' scenario:
+ *   program_enrollments.remaining_balance is NOT NULL in DB (schema drift).
+ *   The ?? fallback is defensive code; the guard is validated by G4.
+ */
+router.post('/setup-auto-pay-scenario', async (req: Request, res: Response) => {
+  try {
+    const { scenario } = req.body;
+    const validScenarios = [
+      'autopay-disabled',
+      'no-payment-method',
+      'amount-too-small',
+      'enrollment-paid-in-full',
+      'already-processing',
+    ];
+    if (!scenario || !validScenarios.includes(scenario)) {
+      return res.status(400).json({ error: `Invalid scenario. Must be one of: ${validScenarios.join(', ')}` });
+    }
+
+    const uid = nanoid(8);
+    const testDb = new TestDatabase();
+
+    // Every scenario needs a school and parent — create minimal shared base
+    const admin = await testDb.createTestUser({
+      email: `ap_admin_${uid}@test.com`,
+      name: 'AutoPay Test Admin',
+      role: 'schoolAdmin',
+    });
+    const school = await testDb.createTestSchool(admin.id, {
+      name: `AutoPay School ${uid}`,
+      registrationCode: `AP${uid.toUpperCase()}`,
+    });
+    await storage.updateUser(admin.id, { schoolId: school.id });
+
+    // Determine parent config per scenario
+    const isAutoPayEnabled = scenario !== 'autopay-disabled';
+    const hasSavedCard = scenario !== 'no-payment-method';
+
+    const parent = await testDb.createTestUser({
+      email: `ap_parent_${uid}@test.com`,
+      name: 'AutoPay Test Parent',
+      role: 'parent',
+      schoolId: school.id,
+    });
+    await storage.updateUser(parent.id, {
+      autoPayEnabled: isAutoPayEnabled,
+      stripeCustomerId: hasSavedCard ? 'cus_test_placeholder' : null,
+      stripeDefaultPaymentMethodId: hasSavedCard ? 'pm_test_placeholder' : null,
+    });
+
+    // Create child (required for enrollment FK)
+    const child = await testDb.createTestChild(parent.id, {
+      firstName: 'AutoPay',
+      lastName: 'TestChild',
+      birthdate: '2015-01-01',
+      gradeLevel: '3rd Grade',
+      schoolId: school.id,
+      parentEmail: `ap_parent_${uid}@test.com`,
+    });
+
+    // Create a class using DB storage directly (must pass `category` text column required by DB)
+    const category = await testDb.createTestCategory(school.id, { name: `AutoPay Category ${uid}` });
+    const cls = await testDb.createTestClass(school.id, {
+      title: `AutoPay Class ${uid}`,
+      price: 10000,
+      status: 'active',
+      categoryId: category.id,
+      category: `AutoPay Category ${uid}`,
+    });
+
+    // Create enrollment — must pass all NOT NULL DB columns:
+    //   child_name, class_name (text, not null in DB)
+    //   status must be one of the CHECK constraint values:
+    //     pending_payment|pending_admin_approval|enrolled|waitlist|cancelled|completed|withdrawn|failed
+    //   remaining_balance is NOT NULL in DB (schema drift — Drizzle shows nullable but DB enforces NOT NULL)
+    const isFullyPaid = scenario === 'enrollment-paid-in-full';
+    const enrollment = await storage.createProgramEnrollment({
+      childId: child.id,
+      classId: cls.id,
+      parentId: parent.id,
+      parentEmail: `ap_parent_${uid}@test.com`,
+      schoolId: school.id,
+      status: 'enrolled',
+      paymentPlan: 'biweekly',
+      price: 10000,
+      totalCost: 10000,
+      totalPaid: isFullyPaid ? 10000 : 5000,
+      remainingBalance: isFullyPaid ? 0 : 5000,
+      childName: 'AutoPay TestChild',
+      className: cls.title,
+      paymentType: 'v2_stripe',
+    } as any);
+
+    // Determine payment amount and status per scenario
+    const paymentAmount = scenario === 'amount-too-small' ? 30 : 5000;
+    // 'already-processing': start with 'processing' status to test idempotency guard
+    const paymentStatus = scenario === 'already-processing' ? 'processing' : 'pending';
+    const yesterday = new Date(Date.now() - 86400000);
+
+    const scheduledPayment = await storage.createScheduledPayment({
+      schoolId: school.id,
+      enrollmentId: enrollment.id,
+      parentId: parent.id,
+      parentEmail: `ap_parent_${uid}@test.com`,
+      amount: paymentAmount,
+      currency: 'usd',
+      scheduledDate: yesterday,
+      frequency: 'one_time',
+      installmentNumber: 2,
+      totalInstallments: 2,
+      status: paymentStatus,
+    });
+
+    console.log(`✅ Auto-pay scenario seeded: ${scenario} (paymentId=${scheduledPayment.id}, parentId=${parent.id})`);
+
+    return res.json({
+      success: true,
+      scenario,
+      scheduledPaymentId: scheduledPayment.id,
+      parentId: parent.id,
+      enrollmentId: enrollment.id,
+    });
+  } catch (error) {
+    console.error('[Test] Error seeding auto-pay scenario:', error);
+    return res.status(500).json({
+      error: 'Failed to seed auto-pay scenario',
+      details: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+/**
+ * POST /api/test/run-auto-pay-for/:scheduledPaymentId
+ * Runs processOneScheduledPayment() for exactly one payment record.
+ * Only touches the specified payment — no other DB records affected.
+ *
+ * Returns: { result: 'charged' | 'skipped' | 'failed' }
+ */
+router.post('/run-auto-pay-for/:scheduledPaymentId', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.scheduledPaymentId);
+    if (isNaN(id)) return res.status(400).json({ error: 'Invalid scheduledPaymentId' });
+
+    const sp = await storage.getScheduledPaymentById(id);
+    if (!sp) return res.status(404).json({ error: `Scheduled payment ${id} not found` });
+
+    const result = await processOneScheduledPayment(sp);
+    return res.json({ success: true, result });
+  } catch (error) {
+    console.error('[Test] Error running auto-pay for payment:', error);
+    return res.status(500).json({
+      error: 'Failed to run auto-pay for payment',
+      details: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+/**
+ * GET /api/test/scheduled-payment/:id
+ * Returns the current state of a scheduled payment record.
+ * Used by tests to assert final status after triggering the scheduler.
+ */
+router.get('/scheduled-payment/:id', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: 'Invalid id' });
+
+    const payment = await storage.getScheduledPaymentById(id);
+    if (!payment) return res.status(404).json({ error: `Scheduled payment ${id} not found` });
+
+    return res.json({ success: true, payment });
+  } catch (error) {
+    console.error('[Test] Error fetching scheduled payment:', error);
+    return res.status(500).json({
+      error: 'Failed to fetch scheduled payment',
+      details: error instanceof Error ? error.message : String(error),
     });
   }
 });

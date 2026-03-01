@@ -29,4 +29,6 @@ module.exports = {
   coverageReporters: ['text', 'lcov', 'html'],
   moduleFileExtensions: ['ts', 'js', 'json'],
   testTimeout: 30000,
+  workerIdleMemoryLimit: '512MB',
+  maxWorkers: 1,
 };

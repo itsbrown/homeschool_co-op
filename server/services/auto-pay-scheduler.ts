@@ -76,6 +76,119 @@ async function notifyAutoPayFailure(scheduledPayment: any, parent: any, errMessa
 }
 
 /**
+ * Process a single scheduled payment record.
+ * Returns 'charged', 'skipped', or 'failed' for the caller to tally.
+ * Extracted so tests can invoke exactly one payment without touching other DB records.
+ */
+export async function processOneScheduledPayment(sp: any): Promise<'charged' | 'skipped' | 'failed'> {
+  try {
+    // Idempotency guard: only process payments in 'pending' state
+    // (processAutoPayments filters to pending, but this guard protects direct calls)
+    if (sp.status !== 'pending') {
+      console.log(`[AutoPay] Skipping payment ${sp.id} — status is '${sp.status}', not 'pending'`);
+      return 'skipped';
+    }
+
+    // Look up parent user
+    const parent = sp.parentId ? await storage.getUser(sp.parentId) : null;
+
+    if (!parent) {
+      console.log(`[AutoPay] Skipping payment ${sp.id} — parent user not found`);
+      return 'skipped';
+    }
+
+    if (!parent.autoPayEnabled) {
+      return 'skipped';
+    }
+
+    if (!parent.stripeDefaultPaymentMethodId || !parent.stripeCustomerId) {
+      console.log(`[AutoPay] Skipping payment ${sp.id} for user ${parent.id} — no saved payment method`);
+      return 'skipped';
+    }
+
+    if (!sp.amount || sp.amount < 50) {
+      console.log(`[AutoPay] Skipping payment ${sp.id} — amount ${sp.amount} is below Stripe minimum ($0.50)`);
+      return 'skipped';
+    }
+
+    // Guard: verify enrollment hasn't already been paid in full before charging
+    if (sp.enrollmentId) {
+      try {
+        const enrollment = await storage.getProgramEnrollmentById(sp.enrollmentId);
+        if (!enrollment) {
+          // Enrollment was deleted after this payment was scheduled — skip rather than charge
+          console.log(`[AutoPay] Skipping payment ${sp.id} — enrollment ${sp.enrollmentId} not found (deleted or never persisted)`);
+          return 'skipped';
+        }
+        // Use fallback per db-patterns: remainingBalance may be null or stale
+        const effectiveBalance = enrollment.remainingBalance ?? (enrollment.totalCost - enrollment.totalPaid);
+        if (effectiveBalance <= 0) {
+          console.log(`[AutoPay] Skipping payment ${sp.id} — enrollment ${sp.enrollmentId} already paid in full (balance: ${effectiveBalance})`);
+          await storage.updateScheduledPaymentStatus(sp.id, 'cancelled');
+          return 'skipped';
+        }
+      } catch (e) {
+        console.error(`[AutoPay] Could not verify enrollment balance for payment ${sp.id}:`, e);
+        // Skip rather than risk double-charging
+        return 'skipped';
+      }
+    }
+
+    // Idempotency guard: mark as processing before calling Stripe
+    await storage.updateScheduledPaymentStatus(sp.id, 'processing' as any);
+    console.log(`[AutoPay] Processing payment ${sp.id} for user ${parent.id} — $${(sp.amount / 100).toFixed(2)}`);
+
+    const stripe = await getStripeClient();
+    const intent = await stripe.paymentIntents.create({
+      amount: sp.amount,
+      currency: 'usd',
+      customer: parent.stripeCustomerId,
+      payment_method: parent.stripeDefaultPaymentMethodId,
+      confirm: true,
+      off_session: true,
+      metadata: {
+        paymentType: 'scheduled_payment',
+        scheduledPaymentId: String(sp.id),
+        enrollmentId: String(sp.enrollmentId || ''),
+        parentEmail: parent.email,
+        installmentNumber: String(sp.installmentNumber || ''),
+        totalInstallments: String(sp.totalInstallments || ''),
+        autoPayInitiated: 'true',
+      },
+    });
+
+    if (intent.status === 'succeeded') {
+      // The existing payment_intent.succeeded webhook will:
+      //   1. Mark scheduled_payment as completed
+      //   2. Update enrollment totalPaid and remainingBalance
+      //   3. Create payment history record
+      // We don't touch the enrollment here — the webhook handles it.
+      console.log(`[AutoPay] ✅ Payment ${sp.id} charged successfully — webhook will update enrollment`);
+      return 'charged';
+    } else {
+      // Stripe requires additional action (3DS, etc.) — not supported for off-session
+      throw new Error(`PaymentIntent requires action — status: ${intent.status}`);
+    }
+  } catch (err: any) {
+    console.error(`[AutoPay] ❌ Failed to charge payment ${sp.id}:`, err.message);
+
+    try {
+      await storage.updateScheduledPaymentStatus(sp.id, 'failed' as any);
+    } catch (updateErr: any) {
+      console.error(`[AutoPay] Failed to mark payment ${sp.id} as failed:`, updateErr.message);
+    }
+
+    // Notify the parent
+    const parent = sp.parentId ? await storage.getUser(sp.parentId) : null;
+    if (parent) {
+      await notifyAutoPayFailure(sp, parent, err.message);
+    }
+
+    return 'failed';
+  }
+}
+
+/**
  * Process all pending scheduled payments that are past due for parents with auto-pay enabled.
  */
 async function processAutoPayments(): Promise<void> {
@@ -107,106 +220,10 @@ async function processAutoPayments(): Promise<void> {
     let failed = 0;
 
     for (const sp of duePayments) {
-      try {
-        // Look up parent user
-        const parent = sp.parentId ? await storage.getUser(sp.parentId) : null;
-
-        if (!parent) {
-          console.log(`[AutoPay] Skipping payment ${sp.id} — parent user not found`);
-          skipped++;
-          continue;
-        }
-
-        if (!parent.autoPayEnabled) {
-          skipped++;
-          continue;
-        }
-
-        if (!parent.stripeDefaultPaymentMethodId || !parent.stripeCustomerId) {
-          console.log(`[AutoPay] Skipping payment ${sp.id} for user ${parent.id} — no saved payment method`);
-          skipped++;
-          continue;
-        }
-
-        if (!sp.amount || sp.amount < 50) {
-          console.log(`[AutoPay] Skipping payment ${sp.id} — amount ${sp.amount} is below Stripe minimum ($0.50)`);
-          skipped++;
-          continue;
-        }
-
-        // Guard: verify enrollment hasn't already been paid in full before charging
-        if (sp.enrollmentId) {
-          try {
-            const enrollment = await storage.getProgramEnrollmentById(sp.enrollmentId);
-            if (enrollment) {
-              // Use fallback per db-patterns: remainingBalance may be null or stale
-              const effectiveBalance = enrollment.remainingBalance ?? (enrollment.totalCost - enrollment.totalPaid);
-              if (effectiveBalance <= 0) {
-                console.log(`[AutoPay] Skipping payment ${sp.id} — enrollment ${sp.enrollmentId} already paid in full (balance: ${effectiveBalance})`);
-                await storage.updateScheduledPaymentStatus(sp.id, 'cancelled');
-                skipped++;
-                continue;
-              }
-            }
-          } catch (e) {
-            console.error(`[AutoPay] Could not verify enrollment balance for payment ${sp.id}:`, e);
-            // Skip rather than risk double-charging
-            skipped++;
-            continue;
-          }
-        }
-
-        // Idempotency guard: mark as processing before calling Stripe
-        await storage.updateScheduledPaymentStatus(sp.id, 'processing' as any);
-        console.log(`[AutoPay] Processing payment ${sp.id} for user ${parent.id} — $${(sp.amount / 100).toFixed(2)}`);
-
-        const stripe = await getStripeClient();
-        const intent = await stripe.paymentIntents.create({
-          amount: sp.amount,
-          currency: 'usd',
-          customer: parent.stripeCustomerId,
-          payment_method: parent.stripeDefaultPaymentMethodId,
-          confirm: true,
-          off_session: true,
-          metadata: {
-            paymentType: 'scheduled_payment',
-            scheduledPaymentId: String(sp.id),
-            enrollmentId: String(sp.enrollmentId || ''),
-            parentEmail: parent.email,
-            installmentNumber: String(sp.installmentNumber || ''),
-            totalInstallments: String(sp.totalInstallments || ''),
-            autoPayInitiated: 'true',
-          },
-        });
-
-        if (intent.status === 'succeeded') {
-          // The existing payment_intent.succeeded webhook will:
-          //   1. Mark scheduled_payment as completed
-          //   2. Update enrollment totalPaid and remainingBalance
-          //   3. Create payment history record
-          // We don't touch the enrollment here — the webhook handles it.
-          console.log(`[AutoPay] ✅ Payment ${sp.id} charged successfully — webhook will update enrollment`);
-          charged++;
-        } else {
-          // Stripe requires additional action (3DS, etc.) — not supported for off-session
-          throw new Error(`PaymentIntent requires action — status: ${intent.status}`);
-        }
-      } catch (err: any) {
-        console.error(`[AutoPay] ❌ Failed to charge payment ${sp.id}:`, err.message);
-        failed++;
-
-        try {
-          await storage.updateScheduledPaymentStatus(sp.id, 'failed' as any);
-        } catch (updateErr: any) {
-          console.error(`[AutoPay] Failed to mark payment ${sp.id} as failed:`, updateErr.message);
-        }
-
-        // Notify the parent
-        const parent = sp.parentId ? await storage.getUser(sp.parentId) : null;
-        if (parent) {
-          await notifyAutoPayFailure(sp, parent, err.message);
-        }
-      }
+      const result = await processOneScheduledPayment(sp);
+      if (result === 'charged') charged++;
+      else if (result === 'skipped') skipped++;
+      else failed++;
     }
 
     console.log(`[AutoPay] Run complete — charged: ${charged}, skipped: ${skipped}, failed: ${failed}`);
