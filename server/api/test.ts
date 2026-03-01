@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { TestDatabase } from '../tests/helpers/testDatabase';
 import { storage } from '../storage';
 import { nanoid } from 'nanoid';
-import { processOneScheduledPayment } from '../services/auto-pay-scheduler';
+import { processOneScheduledPayment, recoverOneScheduledPayment } from '../services/auto-pay-scheduler';
 
 const router = Router();
 
@@ -511,6 +511,9 @@ router.post('/setup-auto-pay-scenario', async (req: Request, res: Response) => {
       'amount-too-small',
       'enrollment-paid-in-full',
       'already-processing',
+      'retry-cap-exceeded',
+      'staleness-cutoff',
+      'stuck-processing-no-pi',
     ];
     if (!scenario || !validScenarios.includes(scenario)) {
       return res.status(400).json({ error: `Invalid scenario. Must be one of: ${validScenarios.join(', ')}` });
@@ -590,11 +593,13 @@ router.post('/setup-auto-pay-scenario', async (req: Request, res: Response) => {
       paymentType: 'v2_stripe',
     } as any);
 
-    // Determine payment amount and status per scenario
+    // Determine payment amount, status and date per scenario
     const paymentAmount = scenario === 'amount-too-small' ? 30 : 5000;
-    // 'already-processing': start with 'processing' status to test idempotency guard
-    const paymentStatus = scenario === 'already-processing' ? 'processing' : 'pending';
+    const paymentStatus =
+      scenario === 'already-processing' || scenario === 'stuck-processing-no-pi' ? 'processing' : 'pending';
     const yesterday = new Date(Date.now() - 86400000);
+    const twentyDaysAgo = new Date(Date.now() - 20 * 86400000);
+    const scheduledDate = scenario === 'staleness-cutoff' ? twentyDaysAgo : yesterday;
 
     const scheduledPayment = await storage.createScheduledPayment({
       schoolId: school.id,
@@ -603,12 +608,17 @@ router.post('/setup-auto-pay-scenario', async (req: Request, res: Response) => {
       parentEmail: `ap_parent_${uid}@test.com`,
       amount: paymentAmount,
       currency: 'usd',
-      scheduledDate: yesterday,
+      scheduledDate,
       frequency: 'one_time',
       installmentNumber: 2,
       totalInstallments: 2,
       status: paymentStatus,
     });
+
+    // For retry-cap-exceeded: set retryCount to MAX so the guard fires immediately
+    if (scenario === 'retry-cap-exceeded') {
+      await storage.updateScheduledPayment(scheduledPayment.id, { retryCount: 3 });
+    }
 
     console.log(`✅ Auto-pay scenario seeded: ${scenario} (paymentId=${scheduledPayment.id}, parentId=${parent.id})`);
 
@@ -672,6 +682,58 @@ router.get('/scheduled-payment/:id', async (req: Request, res: Response) => {
     console.error('[Test] Error fetching scheduled payment:', error);
     return res.status(500).json({
       error: 'Failed to fetch scheduled payment',
+      details: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+/**
+ * POST /api/test/run-recovery-for/:scheduledPaymentId
+ * Calls recoverOneScheduledPayment() directly for a specific payment ID.
+ * Bypasses the olderThanMinutes time filter — intended for test use only.
+ *
+ * Returns: { result: 'reset' | 'completed' | 'failed' | 'left-alone' }
+ */
+router.post('/run-recovery-for/:scheduledPaymentId', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.scheduledPaymentId);
+    if (isNaN(id)) return res.status(400).json({ error: 'Invalid scheduledPaymentId' });
+
+    const sp = await storage.getScheduledPaymentById(id);
+    if (!sp) return res.status(404).json({ error: `Scheduled payment ${id} not found` });
+
+    const result = await recoverOneScheduledPayment(sp);
+    return res.json({ success: true, result });
+  } catch (error) {
+    console.error('[Test] Error running recovery for payment:', error);
+    return res.status(500).json({
+      error: 'Failed to run recovery for payment',
+      details: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+/**
+ * GET /api/test/due-scheduled-payments
+ * Returns IDs of pending payments within the 14-day staleness window.
+ * Used by G7 to verify that stale payments are excluded at the DB level.
+ *
+ * Returns: { paymentIds: number[] }
+ */
+router.get('/due-scheduled-payments', async (req: Request, res: Response) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const payments = await storage.getDueScheduledPayments(today, 14);
+    return res.json({
+      success: true,
+      paymentIds: payments.map((p: any) => p.id),
+      count: payments.length,
+    });
+  } catch (error) {
+    console.error('[Test] Error fetching due scheduled payments:', error);
+    return res.status(500).json({
+      error: 'Failed to fetch due scheduled payments',
       details: error instanceof Error ? error.message : String(error),
     });
   }

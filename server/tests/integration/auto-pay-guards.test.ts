@@ -1,20 +1,25 @@
 /**
  * Integration Tests: Auto-Pay Scheduler Guard Conditions
  *
- * Tests the 5 pre-charge guards in processOneScheduledPayment() by:
+ * Tests the pre-charge guards and production-hardening behaviours in the auto-pay system by:
  *  1. Seeding a self-contained DB scenario via POST /api/test/setup-auto-pay-scenario
  *  2. Triggering the single-payment function via POST /api/test/run-auto-pay-for/:id
  *  3. Asserting the scheduled payment's final status via GET /api/test/scheduled-payment/:id
  *
  * All test endpoints bypass Supabase auth via X-Test-Token (testOnlyMiddleware).
- * No Stripe credentials are used — all 5 guards fire before the Stripe call.
+ * No Stripe credentials are used — all guards fire before the Stripe call.
  *
- * Guards tested:
+ * Guards tested (G1–G5):
  *  G1: autoPayEnabled === false       → status stays 'pending'
  *  G2: No saved payment method        → status stays 'pending'
  *  G3: amount < 50 cents              → status stays 'pending'
  *  G4: enrollment already paid (balance = 0) → status set to 'cancelled' (critical double-charge guard)
  *  G5: payment already in 'processing' state → status stays 'processing' (idempotency guard)
+ *
+ * Production-hardening behaviours (G6–G8):
+ *  G6: retryCount >= 3 (MAX_RETRIES)  → status set to 'failed', failureReason contains 'Exceeded'
+ *  G7: scheduledDate 20 days ago      → excluded by getDueScheduledPayments (14-day staleness window)
+ *  G8: stuck-processing with no PI ID → recoverOneScheduledPayment resets to 'pending'
  *
  * Guards NOT tested here due to Neon DB constraints:
  *  'enrollment-not-found': scheduled_payments.enrollment_id is NOT NULL + FK.
@@ -60,7 +65,7 @@ async function triggerGuard(scheduledPaymentId: number): Promise<'charged' | 'sk
   return data.result;
 }
 
-async function getPaymentStatus(scheduledPaymentId: number): Promise<string> {
+async function getPayment(scheduledPaymentId: number): Promise<any> {
   const res = await fetch(`${BASE_URL}/api/test/scheduled-payment/${scheduledPaymentId}`, {
     method: 'GET',
     headers: HEADERS,
@@ -70,7 +75,38 @@ async function getPaymentStatus(scheduledPaymentId: number): Promise<string> {
     throw new Error(`scheduled-payment/${scheduledPaymentId} lookup failed (${res.status}): ${body}`);
   }
   const data = await res.json() as any;
-  return data.payment.status;
+  return data.payment;
+}
+
+async function getPaymentStatus(scheduledPaymentId: number): Promise<string> {
+  const payment = await getPayment(scheduledPaymentId);
+  return payment.status;
+}
+
+async function runRecovery(scheduledPaymentId: number): Promise<'reset' | 'completed' | 'failed' | 'left-alone'> {
+  const res = await fetch(`${BASE_URL}/api/test/run-recovery-for/${scheduledPaymentId}`, {
+    method: 'POST',
+    headers: HEADERS,
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`run-recovery-for/${scheduledPaymentId} failed (${res.status}): ${body}`);
+  }
+  const data = await res.json() as any;
+  return data.result;
+}
+
+async function getDuePaymentIds(): Promise<number[]> {
+  const res = await fetch(`${BASE_URL}/api/test/due-scheduled-payments`, {
+    method: 'GET',
+    headers: HEADERS,
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`due-scheduled-payments failed (${res.status}): ${body}`);
+  }
+  const data = await res.json() as any;
+  return data.paymentIds;
 }
 
 describe('Auto-Pay Guard Conditions', () => {
@@ -119,6 +155,40 @@ describe('Auto-Pay Guard Conditions', () => {
 
     expect(result).toBe('skipped');
     expect(status).toBe('processing');
+  }, 30000);
+
+  it('G6: retry-cap-exceeded — permanently fails without calling Stripe, failureReason contains Exceeded', async () => {
+    // Payment seeded with retryCount=3 (= MAX_RETRIES)
+    // Guard fires before Stripe: retryCount >= MAX_RETRIES → status 'failed', return 'failed'
+    const { scheduledPaymentId } = await seedScenario('retry-cap-exceeded');
+    const result = await triggerGuard(scheduledPaymentId);
+    const payment = await getPayment(scheduledPaymentId);
+
+    expect(result).toBe('failed');
+    expect(payment.status).toBe('failed');
+    expect(payment.failureReason).toMatch(/Exceeded/i);
+  }, 30000);
+
+  it('G7: staleness-cutoff — 20-day-old payment is excluded from getDueScheduledPayments (14-day window)', async () => {
+    // Payment seeded with scheduledDate = 20 days ago
+    // getDueScheduledPayments(today, 14) must NOT include this payment
+    const { scheduledPaymentId } = await seedScenario('staleness-cutoff');
+    const dueIds = await getDuePaymentIds();
+    const status = await getPaymentStatus(scheduledPaymentId);
+
+    expect(dueIds).not.toContain(scheduledPaymentId);
+    expect(status).toBe('pending'); // untouched — scheduler never saw it
+  }, 30000);
+
+  it('G8: stuck-processing-no-pi — recovery resets to pending when no Stripe PI was created', async () => {
+    // Payment seeded with status='processing' and no stripePaymentIntentId
+    // Case A: Stripe was never called → safe to reset to pending
+    const { scheduledPaymentId } = await seedScenario('stuck-processing-no-pi');
+    const result = await runRecovery(scheduledPaymentId);
+    const status = await getPaymentStatus(scheduledPaymentId);
+
+    expect(result).toBe('reset');
+    expect(status).toBe('pending');
   }, 30000);
 });
 

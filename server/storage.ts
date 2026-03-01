@@ -395,6 +395,8 @@ export interface IStorage {
   getScheduledPaymentsByParentEmail(parentEmail: string): Promise<any[]>;
   getScheduledPaymentsByEnrollmentId(enrollmentId: number): Promise<any[]>;
   getAllScheduledPayments(): Promise<any[]>;
+  getDueScheduledPayments(asOfDate: Date, maxStaleDays: number): Promise<any[]>;
+  getStuckProcessingPayments(olderThanMinutes: number): Promise<any[]>;
   updateScheduledPayment(id: number, payment: Partial<InsertScheduledPayment>): Promise<any | undefined>;
   updateScheduledPaymentStatus(id: number, status: string): Promise<any | undefined>;
   updateScheduledPaymentReminderCount(id: number, count: number): Promise<any | undefined>;
@@ -6895,6 +6897,41 @@ import { DatabaseStorage } from "./dbStorage";
         } catch (error) {
           console.error('❌ Error fetching scheduled payments from database:', error);
           return await this.memStorage.getAllScheduledPayments();
+        }
+      }
+
+      async getDueScheduledPayments(asOfDate: Date, maxStaleDays: number): Promise<any[]> {
+        try {
+          if (this.dbStorage && typeof this.dbStorage.getDueScheduledPayments === 'function') {
+            return await this.dbStorage.getDueScheduledPayments(asOfDate, maxStaleDays);
+          }
+          const all = await this.memStorage.getAllScheduledPayments();
+          const cutoff = new Date(asOfDate.getTime() - maxStaleDays * 86400000);
+          return all.filter((p: any) => {
+            if (p.status !== 'pending') return false;
+            const d = new Date(p.scheduledDate);
+            return d <= asOfDate && d >= cutoff;
+          });
+        } catch (error) {
+          console.error('❌ Error in getDueScheduledPayments:', error);
+          return [];
+        }
+      }
+
+      async getStuckProcessingPayments(olderThanMinutes: number): Promise<any[]> {
+        try {
+          if (this.dbStorage && typeof this.dbStorage.getStuckProcessingPayments === 'function') {
+            return await this.dbStorage.getStuckProcessingPayments(olderThanMinutes);
+          }
+          const all = await this.memStorage.getAllScheduledPayments();
+          const cutoff = new Date(Date.now() - olderThanMinutes * 60000);
+          return all.filter((p: any) => {
+            if (p.status !== 'processing') return false;
+            return p.updatedAt && new Date(p.updatedAt) < cutoff;
+          });
+        } catch (error) {
+          console.error('❌ Error in getStuckProcessingPayments:', error);
+          return [];
         }
       }
 

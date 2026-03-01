@@ -41,6 +41,7 @@ The platform features a full-stack architecture designed for scalability, securi
 -   **Fundraiser System**: Complete management for product-based campaigns for schools, including storefront and credit integration.
 -   **Refund Management System**: Comprehensive refund processing with pro-rated calculator and structured reason codes.
 -   **Payment Reminder Tracking System**: Audit logging for automatic and manual payment reminders with school admin visibility.
+-   **Hardened Auto-Pay Scheduler**: Production-grade auto-pay with 6 safety behaviours: stuck-`processing` recovery (Stripe reconciliation), retry cap (3 attempts via `retryCount`), 14-day staleness cutoff (`getDueScheduledPayments` DB query), pre-charge notifications (in-app + email, 20h dedup), webhook retry cap, and DB-level due-payment query replacing in-memory filter. 10 integration tests (G1–G8 + 2 security) all pass.
 -   **Educator Dashboard**: Tools for managing classes, attendance, lesson plans, and logging work hours.
 -   **Unified File Upload System**: Production-grade system using Replit App Storage for secure, scalable file handling with category-based validation and presigned URLs.
 -   **Reading Assessment Tracking System**: McCall-Crabbs format with auto-averaging of grade-level scores, automatic Lexile score conversion, and parent/admin reporting.
