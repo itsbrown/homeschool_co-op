@@ -65,6 +65,9 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json', limit: '
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: false, limit: '50mb' }));
 
+// Lightweight health check — must respond instantly for Cloud Run health probes
+app.get('/health', (_req, res) => res.json({ status: 'ok' }));
+
 // Apply fileUpload middleware only to file upload routes
 app.use('/api/school-admin/contact-import', fileUpload({
   useTempFiles: false,
@@ -438,52 +441,48 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
   }, async () => {
     log(`serving on port ${port}`);
     
-    // Ensure critical admin users have proper database roles (runs in all environments)
-    // This is idempotent and only adds missing roles
-    await ensureAdminRoles();
+    // Ensure critical admin users have proper database roles (idempotent — safe to run in background)
+    ensureAdminRoles().catch(err =>
+      console.error('⚠️ ensureAdminRoles failed (non-fatal):', err)
+    );
 
-    // Background jobs and data loading only run in development
-    // Autoscale deployments don't support persistent background tasks
-    if (currentEnv === 'development' || currentEnv === 'test') {
-      console.log('🔧 Development mode: Starting background services...');
-      
-      // Dynamically import background services to avoid side effects in production
-      const { backupService } = await import('./services/backupService.js');
-      const { MembershipStatusService } = await import('./services/membership-status-service.js');
-      const { startEnrollmentReminderScheduler } = await import('./services/enrollmentReminderScheduler.js');
-      const { startScheduledPaymentReminderJob } = await import('./services/scheduled-payment-reminders.js');
-      const { startCreditExpirationJob } = await import('./services/creditExpirationService.js');
-      const { startReconciliationJob } = await import('./services/scheduled-payment-reconciliation-job.js');
-      const { storage } = await import('./storage.js');
-      
-      // Initialize and start backup service
-      await backupService.init();
-      backupService.startAutomaticBackups(24); // Backup every 24 hours
-      
-      // Initialize membership status tracking service
-      MembershipStatusService.initializeMembershipStatusJob();
-      
-      // Start enrollment payment reminder scheduler
-      startEnrollmentReminderScheduler();
-      
-      // Start scheduled payment reminder job (sends email reminders for upcoming/overdue payments)
-      startScheduledPaymentReminderJob();
-      
-      // Start credit expiration job (marks expired credits every 12 hours)
-      startCreditExpirationJob();
-      
-      // Start scheduled payment reconciliation job (syncs payment status daily at 3 AM UTC)
-      startReconciliationJob();
+    // Background schedulers — run in all environments (Reserved VM keeps the process alive)
+    console.log(`🔧 Starting background services (${currentEnv})...`);
+    
+    const { backupService } = await import('./services/backupService.js');
+    const { MembershipStatusService } = await import('./services/membership-status-service.js');
+    const { startEnrollmentReminderScheduler } = await import('./services/enrollmentReminderScheduler.js');
+    const { startScheduledPaymentReminderJob } = await import('./services/scheduled-payment-reminders.js');
+    const { startCreditExpirationJob } = await import('./services/creditExpirationService.js');
+    const { startReconciliationJob } = await import('./services/scheduled-payment-reconciliation-job.js');
+    const { storage } = await import('./storage.js');
+    
+    // Initialize and start backup service
+    await backupService.init();
+    backupService.startAutomaticBackups(24); // Backup every 24 hours
+    
+    // Initialize membership status tracking service
+    MembershipStatusService.initializeMembershipStatusJob();
+    
+    // Start enrollment payment reminder scheduler
+    startEnrollmentReminderScheduler();
+    
+    // Start scheduled payment reminder job (sends email reminders for upcoming/overdue payments)
+    startScheduledPaymentReminderJob();
+    
+    // Start credit expiration job (marks expired credits every 12 hours)
+    startCreditExpirationJob();
+    
+    // Start scheduled payment reconciliation job (syncs payment status daily at 3 AM UTC)
+    startReconciliationJob();
 
-      // Start auto-pay job (charges saved cards for due installments every 24 hours)
-      const { startAutoPayJob } = await import('./services/auto-pay-scheduler.js');
-      startAutoPayJob();
-      
-      // Load notifications and notification recipients from JSON into database
-      await storage.initializeNotifications();
-    } else {
-      console.log('☁️ Production mode: Background jobs disabled (not compatible with Autoscale deployments)');
-      console.log('💡 Use Scheduled Deployments or Reserved VM for background tasks');
-    }
+    // Start auto-pay job (charges saved cards for due installments every 24 hours)
+    const { startAutoPayJob } = await import('./services/auto-pay-scheduler.js');
+    startAutoPayJob();
+    
+    // Load notifications into database (non-blocking — does not delay health checks)
+    storage.initializeNotifications().catch(err =>
+      console.error('⚠️ initializeNotifications failed (non-fatal):', err)
+    );
   });
 })();
