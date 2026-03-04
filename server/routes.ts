@@ -130,10 +130,9 @@ function requireSchoolContext(req: any, res: any): number | null {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Initialize database tables
-  // Migrations are idempotent and safe to run multiple times
-  const { initializeDatabase } = await import('./init-db');
-  await initializeDatabase();
+  // NOTE: initializeDatabase() is intentionally NOT called here.
+  // It is deferred until after server.listen() so the health check endpoint
+  // responds immediately. See server/index.ts listen callback.
 
   // Import Supabase authentication middleware
   const { supabaseAuth } = await import("./middleware/supabase-auth");

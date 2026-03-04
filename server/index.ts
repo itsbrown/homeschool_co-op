@@ -441,6 +441,17 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
   }, async () => {
     log(`serving on port ${port}`);
     
+    // Run database migrations in the background — idempotent, safe to defer after listen
+    // This prevents migrations from blocking the health check endpoint during cold-start
+    (async () => {
+      try {
+        const { initializeDatabase } = await import('./init-db.js');
+        await initializeDatabase();
+      } catch (err) {
+        console.error('⚠️ initializeDatabase failed (non-fatal):', err);
+      }
+    })();
+
     // Ensure critical admin users have proper database roles (idempotent — safe to run in background)
     ensureAdminRoles().catch(err =>
       console.error('⚠️ ensureAdminRoles failed (non-fatal):', err)
