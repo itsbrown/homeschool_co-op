@@ -18,7 +18,8 @@ The platform features a full-stack architecture designed for scalability, securi
 -   **Language**: TypeScript with ESM modules.
 -   **API Design**: RESTful JSON API.
 -   **Authentication Middleware**: Supabase-only authentication; protected API endpoints map Supabase UUID to an integer ID.
--   **Server Entry Point Split**: `server/index.ts` is a tiny (~30 line) entry point that only imports `express` and `http`, binds to port 5000 in < 250ms, then dynamically loads `server/app-init.ts` (all routers, middleware, schedulers) in the background. This is critical for deployment health checks. The build uses esbuild `--splitting` to emit two separate chunks: `dist/index.js` (~3 KB) and `dist/app-init-[hash].js` (~1.3 MB). **Do not add static imports to `server/index.ts` — it must stay tiny.**
+-   **Server Entry Point Split**: `server/index.ts` is the entry point that binds to port 5000 in < 250ms, registers `/health` and production static file serving immediately, then dynamically loads `server/app-init.ts` (all routers, middleware, schedulers) in the background. In production, `express.static(dist/public)` + SPA catch-all is registered **before** `httpServer.listen()` so Replit's health check probe at GET `/` always gets HTTP 200 instantly. The build uses esbuild `--splitting`: `dist/index.js` (~3.7 KB) and `dist/app-init-[hash].js` (~1.3 MB). **Do not add heavy module imports to `server/index.ts` — only Node.js builtins (path, fs, http) and express are allowed.**
+-   **Deployment Type**: **MUST be Reserved VM** (not Autoscale). This app runs persistent background schedulers (auto-pay, enrollment reminders, credit expiration, reconciliation), uses WebSocket, and has in-memory state — all incompatible with Autoscale/Cloud Run. When publishing, verify the Replit publish dialog shows "Reserved VM". The `.replit` `deploymentTarget = "vm"` enforces this.
 
 **Data Persistence:**
 -   **Primary Database**: PostgreSQL (Neon-hosted).
