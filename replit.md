@@ -18,6 +18,7 @@ The platform features a full-stack architecture designed for scalability, securi
 -   **Language**: TypeScript with ESM modules.
 -   **API Design**: RESTful JSON API.
 -   **Authentication Middleware**: Supabase-only authentication; protected API endpoints map Supabase UUID to an integer ID.
+-   **Server Entry Point Split**: `server/index.ts` is a tiny (~30 line) entry point that only imports `express` and `http`, binds to port 5000 in < 250ms, then dynamically loads `server/app-init.ts` (all routers, middleware, schedulers) in the background. This is critical for deployment health checks. The build uses esbuild `--splitting` to emit two separate chunks: `dist/index.js` (~3 KB) and `dist/app-init-[hash].js` (~1.3 MB). **Do not add static imports to `server/index.ts` — it must stay tiny.**
 
 **Data Persistence:**
 -   **Primary Database**: PostgreSQL (Neon-hosted).

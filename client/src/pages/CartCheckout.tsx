@@ -11,8 +11,8 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { useLocation } from 'wouter';
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiRequest } from '@/lib/queryClient';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import { apiRequest, queryClient } from '@/lib/queryClient';
 import { Switch } from '@/components/ui/switch';
 import { ShoppingCart, CreditCard, Percent, Gift, AlertCircle, Check, Loader2, Calendar, DollarSign, Clock, CheckCircle2, Award, RefreshCw, ArrowLeft, Zap } from 'lucide-react';
 import ParentAppShell from '@/components/layout/ParentAppShell';
@@ -246,8 +246,6 @@ export default function CartCheckout() {
   }, [selectedPaymentPlan]);
 
   // Auto-pay status query and toggle (only relevant when biweekly is selected)
-  const autoPayQueryClient = useQueryClient();
-
   const { data: autoPayData, isLoading: autoPayLoading } = useQuery({
     queryKey: ['/api/user/auto-pay-status'],
     enabled: isAuthenticated,
@@ -269,7 +267,7 @@ export default function CartCheckout() {
       return res.json();
     },
     onSuccess: () => {
-      autoPayQueryClient.invalidateQueries({ queryKey: ['/api/user/auto-pay-status'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/user/auto-pay-status'] });
     },
     onError: () => {
       toast({ title: 'Could not update auto-pay setting. Please try again.', variant: 'destructive' });
