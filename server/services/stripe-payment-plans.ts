@@ -207,9 +207,8 @@ export class StripePaymentPlanService {
       // Store phases for scheduled payment creation at confirmation time
       const futurePhases = phases.slice(1).map(p => ({
         amount: p.amount,
-        dueDate: p.dueDate.toISOString(),
-        installmentNumber: p.installmentNumber,
-        description: p.description
+        dueDate: p.dueDate.toISOString().split('T')[0],
+        installmentNumber: p.installmentNumber
       }));
       
       const paymentMetadata: Record<string, string> = {
@@ -326,7 +325,6 @@ export class StripePaymentPlanService {
       amount: number;
       dueDate: string;
       installmentNumber: number;
-      description: string;
     }>;
     const totalInstallments = parseInt(metadata.totalInstallments || '1', 10);
     

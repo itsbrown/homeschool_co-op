@@ -581,7 +581,10 @@ export default function ParentConciergePage() {
               <Sparkles className="h-4 w-4 text-white" />
             </div>
             <div>
-              <h2 className="text-sm font-semibold">ASA Assistant</h2>
+              <div className="flex items-center gap-1.5">
+                <h2 className="text-sm font-semibold">ASA Assistant</h2>
+                <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 font-medium tracking-wide">BETA</Badge>
+              </div>
               <p className="text-xs text-muted-foreground">Your school concierge</p>
             </div>
           </div>
@@ -599,7 +602,10 @@ export default function ParentConciergePage() {
             <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center">
               <Sparkles className="h-3.5 w-3.5 text-white" />
             </div>
-            <span className="text-sm font-semibold">ASA Assistant</span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm font-semibold">ASA Assistant</span>
+              <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 font-medium tracking-wide">BETA</Badge>
+            </div>
           </div>
           <Link href="/parent/home">
             <Button variant="ghost" size="sm" className="text-xs gap-1">

@@ -104,7 +104,7 @@ router.post('/setup-cart-scenario', async (req: Request, res: Response) => {
       title: `Math Fundamentals Cart Test ${uniqueId}`,
       description: 'Test class for cart persistence',
       price: 10000, // $100.00
-      status: 'active',
+      status: 'upcoming',
       categoryId: category.id
     });
     
@@ -565,7 +565,7 @@ router.post('/setup-auto-pay-scenario', async (req: Request, res: Response) => {
     const cls = await testDb.createTestClass(school.id, {
       title: `AutoPay Class ${uid}`,
       price: 10000,
-      status: 'active',
+      status: 'upcoming',
       categoryId: category.id,
       category: `AutoPay Category ${uid}`,
     });
