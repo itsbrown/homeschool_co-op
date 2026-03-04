@@ -129,7 +129,7 @@ function requireSchoolContext(req: any, res: any): number | null {
   return schoolId;
 }
 
-export async function registerRoutes(app: Express): Promise<Server> {
+export async function registerRoutes(app: Express, existingServer?: Server): Promise<Server> {
   // NOTE: initializeDatabase() is intentionally NOT called here.
   // It is deferred until after server.listen() so the health check endpoint
   // responds immediately. See server/index.ts listen callback.
@@ -4100,8 +4100,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Register technical support routes
   registerTechnicalSupportRoutes(app);
 
-  const httpServer = createServer(app);
-  
+  const httpServer = existingServer ?? createServer(app);
+
   // Initialize WebSocket data layer for real-time updates (development only)
   // Autoscale deployments may have issues with WebSocket connections across multiple instances
   const currentEnv = process.env.NODE_ENV || 'development';

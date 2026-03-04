@@ -13,7 +13,6 @@ import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import ParentAppShell from "@/components/layout/ParentAppShell";
-import JWTDebugPanel from "@/components/JWTDebugPanel";
 
 export default function SettingsPage() {
   const { user, signOut } = useAuth();
@@ -276,8 +275,6 @@ export default function SettingsPage() {
               </Button>
             </div>
 
-            {/* JWT Debug Panel - Development Only */}
-            {import.meta.env.DEV && <JWTDebugPanel />}
           </div>
         </div>
       </div>

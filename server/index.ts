@@ -2,6 +2,7 @@
 import "./test-env-loader";
 
 import express, { type Request, Response, NextFunction } from "express";
+import { createServer } from 'http';
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import fileUpload from "express-fileupload";
@@ -333,116 +334,103 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
 
 }
 
-(async () => {
-  // Import and apply auth middleware for admin routes
-  const { jwtCheck, requireRole } = await import("./middleware/auth0-auth");
-  
-  // Register admin enrollment payment routes with authentication
-  app.use('/api/admin/enrollments', jwtCheck, requireRole(['schoolAdmin', 'admin', 'superAdmin']), adminEnrollmentPaymentRouter);
-  
-  // Register admin refunds routes with authentication
-  app.use('/api/admin/refunds', jwtCheck, requireRole(['schoolAdmin', 'admin', 'superAdmin']), adminRefundsRouter);
-  
-  // Register financial reports routes with authentication
-  app.use('/api/admin/financial-reports', jwtCheck, requireRole(['schoolAdmin', 'admin', 'superAdmin']), financialReportsRouter);
-  
-  // Register membership admin routes with authentication
-  app.use('/api/admin/memberships', jwtCheck, requireRole(['schoolAdmin', 'admin', 'superAdmin']), membershipRouter);
-  
-  const server = await registerRoutes(app);
+// Create the HTTP server immediately so port 5000 opens before any route
+// registration. Health checks pass from the first millisecond of startup.
+const httpServer = createServer(app);
 
-  app.use(async (err: any, req: Request, res: Response, _next: NextFunction) => {
-    const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
+const port = 5000;
+httpServer.listen({
+  port,
+  host: "0.0.0.0",
+  reusePort: true,
+}, () => {
+  log(`serving on port ${port}`);
 
-    res.status(status).json({ message });
-    console.error('❌ Error handled:', err.message, err.stack);
+  // Phase 2: register routes + static serving in background.
+  // /health already responds; all other routes come online within ~5s.
+  (async () => {
+    // Import auth middleware for admin routes
+    const { jwtCheck, requireRole } = await import("./middleware/auth0-auth");
 
-    // Log error to database for tracking
-    try {
-      const { storage } = await import('./storage');
-      
-      // Determine severity based on status code
-      let severity: 'low' | 'medium' | 'high' | 'critical' = 'medium';
-      if (status >= 500) severity = 'high';
-      if (status === 500 && (message.includes('payment') || message.includes('stripe'))) severity = 'critical';
-      
-      // Determine error type
-      let errorType: 'frontend' | 'backend' | 'api' | 'database' | 'auth' | 'payment' | 'unknown' = 'api';
-      if (message.toLowerCase().includes('auth') || status === 401 || status === 403) errorType = 'auth';
-      if (message.toLowerCase().includes('payment') || message.toLowerCase().includes('stripe')) errorType = 'payment';
-      if (message.toLowerCase().includes('database') || message.toLowerCase().includes('sql')) errorType = 'database';
+    // Register admin routes (require auth)
+    app.use('/api/admin/enrollments', jwtCheck, requireRole(['schoolAdmin', 'admin', 'superAdmin']), adminEnrollmentPaymentRouter);
+    app.use('/api/admin/refunds', jwtCheck, requireRole(['schoolAdmin', 'admin', 'superAdmin']), adminRefundsRouter);
+    app.use('/api/admin/financial-reports', jwtCheck, requireRole(['schoolAdmin', 'admin', 'superAdmin']), financialReportsRouter);
+    app.use('/api/admin/memberships', jwtCheck, requireRole(['schoolAdmin', 'admin', 'superAdmin']), membershipRouter);
 
-      // Extract user info if available
-      const userEmail = (req as any).user?.email || (req as any).auth?.payload?.email;
-      const userId = (req as any).user?.id;
-      const schoolId = (req as any).user?.schoolId;
+    // Register all remaining routes (pass existing server — avoids creating a second HTTP server)
+    await registerRoutes(app, httpServer);
 
-      await storage.createErrorLog({
-        errorType,
-        severity,
-        message: message.substring(0, 500),
-        stackTrace: err.stack?.substring(0, 5000) || null,
-        errorCode: status.toString(),
-        url: req.originalUrl,
-        route: req.route?.path || req.path,
-        method: req.method,
-        userId: userId ?? null,
-        userEmail: userEmail ?? null,
-        schoolId: schoolId ?? null,
-        ipAddress: req.ip || req.headers['x-forwarded-for']?.toString() || null,
-        userAgent: req.headers['user-agent'] || null,
-        requestBody: null, // Don't log request body for security
-        metadata: {},
-        status: 'new',
-        notificationSent: false,
-      });
-    } catch (logError) {
-      console.error('Failed to log error to database:', logError);
-    }
-    // Don't throw the error again - this was causing the server to crash
-  });
+    // Global error handler (must be registered after all routes)
+    app.use(async (err: any, req: Request, res: Response, _next: NextFunction) => {
+      const status = err.status || err.statusCode || 500;
+      const message = err.message || "Internal Server Error";
 
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
-  if (app.get("env") === "development") {
-    await setupVite(app, server);
-  } else {
-    // Prevent browsers from caching index.html across deployments.
-    // Vite fingerprints asset chunks so they are safe to cache forever,
-    // but index.html itself is never fingerprinted. Without this header,
-    // a browser that cached a pre-deployment index.html will request old
-    // chunk hashes that no longer exist, producing:
-    //   "Failed to fetch dynamically imported module"
-    //   "text/html is not a valid JavaScript module"
-    app.use((req, res, next) => {
-      if (
-        req.path === "/" ||
-        (!req.path.startsWith("/api") && !req.path.match(/\.\w+$/))
-      ) {
-        res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-        res.setHeader("Pragma", "no-cache");
-        res.setHeader("Expires", "0");
+      res.status(status).json({ message });
+      console.error('❌ Error handled:', err.message, err.stack);
+
+      try {
+        const { storage } = await import('./storage');
+
+        let severity: 'low' | 'medium' | 'high' | 'critical' = 'medium';
+        if (status >= 500) severity = 'high';
+        if (status === 500 && (message.includes('payment') || message.includes('stripe'))) severity = 'critical';
+
+        let errorType: 'frontend' | 'backend' | 'api' | 'database' | 'auth' | 'payment' | 'unknown' = 'api';
+        if (message.toLowerCase().includes('auth') || status === 401 || status === 403) errorType = 'auth';
+        if (message.toLowerCase().includes('payment') || message.toLowerCase().includes('stripe')) errorType = 'payment';
+        if (message.toLowerCase().includes('database') || message.toLowerCase().includes('sql')) errorType = 'database';
+
+        const userEmail = (req as any).user?.email || (req as any).auth?.payload?.email;
+        const userId = (req as any).user?.id;
+        const schoolId = (req as any).user?.schoolId;
+
+        await storage.createErrorLog({
+          errorType,
+          severity,
+          message: message.substring(0, 500),
+          stackTrace: err.stack?.substring(0, 5000) || null,
+          errorCode: status.toString(),
+          url: req.originalUrl,
+          route: req.route?.path || req.path,
+          method: req.method,
+          userId: userId ?? null,
+          userEmail: userEmail ?? null,
+          schoolId: schoolId ?? null,
+          ipAddress: req.ip || req.headers['x-forwarded-for']?.toString() || null,
+          userAgent: req.headers['user-agent'] || null,
+          requestBody: null,
+          metadata: {},
+          status: 'new',
+          notificationSent: false,
+        });
+      } catch (logError) {
+        console.error('Failed to log error to database:', logError);
       }
-      next();
     });
-    serveStatic(app);
-  }
 
-  // ALWAYS serve the app on port 5000
-  // this serves both the API and the client.
-  // It is the only port that is not firewalled.
-  const port = 5000;
-  server.listen({
-    port,
-    host: "0.0.0.0",
-    reusePort: true,
-  }, async () => {
-    log(`serving on port ${port}`);
-    
-    // Run database migrations in the background — idempotent, safe to defer after listen
-    // This prevents migrations from blocking the health check endpoint during cold-start
+    // Static file serving / Vite — catch-all, must be last
+    if (app.get("env") === "development") {
+      await setupVite(app, httpServer);
+    } else {
+      // Prevent stale index.html from caching across deployments.
+      // Asset chunks are fingerprinted by Vite and safe to cache forever;
+      // index.html is not fingerprinted and must always be revalidated.
+      app.use((req, res, next) => {
+        if (
+          req.path === "/" ||
+          (!req.path.startsWith("/api") && !req.path.match(/\.\w+$/))
+        ) {
+          res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+          res.setHeader("Pragma", "no-cache");
+          res.setHeader("Expires", "0");
+        }
+        next();
+      });
+      serveStatic(app);
+    }
+
+    // DB migrations — idempotent, safe to run in background after listen
     (async () => {
       try {
         const { initializeDatabase } = await import('./init-db.js');
@@ -452,14 +440,14 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
       }
     })();
 
-    // Ensure critical admin users have proper database roles (idempotent — safe to run in background)
+    // Admin role seeding — idempotent, safe to run in background
     ensureAdminRoles().catch(err =>
       console.error('⚠️ ensureAdminRoles failed (non-fatal):', err)
     );
 
-    // Background schedulers — run in all environments (Reserved VM keeps the process alive)
+    // Background schedulers — Reserved VM keeps the process alive between runs
     console.log(`🔧 Starting background services (${currentEnv})...`);
-    
+
     const { backupService } = await import('./services/backupService.js');
     const { MembershipStatusService } = await import('./services/membership-status-service.js');
     const { startEnrollmentReminderScheduler } = await import('./services/enrollmentReminderScheduler.js');
@@ -467,33 +455,21 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
     const { startCreditExpirationJob } = await import('./services/creditExpirationService.js');
     const { startReconciliationJob } = await import('./services/scheduled-payment-reconciliation-job.js');
     const { storage } = await import('./storage.js');
-    
-    // Initialize and start backup service
+
     await backupService.init();
-    backupService.startAutomaticBackups(24); // Backup every 24 hours
-    
-    // Initialize membership status tracking service
+    backupService.startAutomaticBackups(24);
+
     MembershipStatusService.initializeMembershipStatusJob();
-    
-    // Start enrollment payment reminder scheduler
     startEnrollmentReminderScheduler();
-    
-    // Start scheduled payment reminder job (sends email reminders for upcoming/overdue payments)
     startScheduledPaymentReminderJob();
-    
-    // Start credit expiration job (marks expired credits every 12 hours)
     startCreditExpirationJob();
-    
-    // Start scheduled payment reconciliation job (syncs payment status daily at 3 AM UTC)
     startReconciliationJob();
 
-    // Start auto-pay job (charges saved cards for due installments every 24 hours)
     const { startAutoPayJob } = await import('./services/auto-pay-scheduler.js');
     startAutoPayJob();
-    
-    // Load notifications into database (non-blocking — does not delay health checks)
+
     storage.initializeNotifications().catch(err =>
       console.error('⚠️ initializeNotifications failed (non-fatal):', err)
     );
-  });
-})();
+  })().catch(err => console.error('❌ Background initialization failed:', err));
+});

@@ -11,8 +11,10 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { useLocation } from 'wouter';
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
-import { ShoppingCart, CreditCard, Percent, Gift, AlertCircle, Check, Loader2, Calendar, DollarSign, Clock, CheckCircle2, Award, RefreshCw, ArrowLeft } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { ShoppingCart, CreditCard, Percent, Gift, AlertCircle, Check, Loader2, Calendar, DollarSign, Clock, CheckCircle2, Award, RefreshCw, ArrowLeft, Zap } from 'lucide-react';
 import ParentAppShell from '@/components/layout/ParentAppShell';
 import { formatCurrency } from '@/utils/currency';
 import { formatClassSchedule } from '@/lib/utils';
@@ -242,6 +244,37 @@ export default function CartCheckout() {
     // Split plan allows user to choose frequency (weekly/biweekly/monthly)
     // No automatic frequency change needed for split plan
   }, [selectedPaymentPlan]);
+
+  // Auto-pay status query and toggle (only relevant when biweekly is selected)
+  const autoPayQueryClient = useQueryClient();
+
+  const { data: autoPayData, isLoading: autoPayLoading } = useQuery({
+    queryKey: ['/api/user/auto-pay-status'],
+    enabled: isAuthenticated,
+    staleTime: 30_000,
+  });
+  const autoPayEnabled: boolean = (autoPayData as any)?.autoPayEnabled ?? false;
+
+  const { data: paymentMethodData } = useQuery({
+    queryKey: ['/api/user/payment-method'],
+    enabled: isAuthenticated,
+    staleTime: 60_000,
+  });
+  const hasPaymentMethod: boolean = !!(paymentMethodData as any)?.paymentMethod;
+
+  const { mutate: toggleAutoPay, isPending: togglingAutoPay } = useMutation({
+    mutationFn: async (enabled: boolean) => {
+      const res = await apiRequest('PATCH', '/api/user/auto-pay', { enabled });
+      if (!res.ok) throw new Error('Failed to update auto-pay preference');
+      return res.json();
+    },
+    onSuccess: () => {
+      autoPayQueryClient.invalidateQueries({ queryKey: ['/api/user/auto-pay-status'] });
+    },
+    onError: () => {
+      toast({ title: 'Could not update auto-pay setting. Please try again.', variant: 'destructive' });
+    },
+  });
 
   // Fetch available volunteer credits
   useEffect(() => {
@@ -1560,6 +1593,51 @@ export default function CartCheckout() {
                 </div>
               </CardContent>
             </Card>
+            )}
+
+            {/* Auto-Pay Toggle - only shown when biweekly plan is selected */}
+            {selectedPaymentPlan === 'biweekly' && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Zap className="h-5 w-5 text-amber-500" />
+                    Automatic Payments
+                  </CardTitle>
+                  <CardDescription>
+                    Have your installments charged automatically on their due dates
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {autoPayLoading ? (
+                    <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Loading auto-pay status...
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="flex-1">
+                        <p className="font-medium text-sm">Auto-Pay</p>
+                        <p className="text-sm text-muted-foreground">
+                          {autoPayEnabled
+                            ? 'Your saved payment method will be charged automatically every two weeks'
+                            : 'Turn on to have each installment charged automatically on its due date'}
+                        </p>
+                        {!hasPaymentMethod && (
+                          <p className="text-xs text-amber-600 mt-1">
+                            Auto-pay requires a saved payment method. You can save your card after completing this payment.
+                          </p>
+                        )}
+                      </div>
+                      <Switch
+                        checked={autoPayEnabled}
+                        onCheckedChange={(checked) => toggleAutoPay(checked)}
+                        disabled={togglingAutoPay}
+                        aria-label="Enable automatic payments"
+                      />
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             )}
 
             {/* Stripe Subscription Alert - only show when school has enabled subscription status display */}
