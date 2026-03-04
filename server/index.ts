@@ -4,6 +4,8 @@ import "./test-env-loader";
 
 import express from "express";
 import { createServer } from 'http';
+import path from 'path';
+import fs from 'fs';
 
 // Inline log to avoid pulling server/vite.ts (and its Vite dependency) into
 // the entry-point bundle, which would add significant parse-time weight.
@@ -39,6 +41,44 @@ const app = express();
 // This is intentionally registered before initializeApp() runs so it is always
 // reachable, even during the few seconds the heavy bundle is loading.
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
+
+// In production: serve the Vite-compiled frontend immediately so that GET /
+// responds before initializeApp() finishes loading all API routes (~7s).
+// In development, setupVite() (called inside initializeApp) handles this.
+if (process.env.NODE_ENV === 'production') {
+  const publicDir = path.join(import.meta.dirname, 'public');
+  if (fs.existsSync(publicDir)) {
+    // Prevent stale index.html from caching across deployments.
+    // Fingerprinted asset chunks are safe to cache forever.
+    app.use((req, _res, next) => {
+      if (req.path === '/' || (!req.path.startsWith('/api') && !req.path.match(/\.\w+$/))) {
+        _res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        _res.setHeader('Pragma', 'no-cache');
+        _res.setHeader('Expires', '0');
+      }
+      next();
+    });
+    // Serve fingerprinted static assets (JS, CSS, images from dist/public/assets)
+    app.use(express.static(publicDir));
+    // SPA catch-all: serve index.html for all non-API, non-asset routes.
+    // API routes registered later by initializeApp() take precedence because
+    // Express matches in registration order — /api/* routes are added to the
+    // router by registerRoutes(), but this catch-all only fires for paths that
+    // have NOT already been handled. However, since this is a catch-all *use*
+    // that only skips /api and file-extension paths, we're safe.
+    app.use((req, res, next) => {
+      if (
+        req.path.startsWith('/api') ||
+        req.path.startsWith('/uploads') ||
+        req.path.match(/\.\w+$/)
+      ) {
+        next();
+      } else {
+        res.sendFile(path.join(publicDir, 'index.html'));
+      }
+    });
+  }
+}
 
 const httpServer = createServer(app);
 

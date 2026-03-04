@@ -2,7 +2,7 @@ import { type Request, Response, NextFunction } from "express";
 import express, { type Express } from "express";
 import type { Server } from 'http';
 import { registerRoutes } from "./routes";
-import { setupVite, serveStatic, log } from "./vite";
+import { setupVite, log } from "./vite";
 import fileUpload from "express-fileupload";
 import path from "path";
 import fileUploadRouter from './api/file-upload';
@@ -352,24 +352,10 @@ export async function initializeApp(app: Express, httpServer: Server): Promise<v
   });
 
   // Static file serving / Vite — catch-all, must be last
+  // In production, static serving is handled in server/index.ts before listen()
+  // so GET / responds immediately for health checks. Only set up Vite in dev.
   if (app.get("env") === "development") {
     await setupVite(app, httpServer);
-  } else {
-    // Prevent stale index.html from caching across deployments.
-    // Asset chunks are fingerprinted by Vite and safe to cache forever;
-    // index.html is not fingerprinted and must always be revalidated.
-    app.use((req, res, next) => {
-      if (
-        req.path === "/" ||
-        (!req.path.startsWith("/api") && !req.path.match(/\.\w+$/))
-      ) {
-        res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-        res.setHeader("Pragma", "no-cache");
-        res.setHeader("Expires", "0");
-      }
-      next();
-    });
-    serveStatic(app);
   }
 
   // DB migrations — idempotent, safe to run in background after listen
