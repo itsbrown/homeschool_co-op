@@ -99,6 +99,98 @@ description: Workflow configuration, port binding, testing patterns, and deploym
 - App will be available at a `.replit.app` domain or custom domain
 - Production logs are separate from development workflow logs — check them if the published app has issues
 
+### Deployment Type: Reserved VM (Required)
+
+This app **must always be deployed as a Reserved VM**, not Autoscale.
+
+**Why**: The auto-pay scheduler, payment reminder jobs, membership updater, reconciliation job,
+and WebSocket server all run on `setInterval` in a long-lived Node.js process. Autoscale
+deployments spin down between requests, silently killing all background services:
+- Payments due during downtime are not collected
+- WebSocket connections drop without reconnect
+- No error is thrown — the scheduler simply never runs
+
+**Production commands**:
+- Build: `npm run build`
+- Start: `npm run start`
+
+Verify the deployment type in Replit's deployment settings before every publish.
+
+## Vite SPA Deployment: Cache Headers
+
+**Apply before every first deployment. Verify after every rebuild.**
+
+Vite fingerprints asset chunk filenames (e.g., `CartCheckout-D5A6e8cz.js`) for safe long-lived
+caching. However, `index.html` is never fingerprinted — it is always served at the same URL. If a
+browser caches a pre-deployment `index.html`, it will request old chunk filenames that no longer
+exist on the new build. The server returns the SPA fallback (HTML), and the browser throws:
+
+> "Failed to fetch dynamically imported module" / "text/html is not a valid JavaScript module"
+
+This breaks ALL frontend routes simultaneously — users see blank pages or JS errors with no obvious
+connection to a deployment event. Symptoms are reported as individual feature failures ("biweekly
+payment broken", "notifications page broken") but the root cause is a single missing header.
+
+### The Fix (permanent — already applied, never remove)
+
+This middleware lives in `server/index.ts` **inside the `else` block, before `serveStatic(app)`**.
+Never add it to `server/vite.ts` — that file is forbidden to edit. It only runs in production
+(`NODE_ENV !== 'development'`), so it does not affect local dev.
+
+```typescript
+app.use((req, res, next) => {
+  if (
+    req.path === "/" ||
+    (!req.path.startsWith("/api") && !req.path.match(/\.\w+$/))
+  ) {
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+  }
+  next();
+});
+serveStatic(app);
+```
+
+Asset chunks (`/assets/*.js`, `/assets/*.css`) are **not** affected — their filenames change with
+every build, so they remain safe to cache indefinitely.
+
+### Stale-Cache Symptom Pattern
+
+When multiple users report different features failing after a deployment, check error telemetry
+**first** for these strings before investigating any feature-specific bug:
+
+- `"Failed to fetch dynamically imported module"`
+- `"text/html is not a valid JavaScript module"`
+- `"ChunkLoadError"`
+
+If these appear clustered around a deploy time, the root cause is always stale cache — one fix
+resolves all reported symptoms. Do not chase individual feature bugs until this is ruled out.
+
+## Post-Deployment Verification Checklist
+
+Run within 5 minutes of every deployment:
+
+**1. Background services started**
+Check production logs for scheduler startup messages:
+- `💳 Starting auto-pay job...` + `✅ Auto-pay job initialized`
+- `✅ Enrollment reminder scheduler started`
+- `[ReconciliationJob] Scheduled daily reconciliation`
+If absent → deployment type is Autoscale, not Reserved VM. Change it.
+
+**2. No chunk-load failures**
+Search production logs for:
+- `"Failed to fetch dynamically imported module"`
+- `"text/html is not a valid JavaScript module"`
+If present → `Cache-Control` middleware is missing or placed after `serveStatic`.
+
+**3. Frontend loads in a fresh browser**
+Open `/dashboard` or `/cart/checkout` in an incognito window. Blank page or JS error → same fix as step 2.
+
+**4. Test endpoints locked**
+Confirm `POST /api/test/setup-auto-pay-scenario` returns `403 Forbidden` in production.
+If it returns data → `NODE_ENV` is not set to `production` in the deployment environment.
+
 ## Common Pitfalls
 
 - **App not starting** → used "Start App" workflow instead of "Start application" → switch to "Start application" (`npm run dev`)
@@ -107,6 +199,8 @@ description: Workflow configuration, port binding, testing patterns, and deploym
 - **Tests fail with "element not found"** → test assumes empty database state → generate unique test data with `nanoid` instead
 - **Frontend env var undefined** → missing `VITE_` prefix → rename to `VITE_MY_VAR` and access via `import.meta.env.VITE_MY_VAR`
 - **Schema change not applied** → wrote raw SQL migration file → use `npm run db:push` (Drizzle handles it)
+- **Chunk load failures after deployment** → `index.html` cached by browser with stale chunk hashes → verify `Cache-Control: no-cache` middleware is present in `server/index.ts` inside the production `else` block, before `serveStatic(app)`. Symptom: "Failed to fetch dynamically imported module" or "text/html is not valid JavaScript" in error telemetry. Affects ALL frontend routes simultaneously — not just the one the user reported.
+- **Scheduler not running in production** → deployment type is Autoscale, not Reserved VM → change to Reserved VM in Replit deployment settings. Autoscale spins down between requests, killing all `setInterval`-based background jobs silently with no error or warning.
 
 ## Best Practices
 
@@ -118,6 +212,9 @@ description: Workflow configuration, port binding, testing patterns, and deploym
 - Always use `npm run db:push` for schema changes — never write raw SQL migrations
 - Always prefix frontend env vars with `VITE_`
 - Always use the secrets tool for sensitive values like API keys
+- Always verify the `Cache-Control: no-cache` middleware is present in `server/index.ts` before publishing
+- Always check error telemetry for chunk-load failure patterns before diagnosing individual feature bugs after a deployment
+- Always deploy as Reserved VM — verify this setting before every publish
 
 ### Don't
 - Don't use the "Start App" workflow — it's a legacy duplicate
@@ -128,9 +225,12 @@ description: Workflow configuration, port binding, testing patterns, and deploym
 - Don't write Playwright tests that assume empty database state
 - Don't expose or log secrets/API keys in code
 - Don't use raw `psql` for database debugging — use the SQL execution tool
+- Don't remove the `Cache-Control: no-cache` middleware from `server/index.ts` — post-deployment chunk-load failures will break all frontend routes for users with cached browsers
+- Don't treat "feature X is broken" reports at face value after a deployment — rule out stale-cache chunk errors first
+- Don't deploy as Autoscale — background schedulers and WebSocket connections will silently die between requests
 
 ## Key Files
-- `server/index.ts` — Express server entry point, port binding
+- `server/index.ts` — Express server entry point; port binding; `Cache-Control` middleware for production
 - `server/vite.ts` — Vite dev server integration (do not edit)
 - `vite.config.ts` — Vite configuration with aliases (do not edit)
 - `drizzle.config.ts` — Drizzle ORM config (do not edit)

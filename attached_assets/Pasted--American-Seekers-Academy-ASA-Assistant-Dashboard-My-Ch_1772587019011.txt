@@ -1,0 +1,369 @@
+
+American Seekers Academy
+ASA Assistant
+Dashboard
+My Children
+Programs & Classes
+Family Schedule
+Notifications
+Payments
+My Documents
+Reading Progress
+Settings
+contact.americanseekersacademy@gmail.com
+
+School Administrator
+
+SIGN OUT
+9+
+1
+Corey Brown
+User
+
+System Errors
+Live
+Monitor and manage application errors across the platform
+
+Last updated: 8:16:48 PM
+
+
+Auto-refresh
+Refresh
+Total Errors (7 days)
+
+0
+Critical
+
+6
+High
+
+22
+New/Unhandled
+
+0
+Resolved
+
+Filters
+Severity
+
+All severities
+Status
+
+All statuses
+Type
+
+All types
+Clear Filters
+Error Log
+537 total errors found
+MEDIUM
+frontend
+New
+Error: Failed to load school information
+
+Mar 3, 2026 7:29 PM
+Route: /login
+
+Acknowledge
+
+HIGH
+frontend
+New
+Importing a module script failed.
+
+Mar 3, 2026 2:47 PM
+Route: /dashboard
+
+Acknowledge
+
+HIGH
+frontend
+Investigating
+'text/html' is not a valid JavaScript MIME type.
+
+Mar 2, 2026 12:44 PM
+Route: /payments
+
+
+HIGH
+frontend
+New
+Failed to fetch dynamically imported module: https://accounts.americanseekersacademy.com/assets/NotificationsPage-D5A6e8cz.js
+
+Mar 1, 2026 5:37 PM
+Route: /notifications
+
+Acknowledge
+
+MEDIUM
+frontend
+Acknowledged
+Payment Failed: The payment failed.
+
+Mar 1, 2026 5:32 PM
+Route: /payments
+
+
+MEDIUM
+frontend
+New
+Payment Failed: Please select a payment method to pay with.
+
+Mar 1, 2026 5:32 PM
+Route: /payments
+
+Acknowledge
+
+HIGH
+frontend
+Investigating
+Failed to fetch dynamically imported module: https://accounts.americanseekersacademy.com/assets/CartCheckout-BZ4YcQ9j.js
+
+Mar 1, 2026 5:29 PM
+Route: /cart/checkout
+
+
+MEDIUM
+frontend
+New
+Login Failed: Invalid login credentials
+
+Mar 1, 2026 12:11 PM
+Route: /login
+
+Acknowledge
+
+MEDIUM
+frontend
+New
+Login Failed: Invalid login credentials
+
+Mar 1, 2026 12:11 PM
+Route: /login
+
+Acknowledge
+
+HIGH
+frontend
+New
+Failed to fetch dynamically imported module: https://accounts.americanseekersacademy.com/assets/FinancialReportsPage-BZpo_dj4.js
+
+Feb 28, 2026 2:13 PM
+Route: /school-admin/financial-reports
+
+Acknowledge
+
+MEDIUM
+frontend
+New
+Payment Failed: Your card number is incomplete.
+
+Feb 28, 2026 11:47 AM
+Route: /payments
+
+Acknowledge
+
+MEDIUM
+frontend
+New
+Error: Cannot cancel enrolled enrollment. Only pending_payment enrollments can be cancelled.
+
+Feb 27, 2026 3:15 PM
+Route: /parent/programs
+
+Acknowledge
+
+MEDIUM
+frontend
+New
+Error: Cannot cancel enrolled enrollment. Only pending_payment enrollments can be cancelled.
+
+Feb 27, 2026 3:15 PM
+Route: /parent/programs
+
+Acknowledge
+
+MEDIUM
+frontend
+New
+Failed to end session: 400: {"error":"Session is not in progress","code":"NOT_IN_PROGRESS"}
+
+Feb 27, 2026 6:38 AM
+Route: /educator/session/16
+
+Acknowledge
+
+MEDIUM
+frontend
+New
+{"error":"Session is not in progress","code":"NOT_IN_PROGRESS"}
+
+Feb 27, 2026 6:38 AM
+Route: /api/educator/sessions/16/end
+
+Acknowledge
+
+MEDIUM
+frontend
+New
+Payment Failed: Your card number is incomplete.
+
+Feb 26, 2026 8:14 AM
+Route: /payments
+
+Acknowledge
+
+MEDIUM
+frontend
+Acknowledged
+Technical Issue: payment - payment issue: I'm trying to enroll in the payment plan I get an ...
+
+Feb 25, 2026 4:55 PM
+Route: https://accounts.americanseekersacademy.com/cart/checkout
+User: jessiemvieira@gmail.com
+
+
+MEDIUM
+frontend
+New
+Payment Failed: Your card number is incomplete.
+
+Feb 25, 2026 4:51 PM
+Route: /cart/checkout
+
+Acknowledge
+
+HIGH
+frontend
+New
+Failed to load Stripe.js
+
+Feb 25, 2026 2:37 PM
+Route: /login
+
+Acknowledge
+
+MEDIUM
+frontend
+New
+Unhandled Promise Rejection: Failed to load Stripe.js
+
+Feb 25, 2026 2:37 PM
+Route: /login
+
+Acknowledge
+
+Showing 1 - 20 of 537
+
+Previous
+Next
+
+Need Help?
+Error Details
+ID: 532 | Mar 1, 2026, 5:32:21 PM
+
+SeverityMEDIUM
+Type
+frontend
+
+Route
+/payments
+
+Method
+N/A
+
+User
+Anonymous
+
+School ID
+N/A
+
+Message
+Payment Failed: Please select a payment method to pay with.
+
+Metadata
+{
+  "online": true,
+  "source": "toast",
+  "userId": 33,
+  "network": {
+    "rtt": 50,
+    "downlink": 10,
+    "saveData": false,
+    "effectiveType": "4g"
+  },
+  "language": "en-US",
+  "referrer": "https://accounts.americanseekersacademy.com/cart/checkout",
+  "schoolId": null,
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "activeRole": null,
+  "hasSession": true,
+  "toastTitle": "Payment Failed",
+  "breadcrumbs": [
+    {
+      "route": "/cart/checkout",
+      "title": "American Seekers Academy - Adaptive Learning Platform",
+      "timestamp": "2026-03-01T22:30:21.099Z",
+      "timeOnPage": 144781
+    },
+    {
+      "route": "/payments",
+      "title": "Notifications - American Seekers Academy",
+      "timestamp": "2026-03-01T22:32:45.880Z",
+      "timeOnPage": 914
+    },
+    {
+      "route": "/payments",
+      "title": "Notifications - American Seekers Academy",
+      "timestamp": "2026-03-01T22:32:46.794Z"
+    }
+  ],
+  "formContext": null,
+  "memoryUsage": {
+    "usedJSHeapSize": 16,
+    "totalJSHeapSize": 20
+  },
+  "pageLoadTime": 573,
+  "sessionStart": "2026-01-19T15:51:02.534Z",
+  "correlationId": "5a0ba163-76a3-46b3-8351-44ed0be71acd",
+  "recentActions": [
+    {
+      "type": "click",
+      "target": "div.text-2xl",
+      "secondsAgo": 10
+    },
+    {
+      "type": "click",
+      "target": "button#radix-:r22:-trigger-upcoming",
+      "secondsAgo": 10
+    },
+    {
+      "type": "click",
+      "target": "[data-testid=\"button-pay-upcoming-285\"]",
+      "secondsAgo": 5
+    },
+    {
+      "type": "click",
+      "target": "button.inline-flex",
+      "secondsAgo": 1
+    },
+    {
+      "type": "submit",
+      "target": "form.space-y-4",
+      "secondsAgo": 1
+    }
+  ],
+  "userEmailHint": "rac***",
+  "viewportWidth": 1728,
+  "viewportHeight": 907,
+  "toastDescription": "Please select a payment method to pay with.",
+  "sessionErrorCount": 1,
+  "timeOnCurrentPage": 13202
+}
+Update Status
+New
+Resolution Notes
+Add notes about the resolution or investigation...
+Cancel
+Update Error
+Close

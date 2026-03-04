@@ -406,6 +406,24 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
   if (app.get("env") === "development") {
     await setupVite(app, server);
   } else {
+    // Prevent browsers from caching index.html across deployments.
+    // Vite fingerprints asset chunks so they are safe to cache forever,
+    // but index.html itself is never fingerprinted. Without this header,
+    // a browser that cached a pre-deployment index.html will request old
+    // chunk hashes that no longer exist, producing:
+    //   "Failed to fetch dynamically imported module"
+    //   "text/html is not a valid JavaScript module"
+    app.use((req, res, next) => {
+      if (
+        req.path === "/" ||
+        (!req.path.startsWith("/api") && !req.path.match(/\.\w+$/))
+      ) {
+        res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+        res.setHeader("Pragma", "no-cache");
+        res.setHeader("Expires", "0");
+      }
+      next();
+    });
     serveStatic(app);
   }
 
