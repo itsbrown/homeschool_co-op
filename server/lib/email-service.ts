@@ -504,7 +504,7 @@ export async function sendAccountInviteEmail(data: AccountInviteData): Promise<b
     }
 
     const { email, firstName, lastName, role, temporaryPassword } = data;
-    const loginUrl = `${process.env.CLIENT_URL || 'https://your-app-url.replit.app'}/login`;
+    const loginUrl = `${process.env.APP_URL || 'https://app.americanseekersacademy.com'}/login`;
 
     const htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -582,7 +582,7 @@ export async function sendPasswordResetEmail(data: PasswordResetData): Promise<b
     }
 
     const { email, firstName, resetToken } = data;
-    const resetUrl = `${process.env.CLIENT_URL || 'https://your-app-url.replit.app'}/reset-password?token=${resetToken}`;
+    const resetUrl = `${process.env.APP_URL || 'https://app.americanseekersacademy.com'}/reset-password?token=${resetToken}`;
 
     const htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -659,7 +659,7 @@ export async function sendStaffInvitationEmail(
       return false;
     }
 
-    const inviteUrl = `${process.env.CLIENT_URL || 'https://your-app-url.replit.app'}/accept-educator-invitation?token=${token}`;
+    const inviteUrl = `${process.env.APP_URL || 'https://app.americanseekersacademy.com'}/accept-educator-invitation?token=${token}`;
 
     const htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -870,7 +870,7 @@ export async function sendWaitlistPromotedEmail(data: WaitlistPromotedData): Pro
           </div>
           
           <div style="text-align: center; margin: 24px 0;">
-            <a href="${process.env.VITE_APP_URL || 'https://asalearning.com'}/cart/checkout" 
+            <a href="${process.env.APP_URL || 'https://app.americanseekersacademy.com'}/cart/checkout" 
                style="display: inline-block; background-color: #10B981; color: white; padding: 12px 32px; text-decoration: none; border-radius: 6px; font-weight: bold;">
               Complete Payment
             </a>
@@ -893,7 +893,7 @@ Price: ${formatCurrency(price)}
 ACTION REQUIRED:
 Please complete your payment within 24 hours to secure this enrollment. The spot will be offered to the next person on the waitlist if payment is not received.
 
-Complete payment at: ${process.env.VITE_APP_URL || 'https://asalearning.com'}/cart/checkout
+Complete payment at: ${process.env.APP_URL || 'https://app.americanseekersacademy.com'}/cart/checkout
 
 If you have any questions, please contact us at support@americanseekersacademy.com
     `;
@@ -974,7 +974,7 @@ export async function sendNewStudentNotificationEmail(data: NewStudentNotificati
           </div>
           
           <div style="text-align: center; margin: 24px 0;">
-            <a href="${process.env.CLIENT_URL || 'https://accounts.americanseekersacademy.com'}/schools/students" 
+            <a href="${process.env.APP_URL || 'https://app.americanseekersacademy.com'}/schools/students" 
                style="display: inline-block; background-color: #4F46E5; color: white; padding: 12px 32px; text-decoration: none; border-radius: 6px; font-weight: bold;">
               View All Students
             </a>
@@ -1004,7 +1004,7 @@ Parent Contact:
 ${parentPhone ? `- Phone: ${parentPhone}` : ''}
 
 You can view and manage this student's information in your school admin dashboard at:
-${process.env.CLIENT_URL || 'https://accounts.americanseekersacademy.com'}/schools/students
+${process.env.APP_URL || 'https://app.americanseekersacademy.com'}/schools/students
     `;
 
     return await sendEmail(adminEmail, adminName, `New Student Registration - ${studentFirstName} ${studentLastName}`, htmlContent, textContent);
@@ -1032,7 +1032,7 @@ export async function sendWelcomeEmail(data: WelcomeEmailData): Promise<boolean>
 
     const { email, firstName, lastName, role, schoolName } = data;
     const fullName = lastName ? `${firstName} ${lastName}` : firstName;
-    const loginUrl = `${process.env.CLIENT_URL || 'https://accounts.americanseekersacademy.com'}/login`;
+    const loginUrl = `${process.env.APP_URL || 'https://app.americanseekersacademy.com'}/login`;
     const displaySchoolName = schoolName || 'American Seekers Academy';
     
     // Format role for display

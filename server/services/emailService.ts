@@ -59,7 +59,7 @@ export async function sendVerificationEmail(email: string, token: string) {
       return false;
     }
 
-    const verificationUrl = `${process.env.CLIENT_URL || 'http://localhost:5000'}/verify-email?token=${token}`;
+    const verificationUrl = `${process.env.APP_URL || 'https://app.americanseekersacademy.com'}/verify-email?token=${token}`;
     
     const htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -217,7 +217,7 @@ export async function sendEnrollmentReminderEmail(data: EnrollmentReminderData):
     }
 
     const schoolName = data.schoolName || 'American Seekers Academy';
-    const cartUrl = data.cartUrl || `${process.env.CLIENT_URL || 'https://americanseekersacademy.com'}/cart`;
+    const cartUrl = data.cartUrl || `${process.env.APP_URL || 'https://app.americanseekersacademy.com'}/cart`;
     const formattedAmount = (data.amount / 100).toFixed(2);
 
     const htmlContent = `
@@ -317,7 +317,7 @@ export async function sendBulkEnrollmentReminderEmail(data: BulkEnrollmentRemind
     }
 
     const schoolName = data.schoolName || 'American Seekers Academy';
-    const cartUrl = data.cartUrl || `${process.env.CLIENT_URL || 'https://americanseekersacademy.com'}/cart`;
+    const cartUrl = data.cartUrl || `${process.env.APP_URL || 'https://app.americanseekersacademy.com'}/cart`;
     const formattedTotal = (data.totalAmount / 100).toFixed(2);
 
     const enrollmentRows = data.enrollments.map(e => `
