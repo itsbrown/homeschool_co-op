@@ -22,7 +22,7 @@ import { stripePromise } from '@/config/stripe';
 import type { Stripe } from '@stripe/stripe-js';
 import { trackBeginCheckout, trackAddPaymentInfo } from '@/lib/analytics';
 
-function CheckoutForm({ selectedPaymentPlan, selectedPlanAmount }: { selectedPaymentPlan: string; selectedPlanAmount: number }) {
+function CheckoutForm({ selectedPaymentPlan, selectedPlanAmount, autoPayEnabled, hasPaymentMethod, togglingAutoPay, toggleAutoPay }: { selectedPaymentPlan: string; selectedPlanAmount: number; autoPayEnabled: boolean; hasPaymentMethod: boolean; togglingAutoPay: boolean; toggleAutoPay: (enabled: boolean) => void }) {
   const stripe = useStripe();
   const elements = useElements();
   const { cart, clearCart } = useCart();
@@ -121,6 +121,34 @@ function CheckoutForm({ selectedPaymentPlan, selectedPlanAmount }: { selectedPay
           setElementsReady(false);
         }}
       />
+      {selectedPaymentPlan === 'biweekly' && (
+        <div className="rounded-lg border p-4">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex-1">
+              <p className="font-medium text-sm flex items-center gap-2">
+                <Zap className="h-4 w-4 text-amber-500" />
+                Auto-Pay
+              </p>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                {autoPayEnabled
+                  ? 'Your saved payment method will be charged automatically every two weeks'
+                  : 'Turn on to have each installment charged automatically on its due date'}
+              </p>
+              {!hasPaymentMethod && (
+                <p className="text-xs text-amber-600 mt-1">
+                  Complete this payment to save your card and enable auto-pay for future installments.
+                </p>
+              )}
+            </div>
+            <Switch
+              checked={autoPayEnabled}
+              onCheckedChange={(checked) => toggleAutoPay(checked)}
+              disabled={togglingAutoPay || !hasPaymentMethod}
+              aria-label="Enable automatic payments"
+            />
+          </div>
+        </div>
+      )}
       <Button 
         type="submit" 
         className="w-full" 
@@ -258,7 +286,7 @@ export default function CartCheckout() {
     enabled: isAuthenticated,
     staleTime: 60_000,
   });
-  const hasPaymentMethod: boolean = !!(paymentMethodData as any)?.paymentMethod;
+  const hasPaymentMethod: boolean = !!(paymentMethodData as any)?.cardOnFile;
 
   const { mutate: toggleAutoPay, isPending: togglingAutoPay } = useMutation({
     mutationFn: async (enabled: boolean) => {
@@ -1593,50 +1621,6 @@ export default function CartCheckout() {
             </Card>
             )}
 
-            {/* Auto-Pay Toggle - only shown when biweekly plan is selected */}
-            {selectedPaymentPlan === 'biweekly' && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Zap className="h-5 w-5 text-amber-500" />
-                    Automatic Payments
-                  </CardTitle>
-                  <CardDescription>
-                    Have your installments charged automatically on their due dates
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {autoPayLoading ? (
-                    <div className="flex items-center gap-2 text-muted-foreground text-sm">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Loading auto-pay status...
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-between gap-4">
-                      <div className="flex-1">
-                        <p className="font-medium text-sm">Auto-Pay</p>
-                        <p className="text-sm text-muted-foreground">
-                          {autoPayEnabled
-                            ? 'Your saved payment method will be charged automatically every two weeks'
-                            : 'Turn on to have each installment charged automatically on its due date'}
-                        </p>
-                        {!hasPaymentMethod && (
-                          <p className="text-xs text-amber-600 mt-1">
-                            Auto-pay requires a saved payment method. You can save your card after completing this payment.
-                          </p>
-                        )}
-                      </div>
-                      <Switch
-                        checked={autoPayEnabled}
-                        onCheckedChange={(checked) => toggleAutoPay(checked)}
-                        disabled={togglingAutoPay}
-                        aria-label="Enable automatic payments"
-                      />
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            )}
 
             {/* Stripe Subscription Alert - only show when school has enabled subscription status display */}
             {actualPayableAmount > 0 && cart.schoolSettings?.showSubscriptionStatus && hasActiveSubscription && subscriptionInfo && (
@@ -1807,7 +1791,14 @@ export default function CartCheckout() {
                     </Alert>
                   ) : clientSecret && stripeInstance ? (
                     <Elements key={clientSecret} stripe={stripeInstance} options={{ clientSecret }}>
-                      <CheckoutForm selectedPaymentPlan={selectedPaymentPlan} selectedPlanAmount={getButtonDisplayAmount()} />
+                      <CheckoutForm
+                        selectedPaymentPlan={selectedPaymentPlan}
+                        selectedPlanAmount={getButtonDisplayAmount()}
+                        autoPayEnabled={autoPayEnabled}
+                        hasPaymentMethod={hasPaymentMethod}
+                        togglingAutoPay={togglingAutoPay}
+                        toggleAutoPay={toggleAutoPay}
+                      />
                     </Elements>
                   ) : (
                     <Alert variant="destructive">
