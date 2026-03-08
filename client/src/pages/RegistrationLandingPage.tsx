@@ -64,7 +64,7 @@ export default function RegistrationLandingPage() {
   });
 
   // Fetch school locations (using public endpoint - no auth required for registration)
-  const { data: locationsData } = useQuery({
+  const { data: locationsData, isLoading: locationsLoading } = useQuery({
     queryKey: ['/api/locations/public', school?.id],
     queryFn: async () => {
       if (!school?.id) return null;
@@ -392,12 +392,14 @@ export default function RegistrationLandingPage() {
                         <FormLabel>Preferred Location</FormLabel>
                         <Select onValueChange={field.onChange} defaultValue={field.value}>
                           <FormControl>
-                            <SelectTrigger>
+                            <SelectTrigger style={{ fontSize: '16px' }}>
                               <SelectValue placeholder="Select location" />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {locations.length > 0 ? (
+                            {locationsLoading ? (
+                              <SelectItem value="_loading" disabled>Loading locations…</SelectItem>
+                            ) : locations.length > 0 ? (
                               locations.map((location: any) => (
                                 <SelectItem key={location.id} value={location.id.toString()}>
                                   {location.name}

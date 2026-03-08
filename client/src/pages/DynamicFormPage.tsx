@@ -77,10 +77,6 @@ function SocialShareButtons({ formTitle, formUrl, formDescription }: { formTitle
     }
   };
   
-  const openShareWindow = (url: string) => {
-    window.open(url, '_blank', 'width=600,height=400,noopener,noreferrer');
-  };
-  
   return (
     <div className="flex items-center gap-2">
       <span className="text-sm text-muted-foreground flex items-center gap-1">
@@ -90,14 +86,10 @@ function SocialShareButtons({ formTitle, formUrl, formDescription }: { formTitle
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => openShareWindow(shareLinks.facebook)}
-              data-testid="button-share-facebook"
-            >
-              <Facebook className="h-4 w-4 text-blue-600" />
+            <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
+              <a href={shareLinks.facebook} target="_blank" rel="noopener noreferrer" data-testid="button-share-facebook">
+                <Facebook className="h-4 w-4 text-blue-600" />
+              </a>
             </Button>
           </TooltipTrigger>
           <TooltipContent>Share on Facebook</TooltipContent>
@@ -105,14 +97,10 @@ function SocialShareButtons({ formTitle, formUrl, formDescription }: { formTitle
         
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => openShareWindow(shareLinks.twitter)}
-              data-testid="button-share-twitter"
-            >
-              <SiX className="h-4 w-4" />
+            <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
+              <a href={shareLinks.twitter} target="_blank" rel="noopener noreferrer" data-testid="button-share-twitter">
+                <SiX className="h-4 w-4" />
+              </a>
             </Button>
           </TooltipTrigger>
           <TooltipContent>Share on X</TooltipContent>
@@ -120,14 +108,10 @@ function SocialShareButtons({ formTitle, formUrl, formDescription }: { formTitle
         
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => openShareWindow(shareLinks.linkedin)}
-              data-testid="button-share-linkedin"
-            >
-              <Linkedin className="h-4 w-4 text-blue-700" />
+            <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
+              <a href={shareLinks.linkedin} target="_blank" rel="noopener noreferrer" data-testid="button-share-linkedin">
+                <Linkedin className="h-4 w-4 text-blue-700" />
+              </a>
             </Button>
           </TooltipTrigger>
           <TooltipContent>Share on LinkedIn</TooltipContent>
@@ -135,14 +119,10 @@ function SocialShareButtons({ formTitle, formUrl, formDescription }: { formTitle
         
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => window.open(shareLinks.email, '_blank', 'noopener,noreferrer')}
-              data-testid="button-share-email"
-            >
-              <Mail className="h-4 w-4 text-gray-600" />
+            <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
+              <a href={shareLinks.email} data-testid="button-share-email">
+                <Mail className="h-4 w-4 text-gray-600" />
+              </a>
             </Button>
           </TooltipTrigger>
           <TooltipContent>Share via Email</TooltipContent>

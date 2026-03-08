@@ -40,6 +40,10 @@ router.post("/frontend", async (req, res) => {
 
     const { message, stackTrace, url, route, errorCode, severity, metadata } = parsed.data;
 
+    const effectiveSeverity = (message === 'Script error.' || message.startsWith('Script error at'))
+      ? 'low'
+      : severity;
+
     let userId: number | undefined;
     let userEmail: string | undefined;
     let schoolId: number | undefined;
@@ -62,7 +66,7 @@ router.post("/frontend", async (req, res) => {
 
     const errorLog = await storage.createErrorLog({
       errorType: 'frontend',
-      severity,
+      severity: effectiveSeverity,
       message,
       stackTrace: stackTrace ?? null,
       errorCode: errorCode ?? null,
@@ -80,7 +84,7 @@ router.post("/frontend", async (req, res) => {
       notificationSent: false,
     });
 
-    if (severity === 'critical' || severity === 'high') {
+    if (effectiveSeverity === 'critical' || effectiveSeverity === 'high') {
       errorNotificationService.sendImmediateNotification(errorLog).catch(e => {
         console.error('[ErrorTelemetry] Failed to send immediate notification:', e);
       });
