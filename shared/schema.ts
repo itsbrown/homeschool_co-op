@@ -830,6 +830,7 @@ export const scheduledPayments = pgTable("scheduled_payments", {
   processedAt: timestamp("processed_at"),
   failureReason: text("failure_reason"),
   retryCount: integer("retry_count").default(0).notNull(),
+  chargedBy: text("charged_by"), // 'auto_pay' | 'parent_manual' | 'admin_manual' | null
   
   // Reminder tracking
   reminderCount: integer("reminder_count").default(0).notNull(),
@@ -852,6 +853,7 @@ export const insertScheduledPaymentSchema = createInsertSchema(scheduledPayments
     processedAt: z.date().nullable().default(null),
     failureReason: z.string().nullable().default(null),
     retryCount: z.number().default(0),
+    chargedBy: z.string().nullable().default(null),
     reminderCount: z.number().default(0),
     lastReminderSentAt: z.date().nullable().default(null),
     metadata: z.record(z.any()).default({}),

@@ -740,6 +740,33 @@ router.get('/class-breakdown', async (req: any, res) => {
   }
 });
 
+router.get('/auto-pay-history', async (req: any, res) => {
+  try {
+    const result = await getSchoolAdminWithFeatureCheck(req, 'financialReports');
+    if (isError(result)) {
+      return res.status(result.status).json({ error: result.error });
+    }
+    const { schoolId } = result;
+
+    const { startDate: startDateStr, endDate: endDateStr, status = 'all' } = req.query;
+
+    // Default date range: first day of current month → today
+    const now = new Date();
+    const defaultStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const defaultEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+
+    const startDate = startDateStr ? new Date(String(startDateStr)) : defaultStart;
+    const endDate = endDateStr ? new Date(String(endDateStr)) : defaultEnd;
+
+    const data = await storage.getAutoPayHistory(schoolId, { startDate, endDate, status: String(status) });
+
+    return res.json(data);
+  } catch (error) {
+    console.error('Error fetching auto-pay history:', error);
+    return res.status(500).json({ error: 'Failed to fetch auto-pay history' });
+  }
+});
+
 router.get('/export', async (req: any, res) => {
   try {
     const result = await getSchoolAdminWithFeatureCheck(req, 'financialReports');
@@ -832,6 +859,23 @@ router.get('/export', async (req: any, res) => {
       }).join('\n');
 
       filename = `outstanding_balances_${new Date().toISOString().split('T')[0]}.csv`;
+    } else if (reportType === 'autopay') {
+      const now = new Date();
+      const startDate = req.query.startDate ? new Date(String(req.query.startDate)) : new Date(now.getFullYear(), now.getMonth(), 1);
+      const endDate = req.query.endDate ? new Date(String(req.query.endDate)) : new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+      const { records } = await storage.getAutoPayHistory(schoolId, { startDate, endDate, status: 'all' });
+
+      csvContent = 'Date Charged,Parent Name,Parent Email,Child,Class,Installment,Amount ($),Status,Failure Reason,Stripe PI ID\n';
+      csvContent += records.map((r: any) => {
+        const dateStr = r.processedAt ? new Date(r.processedAt).toISOString() : new Date(r.scheduledDate).toISOString().split('T')[0];
+        const parentName = [r.parentFirstName, r.parentLastName].filter(Boolean).join(' ') || 'N/A';
+        const amountDollars = r.amount != null ? (r.amount / 100).toFixed(2) : '0.00';
+        const installment = `${r.installmentNumber || 1} of ${r.totalInstallments || 1}`;
+        const failureReason = (r.failureReason || '').replace(/,/g, ';');
+        return `${dateStr},"${parentName}",${r.parentEmail || 'N/A'},"${r.childName || 'N/A'}","${r.className || 'N/A'}","${installment}",${amountDollars},${r.status},"${failureReason}",${r.stripePaymentIntentId || 'N/A'}`;
+      }).join('\n');
+
+      filename = `auto_pay_history_${new Date().toISOString().split('T')[0]}.csv`;
     }
 
     res.setHeader('Content-Type', 'text/csv');

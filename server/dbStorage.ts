@@ -2172,6 +2172,64 @@ export class DatabaseStorage implements IStorage {
     return updatedPayment;
   }
 
+  async getAutoPayHistory(schoolId: number, filters: { startDate?: Date; endDate?: Date; status?: string }): Promise<{ records: any[]; summary: { totalChargedCents: number; totalFailedCents: number; chargedCount: number; failedCount: number; skippedCount: number } }> {
+    const db = await getDb();
+
+    const conditions: any[] = [
+      eq(scheduledPayments.schoolId, schoolId),
+      eq(scheduledPayments.chargedBy, 'auto_pay'),
+    ];
+
+    if (filters.startDate) {
+      conditions.push(gte(scheduledPayments.scheduledDate, filters.startDate));
+    }
+    if (filters.endDate) {
+      conditions.push(lte(scheduledPayments.scheduledDate, filters.endDate));
+    }
+    if (filters.status && filters.status !== 'all') {
+      conditions.push(eq(scheduledPayments.status, filters.status as any));
+    }
+
+    const rows = await db
+      .select({
+        id: scheduledPayments.id,
+        amount: scheduledPayments.amount,
+        status: scheduledPayments.status,
+        scheduledDate: scheduledPayments.scheduledDate,
+        processedAt: scheduledPayments.processedAt,
+        installmentNumber: scheduledPayments.installmentNumber,
+        totalInstallments: scheduledPayments.totalInstallments,
+        failureReason: scheduledPayments.failureReason,
+        retryCount: scheduledPayments.retryCount,
+        chargedBy: scheduledPayments.chargedBy,
+        stripePaymentIntentId: scheduledPayments.stripePaymentIntentId,
+        enrollmentId: scheduledPayments.enrollmentId,
+        parentEmail: scheduledPayments.parentEmail,
+        // Denormalized from enrollment
+        childName: programEnrollments.childName,
+        className: programEnrollments.className,
+        // From parent user
+        parentFirstName: users.firstName,
+        parentLastName: users.lastName,
+      })
+      .from(scheduledPayments)
+      .leftJoin(programEnrollments, eq(scheduledPayments.enrollmentId, programEnrollments.id))
+      .leftJoin(users, eq(scheduledPayments.parentId, users.id))
+      .where(and(...conditions))
+      .orderBy(desc(scheduledPayments.scheduledDate));
+
+    const totalChargedCents = rows.filter(r => r.status === 'completed').reduce((sum, r) => sum + (r.amount || 0), 0);
+    const totalFailedCents = rows.filter(r => r.status === 'failed').reduce((sum, r) => sum + (r.amount || 0), 0);
+    const chargedCount = rows.filter(r => r.status === 'completed').length;
+    const failedCount = rows.filter(r => r.status === 'failed').length;
+    const skippedCount = rows.filter(r => r.status === 'skipped').length;
+
+    return {
+      records: rows,
+      summary: { totalChargedCents, totalFailedCents, chargedCount, failedCount, skippedCount },
+    };
+  }
+
   async deleteScheduledPayment(id: number): Promise<void> {
     const db = await getDb();
     await db.delete(scheduledPayments).where(eq(scheduledPayments.id, id));

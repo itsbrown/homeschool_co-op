@@ -40,7 +40,9 @@ import {
   ArrowRight,
   Mail,
   Loader2,
-  Send
+  Send,
+  Zap,
+  XCircle,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import {
@@ -290,6 +292,14 @@ export default function FinancialReportsPage() {
   const [isReconciling, setIsReconciling] = useState(false);
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
+
+  // Auto-Pay History filters
+  const now = new Date();
+  const defaultApStartDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+  const defaultApEndDate = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+  const [apStartDate, setApStartDate] = useState(defaultApStartDate);
+  const [apEndDate, setApEndDate] = useState(defaultApEndDate);
+  const [apStatus, setApStatus] = useState('all');
   const { toast } = useToast();
 
   const { data: summaryData, isLoading: summaryLoading, error: summaryError } = useQuery<{ summary: FinancialSummary }>({
@@ -331,6 +341,16 @@ export default function FinancialReportsPage() {
     queryKey: [classBreakdownUrl],
     enabled: activeTab === 'classes',
   });
+
+  const { data: autoPayData, isLoading: autoPayLoading } = useQuery<{ records: any[]; summary: any }>({
+    queryKey: ['/api/admin/financial-reports/auto-pay-history', apStartDate, apEndDate, apStatus],
+    enabled: activeTab === 'autopay',
+  });
+  const autoPayRecords = autoPayData?.records ?? [];
+  const autoPaySummary = autoPayData?.summary ?? { totalChargedCents: 0, totalFailedCents: 0, chargedCount: 0, failedCount: 0, skippedCount: 0 };
+  const autoPaySuccessRate = (autoPaySummary.chargedCount + autoPaySummary.failedCount) > 0
+    ? Math.round(autoPaySummary.chargedCount / (autoPaySummary.chargedCount + autoPaySummary.failedCount) * 100)
+    : 100;
 
   const sendReminderMutation = useMutation({
     mutationFn: async (scheduledPaymentId: number) => {
@@ -805,6 +825,10 @@ export default function FinancialReportsPage() {
                 <TabsTrigger value="reminders">
                   <Mail className="h-4 w-4 mr-1" />
                   Reminders
+                </TabsTrigger>
+                <TabsTrigger value="autopay">
+                  <Zap className="h-3.5 w-3.5 mr-1.5" />
+                  Auto-Pay
                 </TabsTrigger>
               </TabsList>
 
@@ -1363,6 +1387,196 @@ export default function FinancialReportsPage() {
                         <Mail className="h-12 w-12 mx-auto mb-4 text-gray-300" />
                         No reminders have been sent yet
                       </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="autopay" className="mt-4">
+                {/* Filter bar */}
+                <Card className="mb-4">
+                  <CardHeader className="pb-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                      <div>
+                        <CardTitle className="flex items-center gap-2">
+                          <Zap className="h-5 w-5 text-amber-500" />
+                          Auto-Pay Charge History
+                        </CardTitle>
+                        <CardDescription>All installments charged automatically by the auto-pay scheduler</CardDescription>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const url = `/api/admin/financial-reports/export?type=autopay&startDate=${apStartDate}&endDate=${apEndDate}`;
+                          window.location.href = url;
+                        }}
+                      >
+                        <Download className="h-4 w-4 mr-1" />
+                        Export CSV
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex flex-col sm:flex-row gap-3">
+                      <div className="flex items-center gap-2">
+                        <label className="text-sm font-medium whitespace-nowrap">From</label>
+                        <input
+                          type="date"
+                          value={apStartDate}
+                          onChange={(e) => setApStartDate(e.target.value)}
+                          style={{ fontSize: '16px' }}
+                          className="border rounded px-2 py-1 text-sm"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <label className="text-sm font-medium whitespace-nowrap">To</label>
+                        <input
+                          type="date"
+                          value={apEndDate}
+                          onChange={(e) => setApEndDate(e.target.value)}
+                          style={{ fontSize: '16px' }}
+                          className="border rounded px-2 py-1 text-sm"
+                        />
+                      </div>
+                      <select
+                        value={apStatus}
+                        onChange={(e) => setApStatus(e.target.value)}
+                        style={{ fontSize: '16px' }}
+                        className="border rounded px-2 py-1 text-sm"
+                      >
+                        <option value="all">All Statuses</option>
+                        <option value="completed">Charged</option>
+                        <option value="failed">Failed</option>
+                        <option value="skipped">Skipped</option>
+                      </select>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Summary cards */}
+                <div className="grid grid-cols-3 gap-4 mb-4">
+                  <Card>
+                    <CardContent className="pt-4">
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-full bg-green-100 flex items-center justify-center">
+                          <CheckCircle2 className="h-5 w-5 text-green-600" />
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">Total Charged</p>
+                          <p className="font-semibold">{formatCurrency(autoPaySummary.totalChargedCents)}</p>
+                          <p className="text-xs text-muted-foreground">{autoPaySummary.chargedCount} charge{autoPaySummary.chargedCount !== 1 ? 's' : ''}</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="pt-4">
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-full bg-red-100 flex items-center justify-center">
+                          <XCircle className="h-5 w-5 text-red-600" />
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">Total Failed</p>
+                          <p className="font-semibold">{formatCurrency(autoPaySummary.totalFailedCents)}</p>
+                          <p className="text-xs text-muted-foreground">{autoPaySummary.failedCount} failure{autoPaySummary.failedCount !== 1 ? 's' : ''}</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="pt-4">
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
+                          <TrendingUp className="h-5 w-5 text-blue-600" />
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">Success Rate</p>
+                          <p className="font-semibold">{autoPaySuccessRate}%</p>
+                          <p className="text-xs text-muted-foreground">{autoPaySummary.skippedCount} skipped</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Data table */}
+                <Card>
+                  <CardContent className="pt-4">
+                    {autoPayLoading ? (
+                      <div className="space-y-2">
+                        {[1, 2, 3, 4, 5].map(i => <Skeleton key={i} className="h-12 w-full" />)}
+                      </div>
+                    ) : autoPayRecords.length === 0 ? (
+                      <div className="text-center py-10 text-muted-foreground">
+                        <Zap className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                        <p className="font-medium">No auto-pay activity found for this period</p>
+                        <p className="text-sm mt-1">Auto-pay charges will appear here once the scheduler has run</p>
+                      </div>
+                    ) : (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Charged On</TableHead>
+                            <TableHead>Parent</TableHead>
+                            <TableHead>Child</TableHead>
+                            <TableHead>Class</TableHead>
+                            <TableHead>Installment</TableHead>
+                            <TableHead className="text-right">Amount</TableHead>
+                            <TableHead>Status</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {autoPayRecords.map((r: any) => (
+                            <TableRow key={r.id}>
+                              <TableCell className="text-sm">
+                                {r.processedAt
+                                  ? format(new Date(r.processedAt), 'MMM d, yyyy h:mm a')
+                                  : format(new Date(r.scheduledDate), 'MMM d, yyyy')}
+                              </TableCell>
+                              <TableCell>
+                                <div>
+                                  <p className="font-medium text-sm">
+                                    {[r.parentFirstName, r.parentLastName].filter(Boolean).join(' ') || r.parentEmail?.split('@')[0] || 'Unknown'}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">{r.parentEmail}</p>
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-sm">{r.childName || 'N/A'}</TableCell>
+                              <TableCell className="text-sm">{r.className || 'N/A'}</TableCell>
+                              <TableCell className="text-sm">{r.installmentNumber} of {r.totalInstallments}</TableCell>
+                              <TableCell className="text-right font-semibold text-sm">{formatCurrency(r.amount)}</TableCell>
+                              <TableCell>
+                                <div className="space-y-1">
+                                  {r.status === 'completed' && (
+                                    <Badge className="bg-green-100 text-green-800 border-0">Charged</Badge>
+                                  )}
+                                  {r.status === 'failed' && (
+                                    <Badge className="bg-red-100 text-red-800 border-0">Failed</Badge>
+                                  )}
+                                  {r.status === 'skipped' && (
+                                    <Badge className="bg-gray-100 text-gray-800 border-0">Skipped</Badge>
+                                  )}
+                                  {r.status === 'processing' && (
+                                    <Badge className="bg-yellow-100 text-yellow-800 border-0">Processing</Badge>
+                                  )}
+                                  {!['completed', 'failed', 'skipped', 'processing'].includes(r.status) && (
+                                    <Badge variant="outline">{r.status}</Badge>
+                                  )}
+                                  {r.failureReason && (
+                                    <p className="text-xs text-red-600">{r.failureReason}</p>
+                                  )}
+                                  {r.retryCount > 0 && (
+                                    <Badge variant="outline" className="text-xs">
+                                      {r.retryCount} retr{r.retryCount === 1 ? 'y' : 'ies'}
+                                    </Badge>
+                                  )}
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
                     )}
                   </CardContent>
                 </Card>

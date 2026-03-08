@@ -386,6 +386,7 @@ export async function processOneScheduledPayment(sp: any): Promise<'charged' | '
     if (intent.status === 'succeeded') {
       // Webhook payment_intent.succeeded will: mark completed, update enrollment, create history record
       console.log(`[AutoPay] ✅ Payment ${sp.id} charged successfully — webhook will update enrollment`);
+      await storage.updateScheduledPayment(sp.id, { chargedBy: 'auto_pay' });
       return 'charged';
     } else {
       throw new Error(`PaymentIntent requires action — status: ${intent.status}`);

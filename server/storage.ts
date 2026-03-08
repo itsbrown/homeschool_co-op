@@ -400,6 +400,7 @@ export interface IStorage {
   updateScheduledPayment(id: number, payment: Partial<InsertScheduledPayment>): Promise<any | undefined>;
   updateScheduledPaymentStatus(id: number, status: string): Promise<any | undefined>;
   updateScheduledPaymentReminderCount(id: number, count: number): Promise<any | undefined>;
+  getAutoPayHistory(schoolId: number, filters: { startDate?: Date; endDate?: Date; status?: string }): Promise<{ records: any[]; summary: { totalChargedCents: number; totalFailedCents: number; chargedCount: number; failedCount: number; skippedCount: number } }>;
   deleteScheduledPayment(id: number): Promise<void>;
   deletePendingScheduledPaymentsByEnrollmentId(enrollmentId: number): Promise<number>;
 
@@ -6368,6 +6369,17 @@ import { DatabaseStorage } from "./dbStorage";
         } catch (error) {
           return await this.memStorage.updateScheduledPaymentReminderCount(id, count);
         }
+      }
+
+      async getAutoPayHistory(schoolId: number, filters: { startDate?: Date; endDate?: Date; status?: string }): Promise<{ records: any[]; summary: { totalChargedCents: number; totalFailedCents: number; chargedCount: number; failedCount: number; skippedCount: number } }> {
+        try {
+          if (this.dbStorage && typeof this.dbStorage.getAutoPayHistory === 'function') {
+            return await this.dbStorage.getAutoPayHistory(schoolId, filters);
+          }
+        } catch (error) {
+          // fall through to empty response
+        }
+        return { records: [], summary: { totalChargedCents: 0, totalFailedCents: 0, chargedCount: 0, failedCount: 0, skippedCount: 0 } };
       }
 
       async deleteScheduledPayment(id: number): Promise<void> {

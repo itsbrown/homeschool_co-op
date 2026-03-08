@@ -2310,6 +2310,10 @@ async function runMigrations() {
     await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS auto_pay_enabled BOOLEAN NOT NULL DEFAULT FALSE`);
     await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_default_payment_method_id TEXT`);
     console.log('✅ Migration completed: auto-pay columns added to users table');
+
+    // Add charged_by column to scheduled_payments for auto-pay audit trail
+    await db.execute(sql`ALTER TABLE scheduled_payments ADD COLUMN IF NOT EXISTS charged_by TEXT`);
+    console.log('✅ Migration completed: charged_by column added to scheduled_payments');
     
   } catch (fundraiserError) {
     const errorMessage = fundraiserError instanceof Error ? fundraiserError.message : String(fundraiserError);

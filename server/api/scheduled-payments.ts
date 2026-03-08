@@ -395,6 +395,9 @@ router.post('/pay', supabaseAuth, async (req: any, res) => {
 
     console.log('✅ Created payment intent for scheduled payment:', paymentIntent.id, 'with enrollmentIds:', enrollmentIds, 'chargeAmount:', chargeAmount);
 
+    // Stamp charged_by for audit trail
+    await storage.updateScheduledPayment(parseInt(paymentId), { chargedBy: 'parent_manual' });
+
     res.json({
       success: true,
       clientSecret: paymentIntent.client_secret,
