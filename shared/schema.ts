@@ -1861,6 +1861,7 @@ export const categories = pgTable("categories", {
   name: text("name").notNull(), // e.g., "Early Childhood", "High School", "Kindergarten"
   description: text("description"), // Optional description of the category
   isActive: boolean("is_active").default(true).notNull(),
+  isPublic: boolean("is_public").default(true).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => ({
@@ -1872,6 +1873,7 @@ export const insertCategorySchema = createInsertSchema(categories)
   .omit({ id: true, createdAt: true, updatedAt: true })
   .extend({
     description: z.string().nullable().default(null),
+    isPublic: z.boolean().default(true).optional(),
   });
 export type InsertCategory = z.infer<typeof insertCategorySchema>;
 export type Category = typeof categories.$inferSelect;

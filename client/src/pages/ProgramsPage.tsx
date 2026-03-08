@@ -80,7 +80,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
   }
   
   const { data: classesData = { classes: [], pagination: { currentPage: 1, totalPages: 1, totalItems: 0 } }, isLoading: classesLoading } = useQuery<ClassesResponse>({
-    queryKey: ["/api/classes", { page: currentPage, limit: 12, search: searchTerm, category: categoryFilter }],
+    queryKey: ["/api/classes", { page: currentPage, limit: 12, search: searchTerm, categoryName: categoryFilter }],
     enabled: activeTab === "classes" || activeTab === "all",
   });
   
@@ -309,7 +309,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
                   
                   <div>
                     <Label htmlFor="programType">Program</Label>
-                    <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                    <Select value={categoryFilter} onValueChange={(val) => { setCategoryFilter(val); setCurrentPage(1); }}>
                       <SelectTrigger id="programType">
                         <SelectValue placeholder="Any program" />
                       </SelectTrigger>

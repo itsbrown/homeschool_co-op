@@ -35,11 +35,13 @@ router.get('/', async (req, res) => {
     // Get classes with pagination
     let classes = await storage.getClasses(options);
 
-    // Filter out admin-only classes and past classes for public API
+    // Filter out admin-only classes, past classes, and classes in hidden categories
     const now = new Date();
+    const hiddenCategoryIds = await storage.getHiddenCategoryIds();
     classes = classes.filter(c => {
       if (c.isAdminOnly) return false;
       if (c.endDate && new Date(c.endDate) < now) return false;
+      if (c.categoryId && hiddenCategoryIds.includes(c.categoryId)) return false;
       return true;
     });
 
@@ -157,31 +159,34 @@ router.get('/category/:categoryName', async (req, res) => {
   }
 });
 
-// Get unique category names
+// Get unique category names (public categories only)
 router.get('/categories/names', async (req, res) => {
   try {
-    // Get all classes
-    const allClasses = await storage.getClasses({
-      page: 1,
-      limit: 1000, // Large limit to get all classes
-      search: '',
-      category: '',
-      status: 'published'
-    });
+    // Get all classes and hidden category IDs in parallel
+    const [allClasses, hiddenCategoryIds] = await Promise.all([
+      storage.getClasses({
+        page: 1,
+        limit: 1000,
+        search: '',
+        category: '',
+        status: 'published'
+      }),
+      storage.getHiddenCategoryIds()
+    ]);
 
-    // Extract unique category names from active classes only (exclude past classes)
+    // Extract unique category names from active, public classes only
     const now = new Date();
     const categoryNamesMap: {[key: string]: boolean} = {};
 
     allClasses.forEach(c => {
       if (c.categoryName && !(c.endDate && new Date(c.endDate) < now)) {
+        // Skip classes in hidden categories
+        if (c.categoryId && hiddenCategoryIds.includes(c.categoryId)) return;
         categoryNamesMap[c.categoryName] = true;
       }
     });
 
-    // Convert object keys to array
     const categoryNames = Object.keys(categoryNamesMap);
-
     res.json(categoryNames);
   } catch (error) {
     console.error('Error fetching category names:', error);

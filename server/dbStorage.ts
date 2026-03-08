@@ -2494,6 +2494,15 @@ export class DatabaseStorage implements IStorage {
       .orderBy(asc(categories.name));
   }
 
+  async getHiddenCategoryIds(): Promise<number[]> {
+    const db = await getDb();
+    const rows = await db
+      .select({ id: categories.id })
+      .from(categories)
+      .where(and(eq(categories.isPublic, false), eq(categories.isActive, true)));
+    return rows.map(r => r.id);
+  }
+
   async getAllCategories(): Promise<Category[]> {
     const db = await getDb();
     return await db.select().from(categories).where(eq(categories.isActive, true));

@@ -667,13 +667,40 @@ router.get('/context', supabaseAuth, async (req: any, res) => {
         schoolName = school.name || '';
         const memberships = await storage.getMembershipEnrollmentsByParentId(user.id);
         const currentYear = new Date().getFullYear();
-        const activeMembership = memberships.find(m =>
-          m.schoolId === user.schoolId &&
-          m.membershipYear >= currentYear &&
-          ['enrolled', 'active', 'paid'].includes(m.status || '')
+
+        // Find the most relevant membership for the current school and year
+        const schoolMemberships = memberships.filter(m =>
+          m.schoolId === user.schoolId && m.membershipYear >= currentYear
         );
-        membershipStatus = activeMembership ? 'active' : 'expired';
-        membershipExpired = !activeMembership;
+
+        if (schoolMemberships.length === 0) {
+          // New user with no membership record — not expired, just not yet registered
+          membershipStatus = 'none';
+          membershipExpired = false;
+        } else {
+          // Priority order: enrolled > grace_period > pending_payment > suspended > expired
+          const hasActive = schoolMemberships.some(m =>
+            m.status === 'enrolled' || m.status === 'grace_period'
+          );
+          const hasPending = schoolMemberships.some(m => m.status === 'pending_payment');
+          const hasExpiredOrSuspended = schoolMemberships.some(m =>
+            m.status === 'expired' || m.status === 'suspended'
+          );
+
+          if (hasActive) {
+            membershipStatus = 'active';
+            membershipExpired = false;
+          } else if (hasPending) {
+            membershipStatus = 'pending_payment';
+            membershipExpired = false;
+          } else if (hasExpiredOrSuspended) {
+            membershipStatus = 'expired';
+            membershipExpired = true;
+          } else {
+            membershipStatus = 'active';
+            membershipExpired = false;
+          }
+        }
       }
     }
 
@@ -768,6 +795,8 @@ router.get('/context', supabaseAuth, async (req: any, res) => {
     }
     if (membershipExpired) {
       urgentAlerts.push('Your school membership has expired. Renewal is required for class enrollment.');
+    } else if (membershipStatus === 'pending_payment') {
+      urgentAlerts.push('Your membership payment is pending. Please complete your payment to enroll in classes.');
     }
 
     if (pendingPayments.length > 0 && overdueCount === 0) {

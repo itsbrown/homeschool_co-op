@@ -2314,7 +2314,11 @@ async function runMigrations() {
     // Add charged_by column to scheduled_payments for auto-pay audit trail
     await db.execute(sql`ALTER TABLE scheduled_payments ADD COLUMN IF NOT EXISTS charged_by TEXT`);
     console.log('✅ Migration completed: charged_by column added to scheduled_payments');
-    
+
+    // Add is_public column to categories for public visibility control
+    await db.execute(sql`ALTER TABLE categories ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT TRUE NOT NULL`);
+    console.log('✅ Migration completed: is_public column added to categories');
+
   } catch (fundraiserError) {
     const errorMessage = fundraiserError instanceof Error ? fundraiserError.message : String(fundraiserError);
     if (!errorMessage.includes('Database connection not available')) {

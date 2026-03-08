@@ -6162,7 +6162,7 @@ router.put("/categories/:id", supabaseAuth, async (req: any, res) => {
     }
 
     const categoryId = parseInt(req.params.id);
-    const { name, description, isActive } = req.body;
+    const { name, description, isActive, isPublic } = req.body;
 
     // Verify category belongs to user's school
     const categories = await storage.getCategoriesBySchoolId(user.schoolId);
@@ -6175,7 +6175,8 @@ router.put("/categories/:id", supabaseAuth, async (req: any, res) => {
     const updatedCategory = await storage.updateCategory(categoryId, {
       ...(name && { name }),
       ...(description !== undefined && { description }),
-      ...(isActive !== undefined && { isActive })
+      ...(isActive !== undefined && { isActive }),
+      ...(isPublic !== undefined && { isPublic })
     });
 
     res.json(updatedCategory);

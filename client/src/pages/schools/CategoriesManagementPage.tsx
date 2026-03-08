@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/hooks/use-toast'
 import { useSchoolAdmin } from '@/hooks/useSchoolAdmin'
-import { PlusCircle, Trash2, Edit, Power, Tag } from 'lucide-react'
+import { PlusCircle, Trash2, Edit, Power, Tag, Eye, EyeOff } from 'lucide-react'
 import { apiRequest } from '@/lib/queryClient'
 
 export default function CategoriesManagementPage() {
@@ -130,6 +130,39 @@ export default function CategoriesManagementPage() {
     if (window.confirm(`Are you sure you want to ${actionText} "${category.name}"?`)) {
       toggleStatusMutation.mutate({ id: category.id, newStatus })
     }
+  }
+
+  // Visibility toggle mutation (show/hide from public class browsing)
+  const [togglingVisibilityId, setTogglingVisibilityId] = useState<number | null>(null)
+  const toggleVisibilityMutation = useMutation({
+    mutationFn: ({ id, isPublic }: { id: number; isPublic: boolean }) =>
+      apiRequest('PUT', `/api/school-admin/categories/${id}`, { isPublic }),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/school-admin/categories'] })
+      queryClient.invalidateQueries({ queryKey: ['/api/classes/categories/names'] })
+      queryClient.refetchQueries({ queryKey: ['/api/school-admin/categories'] })
+      setTogglingVisibilityId(null)
+      toast({
+        title: "Visibility updated",
+        description: variables.isPublic
+          ? "Category is now visible to the public."
+          : "Category is now hidden from public class browsing.",
+      })
+    },
+    onError: (error: any) => {
+      setTogglingVisibilityId(null)
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update visibility",
+        variant: "destructive",
+      })
+    }
+  })
+
+  const handleToggleVisibility = (category: Category) => {
+    const newIsPublic = !(category as any).isPublic
+    setTogglingVisibilityId(category.id)
+    toggleVisibilityMutation.mutate({ id: category.id, isPublic: newIsPublic })
   }
 
   // Update category mutation
@@ -348,11 +381,14 @@ export default function CategoriesManagementPage() {
                     <TableHead>Name</TableHead>
                     <TableHead className="hidden md:table-cell">Description</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Visibility</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {categories.map((category) => (
+                  {categories.map((category) => {
+                    const isPublic = (category as any).isPublic !== false
+                    return (
                     <TableRow key={category.id} data-testid={`row-category-${category.id}`}>
                       <TableCell className="font-medium" data-testid={`text-category-name-${category.id}`}>
                         {category.name}
@@ -368,6 +404,15 @@ export default function CategoriesManagementPage() {
                           {category.isActive ? 'Active' : 'Inactive'}
                         </Badge>
                       </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={isPublic ? "default" : "outline"}
+                          className={isPublic ? "bg-green-100 text-green-800 border-green-200 hover:bg-green-100" : "text-gray-500"}
+                          data-testid={`badge-visibility-${category.id}`}
+                        >
+                          {isPublic ? 'Public' : 'Hidden'}
+                        </Badge>
+                      </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
                           <Button
@@ -378,6 +423,19 @@ export default function CategoriesManagementPage() {
                             data-testid={`button-edit-${category.id}`}
                           >
                             <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleToggleVisibility(category)}
+                            title={isPublic ? 'Hide from public' : 'Show to public'}
+                            disabled={togglingVisibilityId === category.id}
+                            data-testid={`button-visibility-${category.id}`}
+                          >
+                            {isPublic
+                              ? <EyeOff className="h-4 w-4 text-gray-500" />
+                              : <Eye className="h-4 w-4 text-green-600" />
+                            }
                           </Button>
                           <Button
                             variant="ghost"
@@ -401,7 +459,8 @@ export default function CategoriesManagementPage() {
                         </div>
                       </TableCell>
                     </TableRow>
-                  ))}
+                    )
+                  })}
                 </TableBody>
               </Table>
             </div>
