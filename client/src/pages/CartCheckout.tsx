@@ -31,6 +31,7 @@ function CheckoutForm({ selectedPaymentPlan, selectedPlanAmount, autoPayEnabled,
   const [, setLocation] = useLocation();
   const [processing, setProcessing] = useState(false);
   const [elementsReady, setElementsReady] = useState(false);
+  const [pendingAutoPayEnabled, setPendingAutoPayEnabled] = useState(false);
   
   // Reset ready state when stripe or elements change (e.g., when clientSecret changes)
   useEffect(() => {
@@ -69,6 +70,11 @@ function CheckoutForm({ selectedPaymentPlan, selectedPlanAmount, autoPayEnabled,
 
     // Save payment plan before payment for success page
     localStorage.setItem('selectedPaymentPlan', selectedPaymentPlan);
+
+    // Save pending auto-pay preference for first-time users (applied on success page after card is saved)
+    if (!hasPaymentMethod) {
+      localStorage.setItem('pendingAutoPay', pendingAutoPayEnabled ? 'true' : 'false');
+    }
 
     // Ensure proper return URL with protocol
     const returnUrl = `${window.location.protocol}//${window.location.host}/cart/success`;
@@ -134,16 +140,16 @@ function CheckoutForm({ selectedPaymentPlan, selectedPlanAmount, autoPayEnabled,
                   ? 'Your saved payment method will be charged automatically every two weeks'
                   : 'Turn on to have each installment charged automatically on its due date'}
               </p>
-              {!hasPaymentMethod && (
-                <p className="text-xs text-amber-600 mt-1">
-                  Complete this payment to save your card and enable auto-pay for future installments.
+              {!hasPaymentMethod && pendingAutoPayEnabled && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Your card will be saved securely. Auto-pay activates after your first payment.
                 </p>
               )}
             </div>
             <Switch
-              checked={autoPayEnabled}
-              onCheckedChange={(checked) => toggleAutoPay(checked)}
-              disabled={togglingAutoPay || !hasPaymentMethod}
+              checked={hasPaymentMethod ? autoPayEnabled : pendingAutoPayEnabled}
+              onCheckedChange={hasPaymentMethod ? (checked) => toggleAutoPay(checked) : setPendingAutoPayEnabled}
+              disabled={togglingAutoPay}
               aria-label="Enable automatic payments"
             />
           </div>

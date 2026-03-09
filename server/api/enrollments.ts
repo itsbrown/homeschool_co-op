@@ -406,6 +406,25 @@ router.post('/confirm', async (req: any, res) => {
 
     console.log(`✅ Payment verified with Stripe. Status: ${paymentIntent.status}, Amount: ${paymentIntent.amount}`);
 
+    // Save payment method synchronously so auto-pay can be enabled immediately on success page
+    // The webhook handler also does this async, but this ensures it's ready before the page loads
+    try {
+      const paymentMethodId = typeof paymentIntent.payment_method === 'string'
+        ? paymentIntent.payment_method
+        : (paymentIntent.payment_method as any)?.id;
+
+      if (paymentMethodId) {
+        const currentUser = await storage.getUserById(userId);
+        if (currentUser && !currentUser.stripeDefaultPaymentMethodId) {
+          await storage.updateUser(userId, { stripeDefaultPaymentMethodId: paymentMethodId });
+          console.log(`💳 Saved payment method ${paymentMethodId} for user ${userId}`);
+        }
+      }
+    } catch (pmSaveError) {
+      // Non-fatal — webhook handler will retry; don't abort enrollment confirmation
+      console.warn('⚠️ Could not save payment method synchronously:', pmSaveError);
+    }
+
     // Get database instance for transaction
     const db = await getDb();
     

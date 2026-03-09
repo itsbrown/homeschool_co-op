@@ -66,6 +66,7 @@ export default function CartSuccess() {
           localStorage.removeItem('cart');
           localStorage.removeItem('asa_cart');
           localStorage.removeItem('selectedPaymentPlan');
+          localStorage.removeItem('pendingAutoPay');
           sessionStorage.removeItem('cart_backup');
           
           // Clear cart in context - skip cancellation since enrollments are already processed
@@ -135,6 +136,21 @@ export default function CartSuccess() {
             console.error('❌ Error confirming enrollments:', confirmError);
             // Continue anyway - worst case is cart shows items that are actually paid
           }
+
+          // Apply pending auto-pay preference if user opted in during checkout
+          const pendingAutoPay = localStorage.getItem('pendingAutoPay');
+          if (pendingAutoPay === 'true') {
+            try {
+              const autoPayRes = await apiRequest('PATCH', '/api/user/auto-pay', { enabled: true });
+              if (autoPayRes.ok) {
+                queryClient.invalidateQueries({ queryKey: ['/api/user/auto-pay-status'] });
+                console.log('✅ Auto-pay enabled from pending checkout preference');
+              }
+            } catch (autoPayError) {
+              // Non-fatal — user can enable auto-pay from billing settings
+              console.warn('⚠️ Could not apply pending auto-pay preference:', autoPayError);
+            }
+          }
           
           setProcessedEnrollments(itemCount);
           
@@ -171,6 +187,7 @@ export default function CartSuccess() {
           localStorage.removeItem('cart');
           localStorage.removeItem('asa_cart');
           localStorage.removeItem('selectedPaymentPlan');
+          localStorage.removeItem('pendingAutoPay');
           sessionStorage.removeItem('cart_backup');
           
           // Clear cart in context - skip enrollment cancellation since payment already succeeded
