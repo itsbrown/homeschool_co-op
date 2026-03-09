@@ -289,6 +289,7 @@ export interface IStorage {
   cancelPendingEnrollments(enrollmentIds: number[], parentUserId: number): Promise<{ cancelled: number[]; skipped: number[]; errors: string[] }>;
   getStripeCustomerIdsByParentEmail(parentEmail: string): Promise<string[]>;
   getStripeLinkedEnrollmentsByParentEmail(parentEmail: string): Promise<ProgramEnrollment[]>;
+  getEnrollmentsByParentEmail(parentEmail: string): Promise<ProgramEnrollment[]>;
 
   // Membership Enrollment methods
   getMembershipEnrollmentById(id: number): Promise<MembershipEnrollment | undefined>;
@@ -2139,6 +2140,11 @@ export class MemStorage implements IStorage {
         activeStatuses.includes(e.status) && 
         e.stripeCustomerId !== null
       );
+  }
+
+  async getEnrollmentsByParentEmail(parentEmail: string): Promise<ProgramEnrollment[]> {
+    return Array.from(this.programEnrollmentsStore.values())
+      .filter(e => e.parentEmail === parentEmail);
   }
 
   // Membership Enrollment methods
@@ -5935,6 +5941,14 @@ import { DatabaseStorage } from "./dbStorage";
             inArray(programEnrollments.status, activeStatuses)
           )
         );
+    }
+
+    async getEnrollmentsByParentEmail(parentEmail: string): Promise<ProgramEnrollment[]> {
+      const db = await getDb();
+      const { eq } = await import('drizzle-orm');
+      return await db.select()
+        .from(programEnrollments)
+        .where(eq(programEnrollments.parentEmail, parentEmail));
     }
 
     async createEnrollment(enrollment: any): Promise<any> {

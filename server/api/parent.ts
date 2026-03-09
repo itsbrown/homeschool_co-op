@@ -379,17 +379,24 @@ router.get('/enrollments', supabaseAuth, async (req: any, res) => {
 
     console.log('📚 Parent requesting enrollments for email:', userEmail);
 
-    // Get all enrollments from storage
-    const allEnrollments = await storage.getAllEnrollments();
-    
-    // Filter enrollments for this parent's email
-    const parentEnrollments = allEnrollments.filter((enrollment: any) => 
-      enrollment.parentEmail === userEmail
-    );
+    // Use scoped query — avoids getAllEnrollments() hot path
+    const parentEnrollments = await storage.getEnrollmentsByParentEmail(userEmail);
 
     console.log(`📚 Found ${parentEnrollments.length} enrollments for parent ${userEmail}`);
 
-    return res.status(200).json(parentEnrollments);
+    // Recalculate remainingBalance from authoritative fields (totalCost / totalPaid).
+    // The stored remaining_balance column can be stale for certain creation paths (e.g. deposit plan).
+    // Gold-standard pattern from parent-profile.ts: Math.max(0, totalCost - totalPaid - compAmountCents).
+    // Use ?? not || — || treats a genuinely fully-paid enrollment (balance = 0) as falsy.
+    const enriched = parentEnrollments.map((enrollment: any) => {
+      const totalPaid = enrollment.totalPaid ?? 0;
+      const totalCost = enrollment.totalCost ?? 0;
+      const compAmount = enrollment.compAmountCents ?? 0;
+      const effectiveBalance = Math.max(0, totalCost - totalPaid - compAmount);
+      return { ...enrollment, remainingBalance: effectiveBalance };
+    });
+
+    return res.status(200).json(enriched);
   } catch (error) {
     console.error('❌ Error fetching enrollments:', error);
     return res.status(500).json({ 
