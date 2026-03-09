@@ -35,6 +35,7 @@ import { Link } from "wouter";
 import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
 import { apiRequest, safeJsonParse } from "@/lib/queryClient";
 import { useRole } from "@/contexts/RoleContext";
+import { formatDate } from "@/lib/utils";
 
 // Sample class data (will be replaced with API data)
 const sampleClasses = [
@@ -128,6 +129,7 @@ export default function SchoolClassesPage() {
     location: true,
     status: true,
     enrollment: true,
+    dates: true,
     actions: true
   });
 
@@ -135,7 +137,7 @@ export default function SchoolClassesPage() {
   useEffect(() => {
     const savedColumns = localStorage.getItem('classTableColumns');
     if (savedColumns) {
-      setVisibleColumns(JSON.parse(savedColumns));
+      setVisibleColumns(prev => ({ ...prev, ...JSON.parse(savedColumns) }));
     }
   }, []);
 
@@ -441,7 +443,7 @@ export default function SchoolClassesPage() {
 
   const exportClassList = () => {
     const csvContent = [
-      ['Class Name', 'Category', 'Instructor', 'Grade Level', 'Status', 'Enrollment', 'Schedule'],
+      ['Class Name', 'Category', 'Instructor', 'Grade Level', 'Status', 'Enrollment', 'Start Date', 'End Date', 'Schedule'],
       ...sortedClasses.map((cls: any) => [
         cls.title,
         cls.categoryName || cls.category || '',
@@ -449,6 +451,8 @@ export default function SchoolClassesPage() {
         cls.gradeLevel,
         cls.status,
         `${cls.enrollmentCount || 0}/${cls.capacity || cls.maxEnrollment || 0}`,
+        cls.startDate || '',
+        cls.endDate || '',
         cls.schedule || ''
       ])
     ].map(row => row.join(',')).join('\n');
@@ -641,6 +645,12 @@ export default function SchoolClassesPage() {
                         Enrollment
                       </DropdownMenuCheckboxItem>
                       <DropdownMenuCheckboxItem
+                        checked={visibleColumns.dates}
+                        onCheckedChange={() => toggleColumn('dates')}
+                      >
+                        Dates
+                      </DropdownMenuCheckboxItem>
+                      <DropdownMenuCheckboxItem
                         checked={visibleColumns.actions}
                         onCheckedChange={() => toggleColumn('actions')}
                       >
@@ -678,6 +688,7 @@ export default function SchoolClassesPage() {
                             {visibleColumns.location && <TableHead>Location</TableHead>}
                             {visibleColumns.status && <TableHead>Status</TableHead>}
                             {visibleColumns.enrollment && <TableHead>Enrollment</TableHead>}
+                            {visibleColumns.dates && <TableHead>Dates</TableHead>}
                             {visibleColumns.actions && <TableHead>Actions</TableHead>}
                           </TableRow>
                         </TableHeader>
@@ -702,6 +713,12 @@ export default function SchoolClassesPage() {
                                   </TableCell>
                                 )}
                                 {visibleColumns.enrollment && <TableCell>{cls.enrollmentCount || 0}/{cls.capacity || cls.maxEnrollment || 0}</TableCell>}
+                                {visibleColumns.dates && (
+                                  <TableCell className="text-sm whitespace-nowrap">
+                                    <div className="text-foreground">{formatDate(cls.startDate) || '—'}</div>
+                                    <div className="text-muted-foreground">{formatDate(cls.endDate) || '—'}</div>
+                                  </TableCell>
+                                )}
                                 {visibleColumns.actions && <TableCell>
                                   <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
@@ -796,6 +813,14 @@ export default function SchoolClassesPage() {
                               <span className="font-medium">Location:</span>
                               <p className="text-muted-foreground">{cls.locationName || cls.location || "Not Specified"}</p>
                             </div>
+                            {(cls.startDate || cls.endDate) && (
+                              <div className="col-span-2">
+                                <span className="font-medium">Dates:</span>
+                                <p className="text-muted-foreground">
+                                  {formatDate(cls.startDate) || '—'} – {formatDate(cls.endDate) || '—'}
+                                </p>
+                              </div>
+                            )}
                             <div className="col-span-2">
                               <span className="font-medium">Enrollment:</span>
                               <p className="text-muted-foreground">
