@@ -396,7 +396,14 @@ router.get('/enrollments', supabaseAuth, async (req: any, res) => {
       return { ...enrollment, remainingBalance: effectiveBalance };
     });
 
-    return res.status(200).json(enriched);
+    // Exclude terminal-status enrollments (denylist per asa-payment-patterns gold-standard).
+    // Cancelled/withdrawn/failed/waitlist/completed enrollments have no legitimate outstanding balance.
+    // 'pending_admin_approval' is intentionally kept — payment was made, awaiting admin sign-off.
+    const activeEnrollments = enriched.filter(
+      (e: any) => !['cancelled', 'waitlist', 'withdrawn', 'failed', 'completed'].includes(e.status)
+    );
+
+    return res.status(200).json(activeEnrollments);
   } catch (error) {
     console.error('❌ Error fetching enrollments:', error);
     return res.status(500).json({ 
