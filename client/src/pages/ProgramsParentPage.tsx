@@ -248,9 +248,8 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
     classes: ((schoolClassesResponse as any)?.items || [])
       .filter((item: any) => {
         if (item.endDate && new Date(item.endDate) < now) return false;
-        // Filter out classes in hidden categories — classCategories only returns public names after T003
-        const catName = item.categoryName || item.category;
-        if (catName && classCategories.length > 0 && !classCategories.includes(catName)) return false;
+        // Hide classes whose category has been hidden by an admin
+        if (item.categoryId && item.categoryIsPublic === false) return false;
         return true;
       })
       .map((item: any) => ({

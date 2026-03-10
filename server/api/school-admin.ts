@@ -685,6 +685,9 @@ router.get("/classes", supabaseAuth, requireSchoolContext, async (req: any, res:
     
     console.log(`Found ${allClasses.length} classes for school ID ${schoolId} from database`);
 
+    // Fetch hidden category IDs once — used to set categoryIsPublic on each class
+    const hiddenCategoryIds = await storage.getHiddenCategoryIds();
+
     // Add enrollment counts and parse variants from each class
     // Keep classes with variants intact (don't expand into individual entries)
     const classesWithEnrollment = await Promise.all(allClasses.map(async (classItem) => {
@@ -759,8 +762,13 @@ router.get("/classes", supabaseAuth, requireSchoolContext, async (req: any, res:
         variants: variants || undefined,
         // Include location name for display
         location: locationName || classItem.location || null,
-        // Pass category as categoryName for frontend consistency
-        categoryName: classItem.category || null,
+        // Pass category info for frontend consistency and visibility control
+        categoryName: classItem.categoryName || classItem.category || null,
+        categoryId: classItem.categoryId || null,
+        // Authoritative boolean: false if category is hidden by admin, true otherwise
+        categoryIsPublic: classItem.categoryId
+          ? !hiddenCategoryIds.includes(classItem.categoryId)
+          : true,
         // Override instructorName with derived value from instructorId (source of truth)
         instructorName: derivedInstructorName || classItem.instructorName || null
       };

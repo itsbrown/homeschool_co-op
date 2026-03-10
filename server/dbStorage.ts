@@ -860,8 +860,10 @@ export class DatabaseStorage implements IStorage {
         materials: classes.materials,
         // Add location name from join
         locationNameFromTable: locations.name,
-        // Add category name from join
+        // Add category info from join
+        categoryIdFromTable: categories.id,
         categoryNameFromTable: categories.name,
+        categoryIsPublicFromTable: categories.isPublic,
       })
       .from(classes)
       .leftJoin(locations, eq(classes.locationId, locations.id))
@@ -873,6 +875,8 @@ export class DatabaseStorage implements IStorage {
       ...row,
       locationName: row.locationNameFromTable || row.location || null,
       categoryName: row.categoryNameFromTable || row.category || null,
+      categoryId: row.categoryIdFromTable ?? row.categoryId ?? null,
+      categoryIsPublic: row.categoryIdFromTable != null ? row.categoryIsPublicFromTable : null,
     }));
     
     console.log(`📊 Filtered classes for schoolId=${schoolIdNum}: ${mappedResults.length}`);
