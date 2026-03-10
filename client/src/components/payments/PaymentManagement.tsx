@@ -1342,8 +1342,8 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
       acc[payment.status] = (acc[payment.status] || 0) + 1;
       acc.total += 1;
       
-      // Accumulate totals for each payment type (treat 'succeeded' and 'paid' as successful)
-      if (payment.status === 'paid' || payment.status === 'succeeded') {
+      // Accumulate totals for each payment type (treat 'succeeded', 'paid', and 'completed' as successful)
+      if (payment.status === 'paid' || payment.status === 'succeeded' || payment.status === 'completed') {
         acc.totalPaid = (acc.totalPaid || 0) + payment.amount;
         acc.successfulCount = (acc.successfulCount || 0) + 1;
       } else if (payment.status === 'pending') {
@@ -1368,10 +1368,8 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
     
     stats.scheduledPaymentsTotal = scheduledTotal;
     stats.scheduledPaymentsCount = pendingDbScheduled.length;
-    
-    // Include scheduled payments in the outstanding balance so parents see true amount owed
-    stats.totalOutstanding += scheduledTotal;
-    stats.outstandingCount += stats.scheduledPaymentsCount;
+    // Outstanding Balance is sourced purely from program_enrollments remainingBalance (per asa-payment-patterns).
+    // Scheduled payments are a subset of that balance — adding them here would double-count.
     
     return stats;
   }, [payments, outstandingBalances, dbScheduledPayments]);

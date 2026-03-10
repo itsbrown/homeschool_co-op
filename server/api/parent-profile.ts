@@ -562,9 +562,12 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
     }));
     
     // Calculate class amount due from RECALCULATED balances (not cached DB values)
-    // This ensures the summary matches what's shown in the enrollments table
+    // Exclude statuses with no legitimate outstanding balance (denylist per asa-payment-patterns gold-standard).
+    // 'pending_admin_approval' is intentionally included — payment was made but admin approval is pending.
     const classAmountDue = CurrencyUtils.sum(
-      processedEnrollments.map(enrollment => (enrollment as any)._remainingBalanceCents || 0)
+      processedEnrollments
+        .filter(e => !['cancelled', 'waitlist', 'withdrawn', 'failed', 'completed'].includes(e.status))
+        .map(enrollment => (enrollment as any)._remainingBalanceCents || 0)
     );
 
     // Process membership enrollments with recalculated balances
