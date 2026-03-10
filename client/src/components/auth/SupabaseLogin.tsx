@@ -21,9 +21,11 @@ export const SupabaseLogin: React.FC = () => {
   // RoleContext handles role selection for multi-role users
   useEffect(() => {
     if (isAuthenticated && user) {
-      // Redirect to dashboard - RoleContext will handle role-based routing
-      console.log('👤 User logged in, redirecting to dashboard');
-      setLocation('/dashboard');
+      const params = new URLSearchParams(window.location.search);
+      const returnTo = params.get('returnTo');
+      const destination = returnTo?.startsWith('/') ? returnTo : '/dashboard';
+      console.log('👤 User logged in, redirecting to', destination);
+      setLocation(destination);
     }
   }, [isAuthenticated, user, setLocation]);
 

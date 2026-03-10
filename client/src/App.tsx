@@ -313,13 +313,15 @@ function Router() {
     // Redirect to login if not authenticated (except for public routes)
     if (!isAuthenticated && !isLoading && !['/login', '/auth-callback', '/register', '/emergency-logout', '/auth/logout', '/forgot-password', '/reset-password'].includes(location) && !location.startsWith('/accept-invitation') && !location.startsWith('/school-registration') && !location.startsWith('/accept-educator-invitation') && !location.startsWith('/register/') && !location.startsWith('/school/') && !location.startsWith('/forms/')) {
       console.log(`🔒 Redirecting unauthenticated user from ${location} to login`);
-      setLocation('/login');
+      setLocation('/login?returnTo=' + encodeURIComponent(location));
     }
 
     // Redirect authenticated users away from login page
     if (isAuthenticated && location === '/login' && activeRole) {
       console.log(`🔄 Redirecting authenticated user away from login page`);
-      setLocation('/dashboard');
+      const params = new URLSearchParams(window.location.search);
+      const returnTo = params.get('returnTo');
+      setLocation(returnTo?.startsWith('/') ? returnTo : '/dashboard');
     }
   }, [isAuthenticated, isLoading, location, activeRole, setLocation]);
 
