@@ -86,9 +86,10 @@ interface OutstandingBalance {
   id: number;
   parentEmail: string;
   amount: number;
-  scheduledDate: string;
+  scheduledDate: string | null;
   isOverdue: boolean;
   daysOverdue: number;
+  type?: string;
   parent: { id: number; name: string; email: string; phone: string | null } | null;
   enrollment: { id: number; childName: string | null; className: string | null } | null;
 }
@@ -979,22 +980,30 @@ export default function FinancialReportsPage() {
                                     </div>
                                     <div className="flex items-center gap-2">
                                       <span>{formatCurrency(balance.amount)}</span>
-                                      <span className="text-muted-foreground">
-                                        Due {format(new Date(balance.scheduledDate), 'MMM d')}
-                                      </span>
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => handleSendReminder(balance.id)}
-                                        disabled={sendingReminderId === balance.id}
-                                        className="h-7 px-2"
-                                      >
-                                        {sendingReminderId === balance.id ? (
-                                          <Loader2 className="h-3 w-3 animate-spin" />
-                                        ) : (
-                                          <Send className="h-3 w-3" />
-                                        )}
-                                      </Button>
+                                      {balance.type === 'unscheduled' ? (
+                                        <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200 text-xs">
+                                          No Payment Plan
+                                        </Badge>
+                                      ) : (
+                                        <span className="text-muted-foreground">
+                                          Due {balance.scheduledDate ? format(new Date(balance.scheduledDate), 'MMM d') : '—'}
+                                        </span>
+                                      )}
+                                      {balance.type !== 'unscheduled' && (
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() => handleSendReminder(balance.id)}
+                                          disabled={sendingReminderId === balance.id}
+                                          className="h-7 px-2"
+                                        >
+                                          {sendingReminderId === balance.id ? (
+                                            <Loader2 className="h-3 w-3 animate-spin" />
+                                          ) : (
+                                            <Send className="h-3 w-3" />
+                                          )}
+                                        </Button>
+                                      )}
                                     </div>
                                   </div>
                                 ))}
@@ -1019,14 +1028,22 @@ export default function FinancialReportsPage() {
                           <TableBody>
                             {balances.map((balance) => (
                               <TableRow key={balance.id}>
-                                <TableCell>{format(new Date(balance.scheduledDate), 'MMM d, yyyy')}</TableCell>
+                                <TableCell>
+                                  {balance.scheduledDate
+                                    ? format(new Date(balance.scheduledDate), 'MMM d, yyyy')
+                                    : <span className="text-muted-foreground">—</span>}
+                                </TableCell>
                                 <TableCell>{balance.parent?.name || balance.parentEmail}</TableCell>
                                 <TableCell className="text-muted-foreground">{balance.parent?.phone || '-'}</TableCell>
                                 <TableCell>{balance.enrollment?.childName || 'N/A'}</TableCell>
                                 <TableCell>{balance.enrollment?.className || 'N/A'}</TableCell>
                                 <TableCell>{formatCurrency(balance.amount)}</TableCell>
                                 <TableCell>
-                                  {balance.isOverdue ? (
+                                  {balance.type === 'unscheduled' ? (
+                                    <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200">
+                                      No Payment Plan
+                                    </Badge>
+                                  ) : balance.isOverdue ? (
                                     <Badge variant="destructive">
                                       <AlertTriangle className="h-3 w-3 mr-1" />
                                       {balance.daysOverdue} days overdue
@@ -1039,20 +1056,32 @@ export default function FinancialReportsPage() {
                                   )}
                                 </TableCell>
                                 <TableCell>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => handleSendReminder(balance.id)}
-                                    disabled={sendingReminderId === balance.id}
-                                    className="h-8 px-2"
-                                    title="Send payment reminder"
-                                  >
-                                    {sendingReminderId === balance.id ? (
-                                      <Loader2 className="h-4 w-4 animate-spin" />
-                                    ) : (
-                                      <Send className="h-4 w-4" />
-                                    )}
-                                  </Button>
+                                  {balance.type === 'unscheduled' ? (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-8 px-2"
+                                      title="No scheduled payment to remind about"
+                                      disabled
+                                    >
+                                      <Send className="h-4 w-4 opacity-30" />
+                                    </Button>
+                                  ) : (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => handleSendReminder(balance.id)}
+                                      disabled={sendingReminderId === balance.id}
+                                      className="h-8 px-2"
+                                      title="Send payment reminder"
+                                    >
+                                      {sendingReminderId === balance.id ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                      ) : (
+                                        <Send className="h-4 w-4" />
+                                      )}
+                                    </Button>
+                                  )}
                                 </TableCell>
                               </TableRow>
                             ))}

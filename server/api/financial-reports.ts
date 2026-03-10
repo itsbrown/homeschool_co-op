@@ -370,6 +370,7 @@ router.get('/outstanding-balances', async (req: any, res) => {
 
         return {
           ...payment,
+          type: 'scheduled' as const,
           parent: parentInfo,
           enrollment: enrollmentInfo,
           enrollmentRemainingBalance,
@@ -381,7 +382,7 @@ router.get('/outstanding-balances', async (req: any, res) => {
 
     // Filter out scheduled payments where the enrollment is already fully paid.
     // Auto-heal any stale 'pending' records found — cancel them in the background.
-    const validBalances = enrichedBalances.filter(b => {
+    const filteredScheduled = enrichedBalances.filter(b => {
       const isFullyPaid = b.enrollmentRemainingBalance !== undefined && b.enrollmentRemainingBalance <= 0;
       if (isFullyPaid) {
         storage.updateScheduledPaymentStatus(b.id, 'cancelled').catch(() => {});
@@ -389,6 +390,67 @@ router.get('/outstanding-balances', async (req: any, res) => {
       }
       return true;
     });
+
+    // Also surface enrollments with outstanding balances that have NO pending scheduled payment.
+    // These families owe money but are invisible to a scheduled-payments-only query.
+    const enrollmentsWithBalance = await db
+      .select()
+      .from(programEnrollments)
+      .where(
+        and(
+          eq(programEnrollments.schoolId, schoolId),
+          not(inArray(programEnrollments.status, ['cancelled', 'waitlist', 'withdrawn', 'failed', 'completed'])),
+          sql`COALESCE(${programEnrollments.remainingBalance}, ${programEnrollments.totalCost} - ${programEnrollments.totalPaid}) > 0`
+        )
+      );
+
+    const coveredEnrollmentIds = new Set(outstandingPayments.map(p => p.enrollmentId));
+    const unscheduledEnrollments = enrollmentsWithBalance.filter(e => !coveredEnrollmentIds.has(e.id));
+
+    const enrichedUnscheduled = await Promise.all(
+      unscheduledEnrollments.map(async (enrollment) => {
+        let parentInfo: { id: number; name: string; email: string; phone: string | null } | null = null;
+        try {
+          const parent = await storage.getUser(enrollment.parentId);
+          if (parent) {
+            parentInfo = {
+              id: parent.id,
+              name: parent.name || parent.email,
+              email: parent.email,
+              phone: parent.phone || null,
+            };
+          }
+        } catch (e) {}
+
+        const amount = enrollment.remainingBalance ?? (enrollment.totalCost - enrollment.totalPaid);
+
+        return {
+          id: -enrollment.id,
+          enrollmentId: enrollment.id,
+          parentId: enrollment.parentId,
+          parentEmail: enrollment.parentEmail,
+          amount,
+          scheduledDate: null as string | null,
+          installmentNumber: null as number | null,
+          totalInstallments: null as number | null,
+          status: 'unscheduled',
+          reminderCount: null as number | null,
+          lastReminderSentAt: null as string | null,
+          type: 'unscheduled' as const,
+          parent: parentInfo,
+          enrollment: {
+            id: enrollment.id,
+            childName: enrollment.childName || null,
+            className: enrollment.className || null,
+          },
+          enrollmentRemainingBalance: amount,
+          isOverdue: false,
+          daysOverdue: 0,
+        };
+      })
+    );
+
+    const validBalances: any[] = [...filteredScheduled, ...enrichedUnscheduled];
 
     type FamilyBalance = {
       parent: typeof validBalances[number]['parent'];
