@@ -1190,6 +1190,12 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
     },
   });
 
+  // Membership enrollments — used to include membership fee in Outstanding Balance total.
+  // Uses default fetcher (no custom queryFn) per asa-frontend-conventions.
+  const { data: membershipEnrollments } = useQuery<any[]>({
+    queryKey: ['/api/parent/memberships'],
+  });
+
   // Get Stripe payment history for user
   const { data: stripePayments, isLoading: isLoadingStripePayments } = useQuery({
     queryKey: ["/api/stripe/payment-history"],
@@ -1358,7 +1364,19 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
       total + (enrollment.remainingBalance || 0), 0
     );
     stats.outstandingCount = outstandingData.length;
-    
+
+    // Add membership fees to outstanding balance (denylist per asa-payment-patterns gold-standard).
+    // 'grace_period' is intentionally included — fee is overdue but membership is still active.
+    // Use ?? not || for balance fallback — || treats a genuine $0 balance as falsy.
+    const activeMemberships = (membershipEnrollments || []).filter(
+      (m: any) => !['expired', 'suspended'].includes(m.status)
+    );
+    const membershipOutstanding = activeMemberships.reduce((total: number, m: any) => {
+      const balance = m.remainingBalance ?? Math.max(0, m.amount - (m.amountPaid ?? 0));
+      return total + Math.max(0, balance);
+    }, 0);
+    stats.totalOutstanding += membershipOutstanding;
+
     // Add scheduled/upcoming payments from database (single source of truth)
     const pendingDbScheduled = dbScheduledData.filter((p: any) => p.status === 'pending');
     
@@ -1372,7 +1390,7 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
     // Scheduled payments are a subset of that balance — adding them here would double-count.
     
     return stats;
-  }, [payments, outstandingBalances, dbScheduledPayments]);
+  }, [payments, outstandingBalances, dbScheduledPayments, membershipEnrollments]);
   
   // Format currency amount
   const formatCurrency = (amount: number) => {
