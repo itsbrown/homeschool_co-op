@@ -379,8 +379,14 @@ router.get('/enrollments', supabaseAuth, async (req: any, res) => {
 
     console.log('📚 Parent requesting enrollments for email:', userEmail);
 
-    // Use scoped query — avoids getAllEnrollments() hot path
-    const parentEnrollments = await storage.getEnrollmentsByParentEmail(userEmail);
+    // Use integer parent_id FK — authoritative per asa-auth-patterns.
+    // getEnrollmentsByParentEmail() queries the stale denormalized parent_email
+    // field and misses rows where that field is out of sync with the user record.
+    const parentId = req.auth?.dbUserId || req.user?.id;
+    if (!parentId) {
+      return res.status(401).json({ message: 'Authentication required', error: 'NO_USER_ID' });
+    }
+    const parentEnrollments = await storage.getProgramEnrollmentsByParent(parentId);
 
     console.log(`📚 Found ${parentEnrollments.length} enrollments for parent ${userEmail}`);
 
