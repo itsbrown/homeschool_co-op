@@ -28,6 +28,11 @@ const rejectCreditSchema = z.object({
   reason: z.string().min(1, "Rejection reason is required"),
 });
 
+const revokeCreditSchema = z.object({
+  creditId: z.number().int().positive(),
+  reason: z.string().optional(),
+});
+
 router.get('/summary', requireSchoolContext, async (req: any, res) => {
   try {
     const schoolId = parseInt(req.schoolId);
@@ -504,6 +509,86 @@ router.post('/reject', requireSchoolContext, async (req: any, res) => {
   } catch (error: any) {
     console.error('Error rejecting credit:', error);
     res.status(500).json({ error: 'Failed to reject credit' });
+  }
+});
+
+router.post('/revoke', requireSchoolContext, async (req: any, res) => {
+  try {
+    const schoolId = parseInt(req.schoolId);
+    const adminUserId = req.user.id;
+
+    const validation = revokeCreditSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        details: validation.error.errors
+      });
+    }
+
+    const { creditId, reason } = validation.data;
+
+    const credit = await storage.getCreditById(creditId);
+    if (!credit || credit.schoolId !== schoolId) {
+      return res.status(404).json({ error: 'Credit not found' });
+    }
+
+    const nonRevocableStatuses = ['used', 'expired', 'rejected', 'revoked', 'pending'];
+    if (nonRevocableStatuses.includes(credit.status)) {
+      if (credit.status === 'pending') {
+        return res.status(400).json({ error: 'Pending credits must be rejected, not revoked' });
+      }
+      return res.status(400).json({ error: `Cannot revoke a credit with status: ${credit.status}` });
+    }
+
+    const revokedCredit = await storage.revokeCredit(creditId, reason || '');
+
+    console.log(`⚠️ Credit ${creditId} revoked by admin ${adminUserId}${reason ? ': ' + reason : ''}`);
+
+    // Send notification to user about revoked credit
+    try {
+      const amountDollars = (credit.creditAmountCents / 100).toFixed(2);
+
+      let notificationContent = `Your credit of $${amountDollars} has been removed by your school administrator.`;
+
+      if (credit.title) {
+        notificationContent += `\n\nTitle: ${credit.title}`;
+      }
+
+      if (reason) {
+        notificationContent += `\n\nReason: ${reason}`;
+      }
+
+      notificationContent += `\n\nIf you have questions, please contact your school administrator.`;
+
+      const notification = await storage.createNotification({
+        senderId: adminUserId,
+        schoolId,
+        type: 'in_app',
+        priority: 'normal',
+        subject: 'Credit Removed',
+        content: notificationContent,
+        targetType: 'individual',
+        targetData: { userId: credit.userId, creditId, creditType: credit.creditType, amountCents: credit.creditAmountCents },
+        scheduledFor: null,
+        expiresAt: null
+      });
+
+      await storage.createNotificationRecipient({
+        notificationId: notification.id,
+        recipientId: credit.userId,
+        deliveryType: 'in_app',
+        status: 'pending'
+      });
+
+      console.log(`📧 Notification sent to user ${credit.userId} about revoked credit ${creditId}`);
+    } catch (notifyError) {
+      console.error('⚠️ Error sending credit revocation notification (non-blocking):', notifyError);
+    }
+
+    res.json(revokedCredit);
+  } catch (error: any) {
+    console.error('Error revoking credit:', error);
+    res.status(500).json({ error: 'Failed to revoke credit' });
   }
 });
 

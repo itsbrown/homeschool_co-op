@@ -574,6 +574,10 @@ export default function ParentProfilePage() {
     payment: ParentProfile['scheduledPayments'][0] | null;
   }>({ open: false, payment: null });
   
+  // Remove credit state
+  const [creditToRevoke, setCreditToRevoke] = useState<any>(null);
+  const [revocationReason, setRevocationReason] = useState('');
+
   // Edit parent state
   const [editParentDialogOpen, setEditParentDialogOpen] = useState(false);
   const [editParentFirstName, setEditParentFirstName] = useState('');
@@ -898,6 +902,34 @@ export default function ParentProfilePage() {
       toast({
         title: "Error",
         description: error.message || "Failed to revoke membership",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Revoke credit mutation
+  const revokeCreditMutation = useMutation({
+    mutationFn: async ({ creditId, reason }: { creditId: number; reason?: string }) => {
+      const response = await apiRequest('POST', '/api/credits/revoke', { creditId, reason });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to revoke credit');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Credit removed",
+        description: "The credit has been removed from this account."
+      });
+      queryClient.invalidateQueries({ queryKey: [`/api/parent-profile/${parentId}`] });
+      setCreditToRevoke(null);
+      setRevocationReason('');
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to remove credit",
         variant: "destructive",
       });
     },
@@ -2668,6 +2700,56 @@ export default function ParentProfilePage() {
                           </div>
                         </div>
                         
+                        {(credit.status === 'approved' || credit.status === 'partially_used') && (
+                          <div className="flex justify-end mb-2">
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                  onClick={() => { setCreditToRevoke(credit); setRevocationReason(''); }}
+                                  data-testid={`button-remove-credit-${credit.id}`}
+                                >
+                                  <Trash2 className="h-4 w-4 mr-1" />
+                                  Remove Credit
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Remove Credit</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Remove the {credit.title || 'credit'} of ${(credit.creditAmountCents / 100).toFixed(2)} from this account? This cannot be undone.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <div className="px-1 pb-2">
+                                  <textarea
+                                    className="w-full border rounded-md p-2 text-sm resize-none"
+                                    rows={3}
+                                    placeholder="Reason for removal (optional)..."
+                                    value={creditToRevoke?.id === credit.id ? revocationReason : ''}
+                                    onChange={(e) => setRevocationReason(e.target.value)}
+                                  />
+                                </div>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel onClick={() => { setCreditToRevoke(null); setRevocationReason(''); }}>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => revokeCreditMutation.mutate({ creditId: credit.id, reason: revocationReason.trim() || undefined })}
+                                    disabled={revokeCreditMutation.isPending}
+                                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                    data-testid={`button-confirm-remove-credit-${credit.id}`}
+                                  >
+                                    {revokeCreditMutation.isPending ? (
+                                      <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                                    ) : null}
+                                    Remove Credit
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
+                        )}
+
                         {credit.expiresAt && (
                           <p className="text-xs text-muted-foreground mb-2">
                             Expires: {new Date(credit.expiresAt).toLocaleDateString()}

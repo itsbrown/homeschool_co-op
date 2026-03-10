@@ -23,7 +23,8 @@ import {
   AlertTriangle,
   Users,
   History,
-  Gift
+  Gift,
+  Trash2
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
@@ -109,6 +110,9 @@ export default function CreditManagementPage() {
   const [selectedCredit, setSelectedCredit] = useState<CreditRecord | null>(null);
   const [isRejectDialogOpen, setIsRejectDialogOpen] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
+  const [creditToRevoke, setCreditToRevoke] = useState<CreditRecord | null>(null);
+  const [revocationReason, setRevocationReason] = useState('');
+  const [isRevokeDialogOpen, setIsRevokeDialogOpen] = useState(false);
   const [selectedParent, setSelectedParent] = useState<SelectedUser | null>(null);
   
   const [creditForm, setCreditForm] = useState({
@@ -203,6 +207,30 @@ export default function CreditManagementPage() {
       setIsRejectDialogOpen(false);
       setSelectedCredit(null);
       setRejectionReason('');
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const revokeCreditMutation = useMutation({
+    mutationFn: async ({ creditId, reason }: { creditId: number; reason?: string }) => {
+      const response = await apiRequest('POST', '/api/credits/revoke', { creditId, reason });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to revoke credit');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Credit removed", description: "The credit has been removed successfully." });
+      queryClient.invalidateQueries({ queryKey: ['/api/credits/summary'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/credits/households'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/credits/pending'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/credits/history'] });
+      setIsRevokeDialogOpen(false);
+      setCreditToRevoke(null);
+      setRevocationReason('');
     },
     onError: (error: Error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -553,6 +581,7 @@ export default function CreditManagementPage() {
                         <TableHead className="text-right">Amount</TableHead>
                         <TableHead className="text-right">Used</TableHead>
                         <TableHead>Status</TableHead>
+                        <TableHead></TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -585,6 +614,19 @@ export default function CreditManagementPage() {
                             <Badge className={statusColors[credit.status] || 'bg-gray-100'}>
                               {credit.status.replace('_', ' ')}
                             </Badge>
+                          </TableCell>
+                          <TableCell>
+                            {(credit.status === 'approved' || credit.status === 'partially_used') && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                onClick={() => { setCreditToRevoke(credit); setIsRevokeDialogOpen(true); }}
+                                data-testid={`button-revoke-${credit.id}`}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
                           </TableCell>
                         </TableRow>
                       ))}
@@ -752,6 +794,49 @@ export default function CreditManagementPage() {
                   </>
                 ) : (
                   'Reject Credit'
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+        <Dialog open={isRevokeDialogOpen} onOpenChange={(open) => { setIsRevokeDialogOpen(open); if (!open) { setCreditToRevoke(null); setRevocationReason(''); } }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Remove Credit</DialogTitle>
+              <DialogDescription>
+                Remove the credit for <strong>{creditToRevoke?.userName}</strong>
+                {creditToRevoke && ` (${formatCents(creditToRevoke.creditAmountCents)}`}
+                {creditToRevoke?.title ? ` – ${creditToRevoke.title})` : creditToRevoke ? ')' : ''}.
+                This action cannot be undone.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              <Textarea
+                placeholder="Reason for removal (optional)..."
+                value={revocationReason}
+                onChange={(e) => setRevocationReason(e.target.value)}
+                data-testid="input-revocation-reason"
+              />
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsRevokeDialogOpen(false)} data-testid="button-cancel-revoke">
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => creditToRevoke && revokeCreditMutation.mutate({ creditId: creditToRevoke.id, reason: revocationReason.trim() || undefined })}
+                disabled={revokeCreditMutation.isPending}
+                data-testid="button-confirm-revoke"
+              >
+                {revokeCreditMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Removing...
+                  </>
+                ) : (
+                  'Remove Credit'
                 )}
               </Button>
             </DialogFooter>
