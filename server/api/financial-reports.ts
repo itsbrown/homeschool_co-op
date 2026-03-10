@@ -135,14 +135,14 @@ router.get('/summary', async (req: any, res) => {
 
     const outstandingBalancesResult = await db
       .select({
-        totalOutstanding: sql<number>`COALESCE(SUM(COALESCE(${programEnrollments.remainingBalance}, ${programEnrollments.totalCost} - ${programEnrollments.totalPaid})), 0)::integer`,
+        totalOutstanding: sql<number>`COALESCE(SUM(${programEnrollments.totalCost} - ${programEnrollments.totalPaid}), 0)::integer`,
       })
       .from(programEnrollments)
       .where(
         and(
           eq(programEnrollments.schoolId, schoolId),
           not(inArray(programEnrollments.status, ['cancelled', 'waitlist', 'withdrawn', 'failed', 'completed'])),
-          sql`COALESCE(${programEnrollments.remainingBalance}, ${programEnrollments.totalCost} - ${programEnrollments.totalPaid}) > 0`
+          sql`${programEnrollments.totalCost} - ${programEnrollments.totalPaid} > 0`
         )
       );
 
@@ -182,7 +182,7 @@ router.get('/summary', async (req: any, res) => {
         and(
           eq(programEnrollments.schoolId, schoolId),
           not(inArray(programEnrollments.status, ['cancelled', 'waitlist', 'withdrawn', 'failed', 'completed'])),
-          sql`COALESCE(${programEnrollments.remainingBalance}, ${programEnrollments.totalCost} - ${programEnrollments.totalPaid}) > 0`
+          sql`${programEnrollments.totalCost} - ${programEnrollments.totalPaid} > 0`
         )
       );
 
@@ -400,7 +400,7 @@ router.get('/outstanding-balances', async (req: any, res) => {
         and(
           eq(programEnrollments.schoolId, schoolId),
           not(inArray(programEnrollments.status, ['cancelled', 'waitlist', 'withdrawn', 'failed', 'completed'])),
-          sql`COALESCE(${programEnrollments.remainingBalance}, ${programEnrollments.totalCost} - ${programEnrollments.totalPaid}) > 0`
+          sql`${programEnrollments.totalCost} - ${programEnrollments.totalPaid} > 0`
         )
       );
 
@@ -422,7 +422,7 @@ router.get('/outstanding-balances', async (req: any, res) => {
           }
         } catch (e) {}
 
-        const amount = enrollment.remainingBalance ?? (enrollment.totalCost - enrollment.totalPaid);
+        const amount = enrollment.totalCost - enrollment.totalPaid;
 
         return {
           id: -enrollment.id,
@@ -777,7 +777,7 @@ router.get('/class-breakdown', async (req: any, res) => {
       entry.enrollmentCount++;
       entry.totalExpectedCents += row.totalCost ?? 0;
       entry.totalCollectedCents += row.totalPaid ?? 0;
-      entry.totalOutstandingCents += Math.max(0, row.remainingBalance ?? ((row.totalCost ?? 0) - (row.totalPaid ?? 0)));
+      entry.totalOutstandingCents += Math.max(0, (row.totalCost ?? 0) - (row.totalPaid ?? 0));
       entry.totalCompedCents += row.compAmountCents ?? 0;
     }
 
@@ -974,14 +974,14 @@ router.get('/ai-insights', async (req: any, res) => {
 
     const outstandingResult = await db
       .select({
-        outstanding: sql<number>`COALESCE(SUM(COALESCE(${programEnrollments.remainingBalance}, ${programEnrollments.totalCost} - ${programEnrollments.totalPaid})), 0)::integer`,
+        outstanding: sql<number>`COALESCE(SUM(${programEnrollments.totalCost} - ${programEnrollments.totalPaid}), 0)::integer`,
       })
       .from(programEnrollments)
       .where(
         and(
           eq(programEnrollments.schoolId, schoolId),
           not(inArray(programEnrollments.status, ['cancelled', 'waitlist', 'withdrawn', 'failed', 'completed'])),
-          sql`COALESCE(${programEnrollments.remainingBalance}, ${programEnrollments.totalCost} - ${programEnrollments.totalPaid}) > 0`
+          sql`${programEnrollments.totalCost} - ${programEnrollments.totalPaid} > 0`
         )
       );
 
@@ -1561,13 +1561,13 @@ router.post('/ai-chat', aiChatLimiter, async (req: any, res) => {
       }).from(payments).where(and(eq(payments.schoolId, schoolId), eq(payments.status, 'completed'))),
 
       db.select({
-        outstanding: sql<number>`COALESCE(SUM(COALESCE(${programEnrollments.remainingBalance}, ${programEnrollments.totalCost} - ${programEnrollments.totalPaid})), 0)::integer`,
+        outstanding: sql<number>`COALESCE(SUM(${programEnrollments.totalCost} - ${programEnrollments.totalPaid}), 0)::integer`,
         activeCount: sql<number>`COUNT(*)::integer`,
       }).from(programEnrollments).where(
         and(
           eq(programEnrollments.schoolId, schoolId),
           not(inArray(programEnrollments.status, ['cancelled', 'waitlist', 'withdrawn', 'failed', 'completed'])),
-          sql`COALESCE(${programEnrollments.remainingBalance}, ${programEnrollments.totalCost} - ${programEnrollments.totalPaid}) > 0`
+          sql`${programEnrollments.totalCost} - ${programEnrollments.totalPaid} > 0`
         )
       ),
 
