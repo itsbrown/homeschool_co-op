@@ -139,6 +139,7 @@ Calculator: `server/lib/prorate-calculator.ts` — see `asa-payment-patterns` fo
 - **Cancelling paid enrollments via user endpoint** → user unenroll only works for `pending_payment` → use admin endpoint for paid enrollments with proper refund flow
 - **Missing variant context** → enrollment created without `variantId` when class has multiple variants → always capture variant selection from cart
 - **Orphaned scheduled payments** → enrollment deleted but `scheduled_payments` remain → filter orphaned records from admin views (see `asa-database-patterns`)
+- **Using `classData?.price` instead of `enrollment.totalCost` for balance updates** → `enrollment.programId` is not a reliable class ID (legacy field, not always populated), so `storage.getClassById(enrollment.programId)` often returns `null`, making `totalCost = 0` → `remainingBalance = 0` (wrong, understates balance). Always use `enrollment.totalCost` directly — it is the authoritative financial field set at enrollment creation.
 
 ## Best Practices
 
@@ -157,6 +158,7 @@ Calculator: `server/lib/prorate-calculator.ts` — see `asa-payment-patterns` fo
 - Don't create enrollments without a valid `schoolId` — multi-tenant isolation requires it
 - Don't skip the Stripe payment verification step in the confirm endpoint
 - Don't assume `classId` is always set — marketplace enrollments use `marketplaceClassId` instead
+- Don't look up class price via `programId` when computing `remainingBalance` — use `enrollment.totalCost` directly (see Common Pitfalls above)
 
 ## Key Files
 - `server/api/enrollments.ts` — enrollment CRUD, confirm, unenroll, bulk cancel

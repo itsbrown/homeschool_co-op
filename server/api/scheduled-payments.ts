@@ -537,8 +537,7 @@ router.post('/pay-with-credits', supabaseAuth, async (req: any, res) => {
       const enrollment = await storage.getProgramEnrollmentById(scheduledPayment.enrollmentId);
       if (enrollment) {
         const newTotalPaid = (enrollment.totalPaid || 0) + paymentAmount;
-        const classData = enrollment.programId ? await storage.getClassById(enrollment.programId) : null;
-        const totalCost = classData?.price || 0;
+        const totalCost = enrollment.totalCost || 0;
         const remainingBalance = Math.max(0, totalCost - newTotalPaid);
         
         await storage.updateProgramEnrollment(enrollment.id, {
@@ -703,8 +702,7 @@ router.post('/pay-combined-with-credits', supabaseAuth, async (req: any, res) =>
         const enrollment = await storage.getProgramEnrollmentById(payment.enrollmentId);
         if (enrollment) {
           const newTotalPaid = (enrollment.totalPaid || 0) + paymentAmount;
-          const classData = enrollment.programId ? await storage.getClassById(enrollment.programId) : null;
-          const totalCost = classData?.price || 0;
+          const totalCost = enrollment.totalCost || 0;
           const remainingBalance = Math.max(0, totalCost - newTotalPaid);
 
           await storage.updateProgramEnrollment(enrollment.id, {

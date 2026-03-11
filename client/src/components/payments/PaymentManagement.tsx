@@ -393,6 +393,7 @@ function ScheduledPaymentDialog({
       queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments'] });
       queryClient.invalidateQueries({ queryKey: ['/api/parent/credits'] });
       queryClient.invalidateQueries({ queryKey: ['scheduled-payments-upcoming'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/parent/enrollments'] });
       onSuccess();
       onClose();
     } catch (err: any) {
@@ -844,6 +845,7 @@ function CombinedPaymentDialog({
       queryClient.invalidateQueries({ queryKey: ['/api/parent/credits'] });
       queryClient.invalidateQueries({ queryKey: ['scheduled-payments-upcoming'] });
       queryClient.invalidateQueries({ queryKey: ['scheduled-payments-grouped'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/parent/enrollments'] });
       onSuccess();
       onClose();
     } catch (err: any) {
@@ -1054,6 +1056,7 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
       queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments'] });
       queryClient.invalidateQueries({ queryKey: ['scheduled-payments-upcoming'] });
       queryClient.invalidateQueries({ queryKey: ['/api/enrollments'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/parent/enrollments'] });
       queryClient.invalidateQueries({ queryKey: ['/api/parent/memberships'] });
       
       // Show appropriate toast based on status

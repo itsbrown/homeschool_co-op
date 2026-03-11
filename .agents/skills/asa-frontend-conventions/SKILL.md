@@ -119,6 +119,7 @@ const mutation = useMutation({
 - **Form silently won't submit** → validation fails on fields without visible error display → log `form.formState.errors` to find the failing field
 - **`SelectItem` crashes at runtime** → missing `value` prop on `<SelectItem>` → always include `value="..."` prop
 - **Cache invalidation doesn't work** → used template literal queryKey `` [`/api/classes/${id}`] `` → use array segments `['/api/classes', id]`
+- **`['/api/enrollments']` vs `['/api/parent/enrollments']`** → these are two separate cache key prefixes; invalidating one does not invalidate the other. Admin enrollment views use `/api/enrollments`; parent payment balance and Outstanding Balance card use `/api/parent/enrollments`. After any payment, invalidate both if the data is visible to both roles.
 - **API calls return 401 unexpectedly** → used bare `fetch()` without auth headers → use `apiRequest` or the default TanStack Query fetcher
 - **Hardcoded cultural/religious content in templates** → used specific subjects like "Arabic Language Arts" or "Islamic Studies" as sample data → always use neutral examples like "Math 101", "Science Basics"
 - **iOS Safari auto-zooms on input focus** → input `fontSize` is below 16px → add `style={{ fontSize: '16px' }}` to date/select inputs
