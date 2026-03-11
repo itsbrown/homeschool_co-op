@@ -1822,8 +1822,11 @@ export default function ParentProfilePage() {
                             <TableCell>
                               <div>
                                 <div className="font-medium">{enrollment.className}</div>
+                                {enrollment.categoryName && (
+                                  <Badge variant="secondary" className="text-xs mt-0.5 mb-0.5">{enrollment.categoryName}</Badge>
+                                )}
                                 {enrollment.classDescription && (
-                                  <div className="text-sm text-muted-foreground">
+                                  <div className="text-sm text-muted-foreground line-clamp-2">
                                     {enrollment.classDescription}
                                   </div>
                                 )}
