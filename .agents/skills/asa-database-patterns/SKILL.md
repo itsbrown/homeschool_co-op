@@ -40,7 +40,7 @@ school_class_enrollments → school-managed class enrollments
   .classId → school_classes.id
 ```
 
-**Enrollment financial fields** (all in cents): `totalCost`, `totalPaid`, `remainingBalance`. Note: `remainingBalance` is a stored convenience field that may be null or stale for some enrollments. Always use the fallback pattern when reading it (see "Derived Financial Fields" below).
+**Enrollment financial fields** (all in cents): `totalCost`, `totalPaid`, `remainingBalance`, `compAmountCents`, `effectiveBalance`. Note: `remainingBalance` is a stored convenience field that is **unreliable** — it is set to `0` (not NULL) for `deposit_only`/`stripe_managed` enrollments after a deposit and for comped accounts, causing false positives in financial reports. Use `effective_balance` (a PostgreSQL generated column) instead — see "Derived Financial Fields" below.
 
 ### Multi-Guardian System
 Multiple guardians can be linked to child accounts with shared access. Check guardian relationships when resolving parent data.
@@ -154,32 +154,63 @@ Place all such statements inside the relevant migration try-catch block in `serv
 
 ## Derived Financial Fields
 
-### The `remainingBalance` Fallback Pattern
-The `remainingBalance` column on `program_enrollments` is a stored convenience field, but it can be **null or stale** for older enrollments or certain creation paths. The authoritative values `totalCost` and `totalPaid` are always reliably populated.
+### ⚠️ Why `remainingBalance` Is Unreliable
+The `remainingBalance` column on `program_enrollments` is a stored convenience field with **two known failure modes**:
+1. Set to `0` (not NULL) for `deposit_only`/`stripe_managed` enrollments after a deposit payment — `COALESCE(remaining_balance, ...)` returns `0` even though the true balance is hundreds of dollars
+2. Set to `0` for comped accounts — does not account for `comp_amount_cents`, so a fully-comped enrollment appears to owe its full `total_cost`
 
-**Rule**: Never rely solely on `remainingBalance`. Always use the fallback pattern:
-```typescript
-// ⚠️ Use ?? not || — || treats 0 as falsy, incorrectly re-evaluating a fully-paid enrollment
-const effectiveBalance = enrollment.remainingBalance ?? (enrollment.totalCost - enrollment.totalPaid);
+**Never use `remainingBalance` for financial report aggregations.**
+
+### The `effective_balance` Generated Column (Gold Standard)
+`program_enrollments.effective_balance` is a PostgreSQL `GENERATED ALWAYS AS STORED` column:
+```sql
+effective_balance = total_cost - total_paid - COALESCE(comp_amount_cents, 0)
+```
+- Computed and stored automatically by the database for every row (existing and future)
+- Always correct — no write-path changes needed, no stale values possible
+- Added via `server/init-db.ts` (idempotent on every startup)
+
+**Use `effective_balance` in all SQL financial queries:**
+```sql
+-- Outstanding balance total
+SELECT COALESCE(SUM(effective_balance), 0)
+FROM program_enrollments
+WHERE school_id = $1
+  AND status NOT IN ('cancelled', 'waitlist', 'withdrawn', 'failed', 'completed')
+  AND effective_balance > 0
 ```
 
-**For multiple enrollments**, extract a helper to keep it DRY:
+**In Drizzle ORM** (use raw `sql` — the column is not in the Drizzle schema since it's managed by init-db.ts):
 ```typescript
-const getEffectiveBalance = (e: any) => e.remainingBalance ?? ((e.totalCost || 0) - (e.totalPaid || 0));
+const result = await db
+  .select({
+    totalOutstanding: sql<number>`COALESCE(SUM(effective_balance), 0)::integer`,
+  })
+  .from(programEnrollments)
+  .where(
+    and(
+      eq(programEnrollments.schoolId, schoolId),
+      not(inArray(programEnrollments.status, ['cancelled', 'waitlist', 'withdrawn', 'failed', 'completed'])),
+      sql`effective_balance > 0`
+    )
+  );
 ```
 
-**Gold-standard pattern** (used in `parent-profile.ts`): Compute dynamically and never read the stored field:
+**In TypeScript** (when looping over Drizzle-typed enrollment rows, `effective_balance` is not in the type — use explicit formula):
+```typescript
+const amount = enrollment.totalCost - enrollment.totalPaid - (enrollment.compAmountCents ?? 0);
+```
+
+**Gold-standard pattern** (used in `parent-profile.ts`): Compute dynamically:
 ```typescript
 const actualRemainingBalance = CurrencyUtils.calculateBalance(totalCost, totalPaid + compAmount);
 ```
-
-**Where this pattern is established**: `server/api/school-admin.ts` (lines 3242, 3273, 3281), `server/api/admin-enrollments.ts` (comp validation), `server/services/dataLayer.ts` (CFO insights).
 
 ### Financial Report Aggregations — Always Use `program_enrollments`
 
 For outstanding balance totals, active payment plan counts, or any financial summary, query `program_enrollments` directly — **not `scheduled_payments`**. The `scheduled_payments` table is a subset: many enrollments have remaining balances but no scheduled_payment records (legacy enrollments pre-scheduling feature, comped enrollments, plans not yet scheduled).
 
-The authoritative fields are `totalCost`, `totalPaid`, and `remainingBalance` on `program_enrollments`.
+The authoritative fields are `totalCost`, `totalPaid`, `compAmountCents`, and `effective_balance` on `program_enrollments`.
 
 ### Auto-Heal at Read Time
 
@@ -198,35 +229,10 @@ const validBalances = enrichedBalances.filter(b => {
 
 Rules: check `!== undefined` before comparing (undefined means lookup failed, not that balance is zero); use `.catch(() => {})` so the background write never throws in a read endpoint; filter stale records out of the response immediately so the UI is accurate before the DB write completes. Pattern used in `server/api/financial-reports.ts` outstanding balances endpoint.
 
-**Gold-standard outstanding balance query:**
-```sql
-SELECT COALESCE(SUM(COALESCE(remaining_balance, total_cost - total_paid)), 0)
-FROM program_enrollments
-WHERE school_id = $1
-  AND status NOT IN ('cancelled', 'waitlist', 'withdrawn', 'failed', 'completed')
-  AND COALESCE(remaining_balance, total_cost - total_paid) > 0
-```
-
-**In Drizzle ORM:**
-```typescript
-const result = await db
-  .select({
-    totalOutstanding: sql<number>`COALESCE(SUM(COALESCE(${programEnrollments.remainingBalance}, ${programEnrollments.totalCost} - ${programEnrollments.totalPaid})), 0)::integer`,
-  })
-  .from(programEnrollments)
-  .where(
-    and(
-      eq(programEnrollments.schoolId, schoolId),
-      not(inArray(programEnrollments.status, ['cancelled', 'waitlist', 'withdrawn', 'failed', 'completed'])),
-      sql`COALESCE(${programEnrollments.remainingBalance}, ${programEnrollments.totalCost} - ${programEnrollments.totalPaid}) > 0`
-    )
-  );
-```
-
 ## Common Pitfalls
 
-- **Stored `remainingBalance` can be null or zero**: Never use `||` for the fallback — `||` treats `0` as falsy and incorrectly re-evaluates a fully-paid enrollment. Use `enrollment.remainingBalance ?? (enrollment.totalCost - enrollment.totalPaid)` instead. See "Derived Financial Fields" above.
-- **Outstanding balance undercount in reports**: Querying `SUM(scheduled_payments.amount WHERE status='pending')` misses families with no scheduled_payment records — always use `COALESCE(remaining_balance, total_cost - total_paid) FROM program_enrollments` for financial aggregations.
+- **`remainingBalance` is unreliable for aggregations**: It is `0` (not NULL) for `deposit_only`/`stripe_managed` enrollments after a deposit, and `0` for comped accounts — `COALESCE` won't help. Use `effective_balance` in SQL or `totalCost - totalPaid - (compAmountCents ?? 0)` in TypeScript. See "Derived Financial Fields" above.
+- **Outstanding balance undercount in reports**: Querying `SUM(scheduled_payments.amount WHERE status='pending')` misses families with no scheduled_payment records — always use `effective_balance FROM program_enrollments` for financial aggregations.
 - **Express route ordering**: Specific named routes (e.g., `/classes/assignments`) BEFORE parameterized routes (e.g., `/classes/:id`)
 - **Orphaned data**: `scheduled_payments` with deleted `program_enrollments` must be filtered out of admin views
 - **Auth ID mapping**: Use `authData.dbUserId` (integer) NOT `authData.userId` (Supabase UUID) when querying database tables

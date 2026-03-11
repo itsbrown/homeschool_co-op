@@ -2326,6 +2326,24 @@ async function runMigrations() {
     }
   }
 
+  // Add effective_balance generated column — the single source of truth for what a family owes.
+  // Replaces the unreliable remaining_balance field (which is set to 0 for deposit_only/stripe_managed
+  // enrollments after a deposit, and for comped accounts — causing false positives in financial reports).
+  // Formula: total_cost - total_paid - COALESCE(comp_amount_cents, 0)
+  // PostgreSQL GENERATED ALWAYS AS STORED populates all existing rows immediately on ADD COLUMN.
+  try {
+    console.log('Running migration: Adding effective_balance generated column to program_enrollments...');
+    const db = await getDb();
+    await db.execute(sql`
+      ALTER TABLE program_enrollments
+      ADD COLUMN IF NOT EXISTS effective_balance INTEGER
+      GENERATED ALWAYS AS (total_cost - total_paid - COALESCE(comp_amount_cents, 0)) STORED
+    `);
+    console.log('✅ Migration completed: effective_balance generated column added to program_enrollments');
+  } catch (effectiveBalanceError: any) {
+    console.log('effective_balance migration note:', effectiveBalanceError.message);
+  }
+
   // Data cleanup: cancel orphaned scheduled payments for fully-comped enrollments
   // Idempotent — safe to run on every restart
   try {
