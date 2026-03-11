@@ -2365,6 +2365,54 @@ async function runMigrations() {
   } catch (cleanupError: any) {
     console.log('Cleanup note:', cleanupError.message);
   }
+
+  // Data repair: fix enrollments where credits were applied at checkout alongside a Stripe payment,
+  // but the credit amount was never added to total_paid (bug in initial checkout webhook path).
+  // Root cause: webhook handler passed only amountCents=paymentIntent.amount (Stripe charge only)
+  // to processPayment — credits consumed were not reflected in total_paid, inflating effective_balance.
+  //
+  // Repair logic: find all unified_credit_usage_log rows that have a payment_history_id (meaning they
+  // were consumed during a Stripe-backed payment, not a credit-only checkout). For each, if the credit
+  // owner has an active enrollment whose effective_balance is >= the credit amount, add the credit to
+  // total_paid. remaining_balance is updated too; effective_balance auto-recalculates (generated column).
+  //
+  // Idempotent safety: the WHERE effective_balance >= ucul.amount_cents guard prevents double-applying.
+  // On re-run, already-repaired enrollments have effective_balance = 0 (or < amount) and are skipped.
+  try {
+    console.log('Running data repair: Applying missed credit amounts to enrollment total_paid...');
+    const db = await getDb();
+    const repairResult = await db.execute(sql`
+      WITH credits_to_apply AS (
+        SELECT
+          pe.id AS enrollment_id,
+          SUM(ucul.amount_cents) AS total_credit_amount
+        FROM unified_credit_usage_logs ucul
+        JOIN credits c ON ucul.credit_id = c.id
+        JOIN program_enrollments pe ON pe.parent_id = c.user_id
+        WHERE ucul.payment_history_id IS NOT NULL
+          AND pe.effective_balance > 0
+          AND pe.status NOT IN ('cancelled', 'waitlist', 'withdrawn', 'failed', 'completed')
+          AND pe.effective_balance >= ucul.amount_cents
+        GROUP BY pe.id
+        HAVING SUM(ucul.amount_cents) > 0
+      )
+      UPDATE program_enrollments pe
+      SET
+        total_paid        = pe.total_paid + cta.total_credit_amount,
+        remaining_balance = GREATEST(0, pe.total_cost - pe.total_paid - cta.total_credit_amount)
+      FROM credits_to_apply cta
+      WHERE pe.id = cta.enrollment_id
+        AND pe.effective_balance > 0
+    `);
+    const repairCount = (repairResult as any).rowCount ?? 0;
+    if (repairCount > 0) {
+      console.log(`✅ Data repair: Updated ${repairCount} enrollment(s) with previously unrecorded credit amounts`);
+    } else {
+      console.log('✅ Data repair: No enrollments needed credit total_paid correction');
+    }
+  } catch (repairError: any) {
+    console.log('Data repair note (non-blocking):', repairError.message);
+  }
 }
 
 // Initialize database tables

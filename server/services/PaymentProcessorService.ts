@@ -213,12 +213,61 @@ export async function processPayment(
     }
 
     // Step 7: Update enrollment balances
+    // Extract credits that were applied at checkout but not included in amountCents (Stripe charge amount).
+    // These credits reduce the family's true balance just as a cash payment would — they must be reflected
+    // in totalPaid so that effective_balance = totalCost - totalPaid is correct.
+    // The payment history record and payment_allocations stay as the Stripe charge amount (audit trail).
+    const creditsMetaRaw = input.metadata?.creditsAppliedCents;
+    const creditAllocationRaw = input.metadata?.creditAllocation;
+    const creditsAppliedTotal = creditsMetaRaw ? parseInt(String(creditsMetaRaw), 10) : 0;
+    
+    // Use enrollmentCredits from creditAllocation if available (excludes membership credits)
+    let enrollmentCreditTotal = creditsAppliedTotal;
+    if (creditAllocationRaw && creditsAppliedTotal > 0) {
+      try {
+        const creditAlloc = typeof creditAllocationRaw === 'string'
+          ? JSON.parse(creditAllocationRaw)
+          : creditAllocationRaw;
+        if (typeof creditAlloc.enrollmentCredits === 'number') {
+          enrollmentCreditTotal = creditAlloc.enrollmentCredits;
+        }
+      } catch {
+        // Malformed JSON — fall back to full creditsAppliedTotal
+      }
+    }
+    
+    if (enrollmentCreditTotal > 0) {
+      console.log(`💰 PaymentProcessor: Including ${enrollmentCreditTotal} cents of credits in totalPaid (across ${allocations.length} enrollment(s))`);
+    }
+    
     for (const allocation of allocations) {
       try {
         const enrollment = await storage.getProgramEnrollmentById(allocation.enrollmentId);
         if (enrollment) {
           const currentPaid = enrollment.totalPaid || 0;
-          const newPaid = currentPaid + allocation.amountCents;
+          
+          // Distribute credits proportionally by Stripe allocation amount (same split as Stripe charges)
+          let creditShareForThisEnrollment = 0;
+          if (enrollmentCreditTotal > 0 && allocations.length > 0) {
+            if (allocations.length === 1) {
+              creditShareForThisEnrollment = enrollmentCreditTotal;
+            } else {
+              // Proportional share: this allocation's Stripe amount / total Stripe amount
+              const proportion = input.amountCents > 0 ? allocation.amountCents / input.amountCents : 0;
+              const isLast = allocation === allocations[allocations.length - 1];
+              if (isLast) {
+                // Last allocation absorbs remainder to prevent rounding drift
+                const alreadyAllocated = allocations
+                  .slice(0, -1)
+                  .reduce((sum, a) => sum + (input.amountCents > 0 ? Math.round(enrollmentCreditTotal * (a.amountCents / input.amountCents)) : 0), 0);
+                creditShareForThisEnrollment = enrollmentCreditTotal - alreadyAllocated;
+              } else {
+                creditShareForThisEnrollment = Math.round(enrollmentCreditTotal * proportion);
+              }
+            }
+          }
+          
+          const newPaid = currentPaid + allocation.amountCents + creditShareForThisEnrollment;
           const newBalance = Math.max(0, (enrollment.totalCost || 0) - newPaid);
           
           await storage.updateProgramEnrollment(enrollment.id, {
@@ -230,6 +279,8 @@ export async function processPayment(
           
           console.log(`✅ PaymentProcessor: Updated enrollment ${enrollment.id}`, {
             previousPaid: currentPaid,
+            stripeAllocation: allocation.amountCents,
+            creditShare: creditShareForThisEnrollment,
             newPaid,
             newBalance,
           });

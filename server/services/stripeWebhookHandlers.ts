@@ -212,10 +212,28 @@ export async function handleDirectPaymentSuccess(paymentIntent: Stripe.PaymentIn
     const enrollmentIdList = JSON.parse(enrollmentIds);
     const totalAmount = paymentIntent.amount;
     
+    // Extract enrollment-specific credits from metadata (so membership credits aren't applied to enrollments)
+    const creditsMetaRaw = paymentIntent.metadata?.creditsAppliedCents;
+    const creditAllocationRaw = paymentIntent.metadata?.creditAllocation;
+    const totalCreditsApplied = creditsMetaRaw ? parseInt(String(creditsMetaRaw), 10) : 0;
+    let enrollmentCreditTotal = totalCreditsApplied;
+    if (creditAllocationRaw && totalCreditsApplied > 0) {
+      try {
+        const creditAlloc = typeof creditAllocationRaw === 'string'
+          ? JSON.parse(creditAllocationRaw)
+          : creditAllocationRaw;
+        if (typeof creditAlloc.enrollmentCredits === 'number') {
+          enrollmentCreditTotal = creditAlloc.enrollmentCredits;
+        }
+      } catch {
+        // Malformed JSON — fall back to full totalCreditsApplied
+      }
+    }
+    
     const enrollmentTotal = totalAmount - membershipAmount;
     const perEnrollmentAmount = Math.round(enrollmentTotal / enrollmentIdList.length);
     
-    console.log(`💰 Processing payment for ${enrollmentIdList.length} enrollments, ${perEnrollmentAmount} cents each`);
+    console.log(`💰 Processing payment for ${enrollmentIdList.length} enrollments, ${perEnrollmentAmount} cents each${enrollmentCreditTotal > 0 ? `, plus ${enrollmentCreditTotal} cents credits` : ''}`);
     
     const enrollments = [];
     
@@ -259,12 +277,34 @@ export async function handleDirectPaymentSuccess(paymentIntent: Stripe.PaymentIn
       }
     }
     
+    // Calculate per-enrollment credit share (proportional by Stripe amount, last absorbs remainder)
+    const enrollmentCreditShares: Map<number, number> = new Map();
+    if (enrollmentCreditTotal > 0 && enrollments.length > 0) {
+      if (enrollments.length === 1) {
+        enrollmentCreditShares.set(enrollments[0].id, enrollmentCreditTotal);
+      } else {
+        let remainingCredits = enrollmentCreditTotal;
+        for (let i = 0; i < enrollments.length; i++) {
+          const enrollment = enrollments[i];
+          const stripeAmount = enrollmentAmounts.get(enrollment.id) || 0;
+          if (i === enrollments.length - 1) {
+            enrollmentCreditShares.set(enrollment.id, remainingCredits);
+          } else {
+            const share = enrollmentTotal > 0 ? Math.round(enrollmentCreditTotal * (stripeAmount / enrollmentTotal)) : 0;
+            enrollmentCreditShares.set(enrollment.id, share);
+            remainingCredits -= share;
+          }
+        }
+      }
+    }
+    
     // Second pass: update enrollment totals (cached values for backwards compatibility)
     for (const enrollment of enrollments) {
       try {
         const enrollmentAmount = enrollmentAmounts.get(enrollment.id) || perEnrollmentAmount;
+        const creditShare = enrollmentCreditShares.get(enrollment.id) || 0;
         const currentPaid = enrollment.totalPaid || 0;
-        const newTotalPaid = currentPaid + enrollmentAmount;
+        const newTotalPaid = currentPaid + enrollmentAmount + creditShare;
         const newBalance = Math.max(0, enrollment.totalCost - newTotalPaid);
         
         await storage.updateProgramEnrollment(enrollment.id, {
