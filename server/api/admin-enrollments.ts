@@ -273,12 +273,16 @@ router.post('/:id/comp', async (req: any, res) => {
       });
     }
 
-    // Calculate comp amount (based on total cost)
+    // Calculate comp amount based on the remaining balance (not total cost).
+    // This ensures "100% comp" means "forgive everything still owed", not "forgive the full
+    // original price" — which would over-comp enrollments that already have payments made.
     const totalCost = enrollment.totalCost || 0;
-    const compAmountCents = Math.round((totalCost * percentage) / 100);
-    
-    // Calculate new remaining balance after comp
     const currentPaid = enrollment.totalPaid || 0;
+    // No existing comp at this point (guarded above), so effective balance = totalCost - currentPaid.
+    const effectiveBalance = Math.max(0, totalCost - currentPaid);
+    const compAmountCents = Math.round((effectiveBalance * percentage) / 100);
+
+    // Calculate new remaining balance after comp
     const newRemainingBalance = Math.max(0, totalCost - compAmountCents - currentPaid);
     
     // Determine new status and payment status

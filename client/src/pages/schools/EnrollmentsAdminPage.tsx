@@ -1311,7 +1311,7 @@ export default function EnrollmentsAdminPage() {
                   </Select>
                   {compPercentage && (
                     <p className="text-sm text-muted-foreground">
-                      Comp amount: {formatCurrency(Math.round((compEnrollment.totalCost * parseInt(compPercentage)) / 100))}
+                      Comp amount: {formatCurrency(Math.round((compEnrollment.remainingBalance * parseInt(compPercentage)) / 100))}
                     </p>
                   )}
                 </div>

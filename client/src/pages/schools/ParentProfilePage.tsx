@@ -2032,7 +2032,7 @@ export default function ParentProfilePage() {
                       </div>
                       {selectedEnrollment && compPercentage && (
                         <p className="text-sm text-green-600 mt-2">
-                          Comp amount: ${((selectedEnrollment.totalCost * parseInt(compPercentage || '0')) / 100).toFixed(2)}
+                          Comp amount: ${(((selectedEnrollment.remainingBalance || selectedEnrollment.totalCost) * parseInt(compPercentage || '0')) / 100).toFixed(2)}
                           {parseInt(compPercentage || '0') === 100 && (
                             <span className="text-green-700 font-medium ml-2">
                               (Fully comped - will be enrolled immediately)
