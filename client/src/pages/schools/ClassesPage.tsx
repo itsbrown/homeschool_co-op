@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Loader2, PlusCircle, Search, Filter, FileDown, Calendar, Users, Clock, Settings, ArrowUpDown, ArrowUp, ArrowDown, Upload } from "lucide-react";
+import { Loader2, PlusCircle, Search, Filter, FileDown, Calendar, Users, Clock, Settings, ArrowUpDown, ArrowUp, ArrowDown, Upload, X, Tags } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -120,6 +121,10 @@ export default function SchoolClassesPage() {
   const [sortField, setSortField] = useState<string>("title");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   
+  // Bulk selection state
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [bulkSessionId, setBulkSessionId] = useState<string>("");
+
   // Column visibility state
   const [visibleColumns, setVisibleColumns] = useState({
     className: true,
@@ -192,6 +197,61 @@ export default function SchoolClassesPage() {
     },
     enabled: !!activeRole, // Only run query when school context is available
   });
+
+  // Fetch sessions for bulk assignment
+  const { data: sessions } = useQuery<any[]>({
+    queryKey: ["/api/admin/sessions"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/admin/sessions");
+      return res.json();
+    },
+    enabled: !!activeRole,
+  });
+
+  // Bulk assign session mutation
+  const bulkAssignSessionMutation = useMutation({
+    mutationFn: async ({ classIds, sessionId }: { classIds: number[]; sessionId: number | null }) => {
+      const res = await apiRequest("PATCH", "/api/school-admin/classes/bulk-session", { classIds, sessionId });
+      if (!res.ok) throw new Error("Failed to assign session");
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/school-admin/classes"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/school-admin/classes-list"] });
+      setSelectedIds(new Set());
+      setBulkSessionId("");
+      toast({ title: "Session assigned", description: `Updated ${data.updated} class${data.updated !== 1 ? "es" : ""}.` });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to assign session. Please try again.", variant: "destructive" });
+    },
+  });
+
+  const handleBulkAssignSession = () => {
+    if (selectedIds.size === 0) return;
+    const sessionId = bulkSessionId === "none" ? null : bulkSessionId ? parseInt(bulkSessionId) : null;
+    if (bulkSessionId === "") {
+      toast({ title: "No session selected", description: "Please pick a session to assign.", variant: "destructive" });
+      return;
+    }
+    bulkAssignSessionMutation.mutate({ classIds: Array.from(selectedIds), sessionId });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === sortedClasses.length && sortedClasses.length > 0) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(sortedClasses.map((c: any) => c.id)));
+    }
+  };
+
+  const toggleSelectOne = (id: number) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
 
   // Mutation for duplicating a class
   const duplicateClassMutation = useMutation({
@@ -666,6 +726,47 @@ export default function SchoolClassesPage() {
                 </div>
               </div>
 
+              {/* Bulk Action Bar */}
+              {selectedIds.size > 0 && (
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 p-3 bg-primary/5 border border-primary/20 rounded-lg">
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Badge variant="secondary" className="text-sm px-2 py-1">
+                      {selectedIds.size} selected
+                    </Badge>
+                    <Button variant="ghost" size="sm" className="h-7 px-2 text-muted-foreground" onClick={() => setSelectedIds(new Set())}>
+                      <X className="h-3.5 w-3.5 mr-1" />
+                      Clear
+                    </Button>
+                  </div>
+                  <div className="flex items-center gap-2 flex-1">
+                    <Tags className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <Select value={bulkSessionId} onValueChange={setBulkSessionId}>
+                      <SelectTrigger className="w-[220px] h-8">
+                        <SelectValue placeholder="Pick a session..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">— No Session —</SelectItem>
+                        {(sessions || []).map((s: any) => (
+                          <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      size="sm"
+                      className="h-8"
+                      disabled={!bulkSessionId || bulkAssignSessionMutation.isPending}
+                      onClick={handleBulkAssignSession}
+                    >
+                      {bulkAssignSessionMutation.isPending ? (
+                        <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />Assigning...</>
+                      ) : (
+                        "Assign Session"
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
               {/* List View */}
               <TabsContent value="list">
                 {/* Desktop Table View - Hidden on mobile */}
@@ -681,6 +782,13 @@ export default function SchoolClassesPage() {
                       <Table>
                         <TableHeader>
                           <TableRow>
+                            <TableHead className="w-10">
+                              <Checkbox
+                                checked={sortedClasses.length > 0 && selectedIds.size === sortedClasses.length}
+                                onCheckedChange={toggleSelectAll}
+                                aria-label="Select all"
+                              />
+                            </TableHead>
                             {visibleColumns.className && <TableHead>Class Name</TableHead>}
                             {visibleColumns.category && <TableHead>Category</TableHead>}
                             {visibleColumns.instructor && <TableHead>Instructor</TableHead>}
@@ -695,7 +803,14 @@ export default function SchoolClassesPage() {
                         <TableBody>
                           {sortedClasses.length > 0 ? (
                             sortedClasses.map((cls: any) => (
-                              <TableRow key={cls.id}>
+                              <TableRow key={cls.id} className={selectedIds.has(cls.id) ? "bg-primary/5" : ""}>
+                                <TableCell>
+                                  <Checkbox
+                                    checked={selectedIds.has(cls.id)}
+                                    onCheckedChange={() => toggleSelectOne(cls.id)}
+                                    aria-label={`Select ${cls.title}`}
+                                  />
+                                </TableCell>
                                 {visibleColumns.className && <TableCell className="font-medium">{cls.title}</TableCell>}
                                 {visibleColumns.category && <TableCell>{cls.categoryName || cls.category || 'Not Specified'}</TableCell>}
                                 {visibleColumns.instructor && (
@@ -771,7 +886,7 @@ export default function SchoolClassesPage() {
                           ) : (
                             <TableRow>
                               <TableCell 
-                                colSpan={Object.values(visibleColumns).filter(Boolean).length} 
+                                colSpan={Object.values(visibleColumns).filter(Boolean).length + 1} 
                                 className="text-center py-6 text-muted-foreground"
                               >
                                 No classes found. Try adjusting your search or filters.

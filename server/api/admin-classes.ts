@@ -161,6 +161,46 @@ router.post("/classes", supabaseAuth, requireAdmin, requireSchoolContext, async 
   }
 });
 
+// Bulk assign session to multiple classes
+router.patch("/classes/bulk-session", supabaseAuth, requireAdmin, requireSchoolContext, async (req: any, res) => {
+  try {
+    const schoolId = req.schoolId;
+    const { classIds, sessionId } = req.body;
+
+    if (!Array.isArray(classIds) || classIds.length === 0) {
+      return res.status(400).json({ message: "classIds must be a non-empty array" });
+    }
+
+    const parsedIds = classIds.map((id: any) => parseInt(id));
+    if (parsedIds.some(isNaN)) {
+      return res.status(400).json({ message: "All classIds must be valid integers" });
+    }
+
+    const parsedSessionId = sessionId != null ? parseInt(sessionId) : null;
+    if (sessionId != null && isNaN(parsedSessionId!)) {
+      return res.status(400).json({ message: "sessionId must be a valid integer or null" });
+    }
+
+    let updated = 0;
+    let skipped = 0;
+
+    for (const id of parsedIds) {
+      const existing = await storage.getClassById(id);
+      if (!existing || String(existing.school_id) !== schoolId) {
+        skipped++;
+        continue;
+      }
+      await storage.updateClass(id, { sessionId: parsedSessionId });
+      updated++;
+    }
+
+    return res.status(200).json({ updated, skipped });
+  } catch (error) {
+    console.error("Error bulk-assigning session:", error);
+    return res.status(500).json({ message: "Error updating classes" });
+  }
+});
+
 // Update a class
 router.patch("/classes/:id", supabaseAuth, requireAdmin, requireSchoolContext, async (req: any, res) => {
   try {
