@@ -60,8 +60,7 @@ export async function processBalancePayment(paymentIntent: Stripe.PaymentIntent,
     // Update each enrollment
     for (const enrollment of enrollments) {
       const newAmountPaid = (enrollment.totalPaid || 0) + paymentPerEnrollment;
-      const classData = enrollment.programId ? await storage.getClassById(enrollment.programId) : null;
-      const totalCost = classData?.price || 0;
+      const totalCost = enrollment.totalCost || 0;
       const remainingBalance = Math.max(0, totalCost - newAmountPaid);
       
       // All payments now use Stripe-managed status
