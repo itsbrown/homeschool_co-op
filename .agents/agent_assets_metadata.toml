@@ -6,3 +6,9 @@ id = "Rybl8LEKQb_eQ1p06V9z1"
 uri = "file://docs/REQUIREMENTS_OVERVIEW.md"
 type = "text"
 title = "ASA Platform — Requirements Overview"
+
+[[outputs]]
+id = "yPwZtfEb6fcinvOkr2YJ3"
+uri = "file://docs/PRD.md"
+type = "text"
+title = "ASA Learning Platform — Product Requirements Document"
