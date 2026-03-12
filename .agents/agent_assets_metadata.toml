@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "Rybl8LEKQb_eQ1p06V9z1"
+uri = "file://docs/REQUIREMENTS_OVERVIEW.md"
+type = "text"
+title = "ASA Platform — Requirements Overview"
