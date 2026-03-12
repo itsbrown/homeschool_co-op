@@ -201,10 +201,6 @@ export default function SchoolClassesPage() {
   // Fetch sessions for bulk assignment
   const { data: sessions } = useQuery<any[]>({
     queryKey: ["/api/admin/sessions"],
-    queryFn: async () => {
-      const res = await apiRequest("GET", "/api/admin/sessions");
-      return res.json();
-    },
     enabled: !!activeRole,
   });
 
