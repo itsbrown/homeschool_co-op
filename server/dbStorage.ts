@@ -67,7 +67,8 @@ import {
   SkeletonBlock, InsertSkeletonBlock, skeletonBlocks,
   WeekPlan, InsertWeekPlan, weekPlans,
   WeekPlanBlock, InsertWeekPlanBlock, weekPlanBlocks,
-  WeekPlanBlockHistory, InsertWeekPlanBlockHistory, weekPlanBlockHistory
+  WeekPlanBlockHistory, InsertWeekPlanBlockHistory, weekPlanBlockHistory,
+  Session, sessions
 } from '../shared/schema';
 
 /**
@@ -2428,6 +2429,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Location methods
+  async getSessionById(id: number): Promise<Session | undefined> {
+    const db = await getDb();
+    const [session] = await db.select().from(sessions).where(eq(sessions.id, id));
+    return session;
+  }
+
   async getLocation(id: number): Promise<Location | undefined> {
     const db = await getDb();
     const [location] = await db.select().from(locations).where(eq(locations.id, id));

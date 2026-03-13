@@ -67,7 +67,8 @@ import {
   skeletonBlocks, type SkeletonBlock, type InsertSkeletonBlock,
   weekPlans, type WeekPlan, type InsertWeekPlan,
   weekPlanBlocks, type WeekPlanBlock, type InsertWeekPlanBlock,
-  weekPlanBlockHistory, type WeekPlanBlockHistory, type InsertWeekPlanBlockHistory
+  weekPlanBlockHistory, type WeekPlanBlockHistory, type InsertWeekPlanBlockHistory,
+  type Session
 } from "@shared/schema";
 import { eq, inArray } from 'drizzle-orm';
 import { getDb } from './db';
@@ -138,6 +139,9 @@ export interface IStorage {
   
   // Transactional soft-delete (best practice: atomic operation with proper ordering)
   softDeleteUserWithCleanup(userId: number): Promise<{ success: boolean; error?: string }>;
+
+  // Session methods
+  getSessionById(id: number): Promise<Session | undefined>;
 
   // Location methods
   getLocationsBySchool(schoolId: number): Promise<Location[]>;
@@ -4017,6 +4021,10 @@ export class MemStorage implements IStorage {
     }
   }
 
+  async getSessionById(id: number): Promise<Session | undefined> {
+    return undefined;
+  }
+
   async getLocationById(id: number): Promise<Location | undefined> {
     return this.locationsStore.get(id);
   }
@@ -6584,6 +6592,14 @@ import { DatabaseStorage } from "./dbStorage";
 
       async deleteUserLocation(id: number): Promise<void> {
         return this.dbStorage.deleteUserLocation(id);
+      }
+
+      async getSessionById(id: number): Promise<Session | undefined> {
+        try {
+          return await this.dbStorage.getSessionById(id);
+        } catch (error) {
+          return this.memStorage.getSessionById(id);
+        }
       }
 
       // Location methods - use database storage with fallback to memory

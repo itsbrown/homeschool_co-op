@@ -734,6 +734,19 @@ router.get("/classes", supabaseAuth, requireSchoolContext, async (req: any, res:
         }
       }
       
+      // Look up session name if sessionId exists
+      let sessionName = null;
+      if (classItem.sessionId) {
+        try {
+          const session = await storage.getSessionById(classItem.sessionId);
+          if (session) {
+            sessionName = session.name;
+          }
+        } catch (error) {
+          console.log(`⚠️ Could not fetch session for class ${classItem.id}:`, error);
+        }
+      }
+      
       // Derive instructor name from instructorId join (source of truth) instead of hardcoded field
       let derivedInstructorName = null;
       if (classItem.instructorId) {
@@ -770,7 +783,9 @@ router.get("/classes", supabaseAuth, requireSchoolContext, async (req: any, res:
           ? !hiddenCategoryIds.includes(classItem.categoryId)
           : true,
         // Override instructorName with derived value from instructorId (source of truth)
-        instructorName: derivedInstructorName || classItem.instructorName || null
+        instructorName: derivedInstructorName || classItem.instructorName || null,
+        // Include session name for display
+        sessionName: sessionName || null
       };
     }));
 

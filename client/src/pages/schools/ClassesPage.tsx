@@ -34,7 +34,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
-import { apiRequest, safeJsonParse } from "@/lib/queryClient";
+import { apiRequest } from "@/lib/queryClient";
 import { useRole } from "@/contexts/RoleContext";
 import { formatDate } from "@/lib/utils";
 
@@ -130,6 +130,7 @@ export default function SchoolClassesPage() {
     className: true,
     category: true,
     instructor: true,
+    session: true,
     gradeLevel: true,
     location: true,
     status: true,
@@ -190,12 +191,7 @@ export default function SchoolClassesPage() {
   // Only fetch when user has an active role (school context is set)
   const { data: classes, isLoading, error, refetch } = useQuery({
     queryKey: ['/api/school-admin/classes'],
-    queryFn: async () => {
-      const response = await apiRequest("GET", "/api/school-admin/classes");
-      const data = await safeJsonParse(response);
-      return data;
-    },
-    enabled: !!activeRole, // Only run query when school context is available
+    enabled: !!activeRole,
   });
 
   // Fetch sessions for bulk assignment
@@ -499,11 +495,12 @@ export default function SchoolClassesPage() {
 
   const exportClassList = () => {
     const csvContent = [
-      ['Class Name', 'Category', 'Instructor', 'Grade Level', 'Status', 'Enrollment', 'Start Date', 'End Date', 'Schedule'],
+      ['Class Name', 'Category', 'Instructor', 'Session', 'Grade Level', 'Status', 'Enrollment', 'Start Date', 'End Date', 'Schedule'],
       ...sortedClasses.map((cls: any) => [
         cls.title,
         cls.categoryName || cls.category || '',
         cls.instructorName || cls.instructor || 'Unassigned',
+        cls.sessionName || '',
         cls.gradeLevel,
         cls.status,
         `${cls.enrollmentCount || 0}/${cls.capacity || cls.maxEnrollment || 0}`,
@@ -677,6 +674,12 @@ export default function SchoolClassesPage() {
                         Instructor
                       </DropdownMenuCheckboxItem>
                       <DropdownMenuCheckboxItem
+                        checked={visibleColumns.session}
+                        onCheckedChange={() => toggleColumn('session')}
+                      >
+                        Session
+                      </DropdownMenuCheckboxItem>
+                      <DropdownMenuCheckboxItem
                         checked={visibleColumns.gradeLevel}
                         onCheckedChange={() => toggleColumn('gradeLevel')}
                       >
@@ -788,6 +791,7 @@ export default function SchoolClassesPage() {
                             {visibleColumns.className && <TableHead>Class Name</TableHead>}
                             {visibleColumns.category && <TableHead>Category</TableHead>}
                             {visibleColumns.instructor && <TableHead>Instructor</TableHead>}
+                            {visibleColumns.session && <TableHead>Session</TableHead>}
                             {visibleColumns.gradeLevel && <TableHead>Grade Level</TableHead>}
                             {visibleColumns.location && <TableHead>Location</TableHead>}
                             {visibleColumns.status && <TableHead>Status</TableHead>}
@@ -816,6 +820,7 @@ export default function SchoolClassesPage() {
                                       : (cls.instructor || "No Instructor Assigned")}
                                   </TableCell>
                                 )}
+                                {visibleColumns.session && <TableCell>{cls.sessionName || ''}</TableCell>}
                                 {visibleColumns.gradeLevel && <TableCell>{cls.gradeLevel}</TableCell>}
                                 {visibleColumns.location && <TableCell>{cls.locationName || cls.location || "Not Specified"}</TableCell>}
                                 {visibleColumns.status && (
@@ -924,6 +929,12 @@ export default function SchoolClassesPage() {
                               <span className="font-medium">Location:</span>
                               <p className="text-muted-foreground">{cls.locationName || cls.location || "Not Specified"}</p>
                             </div>
+                            {cls.sessionName && (
+                              <div>
+                                <span className="font-medium">Session:</span>
+                                <p className="text-muted-foreground">{cls.sessionName}</p>
+                              </div>
+                            )}
                             {(cls.startDate || cls.endDate) && (
                               <div className="col-span-2">
                                 <span className="font-medium">Dates:</span>
