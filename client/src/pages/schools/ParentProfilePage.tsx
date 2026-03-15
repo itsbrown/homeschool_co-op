@@ -62,7 +62,8 @@ import {
   Copy,
   Loader2,
   XCircle,
-  Gift
+  Gift,
+  Info
 } from 'lucide-react';
 import { Link } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
@@ -195,6 +196,7 @@ interface ParentProfile {
     totalCreditUsedCents: number;
     totalAmountPaid: number;
     totalAmountDue: number;
+    strandedPaymentCents?: number;
     activeEnrollments: number;
     activeMemberships: number;
   };
@@ -1602,6 +1604,14 @@ export default function ParentProfilePage() {
               <div className="text-2xl font-bold">
                 ${profile.summary.totalAmountDue.toFixed(2)}
               </div>
+              {(profile.summary.strandedPaymentCents ?? 0) > 0 && (
+                <div className="flex items-center gap-1 mt-1" title={`$${(profile.summary.strandedPaymentCents! / 100).toFixed(2)} from cancelled/inactive enrollments has been credited toward this balance.`}>
+                  <Info className="h-3 w-3 text-blue-500" />
+                  <span className="text-xs text-muted-foreground">
+                    Includes ${(profile.summary.strandedPaymentCents! / 100).toFixed(2)} credit from prior payments
+                  </span>
+                </div>
+              )}
             </CardContent>
           </Card>
           <Card>

@@ -4461,6 +4461,23 @@ export class DatabaseStorage implements IStorage {
     return Number(result[0]?.total || 0);
   }
 
+  async getStrandedPaymentAllocationsForParent(parentId: number): Promise<{ totalStrandedCents: number }> {
+    const db = await getDb();
+    const result = await db.select({
+      total: sql<number>`COALESCE(SUM(${paymentAllocations.allocatedAmountCents}), 0)`
+    })
+    .from(paymentAllocations)
+    .innerJoin(programEnrollments, eq(paymentAllocations.enrollmentId, programEnrollments.id))
+    .where(
+      and(
+        eq(programEnrollments.parentId, parentId),
+        inArray(programEnrollments.status, ['cancelled', 'withdrawn', 'failed', 'waitlist']),
+        eq(paymentAllocations.allocationType, 'payment')
+      )
+    );
+    return { totalStrandedCents: Number(result[0]?.total || 0) };
+  }
+
   // ==================== CREDIT HOLDS (Reserve-then-Finalize Pattern) ====================
   
   async createCreditHolds(

@@ -518,6 +518,9 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
     // Calculate summary statistics using FILTERED data only
     const totalAmountPaid = BillingCalculationService.calculateTotalPaid(paymentHistory);
     
+    // Fetch stranded payment allocations in parallel with enrollment processing
+    const strandedPromise = storage.getStrandedPaymentAllocationsForParent(parentId);
+
     // FIRST: Build enrollments with recalculated balances (same logic as UI display)
     // This ensures summary and table use the same source of truth
     const processedEnrollments = await Promise.all(filteredEnrollments.map(async enrollment => {
@@ -565,11 +568,14 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
     // Calculate class amount due from RECALCULATED balances (not cached DB values)
     // Exclude statuses with no legitimate outstanding balance (denylist per asa-payment-patterns gold-standard).
     // 'pending_admin_approval' is intentionally included — payment was made but admin approval is pending.
-    const classAmountDue = CurrencyUtils.sum(
+    const rawClassAmountDue = CurrencyUtils.sum(
       processedEnrollments
         .filter(e => !['cancelled', 'waitlist', 'withdrawn', 'failed', 'completed'].includes(e.status))
         .map(enrollment => (enrollment as any)._remainingBalanceCents || 0)
     );
+
+    const { totalStrandedCents: strandedPaymentCents } = await strandedPromise;
+    const classAmountDue = Math.max(0, rawClassAmountDue - strandedPaymentCents);
 
     // Process membership enrollments with recalculated balances
     const processedMembershipEnrollments = membershipEnrollments.map(membership => {
@@ -682,6 +688,7 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
         totalCreditUsedCents: credits.reduce((sum, c) => sum + c.usedAmountCents, 0),
         totalAmountPaid: CurrencyUtils.toDisplay(totalAmountPaid),
         totalAmountDue: CurrencyUtils.toDisplay(totalAmountDue),
+        strandedPaymentCents,
         activeEnrollments: filteredEnrollments.filter(e => ['enrolled', 'pending_payment'].includes(e.status)).length,
         activeMemberships: membershipEnrollments.filter(m => ['active', 'enrolled', 'pending_payment'].includes(m.status)).length
       }

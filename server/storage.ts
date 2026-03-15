@@ -705,6 +705,7 @@ export interface IStorage {
   createPaymentAllocations(allocations: InsertPaymentAllocation[]): Promise<PaymentAllocation[]>;
   getTotalPaidForEnrollment(enrollmentId: number): Promise<number>;
   getTotalPaidForMembershipEnrollment(membershipEnrollmentId: number): Promise<number>;
+  getStrandedPaymentAllocationsForParent(parentId: number): Promise<{ totalStrandedCents: number }>;
   
   // ==================== ASSESSMENT TRACKING ====================
   // Assessment Types
@@ -4720,6 +4721,21 @@ export class MemStorage implements IStorage {
     return allocations.reduce((sum, a) => sum + a.allocatedAmountCents, 0);
   }
 
+  async getStrandedPaymentAllocationsForParent(parentId: number): Promise<{ totalStrandedCents: number }> {
+    const strandedStatuses = ['cancelled', 'withdrawn', 'failed', 'waitlist'];
+    const enrollments = await this.getProgramEnrollmentsByParent(parentId);
+    const strandedEnrollmentIds = new Set(
+      enrollments.filter(e => strandedStatuses.includes(e.status)).map(e => e.id)
+    );
+    let total = 0;
+    for (const allocation of this.paymentAllocationsStore.values()) {
+      if (allocation.enrollmentId && allocation.allocationType === 'payment' && strandedEnrollmentIds.has(allocation.enrollmentId)) {
+        total += allocation.allocatedAmountCents;
+      }
+    }
+    return { totalStrandedCents: total };
+  }
+
   // ==================== ASSESSMENT TRACKING ====================
   private assessmentTypesStore: Map<number, AssessmentType> = new Map();
   private assessmentTypeIdCounter: number = 1;
@@ -7567,6 +7583,10 @@ import { DatabaseStorage } from "./dbStorage";
 
       async getTotalPaidForMembershipEnrollment(membershipEnrollmentId: number): Promise<number> {
         return this.dbStorage.getTotalPaidForMembershipEnrollment(membershipEnrollmentId);
+      }
+
+      async getStrandedPaymentAllocationsForParent(parentId: number): Promise<{ totalStrandedCents: number }> {
+        return this.dbStorage.getStrandedPaymentAllocationsForParent(parentId);
       }
 
       // ==================== STRIPE PAYMENT HISTORY ====================
