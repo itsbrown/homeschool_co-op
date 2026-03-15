@@ -68,7 +68,7 @@ import {
   weekPlans, type WeekPlan, type InsertWeekPlan,
   weekPlanBlocks, type WeekPlanBlock, type InsertWeekPlanBlock,
   weekPlanBlockHistory, type WeekPlanBlockHistory, type InsertWeekPlanBlockHistory,
-  type Session
+  sessions, type Session, type InsertSession
 } from "@shared/schema";
 import { eq, inArray } from 'drizzle-orm';
 import { getDb } from './db';
@@ -805,6 +805,14 @@ export interface IStorage {
 
   // Schedule Builder - Block History
   getBlockHistory(blockId: number): Promise<WeekPlanBlockHistory[]>;
+
+  // Enrollment Session methods
+  getEnrollmentSessionsBySchoolId(schoolId: number): Promise<Session[]>;
+  getEnrollmentSessionById(id: number): Promise<Session | undefined>;
+  getOpenEnrollmentSessionsBySchoolIds(schoolIds: number[]): Promise<Session[]>;
+  createEnrollmentSession(session: InsertSession): Promise<Session>;
+  updateEnrollmentSession(id: number, data: Partial<InsertSession>): Promise<Session | undefined>;
+  deleteEnrollmentSession(id: number): Promise<void>;
 }
 
 export class MemStorage implements IStorage {
@@ -4911,6 +4919,14 @@ export class MemStorage implements IStorage {
   // Payment Reminder Log methods
   async createPaymentReminderLog(log: InsertPaymentReminderLog): Promise<PaymentReminderLog> { throw new Error('Not implemented'); }
   async getPaymentReminderLogsBySchool(schoolId: number, limit: number = 100): Promise<PaymentReminderLog[]> { return []; }
+
+  // Enrollment Session methods (MemStorage stubs)
+  async getEnrollmentSessionsBySchoolId(schoolId: number): Promise<Session[]> { return []; }
+  async getEnrollmentSessionById(id: number): Promise<Session | undefined> { return undefined; }
+  async getOpenEnrollmentSessionsBySchoolIds(schoolIds: number[]): Promise<Session[]> { return []; }
+  async createEnrollmentSession(session: InsertSession): Promise<Session> { throw new Error('Not implemented'); }
+  async updateEnrollmentSession(id: number, data: Partial<InsertSession>): Promise<Session | undefined> { return undefined; }
+  async deleteEnrollmentSession(id: number): Promise<void> {}
 }
 
 import { DatabaseStorage } from "./dbStorage";
@@ -7838,6 +7854,26 @@ import { DatabaseStorage } from "./dbStorage";
       }
       async getBlockHistory(blockId: number): Promise<WeekPlanBlockHistory[]> {
         return this.dbStorage.getBlockHistory(blockId);
+      }
+
+      // Enrollment Session methods
+      async getEnrollmentSessionsBySchoolId(schoolId: number): Promise<Session[]> {
+        return this.dbStorage.getEnrollmentSessionsBySchoolId(schoolId);
+      }
+      async getEnrollmentSessionById(id: number): Promise<Session | undefined> {
+        return this.dbStorage.getEnrollmentSessionById(id);
+      }
+      async getOpenEnrollmentSessionsBySchoolIds(schoolIds: number[]): Promise<Session[]> {
+        return this.dbStorage.getOpenEnrollmentSessionsBySchoolIds(schoolIds);
+      }
+      async createEnrollmentSession(session: InsertSession): Promise<Session> {
+        return this.dbStorage.createEnrollmentSession(session);
+      }
+      async updateEnrollmentSession(id: number, data: Partial<InsertSession>): Promise<Session | undefined> {
+        return this.dbStorage.updateEnrollmentSession(id, data);
+      }
+      async deleteEnrollmentSession(id: number): Promise<void> {
+        return this.dbStorage.deleteEnrollmentSession(id);
       }
 
       // Clear all data from storage (for testing)

@@ -2104,9 +2104,9 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
   // These are separate from the Auth0-based admin router at /api/admin
   app.use("/api/admin/enrollments", supabaseAuth, adminEnrollmentsRouter); // Admin enrollment CRUD + comp (Supabase auth)
   app.use("/api/admin/enrollments", supabaseAuth, adminEnrollmentPaymentRouter); // Admin enrollment payment management (Supabase auth)
+  app.use("/api/admin/sessions", adminSessionsRouter); // Session management (Supabase auth - must be before /api/admin)
   app.use("/api/admin", adminRouter);
   app.use("/api/admin-classes", adminClassesRouter); // Add duplicate route for backwards compatibility
-  app.use("/api/admin/sessions", adminSessionsRouter); // Session management
   app.use("/api/session-enrollments", sessionEnrollmentsRouter); // Session-based enrollment
   app.use("/api/admin-users", adminUsersRouter); // Admin user management
   app.use("/api/activities", activitiesRouter);

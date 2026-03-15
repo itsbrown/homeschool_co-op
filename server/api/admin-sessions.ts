@@ -1,28 +1,22 @@
 import { Router } from "express";
-import { sessions, insertSessionSchema } from "@shared/schema";
+import { insertSessionSchema } from "@shared/schema";
 import { supabaseAuth } from "../middleware/supabase-auth";
-import { requireAdmin } from "../middleware/auth0-auth";
+import { requireRole } from "../middleware/auth0-auth";
 import { requireSchoolContext } from "../middleware/require-school-context";
 import { storage } from "../storage";
-import { getDb } from "../db";
-import { eq, and, desc, inArray } from "drizzle-orm";
 
 const router = Router();
 
-router.get("/", supabaseAuth, requireAdmin, requireSchoolContext, async (req: any, res) => {
+const requireSchoolAdmin = requireRole(['schoolAdmin', 'admin', 'superAdmin']);
+
+router.get("/", supabaseAuth, requireSchoolAdmin, requireSchoolContext, async (req: any, res) => {
   try {
-    const db = getDb();
     const schoolId = parseInt(req.schoolId);
     if (isNaN(schoolId)) {
       return res.status(400).json({ message: "Invalid school ID" });
     }
 
-    const result = await db
-      .select()
-      .from(sessions)
-      .where(eq(sessions.schoolId, schoolId))
-      .orderBy(desc(sessions.sortOrder));
-
+    const result = await storage.getEnrollmentSessionsBySchoolId(schoolId);
     res.json(result);
   } catch (error) {
     console.error("Error fetching sessions:", error);
@@ -32,7 +26,7 @@ router.get("/", supabaseAuth, requireAdmin, requireSchoolContext, async (req: an
 
 router.get("/open", supabaseAuth, async (req: any, res) => {
   try {
-    const userId = req.userId;
+    const userId = req.user?.id;
     if (!userId) {
       return res.status(401).json({ message: "Authentication required" });
     }
@@ -47,13 +41,7 @@ router.get("/open", supabaseAuth, async (req: any, res) => {
       return res.json([]);
     }
 
-    const db = getDb();
-    const result = await db
-      .select()
-      .from(sessions)
-      .where(and(inArray(sessions.schoolId, schoolIds), eq(sessions.enrollmentOpen, true)))
-      .orderBy(desc(sessions.sortOrder));
-
+    const result = await storage.getOpenEnrollmentSessionsBySchoolIds(schoolIds);
     res.json(result);
   } catch (error) {
     console.error("Error fetching open sessions:", error);
@@ -61,34 +49,28 @@ router.get("/open", supabaseAuth, async (req: any, res) => {
   }
 });
 
-router.get("/:id", supabaseAuth, requireAdmin, requireSchoolContext, async (req: any, res) => {
+router.get("/:id", supabaseAuth, requireSchoolAdmin, requireSchoolContext, async (req: any, res) => {
   try {
-    const db = getDb();
     const schoolId = parseInt(req.schoolId);
     const id = parseInt(req.params.id);
     if (isNaN(id)) {
       return res.status(400).json({ message: "Invalid session ID" });
     }
 
-    const result = await db
-      .select()
-      .from(sessions)
-      .where(and(eq(sessions.id, id), eq(sessions.schoolId, schoolId)));
-
-    if (result.length === 0) {
+    const session = await storage.getEnrollmentSessionById(id);
+    if (!session || session.schoolId !== schoolId) {
       return res.status(404).json({ message: "Session not found" });
     }
 
-    res.json(result[0]);
+    res.json(session);
   } catch (error) {
     console.error("Error fetching session:", error);
     res.status(500).json({ message: "Failed to fetch session" });
   }
 });
 
-router.post("/", supabaseAuth, requireAdmin, requireSchoolContext, async (req: any, res) => {
+router.post("/", supabaseAuth, requireSchoolAdmin, requireSchoolContext, async (req: any, res) => {
   try {
-    const db = getDb();
     const schoolId = parseInt(req.schoolId);
     if (isNaN(schoolId)) {
       return res.status(400).json({ message: "Invalid school ID" });
@@ -100,7 +82,7 @@ router.post("/", supabaseAuth, requireAdmin, requireSchoolContext, async (req: a
       return res.status(400).json({ message: "Invalid session data", errors: parsed.error.flatten() });
     }
 
-    const [created] = await db.insert(sessions).values(parsed.data).returning();
+    const created = await storage.createEnrollmentSession(parsed.data);
     res.status(201).json(created);
   } catch (error) {
     console.error("Error creating session:", error);
@@ -108,35 +90,25 @@ router.post("/", supabaseAuth, requireAdmin, requireSchoolContext, async (req: a
   }
 });
 
-router.patch("/:id", supabaseAuth, requireAdmin, requireSchoolContext, async (req: any, res) => {
+router.patch("/:id", supabaseAuth, requireSchoolAdmin, requireSchoolContext, async (req: any, res) => {
   try {
-    const db = getDb();
     const schoolId = parseInt(req.schoolId);
     const id = parseInt(req.params.id);
     if (isNaN(id)) {
       return res.status(400).json({ message: "Invalid session ID" });
     }
 
-    const existing = await db
-      .select()
-      .from(sessions)
-      .where(and(eq(sessions.id, id), eq(sessions.schoolId, schoolId)));
-
-    if (existing.length === 0) {
+    const existing = await storage.getEnrollmentSessionById(id);
+    if (!existing || existing.schoolId !== schoolId) {
       return res.status(404).json({ message: "Session not found" });
     }
 
-    const updateData: Record<string, any> = { ...req.body, updatedAt: new Date() };
+    const updateData: Record<string, any> = { ...req.body };
     delete updateData.id;
     delete updateData.schoolId;
     delete updateData.createdAt;
 
-    const [updated] = await db
-      .update(sessions)
-      .set(updateData)
-      .where(and(eq(sessions.id, id), eq(sessions.schoolId, schoolId)))
-      .returning();
-
+    const updated = await storage.updateEnrollmentSession(id, updateData);
     res.json(updated);
   } catch (error) {
     console.error("Error updating session:", error);
@@ -144,25 +116,20 @@ router.patch("/:id", supabaseAuth, requireAdmin, requireSchoolContext, async (re
   }
 });
 
-router.delete("/:id", supabaseAuth, requireAdmin, requireSchoolContext, async (req: any, res) => {
+router.delete("/:id", supabaseAuth, requireSchoolAdmin, requireSchoolContext, async (req: any, res) => {
   try {
-    const db = getDb();
     const schoolId = parseInt(req.schoolId);
     const id = parseInt(req.params.id);
     if (isNaN(id)) {
       return res.status(400).json({ message: "Invalid session ID" });
     }
 
-    const existing = await db
-      .select()
-      .from(sessions)
-      .where(and(eq(sessions.id, id), eq(sessions.schoolId, schoolId)));
-
-    if (existing.length === 0) {
+    const existing = await storage.getEnrollmentSessionById(id);
+    if (!existing || existing.schoolId !== schoolId) {
       return res.status(404).json({ message: "Session not found" });
     }
 
-    await db.delete(sessions).where(and(eq(sessions.id, id), eq(sessions.schoolId, schoolId)));
+    await storage.deleteEnrollmentSession(id);
     res.json({ message: "Session deleted" });
   } catch (error) {
     console.error("Error deleting session:", error);

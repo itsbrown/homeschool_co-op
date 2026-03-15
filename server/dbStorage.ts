@@ -68,7 +68,7 @@ import {
   WeekPlan, InsertWeekPlan, weekPlans,
   WeekPlanBlock, InsertWeekPlanBlock, weekPlanBlocks,
   WeekPlanBlockHistory, InsertWeekPlanBlockHistory, weekPlanBlockHistory,
-  Session, sessions
+  Session, InsertSession, sessions
 } from '../shared/schema';
 
 /**
@@ -5345,5 +5345,47 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(weekPlanBlockHistory)
       .where(eq(weekPlanBlockHistory.blockId, blockId))
       .orderBy(desc(weekPlanBlockHistory.changedAt));
+  }
+
+  // Enrollment Session methods
+  async getEnrollmentSessionsBySchoolId(schoolId: number): Promise<Session[]> {
+    const db = await getDb();
+    return await db.select().from(sessions)
+      .where(eq(sessions.schoolId, schoolId))
+      .orderBy(desc(sessions.sortOrder));
+  }
+
+  async getEnrollmentSessionById(id: number): Promise<Session | undefined> {
+    const db = await getDb();
+    const [session] = await db.select().from(sessions).where(eq(sessions.id, id));
+    return session;
+  }
+
+  async getOpenEnrollmentSessionsBySchoolIds(schoolIds: number[]): Promise<Session[]> {
+    const db = await getDb();
+    if (schoolIds.length === 0) return [];
+    return await db.select().from(sessions)
+      .where(and(inArray(sessions.schoolId, schoolIds), eq(sessions.enrollmentOpen, true)))
+      .orderBy(desc(sessions.sortOrder));
+  }
+
+  async createEnrollmentSession(session: InsertSession): Promise<Session> {
+    const db = await getDb();
+    const [created] = await db.insert(sessions).values(session).returning();
+    return created;
+  }
+
+  async updateEnrollmentSession(id: number, data: Partial<InsertSession>): Promise<Session | undefined> {
+    const db = await getDb();
+    const [updated] = await db.update(sessions)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(sessions.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteEnrollmentSession(id: number): Promise<void> {
+    const db = await getDb();
+    await db.delete(sessions).where(eq(sessions.id, id));
   }
 }

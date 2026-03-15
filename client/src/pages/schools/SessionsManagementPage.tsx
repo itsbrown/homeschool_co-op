@@ -1,18 +1,22 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { AdminShell } from "@/components/ui/admin-shell";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import SchoolAdminLayout from "@/components/layout/SchoolAdminLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Plus, Edit, Trash2, Calendar, Clock, Users, DollarSign } from "lucide-react";
+import { Plus, Edit, Trash2, Calendar, Clock, Users, DollarSign, AlertCircle } from "lucide-react";
 import type { Session } from "@shared/schema";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -34,27 +38,29 @@ function formatDate(dateStr: string | null | undefined): string {
   return new Date(dateStr + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-interface SessionFormData {
-  name: string;
-  description: string;
-  startDate: string;
-  endDate: string;
-  status: string;
-  enrollmentOpen: boolean;
-  halfDayPrice: string;
-  fullDayPrice: string;
-  halfDayStartTime: string;
-  halfDayEndTime: string;
-  fullDayStartTime: string;
-  fullDayEndTime: string;
-  halfDayDays: string[];
-  fullDayDays: string[];
-  halfDayCapacity: string;
-  fullDayCapacity: string;
-  sortOrder: string;
-}
+const sessionFormSchema = z.object({
+  name: z.string().min(1, "Session name is required"),
+  description: z.string().optional(),
+  startDate: z.string().min(1, "Start date is required"),
+  endDate: z.string().min(1, "End date is required"),
+  status: z.enum(["upcoming", "active", "completed", "cancelled"]).default("upcoming"),
+  enrollmentOpen: z.boolean().default(false),
+  halfDayPrice: z.string().optional(),
+  fullDayPrice: z.string().optional(),
+  halfDayStartTime: z.string().optional(),
+  halfDayEndTime: z.string().optional(),
+  fullDayStartTime: z.string().optional(),
+  fullDayEndTime: z.string().optional(),
+  halfDayDays: z.array(z.string()).default(["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]),
+  fullDayDays: z.array(z.string()).default(["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]),
+  halfDayCapacity: z.string().optional(),
+  fullDayCapacity: z.string().optional(),
+  sortOrder: z.string().default("0"),
+});
 
-const emptyForm: SessionFormData = {
+type SessionFormData = z.infer<typeof sessionFormSchema>;
+
+const defaultValues: SessionFormData = {
   name: "",
   description: "",
   startDate: "",
@@ -74,13 +80,13 @@ const emptyForm: SessionFormData = {
   sortOrder: "0",
 };
 
-function sessionToForm(s: Session): SessionFormData {
+function sessionToFormValues(s: Session): SessionFormData {
   return {
     name: s.name,
     description: s.description || "",
     startDate: s.startDate,
     endDate: s.endDate,
-    status: s.status,
+    status: s.status as SessionFormData["status"],
     enrollmentOpen: s.enrollmentOpen,
     halfDayPrice: s.halfDayPrice != null ? String(s.halfDayPrice / 100) : "",
     fullDayPrice: s.fullDayPrice != null ? String(s.fullDayPrice / 100) : "",
@@ -122,10 +128,14 @@ export default function SessionsManagementPage() {
   const { toast } = useToast();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [form, setForm] = useState<SessionFormData>(emptyForm);
   const [deleteId, setDeleteId] = useState<number | null>(null);
 
-  const { data: sessionsList = [], isLoading } = useQuery<Session[]>({
+  const form = useForm<SessionFormData>({
+    resolver: zodResolver(sessionFormSchema),
+    defaultValues,
+  });
+
+  const { data: sessionsList = [], isLoading, isError, error } = useQuery<Session[]>({
     queryKey: ["/api/admin/sessions"],
   });
 
@@ -167,22 +177,18 @@ export default function SessionsManagementPage() {
 
   const openCreate = () => {
     setEditingId(null);
-    setForm(emptyForm);
+    form.reset(defaultValues);
     setDialogOpen(true);
   };
 
   const openEdit = (s: Session) => {
     setEditingId(s.id);
-    setForm(sessionToForm(s));
+    form.reset(sessionToFormValues(s));
     setDialogOpen(true);
   };
 
-  const handleSubmit = () => {
-    if (!form.name || !form.startDate || !form.endDate) {
-      toast({ title: "Please fill in all required fields", variant: "destructive" });
-      return;
-    }
-    const payload = formToPayload(form);
+  const onSubmit = (data: SessionFormData) => {
+    const payload = formToPayload(data);
     if (editingId) {
       updateMutation.mutate({ id: editingId, data: payload });
     } else {
@@ -190,20 +196,17 @@ export default function SessionsManagementPage() {
     }
   };
 
-  const toggleDay = (list: string[], day: string): string[] => {
-    return list.includes(day) ? list.filter((d) => d !== day) : [...list, day];
+  const toggleDay = (current: string[], day: string): string[] => {
+    return current.includes(day) ? current.filter((d) => d !== day) : [...current, day];
   };
 
   const isPending = createMutation.isPending || updateMutation.isPending;
 
   return (
-    <AdminShell>
+    <SchoolAdminLayout pageTitle="Enrollment Sessions">
       <div className="flex flex-col space-y-6">
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Enrollment Sessions</h1>
-            <p className="text-muted-foreground mt-1">Manage enrollment periods (e.g. Winter, Spring, Fall) with schedule and pricing</p>
-          </div>
+          <p className="text-muted-foreground">Manage enrollment periods (e.g. Winter, Spring, Fall) with schedule and pricing</p>
           <Button onClick={openCreate}>
             <Plus className="h-4 w-4 mr-2" />
             New Session
@@ -214,6 +217,13 @@ export default function SessionsManagementPage() {
           <div className="flex justify-center py-12">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
           </div>
+        ) : isError ? (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              {(error as Error)?.message || "Failed to load enrollment sessions. Please try refreshing the page."}
+            </AlertDescription>
+          </Alert>
         ) : sessionsList.length === 0 ? (
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-12 text-center">
@@ -308,134 +318,284 @@ export default function SessionsManagementPage() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2 md:col-span-2">
-                <Label>Session Name *</Label>
-                <Input placeholder="e.g. Spring 2026" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem className="md:col-span-2">
+                      <FormLabel>Session Name *</FormLabel>
+                      <FormControl>
+                        <Input placeholder="e.g. Spring 2026" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="description"
+                  render={({ field }) => (
+                    <FormItem className="md:col-span-2">
+                      <FormLabel>Description</FormLabel>
+                      <FormControl>
+                        <Textarea placeholder="Optional description" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="startDate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Start Date *</FormLabel>
+                      <FormControl>
+                        <Input type="date" style={{ fontSize: '16px' }} {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="endDate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>End Date *</FormLabel>
+                      <FormControl>
+                        <Input type="date" style={{ fontSize: '16px' }} {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="status"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Status</FormLabel>
+                      <Select value={field.value} onValueChange={field.onChange}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="upcoming">Upcoming</SelectItem>
+                          <SelectItem value="active">Active</SelectItem>
+                          <SelectItem value="completed">Completed</SelectItem>
+                          <SelectItem value="cancelled">Cancelled</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="enrollmentOpen"
+                  render={({ field }) => (
+                    <FormItem className="flex items-center gap-3 pt-6">
+                      <FormControl>
+                        <Switch checked={field.value} onCheckedChange={field.onChange} />
+                      </FormControl>
+                      <FormLabel className="!mt-0">Enrollment Open</FormLabel>
+                    </FormItem>
+                  )}
+                />
               </div>
-              <div className="space-y-2 md:col-span-2">
-                <Label>Description</Label>
-                <Textarea placeholder="Optional description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
-              </div>
-              <div className="space-y-2">
-                <Label>Start Date *</Label>
-                <Input type="date" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} />
-              </div>
-              <div className="space-y-2">
-                <Label>End Date *</Label>
-                <Input type="date" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} />
-              </div>
-              <div className="space-y-2">
-                <Label>Status</Label>
-                <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="upcoming">Upcoming</SelectItem>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="completed">Completed</SelectItem>
-                    <SelectItem value="cancelled">Cancelled</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex items-center gap-3 pt-6">
-                <Switch checked={form.enrollmentOpen} onCheckedChange={(v) => setForm({ ...form, enrollmentOpen: v })} />
-                <Label>Enrollment Open</Label>
-              </div>
-            </div>
 
-            <div className="border-t pt-4">
-              <h4 className="font-semibold mb-3">Half Day Schedule</h4>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label>Price ($)</Label>
-                  <Input type="number" step="0.01" placeholder="0.00" value={form.halfDayPrice} onChange={(e) => setForm({ ...form, halfDayPrice: e.target.value })} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Start Time</Label>
-                  <Input type="time" value={form.halfDayStartTime} onChange={(e) => setForm({ ...form, halfDayStartTime: e.target.value })} />
-                </div>
-                <div className="space-y-2">
-                  <Label>End Time</Label>
-                  <Input type="time" value={form.halfDayEndTime} onChange={(e) => setForm({ ...form, halfDayEndTime: e.target.value })} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Capacity</Label>
-                  <Input type="number" placeholder="Max students" value={form.halfDayCapacity} onChange={(e) => setForm({ ...form, halfDayCapacity: e.target.value })} />
-                </div>
-                <div className="space-y-2 md:col-span-2">
-                  <Label>Days</Label>
-                  <div className="flex flex-wrap gap-2">
-                    {DAYS.map((day) => (
-                      <Button
-                        key={day}
-                        type="button"
-                        variant={form.halfDayDays.includes(day) ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => setForm({ ...form, halfDayDays: toggleDay(form.halfDayDays, day) })}
-                      >
-                        {day.slice(0, 3)}
-                      </Button>
-                    ))}
-                  </div>
+              <div className="border-t pt-4">
+                <h4 className="font-semibold mb-3">Half Day Schedule</h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="halfDayPrice"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Price ($)</FormLabel>
+                        <FormControl>
+                          <Input type="number" step="0.01" placeholder="0.00" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="halfDayStartTime"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Start Time</FormLabel>
+                        <FormControl>
+                          <Input type="time" style={{ fontSize: '16px' }} {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="halfDayEndTime"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>End Time</FormLabel>
+                        <FormControl>
+                          <Input type="time" style={{ fontSize: '16px' }} {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="halfDayCapacity"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Capacity</FormLabel>
+                        <FormControl>
+                          <Input type="number" placeholder="Max students" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="halfDayDays"
+                    render={({ field }) => (
+                      <FormItem className="md:col-span-2">
+                        <FormLabel>Days</FormLabel>
+                        <div className="flex flex-wrap gap-2">
+                          {DAYS.map((day) => (
+                            <Button
+                              key={day}
+                              type="button"
+                              variant={field.value.includes(day) ? "default" : "outline"}
+                              size="sm"
+                              onClick={() => field.onChange(toggleDay(field.value, day))}
+                            >
+                              {day.slice(0, 3)}
+                            </Button>
+                          ))}
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 </div>
               </div>
-            </div>
 
-            <div className="border-t pt-4">
-              <h4 className="font-semibold mb-3">Full Day Schedule</h4>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label>Price ($)</Label>
-                  <Input type="number" step="0.01" placeholder="0.00" value={form.fullDayPrice} onChange={(e) => setForm({ ...form, fullDayPrice: e.target.value })} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Start Time</Label>
-                  <Input type="time" value={form.fullDayStartTime} onChange={(e) => setForm({ ...form, fullDayStartTime: e.target.value })} />
-                </div>
-                <div className="space-y-2">
-                  <Label>End Time</Label>
-                  <Input type="time" value={form.fullDayEndTime} onChange={(e) => setForm({ ...form, fullDayEndTime: e.target.value })} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Capacity</Label>
-                  <Input type="number" placeholder="Max students" value={form.fullDayCapacity} onChange={(e) => setForm({ ...form, fullDayCapacity: e.target.value })} />
-                </div>
-                <div className="space-y-2 md:col-span-2">
-                  <Label>Days</Label>
-                  <div className="flex flex-wrap gap-2">
-                    {DAYS.map((day) => (
-                      <Button
-                        key={day}
-                        type="button"
-                        variant={form.fullDayDays.includes(day) ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => setForm({ ...form, fullDayDays: toggleDay(form.fullDayDays, day) })}
-                      >
-                        {day.slice(0, 3)}
-                      </Button>
-                    ))}
-                  </div>
+              <div className="border-t pt-4">
+                <h4 className="font-semibold mb-3">Full Day Schedule</h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="fullDayPrice"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Price ($)</FormLabel>
+                        <FormControl>
+                          <Input type="number" step="0.01" placeholder="0.00" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="fullDayStartTime"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Start Time</FormLabel>
+                        <FormControl>
+                          <Input type="time" style={{ fontSize: '16px' }} {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="fullDayEndTime"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>End Time</FormLabel>
+                        <FormControl>
+                          <Input type="time" style={{ fontSize: '16px' }} {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="fullDayCapacity"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Capacity</FormLabel>
+                        <FormControl>
+                          <Input type="number" placeholder="Max students" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="fullDayDays"
+                    render={({ field }) => (
+                      <FormItem className="md:col-span-2">
+                        <FormLabel>Days</FormLabel>
+                        <div className="flex flex-wrap gap-2">
+                          {DAYS.map((day) => (
+                            <Button
+                              key={day}
+                              type="button"
+                              variant={field.value.includes(day) ? "default" : "outline"}
+                              size="sm"
+                              onClick={() => field.onChange(toggleDay(field.value, day))}
+                            >
+                              {day.slice(0, 3)}
+                            </Button>
+                          ))}
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 </div>
               </div>
-            </div>
 
-            <div className="border-t pt-4">
-              <div className="space-y-2">
-                <Label>Sort Order</Label>
-                <Input type="number" value={form.sortOrder} onChange={(e) => setForm({ ...form, sortOrder: e.target.value })} />
+              <div className="border-t pt-4">
+                <FormField
+                  control={form.control}
+                  name="sortOrder"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Sort Order</FormLabel>
+                      <FormControl>
+                        <Input type="number" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               </div>
-            </div>
-          </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleSubmit} disabled={isPending}>
-              {isPending ? "Saving..." : editingId ? "Update Session" : "Create Session"}
-            </Button>
-          </DialogFooter>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
+                <Button type="submit" disabled={isPending}>
+                  {isPending ? "Saving..." : editingId ? "Update Session" : "Create Session"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
         </DialogContent>
       </Dialog>
 
@@ -453,6 +613,6 @@ export default function SessionsManagementPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </AdminShell>
+    </SchoolAdminLayout>
   );
 }
