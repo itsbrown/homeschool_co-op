@@ -303,21 +303,32 @@ export function recalculatePaymentSchedule(
   if (remainingBalance <= 0) {
     errors.push('Enrollment is already paid in full');
   }
-  
-  // Validation: Ensure program hasn't ended
-  if (currentDate > programEndDate) {
-    errors.push('Program has already ended');
+
+  const programEnded = currentDate > programEndDate;
+
+  // Validation: Ended programs only allow one-time payments
+  if (programEnded) {
+    if (newFrequency !== 'one_time') {
+      errors.push('Program has ended — only a one-time payment is allowed.');
+    } else if (remainingBalance < 50) {
+      // Balance too small for Stripe (already caught above if <= 0, but catch < 50 cents too)
+      if (remainingBalance > 0) {
+        errors.push('Enrollment is already paid in full');
+      }
+    }
   }
-  
+
   // Calculate remaining days from now to program end
   const remainingDays = daysBetween(currentDate, programEndDate);
-  
-  // Validation: Check if enough time remains for the requested frequency
-  const minDaysRequired = newFrequency === 'weekly' ? 7 : newFrequency === 'biweekly' ? 14 : 30;
-  if (remainingDays < minDaysRequired && newFrequency !== 'one_time') {
-    errors.push(`Not enough time remaining (${remainingDays} days) for ${newFrequency} payments. Minimum required: ${minDaysRequired} days.`);
+
+  // Validation: Check if enough time remains for the requested frequency (active programs only)
+  if (!programEnded) {
+    const minDaysRequired = newFrequency === 'weekly' ? 7 : newFrequency === 'biweekly' ? 14 : 30;
+    if (remainingDays < minDaysRequired && newFrequency !== 'one_time') {
+      errors.push(`Not enough time remaining (${remainingDays} days) for ${newFrequency} payments. Minimum required: ${minDaysRequired} days.`);
+    }
   }
-  
+
   // If there are validation errors, return them
   if (errors.length > 0) {
     return {
@@ -332,12 +343,15 @@ export function recalculatePaymentSchedule(
       validationErrors: errors
     };
   }
-  
+
+  // For ended programs with one_time payment, schedule date is today
+  const scheduleEndDate = programEnded ? currentDate : programEndDate;
+
   // Calculate schedule for the remaining balance starting from today
   const recalculatedSchedule = calculatePaymentSchedule(
     remainingBalance,
     currentDate,
-    programEndDate,
+    scheduleEndDate,
     newFrequency
   );
   

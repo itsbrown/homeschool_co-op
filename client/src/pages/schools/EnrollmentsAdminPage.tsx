@@ -49,7 +49,8 @@ import {
   TrendingUp,
   Gift,
   Percent,
-  Bell
+  Bell,
+  Info
 } from "lucide-react";
 import { formatCurrency } from "@/utils/currency";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -241,7 +242,13 @@ export default function EnrollmentsAdminPage() {
   useEffect(() => {
     if (planDetails) {
       setPaymentPlanDetails(planDetails);
-      setSelectedFrequency(planDetails.enrollment.currentFrequency || planDetails.enrollment.paymentFrequency || "one_time");
+      const programEndDate = planDetails.enrollment.programEndDate;
+      const isProgramEnded = programEndDate ? new Date() > new Date(programEndDate) : false;
+      if (isProgramEnded) {
+        setSelectedFrequency("one_time");
+      } else {
+        setSelectedFrequency(planDetails.enrollment.currentFrequency || planDetails.enrollment.paymentFrequency || "one_time");
+      }
     }
   }, [planDetails]);
 
@@ -351,6 +358,8 @@ export default function EnrollmentsAdminPage() {
       // Invalidate enrollment-related queries
       queryClient.invalidateQueries({ queryKey: ["/api/school-admin/enrollments"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/enrollments", selectedEnrollment?.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/enrollments"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/parent/enrollments"] });
       
       // Invalidate parent profile queries to refresh scheduled payments display
       // Uses predicate to match any parent profile URL (consistent with ManualPaymentEntryPage pattern)
@@ -668,6 +677,10 @@ export default function EnrollmentsAdminPage() {
   const selectedPreviewData = paymentPlanDetails && selectedFrequency && paymentPlanDetails.frequencyPreviews[selectedFrequency];
   const selectedPreview = selectedPreviewData && 'valid' in selectedPreviewData && selectedPreviewData.valid ? selectedPreviewData.schedule : null;
   const hasError = selectedPreviewData && 'valid' in selectedPreviewData && !selectedPreviewData.valid;
+
+  const isProgramEnded = paymentPlanDetails?.enrollment?.programEndDate
+    ? new Date() > new Date(paymentPlanDetails.enrollment.programEndDate)
+    : false;
 
   if (isLoading) {
     return (
@@ -1088,18 +1101,32 @@ export default function EnrollmentsAdminPage() {
                   </div>
                 </div>
 
+                {/* Ended Program Banner */}
+                {isProgramEnded && (
+                  <Alert data-testid="alert-program-ended">
+                    <Info className="h-4 w-4" />
+                    <AlertDescription>
+                      This program has ended. Only a one-time payment can be collected for the remaining balance.
+                    </AlertDescription>
+                  </Alert>
+                )}
+
                 {/* New Frequency Selector */}
                 <div className="space-y-2">
                   <Label htmlFor="payment-frequency">New Payment Frequency</Label>
                   <Select value={selectedFrequency} onValueChange={setSelectedFrequency}>
-                    <SelectTrigger id="payment-frequency">
+                    <SelectTrigger id="payment-frequency" style={{ fontSize: '16px' }}>
                       <SelectValue placeholder="Select frequency" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="one_time">One-time Payment</SelectItem>
-                      <SelectItem value="weekly">Weekly Installments</SelectItem>
-                      <SelectItem value="biweekly">Bi-weekly Installments</SelectItem>
-                      <SelectItem value="monthly">Monthly Installments</SelectItem>
+                      {!isProgramEnded && (
+                        <>
+                          <SelectItem value="weekly">Weekly Installments</SelectItem>
+                          <SelectItem value="biweekly">Bi-weekly Installments</SelectItem>
+                          <SelectItem value="monthly">Monthly Installments</SelectItem>
+                        </>
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
