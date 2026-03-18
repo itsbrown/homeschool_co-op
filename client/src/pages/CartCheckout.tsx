@@ -253,10 +253,25 @@ export default function CartCheckout() {
   // When true, the initialization useEffect will not re-trigger createPaymentIntent
   const [hasCheckoutConflict, setHasCheckoutConflict] = useState(false);
 
-  // Calculate the ACTUAL total payable amount (class total + membership)
-  // This is used to determine if we should show the payment form or free enrollment flow
-  const actualPayableAmount = cart.total + (cart.membership?.amount || 0);
-  
+  // Authoritative pricing data from server snapshot — must be declared before actualPayableAmount
+  const [authoritativeData, setAuthoritativeData] = useState<AuthoritativeDataType | null>(null);
+
+  // SERVER-AUTHORITATIVE - never recalculate
+  // Uses snapshot.totals.payableAmount when available; cart arithmetic is only a pre-snapshot fallback.
+  const actualPayableAmount = authoritativeData?.payableAmount ?? (cart.total + (cart.membership?.amount || 0));
+
+  // Debug divergence between server and client calculations
+  if (authoritativeData?.payableAmount !== undefined) {
+    const clientCalc = cart.total + (cart.membership?.amount || 0);
+    if (Math.abs(authoritativeData.payableAmount - clientCalc) > 1) {
+      console.warn('💰 [SERVER-AUTH] payableAmount divergence detected:', {
+        server: authoritativeData.payableAmount,
+        clientCalc,
+        diff: authoritativeData.payableAmount - clientCalc
+      });
+    }
+  }
+
   // Debug cart data
   console.log('🛒 CartCheckout - cart data:', {
     itemsCount: cart.items.length,
@@ -328,15 +343,16 @@ export default function CartCheckout() {
     fetchCredits();
   }, [isAuthenticated]);
 
-  // Calculate credits to apply based on cart total
+  // SERVER-AUTHORITATIVE - never recalculate
+  // Use snapshot.credits.applied when available; Math.min is only a pre-snapshot fallback.
   useEffect(() => {
     if (applyCredits && availableCredits > 0) {
-      const maxApplicable = Math.min(availableCredits, actualPayableAmount);
-      setCreditsToApply(maxApplicable);
+      const serverApplied = authoritativeData?.creditsApplied;
+      setCreditsToApply(serverApplied ?? Math.min(availableCredits, actualPayableAmount));
     } else {
       setCreditsToApply(0);
     }
-  }, [applyCredits, availableCredits, actualPayableAmount]);
+  }, [applyCredits, availableCredits, actualPayableAmount, authoritativeData?.creditsApplied]);
 
   // Track if this is the initial load
   const [isInitialLoad, setIsInitialLoad] = useState(true);
@@ -372,8 +388,9 @@ export default function CartCheckout() {
     // If cart has items OR membership after hydration, proceed
     const hasCartContent = cart.items.length > 0 || cart.membership;
     if (hasCartContent) {
-      // Calculate actual payable amount (class total + membership)
-      const payableAmount = cart.total + (cart.membership?.amount || 0);
+      // SERVER-AUTHORITATIVE - never recalculate
+      // Use snapshot.totals.payableAmount when available; cart arithmetic is only a pre-snapshot fallback.
+      const payableAmount = authoritativeData?.payableAmount ?? (cart.total + (cart.membership?.amount || 0));
       
       // If total payable is $0 (100% discount with no membership), don't create payment intent
       // The UI will show the Free Enrollment request flow instead
@@ -413,8 +430,9 @@ export default function CartCheckout() {
       return;
     }
     
-    // Calculate actual payable amount (class total + membership)
-    const payableAmount = cart.total + (cart.membership?.amount || 0);
+    // SERVER-AUTHORITATIVE - never recalculate
+    // Use snapshot.totals.payableAmount when available; cart arithmetic is only a pre-snapshot fallback.
+    const payableAmount = authoritativeData?.payableAmount ?? (cart.total + (cart.membership?.amount || 0));
     
     // If total payable becomes $0, clear clientSecret to show Free Enrollment flow
     if (payableAmount === 0) {
@@ -496,12 +514,11 @@ export default function CartCheckout() {
     schoolSettings: any;
     appliedPromoCode: string | null;
     payableAmount: number;
+    creditsApplied: number; // SERVER-AUTHORITATIVE - from snapshot.credits.applied
     paymentPlans: PaymentPlanOption[];
     snapshotGeneratedAt?: number;
   };
 
-  const [authoritativeData, setAuthoritativeData] = useState<AuthoritativeDataType | null>(null);
-  
   const prevCartItemsRef = useRef<string>('');
   
   useEffect(() => {
@@ -570,7 +587,7 @@ export default function CartCheckout() {
           availableCredits: snapshot.credits.available
         });
         
-        // Build authoritative data object
+        // Build authoritative data object — all money fields come from the server snapshot
         const authData: AuthoritativeDataType = {
           itemsTotal: snapshot.totals.itemsTotal,
           membershipAmount: snapshot.membership.alreadyPaid ? 0 : snapshot.membership.discountedAmount,
@@ -582,7 +599,8 @@ export default function CartCheckout() {
           discounts: snapshot.pricing.discounts,
           schoolSettings: snapshot.pricing.schoolSettings,
           appliedPromoCode: promoCode, // Store the promo code used for this snapshot
-          payableAmount: snapshot.totals.payableAmount,
+          payableAmount: snapshot.totals.payableAmount,       // SERVER-AUTHORITATIVE
+          creditsApplied: snapshot.credits.applied ?? 0,     // SERVER-AUTHORITATIVE
           paymentPlans: snapshot.paymentPlans || [],
           snapshotGeneratedAt: snapshot.generatedAt
         };
@@ -781,8 +799,9 @@ export default function CartCheckout() {
               schoolSettings: conflictData.authoritative.schoolSettings || authoritativeData?.schoolSettings || null,
               // Preserve existing promo code from authoritativeData
               appliedPromoCode: authoritativeData?.appliedPromoCode ?? (cart.appliedPromoCode?.code || null),
-              // Preserve payable amount and payment plans from previous snapshot
+              // SERVER-AUTHORITATIVE - preserve payable amount and payment plans from server
               payableAmount: conflictData.authoritative.payableAmount ?? authoritativeData?.payableAmount ?? actualPayableAmount,
+              creditsApplied: conflictData.authoritative.creditsApplied ?? authoritativeData?.creditsApplied ?? 0,
               paymentPlans: conflictData.authoritative.paymentPlans ?? authoritativeData?.paymentPlans ?? []
             });
             console.log('📝 Set authoritative data from 409:', {
@@ -1374,7 +1393,8 @@ export default function CartCheckout() {
                   <Separator />
                   <div className="flex justify-between font-medium text-lg">
                     <span>Total:</span>
-                    <span>{formatCurrency(Math.max(0, cart.total + (cart.membership?.amount || 0) - creditsToApply))}</span>
+                    {/* SERVER-AUTHORITATIVE - never recalculate; uses snapshot.totals.payableAmount */}
+                    <span>{formatCurrency(actualPayableAmount)}</span>
                   </div>
                 </div>
               </CardContent>
