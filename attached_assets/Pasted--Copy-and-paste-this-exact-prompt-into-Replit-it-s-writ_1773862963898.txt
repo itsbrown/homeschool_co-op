@@ -1,0 +1,48 @@
+**Copy and paste this exact prompt into Replit** (it’s written so Replit can fix everything in one clean pass without adding extra stuff):
+
+---
+
+**Replit, here are the current screenshots after your last changes.** The Net Due bar and Outstanding Enrollments section are great progress, but the numbers are still inconsistent and confusing the parent:
+
+- Concierge / ASA Assistant still shows **$5,250** “PAYMENTS DUE” (and lists the 2 overdue scheduled payments).
+- PaymentManagement “Upcoming Payments” card/tab still shows **$5,250**.
+- PaymentManagement “Available Credits” still shows **$422** (while concierge correctly shows **$358.50**).
+- Net Due bar is using the wrong credits number ($3,628 instead of the real ~$3,691.50).
+- Inside PaymentManagement the aggregate “Outstanding Balance” is $4,050 but the per-enrollment list shows only $3,875 for joe joe (inconsistent).
+
+**Goal: Make every view show the same single source of truth:**
+- “Total Owed” / “PAYMENTS DUE” = **$4,050** everywhere (the correct effectiveBalance after deduplication).
+- “Available Credits” = **$358.50** everywhere.
+- Net Due = Total Owed minus Available Credits.
+
+**Do these exact fixes (no new UI sections, no extra logging):**
+
+1. **server/api/parent-concierge.ts**  
+   - Add (or fix) the `deduplicateEnrollments` helper exactly as it exists in PaymentManagement.tsx.  
+   - In **both** the context endpoint AND the check_payments handler:  
+     - Use the deduplicated enrollments.  
+     - Set `totalDue` = sum of `(effectiveBalance ?? remainingBalance ?? 0)` for positive balances only.  
+     - This will make the ASA Assistant widget show **$4,050** instead of $5,250.
+
+2. **client/src/components/payments/PaymentManagement.tsx**  
+   - Change the Available Credits display (and the Net Due bar) to use `creditsData?.totalAvailableCents ?? 0` (the exact field the concierge uses for $358.50).  
+   - Fix the Outstanding Balance aggregation so the card total exactly matches the sum in the “Outstanding Enrollments” list (currently $4,050 vs $3,875 — probably a missing enrollment or wrong filter).  
+   - In the “Upcoming Payments” card (the one showing $5,250): either make its dollar amount also use the effectiveBalance total ($4,050) **or** clearly relabel it “Next Scheduled Installments” and keep only the installment list.
+
+3. **Cache & consistency**  
+   - Make sure **all** payment success handlers (ScheduledPaymentDialog, CombinedPaymentDialog, and the Stripe redirect handler) invalidate `['/api/parent/enrollments']`, `['/api/parent/credits']`, `['/api/enrollments']`, and the scheduled-payments keys.  
+   - Also apply the same approved + partially_used credits filter (and expiration logic) to the admin parent-profile.ts so the admin view matches too.
+
+4. After the changes:  
+   - Restart/rebuild the app.  
+   - Hard-refresh both the Payments page and the main dashboard (Concierge).  
+   - Verify: Concierge now shows **$4,050** PAYMENTS DUE, Available Credits is **$358.50** everywhere, Net Due is correct, and Upcoming Payments card no longer contradicts the Outstanding Balance.
+
+Do **only** these changes — no extra sections or debug logs unless I ask. When it’s done, tell me the new numbers you see on both screens.
+
+---
+
+**Why this will finally work:**  
+Replit’s previous changes got 70% there but missed syncing the concierge endpoint (which is still using old scheduled-payment sums) and the credits field in PaymentManagement. This prompt forces both views to use the **exact same calculation** you already have working in the Outstanding Balance logic.
+
+Paste the whole block above into Replit, let it run, then send me the new screenshots (or just tell me the three numbers: Concierge PAYMENTS DUE, Available Credits, and Net Due). We should be done after this one round. Ready when you are!
