@@ -1393,31 +1393,16 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
           new Date(b.enrollmentDate).getTime() - new Date(a.enrollmentDate).getTime()
         );
 
-        // Find the latest enrollment and check if it has a balance due
+        // Find the latest enrollment
         const latestEnrollment = sortedEnrollments[0];
+
+        // Only pending_payment enrollments with a remaining balance belong in the cart.
+        // enrolled-status enrollments (even with installment balances) are managed by
+        // the billing/scheduled payments system, not the cart.
+        const isPendingPayment = latestEnrollment.status === 'pending_payment';
         const hasBalance = latestEnrollment.remainingBalance > 0;
-        
-        // Check if there's a fully paid enrollment (enrolled with no balance)
-        const hasFullyPaidEnrollment = sortedEnrollments.some(e => 
-          (e.status === 'enrolled' && (e.remainingBalance === 0 || e.remainingBalance === null)) ||
-          (e.paymentStatus === 'completed' && (e.remainingBalance === 0 || e.remainingBalance === null))
-        );
 
-        // Check if latest enrollment is fully paid
-        const latestIsPaid = (latestEnrollment.status === 'enrolled' && (latestEnrollment.remainingBalance === 0 || latestEnrollment.remainingBalance === null)) ||
-                           (latestEnrollment.paymentStatus === 'completed' && (latestEnrollment.remainingBalance === 0 || latestEnrollment.remainingBalance === null));
-
-        // Skip items where there's a fully paid enrollment OR latest enrollment is paid OR on waitlist
-        const isWaitlisted = latestEnrollment.status === 'waitlist';
-        // An enrolled item with a remaining balance is a valid installment due — do not skip it
-        const enrolledWithBalance = latestEnrollment.status === 'enrolled' && hasBalance;
-        const shouldSkip = !enrolledWithBalance && (hasFullyPaidEnrollment || latestIsPaid || isWaitlisted);
-
-        if (!isWaitlisted && !shouldSkip && hasBalance) {
-          // Set statusText to "Installment Due" for enrolled-status items so they are visually distinct
-          if (latestEnrollment.status === 'enrolled') {
-            latestEnrollment.statusText = 'Installment Due';
-          }
+        if (isPendingPayment && hasBalance) {
           unpaidEnrollments.push(latestEnrollment);
         }
       }
