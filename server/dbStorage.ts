@@ -4224,7 +4224,7 @@ export class DatabaseStorage implements IStorage {
   async getAvailableCredits(userId: number): Promise<Credit[]> {
     const db = await getDb();
     const now = new Date();
-    return db.select().from(credits)
+    const allCredits = await db.select().from(credits)
       .where(and(
         eq(credits.userId, userId),
         or(
@@ -4237,6 +4237,8 @@ export class DatabaseStorage implements IStorage {
         )
       ))
       .orderBy(asc(credits.expiresAt)); // FIFO - use soonest to expire first
+    // Only include credits that still have a positive remaining balance
+    return allCredits.filter(c => (c.creditAmountCents - c.usedAmountCents) > 0);
   }
 
   async getTotalAvailableCredits(userId: number): Promise<number> {

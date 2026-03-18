@@ -368,7 +368,7 @@ Remaining: $${(remaining / 100).toFixed(2)}`;
         );
         const dedupedEnrollments = deduplicateEnrollments(activeEnrollments);
         const unpaidEnrollments = dedupedEnrollments.filter((e: any) => {
-          const effectiveBalance = Math.max(0, (e.totalCost ?? 0) - (e.totalPaid ?? 0) - (e.compAmountCents ?? 0));
+          const effectiveBalance = e.effectiveBalance ?? Math.max(0, (e.totalCost ?? 0) - (e.totalPaid ?? 0) - (e.compAmountCents ?? 0));
           return effectiveBalance > 0;
         });
 
@@ -377,13 +377,13 @@ Remaining: $${(remaining / 100).toFixed(2)}`;
         }
 
         const totalDue = unpaidEnrollments.reduce((sum: number, e: any) =>
-          sum + Math.max(0, (e.totalCost ?? 0) - (e.totalPaid ?? 0) - (e.compAmountCents ?? 0)), 0
+          sum + (e.effectiveBalance ?? Math.max(0, (e.totalCost ?? 0) - (e.totalPaid ?? 0) - (e.compAmountCents ?? 0))), 0
         );
 
         let result = `Total Outstanding: $${(totalDue / 100).toFixed(2)}\n\n`;
 
         result += unpaidEnrollments.slice(0, 8).map((e: any) => {
-          const balance = Math.max(0, (e.totalCost ?? 0) - (e.totalPaid ?? 0) - (e.compAmountCents ?? 0));
+          const balance = e.effectiveBalance ?? Math.max(0, (e.totalCost ?? 0) - (e.totalPaid ?? 0) - (e.compAmountCents ?? 0));
           return `📋 $${(balance / 100).toFixed(2)} remaining — ${e.className || 'Class'}
    Child: ${e.childName || 'Unknown'}
    Paid: $${((e.totalPaid ?? 0) / 100).toFixed(2)} of $${((e.totalCost ?? 0) / 100).toFixed(2)}`;
@@ -739,11 +739,11 @@ router.get('/context', supabaseAuth, async (req: any, res) => {
     });
     const dedupedContextEnrollments = deduplicateEnrollments(nonTerminalEnrollments);
     const unpaidParentEnrollments = dedupedContextEnrollments.filter((e: any) => {
-      const effectiveBalance = Math.max(0, (e.totalCost ?? 0) - (e.totalPaid ?? 0) - (e.compAmountCents ?? 0));
+      const effectiveBalance = e.effectiveBalance ?? Math.max(0, (e.totalCost ?? 0) - (e.totalPaid ?? 0) - (e.compAmountCents ?? 0));
       return effectiveBalance > 0;
     });
     const totalDue = unpaidParentEnrollments.reduce((sum: number, e: any) =>
-      sum + Math.max(0, (e.totalCost ?? 0) - (e.totalPaid ?? 0) - (e.compAmountCents ?? 0)), 0
+      sum + (e.effectiveBalance ?? Math.max(0, (e.totalCost ?? 0) - (e.totalPaid ?? 0) - (e.compAmountCents ?? 0))), 0
     );
 
     // Keep scheduled payments for displaying upcoming due dates (not for totalDue calculation)

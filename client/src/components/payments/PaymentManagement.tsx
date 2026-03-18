@@ -1371,7 +1371,7 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
       }
       
       return acc;
-    }, { paid: 0, succeeded: 0, pending: 0, failed: 0, refunded: 0, canceled: 0, total: 0, totalPaid: 0, totalPending: 0, totalOutstanding: 0, outstandingCount: 0, successfulCount: 0, scheduledPaymentsTotal: 0, scheduledPaymentsCount: 0 });
+    }, { paid: 0, succeeded: 0, pending: 0, failed: 0, refunded: 0, canceled: 0, total: 0, totalPaid: 0, totalPending: 0, totalOutstanding: 0, outstandingCount: 0, successfulCount: 0, scheduledPaymentsTotal: 0, scheduledPaymentsCount: 0, membershipOutstanding: 0 });
     
     // Add outstanding balances from enrollments.
     // Prefer effectiveBalance (canonical server-computed field); fall back to remainingBalance for compat.
@@ -1380,9 +1380,9 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
     );
     stats.outstandingCount = outstandingData.length;
 
-    // Add membership fees to outstanding balance (denylist per asa-payment-patterns gold-standard).
+    // Compute membership outstanding separately (displayed as a labelled line item at the bottom of the list).
+    // Added to card total so the card total equals the sum of all visible line items (enrollments + membership).
     // 'grace_period' is intentionally included — fee is overdue but membership is still active.
-    // Use ?? not || for balance fallback — || treats a genuine $0 balance as falsy.
     const activeMemberships = (membershipEnrollments || []).filter(
       (m: any) => !['expired', 'suspended'].includes(m.status)
     );
@@ -1390,6 +1390,8 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
       const balance = m.remainingBalance ?? Math.max(0, m.amount - (m.amountPaid ?? 0));
       return total + Math.max(0, balance);
     }, 0);
+    stats.membershipOutstanding = membershipOutstanding;
+    // Include membership in total so the card total matches the full visible list (enrollments + membership line item).
     stats.totalOutstanding += membershipOutstanding;
 
     // Add scheduled/upcoming payments from database (single source of truth)
@@ -1505,7 +1507,7 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
             
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Upcoming Payments</CardTitle>
+                <CardTitle className="text-sm font-medium">Next Scheduled Installments</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{formatCurrency(paymentStats.scheduledPaymentsTotal || 0)}</div>
@@ -1533,7 +1535,7 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-amber-600">
-                  {isLoadingCredits ? "Loading..." : (creditsData?.totalAvailableFormatted || '$0.00')}
+                  {isLoadingCredits ? "Loading..." : formatCurrency(creditsData?.totalAvailableCents || 0)}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
                   {creditsData?.credits?.length || 0} credit{(creditsData?.credits?.length || 0) !== 1 ? 's' : ''} on account
@@ -1555,7 +1557,7 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
                     <div className="text-muted-foreground self-center hidden sm:block">−</div>
                     <div>
                       <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Credits Available</p>
-                      <p className="text-xl font-bold text-amber-600">{creditsData?.totalAvailableFormatted || '$0.00'}</p>
+                      <p className="text-xl font-bold text-amber-600">{formatCurrency(creditsData?.totalAvailableCents || 0)}</p>
                     </div>
                     <div className="text-muted-foreground self-center hidden sm:block">=</div>
                     <div>
@@ -1571,14 +1573,14 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
           )}
           
           {/* Outstanding Enrollments — per-enrollment effective_balance breakdown */}
-          {outstandingBalances && outstandingBalances.length > 0 && (
+          {((outstandingBalances && outstandingBalances.length > 0) || (paymentStats.membershipOutstanding || 0) > 0) && (
             <Card>
               <CardHeader>
                 <CardTitle>Outstanding Enrollments</CardTitle>
                 <CardDescription>Remaining balance per enrollment</CardDescription>
               </CardHeader>
               <CardContent className="space-y-2">
-                {outstandingBalances.map((enrollment: any) => {
+                {(outstandingBalances || []).map((enrollment: any) => {
                   const balance = enrollment.effectiveBalance ?? enrollment.remainingBalance ?? 0;
                   return (
                     <div key={enrollment.id} className="flex justify-between items-center p-3 border rounded-lg">
@@ -1595,6 +1597,17 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
                     </div>
                   );
                 })}
+                {(paymentStats.membershipOutstanding || 0) > 0 && (
+                  <div className="flex justify-between items-center p-3 border rounded-lg">
+                    <div>
+                      <p className="font-medium text-sm">Annual Membership Fee</p>
+                      <p className="text-xs text-muted-foreground">Membership dues</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-medium text-orange-600">{formatCurrency(paymentStats.membershipOutstanding)}</p>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}
