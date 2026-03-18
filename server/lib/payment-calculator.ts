@@ -17,6 +17,22 @@ export interface PaymentSchedule {
 }
 
 /**
+ * Distribute remainder cents evenly across all payments (round-robin).
+ * Prevents a visually jarring "giant final payment" caused by lumping all
+ * rounding cents onto the last installment.
+ *
+ * Example: $1300 over 9 payments → base=$144, remainder=4¢
+ *   → [145, 145, 145, 145, 144, 144, 144, 144, 144]  (first 4 get +1¢)
+ */
+function distributeRemainder(base: number, remainder: number, count: number): number[] {
+  const amounts = new Array(count).fill(base);
+  for (let i = 0; i < remainder; i++) {
+    amounts[i % count] += 1;
+  }
+  return amounts;
+}
+
+/**
  * Calculate the number of days between two dates
  */
 function daysBetween(start: Date, end: Date): number {
@@ -62,6 +78,8 @@ export function calculatePaymentSchedule(
   endDate: Date,
   frequency: PaymentFrequency
 ): PaymentSchedule {
+  if (totalAmountCents < 50) throw new Error('Amount below Stripe minimum (50 cents)');
+
   // Validate dates first
   const validStartDate = safeParseDate(startDate, 'startDate');
   const validEndDate = safeParseDate(endDate, 'endDate');
@@ -149,17 +167,18 @@ export function calculatePaymentSchedule(
   }
   
   const numberOfPayments = paymentDates.length;
-  
-  // Calculate payment amounts based on actual number of payments
-  const basePaymentAmount = Math.floor(totalAmountCents / numberOfPayments);
-  const remainder = totalAmountCents - (basePaymentAmount * numberOfPayments);
-  const finalPaymentAmount = basePaymentAmount + remainder; // Add any rounding difference to final payment
-  
+
+  // Distribute remainder cents evenly (round-robin) so no single payment
+  // is visibly larger than the others by more than 1 cent.
+  const base = Math.floor(totalAmountCents / numberOfPayments);
+  const remainder = totalAmountCents - (base * numberOfPayments);
+  const paymentAmounts = distributeRemainder(base, remainder, numberOfPayments);
+
   return {
     totalAmount: totalAmountCents,
     numberOfPayments,
-    paymentAmount: basePaymentAmount,
-    finalPaymentAmount,
+    paymentAmount: paymentAmounts[0],
+    finalPaymentAmount: paymentAmounts[numberOfPayments - 1],
     paymentDates,
     frequency,
     startDate: new Date(startDate),
@@ -221,16 +240,16 @@ export function calculateCheckoutBiweeklySchedule(
   }
   
   const totalPayments = allPaymentDates.length;
-  
-  const basePaymentAmount = Math.floor(totalAmountCents / totalPayments);
-  const remainder = totalAmountCents - (basePaymentAmount * totalPayments);
-  const finalPaymentAmount = basePaymentAmount + remainder;
-  
+
+  const base = Math.floor(totalAmountCents / totalPayments);
+  const remainder = totalAmountCents - (base * totalPayments);
+  const paymentAmounts = distributeRemainder(base, remainder, totalPayments);
+
   return {
-    firstPaymentAmount: basePaymentAmount,
+    firstPaymentAmount: paymentAmounts[0],
     numberOfPayments: totalPayments,
-    paymentAmount: basePaymentAmount,
-    finalPaymentAmount,
+    paymentAmount: paymentAmounts[0],
+    finalPaymentAmount: paymentAmounts[totalPayments - 1],
     paymentDates: allPaymentDates,
     totalAmount: totalAmountCents
   };
