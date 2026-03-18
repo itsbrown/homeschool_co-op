@@ -1395,8 +1395,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         // Find the latest enrollment and check if it has a balance due
         const latestEnrollment = sortedEnrollments[0];
-        const hasBalance = latestEnrollment.remainingBalance > 0 && 
-                          latestEnrollment.paymentSystemVersion === 'v2_stripe';
+        const hasBalance = latestEnrollment.remainingBalance > 0;
         
         // Check if there's a fully paid enrollment (enrolled with no balance)
         const hasFullyPaidEnrollment = sortedEnrollments.some(e => 
@@ -1410,9 +1409,15 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         // Skip items where there's a fully paid enrollment OR latest enrollment is paid OR on waitlist
         const isWaitlisted = latestEnrollment.status === 'waitlist';
-        const shouldSkip = hasFullyPaidEnrollment || latestIsPaid || isWaitlisted;
+        // An enrolled item with a remaining balance is a valid installment due — do not skip it
+        const enrolledWithBalance = latestEnrollment.status === 'enrolled' && hasBalance;
+        const shouldSkip = !enrolledWithBalance && (hasFullyPaidEnrollment || latestIsPaid || isWaitlisted);
 
-        if (!isWaitlisted && !shouldSkip && (hasBalance || (latestEnrollment.status === 'pending_payment' && latestEnrollment.remainingBalance > 0))) {
+        if (!isWaitlisted && !shouldSkip && hasBalance) {
+          // Set statusText to "Installment Due" for enrolled-status items so they are visually distinct
+          if (latestEnrollment.status === 'enrolled') {
+            latestEnrollment.statusText = 'Installment Due';
+          }
           unpaidEnrollments.push(latestEnrollment);
         }
       }
@@ -1433,8 +1438,13 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         let statusText = 'Payment Required';
 
         // Determine appropriate status text based on payment state
-        if (enrollment.status === 'partially_paid') {
+        if (enrollment.statusText) {
+          // Preserve explicitly-set statusText (e.g. "Installment Due" for enrolled-status items)
+          statusText = enrollment.statusText;
+        } else if (enrollment.status === 'partially_paid') {
           statusText = 'Partially Paid';
+        } else if (enrollment.status === 'enrolled' && remainingBalance > 0) {
+          statusText = 'Installment Due';
         } else if (enrollment.paymentSystemVersion === 'v2_stripe' && remainingBalance > 0) {
           statusText = 'Balance Due';
         } else if (enrollment.paymentSystemVersion === 'v2_stripe') {

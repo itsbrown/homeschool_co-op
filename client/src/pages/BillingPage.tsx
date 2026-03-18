@@ -745,6 +745,7 @@ function UpcomingPaymentsTab({
     queryClient.invalidateQueries({ queryKey: ['scheduled-payments-upcoming'] });
     queryClient.invalidateQueries({ queryKey: ['billing-summary'] });
     queryClient.invalidateQueries({ queryKey: ['/api/payment-history/history'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/parent/enrollments'] });
     
     toast({
       title: "Payment Successful!",
@@ -1355,6 +1356,7 @@ export default function BillingPage() {
       queryClient.invalidateQueries({ queryKey: ['/api/enrollments'] });
       queryClient.invalidateQueries({ queryKey: ['/api/parent/memberships'] });
       queryClient.invalidateQueries({ queryKey: ['stripe-subscription-schedules'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/parent/enrollments'] });
       
       // Show appropriate toast based on status
       if (redirectStatus === 'succeeded') {
@@ -1968,6 +1970,7 @@ export default function BillingPage() {
                           queryClient.invalidateQueries({ queryKey: ['/api/billing/summary'] });
                           queryClient.invalidateQueries({ queryKey: ['/api/enrollments'] });
                           queryClient.invalidateQueries({ queryKey: ['scheduled-payments-upcoming'] });
+                          queryClient.invalidateQueries({ queryKey: ['/api/parent/enrollments'] });
                           
                           console.log('✅ Payment success handling complete');
                         }}

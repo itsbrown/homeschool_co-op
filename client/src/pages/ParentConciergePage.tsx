@@ -98,6 +98,8 @@ function formatCurrency(cents: number): string {
 }
 
 function ContextSidebar({ context, isLoading }: { context: ContextData | null; isLoading: boolean }) {
+  const { openCart } = useCart();
+
   if (isLoading) {
     return (
       <div className="space-y-4 p-4">
@@ -145,6 +147,13 @@ function ContextSidebar({ context, isLoading }: { context: ContextData | null; i
                 ))}
               </div>
             )}
+            <Button
+              size="sm"
+              className="mt-3 w-full"
+              onClick={openCart}
+            >
+              Pay Now
+            </Button>
           </CardContent>
         </Card>
       )}
@@ -251,6 +260,8 @@ function ContextSidebar({ context, isLoading }: { context: ContextData | null; i
 }
 
 function MobileSidebarCards({ context, isLoading }: { context: ContextData | null; isLoading: boolean }) {
+  const { openCart } = useCart();
+
   if (isLoading || !context) {
     return (
       <div className="flex gap-3 px-4 py-3 overflow-x-auto">
@@ -261,7 +272,7 @@ function MobileSidebarCards({ context, isLoading }: { context: ContextData | nul
     );
   }
 
-  const cards: Array<{ icon: any; label: string; value: string; color: string }> = [];
+  const cards: Array<{ icon: any; label: string; value: string; color: string; onClick?: () => void }> = [];
 
   if (context.payments.totalDue > 0) {
     cards.push({
@@ -269,6 +280,7 @@ function MobileSidebarCards({ context, isLoading }: { context: ContextData | nul
       label: context.payments.overdueCount > 0 ? 'Overdue' : 'Due',
       value: formatCurrency(context.payments.totalDue),
       color: context.payments.overdueCount > 0 ? 'text-red-600' : 'text-amber-600',
+      onClick: openCart,
     });
   }
 
@@ -304,7 +316,14 @@ function MobileSidebarCards({ context, isLoading }: { context: ContextData | nul
   return (
     <div className="flex gap-2 px-4 py-2 overflow-x-auto scrollbar-hide border-b bg-muted/30">
       {cards.map((card, i) => (
-        <div key={i} className="flex items-center gap-2 min-w-fit bg-background rounded-lg px-3 py-2 border">
+        <div
+          key={i}
+          className={cn(
+            "flex items-center gap-2 min-w-fit bg-background rounded-lg px-3 py-2 border",
+            card.onClick && "cursor-pointer hover:bg-muted/50"
+          )}
+          onClick={card.onClick}
+        >
           <card.icon className={cn("h-4 w-4", card.color)} />
           <div>
             <div className="text-[10px] text-muted-foreground uppercase">{card.label}</div>
