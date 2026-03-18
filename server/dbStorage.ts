@@ -1,4 +1,4 @@
-import { eq, and, desc, asc, like, or, sql, lt, gt, gte, lte, isNull, inArray } from 'drizzle-orm';
+import { eq, and, desc, asc, like, or, sql, lt, gt, gte, lte, isNull, inArray, not } from 'drizzle-orm';
 import { getDb } from './db';
 import { IStorage } from './storage';
 import {
@@ -1192,6 +1192,27 @@ export class DatabaseStorage implements IStorage {
     }
 
     return { cancelled, skipped, errors };
+  }
+
+  async getEnrollmentFamiliesByPeriod(schoolId: number, startDate: string, endDate: string): Promise<{ parentEmail: string; parentId: number; childName: string; className: string }[]> {
+    const db = await getDb();
+    const rows = await db
+      .select({
+        parentEmail: programEnrollments.parentEmail,
+        parentId: programEnrollments.parentId,
+        childName: programEnrollments.childName,
+        className: programEnrollments.className,
+      })
+      .from(programEnrollments)
+      .where(
+        and(
+          eq(programEnrollments.schoolId, schoolId),
+          gte(programEnrollments.programStartDate, startDate),
+          lte(programEnrollments.programStartDate, endDate),
+          not(inArray(programEnrollments.status, ['cancelled', 'waitlist', 'withdrawn', 'failed']))
+        )
+      );
+    return rows;
   }
 
   // Membership Enrollment methods

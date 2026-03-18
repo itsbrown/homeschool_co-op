@@ -78,6 +78,7 @@ const StaffPermissionsPage = lazy(() => import("./pages/schooladmin/StaffPermiss
 const LocationEnrollmentsPage = lazy(() => import("./pages/schooladmin/LocationEnrollmentsPage"));
 const RefundHistoryPage = lazy(() => import("./pages/schooladmin/RefundHistoryPage"));
 const FinancialReportsPage = lazy(() => import("./pages/schooladmin/FinancialReportsPage"));
+const RetentionReportPage = lazy(() => import("./pages/schooladmin/RetentionReportPage"));
 const FundraiserStorePage = lazy(() => import("./pages/FundraiserStorePage"));
 const FundraiserSuccessPage = lazy(() => import("./pages/FundraiserSuccessPage"));
 const DynamicFormPage = lazy(() => import("./pages/DynamicFormPage"));
@@ -637,6 +638,7 @@ function Router() {
       <Route path="/school-admin/location-enrollments" component={LocationEnrollmentsPage} />
       <Route path="/school-admin/refunds" component={RefundHistoryPage} />
       <Route path="/school-admin/financial-reports" component={FinancialReportsPage} />
+      <Route path="/school-admin/retention-report" component={RetentionReportPage} />
       <Route path="/fundraiser/:campaignId/:familySlug">
         {(params) => <FundraiserStorePage campaignId={params?.campaignId || ''} familySlug={params?.familySlug || ''} />}
       </Route>

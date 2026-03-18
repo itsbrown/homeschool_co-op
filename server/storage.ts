@@ -294,6 +294,7 @@ export interface IStorage {
   getStripeCustomerIdsByParentEmail(parentEmail: string): Promise<string[]>;
   getStripeLinkedEnrollmentsByParentEmail(parentEmail: string): Promise<ProgramEnrollment[]>;
   getEnrollmentsByParentEmail(parentEmail: string): Promise<ProgramEnrollment[]>;
+  getEnrollmentFamiliesByPeriod(schoolId: number, startDate: string, endDate: string): Promise<{ parentEmail: string; parentId: number; childName: string; className: string }[]>;
 
   // Membership Enrollment methods
   getMembershipEnrollmentById(id: number): Promise<MembershipEnrollment | undefined>;
@@ -2158,6 +2159,23 @@ export class MemStorage implements IStorage {
   async getEnrollmentsByParentEmail(parentEmail: string): Promise<ProgramEnrollment[]> {
     return Array.from(this.programEnrollmentsStore.values())
       .filter(e => e.parentEmail === parentEmail);
+  }
+
+  async getEnrollmentFamiliesByPeriod(schoolId: number, startDate: string, endDate: string): Promise<{ parentEmail: string; parentId: number; childName: string; className: string }[]> {
+    const terminalStatuses = ['cancelled', 'waitlist', 'withdrawn', 'failed'];
+    return Array.from(this.programEnrollmentsStore.values())
+      .filter(e => {
+        if (e.schoolId !== schoolId) return false;
+        if (terminalStatuses.includes(e.status)) return false;
+        if (!e.programStartDate) return false;
+        return e.programStartDate >= startDate && e.programStartDate <= endDate;
+      })
+      .map(e => ({
+        parentEmail: e.parentEmail,
+        parentId: e.parentId,
+        childName: e.childName,
+        className: e.className,
+      }));
   }
 
   // Membership Enrollment methods
@@ -5989,6 +6007,10 @@ import { DatabaseStorage } from "./dbStorage";
       return await db.select()
         .from(programEnrollments)
         .where(eq(programEnrollments.parentEmail, parentEmail));
+    }
+
+    async getEnrollmentFamiliesByPeriod(schoolId: number, startDate: string, endDate: string): Promise<{ parentEmail: string; parentId: number; childName: string; className: string }[]> {
+      return this.dbStorage.getEnrollmentFamiliesByPeriod(schoolId, startDate, endDate);
     }
 
     async createEnrollment(enrollment: any): Promise<any> {

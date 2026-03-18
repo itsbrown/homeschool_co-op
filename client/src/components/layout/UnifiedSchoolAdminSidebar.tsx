@@ -114,6 +114,7 @@ const adminNavGroups: NavGroup[] = [
     icon: Wallet,
     items: [
       { title: 'Financial Reports', href: '/school-admin/financial-reports', icon: BarChart3 },
+      { title: 'Retention Report', href: '/school-admin/retention-report', icon: Users },
       { title: 'Manual Payments', href: '/schools/manual-payments', icon: CreditCard },
       { title: 'Discounts', href: '/schools/discounts', icon: Target },
       { title: 'Credits', href: '/school-admin/credits', icon: Coins },
