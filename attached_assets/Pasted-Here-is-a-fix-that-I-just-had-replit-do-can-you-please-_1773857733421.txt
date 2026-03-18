@@ -1,0 +1,389 @@
+Here is a fix that I just had replit do - can you please do your best to understand it and ask me any clarifying questions including asking for files if you need. But, replit is introducing errors every time it makes an update and most updates dont make sense: Now I have all the information I need. Let me implement the four fixes:
+Fix 1: Auto-heal stale scheduled payments in /upcoming endpoint
+Fix 2: Fix outstanding balance display in PaymentManagement.tsx to properly use effectiveBalance (the server already returns remainingBalance = effectiveBalance from /api/parent/enrollments)
+Fix 3: Add net-due summary to PaymentManagement.tsx
+Fix 4: Fix cache invalidation
+Let me also look at what the admin credits view shows to understand the $358.50 vs $422 discrepancy. The task says both show "parent/credits" data. Since both access the same endpoint, the discrepancy might be that one call happens before the other or one uses a different filtering approach. Actually re-reading the task: "The parent dashboard shows $358.50 while the admin view shows $422" - this could be the admin "parent profile view" (admin looking at a specific parent's credits) vs what the parent sees themselves. Let me check:
+Now I understand the credits discrepancy. The admin view in parent-profile.ts filters credits by school: allCredits.filter(c => adminSchoolIds.includes(c.schoolId)). If a credit doesn't have a school_id or has a school_id outside the admin's schools, it gets excluded. The parent sees ALL their credits regardless of school. So the admin would see fewer credits than the parent if some credits have no school_id or belong to a different school. But the task says admin shows $422 and parent shows $358.50 - meaning admin sees MORE. This suggests that the admin sees credits the parent doesn't. This is confusing.
+Looking more carefully at /api/parent/credits (line 936 in parent.ts):
+textconst allCredits = await storage.getCredits({ userId: user.id });
+const totalAvailableCents = allCredits.reduce((sum, credit) => {
+if (credit.status === 'approved' || credit.status === 'partially_used') {
+It only counts approved and partially_used. What if the parent dashboard shows a different amount than expected because pending credits are being excluded when the admin's view includes them?
+Actually, there's a critical clue: the parent dashboard's Credits tab shows credit.status === 'approved' or credit.status === 'partially_used' for the totalAvailableCents. But ALL credits are returned in the credits array, including pending/rejected ones. The totalAvailableCents only counts approved/partially_used ones.
+The admin view in parent-profile.ts shows totalCreditAmountCents: credits.reduce((sum, c) => sum + c.creditAmountCents, 0) - which sums ALL credits regardless of status! This would include pending credits.
+So the discrepancy is:
+
+Parent dashboard shows only approved/partially_used credits = $358.50
+Admin shows ALL credits (including pending) = $422
+
+The fix should be to make both use the same calculation: only count approved/partially_used credits. The admin view should be fixed to show the same "available balance" (approved + partially_used only), while still showing ALL credits in the details table.
+Now let me make all four fixes. I'll start with the server-side changes (auto-heal in scheduled-payments, fix the parent-profile admin credits total), then move to the frontend changes (net-due summary, cache invalidation, outstanding balance display).
+Fix 1: Auto-heal stale scheduled payments in /upcoming endpoint
+Now let me fix the admin view credits total in parent-profile.ts to show available credits (approved + partially_used only):
+Good. Now let me work on the PaymentManagement.tsx frontend changes. First, let me read the relevant sections:
+Good. The outstandingBalances computation is correct - it filters by remainingBalance > 0 and uses enrollment.remainingBalance. The server already computes remainingBalance correctly as effectiveBalance.
+Now let me look for where the PaymentManagement renders the stats cards and where I should add the net-due summary:
+Now I see the existing stats cards. I need to add the net-due summary (Total Owed · Credits Available · Net Due) below or above the existing stats cards. Looking at the current layout, there are already stats cards showing Outstanding Balance and Available Credits. The "Net Due" = Outstanding Balance - Available Credits. Let me add a prominent net-due summary after the existing stats card grid.
+But first let me find where credits data is queried and how it's structured:
+Now let me look at the cache invalidation in PaymentManagement:
+Good - the cache invalidation at lines 392-396 already includes ['/api/parent/enrollments']. Let me look at line 417-419 to see what's missing there:
+I see that handleSuccess at line 411 (in the payment modal) is missing ['/api/parent/enrollments'] and ['/api/parent/credits']. Let me fix this:
+Good. Now let me add the "Total Owed · Credits Available · Net Due" summary. I'll add it after the existing stats cards grid as a highlighted summary bar. Let me also check what's just after the stats grid:
+Now I'll add the Net Due summary right after the 5-card stats grid (after the closing </div> tag at line 1534):
+Now I need to check that creditsData.totalAvailableCents is actually returned by the backend. Let me check the parent.ts /credits endpoint:
+totalAvailableCents is already returned by the backend at line 962. The Net Due calculation uses creditsData?.totalAvailableCents || 0 which is correct.
+Now let me also verify the outstandingBalances useMemo logic. The current logic groups enrollments by classId-childId and picks the latest enrollment, then checks hasBalance || (!hasFullyPaidEnrollment && latestEnrollment.status === 'pending_payment' && latestEnrollment.remainingBalance > 0). This logic already uses remainingBalance which the server sets to effectiveBalance. The paymentStats.totalOutstanding then sums enrollment.remainingBalance from the filtered list. This looks correct.
+Let me check whether there are units issues - the totalOutstanding is in cents and creditsData.totalAvailableCents is also in cents:
+formatCurrency divides by 100, so everything is in cents. The totalOutstanding accumulates enrollment.remainingBalance - let me verify what units that is in:
+remainingBalance is set to effectiveBalance which is in cents (since totalCost, totalPaid, compAmountCents are all in cents per the schema).
+The Net Due calculation is:
+
+paymentStats.totalOutstanding = sum of enrollment.remainingBalance (cents)
+creditsData.totalAvailableCents (cents)
+Both in cents, and formatCurrency handles the /100 conversion
+
+This is correct! Let me now check if there's a Parent Dashboard "Payments Due" widget that uses a stale balance source:
+Now let me look at the parent dashboard widget that shows payment-related balance amounts - specifically looking for the widget that shows "Payments Due":
+The parent dashboard "Payments" widget currently shows the count of unpaid enrollments, not the total balance amount. The task mentions a "Payments Due" widget - this is likely the widget at line 727. Let me see if this paymentStatus !== 'completed' filter is correct vs. using remainingBalance > 0.
+Looking at the task description again: "The parent-facing 'Payments Due' widget, parent payment management view, and admin overview show different numbers." Let me look at what specific values are being compared and see if there's a total payments amount widget that I'm missing:
+The parent dashboard doesn't have a specific "total amount due in dollars" widget - it only shows the count of unpaid enrollments. So the task's "Payments Due widget" likely refers to the scheduled payments widget or the overall payment balance view in PaymentManagement.
+Let me look at the scheduled payments widget in the parent dashboard to see if there's a total $ amount being shown there:
+The parent dashboard doesn't seem to have a dedicated "Payments Due" total amount widget. Let me verify the updateScheduledPaymentStatus method exists in storage:
+updateScheduledPaymentStatus exists. Let me now verify the full state of the auto-heal change in scheduled-payments.ts is correct by checking the pending filter - we only filter pending | processing but want to auto-heal both pending and overdue:
+The current filter only includes pending | processing but not overdue. The auto-heal check in the code already handles if payment.status === 'pending' || payment.status === 'overdue' but the initial filter doesn't include overdue payments. I need to also include overdue in the initial pendingPayments filter so that stale overdue ones can be auto-healed:
+Now let me also verify there are no TypeScript issues by checking if enrollment.compAmountCents exists in the ProgramEnrollment type:
+Good. compAmountCents exists in the schema. Now let me check if getProgramEnrollmentById returns the full enrollment object with these fields:
+getProgramEnrollmentById returns ProgramEnrollment which has compAmountCents. The types are correct.
+Now let me verify the app is running and check for any build errors:
+Checked console and system logs
+The "Start application" workflow is running. Now let me verify there are no TypeScript errors by checking the specific code changes. Let me also verify the outstandingBalances logic handles the case where remainingBalance might already be net of credits (it shouldn't be - the server returns effectiveBalance which is totalCost - totalPaid - compAmountCents, not subtracting credits):
+The logic is:
+
+effectiveBalance = Math.max(0, totalCost - totalPaid - compAmountCents)
+This doesn't subtract credits - credits reduce totalPaid when applied at payment time
+So totalOutstanding = sum of remaining enrollment balances (before applying any available but unspent credits)
+totalAvailableCents = approved/partially_used credits that could be applied to pay off the balance
+
+This is correct for the Net Due summary: Total Owed (what's remaining to pay) - Credits Available (what could be applied) = Net Due (actual cash needed).
+Now let me also check if there are any issues with the updateScheduledPaymentStatus type:
+Let me verify there are no compilation issues by checking the Vite dev server output more carefully:
+No errors in the logs. Let me restart the app to see if the code compiles cleanly with the changes:
+The app is running fine. No TypeScript errors in the server. The DB errors are pre-existing issues from no live database connection in development mode. Let me also check that the Vite frontend build didn't fail by looking for build errors more carefully:
+Good - the "Database connection not available" errors are pre-existing issues in dev mode (DB uses PostgreSQL in production). There are no TypeScript or build errors for my changes.
+Now let me also verify one more thing - the admin parent profile view needs to show totalAvailableCreditCents which I've added. Let me check if the admin frontend reads this field and if we need to update the frontend to use totalAvailableCreditCents instead of the old computed total:
+I can see the admin ParentProfilePage.tsx frontend shows the credits summary. Currently it shows totalCreditAmountCents which before my fix was ALL credits (pending + approved). Now that I've fixed the backend to filter to approved || partially_used, the numbers will match what the parent sees.
+Let me look at lines 2806-2814 in ParentProfilePage.tsx to also add totalAvailableCreditCents to the type interface:
+Now let me also update the admin UI to use the totalAvailableCreditCents directly from the backend (which now filters properly to approved || partially_used):
+Good. Let me now prepare the commit message and verify everything is complete. Let me do a final review of all my changes:
+Summary of changes made:
+
+server/api/scheduled-payments.ts:
+
+   * Extended pendingPayments filter to include overdue status (so stale overdue payments are picked up)
+   * Added auto-heal logic: when fetching upcoming payments, cross-references each pending/overdue payment's enrollment effective_balance (computed as totalCost - totalPaid - compAmountCents); if <= 0, cancels the scheduled payment and excludes it from results
+
+server/api/parent-profile.ts:
+
+   * Fixed totalCreditAmountCents and totalCreditUsedCents to filter only approved and partially_used credits (previously counted ALL credits including pending ones, causing the discrepancy where admin showed $422 while parent saw $358.50)
+   * Added new totalAvailableCreditCents field to the summary (credits.amount - credits.used for approved/partially_used only)
+
+client/src/components/payments/PaymentManagement.tsx:
+
+   * Fixed handleSuccess in the payment modal: added missing ['/api/parent/enrollments'], ['/api/parent/credits'], ['/api/enrollments'] query invalidations
+   * Added a "Total Owed · Credits Available · Net Due" summary bar below the stats cards in the Overview tab
+
+client/src/pages/schools/ParentProfilePage.tsx:
+
+   * Added totalAvailableCreditCents to the admin profile summary TypeScript type
+   * Updated the admin credit summary UI to use totalAvailableCreditCents for the "Available Balance" display and renamed "Total Credits" to "Approved Credits" for clarity
+Now let me also propose follow-up tasks and then merge to main:
+The proposeFollowUpTasks callback is not available in this context. That's okay - the main task is complete. Let me mark the task as done:
+The code review identified several issues I need to fix. Let me address them all:
+
+Cache invalidation is incomplete across multiple payment handlers
+Credits discrepancy needs to be resolved at the actual /api/parent/credits source
+Outstanding balance needs to explicitly use effective_balance
+
+Let me first find all payment success handlers in PaymentManagement.tsx:
+Let me read the specific payment handlers to understand their full context:
+I can see the issues clearly. The CombinedPaymentDialog.handleCreditOnlyPayment (line 851) is missing ['/api/enrollments']. The CombinedPaymentDialog.handleSuccess (line 866) is missing both ['/api/parent/enrollments'] and ['/api/enrollments']. The ScheduledPaymentDialog.handleCreditOnlyPayment at line 396 is missing ['/api/enrollments'].
+Let me fix all three:
+Now fix the CombinedPaymentDialog - both handleCreditOnlyPayment (line ~846) and handleSuccess (line ~866):
+Good. Now let me address the code review's concern about remainingBalance vs explicit effective_balance. The review notes:
+"PaymentManagement.tsx still aggregates enrollment.remainingBalance... Even if backend currently recomputes and places it into remainingBalance, this does not satisfy the stated contract and is brittle against future regressions."
+The backend already sends remainingBalance = effectiveBalance from /api/parent/enrollments. The review wants us to use an explicit effectiveBalance field name to make the intent clear and avoid future confusion. Let me check what the API actually returns and update the frontend to use an explicit field:
+Good. The backend sends remainingBalance which is actually effectiveBalance. The code review's concern is that the field name remainingBalance is ambiguous - it could revert to using the stale stored column in future. The best fix is to add an explicit effectiveBalance field alongside remainingBalance in the backend response, and update the frontend to use that explicit field.
+Let me update the backend to also send effectiveBalance explicitly:
+Now let me update the PaymentManagement.tsx frontend to explicitly use effectiveBalance instead of remainingBalance in the outstanding balance computations:
+Now I need to update the outstandingBalances useMemo to use effectiveBalance instead of remainingBalance:
+Now update the paymentStats.totalOutstanding to use effectiveBalance:
+Now let me address the credits discrepancy concern from the code review. The review says:
+"changes were made to parent-profile.ts and ParentProfilePage.tsx, but the task called out mismatch between parent dashboard/payment views and admin overview via /api/parent/credits. This commit does not change ParentDashboard.tsx or /api/parent/credits behavior"
+Let me check the /api/parent/credits endpoint to understand what it returns and verify the ParentDashboard.tsx shows the correct amount:
+The /api/parent/credits endpoint at line 916 is correct - it already filters totalAvailableCents to only approved || partially_used credits. Both ParentDashboard.tsx and PaymentManagement.tsx call this same endpoint, so they should show the same credit amount.
+The credits discrepancy between parent ($358.50) and admin ($422) was that the admin's parent-profile.ts was computing totalCreditAmountCents as a sum of ALL credits (including pending ones). I've already fixed that.
+Now let me verify the ParentDashboard.tsx credits call:
+The ParentDashboard.tsx calls /api/parent/credits and shows creditsData?.totalAvailableFormatted - exactly the same as PaymentManagement.tsx. So both parent views should show the same credits total, which comes from /api/parent/credits filtering to approved || partially_used. This is already correct.
+The discrepancy the task mentions ($358.50 vs $422) is specifically between the parent view (via /api/parent/credits with approved/partially_used filter) and the admin view (via /api/parent-profile/{id} which previously counted ALL credits). My fix to parent-profile.ts addresses exactly this discrepancy.
+Now let me also check if there's a ParentDashboard.tsx that shows payment balance amount (not just count) and whether it uses remainingBalance vs effectiveBalance:
+The ParentDashboard "Payments" widget uses e.paymentStatus !== 'completed' which is a count filter. For the task's description of "Payments Due" widget showing a dollar amount, let me check if enrollmentsData in the dashboard is calling a different endpoint:
+The ParentDashboard.tsx uses queryKey: ["/api/parent/enrollments"] which calls the same /api/parent/enrollments endpoint - now returning effectiveBalance alongside remainingBalance. The "Payments" widget at line 734 counts enrollments where paymentStatus !== 'completed' - a count metric, not a dollar amount.
+The task's description of "Payments Due" widget showing different dollars vs PaymentManagement is about the total outstanding dollar amounts. In PaymentManagement.tsx the "Outstanding Balance" card shows the sum of effectiveBalance for all unpaid enrollments. The dashboard's "Payments" widget shows only a count.
+The actual financial discrepancy is between what the parent sees in PaymentManagement.tsx and what the admin sees in ParentProfilePage.tsx. My fixes address that by:
+
+Making the backend also return effectiveBalance explicitly
+Making PaymentManagement.tsx use effectiveBalance ?? remainingBalance
+Making admin parent-profile.ts filter credits correctly to match parent view
+
+Let me now verify the complete status of all the payment handler invalidations to make sure I haven't missed any other handlers:
+There are exactly 2 handleCreditOnlyPayment and 2 handleSuccess functions in the file - the ScheduledPaymentDialog (lines 359 and 412) and the CombinedPaymentDialog (lines 819 and 868). I've fixed all 4 of them.
+Let me do a final check of the invalidation queries to verify everything looks complete:
+All 4 payment success handlers now have complete cache invalidation covering:
+
+['/api/payment-history']
+['/api/scheduled-payments']
+['scheduled-payments-upcoming']
+['/api/parent/enrollments'] ✅
+['/api/parent/credits'] ✅
+['/api/enrollments'] ✅
+
+Lines 1062-1067 are a different handler (possibly for direct enrollment payment) which already has both enrollment keys but is missing ['/api/parent/credits']. Let me check:
+This is the Stripe redirect handler - it fires when the user returns from a Stripe payment. Let me add ['/api/parent/credits'] to it as well for completeness:
+All changes are in place. Let me update the commit message to reflect all the improvements:
+The code review approved with comments. The two comments are:
+
+The /api/scheduled-payments/grouped endpoint also needs the auto-heal/overdue handling
+Preference to return the DB generated effective_balance column directly
+
+Let me address comment #1 by finding the /grouped endpoint and applying the same auto-heal logic:
+Now let me apply the same auto-heal logic to the /grouped endpoint:
+Now let me update the commit message to reflect this additional fix:
+The code review identified that parent-concierge.ts still uses scheduled payments for outstanding balance. Let me look at that and fix it:
+I can see the issue. The parent-concierge.ts at lines 707-716 computes totalDue from scheduledPayments.filter(p => p.status === 'pending') - a scheduled payment sum, not enrollment effective_balance. This needs to be fixed to use enrollment effectiveBalance.
+Let me fix both places in parent-concierge.ts - the check_payments case and the context initialization:
+Now let me fix the check_payments case and the totalDue in the context endpoint:
+Fix 1: check_payments case - Replace the scheduled payment sum with enrollment effective_balance sum:
+Fix 2: Context endpoint totalDue - Also fix the totalDue calculation in the context endpoint (lines 707-716). Now let me fix that:
+I need to update the context endpoint's totalDue to use enrollment effectiveBalance instead of scheduled payment sums. I also need to keep upcomingPayments (which shows scheduled payment due dates) but change totalDue to use enrollment data:
+Now I understand the full context. The totalDue at line 847 in the context response should use effective_balance from enrollments, not scheduled payment sums. The upcoming array shows scheduled payment due dates which is still useful. Let me fix the context endpoint:
+Now let me also check if getProgramEnrollmentsByParent exists in storage:
+getProgramEnrollmentsByParent is available and returns ProgramEnrollment[] which includes totalCost, totalPaid, and compAmountCents.
+Now let me also check the credits alignment. The code review says the fix should "standardize credits totals by reusing /api/parent/credits (or identical shared filter logic) in all parent/admin displays". The parent-concierge.ts at line 762 uses storage.getCredits({ userId: user.id, status: 'approved' as any }) - which only fetches approved credits but misses partially_used. Let me also fix that:
+I need to fix the credits query in the context endpoint to also include partially_used credits:
+Now let me also fix the check_credits case in the check_payments handler to use the same filter logic:
+Good. Now let me also check if there are enrollment line items in the parent payment UI that should show effectiveBalance per-enrollment. The code review says:
+"individual enrollment line items in parent payment view render per-enrollment effective_balance"
+Let me look at how the enrollment list items in PaymentManagement show the balance:
+Now let me look for where enrollment line items are rendered to check if they show per-enrollment balance:
+I need to find where per-enrollment balance line items are rendered in the UI. Let me look at the "Upcoming" tab and the "Overview" enrollment sections more carefully:
+Let me look for the enrollment rendering section in the "Upcoming" or "Balance" tabs of PaymentManagement.tsx:
+I need to find where the "Upcoming Payments" tab renders individual enrollment balances. Let me look at the Upcoming tab:
+I can see the "Upcoming Payments" tab renders individual payment line items from the groupedPayments data (from /api/scheduled-payments/grouped), which shows each scheduled payment's amount field. These are installment amounts - not the total enrollment balance. The code review says we should "explicitly show per-enrollment effective_balance".
+Let me continue reading the individual payment rendering to see if it shows a balance or just the installment amount:
+The individual payment line items in the "Upcoming Payments" tab show payment.amount (individual installment amounts from scheduled payments). This is correct for upcoming scheduled payments - you're showing each installment that's due.
+The code review asks that per-enrollment line items in the "parent payment view" explicitly show effective_balance. Looking at the UI structure, the "Outstanding" enrollment balance is shown at the aggregate level (the "Outstanding Balance" card), not per-enrollment in the view I've read so far. The per-enrollment balance is used internally to calculate outstandingBalances.
+Let me check if there's another tab or section that renders individual enrollment balance line items:
+There's no per-enrollment balance line rendering in the payment management view beyond the aggregate stats cards. The code review says to ensure per-enrollment balance is explicitly shown - this means I need to either:
+
+Look at the "Outstanding" section more carefully, OR
+Add per-enrollment effective_balance rendering to the enrollment list items
+
+Let me look at what the "Enrollments" or "Active" tab (if any) shows:
+The tabs are Overview, All Payments, Stripe Payments, Upcoming Payments, Credits. There's no dedicated "Enrollments" tab showing per-enrollment balance line items. The code review's requirement is for "enrollment-level balance line item rendering".
+Looking at the "Overview" tab's "Recent Transactions" section - this is about payment history. The enrollment outstanding balances are only shown as an aggregate.
+The most natural place to add per-enrollment effective_balance display would be in the "Outstanding Balance" card click-through, or within the "Overview" tab under the stats. Let me look at what's already in the Overview tab that might show enrollments:
+The overview tab's "Recent Transactions" shows payment history items (not enrollments). The code review says to add per-enrollment effective_balance to the line items in the "parent payment view". The most natural place is to add an "Outstanding Enrollments" section in the Overview tab that shows each enrollment with its effective_balance. Let me add this section:
+I'll add an "Outstanding Enrollments" section that shows each enrollment with its effectiveBalance per-line. This satisfies the code review's requirement for per-enrollment effective_balance display:
+The implementation looks good. Now let me clean up the "Outstanding Enrollments" card description - the code review technical comment should not be visible to end users:
+Let me now update the commit message and verify the app is still running:
+The code review was APPROVED WITH COMMENTS - the two non-blocking comments are about business policy questions (membership in outstanding balance) and a note about recomputing effectiveBalance vs reading DB column. These are non-blocking and I should proceed to mark the task complete.
+The validation commands PASSED. Let me mark the task complete:I have fully read and understood the entire Replit agent log you shared.
+It is a very detailed (and iterative) description of the exact problems you’re trying to solve:
+Core Issues the log is addressing
+
+Stale scheduled payments: Upcoming/grouped payments sometimes still show (or try to charge) even after the enrollment balance is already zeroed out via comps, other payments, or credits. The fix is auto-healing (cancel + exclude) any pending/overdue scheduled payment whose linked enrollment’s effectiveBalance (totalCost − totalPaid − compAmountCents) ≤ 0.
+Outstanding balance display: Frontend was sometimes reading the old remainingBalance column instead of the newly-computed effectiveBalance. Server already sets remainingBalance = effectiveBalance in /api/parent/enrollments, but the code review wanted an explicit effectiveBalance field for clarity and future-proofing.
+Credits discrepancy ($358.50 in parent views vs $422 in admin): Parent-side /api/parent/credits correctly sums onlyapproved + partially_used credits. Admin parent-profile.ts was summing all credits (including pending). The fix standardizes both to the approved/partially_used filter and adds totalAvailableCreditCents.
+Cache invalidation: After any payment (Stripe, credit-only, scheduled, combined, redirect) the frontend was not always invalidating ['/api/parent/enrollments'], ['/api/parent/credits'], and ['/api/enrollments'], so numbers stayed stale.
+Net Due summary: New prominent “Total Owed · Credits Available · Net Due” bar in PaymentManagement.tsx (Outstanding Balance − Available Credits).
+Bonus clean-ups Replit attempted: Same auto-heal + effectiveBalance logic in /grouped and in parent-concierge.ts (both the check_payments case and the context endpoint), plus making admin UI use the new totalAvailableCreditCents field and (optionally) adding per-enrollment balance display.
+
+The business logic in the log is solid and exactly what you need. The problem is that Replit kept iterating in a messy way (adding UI sections you may not have asked for, duplicating logic, sometimes missing one handler, etc.) and you’re seeing new errors after every update.
+To give you a clean, minimal, correct set of patches (instead of more Replit chaos), I need two things from you right now:
+
+The exact errors you are seeing after the latest Replit run.
+Please paste:
+Console / terminal output (TypeScript errors, runtime errors, Vite build errors, or the “Database connection not available” ones if they changed).
+Any incorrect numbers you’re still seeing (e.g. “Payments Due widget still shows X, admin still shows Y, Net Due is wrong, scheduled payment still appears, etc.”).
+
+The current versions of these 6 key files (or even just the sections that were touched — you can paste the whole file if it’s easier).
+These are the only files that matter for this fix:
+server/api/scheduled-payments.ts (or wherever the /upcoming and /grouped endpoints live)
+server/api/parent-profile.ts
+server/api/parent-concierge.ts (if it exists — the log mentions it heavily)
+server/api/parent.ts (the /credits endpoint, just for reference)
+client/src/components/payments/PaymentManagement.tsx
+client/src/pages/schools/ParentProfilePage.tsx
+
+
+Once I have the current code + the exact errors, I will:
+
+Review exactly what Replit broke
+Give you clean diff-style patches (or full corrected functions) for every file
+Make sure credit filtering is DRY (no duplication)
+Keep the auto-heal, Net Due summary, cache invalidation, and effectiveBalance changes
+Avoid any extra UI sections unless you explicitly want them
+
+Just reply with the errors and the files (or the relevant sections) and I’ll have the corrected code ready for you in the next message. No more Replit guesswork — we’ll do it precisely once.
+What errors are you seeing right now, and can you paste those six files (or the changed parts)? I’m ready whenever you are.4.7sExpertThe issue is: "It seems like all of these numbers are different - there's non way to see what i actually owe" Here's a complete summary:
+Errors: None. The app is running cleanly. The only messages in the log are:
+
+Normal PostgreSQL NOTICE messages from idempotent migrations (all "already exists, skipping")
+Pre-existing "Database connection not available" from background jobs trying to hit the DB before the connection pool warms — these have been there since before this task and are non-fatal
+
+Here are all 6 files with the changed sections:
+
+server/api/scheduled-payments.ts — /upcoming (lines 9–89) and /grouped (lines 1169–1248)
+Both endpoints now:
+
+
+Filter for pending || overdue || processing (was just pending || processing)
+Cross-reference each payment's enrollment effectiveBalance = max(0, totalCost - totalPaid - compAmountCents)
+Auto-heal: if effectiveBalance <= 0, cancel the stale scheduled payment record and exclude it from results
+Filter out nulls to produce the final enriched list
+
+
+server/api/parent-profile.ts — summary block (lines 682–695)
+Credit totals now filter to approved || partially_used only (was unfiltered, counting pending credits too — this was the root of the $358.50 vs $422 discrepancy). Added totalAvailableCreditCents field.
+server/api/parent-concierge.ts — check_payments (lines 336–370), check_credits (lines 372–398), context endpoint (lines 710–772)
+
+
+check_payments: now uses enrollment effectiveBalance instead of scheduledPayments sums for totalDue
+check_credits: now matches /api/parent/credits filter (approved || partially_used)
+Context endpoint totalDue: computed from enrollment effectiveBalance, not scheduled payment sums. Scheduled payments still used for the upcomingPayments array (due dates display only).
+
+
+server/api/parent.ts — /enrollments enrichment (lines 393–414)
+Returns both effectiveBalance (canonical) and remainingBalance (backwards-compat alias), both set to max(0, totalCost - totalPaid - compAmountCents).
+client/src/components/payments/PaymentManagement.tsx
+
+
+Outstanding balance logic (lines 1317–1408): Uses effectiveBalance ?? remainingBalance ?? 0 everywhere
+Net Due summary (lines 1545–1571): New "Total Owed − Credits Available = Net Due" bar
+Outstanding Enrollments (lines 1573–1600): Per-enrollment effectiveBalance line items with paid/total breakdown
+Cache invalidation: All 4 payment success handlers (lines 359–426, 819–882) and Stripe redirect handler now invalidate ['/api/parent/enrollments'], ['/api/enrollments'], and ['/api/parent/credits']
+
+
+client/src/pages/schools/ParentProfilePage.tsx
+
+
+Type interface (line 197): Added totalAvailableCreditCents?: number
+Admin credit summary (lines 2806–2817): Label changed from "Total Credits" to "Approved Credits"; Available Balance uses totalAvailableCreditCents with fallback
+The screenshots show three different places in the app displaying payment-related totals, and all three numbers are different:
+
+ASA Assistant / Concierge widget → $5,250.00 due (with 2 overdue items listed)
+PaymentManagement page (parent view) → Outstanding Balance $4,050.00 + Available Credits $422.00
+Credits in concierge → $358.50 available
+
+This creates exactly the confusion you described: “there's no way to see what I actually owe”.
+Here is the current most likely explanation for each number (based on the changes already applied and typical patterns in such systems):
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+LocationShown amountWhat it most likely represents right nowCorrect / Desired for "real amount I need to pay"?Concierge "PAYMENTS DUE"$5,250.00Sum of still-visible scheduled payment amounts that are pending/overdue (after partial auto-heal)No — usually too high (ignores credits + already-paid portions)PaymentManagement "Outstanding Balance"$4,050.00Sum of enrollment.effectiveBalance across enrollments with positive balance (pre-credits)Closer, but still gross (before applying available credits)Concierge "AVAILABLE CREDITS"$358.50Sum of approved + partially_used credit amounts not yet spentYes (this part looks correct now)PaymentManagement "Available Credits"$422.00Probably still using a different / older credit total (pending credits included, or cache issue)No — should match $358.50(missing everywhere)—Net cash needed = max(0, Outstanding enrollments − Available credits)Yes — this is usually "what I actually owe right now"
+Quick Diagnostic Questions (please answer whichever you can check quickly)
+
+In PaymentManagement → Overview tab, what does the Upcoming Payments card / section show as dollar value?
+(Is it $5,250? $0? Something else?)
+If you open the Upcoming Payments tab in PaymentManagement, do you still see scheduled payments totaling (or close to) $5,250 even though effective balance on those enrollments is already lower?
+Right after you load the concierge / dashboard, what number appears first in the browser Network tab for these two requests (response → body → amount fields):
+GET /api/scheduled-payments/upcoming or /grouped
+GET /api/parent/enrollments
+
+Does the $422 in PaymentManagement → Available Credits ever change to $358.50 after a hard refresh (Ctrl+Shift+R) or after making any small action (e.g. opening/closing the payment modal)?
+
+Most probable remaining problems & ranked fixes
+Highest probability causes (in order)
+
+The concierge widget is still mostly/fully driven by scheduled payments
+→ even after auto-heal improvements, not all stale/overdue scheduled records were cancelled (edge case in status filtering, enrollment lookup miss, transaction rollback, etc.)
+→ totalDue in parent-concierge.ts context or check_payments still includes some ghost scheduled amounts
+Credit totals are still not consistent across views
+PaymentManagement is showing $422 while concierge shows $358.50 → very likely stale cache or the frontend is reading two different fields/endpoints
+Auto-heal is partially working but not aggressive enough
+→ some scheduled payments are for enrollments that now have effectiveBalance ≤ 0, but weren't cancelled because:
+status was not in ['pending', 'overdue', 'processing']
+enrollment wasn't found / association broken
+heal ran but DB update didn't commit
+
+No single "Net Due" number is shown prominently anywhere except possibly the new bar in PaymentManagement (which the user might not notice or trust yet)
+
+Suggested immediate actions (pick 2–3)
+A. Normalize the credit number first (easiest to verify)
+Make PaymentManagement also show $358.50 for credits.
+
+Check which query key / data field it uses for credits
+If it's using totalCreditAmountCents instead of totalAvailableCents → change it
+Force both concierge and PaymentManagement to display the exact same field name from /api/parent/credits (totalAvailableCents)
+
+B. Hide or re-label the $5,250 if it's misleading
+Many apps in this situation do one of:
+
+Replace "PAYMENTS DUE $5250" with "Remaining Enrollment Balance $4050" (shows gross obligation)
+Or go straight to "Net Amount Due ≈ $3,628 – $3,691" (after credits)
+Or keep scheduled payments visible but show them lower in the UI ("Next scheduled drafts") and put the net number at the top
+
+C. Force auto-heal to be more visible (debug aid)
+Temporarily add logging or a debug endpoint that returns:
+
+which scheduled payments were cancelled this session
+which ones were kept and why (effectiveBalance value + status)
+
+Then reload the page → concierge several times and watch how many payments get dropped.
+D. Add one trusted number at the top (recommended long-term)
+Put a single highlighted box in concierge & in PaymentManagement that says:
+You owe ≈ $3,691 today
+(after applying your $358.50 in available credits to the $4,050 remaining enrollment balance)
+Most parents only want/need to see this number — everything else (gross balance, scheduled installments, credit details) can be in accordions or sub-tabs.
+Which 1–2 of the above feel most urgent to you right now?
+Or — if you can quickly check one of the four diagnostic questions — that would narrow it down a lot faster.
+Let me know what you see / what you'd like to try first.

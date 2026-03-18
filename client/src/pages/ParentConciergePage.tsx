@@ -67,6 +67,7 @@ interface ContextData {
   membershipExpired: boolean;
   payments: {
     totalDue: number;
+    netDue?: number;
     overdueCount: number;
     upcoming: Array<{
       amount: number;
@@ -130,6 +131,11 @@ function ContextSidebar({ context, isLoading }: { context: ContextData | null; i
               <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Payments Due</span>
             </div>
             <div className="text-xl font-bold">{formatCurrency(context.payments.totalDue)}</div>
+            {context.credits.totalAvailable > 0 && context.payments.netDue !== undefined && (
+              <div className="text-sm text-muted-foreground mt-0.5">
+                Net due after credits: <span className="font-semibold text-foreground">{formatCurrency(context.payments.netDue)}</span>
+              </div>
+            )}
             {context.payments.overdueCount > 0 && (
               <Badge variant="destructive" className="mt-1 text-xs">
                 {context.payments.overdueCount} overdue
@@ -275,10 +281,13 @@ function MobileSidebarCards({ context, isLoading }: { context: ContextData | nul
   const cards: Array<{ icon: any; label: string; value: string; color: string; onClick?: () => void }> = [];
 
   if (context.payments.totalDue > 0) {
+    const displayAmount = (context.payments.netDue !== undefined && context.credits.totalAvailable > 0)
+      ? context.payments.netDue
+      : context.payments.totalDue;
     cards.push({
       icon: DollarSign,
-      label: context.payments.overdueCount > 0 ? 'Overdue' : 'Due',
-      value: formatCurrency(context.payments.totalDue),
+      label: context.payments.overdueCount > 0 ? 'Overdue' : 'Net Due',
+      value: formatCurrency(displayAmount),
       color: context.payments.overdueCount > 0 ? 'text-red-600' : 'text-amber-600',
       onClick: openCart,
     });

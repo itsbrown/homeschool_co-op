@@ -7,6 +7,30 @@ import { knowledgeBaseProcessor } from '../services/knowledgeBaseProcessor';
 
 const router = Router();
 
+function deduplicateEnrollments(enrollments: any[]): any[] {
+  const groups: Record<string, any[]> = {};
+  for (const e of enrollments) {
+    const key = `${e.classId}-${e.childId}`;
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(e);
+  }
+  const result: any[] = [];
+  for (const group of Object.values(groups)) {
+    const sorted = group.sort((a: any, b: any) =>
+      new Date(b.enrollmentDate || b.createdAt || 0).getTime() - new Date(a.enrollmentDate || a.createdAt || 0).getTime()
+    );
+    const latest = sorted[0];
+    const hasFullyPaid = sorted.some((e: any) =>
+      e.status === 'enrolled' && Math.max(0, (e.totalCost ?? 0) - (e.totalPaid ?? 0) - (e.compAmountCents ?? 0)) === 0
+    );
+    const balance = Math.max(0, (latest.totalCost ?? 0) - (latest.totalPaid ?? 0) - (latest.compAmountCents ?? 0));
+    if (balance > 0 || (!hasFullyPaid && latest.status === 'pending_payment' && balance > 0)) {
+      result.push(latest);
+    }
+  }
+  return result;
+}
+
 const chatLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 20,
@@ -334,43 +358,45 @@ Remaining: $${(remaining / 100).toFixed(2)}`;
       }
 
       case 'check_payments': {
-        const scheduledPayments = await storage.getScheduledPaymentsByParentEmail(userEmail);
-        const pendingPayments = scheduledPayments.filter(p =>
-          p.status === 'pending' && (!schoolId || p.schoolId === schoolId)
+        const parentId = (await storage.getUserByEmail(userEmail))?.id;
+        const parentEnrollments = parentId
+          ? await storage.getProgramEnrollmentsByParent(parentId)
+          : [];
+        const activeEnrollments = parentEnrollments.filter((e: any) =>
+          !['cancelled', 'waitlist', 'withdrawn', 'failed', 'completed'].includes(e.status) &&
+          (!schoolId || e.schoolId === schoolId)
         );
-
-        if (pendingPayments.length === 0) {
-          return 'No upcoming payments found. All payments are up to date!';
-        }
-
-        const totalDue = pendingPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
-
-        const overdue = pendingPayments.filter(p => {
-          if (!p.scheduledDate) return false;
-          return new Date(p.scheduledDate) < new Date();
+        const dedupedEnrollments = deduplicateEnrollments(activeEnrollments);
+        const unpaidEnrollments = dedupedEnrollments.filter((e: any) => {
+          const effectiveBalance = Math.max(0, (e.totalCost ?? 0) - (e.totalPaid ?? 0) - (e.compAmountCents ?? 0));
+          return effectiveBalance > 0;
         });
 
-        let result = `Total Outstanding: $${(totalDue / 100).toFixed(2)}\n`;
-        if (overdue.length > 0) {
-          result += `⚠️ OVERDUE PAYMENTS: ${overdue.length}\n\n`;
+        if (unpaidEnrollments.length === 0) {
+          return 'No outstanding balances found. All payments are up to date!';
         }
 
-        const allEnrollments = await storage.getAllEnrollments();
+        const totalDue = unpaidEnrollments.reduce((sum: number, e: any) =>
+          sum + Math.max(0, (e.totalCost ?? 0) - (e.totalPaid ?? 0) - (e.compAmountCents ?? 0)), 0
+        );
 
-        result += pendingPayments.slice(0, 8).map(p => {
-          const enrollment = allEnrollments.find((e: any) => e.id === p.enrollmentId);
-          const isOverdue = p.scheduledDate && new Date(p.scheduledDate) < new Date();
-          return `${isOverdue ? '🔴 OVERDUE' : '📅'} $${((p.amount || 0) / 100).toFixed(2)} — Due: ${p.scheduledDate ? new Date(p.scheduledDate).toLocaleDateString() : 'TBD'}
-   Class: ${enrollment?.className || 'Unknown'}
-   Child: ${enrollment?.childName || 'Unknown'}`;
+        let result = `Total Outstanding: $${(totalDue / 100).toFixed(2)}\n\n`;
+
+        result += unpaidEnrollments.slice(0, 8).map((e: any) => {
+          const balance = Math.max(0, (e.totalCost ?? 0) - (e.totalPaid ?? 0) - (e.compAmountCents ?? 0));
+          return `📋 $${(balance / 100).toFixed(2)} remaining — ${e.className || 'Class'}
+   Child: ${e.childName || 'Unknown'}
+   Paid: $${((e.totalPaid ?? 0) / 100).toFixed(2)} of $${((e.totalCost ?? 0) / 100).toFixed(2)}`;
         }).join('\n\n');
 
         return result;
       }
 
       case 'check_credits': {
-        const credits = await storage.getCredits({ userId, status: 'approved' as any });
-        const activeCredits = credits.filter(c => {
+        // Match /api/parent/credits filter: approved or partially_used
+        const allUserCredits = await storage.getCredits({ userId });
+        const activeCredits = allUserCredits.filter(c => {
+          if (c.status !== 'approved' && c.status !== 'partially_used') return false;
           const remaining = (c.creditAmountCents || 0) - (c.usedAmountCents || 0);
           if (remaining <= 0) return false;
           if (c.expiresAt && new Date(c.expiresAt) < new Date()) return false;
@@ -704,6 +730,23 @@ router.get('/context', supabaseAuth, async (req: any, res) => {
       }
     }
 
+    const parentEnrollments = await storage.getProgramEnrollmentsByParent(user.id);
+    const childIds = children.map(c => c.id);
+    const nonTerminalEnrollments = parentEnrollments.filter((e: any) => {
+      if (['cancelled', 'waitlist', 'withdrawn', 'failed', 'completed'].includes(e.status)) return false;
+      if (user.schoolId && e.schoolId !== user.schoolId) return false;
+      return true;
+    });
+    const dedupedContextEnrollments = deduplicateEnrollments(nonTerminalEnrollments);
+    const unpaidParentEnrollments = dedupedContextEnrollments.filter((e: any) => {
+      const effectiveBalance = Math.max(0, (e.totalCost ?? 0) - (e.totalPaid ?? 0) - (e.compAmountCents ?? 0));
+      return effectiveBalance > 0;
+    });
+    const totalDue = unpaidParentEnrollments.reduce((sum: number, e: any) =>
+      sum + Math.max(0, (e.totalCost ?? 0) - (e.totalPaid ?? 0) - (e.compAmountCents ?? 0)), 0
+    );
+
+    // Keep scheduled payments for displaying upcoming due dates (not for totalDue calculation)
     const scheduledPayments = await storage.getScheduledPaymentsByParentEmail(userEmail);
     const pendingPayments = scheduledPayments
       .filter(p => p.status === 'pending' && (!user.schoolId || p.schoolId === user.schoolId))
@@ -713,18 +756,19 @@ router.get('/context', supabaseAuth, async (req: any, res) => {
         return dateA - dateB;
       });
 
-    const totalDue = pendingPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
     const overdueCount = pendingPayments.filter(p =>
       p.scheduledDate && new Date(p.scheduledDate) < new Date()
     ).length;
 
     const allEnrollments = await storage.getAllEnrollments();
-    const childIds = children.map(c => c.id);
 
     const upcomingPayments = pendingPayments.slice(0, 3).map(p => {
       const enrollment = allEnrollments.find((e: any) => e.id === p.enrollmentId);
+      const enrollmentBalance = enrollment
+        ? Math.max(0, (enrollment.totalCost ?? 0) - (enrollment.totalPaid ?? 0) - (enrollment.compAmountCents ?? 0))
+        : (p.amount || 0);
       return {
-        amount: p.amount || 0,
+        amount: enrollmentBalance,
         dueDate: p.scheduledDate ? new Date(p.scheduledDate).toLocaleDateString() : 'TBD',
         className: enrollment?.className || 'Class',
         childName: enrollment?.childName || '',
@@ -742,8 +786,10 @@ router.get('/context', supabaseAuth, async (req: any, res) => {
       e.status === 'waitlist'
     );
 
-    const credits = await storage.getCredits({ userId: user.id, status: 'approved' as any });
-    const activeCredits = credits.filter(c => {
+    // Use same filter as /api/parent/credits for consistency: approved or partially_used
+    const allCredits = await storage.getCredits({ userId: user.id });
+    const activeCredits = allCredits.filter(c => {
+      if (c.status !== 'approved' && c.status !== 'partially_used') return false;
       const remaining = (c.creditAmountCents || 0) - (c.usedAmountCents || 0);
       if (remaining <= 0) return false;
       if (c.expiresAt && new Date(c.expiresAt) < new Date()) return false;
@@ -844,6 +890,7 @@ router.get('/context', supabaseAuth, async (req: any, res) => {
       membershipExpired,
       payments: {
         totalDue,
+        netDue: Math.max(0, totalDue - totalCredits),
         overdueCount,
         upcoming: upcomingPayments,
       },

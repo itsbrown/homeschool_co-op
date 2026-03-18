@@ -394,6 +394,7 @@ function ScheduledPaymentDialog({
       queryClient.invalidateQueries({ queryKey: ['/api/parent/credits'] });
       queryClient.invalidateQueries({ queryKey: ['scheduled-payments-upcoming'] });
       queryClient.invalidateQueries({ queryKey: ['/api/parent/enrollments'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/enrollments'] });
       onSuccess();
       onClose();
     } catch (err: any) {
@@ -417,6 +418,9 @@ function ScheduledPaymentDialog({
     queryClient.invalidateQueries({ queryKey: ['/api/payment-history'] });
     queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments'] });
     queryClient.invalidateQueries({ queryKey: ['scheduled-payments-upcoming'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/parent/enrollments'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/parent/credits'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/enrollments'] });
     onSuccess();
     onClose();
   };
@@ -846,6 +850,7 @@ function CombinedPaymentDialog({
       queryClient.invalidateQueries({ queryKey: ['scheduled-payments-upcoming'] });
       queryClient.invalidateQueries({ queryKey: ['scheduled-payments-grouped'] });
       queryClient.invalidateQueries({ queryKey: ['/api/parent/enrollments'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/enrollments'] });
       onSuccess();
       onClose();
     } catch (err: any) {
@@ -870,6 +875,8 @@ function CombinedPaymentDialog({
     queryClient.invalidateQueries({ queryKey: ['scheduled-payments-upcoming'] });
     queryClient.invalidateQueries({ queryKey: ['scheduled-payments-grouped'] });
     queryClient.invalidateQueries({ queryKey: ['/api/parent/credits'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/parent/enrollments'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/enrollments'] });
     onSuccess();
     onClose();
   };
@@ -1058,6 +1065,7 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
       queryClient.invalidateQueries({ queryKey: ['/api/enrollments'] });
       queryClient.invalidateQueries({ queryKey: ['/api/parent/enrollments'] });
       queryClient.invalidateQueries({ queryKey: ['/api/parent/memberships'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/parent/credits'] });
       
       // Show appropriate toast based on status
       if (redirectStatus === 'succeeded') {
@@ -1327,12 +1335,15 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
       );
 
       const latestEnrollment = sortedEnrollments[0];
-      const hasBalance = latestEnrollment.remainingBalance > 0;
+      // Use effectiveBalance (canonical server-computed field) to determine outstanding amount.
+      // Falls back to remainingBalance for backwards-compat if effectiveBalance is absent.
+      const getBalance = (e: any) => e.effectiveBalance ?? e.remainingBalance ?? 0;
+      const hasBalance = getBalance(latestEnrollment) > 0;
       const hasFullyPaidEnrollment = sortedEnrollments.some((e: any) => 
-        e.status === 'enrolled' && e.remainingBalance === 0
+        e.status === 'enrolled' && getBalance(e) === 0
       );
 
-      if (hasBalance || (!hasFullyPaidEnrollment && latestEnrollment.status === 'pending_payment' && latestEnrollment.remainingBalance > 0)) {
+      if (hasBalance || (!hasFullyPaidEnrollment && latestEnrollment.status === 'pending_payment' && getBalance(latestEnrollment) > 0)) {
         unpaidEnrollments.push(latestEnrollment);
       }
     }
@@ -1362,9 +1373,10 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
       return acc;
     }, { paid: 0, succeeded: 0, pending: 0, failed: 0, refunded: 0, canceled: 0, total: 0, totalPaid: 0, totalPending: 0, totalOutstanding: 0, outstandingCount: 0, successfulCount: 0, scheduledPaymentsTotal: 0, scheduledPaymentsCount: 0 });
     
-    // Add outstanding balances from enrollments
+    // Add outstanding balances from enrollments.
+    // Prefer effectiveBalance (canonical server-computed field); fall back to remainingBalance for compat.
     stats.totalOutstanding = outstandingData.reduce((total: number, enrollment: any) => 
-      total + (enrollment.remainingBalance || 0), 0
+      total + (enrollment.effectiveBalance ?? enrollment.remainingBalance ?? 0), 0
     );
     stats.outstandingCount = outstandingData.length;
 
@@ -1529,7 +1541,64 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
               </CardContent>
             </Card>
           </div>
+
+          {/* Net Due Summary */}
+          {(!isLoadingEnrollments && !isLoadingCredits) && (
+            <Card className="border-blue-200 bg-blue-50/50">
+              <CardContent className="pt-4 pb-4">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div className="flex flex-wrap gap-6 sm:gap-10">
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Total Owed</p>
+                      <p className="text-xl font-bold text-orange-600">{formatCurrency(paymentStats.totalOutstanding || 0)}</p>
+                    </div>
+                    <div className="text-muted-foreground self-center hidden sm:block">−</div>
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Credits Available</p>
+                      <p className="text-xl font-bold text-amber-600">{creditsData?.totalAvailableFormatted || '$0.00'}</p>
+                    </div>
+                    <div className="text-muted-foreground self-center hidden sm:block">=</div>
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Net Due</p>
+                      <p className={`text-xl font-bold ${Math.max(0, (paymentStats.totalOutstanding || 0) - (creditsData?.totalAvailableCents || 0)) > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                        {formatCurrency(Math.max(0, (paymentStats.totalOutstanding || 0) - (creditsData?.totalAvailableCents || 0)))}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
           
+          {/* Outstanding Enrollments — per-enrollment effective_balance breakdown */}
+          {outstandingBalances && outstandingBalances.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Outstanding Enrollments</CardTitle>
+                <CardDescription>Remaining balance per enrollment</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {outstandingBalances.map((enrollment: any) => {
+                  const balance = enrollment.effectiveBalance ?? enrollment.remainingBalance ?? 0;
+                  return (
+                    <div key={enrollment.id} className="flex justify-between items-center p-3 border rounded-lg">
+                      <div>
+                        <p className="font-medium text-sm">{enrollment.childName || 'Child'}</p>
+                        <p className="text-xs text-muted-foreground">{enrollment.className || 'Class'}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-medium text-orange-600">{formatCurrency(balance)}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {formatCurrency(enrollment.totalPaid ?? 0)} paid of {formatCurrency(enrollment.totalCost ?? 0)}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </CardContent>
+            </Card>
+          )}
+
           <Card>
             <CardHeader>
               <CardTitle>Recent Transactions</CardTitle>

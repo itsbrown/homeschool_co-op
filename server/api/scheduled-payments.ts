@@ -16,17 +16,18 @@ router.get('/upcoming', supabaseAuth, async (req: any, res) => {
     // Get scheduled payments from local database
     const allScheduledPayments = await storage.getScheduledPaymentsByParentEmail(userEmail);
     
-    // Filter for pending and processing payments (processing may be from abandoned checkout)
+    // Filter for pending, overdue, and processing payments (processing may be from abandoned checkout)
     const pendingPayments = allScheduledPayments.filter(
-      p => p.status === 'pending' || p.status === 'processing'
+      p => p.status === 'pending' || p.status === 'overdue' || p.status === 'processing'
     );
     
     console.log(`📊 Found ${pendingPayments.length} pending/processing scheduled payments for ${userEmail}`);
     console.log(`📋 Payment IDs returned: [${pendingPayments.map(p => `${p.id}(e:${p.enrollmentId})`).join(', ')}]`);
 
-    // Get enrollment details for enrichment
-    const enrichedPayments = await Promise.all(pendingPayments.map(async (payment) => {
+    // Get enrollment details for enrichment; auto-heal stale records
+    const enrichedPaymentsRaw = await Promise.all(pendingPayments.map(async (payment) => {
       let enrollmentDetails = null;
+      let effectiveBalance = null;
       if (payment.enrollmentId) {
         const enrollment = await storage.getProgramEnrollmentById(payment.enrollmentId);
         if (enrollment) {
@@ -34,7 +35,22 @@ router.get('/upcoming', supabaseAuth, async (req: any, res) => {
             className: enrollment.className,
             childName: enrollment.childName
           };
+          // Compute effective_balance the same way the DB generated column does:
+          // total_cost - total_paid - COALESCE(comp_amount_cents, 0)
+          const totalPaid = enrollment.totalPaid ?? 0;
+          const totalCost = enrollment.totalCost ?? 0;
+          const compAmount = enrollment.compAmountCents ?? 0;
+          effectiveBalance = Math.max(0, totalCost - totalPaid - compAmount);
         }
+      }
+
+      // AUTO-HEAL: if the enrollment is fully paid, cancel stale pending/overdue record
+      if (effectiveBalance !== null && effectiveBalance <= 0) {
+        if (payment.status === 'pending' || payment.status === 'overdue') {
+          storage.updateScheduledPaymentStatus(payment.id, 'cancelled').catch(() => {});
+          console.log(`🔄 Auto-cancelled stale scheduled payment ${payment.id} — enrollment ${payment.enrollmentId} effective_balance is ${effectiveBalance}`);
+        }
+        return null; // Exclude from results
       }
       
       const metadata = payment.metadata as any || {};
@@ -52,6 +68,8 @@ router.get('/upcoming', supabaseAuth, async (req: any, res) => {
         childName: enrollmentDetails?.childName || ''
       };
     }));
+
+    const enrichedPayments = enrichedPaymentsRaw.filter((p): p is NonNullable<typeof p> => p !== null);
 
     // Sort by due date
     enrichedPayments.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
@@ -1154,16 +1172,18 @@ router.get('/grouped', supabaseAuth, async (req: any, res) => {
     console.log('📅 Fetching grouped scheduled payments for:', userEmail);
 
     const allScheduledPayments = await storage.getScheduledPaymentsByParentEmail(userEmail);
+    // Include overdue so stale overdue records can be auto-healed alongside pending ones
     const pendingPayments = allScheduledPayments.filter(
-      p => p.status === 'pending' || p.status === 'processing'
+      p => p.status === 'pending' || p.status === 'overdue' || p.status === 'processing'
     );
 
     if (pendingPayments.length === 0) {
       return res.json({ success: true, groups: [] });
     }
 
-    const enrichedPayments = await Promise.all(pendingPayments.map(async (payment) => {
+    const enrichedPaymentsRaw = await Promise.all(pendingPayments.map(async (payment) => {
       let enrollmentDetails = null;
+      let effectiveBalance = null;
       if (payment.enrollmentId) {
         const enrollment = await storage.getProgramEnrollmentById(payment.enrollmentId);
         if (enrollment) {
@@ -1171,8 +1191,22 @@ router.get('/grouped', supabaseAuth, async (req: any, res) => {
             className: enrollment.className,
             childName: enrollment.childName
           };
+          const totalPaid = enrollment.totalPaid ?? 0;
+          const totalCost = enrollment.totalCost ?? 0;
+          const compAmount = enrollment.compAmountCents ?? 0;
+          effectiveBalance = Math.max(0, totalCost - totalPaid - compAmount);
         }
       }
+
+      // AUTO-HEAL: cancel stale pending/overdue records where enrollment is fully paid
+      if (effectiveBalance !== null && effectiveBalance <= 0) {
+        if (payment.status === 'pending' || payment.status === 'overdue') {
+          storage.updateScheduledPaymentStatus(payment.id, 'cancelled').catch(() => {});
+          console.log(`🔄 [grouped] Auto-cancelled stale scheduled payment ${payment.id} — effective_balance is ${effectiveBalance}`);
+        }
+        return null; // Exclude from grouped results
+      }
+
       const metadata = payment.metadata as any || {};
       return {
         id: payment.id,
@@ -1189,6 +1223,8 @@ router.get('/grouped', supabaseAuth, async (req: any, res) => {
         description: metadata.description || `Payment ${payment.installmentNumber} of ${payment.totalInstallments}`,
       };
     }));
+
+    const enrichedPayments = enrichedPaymentsRaw.filter((p): p is NonNullable<typeof p> => p !== null);
 
     const groupMap: Record<string, {
       dueDate: string;

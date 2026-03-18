@@ -194,6 +194,7 @@ interface ParentProfile {
     totalCredits: number;
     totalCreditAmountCents: number;
     totalCreditUsedCents: number;
+    totalAvailableCreditCents?: number;
     totalAmountPaid: number;
     totalAmountDue: number;
     strandedPaymentCents?: number;
@@ -2799,10 +2800,10 @@ export default function ParentProfilePage() {
                       </Card>
                     ))}
                     
-                    {/* Credit Summary */}
+                    {/* Credit Summary — only approved/partially_used credits count toward available balance */}
                     <div className="mt-4 p-4 bg-muted/30 rounded-lg">
                       <div className="flex justify-between items-center">
-                        <span className="font-medium">Total Credits:</span>
+                        <span className="font-medium">Approved Credits:</span>
                         <span className="font-semibold">${((profile.summary?.totalCreditAmountCents || 0) / 100).toFixed(2)}</span>
                       </div>
                       <div className="flex justify-between items-center text-muted-foreground">
@@ -2811,7 +2812,7 @@ export default function ParentProfilePage() {
                       </div>
                       <div className="flex justify-between items-center text-green-600 font-medium border-t mt-2 pt-2">
                         <span>Available Balance:</span>
-                        <span>${(((profile.summary?.totalCreditAmountCents || 0) - (profile.summary?.totalCreditUsedCents || 0)) / 100).toFixed(2)}</span>
+                        <span>${((profile.summary?.totalAvailableCreditCents ?? ((profile.summary?.totalCreditAmountCents || 0) - (profile.summary?.totalCreditUsedCents || 0))) / 100).toFixed(2)}</span>
                       </div>
                     </div>
                   </div>
