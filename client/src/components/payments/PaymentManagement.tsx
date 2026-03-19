@@ -255,8 +255,8 @@ function ScheduledPaymentDialog({
   const [loadingCredits, setLoadingCredits] = useState(false);
   const [creditPaymentComplete, setCreditPaymentComplete] = useState(false);
   
-  // Credit preview — informational only. Server validates and applies the actual deduction on submit.
-  // Both operands (availableCredits, payment.amount) come from server API responses.
+  // NOT displayed to user — used only for payment flow logic (isFullyCoveredByCredits) and submit payload.
+  // Server is authoritative; the actual credit deduction is confirmed on submit, not here.
   const creditsToApply = applyCredits ? Math.min(availableCredits, payment.amount) : 0;
   const amountAfterCredits = Math.max(0, payment.amount - creditsToApply);
   const isFullyCoveredByCredits = amountAfterCredits === 0 && creditsToApply > 0;
@@ -385,6 +385,10 @@ function ScheduledPaymentDialog({
         throw new Error(data.error || 'Failed to process credit payment');
       }
 
+      if (data.creditsApplied !== undefined && data.creditsApplied !== creditsToApply) {
+        console.warn('[PaymentManagement] Single-payment credit drift: local preview =', creditsToApply, ', server applied =', data.creditsApplied);
+      }
+
       setCreditPaymentComplete(true);
       toast({
         title: "Payment Successful",
@@ -466,19 +470,9 @@ function ScheduledPaymentDialog({
                   <span className="font-medium">{formatDate(payment.dueDate)}</span>
                 </div>
               )}
-              <div className="flex justify-between pt-2 border-t border-border">
-                <span>Payment Amount:</span>
-                <span className="font-medium">{formatCurrency(payment.amount)}</span>
-              </div>
-              {creditsToApply > 0 && (
-                <div className="flex justify-between text-amber-600">
-                  <span>Credits Applied:</span>
-                  <span className="font-medium">-{formatCurrency(creditsToApply)}</span>
-                </div>
-              )}
               <div className="flex justify-between pt-2 border-t border-border mt-2">
-                <span className="font-semibold">Amount Due:</span>
-                <span className="font-bold text-lg">{formatCurrency(amountAfterCredits)}</span>
+                <span className="font-semibold">Amount due:</span>
+                <span className="font-bold text-lg">{formatCurrency(payment.amount)}</span>
               </div>
             </div>
           </div>
@@ -490,8 +484,8 @@ function ScheduledPaymentDialog({
                 <div className="flex items-center gap-2">
                   <Award className="h-5 w-5 text-amber-600" />
                   <div>
-                    <p className="text-sm font-medium text-amber-800">Available Credits</p>
-                    <p className="text-lg font-bold text-amber-600">{formatCurrency(availableCredits)}</p>
+                    <p className="text-sm font-medium text-amber-800">Available credits: {formatCurrency(availableCredits)}</p>
+                    <p className="text-xs text-amber-700">The server will confirm the final credit deduction on submit.</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -508,19 +502,6 @@ function ScheduledPaymentDialog({
                   />
                 </div>
               </div>
-              {applyCredits && (
-                <div className="mt-3 p-2 bg-amber-100 rounded text-sm text-amber-800">
-                  <div className="flex items-center gap-1">
-                    <Check className="h-4 w-4" />
-                    <span>
-                      {isFullyCoveredByCredits 
-                        ? `Full payment covered by credits! Remaining credits: ${formatCurrency(availableCredits - creditsToApply)}`
-                        : `${formatCurrency(creditsToApply)} will be applied. You'll pay ${formatCurrency(amountAfterCredits)} with card.`
-                      }
-                    </span>
-                  </div>
-                </div>
-              )}
             </div>
           )}
 
@@ -727,8 +708,8 @@ function CombinedPaymentDialog({
   const [creditPaymentComplete, setCreditPaymentComplete] = useState(false);
 
   const totalAmount = payments.reduce((sum: number, p: any) => sum + p.amount, 0);
-  // Credit preview — informational only. Server validates and applies the actual deduction on submit.
-  // Both operands (availableCredits, totalAmount) come from server API responses.
+  // NOT displayed to user — used only for payment flow logic (isFullyCoveredByCredits) and submit payload.
+  // Server is authoritative; the actual credit deduction is confirmed on submit, not here.
   const creditsToApply = applyCredits ? Math.min(availableCredits, totalAmount) : 0;
   const amountAfterCredits = Math.max(0, totalAmount - creditsToApply);
   const isFullyCoveredByCredits = amountAfterCredits === 0 && creditsToApply > 0;
@@ -842,6 +823,10 @@ function CombinedPaymentDialog({
         throw new Error(data.error || 'Failed to process credit payment');
       }
 
+      if (data.creditsApplied !== undefined && data.creditsApplied !== creditsToApply) {
+        console.warn('[PaymentManagement] Bulk-payment credit drift: local preview =', creditsToApply, ', server applied =', data.creditsApplied);
+      }
+
       setCreditPaymentComplete(true);
       toast({
         title: "Payment Successful",
@@ -917,20 +902,10 @@ function CombinedPaymentDialog({
                   <span className="font-medium">{formatCurrency(payment.amount)}</span>
                 </div>
               ))}
-              <div className="border-t pt-2 border-border">
+              <div className="border-t pt-2 border-border mt-2">
                 <div className="flex justify-between">
-                  <span>Payment Amount:</span>
-                  <span className="font-medium">{formatCurrency(totalAmount)}</span>
-                </div>
-                {creditsToApply > 0 && (
-                  <div className="flex justify-between text-amber-600">
-                    <span>Credits Applied:</span>
-                    <span className="font-medium">-{formatCurrency(creditsToApply)}</span>
-                  </div>
-                )}
-                <div className="flex justify-between pt-2 border-t border-border mt-2">
-                  <span className="font-semibold">Amount Due:</span>
-                  <span className="font-bold text-lg">{formatCurrency(amountAfterCredits)}</span>
+                  <span className="font-semibold">Amount due:</span>
+                  <span className="font-bold text-lg">{formatCurrency(totalAmount)}</span>
                 </div>
               </div>
             </div>
@@ -942,8 +917,8 @@ function CombinedPaymentDialog({
                 <div className="flex items-center gap-2">
                   <Award className="h-5 w-5 text-amber-600" />
                   <div>
-                    <p className="text-sm font-medium text-amber-800">Available Credits</p>
-                    <p className="text-lg font-bold text-amber-600">{formatCurrency(availableCredits)}</p>
+                    <p className="text-sm font-medium text-amber-800">Available credits: {formatCurrency(availableCredits)}</p>
+                    <p className="text-xs text-amber-700">The server will confirm the final credit deduction on submit.</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -960,19 +935,6 @@ function CombinedPaymentDialog({
                   />
                 </div>
               </div>
-              {applyCredits && (
-                <div className="mt-3 p-2 bg-amber-100 rounded text-sm text-amber-800">
-                  <div className="flex items-center gap-1">
-                    <Check className="h-4 w-4" />
-                    <span>
-                      {isFullyCoveredByCredits
-                        ? `Full payment covered by credits! Remaining credits: ${formatCurrency(availableCredits - creditsToApply)}`
-                        : `${formatCurrency(creditsToApply)} will be applied. You'll pay ${formatCurrency(amountAfterCredits)} with card.`
-                      }
-                    </span>
-                  </div>
-                </div>
-              )}
             </div>
           )}
 
@@ -1393,6 +1355,12 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
       // SERVER-AUTHORITATIVE - never recalculate. Prefer effectiveBalance (server-computed,
       // includes compAmountCents); fall back to remainingBalance for legacy records only.
       const balance = m.effectiveBalance ?? m.remainingBalance ?? 0;
+      if (import.meta.env.MODE !== 'production' && m.effectiveBalance !== undefined) {
+        const legacyCalc = Math.max(0, m.amount - (m.amountPaid ?? 0));
+        if (Math.abs(m.effectiveBalance - legacyCalc) > 1) {
+          console.warn('[PaymentManagement] Balance drift detected: effectiveBalance =', m.effectiveBalance, ', legacy calc =', legacyCalc, 'for membership', m.id);
+        }
+      }
       return total + Math.max(0, balance);
     }, 0);
     stats.membershipOutstanding = membershipOutstanding;
