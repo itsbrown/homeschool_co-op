@@ -6151,6 +6151,24 @@ router.post("/categories", supabaseAuth, async (req: any, res) => {
     }
 
     console.log(`➕ Creating new category "${name}" for school ID: ${user.schoolId}`);
+
+    // Check if an active category with the same name already exists — return 409
+    const existingActive = await storage.getCategoryByNameAndSchool(user.schoolId, name, true);
+    if (existingActive) {
+      return res.status(409).json({ message: `A category named "${name}" already exists` });
+    }
+
+    // Check if a soft-deleted (inactive) category with the same name exists — reactivate it
+    const existingInactive = await storage.getCategoryByNameAndSchool(user.schoolId, name, false);
+    if (existingInactive) {
+      console.log(`♻️ Reactivating soft-deleted category "${name}" (id=${existingInactive.id})`);
+      const reactivated = await storage.updateCategory(existingInactive.id, {
+        isActive: true,
+        description: description !== undefined ? description || null : existingInactive.description
+      });
+      return res.status(201).json(reactivated);
+    }
+
     const newCategory = await storage.createCategory({
       schoolId: user.schoolId,
       name,

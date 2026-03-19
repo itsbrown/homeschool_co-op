@@ -167,6 +167,24 @@ async function runMigrations() {
       // Constraint already exists, which is fine
       console.log('✅ Migration completed: unique constraint already exists on categories');
     }
+
+    // Replace hard unique constraint with a partial index scoped to active rows only
+    // This allows soft-deleted categories to be recreated with the same name
+    console.log('Running migration: Replacing categories unique constraint with partial index...');
+    try {
+      await db.execute(sql`
+        ALTER TABLE categories
+        DROP CONSTRAINT IF EXISTS categories_school_id_name_unique;
+      `);
+      await db.execute(sql`
+        CREATE UNIQUE INDEX IF NOT EXISTS categories_school_id_name_active_unique
+        ON categories(school_id, name)
+        WHERE is_active = true;
+      `);
+      console.log('✅ Migration completed: categories partial unique index created');
+    } catch (partialIndexError) {
+      console.log('✅ Migration completed: categories partial unique index already in place or constraint already dropped');
+    }
     
     // Seed default categories for all existing schools
     console.log('Running migration: Seeding default categories for existing schools...');

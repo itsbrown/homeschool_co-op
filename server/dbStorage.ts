@@ -2526,6 +2526,15 @@ export class DatabaseStorage implements IStorage {
       .orderBy(asc(categories.name));
   }
 
+  async getCategoryByNameAndSchool(schoolId: number, name: string, isActive: boolean): Promise<Category | undefined> {
+    const db = await getDb();
+    const [category] = await db
+      .select()
+      .from(categories)
+      .where(and(eq(categories.schoolId, schoolId), eq(categories.name, name), eq(categories.isActive, isActive)));
+    return category;
+  }
+
   async getHiddenCategoryIds(): Promise<number[]> {
     const db = await getDb();
     const rows = await db

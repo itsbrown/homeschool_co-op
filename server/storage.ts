@@ -484,6 +484,7 @@ export interface IStorage {
   // Category methods
   getCategoryById(id: number): Promise<any>;
   getCategoriesBySchoolId(schoolId: number): Promise<any[]>;
+  getCategoryByNameAndSchool(schoolId: number, name: string, isActive: boolean): Promise<any>;
   getHiddenCategoryIds(): Promise<number[]>;
   createCategory(category: any): Promise<any>;
   updateCategory(id: number, category: any): Promise<any>;
@@ -4243,6 +4244,10 @@ export class MemStorage implements IStorage {
     return [];
   }
 
+  async getCategoryByNameAndSchool(schoolId: number, name: string, isActive: boolean): Promise<any> {
+    return null;
+  }
+
   async getHiddenCategoryIds(): Promise<number[]> {
     return [];
   }
@@ -6722,6 +6727,14 @@ import { DatabaseStorage } from "./dbStorage";
         }
       }
 
+      async getCategoryByNameAndSchool(schoolId: number, name: string, isActive: boolean): Promise<any> {
+        try {
+          return await this.dbStorage.getCategoryByNameAndSchool(schoolId, name, isActive);
+        } catch (error) {
+          return this.memStorage.getCategoryByNameAndSchool(schoolId, name, isActive);
+        }
+      }
+
       async getHiddenCategoryIds(): Promise<number[]> {
         try {
           return await this.dbStorage.getHiddenCategoryIds();
@@ -6734,7 +6747,8 @@ import { DatabaseStorage } from "./dbStorage";
         try {
           return await this.dbStorage.createCategory(category);
         } catch (error) {
-          return this.memStorage.createCategory(category);
+          console.error('❌ CombinedStorage.createCategory DB error:', error);
+          throw error;
         }
       }
 

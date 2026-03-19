@@ -1864,10 +1864,7 @@ export const categories = pgTable("categories", {
   isPublic: boolean("is_public").default(true).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-}, (table) => ({
-  // Unique constraint to prevent duplicate categories within the same school
-  uniqueSchoolCategory: unique("categories_school_id_name_unique").on(table.schoolId, table.name)
-}));
+});
 
 export const insertCategorySchema = createInsertSchema(categories)
   .omit({ id: true, createdAt: true, updatedAt: true })
