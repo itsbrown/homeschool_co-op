@@ -2120,7 +2120,7 @@ export const weeklySkeletons = pgTable("weekly_skeletons", {
   id: serial("id").primaryKey(),
   schoolId: integer("school_id").notNull().references(() => schools.id),
   sessionId: integer("session_id").references(() => sessions.id),
-  classId: integer("class_id").references(() => classes.id, { onDelete: 'set null' }),
+  classId: integer("class_id").references(() => schoolClasses.id, { onDelete: 'set null' }),
   name: text("name").notNull(),
   description: text("description"),
   gradeLevel: text("grade_level").notNull(),
@@ -2235,7 +2235,10 @@ export const weekPlanBlockHistoryRelations = relations(weekPlanBlockHistory, ({ 
 
 // Schedule Builder schemas for validation
 export const insertWeeklySkeletonSchema = createInsertSchema(weeklySkeletons)
-  .omit({ id: true, createdAt: true, updatedAt: true });
+  .omit({ id: true, createdAt: true, updatedAt: true })
+  .extend({
+    classId: z.number().nullable().default(null),
+  });
 export const insertSkeletonBlockSchema = createInsertSchema(skeletonBlocks)
   .omit({ id: true, createdAt: true, updatedAt: true });
 export const insertWeekPlanSchema = createInsertSchema(weekPlans)

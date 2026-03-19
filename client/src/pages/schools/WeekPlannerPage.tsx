@@ -94,6 +94,7 @@ export default function WeekPlannerPage() {
   const [historyBlockId, setHistoryBlockId] = useState<number | null>(null);
   const [gapsDialog, setGapsDialog] = useState(false);
   const [gapsResult, setGapsResult] = useState<any>(null);
+  const [deleteBlockId, setDeleteBlockId] = useState<number | null>(null);
 
   const templateId = selectedTemplateId ? parseInt(selectedTemplateId) : null;
 
@@ -119,6 +120,11 @@ export default function WeekPlannerPage() {
   const { data: aiStatus } = useQuery<{ available: boolean }>({
     queryKey: ["/api/schedule-ai/status"],
   });
+
+  const { data: classesData } = useQuery<{ items: any[]; classes?: any[] }>({
+    queryKey: ["/api/school-admin/classes"],
+  });
+  const classesList = classesData?.items ?? classesData?.classes ?? [];
 
   const { data: blockHistory = [] } = useQuery<any[]>({
     queryKey: ["/api/schedule-builder/week-plan-blocks", historyBlockId, "history"],
@@ -202,7 +208,7 @@ export default function WeekPlannerPage() {
   });
 
   const generateWeekMutation = useMutation({
-    mutationFn: (data: { skeletonId: number; weekNumber: number }) =>
+    mutationFn: (data: { skeletonId: number; weekNumber: number; weekPlanId?: number }) =>
       apiRequest("POST", "/api/schedule-ai/generate-week", data),
     onSuccess: () => {
       if (selectedWeekPlanId) queryClient.invalidateQueries({ queryKey: ["/api/schedule-builder/week-plans", selectedWeekPlanId] });
@@ -237,6 +243,15 @@ export default function WeekPlannerPage() {
       setGapsDialog(true);
     },
     onError: (err: any) => toast({ title: "Gap analysis failed", description: err.message, variant: "destructive" }),
+  });
+
+  const deleteBlockMutation = useMutation({
+    mutationFn: (id: number) => apiRequest("DELETE", `/api/schedule-builder/week-plan-blocks/${id}`),
+    onSuccess: () => {
+      if (selectedWeekPlanId) queryClient.invalidateQueries({ queryKey: ["/api/schedule-builder/week-plans", selectedWeekPlanId] });
+      toast({ title: "Block deleted" });
+    },
+    onError: (err: any) => toast({ title: "Error deleting block", description: err.message, variant: "destructive" }),
   });
 
   const sortedWeekPlans = [...weekPlans].sort((a, b) => a.weekNumber - b.weekNumber);
@@ -288,9 +303,14 @@ export default function WeekPlannerPage() {
 
   const handleCreateWeek = () => {
     if (!newWeekNumber || !newWeekStartDate || !templateId) return;
+    const num = parseInt(newWeekNumber);
+    if (sortedWeekPlans.some((wp) => wp.weekNumber === num)) {
+      toast({ title: "Duplicate week number", description: `Week ${num} already exists for this template.`, variant: "destructive" });
+      return;
+    }
     createWeekMutation.mutate({
       skeletonId: templateId,
-      weekNumber: parseInt(newWeekNumber),
+      weekNumber: num,
       weekStartDate: newWeekStartDate,
       notes: newWeekNotes || null,
     });
@@ -298,9 +318,14 @@ export default function WeekPlannerPage() {
 
   const handleCloneWeek = () => {
     if (!cloneSourceId || !cloneWeekNumber || !cloneWeekStartDate) return;
+    const num = parseInt(cloneWeekNumber);
+    if (sortedWeekPlans.some((wp) => wp.weekNumber === num)) {
+      toast({ title: "Duplicate week number", description: `Week ${num} already exists for this template.`, variant: "destructive" });
+      return;
+    }
     cloneWeekMutation.mutate({
       id: cloneSourceId,
-      data: { weekNumber: parseInt(cloneWeekNumber), weekStartDate: cloneWeekStartDate },
+      data: { weekNumber: num, weekStartDate: cloneWeekStartDate },
     });
   };
 
@@ -342,9 +367,13 @@ export default function WeekPlannerPage() {
                 <SelectValue placeholder="Select a template..." />
               </SelectTrigger>
               <SelectContent>
-                {templates.map((s) => (
-                  <SelectItem key={s.id} value={String(s.id)}>{s.name} ({s.gradeLevel})</SelectItem>
-                ))}
+                {templates.map((s) => {
+                  const linkedClass = s.classId ? classesList.find((c: any) => c.id === s.classId) : null;
+                  const displayClass = linkedClass ? (linkedClass.title || linkedClass.name || `Class ${linkedClass.id}`) : s.gradeLevel;
+                  return (
+                    <SelectItem key={s.id} value={String(s.id)}>{s.name} ({displayClass})</SelectItem>
+                  );
+                })}
               </SelectContent>
             </Select>
           </div>
@@ -459,7 +488,7 @@ export default function WeekPlannerPage() {
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => templateId && generateWeekMutation.mutate({ skeletonId: templateId, weekNumber: selectedWeekData.weekNumber })}
+                              onClick={() => templateId && generateWeekMutation.mutate({ skeletonId: templateId, weekNumber: selectedWeekData.weekNumber, weekPlanId: selectedWeekPlanId ?? undefined })}
                               disabled={generateWeekMutation.isPending}
                             >
                               {generateWeekMutation.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Sparkles className="h-4 w-4 mr-1" />}
@@ -567,6 +596,14 @@ export default function WeekPlannerPage() {
                                 >
                                   <Sparkles className="h-3 w-3 mr-1" />
                                   AI
+                                </Button>
+                              )}
+                              {wb && (
+                                <Button
+                                  variant="ghost" size="sm" className="h-7 px-2 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 ml-auto"
+                                  onClick={() => setDeleteBlockId(wb.id)}
+                                >
+                                  <Trash2 className="h-3 w-3" />
                                 </Button>
                               )}
                             </div>
@@ -808,6 +845,21 @@ export default function WeekPlannerPage() {
             <Button variant="outline" onClick={() => setDeleteWeekId(null)}>Cancel</Button>
             <Button variant="destructive" onClick={() => deleteWeekId && deleteWeekMutation.mutate(deleteWeekId)} disabled={deleteWeekMutation.isPending}>
               {deleteWeekMutation.isPending ? "Deleting..." : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteBlockId !== null} onOpenChange={() => setDeleteBlockId(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Block</DialogTitle>
+            <DialogDescription>Are you sure you want to delete this block's content? The skeleton block slot remains. This cannot be undone.</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteBlockId(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={() => { if (deleteBlockId) { deleteBlockMutation.mutate(deleteBlockId); setDeleteBlockId(null); } }} disabled={deleteBlockMutation.isPending}>
+              {deleteBlockMutation.isPending ? "Deleting..." : "Delete"}
             </Button>
           </DialogFooter>
         </DialogContent>

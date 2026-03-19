@@ -21,7 +21,7 @@ router.post(
       if (!scheduleCurriculumAssistant.isAvailable()) {
         return res.status(503).json({ message: "AI service is not available" });
       }
-      const { skeletonId, weekNumber, previousWeekSummary } = req.body;
+      const { skeletonId, weekNumber, weekPlanId, previousWeekSummary } = req.body;
       const schoolId = parseInt(req.schoolId);
       if (!skeletonId || !weekNumber || isNaN(schoolId)) {
         return res.status(400).json({ message: "skeletonId and weekNumber required" });
@@ -38,6 +38,41 @@ router.post(
         schoolId,
         previousWeekSummary,
       });
+
+      // If a weekPlanId was provided, persist the generated blocks
+      if (weekPlanId && result.success && result.data?.blocks) {
+        const weekPlan = await storage.getWeekPlanById(weekPlanId);
+        if (weekPlan && weekPlan.schoolId === schoolId) {
+          const existingBlocks = await storage.getWeekPlanBlocksByWeekPlanId(weekPlanId);
+          const existingBySkeletonBlockId = new Map(existingBlocks.map((b) => [b.skeletonBlockId, b]));
+
+          for (const generatedBlock of result.data.blocks) {
+            const { skeletonBlockId, title, description, objectives, notes } = generatedBlock;
+            if (!skeletonBlockId) continue;
+            const existing = existingBySkeletonBlockId.get(skeletonBlockId);
+            if (existing) {
+              await storage.updateWeekPlanBlock(existing.id, {
+                title: title || existing.title,
+                description: description || existing.description,
+                objectives: objectives || existing.objectives,
+                notes: notes || existing.notes,
+              }, req.user?.id);
+            } else {
+              await storage.createWeekPlanBlock({
+                weekPlanId,
+                skeletonBlockId,
+                title: title || null,
+                description: description || null,
+                objectives: objectives || [],
+                groups: [],
+                lessonLink: null,
+                notes: notes || null,
+              });
+            }
+          }
+        }
+      }
+
       res.json(result);
     } catch (error) {
       console.error("Error generating week plan:", error);

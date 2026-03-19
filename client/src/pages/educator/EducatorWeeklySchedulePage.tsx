@@ -414,6 +414,13 @@ function ScheduleGrid({ weekPlan, skeleton, skeletonBlocks }: ScheduleGridProps)
                     const description = planBlock?.description || sb.defaultDescription || "";
                     const isCompleted = planBlock?.isCompleted || false;
 
+                    const hasExtraDetails = !!(
+                      (Array.isArray(planBlock?.objectives) && (planBlock.objectives as string[]).length > 0) ||
+                      (Array.isArray(planBlock?.groups) && (planBlock.groups as any[]).length > 0) ||
+                      planBlock?.notes ||
+                      planBlock?.lessonLink
+                    );
+
                     return (
                       <button
                         key={sb.id}
@@ -445,10 +452,12 @@ function ScheduleGrid({ weekPlan, skeleton, skeletonBlocks }: ScheduleGridProps)
                             {description}
                           </p>
                         )}
-                        <span className="text-[10px] text-blue-500 group-hover:text-blue-700 flex items-center gap-0.5 mt-1">
-                          Tap for full details
-                          <ChevronRight className="h-3 w-3" />
-                        </span>
+                        {hasExtraDetails && (
+                          <span className="text-[10px] text-blue-500 group-hover:text-blue-700 flex items-center gap-0.5 mt-1">
+                            Tap for full details
+                            <ChevronRight className="h-3 w-3" />
+                          </span>
+                        )}
                       </button>
                     );
                   })}

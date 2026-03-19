@@ -166,10 +166,19 @@ router.post(
       if (!skeleton) return res.status(404).json({ message: "Skeleton not found" });
       const schoolId = parseInt(req.schoolId);
       if (skeleton.schoolId !== schoolId) return res.status(403).json({ message: "Access denied" });
+      // Auto-assign sortOrder based on existing blocks for this day
+      const existingBlocks = await storage.getSkeletonBlocksBySkeletonId(skeletonId);
+      const dayOfWeek = req.body.dayOfWeek !== undefined ? parseInt(req.body.dayOfWeek) : undefined;
+      const maxSortOrder = existingBlocks
+        .filter((b) => b.dayOfWeek === dayOfWeek)
+        .reduce((max, b) => Math.max(max, b.sortOrder), -1);
+      const sortOrder = req.body.sortOrder !== undefined ? parseInt(req.body.sortOrder) : maxSortOrder + 1;
+
       const data = insertSkeletonBlockSchema.parse({
         ...req.body,
         skeletonId,
         createdBy: userId,
+        sortOrder,
       });
       const block = await storage.createSkeletonBlock(data);
       res.status(201).json(block);

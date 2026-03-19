@@ -35,6 +35,7 @@ interface TemplateFormData {
   name: string;
   description: string;
   gradeLevel: string;
+  classId: string;
   operatingDays: string[];
   sessionId: string;
   isActive: boolean;
@@ -44,6 +45,7 @@ const emptyTemplateForm: TemplateFormData = {
   name: "",
   description: "",
   gradeLevel: "",
+  classId: "",
   operatingDays: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
   sessionId: "",
   isActive: true,
@@ -57,7 +59,6 @@ interface BlockFormData {
   defaultTitle: string;
   defaultDescription: string;
   subjectArea: string;
-  sortOrder: string;
 }
 
 const emptyBlockForm: BlockFormData = {
@@ -68,7 +69,6 @@ const emptyBlockForm: BlockFormData = {
   defaultTitle: "",
   defaultDescription: "",
   subjectArea: "",
-  sortOrder: "0",
 };
 
 export default function ScheduleBuilderPage() {
@@ -185,6 +185,7 @@ export default function ScheduleBuilderPage() {
       name: s.name,
       description: s.description || "",
       gradeLevel: s.gradeLevel,
+      classId: s.classId ? String(s.classId) : "",
       operatingDays: s.operatingDays || [],
       sessionId: s.sessionId ? String(s.sessionId) : "",
       isActive: s.isActive,
@@ -193,14 +194,16 @@ export default function ScheduleBuilderPage() {
   };
 
   const handleTemplateSubmit = () => {
-    if (!templateForm.name || !templateForm.gradeLevel || templateForm.operatingDays.length === 0) {
+    if (!templateForm.name || !templateForm.classId || templateForm.operatingDays.length === 0) {
       toast({ title: "Please fill in all required fields (name, class, and at least one operating day)", variant: "destructive" });
       return;
     }
+    const selectedClass = classesList.find((cls: any) => String(cls.id) === templateForm.classId);
     const payload: any = {
       name: templateForm.name,
       description: templateForm.description || null,
-      gradeLevel: templateForm.gradeLevel,
+      gradeLevel: selectedClass ? (selectedClass.title || selectedClass.name || `Class ${selectedClass.id}`) : templateForm.gradeLevel,
+      classId: parseInt(templateForm.classId),
       operatingDays: templateForm.operatingDays,
       isActive: templateForm.isActive,
     };
@@ -253,7 +256,6 @@ export default function ScheduleBuilderPage() {
       defaultTitle: block.defaultTitle,
       defaultDescription: block.defaultDescription || "",
       subjectArea: block.subjectArea || "",
-      sortOrder: String(block.sortOrder),
     });
     setBlockDialogOpen(true);
   };
@@ -272,7 +274,6 @@ export default function ScheduleBuilderPage() {
       defaultTitle: blockForm.defaultTitle,
       defaultDescription: blockForm.defaultDescription || null,
       subjectArea: blockForm.subjectArea || null,
-      sortOrder: parseInt(blockForm.sortOrder) || 0,
     };
     if (editingBlockId) {
       updateBlockMutation.mutate({ skeletonId: activeTemplateForBlock.id, blockId: editingBlockId, data: payload });
@@ -355,13 +356,13 @@ export default function ScheduleBuilderPage() {
             </div>
             <div className="space-y-2">
               <Label>Class *</Label>
-              <Select value={templateForm.gradeLevel} onValueChange={(v) => setTemplateForm({ ...templateForm, gradeLevel: v })}>
+              <Select value={templateForm.classId} onValueChange={(v) => setTemplateForm({ ...templateForm, classId: v })}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select a class..." />
                 </SelectTrigger>
                 <SelectContent>
                   {classesList.map((cls: any) => (
-                    <SelectItem key={cls.id} value={cls.title || cls.name || `Class ${cls.id}`}>
+                    <SelectItem key={cls.id} value={String(cls.id)}>
                       {cls.title || cls.name || `Class ${cls.id}`}
                     </SelectItem>
                   ))}
@@ -553,7 +554,13 @@ function TemplateCard({
             <CardDescription className="mt-1 flex items-center gap-3">
               <span className="flex items-center gap-1">
                 <BookOpen className="h-3.5 w-3.5" />
-                {template.gradeLevel}
+                {(() => {
+                  if (template.classId) {
+                    const linked = classes.find((c: any) => c.id === template.classId);
+                    return linked ? (linked.title || linked.name || `Class ${linked.id}`) : template.gradeLevel;
+                  }
+                  return template.gradeLevel;
+                })()}
               </span>
               {linkedSession && (
                 <span className="flex items-center gap-1">
