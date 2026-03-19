@@ -251,12 +251,92 @@ The frontend sends `expectedSchedule` (firstPaymentAmount + numberOfPayments fro
 ### Why This Matters
 Previously, the cart display and payment processor used independent calculation logic with different date sources. This caused the user to see "5 payments of $1,035" but be charged "2 payments of $2,587.50 + $810.00". The shared helper eliminates this class of bug.
 
+## Frontend Money Display Rules
+
+### The Golden Rule
+Any component that **displays a money amount must receive it from a server response** — never derive it by combining primitive fields (e.g. `price + membership.amount`, `subtotal - discount`, `amount - amountPaid`). Add this comment above every total display line:
+```typescript
+// SERVER-AUTHORITATIVE - never recalculate
+```
+
+### CartSnapshot — Authoritative Source During Checkout
+`POST /api/cart/snapshot` returns `CartSnapshot` from `server/utils/cart-pricing.ts`. Once loaded, these are the only values that should appear in any checkout display:
+
+| Field | Use for |
+|-------|---------|
+| `snapshot.totals.grandTotal` | Full order total before credits |
+| `snapshot.totals.payableAmount` | Amount user actually pays (after credits) |
+| `snapshot.credits.applied` | Credits deducted from this order |
+| `snapshot.paymentPlans[n].amount` | First payment for a given plan |
+| `snapshot.paymentPlans[n].numberOfPayments` | Payment count for a given plan |
+
+In `CartCheckout.tsx`, the snapshot is fetched into `authoritativeData`. After that loads, **all totals must read from `authoritativeData`**, not from `cart.total`, `cart.membership?.amount`, or any local arithmetic.
+
+### Pre-Snapshot Estimates (CartDrawer, CartContext)
+`cart.total` in `CartContext` is intentionally client-side — it powers the cart badge count and drawer preview **before the server snapshot exists**. This is acceptable but must be clearly labelled:
+
+```typescript
+// CLIENT-SIDE ESTIMATE ONLY — for cart badge & drawer preview.
+// Final authoritative totals come from CartSnapshot after checkout initiation.
+const total = Math.max(0, subtotal - totalDiscountAmount);
+```
+
+In the cart drawer total display, always use "Estimated Total" (not "Total") and include a small disclaimer:
+```tsx
+<p className="text-xs text-muted-foreground">Estimated Total (before final review)</p>
+<span className="font-bold">{formatCurrency(cart.total + (cart.membership?.amount || 0))}</span>
+<small className="text-muted-foreground block">Final amount confirmed at checkout. Credits and discounts applied server-side.</small>
+```
+
+### `effectiveBalance` — Always Prefer Over Client Subtraction
+Never compute a balance by subtracting fields:
+```typescript
+// WRONG — client-side arithmetic
+const balance = Math.max(0, enrollment.amount - (enrollment.amountPaid ?? 0));
+
+// CORRECT — server-computed field
+const balance = enrollment.effectiveBalance ?? enrollment.remainingBalance ?? 0;
+```
+`effectiveBalance` is computed server-side as `totalCost - totalPaid - compAmountCents` and is always preferred. If it's absent (legacy records), fall back to `remainingBalance`. Never fall back to client subtraction.
+
+### Credit Cap Display — Informational Only
+Do not compute `Math.min(availableCredits, payment.amount)` for display and present it as the amount that will be charged. Instead:
+- Show `payment.amount` as "Amount due" (server value)
+- Show `availableCredits` as "Available credits" info text
+- Let the server compute and validate the actual credit deduction on submit
+- After a payment response, add a divergence check:
+```typescript
+if (response.creditsApplied !== localCreditPreview) {
+  console.warn('[SERVER-AUTH] credit divergence:', { server: response.creditsApplied, local: localCreditPreview });
+}
+```
+
+### Divergence Detection Pattern
+Whenever a CartSnapshot loads, check whether the server total matches what was previously displayed locally:
+```typescript
+if (authoritativeData?.payableAmount !== undefined) {
+  const clientCalc = cart.total + (cart.membership?.amount || 0);
+  if (Math.abs(authoritativeData.payableAmount - clientCalc) > 1) {
+    console.warn('[SERVER-AUTH] payableAmount divergence:', {
+      server: authoritativeData.payableAmount,
+      clientCalc,
+      diff: authoritativeData.payableAmount - clientCalc,
+    });
+  }
+}
+```
+
+### 409 Conflict Auto-Retry
+When `POST /api/stripe/create-payment-intent` returns 409, the server provides authoritative values in `conflictData.authoritative`. The client auto-retries once using those values. After `MAX_RETRIES` (1), a conflict guard prevents infinite loops and shows a "Prices Updated — refresh your cart" error. See `client/src/pages/CartCheckout.tsx`.
+
 ## Common Pitfalls
 
 - **Financial report shows balance owed for a fully-paid family** → stale `scheduled_payments` records remain `pending` after enrollment balance reaches zero (sync is non-fatal and can silently fail) → use the auto-heal-at-read-time pattern from `asa-database-patterns`; always verify `effectiveBalance` using the `??` fallback before treating a record as outstanding
 - **Auto-pay double-charges a fully-paid enrollment** → scheduler processes any `pending` scheduled payment without checking enrollment balance first → always call `storage.getProgramEnrollmentById()` and verify `effectiveBalance <= 0` before the Stripe call; skip rather than charge on any lookup error (see `server/services/auto-pay-scheduler.ts`)
 - **Comp leaves overdue installments on the books** → cancellation logic filters only `status = 'pending'`, missing `overdue` records → always filter `p.status === 'pending' || p.status === 'overdue'` when cancelling or reducing scheduled payments after a comp
 - **Outstanding Balance card doesn't update after a credit-only payment** → payment success handler invalidated `/api/payment-history` and `/api/scheduled-payments` but missed `/api/parent/enrollments` → the Outstanding Balance card reads from the enrollment query; always include `["/api/parent/enrollments"]` in post-payment cache invalidation alongside the other payment query keys
+- **Frontend shows wrong total after discount or credit applied** → component displays `cart.total + membership.amount` arithmetic after a CartSnapshot was already fetched → once `authoritativeData` exists, all totals must read from `authoritativeData.payableAmount`; the old client calculation should only serve as a pre-snapshot fallback
+- **Balance display shows stale amount** → component uses `Math.max(0, enrollment.amount - enrollment.amountPaid)` fallback instead of `enrollment.effectiveBalance` → always prefer `effectiveBalance ?? remainingBalance ?? 0`; the client subtraction fallback silently ignores `compAmountCents` and other server-side adjustments
 
 ## Best Practices
 
@@ -275,6 +355,7 @@ Previously, the cart display and payment processor used independent calculation 
 - Always skip (never charge) when an enrollment balance lookup fails — a missed charge is recoverable, a double-charge is not
 
 ### Don't
+- Don't compute any money total on the frontend — display only values from server API responses or CartSnapshot; never add, subtract, or `Math.min`/`Math.max` raw price fields together for display
 - Don't trust client-side pricing or discount calculations
 - Don't create PaymentIntents with amounts below $0.50 (50 cents)
 - Don't modify `totalPaid` or `remainingBalance` on enrollments directly — let the payment flow update them
