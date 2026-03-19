@@ -1,0 +1,41 @@
+Permissions & Access Model
+Who can currently access the Schedule Builder / Week Planner? (school admins only? individual educators? parents?)
+How are permissions currently enforced? (role checks in middleware? per-school ownership? userId matching?)
+What exact permission levels do you want to add for the "schedule builder"?
+Examples:
+Full admin: create/edit/delete skeletons/templates/plans
+Educator: create/edit plans for their assigned classes only
+View-only for parents (already exists?)
+Can educators create their own skeletons/templates, or only use school-provided ones?
+
+Any school-level vs teacher-level separation? (e.g. school template library vs personal drafts)
+
+Data Model Details (from shared/schema.ts)
+What tables are involved in scheduling? (weekly_skeletons, week_plans, week_plan_blocks, schedule_blocks, templates?)
+Key fields on weekly_skeletons / week_plans / week_plan_blocks? Especially:
+How is a week_plan linked to a skeleton?
+How are blocks linked to days of week?
+What fields store AI-generated content (objectives, groups, notes, lessonLink, etc.)?
+Does a week_plan have a status (draft/published)?
+Any classId or childId or parentId linking?
+
+
+Current AI Generation Flow
+What does /api/schedule-ai/generate-week currently return? (array of block objects? full week plan?)
+What data does the frontend send to it? (skeletonId, weekNumber, weekPlanId?)
+Does the AI service (scheduleCurriculumAssistant.ts) use Grok/Claude/OpenAI? Any prompt templates I should know?
+
+Frontend State & Mutations
+Are you using tRPC, React Query, or plain fetch for these endpoints?
+How is the week plan list fetched for parents/educators? (getWeekPlansByChild? getWeekPlansByClass?)
+Is there optimistic UI or refetch on generate success?
+
+Any Known Edge Cases or Pain Points
+What breaks most often in production with the scheduler?
+Are there concurrency issues (multiple educators editing same plan)?
+Mobile vs desktop differences that are problematic?
+Any performance issues with many blocks/plans?
+
+Nice-to-have / Future Vision
+Beyond the listed fixes, what would make this "best in class" for you?
+(e.g. drag-and-drop already mentioned, version history, comments on blocks, parent notifications on new plan, AI suggestions per block instead of whole week, integration with Google Calendar/Outlook, etc.)

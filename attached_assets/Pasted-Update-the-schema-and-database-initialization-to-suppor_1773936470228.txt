@@ -1,0 +1,38 @@
+Update the schema and database initialization to support scheduler permissions without using Drizzle migrations or db:push.
+
+This project applies all schema changes via idempotent SQL in server/init-db.ts (startup script).
+
+Do the following:
+
+1. In shared/schema.ts:
+   - Add classId column to weekly_skeletons table:
+     classId: integer("class_id").references(() => classes.id, { onDelete: 'set null' }),
+   - Create new table schedule_permissions:
+     id: serial("id").primaryKey(),
+     grantedToUserId: integer("granted_to_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+     grantedByUserId: integer("granted_by_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+     resourceType: text("resource_type").notNull(), // 'skeleton' | 'weekPlan' | 'weekPlanBlock'
+     resourceId: integer("resource_id").notNull(),
+     permissionLevel: text("permission_level").notNull().$type<'read' | 'write' | 'manage'>(),
+     scope: text("scope").default('granted'), // 'granted' = full access, 'class' = restricted
+     createdAt: timestamp("created_at").defaultNow(),
+     expiresAt: timestamp("expires_at"),
+
+2. In server/init-db.ts (or wherever the startup SQL runs):
+   - Add idempotent SQL to add the classId column if it doesn't exist:
+     ALTER TABLE weekly_skeletons ADD COLUMN IF NOT EXISTS class_id INTEGER REFERENCES classes(id) ON DELETE SET NULL;
+   - Add idempotent SQL to create the schedule_permissions table if it doesn't exist (full CREATE TABLE IF NOT EXISTS with all columns and constraints)
+   - Add a one-time backfill comment/query for classId (can be run manually once):
+     -- One-time backfill (run manually in DB console or add as one-time SQL):
+     UPDATE weekly_skeletons ws
+     SET class_id = c.id
+     FROM classes c
+     WHERE LOWER(TRIM(ws.grade_level)) = LOWER(TRIM(c.title))
+     AND ws.class_id IS NULL;
+
+3. In server/api/schedule-builder.ts:
+   - When creating/updating a skeleton (POST/PATCH /skeletons), accept classId from req.body (zod schema update) and save it to weekly_skeletons.classId
+   - Keep gradeLevel text for display fallback / legacy
+
+Apply changes safely. Show updated schema.ts, the new SQL blocks for init-db.ts, and any Zod/body changes in the API routes.
+Do NOT create a migrations folder or suggest db:push.

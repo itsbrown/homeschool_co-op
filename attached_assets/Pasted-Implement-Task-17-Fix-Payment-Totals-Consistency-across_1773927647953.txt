@@ -1,0 +1,63 @@
+Implement Task #17 - Fix Payment Totals Consistency across the entire billing flow.
+
+Goal: Make sure the dashboard widget, BillingPage "Outstanding Balance", BillingPage "Total Owed / Net Due" summary, and ParentConciergePage totalDue all show the **same authoritative number** (or clearly explain why they differ slightly).
+
+Core rules to enforce everywhere:
+1. Per-enrollment balance = effectiveBalance = Math.max(0, totalCost - totalPaid - compAmount || 0)
+   → Never use the stale remainingBalance column directly anymore.
+2. Global total owed / net due / totalBalance =
+   enrollment effectiveBalances sum
+   +
+   only those pending/overdue scheduled payments where the enrollment's effectiveBalance === 0
+   (prevents double-counting while including stranded / future payments on "paid" enrollments)
+3. Add clear comments explaining this logic in every place it is calculated.
+
+Specific changes:
+
+1. In server/api/billing.ts (around lines 555-649 – the enrollment fetch / summary logic):
+   - Replace any use of enrollment.remainingBalance with the effectiveBalance formula
+   - Example replacement:
+     const effectiveBalance = Math.max(0,
+       (enrollment.totalCost || 0) -
+       (enrollment.totalPaid || 0) -
+       (enrollment.compAmount || 0)
+     );
+   - If effectiveBalance is already a selected/generated field in the query, prefer that.
+   - Add a separate query (or join) to fetch extra scheduled payments:
+     Only include scheduledPayments where status IN ('pending', 'overdue', 'processing')
+     AND the enrollment's effectiveBalance <= 0
+   - Compute:
+     const enrollmentTotal = enrollments.reduce((sum, e) => sum + e.effectiveBalance, 0);
+     const extraScheduledTotal = extraPayments.reduce((sum, p) => sum + p.amount, 0);
+     const totalBalance = enrollmentTotal + extraScheduledTotal;
+   - Return in the response: totalBalance, enrollmentBalances (array or map), extraScheduledTotal (optional for transparency)
+
+2. In server/api/parent-concierge.ts (around lines 730-916 – the /context endpoint):
+   - Align totalDue / netDue / totalBalance calculation to **exactly** match the billing.ts logic
+   - Use the same effectiveBalance formula per enrollment
+   - Include the same filtered extra scheduled payments logic
+   - Return consistent field names (e.g. totalDue, totalBalance) so frontend can use one value
+
+3. In client/src/pages/BillingPage.tsx (around lines 1670-1734 – the stats and summary row):
+   - Change "Outstanding Balance" stat to use the new server totalBalance (or sum of effectiveBalances if API keeps them separate)
+   - Update the "TOTAL OWED / NET DUE" summary row at the bottom to use the server-provided totalBalance
+     Example:
+     <div className="summary-row total">
+       <span>Total Owed / Net Due</span>
+       <strong>{formatCurrency(billingData.totalBalance)}</strong>
+     </div>
+   - If extraScheduledTotal > 0, add a small explanation below:
+     <small>Includes ${formatCurrency(extraScheduledTotal)} in pending/overdue installments not yet reflected in enrollment balances.</small>
+   - Keep the "Next Scheduled Installments" box as a separate visual (it's useful), but make clear it's additional context, not part of current owed unless overdue.
+
+4. General safety rules:
+   - Add comments everywhere the formula is used:
+     // AUTHORITATIVE BALANCE: effectiveBalance = max(0, totalCost - totalPaid - compAmount)
+     // GLOBAL TOTAL OWED: enrollment effective balances + pending installments on fully-paid enrollments only
+   - In development mode, log any detected drift:
+     if (process.env.NODE_ENV !== 'production' && calculated !== serverValue) {
+       console.warn(`Balance drift detected: client=${calculated}, server=${serverValue}`);
+     }
+   - Do not remove or change the separate "Next Scheduled Installments" display – just ensure the headline total is correct.
+
+Apply these changes safely across the listed files. Preserve existing functionality, error handling, and types. Add explanatory comments so future developers understand why we filter scheduled payments this way.
