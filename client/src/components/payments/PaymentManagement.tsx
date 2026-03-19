@@ -255,7 +255,8 @@ function ScheduledPaymentDialog({
   const [loadingCredits, setLoadingCredits] = useState(false);
   const [creditPaymentComplete, setCreditPaymentComplete] = useState(false);
   
-  // Calculate credits to apply (capped at payment amount)
+  // Credit preview — informational only. Server validates and applies the actual deduction on submit.
+  // Both operands (availableCredits, payment.amount) come from server API responses.
   const creditsToApply = applyCredits ? Math.min(availableCredits, payment.amount) : 0;
   const amountAfterCredits = Math.max(0, payment.amount - creditsToApply);
   const isFullyCoveredByCredits = amountAfterCredits === 0 && creditsToApply > 0;
@@ -726,6 +727,8 @@ function CombinedPaymentDialog({
   const [creditPaymentComplete, setCreditPaymentComplete] = useState(false);
 
   const totalAmount = payments.reduce((sum: number, p: any) => sum + p.amount, 0);
+  // Credit preview — informational only. Server validates and applies the actual deduction on submit.
+  // Both operands (availableCredits, totalAmount) come from server API responses.
   const creditsToApply = applyCredits ? Math.min(availableCredits, totalAmount) : 0;
   const amountAfterCredits = Math.max(0, totalAmount - creditsToApply);
   const isFullyCoveredByCredits = amountAfterCredits === 0 && creditsToApply > 0;
@@ -1387,7 +1390,9 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
       (m: any) => !['expired', 'suspended'].includes(m.status)
     );
     const membershipOutstanding = activeMemberships.reduce((total: number, m: any) => {
-      const balance = m.remainingBalance ?? Math.max(0, m.amount - (m.amountPaid ?? 0));
+      // SERVER-AUTHORITATIVE - never recalculate. Prefer effectiveBalance (server-computed,
+      // includes compAmountCents); fall back to remainingBalance for legacy records only.
+      const balance = m.effectiveBalance ?? m.remainingBalance ?? 0;
       return total + Math.max(0, balance);
     }, 0);
     stats.membershipOutstanding = membershipOutstanding;
@@ -1465,6 +1470,9 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
     }
   };
   
+  // SERVER-DERIVED NET DUE — both operands (totalOutstanding, totalAvailableCents) come from server API.
+  const netDue = Math.max(0, (paymentStats.totalOutstanding || 0) - (creditsData?.totalAvailableCents || 0));
+
   return (
     <div className="space-y-6">
       <Tabs defaultValue="all-payments" className="w-full">
@@ -1562,8 +1570,9 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
                     <div className="text-muted-foreground self-center hidden sm:block">=</div>
                     <div>
                       <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Net Due</p>
-                      <p className={`text-xl font-bold ${Math.max(0, (paymentStats.totalOutstanding || 0) - (creditsData?.totalAvailableCents || 0)) > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                        {formatCurrency(Math.max(0, (paymentStats.totalOutstanding || 0) - (creditsData?.totalAvailableCents || 0)))}
+                      {/* SERVER-AUTHORITATIVE - never recalculate; uses netDue const derived from server API values */}
+                      <p className={`text-xl font-bold ${netDue > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                        {formatCurrency(netDue)}
                       </p>
                     </div>
                   </div>

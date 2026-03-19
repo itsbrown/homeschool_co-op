@@ -797,6 +797,8 @@ const calculateCartTotalsSync = (
   }
   
   const totalDiscountAmount = siblingDiscount + freeAfterThreeDiscount + promoDiscount;
+  // CLIENT-SIDE ESTIMATE ONLY — for cart badge & drawer preview.
+  // Final authoritative totals come from CartSnapshot after checkout initiation.
   const total = Math.max(0, subtotal - totalDiscountAmount);
 
   return {
@@ -947,6 +949,8 @@ const calculateCartTotalsWithDiscounts = async (
   const autoAndPromoDiscountAmount = allDiscounts.reduce((sum, discount) => sum + discount.discountAmount, 0);
   const totalDiscountAmount = siblingDiscount + freeAfterThreeDiscount + autoAndPromoDiscountAmount;
 
+  // CLIENT-SIDE ESTIMATE ONLY — for cart badge & drawer preview.
+  // Final authoritative totals come from CartSnapshot after checkout initiation.
   const total = Math.max(0, subtotal - totalDiscountAmount);
 
   return {

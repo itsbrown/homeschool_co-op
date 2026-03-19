@@ -253,10 +253,13 @@ export default function CartDrawer() {
                 )}
 
                 <Separator />
+                {/* CLIENT-SIDE ESTIMATE ONLY — for cart badge & drawer preview.
+                    Final authoritative totals come from CartSnapshot after checkout initiation. */}
                 <div className="flex justify-between font-medium">
-                  <span>Total:</span>
+                  <span>Estimated Total:</span>
                   <span>{formatCurrency(cart.total + (cart.membership?.amount || 0))}</span>
                 </div>
+                <p className="text-xs text-muted-foreground">Final amount confirmed at checkout. Credits and discounts applied server-side.</p>
               </div>
 
               {/* Discount Info */}
