@@ -14,6 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Plus, Edit, Trash2, Calendar, Clock, ChevronDown, ChevronUp, LayoutGrid, BookOpen } from "lucide-react";
 import type { WeeklySkeleton, SkeletonBlock, Session } from "@shared/schema";
+import { BLOCK_TYPE_BADGE_COLORS } from "@/lib/blockColors";
 
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
@@ -23,12 +24,6 @@ const DAY_NAME_TO_NUMBER: Record<string, number> = {
 
 const DAY_NUMBER_TO_NAME: Record<number, string> = {
   0: "Sunday", 1: "Monday", 2: "Tuesday", 3: "Wednesday", 4: "Thursday", 5: "Friday", 6: "Saturday",
-};
-
-const BLOCK_TYPE_COLORS: Record<string, string> = {
-  anchor: "bg-indigo-100 text-indigo-800",
-  curriculum: "bg-emerald-100 text-emerald-800",
-  flexible: "bg-amber-100 text-amber-800",
 };
 
 interface TemplateFormData {
@@ -96,6 +91,16 @@ export default function ScheduleBuilderPage() {
     queryKey: ["/api/school-admin/classes"],
   });
   const classesList = classesData?.items ?? classesData?.classes ?? [];
+
+  const { data: aiStatus } = useQuery<{ available: boolean }>({
+    queryKey: ["/api/schedule-ai/status"],
+  });
+  const aiAvailable = aiStatus?.available ?? false;
+
+  const { data: activeTemplateBlocks = [] } = useQuery<SkeletonBlock[]>({
+    queryKey: ["/api/schedule-builder/skeletons", activeTemplateForBlock?.id, "blocks"],
+    enabled: !!activeTemplateForBlock?.id,
+  });
 
   const createTemplateMutation = useMutation({
     mutationFn: (data: any) => apiRequest("POST", "/api/schedule-builder/skeletons", data),
@@ -266,8 +271,29 @@ export default function ScheduleBuilderPage() {
       toast({ title: "Please fill in all required fields", variant: "destructive" });
       return;
     }
+
+    if (blockForm.endTime <= blockForm.startTime) {
+      toast({ title: "Invalid time range", description: "End time must be after start time.", variant: "destructive" });
+      return;
+    }
+
+    const dayOfWeekNum = parseInt(blockForm.dayOfWeek);
+    const overlapping = activeTemplateBlocks.find((b) => {
+      if (b.dayOfWeek !== dayOfWeekNum) return false;
+      if (editingBlockId && b.id === editingBlockId) return false;
+      return blockForm.startTime < b.endTime && blockForm.endTime > b.startTime;
+    });
+    if (overlapping) {
+      toast({
+        title: "Time overlap detected",
+        description: `This block overlaps with "${overlapping.defaultTitle}" (${overlapping.startTime}–${overlapping.endTime}).`,
+        variant: "destructive",
+      });
+      return;
+    }
+
     const payload = {
-      dayOfWeek: parseInt(blockForm.dayOfWeek),
+      dayOfWeek: dayOfWeekNum,
       startTime: blockForm.startTime,
       endTime: blockForm.endTime,
       blockType: blockForm.blockType,
@@ -471,7 +497,12 @@ export default function ScheduleBuilderPage() {
               <Input placeholder="e.g. Math, Science, Language Arts" value={blockForm.subjectArea} onChange={(e) => setBlockForm({ ...blockForm, subjectArea: e.target.value })} />
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            {!aiAvailable && (
+              <p className="text-xs text-muted-foreground italic sm:mr-auto self-center">
+                AI generation is currently unavailable. Fill blocks manually or contact support.
+              </p>
+            )}
             <Button variant="outline" onClick={() => setBlockDialogOpen(false)}>Cancel</Button>
             <Button onClick={handleBlockSubmit} disabled={blockIsPending}>
               {blockIsPending ? "Saving..." : editingBlockId ? "Update Block" : "Add Block"}
@@ -675,7 +706,7 @@ function BlockEditor({
                     <div key={block.id} className="flex items-start gap-2 p-2 rounded-md bg-muted/50 group">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <Badge className={`text-xs ${BLOCK_TYPE_COLORS[block.blockType] || ""}`}>{block.blockType}</Badge>
+                          <Badge className={`text-xs ${BLOCK_TYPE_BADGE_COLORS[block.blockType] || ""}`}>{block.blockType}</Badge>
                           <span className="text-xs text-muted-foreground flex items-center gap-0.5">
                             <Clock className="h-3 w-3" />
                             {block.startTime} – {block.endTime}

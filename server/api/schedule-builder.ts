@@ -20,13 +20,29 @@ const router = Router();
 router.get(
   "/skeletons",
   supabaseAuth,
-  requireRole(['schoolAdmin', 'admin', 'superAdmin']),
+  requireRole(['schoolAdmin', 'admin', 'superAdmin', 'educator', 'mentor', 'teacher']),
   requireSchoolContext,
   async (req: any, res) => {
     try {
       const schoolId = parseInt(req.schoolId);
       if (isNaN(schoolId)) return res.status(400).json({ message: "Invalid school ID" });
       const skeletons = await storage.getWeeklySkeletonsBySchool(schoolId);
+      const userRole = req.user?.role;
+      if (userRole && ['educator', 'mentor', 'teacher'].includes(userRole)) {
+        const userId = req.user?.id;
+        const assignments = await storage.getEducatorClassAssignmentsByEducatorId(userId);
+        const assignedClassIds = new Set(assignments.map((a: any) => a.classId));
+        const filtered = await Promise.all(
+          skeletons.map(async (s) => {
+            if (!s.classId) return s;
+            if (assignedClassIds.has(s.classId)) return s;
+            const classInfo = await storage.getClassById(s.classId);
+            if (classInfo?.instructorId === userId) return s;
+            return null;
+          })
+        );
+        return res.json(filtered.filter(Boolean));
+      }
       res.json(skeletons);
     } catch (error) {
       console.error("Error fetching skeletons:", error);
@@ -38,6 +54,7 @@ router.get(
 router.get(
   "/skeletons/:id",
   supabaseAuth,
+  requireRole(['schoolAdmin', 'admin', 'superAdmin', 'educator', 'mentor', 'teacher']),
   requireSchoolContext,
   async (req: any, res) => {
     try {
@@ -47,6 +64,15 @@ router.get(
       if (!skeleton) return res.status(404).json({ message: "Skeleton not found" });
       const schoolId = parseInt(req.schoolId);
       if (skeleton.schoolId !== schoolId) return res.status(403).json({ message: "Access denied" });
+      const userId = req.user?.id;
+      const userRole = req.user?.role;
+      if (userRole && ['educator', 'mentor', 'teacher'].includes(userRole) && skeleton.classId) {
+        const assignments = await storage.getEducatorClassAssignmentsByEducatorId(userId);
+        const assigned = assignments.some((a) => a.classId === skeleton.classId);
+        const classInfo = skeleton.classId ? await storage.getClassById(skeleton.classId) : null;
+        const isInstructor = classInfo?.instructorId === userId;
+        if (!assigned && !isInstructor) return res.status(403).json({ message: "Access denied" });
+      }
       res.json(skeleton);
     } catch (error) {
       console.error("Error fetching skeleton:", error);
@@ -134,6 +160,7 @@ router.delete(
 router.get(
   "/skeletons/:skeletonId/blocks",
   supabaseAuth,
+  requireRole(['schoolAdmin', 'admin', 'superAdmin', 'educator', 'mentor', 'teacher']),
   requireSchoolContext,
   async (req: any, res) => {
     try {
@@ -143,6 +170,15 @@ router.get(
       if (!skeleton) return res.status(404).json({ message: "Skeleton not found" });
       const schoolId = parseInt(req.schoolId);
       if (skeleton.schoolId !== schoolId) return res.status(403).json({ message: "Access denied" });
+      const userId = req.user?.id;
+      const userRole = req.user?.role;
+      if (userRole && ['educator', 'mentor', 'teacher'].includes(userRole) && skeleton.classId) {
+        const assignments = await storage.getEducatorClassAssignmentsByEducatorId(userId);
+        const assigned = assignments.some((a) => a.classId === skeleton.classId);
+        const classInfo = await storage.getClassById(skeleton.classId);
+        const isInstructor = classInfo?.instructorId === userId;
+        if (!assigned && !isInstructor) return res.status(403).json({ message: "Access denied" });
+      }
       const blocks = await storage.getSkeletonBlocksBySkeletonId(skeletonId);
       res.json(blocks);
     } catch (error) {
@@ -268,6 +304,7 @@ router.post(
 router.get(
   "/skeletons/:skeletonId/week-plans",
   supabaseAuth,
+  requireRole(['schoolAdmin', 'admin', 'superAdmin', 'educator', 'mentor', 'teacher']),
   requireSchoolContext,
   async (req: any, res) => {
     try {
@@ -277,6 +314,15 @@ router.get(
       if (!skeleton) return res.status(404).json({ message: "Skeleton not found" });
       const schoolId = parseInt(req.schoolId);
       if (skeleton.schoolId !== schoolId) return res.status(403).json({ message: "Access denied" });
+      const userId = req.user?.id;
+      const userRole = req.user?.role;
+      if (userRole && ['educator', 'mentor', 'teacher'].includes(userRole) && skeleton.classId) {
+        const assignments = await storage.getEducatorClassAssignmentsByEducatorId(userId);
+        const assigned = assignments.some((a) => a.classId === skeleton.classId);
+        const classInfo = await storage.getClassById(skeleton.classId);
+        const isInstructor = classInfo?.instructorId === userId;
+        if (!assigned && !isInstructor) return res.status(403).json({ message: "Access denied" });
+      }
       const plans = await storage.getWeekPlansBySkeletonId(skeletonId);
       res.json(plans);
     } catch (error) {
@@ -289,12 +335,30 @@ router.get(
 router.get(
   "/week-plans/published",
   supabaseAuth,
+  requireRole(['schoolAdmin', 'admin', 'superAdmin', 'educator', 'mentor', 'teacher']),
   requireSchoolContext,
   async (req: any, res) => {
     try {
       const schoolId = parseInt(req.schoolId);
       if (isNaN(schoolId)) return res.status(400).json({ message: "Invalid school ID" });
       const plans = await storage.getPublishedWeekPlansBySchool(schoolId);
+      const userRole = req.user?.role;
+      if (userRole && ['educator', 'mentor', 'teacher'].includes(userRole)) {
+        const userId = req.user?.id;
+        const assignments = await storage.getEducatorClassAssignmentsByEducatorId(userId);
+        const assignedClassIds = new Set(assignments.map((a: any) => a.classId));
+        const filtered = await Promise.all(
+          plans.map(async (p) => {
+            const skeleton = await storage.getWeeklySkeletonById(p.skeletonId);
+            if (!skeleton?.classId) return p;
+            if (assignedClassIds.has(skeleton.classId)) return p;
+            const classInfo = await storage.getClassById(skeleton.classId);
+            if (classInfo?.instructorId === userId) return p;
+            return null;
+          })
+        );
+        return res.json(filtered.filter(Boolean));
+      }
       res.json(plans);
     } catch (error) {
       console.error("Error fetching published week plans:", error);
@@ -306,6 +370,7 @@ router.get(
 router.get(
   "/week-plans/:id",
   supabaseAuth,
+  requireRole(['schoolAdmin', 'admin', 'superAdmin', 'educator', 'mentor', 'teacher']),
   requireSchoolContext,
   async (req: any, res) => {
     try {
@@ -315,6 +380,18 @@ router.get(
       if (!plan) return res.status(404).json({ message: "Week plan not found" });
       const schoolId = parseInt(req.schoolId);
       if (plan.schoolId !== schoolId) return res.status(403).json({ message: "Access denied" });
+      const userId = req.user?.id;
+      const userRole = req.user?.role;
+      if (userRole && ['educator', 'mentor', 'teacher'].includes(userRole)) {
+        const skeleton = await storage.getWeeklySkeletonById(plan.skeletonId);
+        if (skeleton?.classId) {
+          const assignments = await storage.getEducatorClassAssignmentsByEducatorId(userId);
+          const assigned = assignments.some((a) => a.classId === skeleton.classId);
+          const classInfo = await storage.getClassById(skeleton.classId);
+          const isInstructor = classInfo?.instructorId === userId;
+          if (!assigned && !isInstructor) return res.status(403).json({ message: "Access denied" });
+        }
+      }
       const blocks = await storage.getWeekPlanBlocksByWeekPlanId(id);
       res.json({ ...plan, blocks });
     } catch (error) {
@@ -451,6 +528,7 @@ router.post(
 router.get(
   "/week-plans/:weekPlanId/blocks",
   supabaseAuth,
+  requireRole(['schoolAdmin', 'admin', 'superAdmin', 'educator', 'mentor', 'teacher']),
   requireSchoolContext,
   async (req: any, res) => {
     try {
@@ -460,6 +538,18 @@ router.get(
       if (!plan) return res.status(404).json({ message: "Week plan not found" });
       const schoolId = parseInt(req.schoolId);
       if (plan.schoolId !== schoolId) return res.status(403).json({ message: "Access denied" });
+      const userId = req.user?.id;
+      const userRole = req.user?.role;
+      if (userRole && ['educator', 'mentor', 'teacher'].includes(userRole)) {
+        const skeleton = await storage.getWeeklySkeletonById(plan.skeletonId);
+        if (skeleton?.classId) {
+          const assignments = await storage.getEducatorClassAssignmentsByEducatorId(userId);
+          const assigned = assignments.some((a) => a.classId === skeleton.classId);
+          const classInfo = await storage.getClassById(skeleton.classId);
+          const isInstructor = classInfo?.instructorId === userId;
+          if (!assigned && !isInstructor) return res.status(403).json({ message: "Access denied" });
+        }
+      }
       const blocks = await storage.getWeekPlanBlocksByWeekPlanId(weekPlanId);
       res.json(blocks);
     } catch (error) {
@@ -499,6 +589,7 @@ router.post(
 router.patch(
   "/week-plan-blocks/:id",
   supabaseAuth,
+  requireRole(['schoolAdmin', 'admin', 'superAdmin', 'educator', 'mentor', 'teacher']),
   requireSchoolContext,
   async (req: any, res) => {
     try {
@@ -511,6 +602,16 @@ router.patch(
       if (!plan) return res.status(404).json({ message: "Week plan not found" });
       const schoolId = parseInt(req.schoolId);
       if (plan.schoolId !== schoolId) return res.status(403).json({ message: "Access denied" });
+      const userRole = req.user?.role;
+      if (userRole && ['educator', 'mentor', 'teacher'].includes(userRole)) {
+        const skeleton = await storage.getWeeklySkeletonById(plan.skeletonId);
+        if (skeleton?.classId) {
+          const assignments = await storage.getEducatorClassAssignmentsByEducatorId(userId);
+          const assigned = assignments.some((a: any) => a.classId === skeleton.classId);
+          const classInfo = await storage.getClassById(skeleton.classId);
+          if (!assigned && classInfo?.instructorId !== userId) return res.status(403).json({ message: "Access denied" });
+        }
+      }
       const updated = await storage.updateWeekPlanBlock(id, req.body, userId);
       res.json(updated);
     } catch (error) {
@@ -547,6 +648,7 @@ router.delete(
 router.post(
   "/week-plan-blocks/:id/complete",
   supabaseAuth,
+  requireRole(['schoolAdmin', 'admin', 'superAdmin', 'educator', 'mentor', 'teacher']),
   requireSchoolContext,
   async (req: any, res) => {
     try {
@@ -559,6 +661,16 @@ router.post(
       if (!plan) return res.status(404).json({ message: "Week plan not found" });
       const schoolId = parseInt(req.schoolId);
       if (plan.schoolId !== schoolId) return res.status(403).json({ message: "Access denied" });
+      const userRole = req.user?.role;
+      if (userRole && ['educator', 'mentor', 'teacher'].includes(userRole)) {
+        const skeleton = await storage.getWeeklySkeletonById(plan.skeletonId);
+        if (skeleton?.classId) {
+          const assignments = await storage.getEducatorClassAssignmentsByEducatorId(userId);
+          const assigned = assignments.some((a: any) => a.classId === skeleton.classId);
+          const classInfo = await storage.getClassById(skeleton.classId);
+          if (!assigned && classInfo?.instructorId !== userId) return res.status(403).json({ message: "Access denied" });
+        }
+      }
       const updated = await storage.markBlockCompleted(id, userId);
       res.json(updated);
     } catch (error) {
@@ -575,10 +687,12 @@ router.post(
 router.get(
   "/week-plan-blocks/:id/history",
   supabaseAuth,
+  requireRole(['schoolAdmin', 'admin', 'superAdmin', 'educator', 'mentor', 'teacher']),
   requireSchoolContext,
   async (req: any, res) => {
     try {
       const id = parseInt(req.params.id);
+      const userId = req.user?.id;
       if (isNaN(id)) return res.status(400).json({ message: "Invalid block ID" });
       const block = await storage.getWeekPlanBlockById(id);
       if (!block) return res.status(404).json({ message: "Block not found" });
@@ -586,6 +700,16 @@ router.get(
       if (!plan) return res.status(404).json({ message: "Week plan not found" });
       const schoolId = parseInt(req.schoolId);
       if (plan.schoolId !== schoolId) return res.status(403).json({ message: "Access denied" });
+      const userRole = req.user?.role;
+      if (userRole && ['educator', 'mentor', 'teacher'].includes(userRole)) {
+        const skeleton = await storage.getWeeklySkeletonById(plan.skeletonId);
+        if (skeleton?.classId) {
+          const assignments = await storage.getEducatorClassAssignmentsByEducatorId(userId);
+          const assigned = assignments.some((a: any) => a.classId === skeleton.classId);
+          const classInfo = await storage.getClassById(skeleton.classId);
+          if (!assigned && classInfo?.instructorId !== userId) return res.status(403).json({ message: "Access denied" });
+        }
+      }
       const history = await storage.getBlockHistory(id);
       res.json(history);
     } catch (error) {

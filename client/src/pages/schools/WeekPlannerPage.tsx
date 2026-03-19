@@ -19,16 +19,11 @@ import {
   ThumbsUp, Lightbulb, X
 } from "lucide-react";
 import type { WeekPlan, WeekPlanBlock, WeeklySkeleton, SkeletonBlock } from "@shared/schema";
+import { BLOCK_TYPE_COLORS } from "@/lib/blockColors";
 
 const DAY_NAMES: Record<number, string> = {
   0: "Sunday", 1: "Monday", 2: "Tuesday", 3: "Wednesday",
   4: "Thursday", 5: "Friday", 6: "Saturday",
-};
-
-const BLOCK_TYPE_COLORS: Record<string, string> = {
-  anchor: "border-l-indigo-500",
-  curriculum: "border-l-emerald-500",
-  flexible: "border-l-amber-500",
 };
 
 const BLOCK_TYPE_BADGE: Record<string, string> = {
@@ -504,7 +499,7 @@ export default function WeekPlannerPage() {
                           <Copy className="h-4 w-4 mr-1" />
                           Clone
                         </Button>
-                        {aiAvailable && (
+                        {aiAvailable ? (
                           <>
                             <Button
                               size="sm"
@@ -525,6 +520,10 @@ export default function WeekPlannerPage() {
                               Analyze Gaps
                             </Button>
                           </>
+                        ) : (
+                          <p className="text-xs text-muted-foreground italic">
+                            AI generation is currently unavailable. Fill blocks manually or contact support.
+                          </p>
                         )}
                         <Button
                           size="sm"
@@ -603,7 +602,7 @@ export default function WeekPlannerPage() {
                                   History
                                 </Button>
                               )}
-                              {aiAvailable && (
+                              {aiAvailable ? (
                                 <Button
                                   variant="ghost" size="sm" className="h-7 px-2 text-xs"
                                   onClick={() => {
@@ -619,6 +618,8 @@ export default function WeekPlannerPage() {
                                   <Sparkles className="h-3 w-3 mr-1" />
                                   AI
                                 </Button>
+                              ) : (
+                                <span className="text-xs text-muted-foreground px-2 py-1">AI generation is currently unavailable. Fill blocks manually or contact support.</span>
                               )}
                               {wb && (
                                 <Button
@@ -837,7 +838,7 @@ export default function WeekPlannerPage() {
             </div>
           </div>
           <DialogFooter className="flex-col sm:flex-row gap-2">
-            {aiAvailable && editingSkeletonBlockId && (
+            {aiAvailable && editingSkeletonBlockId ? (
               <Button
                 type="button"
                 variant="outline"
@@ -848,7 +849,11 @@ export default function WeekPlannerPage() {
                 {suggestBlockMutation.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Sparkles className="h-4 w-4 mr-1" />}
                 AI Suggest
               </Button>
-            )}
+            ) : !aiAvailable ? (
+              <p className="text-xs text-muted-foreground italic sm:mr-auto self-center">
+                AI generation is currently unavailable. Fill blocks manually or contact support.
+              </p>
+            ) : null}
             <Button variant="outline" onClick={() => setBlockEditDialog(false)}>Cancel</Button>
             <Button onClick={handleBlockSubmit} disabled={createBlockMutation.isPending || updateBlockMutation.isPending}>
               {(createBlockMutation.isPending || updateBlockMutation.isPending) ? "Saving..." : editingBlockId ? "Update Block" : "Add Block"}
