@@ -2413,6 +2413,43 @@ async function runMigrations() {
   } catch (repairError: any) {
     console.log('Data repair note (non-blocking):', repairError.message);
   }
+
+  // Add classId FK to weekly_skeletons and create schedule_permissions table
+  try {
+    await db.execute(sql`
+      ALTER TABLE weekly_skeletons
+        ADD COLUMN IF NOT EXISTS class_id INTEGER REFERENCES classes(id) ON DELETE SET NULL;
+    `);
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS schedule_permissions (
+        id SERIAL PRIMARY KEY,
+        granted_to_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        granted_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        resource_type TEXT NOT NULL,
+        resource_id INTEGER NOT NULL,
+        permission_level TEXT NOT NULL,
+        scope TEXT DEFAULT 'granted',
+        created_at TIMESTAMP DEFAULT NOW(),
+        expires_at TIMESTAMP
+      );
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_schedule_permissions_user
+        ON schedule_permissions(granted_to_user_id);
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_schedule_permissions_resource
+        ON schedule_permissions(resource_type, resource_id);
+    `);
+    // One-time backfill (run manually in DB console — do NOT uncomment here):
+    // UPDATE weekly_skeletons ws SET class_id = c.id
+    // FROM classes c
+    // WHERE LOWER(TRIM(ws.grade_level)) = LOWER(TRIM(c.title))
+    //   AND ws.class_id IS NULL;
+    console.log('✅ Migration completed: weekly_skeletons.class_id added and schedule_permissions table created');
+  } catch (schedulePermError: any) {
+    console.log('Migration note (schedule permissions):', schedulePermError.message);
+  }
 }
 
 // Initialize database tables

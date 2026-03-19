@@ -2120,6 +2120,7 @@ export const weeklySkeletons = pgTable("weekly_skeletons", {
   id: serial("id").primaryKey(),
   schoolId: integer("school_id").notNull().references(() => schools.id),
   sessionId: integer("session_id").references(() => sessions.id),
+  classId: integer("class_id").references(() => classes.id, { onDelete: 'set null' }),
   name: text("name").notNull(),
   description: text("description"),
   gradeLevel: text("grade_level").notNull(),
@@ -2254,6 +2255,24 @@ export type InsertWeekPlanBlock = z.infer<typeof insertWeekPlanBlockSchema>;
 export type WeekPlanBlock = typeof weekPlanBlocks.$inferSelect;
 export type InsertWeekPlanBlockHistory = z.infer<typeof insertWeekPlanBlockHistorySchema>;
 export type WeekPlanBlockHistory = typeof weekPlanBlockHistory.$inferSelect;
+
+// Schedule Permissions - Grant-based permission model for educator-scoped access
+export const schedulePermissions = pgTable("schedule_permissions", {
+  id: serial("id").primaryKey(),
+  grantedToUserId: integer("granted_to_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  grantedByUserId: integer("granted_by_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  resourceType: text("resource_type").notNull(),
+  resourceId: integer("resource_id").notNull(),
+  permissionLevel: text("permission_level").notNull().$type<'read' | 'write' | 'manage'>(),
+  scope: text("scope").default('granted'),
+  createdAt: timestamp("created_at").defaultNow(),
+  expiresAt: timestamp("expires_at"),
+});
+
+export const insertSchedulePermissionSchema = createInsertSchema(schedulePermissions)
+  .omit({ id: true, createdAt: true });
+export type InsertSchedulePermission = z.infer<typeof insertSchedulePermissionSchema>;
+export type SchedulePermission = typeof schedulePermissions.$inferSelect;
 
 // Custom Forms - Form Builder System
 export const customForms = pgTable("custom_forms", {
