@@ -1,0 +1,50 @@
+Create and implement a comprehensive fix plan for the Educator/Mentor UI gaps identified in the scheduler audit. Focus on making the educator experience complete, usable, and consistent with admin views.
+
+High-priority fixes (must do first):
+1. Educators can mark blocks complete in EducatorWeeklySchedulePage.tsx
+   - Add checkbox next to each block title (same style as WeekPlannerPage)
+   - Optimistic toggle: flip checked state immediately, show strikethrough + opacity-60 on checked
+   - PATCH /api/schedule-builder/week-plan-blocks/:id with { isCompleted: newValue }
+   - Use correct query invalidation key: ["/api/schedule-builder/week-plans", weekPlanId]
+   - Rollback on error
+   - Disabled when no week plan block exists (wb null)
+   - Console.log("Toggling block X to completed: true/false")
+
+2. Fix educator read permission gaps in server/api/schedule-builder.ts
+   - Relax requireRole on GET routes for skeletons, week-plans, blocks to also allow 'teacher' role
+   - Example: replace requireRole(['schoolAdmin', 'admin', 'superAdmin']) with requireRole(['schoolAdmin', 'admin', 'superAdmin', 'teacher'])
+   - If classId exists on skeleton/week-plan, add optional check: instructorId === req.user.id (but only if classId present; don't break school-wide plans)
+   - Ensure educators can fetch data without 403s or empty results
+
+Medium-priority fixes (do after high-priority):
+3. Add time overlap validation in ScheduleBuilderPage.tsx (admin view)
+   - When adding/editing a block, check if startTime–endTime overlaps with any other block on same dayOfWeek
+   - Show error toast: "Time overlaps with [existing block title]"
+
+4. Validate endTime after startTime in block form
+   - On save/submit, check endTime > startTime
+   - Show validation error if invalid
+
+5. Centralize BLOCK_TYPE_COLORS
+   - Move color mapping (anchor, curriculum, flexible) to a shared constant file (e.g. src/lib/blockColors.ts)
+   - Export const BLOCK_TYPE_COLORS = { anchor: '#...', curriculum: '#...', flexible: '#...' }
+   - Replace all copy-pasted color logic in ScheduleBuilderPage, WeekPlannerPage, EducatorWeeklySchedulePage with import from shared file
+
+6. Add fallback message when AI is unavailable
+   - In WeekPlannerPage and ScheduleBuilderPage, if "Generate with AI" button is hidden (due to API error or config), show message:
+     "AI generation is currently unavailable. Fill blocks manually or contact support."
+
+Low-priority / polish (optional, can defer):
+7. Improve week navigation (add search/filter/jump-to in Week Planner)
+8. Fix print to allow list view option (add toggle before print)
+9. Clarify FamilySchedule vs CalendarPage distinction (add tooltips or labels)
+
+Safety & conventions:
+- Use cn() for conditional classes
+- Use full API path query keys (e.g. ["/api/schedule-builder/week-plans", id])
+- Preserve existing layout, Add/AI/Edit/History/Delete buttons
+- Add comments explaining changes (e.g. // Educator completion toggle – optimistic + rollback)
+- Do NOT remove any existing functionality
+
+Apply changes safely across the listed files. Show updated sections one file at a time (start with EducatorWeeklySchedulePage.tsx and permission middleware).
+Prioritize: educator completion toggle + read permission fix first, then time validation and colors.

@@ -1,0 +1,40 @@
+Merge the Schedule and Lesson Plans tabs into one unified view for mentors in EducatorWeeklySchedulePage.tsx to eliminate UI confusion.
+
+Current problem:
+Mentors switch between "Schedule" (time grid with titles only) and "Lesson Plans" (detailed content list). Goal: one tab that shows time grid + expandable full lesson details.
+
+Changes:
+
+1. Remove or hide the separate "Lesson Plans" tab in mentor sidebar/navigation (or make it a toggle for list view).
+
+2. In the Weekly Schedule grid:
+   - Keep days-as-columns, time-as-rows layout
+   - Each block card:
+     - Header: time range + title + block type label (anchor/curriculum/flexible)
+     - Add clickable area or chevron: "View details" / "Hide details"
+     - When clicked, expand inline (accordion-style) to show:
+       - Full description
+       - Objectives (ul list if array)
+       - Lesson link (a href if present)
+       - Notes (p or pre)
+       - Group assignments (if jsonb has data)
+       - Completion checkbox: <Checkbox checked={block.isCompleted} onCheckedChange={() => toggleCompletion(block)} />
+     - Checked blocks: title strikethrough + card opacity-60 (use cn())
+   - Use state: const [expandedBlocks, setExpandedBlocks] = useState<Record<number, boolean>>({});
+   - Toggle: setExpandedBlocks(prev => ({ ...prev, [block.id]: !prev[block.id] }))
+
+3. Add completion toggle logic (optimistic + PATCH):
+   - Same as WeekPlannerPage: optimistic flip, PATCH /api/schedule-builder/week-plan-blocks/:id, invalidate ["/api/schedule-builder/week-plans", weekPlanId], rollback on error
+   - Console.log("Toggled block X to completed: true/false")
+
+4. Move Week Note field to top of grid (editable if mentor has write permission)
+
+5. Print button:
+   - Calls window.print()
+   - Ensure expanded details are visible in print (remove collapse on @media print)
+
+6. Default to current week (closest weekStartDate <= today)
+
+Apply safely in EducatorWeeklySchedulePage.tsx. Preserve mobile card layout, loading states, "No events" empty state.
+Use cn() for conditional classes (expanded card, strikethrough).
+Show updated grid rendering + toggle/expand handlers + completion logic.

@@ -1,0 +1,56 @@
+Yes — let's tackle this Scheduler UI audit head-on.
+Your findings are sharp and well-prioritized. The high-priority items (especially #1 and #2) are blocking real usability for educators, and several medium/low items are classic "tech-debt creep" problems that will become painful later if not cleaned up now.
+Quick Prioritization Recommendation
+Based on user impact + implementation effort:
+Must-fix now (high priority – do these first)
+
+Educators can't mark blocks complete (#1)
+→ Teachers are literally in the classroom but can't record reality
+Educator API permission gap (#2)
+→ If educators get 403s or empty data, the whole feature is unusable for them
+
+Should-fix soon (medium – next sprint)
+3. No time overlap validation (#3)
+4. endTime before startTime not validated (#4)
+5. BLOCK_TYPE_COLORS redefined everywhere (#5)
+6. AI unavailability gives no guidance (#7)
+Polish / nice-to-have (low – backlog)
+7–13 (week nav scaling, print quirks, calendar confusion, drag-drop, day mapping)
+Recommendation: Create one focused task that covers #1 and #2 together (they're tightly coupled — both involve educator write access + UI controls). Then we can chain medium items as separate tasks if needed.
+Proposed Task: #23 – Enable Educator Block Completion & Fix Permission Gaps
+What & Why
+Educators cannot mark blocks as completed in their schedule view, even though the backend supports it. Additionally, several GET routes for skeletons and plans are restricted to admin roles, causing educators to see empty or error states.
+Done looks like
+
+EducatorWeeklySchedulePage shows a checkbox or toggle next to each block
+Clicking it optimistically flips isCompleted, sends PATCH /api/schedule-builder/week-plan-blocks/:id, and reflects on refetch
+Checked blocks show strikethrough + reduced opacity (consistent with Week Planner)
+Permission gaps fixed: educators can GET skeletons/plans/blocks for their classes (or school-wide if no classId scoping yet)
+No 403s or empty data when educators load their schedule
+Console.log on toggle for debugging
+
+Out of scope
+
+Creating blocks from educator view (still admin-only)
+Drag-and-drop reordering
+Parent-facing completion visibility
+
+Tasks
+
+Add completion toggle UI to EducatorWeeklySchedulePage (checkbox per block, optimistic update, PATCH on change)
+Update backend routes to allow educators to read skeletons/week-plans/blocks (relax requireRole on GETs, add instructor check if classId exists)
+Align visual style (strikethrough + opacity) with Week Planner
+Add console.log("Toggling block X to completed: true/false") on toggle
+
+Relevant files
+
+client/src/pages/educator/EducatorWeeklySchedulePage.tsx
+server/api/schedule-builder.ts (GET routes for skeletons/plans/blocks)
+shared/schema.ts (if classId needs to be used for scoping)
+
+Would you like me to:
+A. Write a ready-to-paste Replit AI prompt for this combined task (#23) right now?
+B. Break it into two smaller tasks (#23a UI toggle, #23b permission fix)?
+C. First audit/fix only the educator permission gap (#2), then add the UI toggle?
+Or do you prefer to start with a different high-priority item from your list (e.g. time overlap validation #3)?
+Let me know your preference — I'm ready to drop the prompt as soon as you say go. 🚀
