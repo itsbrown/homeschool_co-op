@@ -95,6 +95,7 @@ export default function WeekPlannerPage() {
   const [gapsDialog, setGapsDialog] = useState(false);
   const [gapsResult, setGapsResult] = useState<any>(null);
   const [deleteBlockId, setDeleteBlockId] = useState<number | null>(null);
+  const [completionOverrides, setCompletionOverrides] = useState<Record<number, boolean>>({});
 
   const templateId = selectedTemplateId ? parseInt(selectedTemplateId) : null;
 
@@ -198,14 +199,34 @@ export default function WeekPlannerPage() {
     onError: (err: any) => toast({ title: "Error updating block", description: err.message, variant: "destructive" }),
   });
 
-  const completeBlockMutation = useMutation({
-    mutationFn: (id: number) => apiRequest("POST", `/api/schedule-builder/week-plan-blocks/${id}/complete`),
-    onSuccess: () => {
+  const toggleCompletionMutation = useMutation({
+    mutationFn: ({ id, isCompleted }: { id: number; isCompleted: boolean }) =>
+      apiRequest("PATCH", `/api/schedule-builder/week-plan-blocks/${id}`, { isCompleted }),
+    onSuccess: (_res, { id }) => {
       if (selectedWeekPlanId) queryClient.invalidateQueries({ queryKey: ["/api/schedule-builder/week-plans", selectedWeekPlanId] });
-      toast({ title: "Block completion toggled" });
+      setCompletionOverrides((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
     },
-    onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+    onError: (err: any, { id }) => {
+      console.error("Error toggling block completion:", err);
+      setCompletionOverrides((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+    },
   });
+
+  function toggleBlockCompletion(wb: { id: number; isCompleted: boolean } | null) {
+    console.log("toggleBlockCompletion called", wb);
+    if (!wb) return;
+    const newValue = !(completionOverrides[wb.id] ?? wb.isCompleted);
+    setCompletionOverrides((prev) => ({ ...prev, [wb.id]: newValue }));
+    toggleCompletionMutation.mutate({ id: wb.id, isCompleted: newValue });
+  }
 
   const generateWeekMutation = useMutation({
     mutationFn: (data: { skeletonId: number; weekNumber: number; weekPlanId?: number }) =>
@@ -527,7 +548,7 @@ export default function WeekPlannerPage() {
                       {blocksByDay[dayNum]?.map(({ skeletonBlock: sb, weekBlock: wb }) => (
                         <Card
                           key={sb.id}
-                          className={`border-l-4 ${BLOCK_TYPE_COLORS[sb.blockType] || "border-l-gray-300"} ${wb?.isCompleted ? "opacity-60" : ""}`}
+                          className={`border-l-4 ${BLOCK_TYPE_COLORS[sb.blockType] || "border-l-gray-300"} ${wb && (completionOverrides[wb.id] ?? wb.isCompleted) ? "opacity-60" : ""}`}
                         >
                           <CardContent className="p-3 space-y-2">
                             <div className="flex items-center justify-between gap-1">
@@ -539,12 +560,13 @@ export default function WeekPlannerPage() {
                             </div>
                             <div className="flex items-start gap-2">
                               <Checkbox
-                                checked={wb?.isCompleted ?? false}
-                                onCheckedChange={() => wb && completeBlockMutation.mutate(wb.id)}
+                                checked={completionOverrides[wb?.id ?? 0] ?? wb?.isCompleted ?? false}
+                                onCheckedChange={() => toggleBlockCompletion(wb ?? null)}
+                                disabled={!wb}
                                 className="mt-0.5"
                               />
                               <div className="flex-1 min-w-0">
-                                <p className={`text-sm font-medium truncate ${wb?.isCompleted ? "line-through" : ""}`}>
+                                <p className={`text-sm font-medium truncate ${wb && (completionOverrides[wb.id] ?? wb.isCompleted) ? "line-through opacity-60" : ""}`}>
                                   {wb?.title || sb.defaultTitle}
                                 </p>
                                 {(wb?.description || sb.defaultDescription) && (
