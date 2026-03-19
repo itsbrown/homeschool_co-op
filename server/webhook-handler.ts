@@ -692,7 +692,8 @@ export const webhookHandler = async (req: Request, res: Response) => {
                   ? originalAmount  // Use original full amount when credits were applied
                   : paymentIntent.amount;  // Use Stripe amount for non-credit payments
                 const newAmountPaid = currentAmountPaid + totalPaymentAmount;
-                const newBalance = Math.max(0, (enrollment.totalCost || 0) - newAmountPaid);
+                const compAmount = enrollment.compAmountCents ?? 0;
+                const newBalance = Math.max(0, (enrollment.totalCost || 0) - newAmountPaid - compAmount);
                 
                 // Update program enrollment in database
                 const updatedEnrollment = await storage.updateProgramEnrollment(targetEnrollmentId, {
@@ -703,6 +704,26 @@ export const webhookHandler = async (req: Request, res: Response) => {
                 
                 if (updatedEnrollment) {
                   console.log(`✅ Updated enrollment ${targetEnrollmentId}: paid=${newAmountPaid}, balance=${newBalance}`);
+                }
+
+                // AUTO-HEAL: if the enrollment is now fully paid, cancel all remaining pending/overdue
+                // scheduled payment rows so they don't appear as outstanding in dashboards.
+                if (newBalance === 0) {
+                  try {
+                    const remainingInstallments = await storage.getScheduledPaymentsByEnrollmentId(targetEnrollmentId);
+                    let cancelledCount = 0;
+                    for (const sp of remainingInstallments) {
+                      if ((sp.status === 'pending' || sp.status === 'overdue') && sp.id !== parseInt(scheduledPaymentId)) {
+                        await storage.updateScheduledPayment(sp.id, { status: 'cancelled' });
+                        cancelledCount++;
+                      }
+                    }
+                    if (cancelledCount > 0) {
+                      console.log(`✅ Auto-cancelled ${cancelledCount} stale scheduled payment(s) for fully-paid enrollment ${targetEnrollmentId}`);
+                    }
+                  } catch (healErr: any) {
+                    console.error(`⚠️ Auto-heal: failed to cancel stale installments for enrollment ${targetEnrollmentId}:`, healErr.message);
+                  }
                 }
               } else {
                 console.error(`❌ Enrollment ${targetEnrollmentId} not found for scheduled payment`);
