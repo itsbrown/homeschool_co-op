@@ -741,48 +741,36 @@ router.get('/context', supabaseAuth, async (req: any, res) => {
       return { ...enrollment, effectiveBalance, remainingBalance: effectiveBalance };
     });
 
+    // Status filtering: skip non-active enrollments (aligned with billing API terminalStatuses)
     const nonTerminalEnrollments = enrichedEnrollments.filter((e: any) => {
-      if (['cancelled', 'waitlist', 'withdrawn', 'failed', 'completed'].includes(e.status)) return false;
+      if (['cancelled', 'completed', 'waitlist', 'withdrawn', 'failed', 'rejected'].includes(e.status)) return false;
       if (user.schoolId && e.schoolId !== user.schoolId) return false;
       return true;
     });
     const dedupedContextEnrollments = deduplicateEnrollments(nonTerminalEnrollments);
     const unpaidParentEnrollments = dedupedContextEnrollments.filter((e: any) => e.effectiveBalance > 0);
-    const totalDue = unpaidParentEnrollments.reduce((sum: number, e: any) => sum + e.effectiveBalance, 0);
+    const enrollmentDue = unpaidParentEnrollments.reduce((sum: number, e: any) => sum + e.effectiveBalance, 0);
 
-    // Keep scheduled payments for displaying upcoming due dates (not for totalDue calculation)
     const scheduledPayments = await storage.getScheduledPaymentsByParentEmail(userEmail);
 
-    // AUTO-HEAL: cancel stale pending/overdue scheduled payments for fully-paid enrollments.
-    // This keeps the concierge widget accurate without waiting for the next reconciliation job.
-    const pendingOrOverduePayments = scheduledPayments.filter(
+    // ANTI-DOUBLE-COUNTING: build set of enrollment IDs where effectiveBalance > 0.
+    // Scheduled installments for these enrollments are already captured in enrollmentDue,
+    // so we must NOT add them again. Only add installments for enrollments with effectiveBalance === 0.
+    const enrollmentIdsWithPositiveBalance = new Set(unpaidParentEnrollments.map((e: any) => e.id));
+
+    const rawPendingOrOverdue = scheduledPayments.filter(
       p => (p.status === 'pending' || p.status === 'overdue') && (!user.schoolId || p.schoolId === user.schoolId)
     );
-    const healedIds = new Set<number>();
-    for (const sp of pendingOrOverduePayments) {
-      if (sp.enrollmentId) {
-        try {
-          const enr = await storage.getProgramEnrollmentById(sp.enrollmentId);
-          if (enr) {
-            const balance = Math.max(0, (enr.totalCost ?? 0) - (enr.totalPaid ?? 0) - (enr.compAmountCents ?? 0));
-            if (balance <= 0) {
-              try {
-                await storage.updateScheduledPayment(sp.id, { status: 'cancelled' });
-              } catch (cancelErr: any) {
-                console.error(`⚠️ Concierge auto-heal: failed to cancel scheduled payment ${sp.id} for enrollment ${sp.enrollmentId}:`, cancelErr.message);
-                continue; // Don't add to healedIds if cancel failed — will still show in list
-              }
-              healedIds.add(sp.id);
-            }
-          }
-        } catch {
-          // Non-blocking — skip on error
-        }
-      }
-    }
+    const nonDoubleCountedInstallmentsTotal = rawPendingOrOverdue
+      .filter(p => !enrollmentIdsWithPositiveBalance.has(p.enrollmentId))
+      .reduce((sum, p) => sum + (p.amount || 0), 0);
+
+    // COMBINED TOTAL: enrollment effectiveBalances + pending/overdue installments for zero-balance enrollments
+    // This formula is identical to billing API's totalBalance computation.
+    const totalDue = enrollmentDue + nonDoubleCountedInstallmentsTotal;
 
     const pendingPayments = scheduledPayments
-      .filter(p => (p.status === 'pending' || p.status === 'overdue') && !healedIds.has(p.id) && (!user.schoolId || p.schoolId === user.schoolId))
+      .filter(p => (p.status === 'pending' || p.status === 'overdue') && (!user.schoolId || p.schoolId === user.schoolId))
       .sort((a, b) => {
         const dateA = a.scheduledDate ? new Date(a.scheduledDate).getTime() : Infinity;
         const dateB = b.scheduledDate ? new Date(b.scheduledDate).getTime() : Infinity;

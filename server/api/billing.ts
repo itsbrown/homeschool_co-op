@@ -553,46 +553,79 @@ router.get('/summary', async (req, res) => {
 
     // Calculate enrollment details with balances
     const enrollmentDetails = [];
-    let totalBalance = 0;
+    let enrollmentBalancesSum = 0;
+
+    // Status filtering: skip non-active enrollments (aligned with concierge nonTerminalEnrollments logic)
+    const terminalStatuses = ['cancelled', 'completed', 'waitlist', 'withdrawn', 'failed', 'rejected'];
 
     for (const enrollment of allEnrollments) {
-      // Get class details
+      if (terminalStatuses.includes(enrollment.status)) continue;
+
       const classDetails = await storage.getClassById(enrollment.classId);
       if (!classDetails) continue;
 
-      // Get child details
       const child = children.find(c => c.id === enrollment.childId);
       if (!child) continue;
 
-      // Calculate balance based on enrollment data
-      const totalAmount = enrollment.totalCost || classDetails.price || 0;
-      const totalPaid = enrollment.totalPaid || enrollment.amount || 0; // Use updated totalPaid field
-      // Use remainingBalance if available, otherwise calculate from totalCost - totalPaid
-      const balance = enrollment.remainingBalance !== undefined 
-        ? enrollment.remainingBalance 
-        : (totalAmount - totalPaid);
+      // AUTHORITATIVE PER-ENROLLMENT BALANCE: max(0, totalCost - totalPaid - compAmountCents)
+      // Uses totalCost ?? 0 (no classDetails.price fallback for balance calc — matches concierge)
+      const totalCost = enrollment.totalCost ?? 0;
+      const totalPaid = enrollment.totalPaid ?? 0;
+      const compAmount = enrollment.compAmountCents ?? 0;
+      const effectiveBalance = Math.max(0, totalCost - totalPaid - compAmount);
 
-      // Always show all enrollments, but only add positive balances to total
       enrollmentDetails.push({
         enrollmentId: enrollment.id,
         childName: `${child.firstName} ${child.lastName}`,
         className: classDetails.title,
-        classPrice: totalAmount,
+        classPrice: totalCost || classDetails.price || 0,
         amountPaid: totalPaid,
-        balance: balance,
+        balance: effectiveBalance,
         status: enrollment.status,
         enrollmentDate: enrollment.enrollmentDate,
-        depositRequired: enrollment.depositRequired || Math.round(totalAmount * 0.1)
+        depositRequired: enrollment.depositRequired || Math.round(totalCost * 0.1)
       });
       
-      // Only add positive balances to the total outstanding amount
-      if (balance > 0) {
-        totalBalance += balance;
+      if (effectiveBalance > 0) {
+        enrollmentBalancesSum += effectiveBalance;
       }
     }
 
-    // Get pending scheduled payments (payment plan installments not yet paid)
-    let scheduledPaymentsTotal = 0;
+    // DEDUPLICATION: group by classId-childId, keep only the latest enrollment per group.
+    // This matches concierge's deduplicateEnrollments() logic — prevents duplicate enrollment
+    // rows for the same class/child from inflating the total.
+    const groups: Record<string, typeof enrollmentDetails> = {};
+    for (const detail of enrollmentDetails) {
+      const enrollment = allEnrollments.find(e => e.id === detail.enrollmentId);
+      if (!enrollment) continue;
+      const key = `${enrollment.classId}-${enrollment.childId}`;
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(detail);
+    }
+    const dedupedEnrollmentDetails: typeof enrollmentDetails = [];
+    for (const group of Object.values(groups)) {
+      const sorted = group.sort((a, b) => {
+        const enrollmentA = allEnrollments.find(e => e.id === a.enrollmentId);
+        const enrollmentB = allEnrollments.find(e => e.id === b.enrollmentId);
+        const dateA = new Date(a.enrollmentDate || enrollmentA?.createdAt || 0).getTime();
+        const dateB = new Date(b.enrollmentDate || enrollmentB?.createdAt || 0).getTime();
+        return dateB - dateA;
+      });
+      dedupedEnrollmentDetails.push(sorted[0]);
+    }
+
+    // Recompute enrollmentBalancesSum from deduped list
+    enrollmentBalancesSum = dedupedEnrollmentDetails.reduce((sum, d) => sum + Math.max(0, d.balance), 0);
+
+    // ANTI-DOUBLE-COUNTING: build set of enrollment IDs where effectiveBalance > 0.
+    // Scheduled installments for these enrollments are already captured in enrollmentBalancesSum,
+    // so we must NOT add them again. Only add installments for enrollments with effectiveBalance === 0
+    // (stranded installments not yet reflected in the enrollment row's totalPaid).
+    const enrollmentIdsWithPositiveBalance = new Set(
+      dedupedEnrollmentDetails.filter(d => d.balance > 0).map(d => d.enrollmentId)
+    );
+
+    let nonDoubleCountedScheduledTotal = 0;
     let pendingScheduledPayments: Array<{
       id: number;
       amount: number;
@@ -605,7 +638,10 @@ router.get('/summary', async (req, res) => {
     try {
       const allScheduledPayments = await storage.getScheduledPaymentsByParentEmail(userEmail);
       pendingScheduledPayments = allScheduledPayments
-        .filter(p => p.status === 'pending')
+        .filter(p =>
+          (p.status === 'pending' || p.status === 'overdue') &&
+          !enrollmentIdsWithPositiveBalance.has(p.enrollmentId)
+        )
         .map(p => ({
           id: p.id,
           amount: p.amount,
@@ -614,36 +650,35 @@ router.get('/summary', async (req, res) => {
           totalInstallments: p.totalInstallments,
           status: p.status
         }));
-      
-      scheduledPaymentsTotal = pendingScheduledPayments.reduce((sum, p) => sum + p.amount, 0);
-      console.log(`📅 Found ${pendingScheduledPayments.length} pending scheduled payments totaling ${scheduledPaymentsTotal} cents`);
+      nonDoubleCountedScheduledTotal = pendingScheduledPayments.reduce((sum, p) => sum + p.amount, 0);
+      console.log(`📅 Non-double-counted scheduled payments: ${pendingScheduledPayments.length} totaling ${nonDoubleCountedScheduledTotal} cents`);
     } catch (error) {
       console.log('⚠️ Could not fetch scheduled payments:', error);
     }
     
-    // Total outstanding = enrollment balances + pending scheduled payments
-    const combinedBalance = totalBalance + scheduledPaymentsTotal;
+    // COMBINED TOTAL: enrollment effectiveBalances + pending/overdue installments for zero-balance enrollments
+    const totalBalance = enrollmentBalancesSum + nonDoubleCountedScheduledTotal;
 
     const summary = {
-      totalBalance: combinedBalance,
+      totalBalance,
       totalBalanceFormatted: new Intl.NumberFormat('en-US', {
         style: 'currency',
         currency: 'USD'
-      }).format(combinedBalance / 100),
-      enrollmentBalance: totalBalance,
-      scheduledPaymentsBalance: scheduledPaymentsTotal,
+      }).format(totalBalance / 100),
+      enrollmentBalance: enrollmentBalancesSum,
+      scheduledPaymentsBalance: nonDoubleCountedScheduledTotal,
       pendingScheduledPayments: pendingScheduledPayments.length,
-      enrollmentCount: enrollmentDetails.length,
-      enrollmentDetails: enrollmentDetails,
+      enrollmentCount: dedupedEnrollmentDetails.length,
+      enrollmentDetails: dedupedEnrollmentDetails,
       parentEmail: userEmail
     };
 
     console.log('✅ Billing summary generated:', {
-      combinedBalance,
-      enrollmentBalance: totalBalance,
-      scheduledPaymentsBalance: scheduledPaymentsTotal,
+      totalBalance,
+      enrollmentBalance: enrollmentBalancesSum,
+      scheduledPaymentsBalance: nonDoubleCountedScheduledTotal,
       pendingScheduledPayments: pendingScheduledPayments.length,
-      enrollmentCount: enrollmentDetails.length,
+      enrollmentCount: dedupedEnrollmentDetails.length,
       parentEmail: userEmail
     });
 
