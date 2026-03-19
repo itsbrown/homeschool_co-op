@@ -55,6 +55,7 @@ function StatusBadge({ status }: { status: string }) {
     absent: 'bg-red-100 text-red-800',
     late: 'bg-yellow-100 text-yellow-800',
     excused: 'bg-blue-100 text-blue-800',
+    early_departure: 'bg-orange-100 text-orange-800',
     scheduled: 'bg-gray-100 text-gray-800',
     in_progress: 'bg-blue-100 text-blue-800',
     completed: 'bg-green-100 text-green-800',
@@ -497,6 +498,7 @@ export default function AttendanceManagementPage() {
                     <SelectItem value="absent">Absent</SelectItem>
                     <SelectItem value="late">Late</SelectItem>
                     <SelectItem value="excused">Excused</SelectItem>
+                    <SelectItem value="early_departure">Early Departure</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -543,13 +545,20 @@ export default function AttendanceManagementPage() {
                           <TableHead>Status</TableHead>
                           <TableHead>Check-In</TableHead>
                           <TableHead>Check-Out</TableHead>
-                          <TableHead>Tardy</TableHead>
+                          <TableHead>Minutes</TableHead>
                           <TableHead>Location</TableHead>
                           <TableHead>Notes</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {records.map((record: any) => (
+                        {records.map((record: any) => {
+                          let minutesDisplay = '—';
+                          if (record.status === 'late' && record.tardyMinutes) {
+                            minutesDisplay = `${record.tardyMinutes} min late`;
+                          } else if (record.status === 'early_departure' && record.earlyDepartureMinutes) {
+                            minutesDisplay = `${record.earlyDepartureMinutes} min early`;
+                          }
+                          return (
                           <TableRow key={record.id}>
                             <TableCell>{formatDate(record.sessionDate)}</TableCell>
                             <TableCell className="font-medium">{record.childName || '—'}</TableCell>
@@ -557,7 +566,7 @@ export default function AttendanceManagementPage() {
                             <TableCell><StatusBadge status={record.status} /></TableCell>
                             <TableCell>{formatTime(record.checkInTime)}</TableCell>
                             <TableCell>{formatTime(record.checkOutTime)}</TableCell>
-                            <TableCell>{record.tardyMinutes ? `${record.tardyMinutes} min` : '—'}</TableCell>
+                            <TableCell className="text-sm">{minutesDisplay}</TableCell>
                             <TableCell>
                               {record.locationVerified === true && <Badge variant="default">Verified</Badge>}
                               {record.locationVerified === false && <Badge variant="destructive">Failed</Badge>}
@@ -565,7 +574,8 @@ export default function AttendanceManagementPage() {
                             </TableCell>
                             <TableCell className="max-w-32 truncate">{record.notes || '—'}</TableCell>
                           </TableRow>
-                        ))}
+                          );
+                        })}
                       </TableBody>
                     </Table>
                   </div>

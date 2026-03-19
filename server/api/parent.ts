@@ -1113,4 +1113,58 @@ router.get('/payment-receipts', supabaseAuth, async (req: any, res) => {
   }
 });
 
+// GET /api/parent/children/:id/attendance - Get attendance history for a child (parent view)
+router.get('/children/:id/attendance', supabaseAuth, async (req: any, res) => {
+  try {
+    const childId = parseInt(req.params.id);
+    const userEmail = req.auth?.email || req.user?.email;
+
+    if (!userEmail) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    if (isNaN(childId)) {
+      return res.status(400).json({ message: 'Invalid child ID' });
+    }
+
+    // Verify parent owns this child or is a guardian
+    const child = await storage.getChildById(childId);
+    if (!child) {
+      return res.status(404).json({ message: 'Child not found' });
+    }
+
+    if (child.parentEmail !== userEmail) {
+      const user = await storage.getUserByEmail(userEmail);
+      let isGuardian = false;
+      if (user) {
+        const guardians = await storage.getGuardiansByChildId(childId);
+        isGuardian = guardians.some((g: any) => g.guardianUserId === user.id);
+      }
+      if (!isGuardian) {
+        return res.status(403).json({ message: 'Access denied: You can only view your own children' });
+      }
+    }
+
+    const attendance = await storage.getAttendanceByChildId(childId);
+
+    // Enrich with session and class info
+    const enriched = await Promise.all(
+      attendance.map(async (record: any) => {
+        const session = await storage.getClassSessionById(record.sessionId);
+        const classInfo = session ? await storage.getClassById(session.classId) : null;
+        return {
+          ...record,
+          sessionDate: session?.scheduledDate,
+          className: classInfo?.title || 'Unknown',
+        };
+      })
+    );
+
+    return res.status(200).json(enriched);
+  } catch (error: any) {
+    console.error('❌ Error fetching child attendance:', error);
+    return res.status(500).json({ message: 'Failed to fetch attendance' });
+  }
+});
+
 export default router;

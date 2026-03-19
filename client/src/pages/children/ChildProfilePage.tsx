@@ -1,7 +1,10 @@
 import { useState, useMemo } from "react";
 import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { ArrowLeft, User, Calendar, GraduationCap, Mail, Phone, MapPin, Heart, AlertTriangle, BookOpen, X, Clock, Users, UserPlus, Trash2 } from "lucide-react";
+import { ArrowLeft, User, Calendar, GraduationCap, Mail, Phone, MapPin, Heart, AlertTriangle, BookOpen, X, Clock, Users, UserPlus, Trash2, ClipboardList } from "lucide-react";
+import { format } from "date-fns";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { displayScoreWithMax } from "@/lib/assessmentUtils";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +19,33 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { queryClient } from "@/lib/queryClient";
 import { useRoleAwareLayout } from '@/hooks/use-role-aware-layout';
+
+interface ChildAssessmentRecord {
+  id: number;
+  assessmentTypeId: number;
+  assessmentTypeName: string;
+  assessmentTypeCategory: string;
+  score: string | null;
+  scoreFormat: string | null;
+  maxScore: number | null;
+  levelOptions: string[] | null;
+  assessmentDate: string;
+  lexileScore?: number | null;
+  curriculumBookName?: string | null;
+  notes?: string | null;
+}
+
+interface ChildAttendanceRecord {
+  id: number;
+  status: string;
+  sessionDate: string;
+  tardyMinutes?: number | null;
+  earlyDepartureMinutes?: number | null;
+  checkInTime?: string | null;
+  checkOutTime?: string | null;
+  notes?: string | null;
+  className?: string | null;
+}
 
 // Layout-agnostic content component for child profile
 // Can be wrapped with appropriate layout by parent components
@@ -100,6 +130,60 @@ export function ChildProfileContent({ activeRole }: ChildProfileContentProps) {
   const { data: guardians = [], isLoading: guardiansLoading } = useQuery<any[]>({
     queryKey: ['/api/children', id, 'guardians'],
     enabled: !!id
+  });
+
+  // Fetch assessments for this child — using parent-facing endpoint when role is parent
+  const { data: assessments = [], isLoading: assessmentsLoading } = useQuery<ChildAssessmentRecord[]>({
+    queryKey: ['/api/assessments/parent/child', id, activeRole],
+    queryFn: async () => {
+      const token = localStorage.getItem('supabase_token');
+      if (activeRole === 'parent') {
+        // Parent endpoint returns [{ child, assessments }]; find this child's record
+        const res = await fetch('/api/assessments/parent/my-children', {
+          headers: { ...(token && { Authorization: `Bearer ${token}` }) },
+          credentials: 'include',
+        });
+        if (!res.ok) return [];
+        const data: Array<{ child: { id: number }; assessments: ChildAssessmentRecord[] }> = await res.json();
+        // Find the matching child entry and return their assessments flat
+        const childEntry = data.find(entry => String(entry.child?.id) === String(id));
+        return childEntry?.assessments || [];
+      } else {
+        // School admin: fetch by child ID directly
+        const res = await fetch(`/api/assessments/students/child/${id}`, {
+          headers: { ...(token && { Authorization: `Bearer ${token}` }) },
+          credentials: 'include',
+        });
+        if (!res.ok) return [];
+        return res.json();
+      }
+    },
+    enabled: !!id && !!activeRole,
+  });
+
+  // Fetch attendance for this child — using role-appropriate endpoint
+  const { data: attendance = [], isLoading: attendanceLoading } = useQuery<ChildAttendanceRecord[]>({
+    queryKey: ['/api/attendance/child', id, activeRole],
+    queryFn: async () => {
+      const token = localStorage.getItem('supabase_token');
+      let endpoint: string;
+      if (activeRole === 'parent') {
+        endpoint = `/api/parent/children/${id}/attendance`;
+      } else if (activeRole === 'schoolAdmin') {
+        endpoint = `/api/school-admin/attendance/records?childId=${id}`;
+      } else {
+        endpoint = `/api/educator/children/${id}/attendance`;
+      }
+      const res = await fetch(endpoint, {
+        headers: { ...(token && { Authorization: `Bearer ${token}` }) },
+        credentials: 'include',
+      });
+      if (!res.ok) return [];
+      const data = await res.json();
+      // school-admin endpoint returns { records } or an array
+      return Array.isArray(data) ? data : (data.records || []);
+    },
+    enabled: !!id && !!activeRole,
   });
 
   // Unenrollment mutation
@@ -306,20 +390,215 @@ export function ChildProfileContent({ activeRole }: ChildProfileContentProps) {
           </TabsContent>
 
           <TabsContent value="academic" className="space-y-4 sm:space-y-6">
+            {/* Attendance Summary */}
             <Card>
               <CardHeader className="p-4 sm:p-6">
                 <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-                  <BookOpen className="h-4 w-4 sm:h-5 sm:w-5" />
-                  Academic Information
+                  <Calendar className="h-4 w-4 sm:h-5 sm:w-5" />
+                  Attendance History
                 </CardTitle>
+                <CardDescription>
+                  Class attendance records for {child.firstName}
+                </CardDescription>
               </CardHeader>
               <CardContent className="p-4 sm:p-6 pt-0">
-                <div className="text-center py-8 text-muted-foreground">
-                  <BookOpen className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p>Academic records and progress reports will be displayed here.</p>
-                </div>
+                {attendanceLoading ? (
+                  <div className="space-y-2">
+                    <div className="h-8 bg-muted rounded animate-pulse" />
+                    <div className="h-8 bg-muted rounded animate-pulse w-3/4" />
+                  </div>
+                ) : attendance.length === 0 ? (
+                  <div className="text-center py-6 text-muted-foreground">
+                    <Calendar className="h-10 w-10 mx-auto mb-3 opacity-50" />
+                    <p className="text-sm">No attendance records yet.</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Class</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Minutes</TableHead>
+                          <TableHead>Notes</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {attendance.slice(0, 20).map((record) => {
+                          const statusColors: Record<string, string> = {
+                            present: 'bg-green-100 text-green-800',
+                            absent: 'bg-red-100 text-red-800',
+                            late: 'bg-yellow-100 text-yellow-800',
+                            excused: 'bg-blue-100 text-blue-800',
+                            early_departure: 'bg-orange-100 text-orange-800',
+                          };
+                          const status = record.status || 'present';
+                          let minutesNote = '';
+                          if (status === 'late' && record.tardyMinutes) {
+                            minutesNote = `${record.tardyMinutes} min late`;
+                          } else if (status === 'early_departure' && record.earlyDepartureMinutes) {
+                            minutesNote = `Left ${record.earlyDepartureMinutes} min early`;
+                          }
+                          return (
+                            <TableRow key={record.id}>
+                              <TableCell className="whitespace-nowrap text-sm">
+                                {record.sessionDate
+                                  ? format(new Date(record.sessionDate), 'MMM d, yyyy')
+                                  : '—'}
+                              </TableCell>
+                              <TableCell className="text-sm">{record.className || '—'}</TableCell>
+                              <TableCell>
+                                <Badge className={`text-xs capitalize ${statusColors[status] || 'bg-gray-100 text-gray-800'}`}>
+                                  {status.replace('_', ' ')}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-sm text-muted-foreground">
+                                {minutesNote || '—'}
+                              </TableCell>
+                              <TableCell className="text-sm text-muted-foreground">
+                                {record.notes || '—'}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                    {attendance.length > 20 && (
+                      <p className="text-xs text-muted-foreground mt-2 text-right">
+                        Showing 20 of {attendance.length} records
+                      </p>
+                    )}
+                  </div>
+                )}
               </CardContent>
             </Card>
+
+            {/* Assessment History */}
+            <Card>
+              <CardHeader className="p-4 sm:p-6">
+                <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                  <ClipboardList className="h-4 w-4 sm:h-5 sm:w-5" />
+                  Assessment History
+                </CardTitle>
+                <CardDescription>
+                  Recorded assessments and academic progress for {child.firstName}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-4 sm:p-6 pt-0">
+                {assessmentsLoading ? (
+                  <div className="space-y-2">
+                    <div className="h-8 bg-muted rounded animate-pulse" />
+                    <div className="h-8 bg-muted rounded animate-pulse" />
+                    <div className="h-8 bg-muted rounded animate-pulse w-3/4" />
+                  </div>
+                ) : assessments.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <ClipboardList className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>No assessments recorded yet.</p>
+                    <p className="text-sm mt-2">Assessment results will appear here once recorded by your child's educator.</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Type</TableHead>
+                          <TableHead>Book / Lesson</TableHead>
+                          <TableHead>Score</TableHead>
+                          <TableHead>Lexile</TableHead>
+                          <TableHead>Notes</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {assessments.map((a) => {
+                          const typeName = a.assessmentTypeName || `Type #${a.assessmentTypeId}`;
+                          const bookName = a.curriculumBookName;
+                          return (
+                            <TableRow key={a.id}>
+                              <TableCell className="whitespace-nowrap text-sm">
+                                {a.assessmentDate
+                                  ? format(new Date(a.assessmentDate), 'MMM d, yyyy')
+                                  : '—'}
+                              </TableCell>
+                              <TableCell className="text-sm">{typeName}</TableCell>
+                              <TableCell className="text-sm">
+                                {bookName ? bookName : '—'}
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="outline" className="bg-blue-50 text-blue-700 text-xs">
+                                  {displayScoreWithMax(
+                                    a.score,
+                                    a.scoreFormat,
+                                    a.levelOptions,
+                                    a.maxScore
+                                  )}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                {a.lexileScore != null ? (
+                                  <Badge variant="outline" className="bg-emerald-50 text-emerald-700 text-xs">
+                                    {a.lexileScore}L
+                                  </Badge>
+                                ) : (
+                                  <span className="text-muted-foreground text-xs">—</span>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-sm text-muted-foreground max-w-40 truncate">
+                                {a.notes || '—'}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Lexile History Card */}
+            {assessments.some(a => a.lexileScore != null) && (
+              <Card>
+                <CardHeader className="p-4 sm:p-6">
+                  <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                    <BookOpen className="h-4 w-4 sm:h-5 sm:w-5" />
+                    Lexile Reading Level History
+                  </CardTitle>
+                  <CardDescription>
+                    Reading level progression for {child.firstName}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="p-4 sm:p-6 pt-0">
+                  <div className="space-y-2">
+                    {assessments
+                      .filter(a => a.lexileScore != null)
+                      .sort((a, b) => new Date(b.assessmentDate).getTime() - new Date(a.assessmentDate).getTime())
+                      .map((a) => (
+                        <div key={a.id} className="flex items-center justify-between py-2 border-b last:border-b-0">
+                          <div>
+                            <span className="text-sm font-medium">{a.assessmentTypeName || 'Reading Assessment'}</span>
+                            {a.curriculumBookName ? (
+                              <span className="text-xs text-muted-foreground ml-2">
+                                — {a.curriculumBookName}
+                              </span>
+                            ) : null}
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className="text-xs text-muted-foreground">
+                              {a.assessmentDate ? format(new Date(a.assessmentDate), 'MMM d, yyyy') : ''}
+                            </span>
+                            <Badge className="bg-emerald-100 text-emerald-800 text-sm font-bold">
+                              {a.lexileScore}L
+                            </Badge>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
 
           <TabsContent value="health" className="space-y-4 sm:space-y-6">

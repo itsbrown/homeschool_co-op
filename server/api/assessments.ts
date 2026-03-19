@@ -11,6 +11,101 @@ import {
 import { z } from 'zod';
 
 /**
+ * Valid letter grades for letter_grade score format (case-insensitive).
+ * Letters are normalized to uppercase before saving.
+ */
+const VALID_LETTER_GRADES = ['A+', 'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-', 'D+', 'D', 'D-', 'F'];
+
+/**
+ * Validate a score string against the given score format.
+ * Returns null if valid, or an error string if invalid.
+ *
+ * Rules:
+ *  - numeric:     must be a number; if max_score is set, must be between 0 and max_score.
+ *  - fraction:    must match pattern N/D (e.g. "8/10"). Do NOT normalize — save raw text.
+ *  - level:       must be one of the values in level_options.
+ *  - letter_grade: must match A+/A/A-/B+/B/B-/C+/C/C-/D+/D/D-/F (case-insensitive).
+ *  - percentage:  must be a number between 0 and 100.
+ */
+export function validateScore(
+  score: string,
+  scoreFormat: string,
+  levelOptions?: string[] | null,
+  maxScore?: number | null
+): string | null {
+  const s = score.trim();
+
+  switch (scoreFormat) {
+    case 'numeric': {
+      // numeric: must be a strictly numeric string (no trailing non-numeric chars)
+      const numericPattern = /^-?\d+(\.\d+)?$/;
+      if (!numericPattern.test(s)) {
+        return maxScore != null
+          ? `Score must be a number between 0 and ${maxScore}`
+          : 'Score must be a number';
+      }
+      const num = Number(s);
+      if (maxScore != null && (num < 0 || num > maxScore)) {
+        return `Score must be a number between 0 and ${maxScore}`;
+      }
+      return null;
+    }
+    case 'fraction': {
+      // fraction: must match N/D where N and D are numbers
+      const fractionPattern = /^\d+(\.\d+)?\/\d+(\.\d+)?$/;
+      if (!fractionPattern.test(s)) {
+        return "Score must be a fraction like '8/10'";
+      }
+      return null;
+    }
+    case 'level': {
+      // level: must be one of the allowed level_options values
+      if (!levelOptions || levelOptions.length === 0) {
+        return null; // No restriction defined — accept any value
+      }
+      if (!levelOptions.includes(s)) {
+        return `Score must be one of: ${levelOptions.join(', ')}`;
+      }
+      return null;
+    }
+    case 'letter_grade': {
+      // letter_grade: must match A+/A/A-/B+/.../F (case-insensitive)
+      const upper = s.toUpperCase();
+      if (!VALID_LETTER_GRADES.includes(upper)) {
+        return 'Score must be a valid letter grade (A+, A, A-, B+, B, B-, C+, C, C-, D+, D, D-, F)';
+      }
+      return null;
+    }
+    case 'percentage': {
+      // percentage: must be a strictly numeric string between 0 and 100
+      const percentagePattern = /^\d+(\.\d+)?$/;
+      if (!percentagePattern.test(s)) {
+        return 'Score must be a percentage between 0 and 100';
+      }
+      const pct = Number(s);
+      if (pct < 0 || pct > 100) {
+        return 'Score must be a percentage between 0 and 100';
+      }
+      return null;
+    }
+    default:
+      // Unknown/custom format — accept anything
+      return null;
+  }
+}
+
+/**
+ * Normalize a score value for storage.
+ * Currently only uppercases letter_grade scores; all others are saved as-is.
+ */
+export function normalizeScore(score: string, scoreFormat: string): string {
+  if (scoreFormat === 'letter_grade') {
+    return score.trim().toUpperCase();
+  }
+  return score;
+}
+
+/**
  * Calculate Lexile score from grade level score
  * Formula: Lexile = 200 + (gradeLevel × 100)
  * Example: Grade 6.96 → 896L
@@ -322,7 +417,30 @@ router.get('/students/child/:childId', supabaseAuth, requireSchoolContext, async
   try {
     const childId = parseInt(req.params.childId);
     const assessments = await storage.getStudentAssessmentsByChildId(childId);
-    res.json(assessments);
+    // Enrich assessments with nested assessmentType and curriculumBook for frontend display
+    const enriched = await Promise.all(assessments.map(async (assessment) => {
+      const assessmentType = await storage.getAssessmentTypeById(assessment.assessmentTypeId);
+      let curriculumBook = null;
+      if (assessment.curriculumBookId) {
+        curriculumBook = await storage.getCurriculumBookById(assessment.curriculumBookId);
+      }
+      return {
+        ...assessment,
+        assessmentType: assessmentType ? {
+          id: assessmentType.id,
+          name: assessmentType.name,
+          category: assessmentType.category,
+          scoreFormat: assessmentType.scoreFormat,
+          maxScore: assessmentType.maxScore,
+          levelOptions: assessmentType.levelOptions,
+        } : null,
+        curriculumBook: curriculumBook ? {
+          id: curriculumBook.id,
+          name: curriculumBook.name,
+        } : null,
+      };
+    }));
+    res.json(enriched);
   } catch (error) {
     console.error('Error fetching child assessments:', error);
     res.status(500).json({ message: 'Failed to fetch child assessments' });
@@ -363,7 +481,24 @@ router.post('/students', supabaseAuth, requireSchoolContext, async (req: Request
       return res.status(403).json({ message: 'Invalid assessment type' });
     }
     
-    const assessment = await storage.createStudentAssessment(validatedData);
+    // Validate the score against the assessment type's score format
+    const scoreError = validateScore(
+      validatedData.score,
+      assessmentType.scoreFormat,
+      assessmentType.levelOptions,
+      assessmentType.maxScore
+    );
+    if (scoreError) {
+      return res.status(400).json({ error: scoreError });
+    }
+    
+    // Normalize score (e.g. uppercase letter grades)
+    const normalizedScore = normalizeScore(validatedData.score, assessmentType.scoreFormat);
+    
+    const assessment = await storage.createStudentAssessment({
+      ...validatedData,
+      score: normalizedScore,
+    });
     res.status(201).json(assessment);
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -394,11 +529,29 @@ router.patch('/students/:id', supabaseAuth, requireSchoolContext, async (req: Re
     
     const { schoolId: _, recordedBy: __, id: ___, createdAt: ____, childId: _____, ...safeData } = req.body;
     
-    // If score is being updated, recalculate Lexile score
-    if (safeData.score !== undefined && safeData.lexileScore === undefined) {
-      const gradeLevel = parseGradeLevelScore(safeData.score);
-      if (gradeLevel !== null) {
-        safeData.lexileScore = calculateLexileFromGradeLevel(gradeLevel);
+    // If score is being updated, validate against the assessment type's format
+    if (safeData.score !== undefined) {
+      const assessmentType = await storage.getAssessmentTypeById(existing.assessmentTypeId);
+      if (assessmentType) {
+        const scoreError = validateScore(
+          safeData.score,
+          assessmentType.scoreFormat,
+          assessmentType.levelOptions,
+          assessmentType.maxScore
+        );
+        if (scoreError) {
+          return res.status(400).json({ error: scoreError });
+        }
+        // Normalize score (e.g. uppercase letter grades)
+        safeData.score = normalizeScore(safeData.score, assessmentType.scoreFormat);
+      }
+      
+      // Recalculate Lexile score if not provided
+      if (safeData.lexileScore === undefined) {
+        const gradeLevel = parseGradeLevelScore(safeData.score);
+        if (gradeLevel !== null) {
+          safeData.lexileScore = calculateLexileFromGradeLevel(gradeLevel);
+        }
       }
     }
     
@@ -475,6 +628,9 @@ router.get('/parent/my-children', supabaseAuth, async (req: Request, res: Respon
           ...assessment,
           assessmentTypeName: assessmentType?.name || 'Unknown',
           assessmentTypeCategory: assessmentType?.category || 'custom',
+          scoreFormat: assessmentType?.scoreFormat || 'numeric',
+          maxScore: assessmentType?.maxScore || null,
+          levelOptions: assessmentType?.levelOptions || null,
           curriculumBookName: curriculumBook?.name || null
         };
       }));

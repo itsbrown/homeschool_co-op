@@ -31,6 +31,7 @@ import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import AppShell from '@/components/layout/AppShell';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { displayScoreWithMax } from '@/lib/assessmentUtils';
 
 interface AssessmentType {
   id: number;
@@ -42,6 +43,7 @@ interface AssessmentType {
   minScore: number | null;
   maxScore: number | null;
   passingScore: number | null;
+  levelOptions: string[] | null;
   isActive: boolean;
   sortOrder: number;
   createdAt: string;
@@ -75,7 +77,7 @@ interface StudentAssessment {
   source: string;
   recordedBy: number;
   child?: { firstName: string; lastName: string };
-  assessmentType?: { name: string };
+  assessmentType?: { name: string; scoreFormat?: string; maxScore?: number | null; levelOptions?: string[] | null };
   curriculumBook?: { name: string } | null;
   recorder?: { firstName: string; lastName: string };
 }
@@ -629,7 +631,12 @@ export default function AssessmentManagementPage() {
                             </TableCell>
                             <TableCell>
                               <Badge variant="outline" className="bg-blue-50 text-blue-700">
-                                {assessment.score}
+                                {displayScoreWithMax(
+                                  assessment.score,
+                                  assessment.assessmentType?.scoreFormat ?? 'numeric',
+                                  assessment.assessmentType?.levelOptions ?? undefined,
+                                  assessment.assessmentType?.maxScore ?? undefined
+                                )}
                               </Badge>
                             </TableCell>
                             <TableCell>

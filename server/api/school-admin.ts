@@ -7446,6 +7446,7 @@ router.get('/attendance/records', supabaseAuth, async (req: any, res) => {
         checkInTime: sessionAttendance.checkInTime,
         checkOutTime: sessionAttendance.checkOutTime,
         tardyMinutes: sessionAttendance.tardyMinutes,
+        earlyDepartureMinutes: sessionAttendance.earlyDepartureMinutes,
         notes: sessionAttendance.notes,
         locationVerified: sessionAttendance.locationVerified,
         childFirstName: children.firstName,
@@ -7463,12 +7464,13 @@ router.get('/attendance/records', supabaseAuth, async (req: any, res) => {
       .where(and(...conditions))
       .orderBy(sql`${classSessions.scheduledDate} DESC`);
 
-    const records = results.map((row: any) => ({
+    const records = results.map((row: typeof results[number]) => ({
       id: row.id,
       status: row.status,
       checkInTime: row.checkInTime,
       checkOutTime: row.checkOutTime,
       tardyMinutes: row.tardyMinutes,
+      earlyDepartureMinutes: row.earlyDepartureMinutes,
       notes: row.notes,
       locationVerified: row.locationVerified,
       childName: [row.childFirstName, row.childLastName].filter(Boolean).join(' ') || 'Unknown',
@@ -7547,9 +7549,29 @@ router.get('/attendance/summary', supabaseAuth, async (req: any, res) => {
         sql`${sessionAttendance.status} IN ('present', 'late')`
       ));
 
+    const [presentOnlyResult] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(sessionAttendance)
+      .innerJoin(classSessions, eq(sessionAttendance.sessionId, classSessions.id))
+      .where(and(
+        ...attendanceConditions,
+        sql`${sessionAttendance.status} = 'present'`
+      ));
+
+    const [absentResult] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(sessionAttendance)
+      .innerJoin(classSessions, eq(sessionAttendance.sessionId, classSessions.id))
+      .where(and(
+        ...attendanceConditions,
+        sql`${sessionAttendance.status} = 'absent'`
+      ));
+
     const totalRecords = totalRecordsResult?.count || 0;
     const presentLateCount = presentLateResult?.count || 0;
     const overallAttendanceRate = totalRecords > 0 ? Math.round((presentLateCount / totalRecords) * 10000) / 100 : 0;
+    const totalPresent = presentOnlyResult?.count || 0;
+    const totalAbsent = absentResult?.count || 0;
 
     const schoolData = await db
       .select({ absenteeismThresholdPercent: schools.absenteeismThresholdPercent })
@@ -7616,7 +7638,10 @@ router.get('/attendance/summary', supabaseAuth, async (req: any, res) => {
       sessionsToday: sessionsTodayResult?.count || 0,
       activeSessionsNow: activeSessionsResult?.count || 0,
       overallAttendanceRate,
+      averageAttendanceRate: overallAttendanceRate,
       totalStudentRecords: totalRecords,
+      totalPresent,
+      totalAbsent,
       chronicAbsentees,
       educatorPunctuality,
     });
