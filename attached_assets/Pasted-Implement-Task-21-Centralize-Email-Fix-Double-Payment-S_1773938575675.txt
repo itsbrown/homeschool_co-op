@@ -1,0 +1,55 @@
+Implement Task #21 - Centralize Email & Fix Double Payment Send exactly as specified.
+
+Goal: Make email-service.ts the single place that instantiates Brevo client and calls sendTransacEmail. Eliminate double payment emails for Stripe checkout path while preserving external/manual/test sends.
+
+Specific changes:
+
+1. In server/lib/email-service.ts:
+   - Add new exported function sendEmailDirect(to: string, toName: string | null, subject: string, htmlContent: string, textContent?: string): Promise<void>
+     - Inside: create SendSmtpEmail object using existing logic (sender, to, subject, htmlContent, textContent)
+     - Add console.log: console.log(`[Email] ${subject} → ${to} (${toName || 'no name'})`)
+     - Use the existing Brevo client (or instantiate if not already global)
+     - Handle errors with console.error but rethrow so caller can catch
+   - Refactor ALL existing named send functions (sendPaymentConfirmationEmail, sendPaymentReceipt, sendWaitlistJoinedEmail, sendWaitlistPromotedEmail, sendWelcomeEmail, sendScheduledPaymentReminder, sendOverduePaymentNotice, sendConsolidatedPaymentReminder, sendAccountInviteEmail, sendPasswordResetEmail, sendStaffInvitationEmail, sendNewStudentNotificationEmail) to:
+     - Assemble subject, htmlContent, textContent as before
+     - Call await sendEmailDirect(to, toName, subject, htmlContent, textContent)
+     - Remove any direct Brevo client usage inside these functions
+   - Keep existing exports and types intact
+
+2. In server/api/role-invitations.ts:
+   - Remove any local brevoApiInstance or Brevo client initialization
+   - Import { sendEmailDirect } from '../lib/email-service'
+   - Replace the brevoApiInstance.sendTransacEmail(...) call with:
+     await sendEmailDirect(email, email, subject, htmlContent, textContent)
+   - Keep inline HTML unchanged
+
+3. In server/api/school-admin.ts:
+   - Same pattern: remove local Brevo client
+   - Import sendEmailDirect
+   - Replace brevoApiInstance.sendTransacEmail(...) with sendEmailDirect(...)
+   - Keep HTML unchanged
+
+4. In server/services/error-notification.ts:
+   - Keep ErrorNotificationService class and its public methods unchanged (constructor, sendImmediateNotification, sendDailySummary)
+   - Remove this.brevoClient initialization and any direct sendTransacEmail calls inside the class
+   - Import { sendEmailDirect } from '../lib/email-service'
+   - Replace both this.brevoClient.sendTransacEmail(...) calls with sendEmailDirect(...)
+   - Remove constructor check for BREVO_API_KEY (sendEmailDirect will handle it)
+
+5. In server/api/billing.ts:
+   - Around lines 340-370 (~ /confirm-payment route):
+     - Remove the call to sendPaymentConfirmationEmail(...) at the end of successful confirmation
+     - Add comment: // Removed: webhook handles Stripe-confirmed payment emails. This route only handles non-Stripe / external payments.
+   - Around lines 880-970 (~ /confirm-external-payment and /test-email):
+     - Leave sendPaymentConfirmationEmail calls intact (these do not trigger Stripe webhook)
+   - Do NOT touch webhook-handler.ts (it should continue sending receipt via sendPaymentReceipt)
+
+Safety rules:
+- Preserve all existing inline HTML templates exactly
+- Do not migrate any templates to Brevo-hosted yet
+- Add console.log in sendEmailDirect as specified
+- Do not add email_logs table or runtime de-duplication yet
+- Keep error handling and return values as close as possible to original
+- If Brevo client is already global in email-service.ts, reuse it; otherwise make sendEmailDirect instantiate once
+
+Apply changes safely across the listed files. Show updated sections or diffs for each file. After changes, Stripe checkout should send exactly one email (from webhook), external payments and test endpoint still send, and all sends are logged and centralized.
