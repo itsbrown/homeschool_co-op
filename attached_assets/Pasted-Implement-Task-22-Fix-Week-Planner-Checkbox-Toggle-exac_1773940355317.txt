@@ -1,0 +1,82 @@
+Implement Task #22 - Fix Week Planner Checkbox Toggle exactly as described.
+
+Goals:
+- Checkboxes now toggle both ways (checked ↔ unchecked)
+- Immediate visual feedback (optimistic update)
+- Checked blocks get strikethrough title + reduced opacity
+- Server PATCH confirms change; rollback on failure
+- Disabled (non-functional) when wb is null (no week plan block yet)
+- Console.log on every toggle attempt for debugging
+
+Specific changes in WeekPlannerPage.tsx:
+
+1. Add local state for optimistic overrides:
+   const [completionOverrides, setCompletionOverrides] = useState<Record<number, boolean>>({});
+
+2. Create toggleBlockCompletion function (around line 190-208 or in component body):
+   const toggleBlockCompletion = (wb: WeekPlanBlock | null) => {
+     if (!wb) {
+       console.log("Toggle attempted on null wb — ignored");
+       return; // keep disabled
+     }
+
+     const blockId = wb.id;
+     const currentValue = completionOverrides[blockId] ?? wb.isCompleted;
+     const newValue = !currentValue;
+
+     console.log(`Toggling completion for block ${blockId}: ${currentValue} → ${newValue}`);
+
+     // Optimistic update
+     setCompletionOverrides(prev => ({ ...prev, [blockId]: newValue }));
+
+     // Call server
+     toggleCompletionMutation.mutate(
+       { id: blockId, isCompleted: newValue },
+       {
+         onSuccess: () => {
+           // Invalidate cache to refetch latest
+           queryClient.invalidateQueries({ queryKey: ['week-plan', currentWeekPlanId] });
+           // Clean up override after success
+           setCompletionOverrides(prev => {
+             const copy = { ...prev };
+             delete copy[blockId];
+             return copy;
+           });
+         },
+         onError: (err) => {
+           console.error("Toggle failed", err);
+           // Rollback optimistic state
+           setCompletionOverrides(prev => {
+             const copy = { ...prev };
+             delete copy[blockId];
+             return copy;
+           });
+         }
+       }
+     );
+   };
+
+3. Replace completeBlockMutation with toggleCompletionMutation:
+   - Use useMutation from TanStack Query
+   - mutate({ id, isCompleted })
+   - PATCH /api/schedule-builder/week-plan-blocks/:id with { isCompleted }
+
+4. Update checkbox rendering (around lines 527-562, inside block map):
+   - Replace existing Checkbox:
+     <Checkbox
+       checked={completionOverrides[wb?.id ?? 0] ?? wb?.isCompleted ?? false}
+       onCheckedChange={() => toggleBlockCompletion(wb)}
+       disabled={!wb} // disable if no block exists
+     />
+   - Add CSS for checked state (strikethrough + opacity):
+     In the block title <span> or <div>:
+     className={cn(
+       "block-title",
+       (completionOverrides[wb.id] ?? wb.isCompleted) && "line-through opacity-60"
+     )}
+
+5. Remove any old completeBlockMutation usage and onCheckedChange handlers that only set true
+
+Apply changes safely in WeekPlannerPage.tsx only. Preserve existing grid layout, Add/AI buttons, anchor labels, etc.
+Add comments explaining optimistic toggle and rollback.
+Show updated sections: state + toggle function + checkbox render part.
