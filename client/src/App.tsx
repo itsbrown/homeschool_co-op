@@ -134,7 +134,7 @@ const EducatorDashboardPage = lazy(() => import('./pages/educator/EducatorDashbo
 const EducatorSchedulePage = lazy(() => import('./pages/educator/EducatorSchedulePage'));
 const EducatorSettingsPage = lazy(() => import('./pages/educator/EducatorSettingsPage'));
 const MyClassesPage = lazy(() => import('./pages/educator/MyClasses'));
-const WeeklyCalendarPage = lazy(() => import('./pages/educator/WeeklyCalendar'));
+
 const MyHoursPage = lazy(() => import('./pages/educator/MyHours'));
 const ActiveSessionPage = lazy(() => import('./pages/educator/ActiveSession'));
 const StartSessionPage = lazy(() => import('./pages/educator/StartSession'));
@@ -549,7 +549,8 @@ function Router() {
       <Route path="/educator/dashboard" component={() => <EducatorAppShell><EducatorDashboardPage /></EducatorAppShell>} />
       <Route path="/educator/my-classes" component={() => <EducatorAppShell><MyClassesPage /></EducatorAppShell>} />
       <Route path="/educator/session/:id" component={() => <EducatorAppShell><ActiveSessionPage /></EducatorAppShell>} />
-      <Route path="/educator/weekly-calendar" component={() => <EducatorAppShell><WeeklyCalendarPage /></EducatorAppShell>} />
+      <Route path="/educator/weekly-calendar" component={() => <Redirect to="/educator/week-plans" />} />
+
       <Route path="/educator/my-hours" component={() => <EducatorAppShell><MyHoursPage /></EducatorAppShell>} />
       <Route path="/educator/classes" component={() => <EducatorAppShell><EducatorClassesPage /></EducatorAppShell>} />
       <Route path="/educator/classes/:id" component={() => <EducatorAppShell><EducatorClassDetailsPage /></EducatorAppShell>} />
