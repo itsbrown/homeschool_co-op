@@ -19,17 +19,11 @@ import {
   ThumbsUp, Lightbulb, X
 } from "lucide-react";
 import type { WeekPlan, WeekPlanBlock, WeeklySkeleton, SkeletonBlock } from "@shared/schema";
-import { BLOCK_TYPE_COLORS } from "@/lib/blockColors";
+import { BLOCK_TYPE_COLORS, BLOCK_TYPE_BADGE_COLORS } from "@/lib/blockColors";
 
 const DAY_NAMES: Record<number, string> = {
   0: "Sunday", 1: "Monday", 2: "Tuesday", 3: "Wednesday",
   4: "Thursday", 5: "Friday", 6: "Saturday",
-};
-
-const BLOCK_TYPE_BADGE: Record<string, string> = {
-  anchor: "bg-indigo-100 text-indigo-800",
-  curriculum: "bg-emerald-100 text-emerald-800",
-  flexible: "bg-amber-100 text-amber-800",
 };
 
 const STATUS_BADGE: Record<string, string> = {
@@ -555,7 +549,7 @@ export default function WeekPlannerPage() {
                                 <Clock className="h-3 w-3" />
                                 {formatTime(sb.startTime)} – {formatTime(sb.endTime)}
                               </span>
-                              <Badge className={`text-[10px] ${BLOCK_TYPE_BADGE[sb.blockType] || ""}`}>{sb.blockType}</Badge>
+                              <Badge className={`text-[10px] ${BLOCK_TYPE_BADGE_COLORS[sb.blockType] || ""}`}>{sb.blockType}</Badge>
                             </div>
                             <div className="flex items-start gap-2">
                               <Checkbox

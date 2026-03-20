@@ -25,7 +25,7 @@ import type { WeekPlan, WeekPlanBlock, WeeklySkeleton, SkeletonBlock } from "@sh
 import { cn } from "@/lib/utils";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { BLOCK_TYPE_COLORS, BLOCK_TYPE_BADGE_COLORS } from "@/lib/blockColors";
+import { BLOCK_TYPE_COLORS, BLOCK_TYPE_BADGE_COLORS, type BlockType } from "@/lib/blockColors";
 import { useRole } from "@/contexts/RoleContext";
 
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -54,7 +54,7 @@ function formatWeekRange(dateStr: string): string {
   return `${start.toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${end.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
 }
 
-function blockTypeBadge(blockType: string) {
+function blockTypeBadge(blockType: BlockType) {
   const badgeColors = BLOCK_TYPE_BADGE_COLORS[blockType] || BLOCK_TYPE_BADGE_COLORS.flexible;
   const label = blockType === "anchor" ? "Core" : blockType === "curriculum" ? "Curriculum" : "Flexible";
   return (
