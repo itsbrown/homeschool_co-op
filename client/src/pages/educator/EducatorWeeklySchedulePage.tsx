@@ -263,6 +263,19 @@ function ScheduleGrid({ weekPlan, skeleton, skeletonBlocks, completionOverrides,
                             {effectiveCompleted && (
                               <CheckCircle2 className="h-3.5 w-3.5 text-green-500 flex-shrink-0 print:text-green-700" />
                             )}
+                            <div className="ml-auto print:hidden" onClick={(e) => e.stopPropagation()}>
+                              {isToggling && planBlock ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400" />
+                              ) : (
+                                <Checkbox
+                                  data-testid={`complete-checkbox-${skelBlock.id}`}
+                                  checked={effectiveCompleted}
+                                  onCheckedChange={() => planBlock && onToggle(planBlock)}
+                                  disabled={!planBlock || isToggling}
+                                  aria-label={`Mark ${title || "block"} as ${effectiveCompleted ? "incomplete" : "complete"}`}
+                                />
+                              )}
+                            </div>
                           </div>
                           <button
                             data-testid={`expand-toggle-${skelBlock.id}`}
@@ -373,9 +386,22 @@ function ScheduleGrid({ weekPlan, skeleton, skeletonBlocks, completionOverrides,
                         <span className="text-xs text-slate-500 font-medium">
                           {formatTime(sb.startTime)} – {formatTime(sb.endTime)}
                         </span>
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-1.5">
                           {blockTypeBadge(sb.blockType || "flexible")}
                           {effectiveCompleted && <CheckCircle2 className="h-4 w-4 text-green-500" />}
+                          <div onClick={(e) => e.stopPropagation()}>
+                            {isToggling && planBlock ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400" />
+                            ) : (
+                              <Checkbox
+                                data-testid={`complete-checkbox-mobile-${sb.id}`}
+                                checked={effectiveCompleted}
+                                onCheckedChange={() => planBlock && onToggle(planBlock)}
+                                disabled={!planBlock || isToggling}
+                                aria-label={`Mark ${planBlock?.title || sb.defaultTitle || "block"} as ${effectiveCompleted ? "incomplete" : "complete"}`}
+                              />
+                            )}
+                          </div>
                         </div>
                       </div>
                       <button
@@ -564,6 +590,7 @@ function WeekPlanView({ weekPlan }: { weekPlan: WeekPlan }) {
   function handleToggle(planBlock: WeekPlanBlock) {
     const current = completionOverrides[planBlock.id] ?? planBlock.isCompleted;
     const newValue = !current;
+    console.log(`Toggled block ${planBlock.id} to completed: ${newValue}`);
     setCompletionOverrides((prev) => ({ ...prev, [planBlock.id]: newValue }));
     toggleCompletionMutation.mutate({ id: planBlock.id, isCompleted: newValue });
   }
