@@ -605,12 +605,10 @@ router.patch(
       const userRole = req.user?.role;
       if (userRole && ['educator', 'mentor', 'teacher'].includes(userRole)) {
         const skeleton = await storage.getWeeklySkeletonById(plan.skeletonId);
-        if (skeleton?.classId) {
-          const assignments = await storage.getEducatorClassAssignmentsByEducatorId(userId);
-          const assigned = assignments.some((a: any) => a.classId === skeleton.classId);
-          const classInfo = await storage.getClassById(skeleton.classId);
-          if (!assigned && classInfo?.instructorId !== userId) return res.status(403).json({ message: "Access denied" });
-        }
+        const assignments = await storage.getEducatorClassAssignmentsByEducatorId(userId);
+        const hasAccess = skeleton?.classId == null || assignments.some((a: any) => a.classId === skeleton.classId) || (skeleton?.classId && (await storage.getClassById(skeleton.classId))?.instructorId === userId);
+        if (!hasAccess) return res.status(403).json({ message: "Not authorized for this class" });
+        console.log("Educator access granted for user", req.user?.id);
       }
       const updated = await storage.updateWeekPlanBlock(id, req.body, userId);
       res.json(updated);
@@ -664,12 +662,10 @@ router.post(
       const userRole = req.user?.role;
       if (userRole && ['educator', 'mentor', 'teacher'].includes(userRole)) {
         const skeleton = await storage.getWeeklySkeletonById(plan.skeletonId);
-        if (skeleton?.classId) {
-          const assignments = await storage.getEducatorClassAssignmentsByEducatorId(userId);
-          const assigned = assignments.some((a: any) => a.classId === skeleton.classId);
-          const classInfo = await storage.getClassById(skeleton.classId);
-          if (!assigned && classInfo?.instructorId !== userId) return res.status(403).json({ message: "Access denied" });
-        }
+        const assignments = await storage.getEducatorClassAssignmentsByEducatorId(userId);
+        const hasAccess = skeleton?.classId == null || assignments.some((a: any) => a.classId === skeleton.classId) || (skeleton?.classId && (await storage.getClassById(skeleton.classId))?.instructorId === userId);
+        if (!hasAccess) return res.status(403).json({ message: "Not authorized for this class" });
+        console.log("Educator access granted for user", req.user?.id);
       }
       const updated = await storage.markBlockCompleted(id, userId);
       res.json(updated);
