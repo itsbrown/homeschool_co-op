@@ -305,6 +305,9 @@ export interface IStorage {
   updateMembershipEnrollment(id: number, enrollment: Partial<InsertMembershipEnrollment>): Promise<MembershipEnrollment | undefined>;
   deleteMembershipEnrollment(id: number): Promise<void>;
   createOrUpdateMembershipEnrollment(parentUserId: number, schoolId: number, membershipYear: number): Promise<MembershipEnrollment>;
+  bulkUpdateMembershipEnrollments(ids: number[], schoolId: number, updates: Partial<MembershipEnrollment>): Promise<number>;
+  getWinterSessionFixPreview(schoolId: number): Promise<Array<{ membershipId: number; parentName: string; parentEmail: string; amountPaid: number; totalAmount: number; currentStatus: string }>>;
+  applyWinterSessionFix(schoolId: number): Promise<number>;
 
   // Membership Agreement methods
   getMembershipAgreementById(id: number): Promise<MembershipAgreement | undefined>;
@@ -389,6 +392,7 @@ export interface IStorage {
   getStripePaymentHistoryByUserId(userId: number): Promise<StripePaymentHistory[]>;
   getStripePaymentsBySubscription(subscriptionId: string): Promise<StripePaymentHistory[]>;
   getStripePaymentByIntentId(paymentIntentId: string): Promise<StripePaymentHistory | undefined>;
+  getStripePaymentHistoryById(id: number): Promise<StripePaymentHistory | undefined>;
   getPaymentByIdempotencyKey(idempotencyKey: string): Promise<StripePaymentHistory | undefined>;
   
   // Payment Discounts methods (for discount tracking/analytics)
@@ -2236,6 +2240,139 @@ export class MemStorage implements IStorage {
     this.membershipEnrollmentsStore.delete(id);
   }
 
+  async bulkUpdateMembershipEnrollments(ids: number[], schoolId: number, updates: Partial<MembershipEnrollment>): Promise<number> {
+    if (ids.length === 0) return 0;
+
+    // Fail-fast: reject if ANY ID does not belong to this school or does not exist
+    for (const id of ids) {
+      const enrollment = this.membershipEnrollmentsStore.get(id);
+      if (!enrollment) {
+        throw new Error(`Unauthorized: membership ID ${id} not found`);
+      }
+      if (enrollment.schoolId !== schoolId) {
+        throw new Error(`Unauthorized: membership ID ${id} does not belong to school ${schoolId}`);
+      }
+    }
+
+    let count = 0;
+    for (const id of ids) {
+      const enrollment = this.membershipEnrollmentsStore.get(id)!;
+      // If zeroing out balanceDue and remainingBalance (marking as paid), sync amountPaid to the full amount
+      const resolvedUpdates = { ...updates };
+      if (resolvedUpdates.balanceDue === 0 && resolvedUpdates.remainingBalance === 0 && resolvedUpdates.amountPaid === undefined) {
+        resolvedUpdates.amountPaid = enrollment.amount ?? 0;
+      }
+      const updatedEnrollment: MembershipEnrollment = {
+        ...enrollment,
+        ...resolvedUpdates,
+        id,
+        updatedAt: new Date()
+      };
+      this.membershipEnrollmentsStore.set(id, updatedEnrollment);
+      count++;
+    }
+    return count;
+  }
+
+  async getWinterSessionFixPreview(schoolId: number): Promise<Array<{ membershipId: number; parentName: string; parentEmail: string; amountPaid: number; totalAmount: number; currentStatus: string }>> {
+    // Winter session date range: 2026-01-05 to 2026-03-13
+    const winterStart = new Date('2026-01-05T00:00:00Z');
+    const winterEnd = new Date('2026-03-13T23:59:59Z');
+
+    // Find pending_payment memberships for this school that have some payment recorded
+    const pendingMemberships = Array.from(this.membershipEnrollmentsStore.values())
+      .filter(m => m.schoolId === schoolId && m.status === 'pending_payment' && (m.amountPaid || 0) > 0);
+
+    if (pendingMemberships.length === 0) return [];
+
+    // Find all payment allocations where membershipEnrollmentId matches a pending membership
+    // AND the same paymentHistoryId also has an allocation to a class enrollment in the winter window
+    const pendingIds = new Set(pendingMemberships.map(m => m.id));
+
+    // Get membership allocations that link to our pending memberships
+    const membershipAllocations = Array.from(this.paymentAllocationsStore.values())
+      .filter(a => a.membershipEnrollmentId !== null && pendingIds.has(a.membershipEnrollmentId!));
+
+    if (membershipAllocations.length === 0) return [];
+
+    // Collect the paymentHistoryIds from membership allocations
+    const paymentHistoryIds = new Set(membershipAllocations.map(a => a.paymentHistoryId));
+
+    // Find class enrollment allocations with same paymentHistoryId where enrollment date is in winter window
+    const winterClassAllocations = Array.from(this.paymentAllocationsStore.values())
+      .filter(a => {
+        if (!a.enrollmentId || !paymentHistoryIds.has(a.paymentHistoryId)) return false;
+        const classEnrollment = this.schoolClassEnrollmentsStore.get(a.enrollmentId);
+        if (!classEnrollment || classEnrollment.status !== 'enrolled') return false;
+        const enrollmentDate = new Date(classEnrollment.enrollmentDate);
+        return enrollmentDate >= winterStart && enrollmentDate <= winterEnd;
+      });
+
+    if (winterClassAllocations.length === 0) return [];
+
+    // Validate that the payments associated with winter class allocations are succeeded
+    const uniquePaymentIds = [...new Set(winterClassAllocations.map(a => a.paymentHistoryId))];
+    const succeededPaymentIds = new Set<number>();
+    for (const pid of uniquePaymentIds) {
+      const paymentRecord = await this.getStripePaymentHistoryById(pid);
+      if (paymentRecord && paymentRecord.status === 'succeeded') {
+        succeededPaymentIds.add(pid);
+      }
+    }
+
+    if (succeededPaymentIds.size === 0) return [];
+
+    const qualifyingPaymentIds = succeededPaymentIds;
+
+    // Collect membership IDs whose payments qualify
+    const qualifyingMembershipIds = new Set<number>();
+    for (const alloc of membershipAllocations) {
+      if (qualifyingPaymentIds.has(alloc.paymentHistoryId) && alloc.membershipEnrollmentId !== null) {
+        qualifyingMembershipIds.add(alloc.membershipEnrollmentId!);
+      }
+    }
+
+    if (qualifyingMembershipIds.size === 0) return [];
+
+    const results = [];
+    for (const m of pendingMemberships) {
+      if (!qualifyingMembershipIds.has(m.id)) continue;
+      const user = this.usersStore.get(m.parentUserId);
+      results.push({
+        membershipId: m.id,
+        parentName: user?.name || 'Unknown',
+        parentEmail: user?.email || 'Unknown',
+        amountPaid: m.amountPaid || 0,
+        totalAmount: m.totalAmount || m.amount || 0,
+        currentStatus: m.status,
+      });
+    }
+    return results;
+  }
+
+  async applyWinterSessionFix(schoolId: number): Promise<number> {
+    const preview = await this.getWinterSessionFixPreview(schoolId);
+    let count = 0;
+    for (const item of preview) {
+      const enrollment = this.membershipEnrollmentsStore.get(item.membershipId);
+      if (enrollment) {
+        const totalAmount = enrollment.totalAmount || enrollment.amount || 0;
+        const enrolledStatus: MembershipEnrollment['status'] = 'enrolled';
+        const updatedEnrollment: MembershipEnrollment = {
+          ...enrollment,
+          status: enrolledStatus,
+          amountPaid: totalAmount,
+          balanceDue: 0,
+          remainingBalance: 0,
+          updatedAt: new Date()
+        };
+        this.membershipEnrollmentsStore.set(item.membershipId, updatedEnrollment);
+        count++;
+      }
+    }
+    return count;
+  }
+
   async createOrUpdateMembershipEnrollment(parentUserId: number, schoolId: number, membershipYear: number): Promise<MembershipEnrollment> {
     // Check if enrollment already exists
     const existing = await this.getMembershipEnrollmentByParentAndSchoolAndYear(parentUserId, schoolId, membershipYear);
@@ -3550,6 +3687,14 @@ export class MemStorage implements IStorage {
   async getStripePaymentByIntentId(paymentIntentId: string): Promise<StripePaymentHistory | undefined> {
     const db = await getDb();
     const result = await db.select().from(stripePaymentHistory).where(eq(stripePaymentHistory.paymentIntentId, paymentIntentId)).limit(1);
+    return result[0];
+  }
+
+  // Note: MemStorage's stripe payment history methods are DB-backed by design —
+  // Stripe payment records are never stored purely in-memory for data integrity.
+  async getStripePaymentHistoryById(id: number): Promise<StripePaymentHistory | undefined> {
+    const db = await getDb();
+    const result = await db.select().from(stripePaymentHistory).where(eq(stripePaymentHistory.id, id)).limit(1);
     return result[0];
   }
 
@@ -6964,6 +7109,18 @@ import { DatabaseStorage } from "./dbStorage";
         return this.dbStorage.createOrUpdateMembershipEnrollment(parentUserId, schoolId, membershipYear);
       }
 
+      async bulkUpdateMembershipEnrollments(ids: number[], schoolId: number, updates: Partial<MembershipEnrollment>): Promise<number> {
+        return this.dbStorage.bulkUpdateMembershipEnrollments(ids, schoolId, updates);
+      }
+
+      async getWinterSessionFixPreview(schoolId: number): Promise<Array<{ membershipId: number; parentName: string; parentEmail: string; amountPaid: number; totalAmount: number; currentStatus: string }>> {
+        return this.dbStorage.getWinterSessionFixPreview(schoolId);
+      }
+
+      async applyWinterSessionFix(schoolId: number): Promise<number> {
+        return this.dbStorage.applyWinterSessionFix(schoolId);
+      }
+
       // Membership Agreement methods
       async getMembershipAgreementById(id: number): Promise<MembershipAgreement | undefined> {
         return this.dbStorage.getMembershipAgreementById(id);
@@ -7656,6 +7813,10 @@ import { DatabaseStorage } from "./dbStorage";
 
       async getStripePaymentByIntentId(paymentIntentId: string): Promise<StripePaymentHistory | undefined> {
         return this.memStorage.getStripePaymentByIntentId(paymentIntentId);
+      }
+
+      async getStripePaymentHistoryById(id: number): Promise<StripePaymentHistory | undefined> {
+        return this.dbStorage.getStripePaymentHistoryById(id);
       }
 
       async getPaymentByIdempotencyKey(idempotencyKey: string): Promise<StripePaymentHistory | undefined> {

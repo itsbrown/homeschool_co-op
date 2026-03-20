@@ -15,6 +15,7 @@ import {
   MembershipAgreement, InsertMembershipAgreement, membershipAgreements,
   SchoolDocument, InsertSchoolDocument, schoolDocuments,
   PaymentReceipt, InsertPaymentReceipt, paymentReceipts,
+  StripePaymentHistory, InsertStripePaymentHistory, stripePaymentHistory,
   StripeSubscriptionSchedule, InsertStripeSubscriptionSchedule, stripeSubscriptionSchedules,
   MarketingLink, InsertMarketingLink, marketingLinks,
   Child, InsertChild, children,
@@ -68,7 +69,8 @@ import {
   WeekPlan, InsertWeekPlan, weekPlans,
   WeekPlanBlock, InsertWeekPlanBlock, weekPlanBlocks,
   WeekPlanBlockHistory, InsertWeekPlanBlockHistory, weekPlanBlockHistory,
-  Session, InsertSession, sessions
+  Session, InsertSession, sessions,
+  SchoolClassEnrollment, schoolClassEnrollments
 } from '../shared/schema';
 
 /**
@@ -1303,6 +1305,190 @@ export class DatabaseStorage implements IStorage {
     return this.createMembershipEnrollment(enrollmentData);
   }
 
+  async bulkUpdateMembershipEnrollments(ids: number[], schoolId: number, updates: Partial<MembershipEnrollment>): Promise<number> {
+    if (ids.length === 0) return 0;
+    const db = await getDb();
+
+    // Validate school ownership — strict: fail-fast if any ID is missing or belongs to another school
+    const existingEnrollments = await db
+      .select({ id: membershipEnrollments.id, schoolId: membershipEnrollments.schoolId })
+      .from(membershipEnrollments)
+      .where(inArray(membershipEnrollments.id, ids));
+
+    if (existingEnrollments.length !== ids.length) {
+      const foundIds = new Set(existingEnrollments.map((e: { id: number; schoolId: number | null }) => e.id));
+      const missingIds = ids.filter(id => !foundIds.has(id));
+      throw new Error(`Bulk update rejected: membership IDs not found: ${missingIds.join(', ')}`);
+    }
+
+    const unauthorizedIds = existingEnrollments.filter((e: { id: number; schoolId: number | null }) => e.schoolId !== schoolId).map((e: { id: number; schoolId: number | null }) => e.id);
+    if (unauthorizedIds.length > 0) {
+      throw new Error(`Unauthorized: membership IDs ${unauthorizedIds.join(', ')} do not belong to school ${schoolId}`);
+    }
+
+    // Strip non-updatable fields
+    const { id: _id, createdAt: _createdAt, schoolId: _schoolId, parentUserId: _parentUserId, ...safeUpdates } = updates;
+
+    // When zeroing balanceDue and remainingBalance (mark as paid) without specifying amountPaid,
+    // set amountPaid per-record to that membership's full amount for accounting consistency.
+    const syncAmountPaid = safeUpdates.balanceDue === 0 && safeUpdates.remainingBalance === 0 && safeUpdates.amountPaid === undefined;
+
+    if (syncAmountPaid) {
+      // Need per-record amounts — do individual updates
+      const fullRecords = await db
+        .select({ id: membershipEnrollments.id, amount: membershipEnrollments.amount })
+        .from(membershipEnrollments)
+        .where(inArray(membershipEnrollments.id, ids));
+      for (const record of fullRecords) {
+        await db
+          .update(membershipEnrollments)
+          .set({ ...safeUpdates, amountPaid: record.amount ?? 0, updatedAt: new Date() })
+          .where(eq(membershipEnrollments.id, record.id));
+      }
+    } else {
+      await db
+        .update(membershipEnrollments)
+        .set({ ...safeUpdates, updatedAt: new Date() })
+        .where(inArray(membershipEnrollments.id, ids));
+    }
+
+    return ids.length;
+  }
+
+  async getWinterSessionFixPreview(schoolId: number): Promise<Array<{ membershipId: number; parentName: string; parentEmail: string; amountPaid: number; totalAmount: number; currentStatus: string }>> {
+    const db = await getDb();
+
+    // Winter session date range: 2026-01-05 to 2026-03-13
+    const winterStart = new Date('2026-01-05T00:00:00Z');
+    const winterEnd = new Date('2026-03-13T23:59:59Z');
+
+    // Find payment_history_ids for succeeded payments that also have a class enrollment
+    // in the winter session window. Use the same stripe_payment_history ID to link
+    // membership allocations (via membershipEnrollmentId) to class allocations (via enrollmentId).
+    //
+    // Join chain: payment_allocations (membershipEnrollmentId) →
+    //             membership_enrollments (pending_payment, schoolId) →
+    //             [same paymentHistoryId in payment_allocations] →
+    //             stripe_payment_history (succeeded) →
+    //             payment_allocations.enrollmentId → school_class_enrollments (enrolled) →
+    //             school_classes.enrollmentDate in winter window
+
+    // Step 1: Find all pending_payment membership IDs for this school that have a succeeded payment allocation
+    const membershipAllocations = await db
+      .select({
+        membershipEnrollmentId: paymentAllocations.membershipEnrollmentId,
+        paymentHistoryId: paymentAllocations.paymentHistoryId,
+      })
+      .from(paymentAllocations)
+      .innerJoin(stripePaymentHistory, eq(paymentAllocations.paymentHistoryId, stripePaymentHistory.id))
+      .innerJoin(membershipEnrollments, eq(paymentAllocations.membershipEnrollmentId, membershipEnrollments.id))
+      .where(
+        and(
+          eq(membershipEnrollments.schoolId, schoolId),
+          eq(membershipEnrollments.status, 'pending_payment'),
+          eq(stripePaymentHistory.status, 'succeeded')
+        )
+      );
+
+    if (membershipAllocations.length === 0) return [];
+
+    // Step 2: For each payment, check if the same payment also allocated to a winter session class enrollment
+    const paymentHistoryIds: number[] = [...new Set(membershipAllocations.map(a => a.paymentHistoryId))];
+
+    // Find payment allocations where the same payment also paid for a class enrollment
+    // that was active during the winter session window (2026-01-05 to 2026-03-13).
+    // school_class_enrollments.enrollment_date is the canonical class date field —
+    // the schoolClasses table has no start/end date columns, so enrollment_date
+    // (the date the class session enrollment was activated) is the authoritative
+    // "class date" used to identify winter session activity.
+    const winterClassAllocations = await db
+      .select({
+        paymentHistoryId: paymentAllocations.paymentHistoryId,
+      })
+      .from(paymentAllocations)
+      .innerJoin(schoolClassEnrollments, eq(paymentAllocations.enrollmentId, schoolClassEnrollments.id))
+      .where(
+        and(
+          inArray(paymentAllocations.paymentHistoryId, paymentHistoryIds),
+          eq(schoolClassEnrollments.status, 'enrolled'),
+          gte(schoolClassEnrollments.enrollmentDate, winterStart),
+          lte(schoolClassEnrollments.enrollmentDate, winterEnd)
+        )
+      );
+
+    if (winterClassAllocations.length === 0) return [];
+
+    const qualifyingPaymentIds = new Set(winterClassAllocations.map(a => a.paymentHistoryId));
+
+    // Step 3: Collect the membership IDs whose payments qualify
+    const qualifyingMembershipIds = new Set<number>();
+    for (const alloc of membershipAllocations) {
+      if (qualifyingPaymentIds.has(alloc.paymentHistoryId) && alloc.membershipEnrollmentId !== null) {
+        qualifyingMembershipIds.add(alloc.membershipEnrollmentId);
+      }
+    }
+
+    if (qualifyingMembershipIds.size === 0) return [];
+
+    // Step 4: Fetch membership details and parent info
+    const pendingMemberships = await db
+      .select()
+      .from(membershipEnrollments)
+      .where(
+        and(
+          eq(membershipEnrollments.schoolId, schoolId),
+          eq(membershipEnrollments.status, 'pending_payment'),
+          inArray(membershipEnrollments.id, [...qualifyingMembershipIds])
+        )
+      );
+
+    const results: Array<{ membershipId: number; parentName: string; parentEmail: string; amountPaid: number; totalAmount: number; currentStatus: string }> = [];
+
+    for (const m of pendingMemberships) {
+      const [parent] = await db.select().from(users).where(eq(users.id, m.parentUserId));
+      results.push({
+        membershipId: m.id,
+        parentName: parent?.name || 'Unknown',
+        parentEmail: parent?.email || 'Unknown',
+        amountPaid: m.amountPaid || 0,
+        totalAmount: m.totalAmount || m.amount || 0,
+        currentStatus: m.status,
+      });
+    }
+
+    return results;
+  }
+
+  async applyWinterSessionFix(schoolId: number): Promise<number> {
+    const preview = await this.getWinterSessionFixPreview(schoolId);
+    if (preview.length === 0) return 0;
+
+    const db = await getDb();
+
+    // For each membership, set status = enrolled, amountPaid = totalAmount, balanceDue = 0, remainingBalance = 0
+    let count = 0;
+    for (const item of preview) {
+      const [m] = await db.select().from(membershipEnrollments).where(eq(membershipEnrollments.id, item.membershipId));
+      if (!m) continue;
+      const totalAmount = m.totalAmount || m.amount || 0;
+
+      const enrolledStatus: MembershipEnrollment['status'] = 'enrolled';
+      await db
+        .update(membershipEnrollments)
+        .set({
+          status: enrolledStatus,
+          amountPaid: totalAmount,
+          balanceDue: 0,
+          remainingBalance: 0,
+          updatedAt: new Date()
+        })
+        .where(eq(membershipEnrollments.id, item.membershipId));
+      count++;
+    }
+
+    return count;
+  }
+
   // Membership Agreement methods
   async getMembershipAgreementById(id: number): Promise<MembershipAgreement | undefined> {
     const db = await getDb();
@@ -2044,6 +2230,40 @@ export class DatabaseStorage implements IStorage {
   async getAllPayments(): Promise<Payment[]> {
     const db = await getDb();
     return await db.select().from(payments).orderBy(desc(payments.createdAt));
+  }
+
+  async saveStripePayment(payment: InsertStripePaymentHistory): Promise<StripePaymentHistory> {
+    const db = await getDb();
+    const result = await db.insert(stripePaymentHistory).values(payment).returning();
+    return result[0];
+  }
+
+  async getStripePaymentHistoryByUserId(userId: number): Promise<StripePaymentHistory[]> {
+    const db = await getDb();
+    return await db.select().from(stripePaymentHistory).where(eq(stripePaymentHistory.userId, userId));
+  }
+
+  async getStripePaymentsBySubscription(subscriptionId: string): Promise<StripePaymentHistory[]> {
+    const db = await getDb();
+    return await db.select().from(stripePaymentHistory).where(eq(stripePaymentHistory.subscriptionId, subscriptionId));
+  }
+
+  async getStripePaymentByIntentId(paymentIntentId: string): Promise<StripePaymentHistory | undefined> {
+    const db = await getDb();
+    const [result] = await db.select().from(stripePaymentHistory).where(eq(stripePaymentHistory.paymentIntentId, paymentIntentId)).limit(1);
+    return result;
+  }
+
+  async getStripePaymentHistoryById(id: number): Promise<StripePaymentHistory | undefined> {
+    const db = await getDb();
+    const [result] = await db.select().from(stripePaymentHistory).where(eq(stripePaymentHistory.id, id)).limit(1);
+    return result;
+  }
+
+  async getPaymentByIdempotencyKey(idempotencyKey: string): Promise<StripePaymentHistory | undefined> {
+    const db = await getDb();
+    const [result] = await db.select().from(stripePaymentHistory).where(eq(stripePaymentHistory.idempotencyKey, idempotencyKey)).limit(1);
+    return result;
   }
 
   async updatePaymentStatus(

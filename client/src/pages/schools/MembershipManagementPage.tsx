@@ -1,24 +1,26 @@
 import { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { useAuth } from "@/hooks/useAuth0";
+import { useAuth } from "@/components/SupabaseProvider";
+import { useRole } from "@/contexts/RoleContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Calendar, DollarSign, FileText, UserCheck, Users, Filter } from 'lucide-react';
+import { Calendar, DollarSign, FileText, UserCheck, Users, Filter, Search, CheckSquare, Wrench, AlertCircle } from 'lucide-react';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { format } from 'date-fns';
+import { cn, formatDate } from '@/lib/utils';
 
-// Form schema for manual payment recording
 const paymentSchema = z.object({
   amount: z.number().min(0, "Amount must be positive"),
   paymentMethod: z.enum(["credit_card", "paypal", "bank_transfer", "cash", "check", "other"]),
@@ -26,63 +28,148 @@ const paymentSchema = z.object({
   notes: z.string().optional(),
 });
 
-// Form schema for membership update
 const updateSchema = z.object({
-  status: z.enum(["pending_payment", "active", "expired", "grace_period", "suspended"]).optional(),
+  status: z.enum(["pending_payment", "active", "enrolled", "expired", "grace_period", "suspended"]).optional(),
   expirationDate: z.string().optional(),
   notes: z.string().optional(),
 });
 
+const expirationDateSchema = z.object({
+  expirationDate: z.string().min(1, "Expiration date is required"),
+});
+
 type PaymentFormData = z.infer<typeof paymentSchema>;
 type UpdateFormData = z.infer<typeof updateSchema>;
+type ExpirationDateFormData = z.infer<typeof expirationDateSchema>;
+
+interface MembershipSummary {
+  total: number;
+  active: number;
+  pending: number;
+  partial: number;
+  expired: number;
+  totalOutstanding: number;
+}
+
+interface MembershipRecord {
+  id: number;
+  parentUserId: number;
+  parentName?: string;
+  parentEmail?: string;
+  schoolId: number;
+  membershipYear: number;
+  status: 'pending_payment' | 'active' | 'enrolled' | 'expired' | 'grace_period' | 'suspended' | 'partial_payment';
+  amount: number;
+  amountPaid: number;
+  remainingBalance: number;
+  totalAmount: number;
+  balanceDue: number;
+  dueDate?: string | null;
+  expirationDate?: string | null;
+  gracePeriodEnd?: string | null;
+  renewalDate?: string | null;
+  paymentMethod?: string | null;
+  notes?: string | null;
+  membershipTier?: string;
+}
+
+interface WinterPreviewItem {
+  membershipId: number;
+  parentName: string;
+  parentEmail: string;
+  amountPaid: number;
+  totalAmount: number;
+  currentStatus: string;
+}
+
+function getStatusBadgeClass(status: string): string {
+  switch (status) {
+    case 'active':
+    case 'enrolled':
+      return 'bg-green-100 text-green-800 border-green-200';
+    case 'grace_period':
+      return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+    case 'pending_payment':
+    case 'partial_payment':
+      return 'bg-orange-100 text-orange-800 border-orange-200';
+    case 'expired':
+      return 'bg-red-100 text-red-800 border-red-200';
+    case 'suspended':
+      return 'bg-gray-100 text-gray-800 border-gray-200';
+    default:
+      return 'bg-gray-100 text-gray-800 border-gray-200';
+  }
+}
+
+function getStatusLabel(status: string): string {
+  const labels: Record<string, string> = {
+    active: 'Active',
+    enrolled: 'Active',
+    grace_period: 'Grace Period',
+    pending_payment: 'Pending',
+    partial_payment: 'Partial',
+    expired: 'Expired',
+    suspended: 'Suspended',
+  };
+  return labels[status] || status;
+}
+
+function getDaysLabel(membership: MembershipRecord): { text: string; className: string } {
+  if (!membership.expirationDate) return { text: 'N/A', className: 'text-muted-foreground' };
+
+  const now = new Date();
+  const exp = new Date(membership.expirationDate);
+  const diff = Math.ceil((exp.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+
+  if (diff < 0) {
+    return { text: `${Math.abs(diff)}d overdue`, className: 'text-red-600 font-semibold' };
+  }
+  if (diff <= 30) {
+    return { text: `${diff}d left`, className: 'text-yellow-600 font-semibold' };
+  }
+  return { text: `${diff}d left`, className: 'text-green-600' };
+}
 
 export default function MembershipManagementPage() {
-  const { user, getAccessTokenSilently } = useAuth();
+  const { user } = useAuth();
+  const { activeRole } = useRole();
   const { toast } = useToast();
-  const [selectedMembership, setSelectedMembership] = useState<any>(null);
+  const [selectedMembership, setSelectedMembership] = useState<MembershipRecord | null>(null);
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
-  // Fetch memberships for authenticated admin's school
-  const { data: memberships, isLoading } = useQuery({
+  const [bulkActionDialog, setBulkActionDialog] = useState<{
+    open: boolean;
+    action: 'paid' | 'pending' | 'expiration' | null;
+  }>({ open: false, action: null });
+
+  const [winterSessionDialogOpen, setWinterSessionDialogOpen] = useState(false);
+  const [winterSessionApplyDialogOpen, setWinterSessionApplyDialogOpen] = useState(false);
+
+
+  const expirationForm = useForm<ExpirationDateFormData>({
+    resolver: zodResolver(expirationDateSchema),
+    defaultValues: { expirationDate: '' },
+  });
+
+  const { data: memberships, isLoading } = useQuery<MembershipRecord[]>({
     queryKey: ['/api/admin/memberships/my-school'],
-    queryFn: async () => {
-      const token = await getAccessTokenSilently();
-      const response = await fetch('/api/admin/memberships/my-school', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      if (!response.ok) {
-        throw new Error('Failed to fetch memberships');
-      }
-      return response.json();
-    },
-    enabled: !!user
+    enabled: !!user,
   });
 
-  // Fetch summary for authenticated admin's school
-  const { data: summary } = useQuery({
+  const { data: summary } = useQuery<MembershipSummary>({
     queryKey: ['/api/admin/memberships/my-school/summary'],
-    queryFn: async () => {
-      const token = await getAccessTokenSilently();
-      const response = await fetch('/api/admin/memberships/my-school/summary', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      if (!response.ok) {
-        throw new Error('Failed to fetch summary');
-      }
-      return response.json();
-    },
-    enabled: !!user
+    enabled: !!user,
   });
 
-  // Payment form
+  const { data: winterPreview, isLoading: isLoadingWinterPreview, refetch: refetchWinterPreview } = useQuery<WinterPreviewItem[]>({
+    queryKey: ['/api/admin/memberships/winter-session-fix-preview'],
+    enabled: false,
+  });
+
   const paymentForm = useForm<PaymentFormData>({
     resolver: zodResolver(paymentSchema),
     defaultValues: {
@@ -93,7 +180,6 @@ export default function MembershipManagementPage() {
     }
   });
 
-  // Update form
   const updateForm = useForm<UpdateFormData>({
     resolver: zodResolver(updateSchema),
     defaultValues: {
@@ -102,85 +188,84 @@ export default function MembershipManagementPage() {
     }
   });
 
-  // Record payment mutation
   const recordPayment = useMutation({
     mutationFn: async (data: PaymentFormData & { membershipId: number }) => {
-      const token = await getAccessTokenSilently();
-      return await apiRequest(
-        `/api/admin/memberships/${data.membershipId}/payment`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            amount: Math.round(data.amount * 100), // Convert to cents
-            paymentMethod: data.paymentMethod,
-            paymentDate: data.paymentDate,
-            notes: data.notes
-          })
-        }
-      );
+      const res = await apiRequest('POST', `/api/admin/memberships/${data.membershipId}/payment`, {
+        amount: Math.round(data.amount * 100),
+        paymentMethod: data.paymentMethod,
+        paymentDate: data.paymentDate,
+        notes: data.notes
+      });
+      return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/memberships/my-school'] });
       queryClient.invalidateQueries({ queryKey: ['/api/admin/memberships/my-school/summary'] });
-      toast({
-        title: "Payment recorded",
-        description: "Membership payment has been recorded successfully"
-      });
+      toast({ title: "Payment recorded", description: "Membership payment has been recorded successfully" });
       setPaymentDialogOpen(false);
       paymentForm.reset();
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to record payment",
-        variant: "destructive"
-      });
+      toast({ title: "Error", description: error.message || "Failed to record payment", variant: "destructive" });
     }
   });
 
-  // Update membership mutation
   const updateMembership = useMutation({
     mutationFn: async (data: UpdateFormData & { membershipId: number }) => {
-      const token = await getAccessTokenSilently();
-      return await apiRequest(
-        `/api/admin/memberships/${data.membershipId}`,
-        {
-          method: 'PATCH',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(data)
-        }
-      );
+      const res = await apiRequest('PATCH', `/api/admin/memberships/${data.membershipId}`, data);
+      return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/memberships/my-school'] });
       queryClient.invalidateQueries({ queryKey: ['/api/admin/memberships/my-school/summary'] });
-      toast({
-        title: "Membership updated",
-        description: "Membership has been updated successfully"
-      });
+      toast({ title: "Membership updated", description: "Membership has been updated successfully" });
       setUpdateDialogOpen(false);
       updateForm.reset();
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to update membership",
-        variant: "destructive"
-      });
+      toast({ title: "Error", description: error.message || "Failed to update membership", variant: "destructive" });
     }
   });
 
-  const handleOpenPaymentDialog = (membership: any) => {
+  const bulkUpdate = useMutation({
+    mutationFn: async ({ membershipIds, updates }: { membershipIds: number[]; updates: Partial<MembershipRecord> }) => {
+      const res = await apiRequest('PATCH', '/api/admin/memberships/bulk-update', { membershipIds, updates });
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/memberships/my-school'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/memberships/my-school/summary'] });
+      toast({ title: "Bulk update complete", description: `Updated ${data.updatedCount} membership(s)` });
+      setBulkActionDialog({ open: false, action: null });
+      setSelectedIds(new Set());
+      expirationForm.reset();
+    },
+    onError: (error: any) => {
+      toast({ title: "Error", description: error.message || "Failed to bulk update memberships", variant: "destructive" });
+    }
+  });
+
+  const applyWinterFix = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest('POST', '/api/admin/memberships/winter-session-fix-apply', {});
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/memberships/my-school'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/memberships/my-school/summary'] });
+      toast({ title: "Winter Session Fix Applied", description: `Fixed ${data.updatedCount} membership(s)` });
+      setWinterSessionApplyDialogOpen(false);
+      setWinterSessionDialogOpen(false);
+    },
+    onError: (error: any) => {
+      toast({ title: "Error", description: error.message || "Failed to apply winter session fix", variant: "destructive" });
+    }
+  });
+
+  const handleOpenPaymentDialog = (membership: MembershipRecord) => {
     setSelectedMembership(membership);
     paymentForm.reset({
-      amount: membership.remainingBalance / 100, // Convert from cents
+      amount: (membership.remainingBalance || 0) / 100,
       paymentMethod: "check",
       paymentDate: format(new Date(), 'yyyy-MM-dd'),
       notes: `Payment for ${membership.membershipYear} membership`
@@ -188,10 +273,14 @@ export default function MembershipManagementPage() {
     setPaymentDialogOpen(true);
   };
 
-  const handleOpenUpdateDialog = (membership: any) => {
+  const handleOpenUpdateDialog = (membership: MembershipRecord) => {
     setSelectedMembership(membership);
+    const validStatuses = ["pending_payment", "active", "enrolled", "expired", "grace_period", "suspended"] as const;
+    const formStatus = validStatuses.includes(membership.status as typeof validStatuses[number])
+      ? (membership.status as typeof validStatuses[number])
+      : "pending_payment";
     updateForm.reset({
-      status: membership.status || "pending_payment",
+      status: formStatus,
       expirationDate: membership.expirationDate ? format(new Date(membership.expirationDate), 'yyyy-MM-dd') : undefined,
       notes: membership.notes || ""
     });
@@ -210,36 +299,99 @@ export default function MembershipManagementPage() {
     }
   };
 
-  const getStatusBadge = (status: string) => {
-    const variants: Record<string, any> = {
-      'active': { variant: 'default', label: 'Active' },
-      'pending_payment': { variant: 'secondary', label: 'Pending Payment' },
-      'partial_payment': { variant: 'secondary', label: 'Partial Payment' },
-      'grace_period': { variant: 'outline', label: 'Grace Period' },
-      'expired': { variant: 'destructive', label: 'Expired' },
-      'suspended': { variant: 'destructive', label: 'Suspended' }
-    };
-    const config = variants[status] || { variant: 'secondary', label: status };
-    return <Badge variant={config.variant}>{config.label}</Badge>;
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedIds(new Set(filteredMemberships.map((m: MembershipRecord) => m.id)));
+    } else {
+      setSelectedIds(new Set());
+    }
   };
 
-  const filteredMemberships = memberships?.filter((m: any) => {
-    if (statusFilter === 'all') return true;
-    return m.status === statusFilter;
-  }) || [];
+  const handleSelectRow = (id: number, checked: boolean) => {
+    const next = new Set(selectedIds);
+    if (checked) {
+      next.add(id);
+    } else {
+      next.delete(id);
+    }
+    setSelectedIds(next);
+  };
 
-  if (isLoading) {
-    return <div className="p-8">Loading memberships...</div>;
+  const handleOpenBulkAction = (action: 'paid' | 'pending' | 'expiration') => {
+    setBulkActionDialog({ open: true, action });
+    if (action === 'expiration') {
+      expirationForm.reset({ expirationDate: '' });
+    }
+  };
+
+  const handleConfirmBulkAction = () => {
+    const ids = Array.from(selectedIds);
+    if (bulkActionDialog.action === 'paid') {
+      bulkUpdate.mutate({ membershipIds: ids, updates: { status: 'enrolled', balanceDue: 0, remainingBalance: 0 } });
+    } else if (bulkActionDialog.action === 'pending') {
+      bulkUpdate.mutate({ membershipIds: ids, updates: { status: 'pending_payment' } });
+    } else if (bulkActionDialog.action === 'expiration') {
+      const formValues = expirationForm.getValues();
+      if (!formValues.expirationDate) return;
+      bulkUpdate.mutate({ membershipIds: ids, updates: { expirationDate: formValues.expirationDate } });
+    }
+  };
+
+  const handleWinterSessionFix = async () => {
+    await refetchWinterPreview();
+    setWinterSessionDialogOpen(true);
+  };
+
+  const allMemberships: MembershipRecord[] = memberships || [];
+  const filteredMemberships = allMemberships.filter((m: MembershipRecord) => {
+    const matchesStatus = statusFilter === 'all' || m.status === statusFilter;
+    const searchLower = searchQuery.toLowerCase();
+    const matchesSearch = !searchQuery ||
+      (m.parentName || '').toLowerCase().includes(searchLower) ||
+      (m.parentEmail || '').toLowerCase().includes(searchLower);
+    return matchesStatus && matchesSearch;
+  });
+
+  const allSelected = filteredMemberships.length > 0 && filteredMemberships.every((m: MembershipRecord) => selectedIds.has(m.id));
+  const someSelected = selectedIds.size > 0;
+
+  const getBulkActionLabel = () => {
+    if (bulkActionDialog.action === 'paid') return 'Mark as Paid (Enrolled)';
+    if (bulkActionDialog.action === 'pending') return 'Mark as Pending';
+    if (bulkActionDialog.action === 'expiration') return 'Set Expiration Date';
+    return '';
+  };
+
+  if (activeRole !== 'schoolAdmin' && activeRole !== 'admin' && activeRole !== 'superAdmin') {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+          <p className="text-lg font-semibold">Access Denied</p>
+          <p className="text-muted-foreground">This page is only available to school administrators.</p>
+        </div>
+      </div>
+    );
   }
 
   return (
     <div className="container mx-auto p-6 space-y-6" data-testid="membership-management-page">
-      <div>
-        <h1 className="text-3xl font-bold">Membership Management</h1>
-        <p className="text-muted-foreground">Manage school memberships and payments</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Membership Management</h1>
+          <p className="text-muted-foreground">Manage school memberships and payments</p>
+        </div>
+        <Button
+          variant="default"
+          className="bg-blue-600 hover:bg-blue-700 text-white"
+          onClick={handleWinterSessionFix}
+          data-testid="winter-session-fix-button"
+        >
+          <Wrench className="h-4 w-4 mr-2" />
+          Winter Session Fix
+        </Button>
       </div>
 
-      {/* Summary Cards */}
       {summary && (
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           <Card>
@@ -271,7 +423,9 @@ export default function MembershipManagementPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-orange-600">{summary.pending + summary.partial}</div>
+              <div className="text-2xl font-bold text-orange-600">
+                {(summary.pending || 0) + (summary.partial || 0)}
+              </div>
             </CardContent>
           </Card>
           <Card>
@@ -298,7 +452,6 @@ export default function MembershipManagementPage() {
         </div>
       )}
 
-      {/* Filters */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -309,7 +462,17 @@ export default function MembershipManagementPage() {
           </div>
         </CardHeader>
         <CardContent className="flex gap-4">
-          <div className="flex-1">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search by name or email..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9"
+              data-testid="search-input"
+            />
+          </div>
+          <div className="w-52">
             <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger data-testid="filter-status">
                 <SelectValue placeholder="Filter by status" />
@@ -317,86 +480,179 @@ export default function MembershipManagementPage() {
               <SelectContent>
                 <SelectItem value="all">All Statuses</SelectItem>
                 <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="enrolled">Enrolled</SelectItem>
                 <SelectItem value="pending_payment">Pending Payment</SelectItem>
                 <SelectItem value="partial_payment">Partial Payment</SelectItem>
                 <SelectItem value="grace_period">Grace Period</SelectItem>
                 <SelectItem value="expired">Expired</SelectItem>
+                <SelectItem value="suspended">Suspended</SelectItem>
               </SelectContent>
             </Select>
           </div>
         </CardContent>
       </Card>
 
-      {/* Memberships Table */}
+      {someSelected && (
+        <div className="sticky top-4 z-10 bg-primary text-primary-foreground rounded-lg shadow-lg p-3 flex items-center gap-3">
+          <CheckSquare className="h-5 w-5 shrink-0" />
+          <span className="font-medium">{selectedIds.size} selected</span>
+          <div className="flex gap-2 ml-auto">
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => handleOpenBulkAction('paid')}
+              data-testid="bulk-action-mark-paid"
+            >
+              Mark as Paid (Enrolled)
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => handleOpenBulkAction('pending')}
+              data-testid="bulk-action-mark-pending"
+            >
+              Mark as Pending
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => handleOpenBulkAction('expiration')}
+              data-testid="bulk-action-set-expiration"
+            >
+              Set Expiration Date
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="text-primary-foreground hover:text-primary-foreground hover:bg-primary/80"
+              onClick={() => setSelectedIds(new Set())}
+            >
+              Clear
+            </Button>
+          </div>
+        </div>
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle>Memberships ({filteredMemberships.length})</CardTitle>
           <CardDescription>View and manage all parent memberships</CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Parent</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Year</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Amount</TableHead>
-                <TableHead>Paid</TableHead>
-                <TableHead>Balance</TableHead>
-                <TableHead>Expiration</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredMemberships.length === 0 ? (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
-                    No memberships found
-                  </TableCell>
+                  <TableHead className="w-10">
+                    <Checkbox
+                      checked={allSelected}
+                      onCheckedChange={handleSelectAll}
+                      data-testid="select-all-checkbox"
+                    />
+                  </TableHead>
+                  <TableHead>Parent</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Year</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Amt Paid</TableHead>
+                  <TableHead>Balance</TableHead>
+                  <TableHead>Renewal</TableHead>
+                  <TableHead>Expiration</TableHead>
+                  <TableHead>Grace End</TableHead>
+                  <TableHead>Days</TableHead>
+                  <TableHead>Actions</TableHead>
                 </TableRow>
-              ) : (
-                filteredMemberships.map((membership: any) => (
-                  <TableRow key={membership.id} data-testid={`membership-row-${membership.id}`}>
-                    <TableCell className="font-medium">{membership.parentName}</TableCell>
-                    <TableCell>{membership.parentEmail}</TableCell>
-                    <TableCell>{membership.membershipYear}</TableCell>
-                    <TableCell>{getStatusBadge(membership.status)}</TableCell>
-                    <TableCell>${(membership.amount / 100).toFixed(2)}</TableCell>
-                    <TableCell>${(membership.amountPaid / 100).toFixed(2)}</TableCell>
-                    <TableCell className={membership.remainingBalance > 0 ? 'text-red-600 font-semibold' : 'text-green-600'}>
-                      ${(membership.remainingBalance / 100).toFixed(2)}
-                    </TableCell>
-                    <TableCell>
-                      {membership.expirationDate ? format(new Date(membership.expirationDate), 'MMM dd, yyyy') : 'N/A'}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleOpenPaymentDialog(membership)}
-                          data-testid={`button-record-payment-${membership.id}`}
-                        >
-                          <DollarSign className="h-4 w-4 mr-1" />
-                          Payment
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleOpenUpdateDialog(membership)}
-                          data-testid={`button-update-${membership.id}`}
-                        >
-                          <FileText className="h-4 w-4 mr-1" />
-                          Update
-                        </Button>
-                      </div>
+              </TableHeader>
+              <TableBody>
+                {isLoading ? (
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <TableRow key={i}>
+                      {Array.from({ length: 12 }).map((_, j) => (
+                        <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
+                      ))}
+                    </TableRow>
+                  ))
+                ) : filteredMemberships.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={12} className="text-center py-8 text-muted-foreground">
+                      No memberships found
                     </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+                ) : (
+                  filteredMemberships.map((membership: MembershipRecord) => {
+                    const daysInfo = getDaysLabel(membership);
+                    const isSelected = selectedIds.has(membership.id);
+                    return (
+                      <TableRow
+                        key={membership.id}
+                        data-testid={`membership-row-${membership.id}`}
+                        className={cn(isSelected && 'bg-muted/50')}
+                      >
+                        <TableCell>
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={(checked) => handleSelectRow(membership.id, !!checked)}
+                            data-testid={`checkbox-row-${membership.id}`}
+                          />
+                        </TableCell>
+                        <TableCell className="font-medium whitespace-nowrap">{membership.parentName}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{membership.parentEmail}</TableCell>
+                        <TableCell>{membership.membershipYear}</TableCell>
+                        <TableCell>
+                          <span className={cn(
+                            'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border',
+                            getStatusBadgeClass(membership.status)
+                          )}>
+                            {getStatusLabel(membership.status)}
+                          </span>
+                        </TableCell>
+                        <TableCell>${((membership.amountPaid || 0) / 100).toFixed(2)}</TableCell>
+                        <TableCell className={cn(
+                          (membership.remainingBalance || 0) > 0 ? 'text-red-600 font-semibold' : 'text-green-600'
+                        )}>
+                          ${((membership.remainingBalance || 0) / 100).toFixed(2)}
+                        </TableCell>
+                        <TableCell className="text-sm whitespace-nowrap">
+                          {membership.renewalDate ? formatDate(membership.renewalDate) : 'N/A'}
+                        </TableCell>
+                        <TableCell className="text-sm whitespace-nowrap">
+                          {membership.expirationDate ? formatDate(membership.expirationDate) : 'N/A'}
+                        </TableCell>
+                        <TableCell className="text-sm whitespace-nowrap">
+                          {membership.gracePeriodEnd ? formatDate(membership.gracePeriodEnd) : 'N/A'}
+                        </TableCell>
+                        <TableCell className={cn('text-sm whitespace-nowrap', daysInfo.className)}>
+                          {daysInfo.text}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex gap-1">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleOpenPaymentDialog(membership)}
+                              data-testid={`button-record-payment-${membership.id}`}
+                            >
+                              <DollarSign className="h-3 w-3 mr-1" />
+                              Pay
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleOpenUpdateDialog(membership)}
+                              data-testid={`button-update-${membership.id}`}
+                            >
+                              <FileText className="h-3 w-3 mr-1" />
+                              Edit
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
 
@@ -521,6 +777,7 @@ export default function MembershipManagementPage() {
                       </FormControl>
                       <SelectContent>
                         <SelectItem value="active">Active</SelectItem>
+                        <SelectItem value="enrolled">Enrolled</SelectItem>
                         <SelectItem value="pending_payment">Pending Payment</SelectItem>
                         <SelectItem value="grace_period">Grace Period</SelectItem>
                         <SelectItem value="expired">Expired</SelectItem>
@@ -567,6 +824,150 @@ export default function MembershipManagementPage() {
               </div>
             </form>
           </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Action Confirmation Dialog */}
+      <Dialog open={bulkActionDialog.open} onOpenChange={(open) => setBulkActionDialog(prev => ({ ...prev, open }))}>
+        <DialogContent data-testid="bulk-action-dialog">
+          <DialogHeader>
+            <DialogTitle>Confirm Bulk Action</DialogTitle>
+            <DialogDescription>
+              {bulkActionDialog.action !== 'expiration'
+                ? `Update ${selectedIds.size} membership(s) to "${getBulkActionLabel()}"?`
+                : `Set expiration date for ${selectedIds.size} membership(s)?`}
+            </DialogDescription>
+          </DialogHeader>
+          {bulkActionDialog.action === 'expiration' && (
+            <div className="py-2">
+              <Form {...expirationForm}>
+                <FormField
+                  control={expirationForm.control}
+                  name="expirationDate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>New Expiration Date</FormLabel>
+                      <FormControl>
+                        <Input type="date" {...field} data-testid="bulk-expiration-date-input" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </Form>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBulkActionDialog({ open: false, action: null })}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleConfirmBulkAction}
+              disabled={bulkUpdate.isPending}
+              data-testid="bulk-action-confirm"
+            >
+              {bulkUpdate.isPending ? "Updating..." : `Confirm – ${getBulkActionLabel()}`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Winter Session Fix Preview Dialog */}
+      <Dialog open={winterSessionDialogOpen} onOpenChange={setWinterSessionDialogOpen}>
+        <DialogContent className="max-w-2xl" data-testid="winter-session-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Wrench className="h-5 w-5" />
+              Winter Session Fix Preview
+            </DialogTitle>
+            <DialogDescription>
+              The following memberships are marked as pending but have a succeeded payment. Confirming will mark them as enrolled with zeroed balances.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-80 overflow-y-auto">
+            {isLoadingWinterPreview ? (
+              <div className="space-y-2">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <Skeleton key={i} className="h-10 w-full" />
+                ))}
+              </div>
+            ) : !winterPreview || winterPreview.length === 0 ? (
+              <div className="flex items-center gap-2 text-muted-foreground py-6 justify-center">
+                <AlertCircle className="h-5 w-5" />
+                No memberships found matching the winter session fix criteria.
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Parent</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Amount Paid</TableHead>
+                    <TableHead>Total</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {winterPreview.map((item: WinterPreviewItem) => (
+                    <TableRow key={item.membershipId}>
+                      <TableCell className="font-medium">{item.parentName}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{item.parentEmail}</TableCell>
+                      <TableCell>
+                        <span className={cn(
+                          'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border',
+                          getStatusBadgeClass(item.currentStatus)
+                        )}>
+                          {getStatusLabel(item.currentStatus)}
+                        </span>
+                      </TableCell>
+                      <TableCell>${(item.amountPaid / 100).toFixed(2)}</TableCell>
+                      <TableCell>${(item.totalAmount / 100).toFixed(2)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setWinterSessionDialogOpen(false)}>
+              Cancel
+            </Button>
+            {winterPreview && winterPreview.length > 0 && (
+              <Button
+                onClick={() => {
+                  setWinterSessionDialogOpen(false);
+                  setWinterSessionApplyDialogOpen(true);
+                }}
+                data-testid="winter-session-confirm-preview"
+              >
+                Apply Fix to {winterPreview.length} account(s)
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Winter Session Fix Apply Confirmation Dialog */}
+      <Dialog open={winterSessionApplyDialogOpen} onOpenChange={setWinterSessionApplyDialogOpen}>
+        <DialogContent data-testid="winter-session-apply-dialog">
+          <DialogHeader>
+            <DialogTitle>Confirm Winter Session Fix</DialogTitle>
+            <DialogDescription>
+              This will update {winterPreview ? winterPreview.length : 0} membership(s) to enrolled status with zeroed balances. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setWinterSessionApplyDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => applyWinterFix.mutate()}
+              disabled={applyWinterFix.isPending}
+              data-testid="winter-session-apply-confirm"
+            >
+              {applyWinterFix.isPending ? "Applying..." : "Confirm & Apply Fix"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

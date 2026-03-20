@@ -8,7 +8,10 @@ import {
   getMySchoolMemberships,
   getMySchoolMembershipSummary,
   createMembershipEnrollment,
-  createMembershipCheckoutSession
+  createMembershipCheckoutSession,
+  bulkUpdateMemberships,
+  getWinterSessionFixPreview,
+  applyWinterSessionFix
 } from "./membership-admin";
 
 const router = Router();
@@ -16,6 +19,11 @@ const router = Router();
 // Admin routes for membership management (authenticated user's school)
 router.get("/my-school", getMySchoolMemberships);
 router.get("/my-school/summary", getMySchoolMembershipSummary);
+
+// Bulk operations (must be before /:id routes)
+router.patch("/bulk-update", bulkUpdateMemberships);
+router.get("/winter-session-fix-preview", getWinterSessionFixPreview);
+router.post("/winter-session-fix-apply", applyWinterSessionFix);
 
 // Admin routes for membership management (specific school - platform admins)
 router.get("/schools/:schoolId", getSchoolMemberships);
