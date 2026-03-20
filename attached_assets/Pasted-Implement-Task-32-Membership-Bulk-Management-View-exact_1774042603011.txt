@@ -1,0 +1,61 @@
+Implement Task #32 - Membership Bulk Management View exactly as described.
+
+Goals:
+- Rich, searchable, filterable memberships table with bulk actions
+- Color-coded status badges (Active green, Grace yellow, Pending orange, Overdue/Expired red, Suspended gray)
+- Computed "days until expiry/overdue" column
+- Bulk selection + toolbar (Mark Paid, Mark Pending, Set Expiration)
+- Dedicated "Winter Session Fix" button with preview modal + confirm apply
+- Toast success/error feedback
+
+Backend changes (server/api/membership-admin.ts & server/storage.ts):
+
+1. Add PATCH /api/admin/memberships/bulk-update
+   - Body: { membershipIds: number[], updates: Partial<MembershipEnrollment> }
+   - Validate all IDs belong to req.schoolId
+   - Bulk update with db.update(membershipEnrollments).set(updates).where(inArray(membershipEnrollments.id, membershipIds))
+   - Return updated count + success message
+
+2. Add GET /api/admin/memberships/winter-session-fix-preview
+   - Query: memberships with status = 'pending_payment' AND schoolId = req.schoolId
+   - JOIN payment_allocations + stripe_payment_history on succeeded payments
+   - Filter class date between 2026-01-05 and 2026-03-13
+   - Return list of { membershipId, parentName, parentEmail, amountPaid, totalAmount }
+
+3. Add POST /api/admin/memberships/winter-session-fix-apply
+   - Run same query as preview
+   - Bulk update matched memberships: status = 'enrolled', amountPaid = totalAmount, balanceDue = 0, remainingBalance = 0, expirationDate = calculated
+   - Return updated count
+
+Frontend changes (client/src/pages/schools/MembershipManagementPage.tsx):
+
+4. Replace existing table with enhanced data table (use @/components/ui/data-table or similar Shadcn pattern)
+   - Columns: checkbox, parent name (link to profile), email, status badge (color-coded), year, amount paid, balance due, renewal date, expiration date, grace end, days remaining (computed: red if overdue, yellow if <30 days, green otherwise)
+   - Search input (filter name/email)
+   - Status filter dropdown
+   - Row selection (single + select-all)
+
+5. Bulk toolbar (sticky when rows selected):
+   - Buttons: "Mark as Paid (Enrolled)", "Mark as Pending", "Set Expiration Date"
+   - Each opens confirmation dialog: "Update X memberships to [new status/expiration]?"
+   - On confirm: call bulk-update endpoint with selected IDs + updates
+
+6. "Winter Session Fix" button (top-right, prominent):
+   - On click: fetch preview list
+   - Show modal with table: parent name/email, current status, amount
+   - Confirm button: "Apply Fix to X accounts"
+   - On confirm: call apply endpoint → toast success → refresh table
+
+Conventions to follow:
+- Use useQuery with full array keys (["/api/admin/memberships", ...])
+- Use apiRequest for mutations
+- Use useToast from @/hooks/use-toast for feedback
+- Use cn() for conditional classes (badges, overdue indicators)
+- Use useRole() from RoleContext for admin-only checks
+- Add data-testid on interactive elements (bulk buttons, fix button, checkboxes)
+- Loading states: Skeleton rows during fetch
+- Error handling: toast on failure
+
+Apply safely. Preserve existing single-row payment/update dialogs.
+Show updated backend routes + frontend table/bulk/fix modal sections.
+Prioritize backend endpoints first, then frontend table, then bulk actions, then winter fix.
