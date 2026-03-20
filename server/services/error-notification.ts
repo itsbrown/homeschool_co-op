@@ -1,27 +1,13 @@
 import { storage } from '../storage';
 import type { ErrorLog } from '@shared/schema';
-import * as brevo from '@getbrevo/brevo';
+import { sendEmailDirect } from '../lib/email-service';
 
 const ERROR_NOTIFICATION_EMAIL = process.env.ERROR_NOTIFICATION_EMAIL || 'errors@americanseekersacademy.com';
-const BREVO_API_KEY = process.env.BREVO_API_KEY;
 
 class ErrorNotificationService {
-  private brevoClient: brevo.TransactionalEmailsApi | null = null;
   private dailySummaryScheduled = false;
 
-  constructor() {
-    if (BREVO_API_KEY) {
-      this.brevoClient = new brevo.TransactionalEmailsApi();
-      this.brevoClient.setApiKey(brevo.TransactionalEmailsApiApiKeys.apiKey, BREVO_API_KEY);
-    }
-  }
-
   async sendImmediateNotification(error: ErrorLog): Promise<void> {
-    if (!this.brevoClient) {
-      console.log('[ErrorNotification] Brevo not configured, skipping email notification');
-      return;
-    }
-
     const severityEmoji = error.severity === 'critical' ? '🚨' : '⚠️';
     const subject = `${severityEmoji} [${error.severity.toUpperCase()}] Application Error: ${error.message.substring(0, 50)}`;
 
@@ -65,27 +51,19 @@ ${error.stackTrace.substring(0, 2000)}${error.stackTrace.length > 2000 ? '\n\n..
     `;
 
     try {
-      const sendSmtpEmail = new brevo.SendSmtpEmail();
-      sendSmtpEmail.subject = subject;
-      sendSmtpEmail.htmlContent = htmlContent;
-      sendSmtpEmail.sender = { email: 'noreply@americanseekersacademy.com', name: 'ASA Error Monitoring' };
-      sendSmtpEmail.to = [{ email: ERROR_NOTIFICATION_EMAIL }];
-
-      await this.brevoClient.sendTransacEmail(sendSmtpEmail);
-      console.log(`[ErrorNotification] Immediate notification sent for error ID ${error.id}`);
-
-      await storage.markErrorsNotified([error.id]);
+      const sent = await sendEmailDirect(ERROR_NOTIFICATION_EMAIL, 'ASA Error Monitoring', subject, htmlContent);
+      if (sent) {
+        console.log(`[ErrorNotification] Immediate notification sent for error ID ${error.id}`);
+        await storage.markErrorsNotified([error.id]);
+      } else {
+        console.log(`[ErrorNotification] Email not sent for error ID ${error.id} (Brevo unavailable)`);
+      }
     } catch (emailError) {
       console.error('[ErrorNotification] Failed to send email:', emailError);
     }
   }
 
   async sendDailySummary(): Promise<void> {
-    if (!this.brevoClient) {
-      console.log('[ErrorNotification] Brevo not configured, skipping daily summary');
-      return;
-    }
-
     const endDate = new Date();
     const startDate = new Date(endDate.getTime() - 24 * 60 * 60 * 1000);
 
@@ -162,13 +140,12 @@ ${error.stackTrace.substring(0, 2000)}${error.stackTrace.length > 2000 ? '\n\n..
         </div>
       `;
 
-      const sendSmtpEmail = new brevo.SendSmtpEmail();
-      sendSmtpEmail.subject = `📊 Daily Error Summary: ${summary.total} error${summary.total !== 1 ? 's' : ''} in the last 24 hours`;
-      sendSmtpEmail.htmlContent = htmlContent;
-      sendSmtpEmail.sender = { email: 'noreply@americanseekersacademy.com', name: 'ASA Error Monitoring' };
-      sendSmtpEmail.to = [{ email: ERROR_NOTIFICATION_EMAIL }];
-
-      await this.brevoClient.sendTransacEmail(sendSmtpEmail);
+      await sendEmailDirect(
+        ERROR_NOTIFICATION_EMAIL,
+        'ASA Error Monitoring',
+        `📊 Daily Error Summary: ${summary.total} error${summary.total !== 1 ? 's' : ''} in the last 24 hours`,
+        htmlContent
+      );
       console.log('[ErrorNotification] Daily summary sent successfully');
     } catch (error) {
       console.error('[ErrorNotification] Failed to send daily summary:', error);

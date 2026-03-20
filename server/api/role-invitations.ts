@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import * as brevo from '@getbrevo/brevo';
+import { sendEmailDirect } from "../lib/email-service";
 import { storage } from "../storage";
 
 const router = Router();
@@ -20,16 +20,6 @@ function mapInvitationToDTO(invitation: any) {
   };
 }
 
-// Initialize Brevo
-let brevoApiInstance: brevo.TransactionalEmailsApi | null = null;
-if (process.env.BREVO_API_KEY) {
-  brevoApiInstance = new brevo.TransactionalEmailsApi();
-  brevoApiInstance.setApiKey(brevo.TransactionalEmailsApiApiKeys.apiKey, process.env.BREVO_API_KEY);
-  console.log('✅ Brevo initialized for role invitations');
-} else {
-  console.warn('⚠️ BREVO_API_KEY not found - role invitation emails will not be sent');
-}
-
 // Generate a random token for invitations
 function generateInvitationToken(): string {
   return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
@@ -38,11 +28,6 @@ function generateInvitationToken(): string {
 // Send role invitation email via Brevo
 async function sendRoleInvitationEmail(email: string, role: string, token: string): Promise<boolean> {
   try {
-    if (!brevoApiInstance) {
-      console.log('📧 Brevo not configured, skipping role invitation email send');
-      return false;
-    }
-
     const invitationUrl = `https://${process.env.REPL_ID}.replit.app/accept-invitation?token=${token}`;
     
     const htmlContent = `
@@ -85,18 +70,7 @@ ${invitationUrl}
 This invitation will expire in 7 days. If you have any questions, please contact our support team.
     `;
 
-    const sendSmtpEmail = new brevo.SendSmtpEmail();
-    sendSmtpEmail.to = [{ email: email }];
-    sendSmtpEmail.sender = { email: 'contact@americanseekersacademy.com', name: 'ASA Platform' };
-    sendSmtpEmail.subject = `You've been invited to join ASA Platform as ${role}`;
-    sendSmtpEmail.htmlContent = htmlContent;
-    sendSmtpEmail.textContent = textContent;
-
-    const result = await brevoApiInstance.sendTransacEmail(sendSmtpEmail);
-
-    console.log(`✅ Role invitation email sent successfully to ${email} for role ${role}`);
-    console.log('📧 Brevo Message ID:', result.body.messageId);
-    return true;
+    return await sendEmailDirect(email, email, `You've been invited to join ASA Platform as ${role}`, htmlContent, textContent);
   } catch (error) {
     console.error('❌ Error sending role invitation email:', error);
     return false;

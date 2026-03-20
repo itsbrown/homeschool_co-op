@@ -3,7 +3,6 @@ import Stripe from 'stripe';
 import rateLimit from 'express-rate-limit';
 import { storage } from '../storage';
 import { insertPaymentSchema, type InsertPayment } from '@shared/schema';
-import { sendPaymentConfirmationEmail } from '../lib/email-service';
 import { createClient } from '@supabase/supabase-js';
 import { dataLayer } from '../services/dataLayer';
 import { getStripeClient } from '../config/stripe';
@@ -335,26 +334,12 @@ router.post('/confirm-payment', async (req, res) => {
         await storage.updatePaymentStatus(payment.id, 'succeeded');
       }
 
-      // Send confirmation email
-      const emailData = {
-        parentEmail,
-        payment: {
-          ...payment!,
-          status: 'completed' as const
-        },
-        enrollmentDetails: enrollmentDetails?.map((detail: any) => ({
-          childName: detail.childName,
-          className: detail.className,
-          price: detail.price,
-          amountPaid: detail.amountPaid
-        })) || []
-      };
-
-      await sendPaymentConfirmationEmail(emailData);
+      // Email is sent by the Stripe webhook (payment_intent.succeeded) — do not send here
+      // to avoid double-sending. The webhook is the single source of truth for Stripe-confirmed payments.
 
       res.json({
         success: true,
-        message: 'Payment confirmed and email sent',
+        message: 'Payment confirmed',
         payment: {
           id: payment?.id,
           status: 'completed',

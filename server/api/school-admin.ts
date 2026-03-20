@@ -4,7 +4,7 @@ import { storage } from "../storage";
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import * as brevo from '@getbrevo/brevo';
+import { sendEmailDirect } from '../lib/email-service';
 import { createClient } from '@supabase/supabase-js';
 import { parse as parseCSV } from 'csv-parse';
 import bcrypt from 'bcryptjs';
@@ -68,16 +68,6 @@ router.get('/csv-template/:type', (req: any, res) => {
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
   res.send(csvContent);
 });
-
-// Initialize Brevo
-let brevoApiInstance: brevo.TransactionalEmailsApi | null = null;
-if (process.env.BREVO_API_KEY) {
-  brevoApiInstance = new brevo.TransactionalEmailsApi();
-  brevoApiInstance.setApiKey(brevo.TransactionalEmailsApiApiKeys.apiKey, process.env.BREVO_API_KEY);
-  console.log('✅ Brevo initialized for staff invitations');
-} else {
-  console.warn('⚠️ BREVO_API_KEY not found - staff invitation emails will not be sent');
-}
 
 // Initialize Supabase Admin Client
 const supabaseAdmin = createClient(
@@ -203,11 +193,6 @@ export async function createStaffAccount(email: string, firstName: string, lastN
 // Send account credentials email (exported for use in public invitation flow)
 export async function sendAccountCredentialsEmail(email: string, firstName: string, lastName: string, temporaryPassword: string, role: string): Promise<boolean> {
   try {
-    if (!brevoApiInstance) {
-      console.log('📧 Brevo not configured, skipping credentials email');
-      return false;
-    }
-
     const loginUrl = `${process.env.CLIENT_URL || 'https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev'}/login`;
 
     const htmlContent = `
@@ -266,17 +251,7 @@ Please visit: ${loginUrl}
 If you have any questions, please contact us at support@americanseekersacademy.com
     `;
 
-    const sendSmtpEmail = new brevo.SendSmtpEmail();
-    sendSmtpEmail.subject = "Your Account is Ready - ASA Platform Access";
-    sendSmtpEmail.htmlContent = htmlContent;
-    sendSmtpEmail.textContent = textContent;
-    sendSmtpEmail.sender = { name: "American Seekers Academy", email: "noreply@americanseekersacademy.com" };
-    sendSmtpEmail.to = [{ email, name: `${firstName} ${lastName}` }];
-
-    const response = await brevoApiInstance.sendTransacEmail(sendSmtpEmail);
-    console.log(`✅ Account credentials email sent successfully via Brevo to: ${email}`);
-    console.log(`📧 Brevo Message ID: ${response.body.messageId}`);
-    return true;
+    return await sendEmailDirect(email, `${firstName} ${lastName}`, "Your Account is Ready - ASA Platform Access", htmlContent, textContent);
 
   } catch (error) {
     console.error('❌ Error sending credentials email:', error);
