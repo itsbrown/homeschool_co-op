@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Plus, Edit, Trash2, Calendar, Clock, ChevronDown, ChevronUp, LayoutGrid, BookOpen } from "lucide-react";
+import { Plus, Edit, Trash2, Calendar, Clock, ChevronDown, ChevronUp, LayoutGrid, BookOpen, Sparkles, Loader2 } from "lucide-react";
 import type { WeeklySkeleton, SkeletonBlock, Session } from "@shared/schema";
 import { BLOCK_TYPE_BADGE_COLORS } from "@/lib/blockColors";
 
@@ -308,6 +308,24 @@ export default function ScheduleBuilderPage() {
     }
   };
 
+  const suggestBlockMutation = useMutation({
+    mutationFn: (data: { skeletonBlockId: number; blockType?: string; subjectArea?: string }) =>
+      apiRequest("POST", "/api/schedule-ai/suggest-block-content", data),
+    onSuccess: async (res) => {
+      const suggestion = await res.json();
+      setBlockForm((prev) => ({
+        ...prev,
+        defaultTitle: suggestion.title || prev.defaultTitle,
+        defaultDescription: suggestion.description || prev.defaultDescription,
+        subjectArea: suggestion.subjectArea || prev.subjectArea,
+      }));
+      toast({ title: "AI suggestions applied" });
+    },
+    onError: (err: any) => {
+      toast({ title: "AI suggestion failed", description: err.message, variant: "destructive" });
+    },
+  });
+
   const templateIsPending = createTemplateMutation.isPending || updateTemplateMutation.isPending;
   const blockIsPending = createBlockMutation.isPending || updateBlockMutation.isPending;
 
@@ -498,11 +516,22 @@ export default function ScheduleBuilderPage() {
             </div>
           </div>
           <DialogFooter className="flex-col sm:flex-row gap-2">
-            {!aiAvailable && (
+            {aiAvailable && editingBlockId ? (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => suggestBlockMutation.mutate({ skeletonBlockId: editingBlockId, blockType: blockForm.blockType, subjectArea: blockForm.subjectArea })}
+                disabled={suggestBlockMutation.isPending}
+                className="sm:mr-auto"
+              >
+                {suggestBlockMutation.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Sparkles className="h-4 w-4 mr-1" />}
+                AI Suggest
+              </Button>
+            ) : !aiAvailable ? (
               <p className="text-xs text-muted-foreground italic sm:mr-auto self-center">
                 AI generation is currently unavailable. Fill blocks manually or contact support.
               </p>
-            )}
+            ) : null}
             <Button variant="outline" onClick={() => setBlockDialogOpen(false)}>Cancel</Button>
             <Button onClick={handleBlockSubmit} disabled={blockIsPending}>
               {blockIsPending ? "Saving..." : editingBlockId ? "Update Block" : "Add Block"}
