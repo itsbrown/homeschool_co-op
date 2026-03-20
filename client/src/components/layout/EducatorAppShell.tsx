@@ -274,12 +274,12 @@ export default function EducatorAppShell({ children }: EducatorAppShellProps) {
   return (
     <StaffGuideProvider>
     <div className="min-h-screen bg-gray-50">
-      <div className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-64 lg:flex-col">
+      <div className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-64 lg:flex-col print:hidden">
         <EducatorSidebar />
       </div>
 
       <div className="lg:pl-64">
-        <div className="lg:hidden">
+        <div className="lg:hidden print:hidden">
           <div className="flex items-center justify-between bg-slate-900 px-4 py-4 shadow-sm">
             <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
               <SheetTrigger asChild>
@@ -409,7 +409,7 @@ export default function EducatorAppShell({ children }: EducatorAppShellProps) {
           </div>
         </div>
 
-        <div className="hidden lg:block">
+        <div className="hidden lg:block print:hidden">
           <div className="flex items-center justify-end bg-white px-6 py-3 shadow-sm border-b">
             <div className="flex items-center gap-4">
               <RoleSwitcher />

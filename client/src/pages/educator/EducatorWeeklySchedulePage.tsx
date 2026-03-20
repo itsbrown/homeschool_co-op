@@ -27,6 +27,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { BLOCK_TYPE_COLORS, BLOCK_TYPE_BADGE_COLORS, type BlockType } from "@/lib/blockColors";
 import { useRole } from "@/contexts/RoleContext";
+import { useAuth } from "@/components/SupabaseProvider";
 
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const DAY_NAMES_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -143,15 +144,18 @@ function InlineBlockDetails({ planBlock }: { planBlock: WeekPlanBlock | null | u
       )}
 
       {lessonLink && (
-        <a
-          href={lessonLink}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium"
-        >
-          <ExternalLink className="h-3 w-3" />
-          Open Lesson Resource
-        </a>
+        <>
+          <a
+            href={lessonLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium print:hidden"
+          >
+            <ExternalLink className="h-3 w-3" />
+            Open Lesson Resource
+          </a>
+          <span className="hidden print:inline text-xs text-slate-600">{lessonLink}</span>
+        </>
       )}
     </div>
   );
@@ -237,7 +241,7 @@ function ScheduleGrid({ weekPlan, skeleton, skeletonBlocks, completionOverrides,
                       return (
                         <td
                           key={dayIdx}
-                          className="border border-slate-200 px-3 py-2 text-center text-slate-300 text-xs"
+                          className="day-col border border-slate-200 px-3 py-2 text-center text-slate-300 text-xs"
                         >
                           —
                         </td>
@@ -253,7 +257,7 @@ function ScheduleGrid({ weekPlan, skeleton, skeletonBlocks, completionOverrides,
                       <td
                         key={dayIdx}
                         className={cn(
-                          "border border-slate-200 p-0 align-top",
+                          "day-col border border-slate-200 p-0 align-top",
                           effectiveCompleted ? "bg-green-50/40 print:bg-green-50" : ""
                         )}
                       >
@@ -265,7 +269,7 @@ function ScheduleGrid({ weekPlan, skeleton, skeletonBlocks, completionOverrides,
                             )}
                             <div className="ml-auto print:hidden" onClick={(e) => e.stopPropagation()}>
                               {isToggling && planBlock ? (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400" />
+                                <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400 print:hidden" />
                               ) : (
                                 <Checkbox
                                   data-testid={`complete-checkbox-${skelBlock.id}`}
@@ -280,7 +284,7 @@ function ScheduleGrid({ weekPlan, skeleton, skeletonBlocks, completionOverrides,
                           <button
                             data-testid={`expand-toggle-${skelBlock.id}`}
                             className={cn(
-                              "w-full text-left hover:text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded transition-colors group print:pointer-events-none",
+                              "w-full text-left hover:text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded transition-colors group print:hidden",
                               effectiveCompleted ? "opacity-60" : ""
                             )}
                             onClick={() => toggleExpand(skelBlock.id)}
@@ -293,7 +297,7 @@ function ScheduleGrid({ weekPlan, skeleton, skeletonBlocks, completionOverrides,
                                   <p className={cn(
                                     "text-sm font-semibold text-slate-800 leading-tight",
                                     effectiveCompleted && "line-through",
-                                    isExpanded ? "" : "line-clamp-2 print:line-clamp-none"
+                                    isExpanded ? "" : "line-clamp-2"
                                   )}>
                                     {title}
                                   </p>
@@ -301,12 +305,20 @@ function ScheduleGrid({ weekPlan, skeleton, skeletonBlocks, completionOverrides,
                               </div>
                               <ChevronDown
                                 className={cn(
-                                  "h-3.5 w-3.5 text-slate-400 mt-0.5 flex-shrink-0 transition-transform duration-200 print:hidden",
+                                  "h-3.5 w-3.5 text-slate-400 mt-0.5 flex-shrink-0 transition-transform duration-200",
                                   isExpanded ? "rotate-180" : ""
                                 )}
                               />
                             </div>
                           </button>
+                          {title && (
+                            <p className={cn(
+                              "hidden print:block text-sm font-semibold text-slate-800 leading-tight",
+                              effectiveCompleted && "line-through"
+                            )}>
+                              {title}
+                            </p>
+                          )}
 
                           {isExpanded && (
                             <div>
@@ -323,12 +335,12 @@ function ScheduleGrid({ weekPlan, skeleton, skeletonBlocks, completionOverrides,
                                   <label htmlFor={`complete-desktop-${planBlock.id}`} className="text-xs text-slate-600 cursor-pointer select-none">
                                     {effectiveCompleted ? "Completed" : "Mark as complete"}
                                   </label>
-                                  {isToggling && <Loader2 className="h-3 w-3 animate-spin text-slate-400" />}
+                                  {isToggling && <Loader2 className="h-3 w-3 animate-spin text-slate-400 print:hidden" />}
                                 </div>
                               )}
                             </div>
                           )}
-                          {!isExpanded && planBlock && (
+                          {!isExpanded && (
                             <div className="hidden print:block">
                               <InlineBlockDetails planBlock={planBlock} />
                             </div>
@@ -643,6 +655,15 @@ function WeekPlanView({ weekPlan }: { weekPlan: WeekPlan }) {
 
 export default function EducatorWeeklySchedulePage() {
   const [selectedPlanId, setSelectedPlanId] = useState<number | null>(null);
+  const { user } = useAuth();
+  const { toast } = useToast();
+
+  const { data: schoolData } = useQuery<{ school: { logo: string | null; name: string } }>({
+    queryKey: ['/api/school-parents/school', user?.email],
+    enabled: !!user?.email,
+  });
+
+  const school = schoolData?.school;
 
   const { data: publishedPlans, isLoading } = useQuery<WeekPlan[]>({
     queryKey: ["/api/schedule-builder/week-plans", "published"],
@@ -678,7 +699,10 @@ export default function EducatorWeeklySchedulePage() {
     if (activeIndex < plans.length - 1) setSelectedPlanId(plans[activeIndex + 1].id);
   };
 
-  const handlePrint = () => window.print();
+  const handlePrint = () => {
+    toast({ title: "Preparing print view\u2026" });
+    window.print();
+  };
 
   if (isLoading) {
     return (
@@ -720,19 +744,30 @@ export default function EducatorWeeklySchedulePage() {
     <div className="p-4 md:p-6 lg:p-8 max-w-7xl mx-auto educator-lesson-plans">
       <title>Schedule & Plans | ASA Educator Portal</title>
 
-      {/* Print header — only visible when printing */}
-      <div className="print-header hidden print:block mb-4 border-b-2 border-blue-200 pb-3">
-        <h1 className="text-xl font-bold text-slate-900">ASA Schedule & Plans</h1>
+      {/* Print-only branded header */}
+      <div className={cn("hidden print:block mb-4 border-b-2 border-slate-300 pb-4 text-center")}>
+        {school?.logo && (
+          <img
+            src={school.logo}
+            alt={school.name}
+            className="mx-auto mb-2 h-16 w-auto object-contain"
+          />
+        )}
+        {school?.name && (
+          <h1 className="text-2xl font-bold text-slate-900">{school.name}</h1>
+        )}
         {activePlan && (
-          <p className="text-sm text-slate-600">
+          <p className="text-sm text-slate-600 mt-1">
+            {activePlan.weekStartDate
+              ? `Week of ${formatWeekRange(activePlan.weekStartDate)} · `
+              : ""}
             Week {activePlan.weekNumber}
-            {activePlan.weekStartDate ? ` · Starting ${formatWeekDate(activePlan.weekStartDate)}` : ""}
           </p>
         )}
       </div>
 
-      {/* Screen header */}
-      <div className="no-print">
+      {/* Screen-only header */}
+      <div className="print:hidden">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-6">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold text-slate-800 flex items-center gap-2">
@@ -745,7 +780,7 @@ export default function EducatorWeeklySchedulePage() {
             variant="outline"
             size="sm"
             onClick={handlePrint}
-            className="flex items-center gap-2 self-start"
+            className="flex items-center gap-2 self-start print:hidden"
           >
             <Printer className="h-4 w-4" />
             Print
@@ -809,7 +844,7 @@ export default function EducatorWeeklySchedulePage() {
 
       {/* Active week plan */}
       <Card className="shadow-sm">
-        <CardHeader className="border-b border-slate-100 py-4">
+        <CardHeader className="border-b border-slate-100 py-4 print:hidden">
           <CardTitle className="text-lg font-semibold text-slate-800">
             {activePlan
               ? `Week ${activePlan.weekNumber}${
@@ -820,7 +855,7 @@ export default function EducatorWeeklySchedulePage() {
               : "Schedule"}
           </CardTitle>
         </CardHeader>
-        <CardContent className="p-4 md:p-6">
+        <CardContent className="p-4 md:p-6 print:p-0">
           {activePlan ? (
             <WeekPlanView weekPlan={activePlan} />
           ) : (
@@ -832,34 +867,32 @@ export default function EducatorWeeklySchedulePage() {
       </Card>
 
       <style>{`
+        @page {
+          size: landscape;
+          margin: 1cm;
+        }
+
         @media print {
+          body {
+            font-family: Arial, sans-serif;
+            font-size: 11pt;
+          }
+
           .educator-lesson-plans {
-            position: fixed;
-            left: 0;
-            top: 0;
             width: 100%;
             padding: 12px 16px !important;
             max-width: none !important;
           }
 
-          .no-print,
-          nav,
-          header,
-          footer,
-          aside,
-          [role="navigation"],
-          [data-sidebar],
-          .sidebar {
-            display: none !important;
-          }
-
-          .print-header {
-            display: block !important;
-          }
-
           .schedule-table {
-            font-size: 11px;
-            page-break-inside: avoid;
+            width: 100%;
+            border-collapse: collapse;
+          }
+
+          .schedule-table th,
+          .schedule-table td {
+            border: 1px solid #94a3b8 !important;
+            padding: 6px 8px !important;
           }
 
           .schedule-table th {
@@ -868,26 +901,8 @@ export default function EducatorWeeklySchedulePage() {
             print-color-adjust: exact;
           }
 
-          .schedule-table td {
-            padding: 6px 8px !important;
-            border: 1px solid #cbd5e1 !important;
-          }
-
-          .schedule-grid-container > div:first-child {
-            display: block !important;
-          }
-
-          .schedule-grid-container > div:last-child {
-            display: none !important;
-          }
-
-          .schedule-table td button[data-testid^="expand-toggle"] {
-            pointer-events: none !important;
-            text-decoration: none !important;
-          }
-
-          .schedule-table td .print\\:block {
-            display: block !important;
+          .schedule-table .day-col {
+            page-break-inside: avoid;
           }
 
           .line-clamp-2 {
