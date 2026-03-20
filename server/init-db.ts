@@ -2311,6 +2311,7 @@ async function runMigrations() {
     await db.execute(sql`ALTER TABLE week_plan_block_history ADD COLUMN IF NOT EXISTS previous_groups JSONB`);
     await db.execute(sql`ALTER TABLE week_plan_block_history ADD COLUMN IF NOT EXISTS previous_attachments JSONB`);
     await db.execute(sql`ALTER TABLE week_plan_block_history ADD COLUMN IF NOT EXISTS changed_at TIMESTAMP DEFAULT NOW() NOT NULL`);
+    await db.execute(sql`ALTER TABLE week_plan_block_history ALTER COLUMN week_plan_block_id DROP NOT NULL`);
 
     // Drop NOT NULL from legacy columns that Drizzle no longer writes to.
     // These columns were renamed in the Drizzle schema; the old names still exist in the

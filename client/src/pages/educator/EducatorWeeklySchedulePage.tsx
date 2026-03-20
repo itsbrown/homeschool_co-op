@@ -868,14 +868,14 @@ export default function EducatorWeeklySchedulePage() {
 
       <style>{`
         @page {
-          size: landscape;
-          margin: 1cm;
+          size: portrait;
+          margin: 1.5cm;
         }
 
         @media print {
           body {
             font-family: Arial, sans-serif;
-            font-size: 11pt;
+            font-size: 10pt;
           }
 
           .educator-lesson-plans {
@@ -887,12 +887,13 @@ export default function EducatorWeeklySchedulePage() {
           .schedule-table {
             width: 100%;
             border-collapse: collapse;
+            font-size: 9pt;
           }
 
           .schedule-table th,
           .schedule-table td {
             border: 1px solid #94a3b8 !important;
-            padding: 6px 8px !important;
+            padding: 6px !important;
           }
 
           .schedule-table th {
