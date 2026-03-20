@@ -1,0 +1,45 @@
+Improve print formatting for the educator/mentor weekly schedule to make it clean, professional, and branded with the school's logo.
+
+Current problem: print is messy (includes tags, buttons, links, cuts off, no logo, no header).
+
+Goals:
+- Add school logo at top (from school.logo URL)
+- Clean table layout with time + full lesson details (objectives, notes, resources inline)
+- No UI clutter in print (hide nav, quick actions, checkboxes, expand icons, buttons)
+- Landscape orientation, readable fonts, proper spacing
+- Keep screen view unchanged
+
+Changes:
+
+1. Fetch school data (use existing school query or prop) to get school.logo and school.name
+
+2. Add print header above grid:
+   <div className="print-header hidden print:block text-center mb-6">
+     <img src={school.logo} alt={school.name} className="mx-auto h-20 object-contain mb-2" />
+     <h1 className="text-2xl font-bold">{school.name} - Weekly Schedule</h1>
+     <p className="text-lg">{weekTitle} (Week {weekNumber})</p>
+   </div>
+
+3. In block cards/grid:
+   - For print: show full details inline (description, objectives as ul, lesson link as text, notes)
+   - Hide checkboxes, edit/AI buttons, expand chevrons in print (@media print { .no-print { display: none !important; } })
+   - Remove "More detail" links — show content directly
+
+4. Add print CSS (in component or global styles):
+   @media print {
+     @page { size: landscape; margin: 1cm; }
+     body { font-family: Arial, sans-serif; font-size: 11pt; }
+     .print-header { display: block !important; }
+     .no-print { display: none !important; }
+     table, th, td { border: 1px solid #ddd; border-collapse: collapse; padding: 8px; }
+     th { background: #f5f5f5; }
+     .day-column { page-break-inside: avoid; }
+   }
+
+5. Update Print button:
+   - On click: show toast "Preparing print view..." (use useToast)
+   - Then window.print()
+
+Apply safely. Preserve screen layout, mobile cards, loading states.
+Use cn() for hidden/print classes.
+Show updated JSX for header + grid + CSS block + Print button handler.
