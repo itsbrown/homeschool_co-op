@@ -301,6 +301,16 @@ async function runMigrations() {
         console.log(`✅ Migration completed: ${roleValue} value already exists in role enum`);
       }
     }
+
+    // Add 'director' role value to existing role enum (idempotent)
+    // director has schedule-builder-level access but is scoped to educator-facing views
+    console.log('Running migration: Adding director value to role enum...');
+    try {
+      await db.execute(sql`ALTER TYPE role ADD VALUE IF NOT EXISTS 'director'`);
+      console.log('✅ Migration completed: director value added to role enum');
+    } catch (directorRoleError) {
+      console.log('✅ Migration completed: director value already exists in role enum');
+    }
     
     // Create user_roles table for multi-role assignments
     console.log('Running migration: Creating user_roles table...');

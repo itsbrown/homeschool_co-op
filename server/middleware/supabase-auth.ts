@@ -340,7 +340,7 @@ export const requireEducatorRole = async (
     // Define educator-type roles (case-insensitive matching)
     const educatorRolePatterns = [
       'educator', 'mentor', 'teacher', 'instructor', 'tutor', 'facilitator',
-      'schoolAdmin', 'school_admin', 'admin', 'superAdmin'
+      'schoolAdmin', 'school_admin', 'admin', 'superAdmin', 'director'
     ];
     
     const hasEducatorRole = userRoles.some(r => 

@@ -234,35 +234,72 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
   });
 
   // Role update endpoint for Firebase users
-  app.post("/api/auth/update-role", async (req, res) => {
-    try {
-      const { role } = req.body;
+  // Secured: requires a valid Supabase session and schoolAdmin-or-above role.
+  // Callers cannot grant a role higher than their own (hierarchy enforced below).
+  // requireRole is imported at the top of registerRoutes (line ~145).
+  app.post(
+    "/api/auth/update-role",
+    supabaseAuth,
+    requireRole(['superAdmin', 'admin', 'schoolAdmin']),
+    async (req: any, res) => {
+      try {
+        const { userId, role: targetRole } = req.body;
 
-      if (!role || !['parent', 'instructor', 'schoolAdmin', 'admin'].includes(role)) {
-        return res.status(400).json({ message: 'Invalid role provided' });
+        if (!targetRole) {
+          return res.status(400).json({ message: 'role is required' });
+        }
+
+        // Caller role is set by supabaseAuth from the database — not trusted from request body.
+        // req.auth.dbUserId is the database integer ID; req.auth.role is the DB-backed effective role.
+        const callerRole: string = req.auth?.role || '';
+
+        // Hierarchy check: callers cannot grant a role higher than their own.
+        // superAdmin can assign any role; admin can assign anything except superAdmin;
+        // schoolAdmin can only assign teacher, director, educator, parent, or student.
+        const schoolAdminAssignable = ['teacher', 'director', 'educator', 'parent', 'student'];
+        const adminAssignable = [...schoolAdminAssignable, 'schoolAdmin', 'admin'];
+
+        let allowed = false;
+        if (callerRole === 'superAdmin') {
+          allowed = true;
+        } else if (callerRole === 'admin') {
+          allowed = adminAssignable.includes(targetRole);
+        } else if (callerRole === 'schoolAdmin') {
+          allowed = schoolAdminAssignable.includes(targetRole);
+        }
+
+        if (!allowed) {
+          return res.status(403).json({ message: `A ${callerRole} cannot assign the ${targetRole} role` });
+        }
+
+        // Resolve target user: use userId from request body (admin acting on another user).
+        // The caller's identity is determined by req.auth.dbUserId (set by supabaseAuth), never the body.
+        const targetDbUserId: number = userId ? parseInt(userId) : (req.auth?.dbUserId || req.user?.id);
+        if (!targetDbUserId || isNaN(targetDbUserId)) {
+          return res.status(400).json({ message: 'Invalid or missing userId' });
+        }
+
+        const targetUser = await storage.getUser(targetDbUserId);
+        if (!targetUser) {
+          return res.status(404).json({ message: 'User not found' });
+        }
+
+        // Dual-write pattern: update both users.role (legacy field) AND user_roles table (source of truth).
+        // user_roles is the authoritative source; users.role is kept in sync for backwards compatibility.
+        await storage.updateUser(targetDbUserId, { role: targetRole as any });
+        await storage.updatePrimaryUserRole(targetDbUserId, targetRole, targetUser.schoolId);
+
+        return res.status(200).json({
+          message: 'Role updated successfully',
+          userId: targetDbUserId,
+          role: targetRole,
+        });
+      } catch (error) {
+        console.error('Error updating user role:', error);
+        return res.status(500).json({ message: 'Internal server error' });
       }
-
-      // Update the user role and return updated user data
-      const updatedUser = {
-        id: 1, // This would be dynamic in a real system
-        name: req.body.name || 'User',
-        email: req.body.email || '',
-        role: role,
-        avatar: null,
-        subscription: 'free'
-      };
-
-      res.setHeader('Content-Type', 'application/json');
-      return res.status(200).json({
-        message: 'Role updated successfully',
-        user: updatedUser
-      });
-    } catch (error) {
-      console.error('Error updating user role:', error);
-      res.setHeader('Content-Type', 'application/json');
-      return res.status(500).json({ message: 'Internal server error' });
     }
-  });
+  );
 
   // Aliases already defined at top of registerRoutes function
 
@@ -1008,53 +1045,9 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
-  // GET individual knowledge base by ID (public access)
-  app.get("/api/knowledge-bases/:id", async (req, res) => {
-    try {
-      const knowledgeBaseId = parseInt(req.params.id);
-
-      if (isNaN(knowledgeBaseId)) {
-        return res.status(400).json({ message: "Invalid knowledge base ID" });
-      }
-
-      let knowledgeBase;
-
-      try {
-        knowledgeBase = await storage.getKnowledgeBase(knowledgeBaseId);
-      } catch (dbError) {
-        console.error("Database error fetching knowledge base, falling back to file storage:", dbError);
-
-        // Fallback to file storage
-        try {
-          const fs = require('fs');
-          const path = require('path');
-          const kbFilePath = path.join(process.cwd(), 'data', 'knowledge-bases.json');
-
-          if (fs.existsSync(kbFilePath)) {
-            const fileContent = fs.readFileSync(kbFilePath, 'utf-8');
-            const allKnowledgeBases = JSON.parse(fileContent);
-            knowledgeBase = allKnowledgeBases.find((kb: any) => kb.id === knowledgeBaseId);
-            console.log(`✅ Loaded knowledge base ${knowledgeBaseId} from file storage`);
-          } else {
-            console.log('⚠️ No knowledge-bases.json file found');
-          }
-        } catch (fileError) {
-          console.error("File storage also failed:", fileError);
-          return res.status(500).json({ message: "Error accessing knowledge base data" });
-        }
-      }
-
-      if (!knowledgeBase) {
-        return res.status(404).json({ message: "Knowledge base not found" });
-      }
-
-      res.status(200).json(knowledgeBase);
-    } catch (error) {
-      console.error("Error fetching knowledge base:", error);
-      res.status(500).json({ message: "Error fetching knowledge base" });
-    }
-  });
-
+  // Duplicate unprotected GET /api/knowledge-bases/:id was removed here.
+  // Only the authenticated version below remains to prevent the unauthenticated handler
+  // from shadowing the protected one (Express uses first-match routing).
   app.get("/api/knowledge-bases/:id", isAuthenticated, async (req, res) => {
     try {
       const knowledgeBaseId = parseInt(req.params.id);
@@ -2105,10 +2098,14 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
   app.use("/api/admin/enrollments", supabaseAuth, adminEnrollmentsRouter); // Admin enrollment CRUD + comp (Supabase auth)
   app.use("/api/admin/enrollments", supabaseAuth, adminEnrollmentPaymentRouter); // Admin enrollment payment management (Supabase auth)
   app.use("/api/admin/sessions", adminSessionsRouter); // Session management (Supabase auth - must be before /api/admin)
-  app.use("/api/admin", adminRouter);
-  app.use("/api/admin-classes", adminClassesRouter); // Add duplicate route for backwards compatibility
+  // Security gateway: supabaseAuth + role check applied at mount point for all /api/admin routes.
+  // Individual routes inside adminRouter may have their own guards — this is additive and safe.
+  app.use("/api/admin", supabaseAuth, requireRole(['superAdmin', 'admin', 'schoolAdmin']), adminRouter);
+  // Security gateway: supabaseAuth + role check at mount point for /api/admin-classes.
+  app.use("/api/admin-classes", supabaseAuth, requireRole(['superAdmin', 'admin', 'schoolAdmin']), adminClassesRouter); // Add duplicate route for backwards compatibility
   app.use("/api/session-enrollments", sessionEnrollmentsRouter); // Session-based enrollment
-  app.use("/api/admin-users", adminUsersRouter); // Admin user management
+  // Security gateway: supabaseAuth + role check at mount point for /api/admin-users.
+  app.use("/api/admin-users", supabaseAuth, requireRole(['superAdmin', 'admin', 'schoolAdmin']), adminUsersRouter); // Admin user management
   app.use("/api/activities", activitiesRouter);
   app.use("/api/migration", migrationRouter);
   app.use("/api/school-admin/marketing-links", marketingLinksRouter);
@@ -2804,7 +2801,9 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
   });
 
   app.use("/api/schools", schoolsRouter);
-  app.use("/api/school-admin", schoolAdminRouter);
+  // Security gateway: supabaseAuth + role check at mount point for /api/school-admin.
+  // Internal routes may add their own guards — this is additive and safe.
+  app.use("/api/school-admin", supabaseAuth, requireRole(['superAdmin', 'admin', 'schoolAdmin']), schoolAdminRouter);
   app.use("/api/educator", educatorRouter);
   // Note: /api/admin/educators is registered earlier in the file (before /api/admin) to ensure specific route matching
   app.use("/api/parent", parentRouter);
@@ -3137,8 +3136,9 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
   app.use("/api/notifications", supabaseAuth, notificationsRouter);
 
   // Register billing routes
+  // Security gateway: supabaseAuth + role check at mount point for /api/billing.
   const billingRouter = (await import("./api/billing")).default;
-  app.use("/api/billing", billingRouter);
+  app.use("/api/billing", supabaseAuth, requireRole(['superAdmin', 'admin', 'schoolAdmin']), billingRouter);
 
   // Register auto-pay routes
   const autoPayRouter = (await import("./api/auto-pay")).default;

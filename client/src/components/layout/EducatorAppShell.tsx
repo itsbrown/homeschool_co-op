@@ -5,7 +5,7 @@ import RoleSwitcher from "@/components/RoleSwitcher.tsx";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetTrigger, SheetClose } from "@/components/ui/sheet";
-import { LogOut, Menu, User, Bell, Home, BookOpen, Calendar, Clock, Users, Settings, GraduationCap, PlayCircle, Shield, HelpCircle } from "lucide-react";
+import { LogOut, Menu, User, Bell, Home, BookOpen, Calendar, Clock, Users, Settings, GraduationCap, PlayCircle, Shield, HelpCircle, LayoutGrid } from "lucide-react";
 import StaffGuideModal from "@/components/StaffGuideModal";
 import { StaffGuideProvider } from "@/contexts/StaffGuideContext";
 import { cn } from "@/lib/utils";
@@ -111,6 +111,7 @@ function EducatorSidebar() {
       mentor: 'Mentor',
       educator: 'Educator',
       teacher: 'Teacher',
+      director: 'Director',
     };
     return labels[role.toLowerCase()] || 'Educator';
   };
@@ -167,6 +168,21 @@ function EducatorSidebar() {
               </Link>
             );
           })}
+          {activeRole === 'director' && (
+            <Link
+              href="/educator/week-plans"
+              className={cn(
+                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                location === '/educator/week-plans' || location.startsWith('/educator/week-plans/')
+                  ? "bg-emerald-600 text-white"
+                  : "text-slate-300 hover:bg-slate-800 hover:text-white"
+              )}
+              data-testid="nav-educator-schedule-builder"
+            >
+              <LayoutGrid className="h-5 w-5" />
+              <span className="flex-1">Schedule Builder</span>
+            </Link>
+          )}
           {hasSuperAdminRole && (
             <Link
               href="/superadmin/schools"
@@ -267,6 +283,7 @@ export default function EducatorAppShell({ children }: EducatorAppShellProps) {
       mentor: 'Mentor',
       educator: 'Educator',
       teacher: 'Teacher',
+      director: 'Director',
     };
     return labels[role.toLowerCase()] || 'Educator';
   };
@@ -333,6 +350,23 @@ export default function EducatorAppShell({ children }: EducatorAppShellProps) {
                           </SheetClose>
                         );
                       })}
+                      {activeRole === 'director' && (
+                        <SheetClose asChild>
+                          <Link
+                            href="/educator/week-plans"
+                            className={cn(
+                              "flex items-center gap-3 rounded-lg px-3 py-3 text-base font-medium transition-colors",
+                              location === '/educator/week-plans' || location.startsWith('/educator/week-plans/')
+                                ? "bg-emerald-600 text-white"
+                                : "text-slate-300 hover:bg-slate-800 hover:text-white"
+                            )}
+                            data-testid="nav-mobile-schedule-builder"
+                          >
+                            <LayoutGrid className="h-5 w-5" />
+                            <span className="flex-1">Schedule Builder</span>
+                          </Link>
+                        </SheetClose>
+                      )}
                       {hasSuperAdminRole && (
                         <SheetClose asChild>
                           <Link

@@ -214,6 +214,29 @@ export class DatabaseStorage implements IStorage {
     await db.delete(userRoles).where(eq(userRoles.userId, userId));
   }
 
+  async updatePrimaryUserRole(userId: number, newRole: string, schoolId?: number | null): Promise<void> {
+    const db = await getDb();
+    const existing = await db
+      .select({ id: userRoles.id })
+      .from(userRoles)
+      .where(and(eq(userRoles.userId, userId), eq(userRoles.isPrimary, true)))
+      .limit(1);
+
+    if (existing.length > 0) {
+      await db
+        .update(userRoles)
+        .set({ role: newRole as any, schoolId: schoolId ?? null })
+        .where(eq(userRoles.id, existing[0].id));
+    } else {
+      await db.insert(userRoles).values({
+        userId,
+        role: newRole as any,
+        schoolId: schoolId ?? undefined,
+        isPrimary: true,
+      });
+    }
+  }
+
   async deleteUserLocationsByUserId(userId: number): Promise<void> {
     const db = await getDb();
     await db.delete(userLocations).where(eq(userLocations.userId, userId));

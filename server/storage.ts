@@ -105,6 +105,7 @@ export interface IStorage {
   // User Role methods
   getUserRolesByUserId(userId: number): Promise<UserRole[]>;
   deleteUserRolesByUserId(userId: number): Promise<void>;
+  updatePrimaryUserRole(userId: number, newRole: string, schoolId?: number | null): Promise<void>;
   getParentsBySchoolId(schoolId: number): Promise<User[]>;
 
   // User cleanup methods (for deletion)
@@ -1238,6 +1239,13 @@ export class MemStorage implements IStorage {
 
   async deleteUserRolesByUserId(userId: number): Promise<void> {
     // MemStorage doesn't track user roles - no-op
+  }
+
+  async updatePrimaryUserRole(userId: number, newRole: string, schoolId?: number | null): Promise<void> {
+    const user = this.usersStore.get(userId);
+    if (user) {
+      this.usersStore.set(userId, { ...user, role: newRole });
+    }
   }
 
   async getParentsBySchoolId(schoolId: number): Promise<User[]> {
@@ -5549,6 +5557,10 @@ import { DatabaseStorage } from "./dbStorage";
 
     async deleteUserRolesByUserId(userId: number): Promise<void> {
       return this.dbStorage.deleteUserRolesByUserId(userId);
+    }
+
+    async updatePrimaryUserRole(userId: number, newRole: string, schoolId?: number | null): Promise<void> {
+      return this.dbStorage.updatePrimaryUserRole(userId, newRole, schoolId);
     }
 
     async deleteUserLocationsByUserId(userId: number): Promise<void> {
