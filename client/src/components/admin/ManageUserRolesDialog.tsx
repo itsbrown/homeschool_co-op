@@ -59,6 +59,11 @@ const BASE_ROLE_OPTIONS = [
   { value: 'learner', label: 'Learner' },
 ];
 
+// Director role (available to schoolAdmin and above)
+const SCHOOL_ADMIN_ROLE_OPTIONS = [
+  { value: 'director', label: 'Director of Education' },
+];
+
 // Admin roles (only shown for super admins)
 const ADMIN_ROLE_OPTIONS = [
   { value: 'schoolAdmin', label: 'School Admin' },
@@ -123,7 +128,7 @@ export default function ManageUserRolesDialog({
     ? allSchools?.filter(school => school.id === adminProfile.schoolId)
     : allSchools;
 
-  // Build combined role options: base roles + custom staff positions + admin roles (if applicable)
+  // Build combined role options: base roles + custom staff positions + director + admin roles (if applicable)
   const roleOptions = [
     ...BASE_ROLE_OPTIONS,
     // Add custom staff positions as role options (use title as-is for backend compatibility)
@@ -132,6 +137,8 @@ export default function ManageUserRolesDialog({
       label: position.title,
       isCustom: true,
     })) || []),
+    // Add director role for schoolAdmin and above
+    ...(adminProfile?.role === 'schoolAdmin' || adminProfile?.role === 'superAdmin' ? SCHOOL_ADMIN_ROLE_OPTIONS : []),
     // Add admin roles only for super admins
     ...(adminProfile?.role === 'superAdmin' ? ADMIN_ROLE_OPTIONS : []),
   ];
@@ -456,7 +463,11 @@ export default function ManageUserRolesDialog({
                       </SelectTrigger>
                       <SelectContent>
                         {roleOptions.map((option) => (
-                          <SelectItem key={option.value} value={option.value}>
+                          <SelectItem
+                            key={option.value}
+                            value={option.value}
+                            {...(option.value === 'director' ? { 'data-testid': 'role-option-director' } : {})}
+                          >
                             {option.label}
                           </SelectItem>
                         ))}

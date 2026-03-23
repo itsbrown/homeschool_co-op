@@ -50,6 +50,11 @@ export default function RoleManagementPage() {
       { value: 'student', label: 'Learner/Student' }
     ];
 
+    // School admins and above can invite directors
+    if (currentUserRole === 'schoolAdmin' || currentUserRole === 'superAdmin' || currentUserRole === 'admin') {
+      baseRoles.push({ value: 'director', label: 'Director of Education' });
+    }
+
     // Only super admins and admins can invite school admins
     if (currentUserRole === 'superAdmin' || currentUserRole === 'admin') {
       baseRoles.push({ value: 'schoolAdmin', label: 'School Administrator' });
@@ -214,7 +219,11 @@ export default function RoleManagementPage() {
                     </SelectTrigger>
                     <SelectContent>
                       {availableRoles.map((role) => (
-                        <SelectItem key={role.value} value={role.value}>
+                        <SelectItem
+                          key={role.value}
+                          value={role.value}
+                          {...(role.value === 'director' ? { 'data-testid': 'role-option-director' } : {})}
+                        >
                           <div className="font-medium">{role.label}</div>
                         </SelectItem>
                       ))}

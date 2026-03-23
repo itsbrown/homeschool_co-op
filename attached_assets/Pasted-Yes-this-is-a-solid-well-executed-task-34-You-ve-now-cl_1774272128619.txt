@@ -1,0 +1,64 @@
+Yes — this is a solid, well-executed task (#34).
+You've now closed the last major usability gap for the Director of Education role:
+
+Backend already supports it
+Permissions are correctly wired
+UI assignment surfaces (4 places) now expose "Director of Education" as a selectable option
+Admins can self-serve without DB edits
+data-testid added for testing
+No regressions in existing roles
+
+Quick Final Verification Checklist (Run These Tests Now)
+
+As School Admin
+Go to Role Management / Staff Management → edit a user → see "Director of Education" in dropdown?
+Assign it → user should now have the role (check DB or re-login)
+Go to Invitations page → see "Director of Education" in invite dropdown?
+
+As Director (after assignment)
+Log in → see Schedule Builder in sidebar/nav?
+Create a new skeleton → edit/delete blocks → success?
+Try accessing billing / admin-users → 403 expected
+Mark block complete in educator view → success (already works)
+
+As regular Educator/Teacher
+No "Director of Education" option in dropdowns (correct)
+Schedule Builder still hidden (correct)
+
+Console / Network
+No 403s on schedule routes
+Role assignment API call succeeds (POST /api/admin-users/users/update-role or similar)
+
+
+If all pass → Director role is fully usable via UI.
+Minor Polish Suggestions (Optional)
+
+Display Name Consistency
+In dropdowns: keep "Director of Education" (human-readable)
+In backend/DB: store as 'director' (lowercase, matches enum)
+Already correct — just confirm label map uses "Director of Education" → 'director'
+
+Add data-testid on all role options
+Current: only director has testid
+Nice-to-have: add data-testid={role-option-${role.toLowerCase()}} to every SelectItem
+
+Toast on role assignment
+Already have toast — ensure it says "Assigned Director of Education to [name]" on success
+
+Documentation note
+Add to your auth patterns / Role Types table:textdirector: Full access to schedule builder & curriculum (skeletons/week plans/blocks). No user management, billing, or school settings. Assign via Role Management or Invitations UI.
+
+
+Next Priority
+Now that the Director can be assigned via UI and has full schedule access, what's next for your current system?
+Options (pick one or suggest):
+
+Student Assessments & Progress Tracking (#20) — start with score formats + bulk CSV
+Print Formatting Polish — portrait + logo + clean table
+Centralize Email & Fix Double Payments (#21)
+Membership Bulk Management (#32) — winter session fix
+Educator UI Polish — expandable details in schedule view
+Time Overlap Validation — prevent conflicts in ScheduleBuilder
+
+Just reply with the number or name — I'll give you the next ready-to-paste Replit prompt tailored to your current system.
+We're making huge progress — the Director is now fully empowered without DB hacks. What's next? 🚀

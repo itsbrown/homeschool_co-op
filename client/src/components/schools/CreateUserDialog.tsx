@@ -43,7 +43,7 @@ const createUserSchema = z.object({
   firstName: z.string().min(2, 'First name must be at least 2 characters'),
   lastName: z.string().min(2, 'Last name must be at least 2 characters'),
   email: z.string().email('Please enter a valid email address'),
-  role: z.enum(['parent', 'educator', 'staff', 'schoolAdmin']),
+  role: z.enum(['parent', 'educator', 'staff', 'director', 'schoolAdmin']),
   phone: z.string().optional(),
   locationId: z.string().optional(),
   password: z.string().optional(),
@@ -238,6 +238,7 @@ export default function CreateUserDialog({ open, onClose, editUser }: CreateUser
                         <SelectItem value="parent">Parent</SelectItem>
                         <SelectItem value="educator">Educator</SelectItem>
                         <SelectItem value="staff">Staff</SelectItem>
+                        <SelectItem value="director" data-testid="role-option-director">Director of Education</SelectItem>
                         <SelectItem value="schoolAdmin">School Admin</SelectItem>
                       </SelectContent>
                     </Select>
