@@ -98,7 +98,7 @@ router.post("/", async (req, res) => {
     }
 
     // Validate role
-    const validRoles = ["educator", "teacher", "schoolAdmin", "admin", "superAdmin"];
+    const validRoles = ["educator", "mentor", "teacher", "schoolAdmin", "director", "admin", "superAdmin"];
     if (!validRoles.includes(role)) {
       return res.status(400).json({ message: "Invalid role specified" });
     }

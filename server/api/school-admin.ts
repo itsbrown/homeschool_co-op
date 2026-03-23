@@ -5217,7 +5217,7 @@ router.get('/users/:userId', supabaseAuth, requireSchoolContext, async (req: any
 });
 
 // Validation schema for user creation (follows registration.ts and user-roles.ts patterns)
-const systemRoles = ['student', 'parent', 'learner', 'educator', 'mentor', 'teacher', 'schoolAdmin', 'admin', 'superAdmin'];
+// systemRoles is imported from @shared/schema — keep that list in sync with the pgEnum
 const createUserSchema = z.object({
   firstName: z.string().min(1, 'First name is required'),
   lastName: z.string().min(1, 'Last name is required'),
@@ -5273,7 +5273,7 @@ router.post('/users', supabaseAuth, requireSchoolContext, async (req: any, res) 
       firstName,
       lastName,
       email,
-      role: role as 'student' | 'parent' | 'learner' | 'educator' | 'mentor' | 'teacher' | 'schoolAdmin' | 'admin' | 'superAdmin',
+      role: role as 'student' | 'parent' | 'learner' | 'educator' | 'mentor' | 'teacher' | 'schoolAdmin' | 'director' | 'admin' | 'superAdmin',
       phone: phone || null,
       password: 'pending_setup', // Placeholder - user will set via invite/reset
       schoolId: Number(schoolId),

@@ -56,8 +56,9 @@ export const userRoles = pgTable("user_roles", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-// System roles that are always valid, plus custom staff positions validated at API layer
-export const systemRoles = ["student", "parent", "learner", "educator", "mentor", "teacher", "schoolAdmin", "admin", "superAdmin"] as const;
+// IMPORTANT: This list must match the pgEnum('role') definition above.
+// When adding a new role, update BOTH the pgEnum and this array.
+export const systemRoles = ["student", "parent", "learner", "educator", "mentor", "teacher", "schoolAdmin", "director", "admin", "superAdmin"] as const;
 export type SystemRole = typeof systemRoles[number];
 
 export const insertUserRoleSchema = createInsertSchema(userRoles).omit({ id: true, createdAt: true });
