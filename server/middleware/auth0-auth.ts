@@ -182,12 +182,14 @@ export const requireSchoolAccess = (req: any, res: Response, next: NextFunction)
 
   // Super admin and admin have access to all schools
   if (['superAdmin', 'admin'].includes(role)) {
+    console.log('School access granted for role', role);
     return next();
   }
 
-  // School admin and staff can only access their own school
-  if (['schoolAdmin', 'teacher'].includes(role)) {
+  // School admin, director, and staff can only access their own school
+  if (['schoolAdmin', 'director', 'teacher'].includes(role)) {
     if (schoolId && schoolId.toString() === requestedSchoolId?.toString()) {
+      console.log('School access granted for role', role);
       return next();
     }
   }
