@@ -583,7 +583,7 @@ userRolesRouter.post('/admin/users/:userId/roles', supabaseAuth, async (req: Aut
     }
 
     // Validate role: either a system role or a custom staff position
-    const systemRoles = ['student', 'parent', 'learner', 'educator', 'teacher', 'schoolAdmin', 'admin', 'superAdmin'];
+    const systemRoles = ['student', 'parent', 'learner', 'educator', 'mentor', 'teacher', 'schoolAdmin', 'director', 'admin', 'superAdmin'];
     const isSystemRole = systemRoles.includes(role);
     let isValidRole = isSystemRole;
     
