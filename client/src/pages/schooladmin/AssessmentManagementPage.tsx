@@ -29,7 +29,7 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
-import AppShell from '@/components/layout/AppShell';
+import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { displayScoreWithMax } from '@/lib/assessmentUtils';
 
@@ -415,7 +415,7 @@ export default function AssessmentManagementPage() {
   };
 
   return (
-    <AppShell>
+    <SchoolAdminLayout pageTitle="Assessments">
       <div className="container mx-auto py-6 px-4">
         <div className="flex items-center justify-between mb-6">
           <div>
@@ -917,7 +917,7 @@ export default function AssessmentManagementPage() {
           </DialogContent>
         </Dialog>
       </div>
-    </AppShell>
+    </SchoolAdminLayout>
   );
 }
 

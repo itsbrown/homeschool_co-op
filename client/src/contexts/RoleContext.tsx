@@ -362,6 +362,7 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
       await queryClient.invalidateQueries({ queryKey: ['/api/educator'] });
       await queryClient.invalidateQueries({ queryKey: ['/api/users'] });
       await queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
+      await queryClient.invalidateQueries({ queryKey: ['/api/schedule-builder'] });
       console.log('✅ Cache invalidation complete');
 
       toast({
