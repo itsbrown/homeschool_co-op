@@ -246,8 +246,8 @@ function DashboardRouter() {
     );
   }
 
-  // For educator, mentor - route to EducatorDashboard with EducatorAppShell
-  if (['educator', 'mentor'].includes(activeRole)) {
+  // For educator, mentor, director - route to EducatorDashboard with EducatorAppShell
+  if (['educator', 'mentor', 'director'].includes(activeRole)) {
     console.log(`🎯 Routing ${activeRole} to EducatorDashboard with EducatorAppShell`);
     return (
       <EducatorAppShell key={`dashboard-${activeRole}`}>

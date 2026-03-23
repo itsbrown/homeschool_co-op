@@ -5,7 +5,8 @@ import RoleSwitcher from "@/components/RoleSwitcher.tsx";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetTrigger, SheetClose } from "@/components/ui/sheet";
-import { LogOut, Menu, User, Bell, Home, BookOpen, Calendar, Clock, Users, Settings, GraduationCap, PlayCircle, Shield, HelpCircle, LayoutGrid } from "lucide-react";
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
+import { LogOut, Menu, User, Bell, Home, BookOpen, Calendar, Clock, Users, Settings, GraduationCap, PlayCircle, Shield, HelpCircle, LayoutGrid, ChevronDown, ClipboardCheck, CalendarDays, UserCheck } from "lucide-react";
 import StaffGuideModal from "@/components/StaffGuideModal";
 import { StaffGuideProvider } from "@/contexts/StaffGuideContext";
 import { cn } from "@/lib/utils";
@@ -66,6 +67,13 @@ const educatorNavigationItems = [
   },
 ];
 
+const directorAcademicsItems = [
+  { title: 'Weekly Templates', href: '/schools/schedule-builder', icon: LayoutGrid },
+  { title: 'Week Planner', href: '/schools/week-planner', icon: CalendarDays },
+  { title: 'Assessments', href: '/school-admin/assessments', icon: ClipboardCheck },
+  { title: 'Attendance', href: '/school-admin/attendance', icon: UserCheck },
+];
+
 function EducatorSidebar() {
   const [location] = useLocation();
   const { user, signOut } = useAuth();
@@ -73,6 +81,17 @@ function EducatorSidebar() {
   const [userSchool, setUserSchool] = useState<any>(null);
   
   const hasSuperAdminRole = (availableRoles || []).some(r => r.role.toLowerCase() === 'superadmin');
+
+  const academicsActive = directorAcademicsItems.some(
+    item => location === item.href || location.startsWith(item.href + '/')
+  );
+  const [academicsOpen, setAcademicsOpen] = useState(academicsActive);
+
+  useEffect(() => {
+    if (academicsActive) {
+      setAcademicsOpen(true);
+    }
+  }, [academicsActive]);
 
   const { data: notifications = [] } = useQuery<Notification[]>({
     queryKey: ['/api/notifications'],
@@ -169,19 +188,54 @@ function EducatorSidebar() {
             );
           })}
           {activeRole === 'director' && (
-            <Link
-              href="/educator/week-plans"
-              className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
-                location === '/educator/week-plans' || location.startsWith('/educator/week-plans/')
-                  ? "bg-emerald-600 text-white"
-                  : "text-slate-300 hover:bg-slate-800 hover:text-white"
-              )}
-              data-testid="nav-educator-schedule-builder"
+            <Collapsible
+              open={academicsOpen}
+              onOpenChange={setAcademicsOpen}
+              data-testid="academics-dropdown-director"
             >
-              <LayoutGrid className="h-5 w-5" />
-              <span className="flex-1">Schedule Builder</span>
-            </Link>
+              <CollapsibleTrigger asChild>
+                <div
+                  className={cn(
+                    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors cursor-pointer",
+                    academicsActive && !academicsOpen
+                      ? "bg-emerald-700 text-white"
+                      : "text-slate-300 hover:bg-slate-800 hover:text-white"
+                  )}
+                >
+                  <ClipboardCheck className="h-5 w-5" />
+                  <span className="flex-1">Academics</span>
+                  <ChevronDown
+                    className={cn(
+                      "h-4 w-4 transition-transform duration-200",
+                      academicsOpen ? "rotate-180" : ""
+                    )}
+                  />
+                </div>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="overflow-hidden transition-all data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 duration-200">
+                <div className="ml-4 mt-1 grid gap-0.5">
+                  {directorAcademicsItems.map((item) => {
+                    const isActive = location === item.href || location.startsWith(item.href + '/');
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        className={cn(
+                          "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
+                          isActive
+                            ? "bg-emerald-600 text-white"
+                            : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                        )}
+                        data-testid={`nav-director-${item.href.replace(/\//g, '-')}`}
+                      >
+                        <item.icon className="h-4 w-4" />
+                        <span>{item.title}</span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
           )}
           {hasSuperAdminRole && (
             <Link
@@ -239,6 +293,17 @@ export default function EducatorAppShell({ children }: EducatorAppShellProps) {
   const [userSchool, setUserSchool] = useState<any>(null);
   
   const hasSuperAdminRole = (availableRoles || []).some(r => r.role.toLowerCase() === 'superadmin');
+
+  const academicsActive = directorAcademicsItems.some(
+    item => location === item.href || location.startsWith(item.href + '/')
+  );
+  const [academicsOpen, setAcademicsOpen] = useState(academicsActive);
+
+  useEffect(() => {
+    if (academicsActive) {
+      setAcademicsOpen(true);
+    }
+  }, [academicsActive]);
 
   const { data: notifications = [] } = useQuery<Notification[]>({
     queryKey: ['/api/notifications'],
@@ -351,21 +416,55 @@ export default function EducatorAppShell({ children }: EducatorAppShellProps) {
                         );
                       })}
                       {activeRole === 'director' && (
-                        <SheetClose asChild>
-                          <Link
-                            href="/educator/week-plans"
-                            className={cn(
-                              "flex items-center gap-3 rounded-lg px-3 py-3 text-base font-medium transition-colors",
-                              location === '/educator/week-plans' || location.startsWith('/educator/week-plans/')
-                                ? "bg-emerald-600 text-white"
-                                : "text-slate-300 hover:bg-slate-800 hover:text-white"
-                            )}
-                            data-testid="nav-mobile-schedule-builder"
-                          >
-                            <LayoutGrid className="h-5 w-5" />
-                            <span className="flex-1">Schedule Builder</span>
-                          </Link>
-                        </SheetClose>
+                        <Collapsible
+                          open={academicsOpen}
+                          onOpenChange={setAcademicsOpen}
+                          data-testid="academics-dropdown-director"
+                        >
+                          <CollapsibleTrigger asChild>
+                            <div
+                              className={cn(
+                                "flex items-center gap-3 rounded-lg px-3 py-3 text-base font-medium transition-colors cursor-pointer",
+                                academicsActive && !academicsOpen
+                                  ? "bg-emerald-700 text-white"
+                                  : "text-slate-300 hover:bg-slate-800 hover:text-white"
+                              )}
+                            >
+                              <ClipboardCheck className="h-5 w-5" />
+                              <span className="flex-1">Academics</span>
+                              <ChevronDown
+                                className={cn(
+                                  "h-4 w-4 transition-transform duration-200",
+                                  academicsOpen ? "rotate-180" : ""
+                                )}
+                              />
+                            </div>
+                          </CollapsibleTrigger>
+                          <CollapsibleContent className="overflow-hidden transition-all data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 duration-200">
+                            <div className="ml-4 mt-1 grid gap-0.5">
+                              {directorAcademicsItems.map((item) => {
+                                const isActive = location === item.href || location.startsWith(item.href + '/');
+                                return (
+                                  <SheetClose asChild key={item.href}>
+                                    <Link
+                                      href={item.href}
+                                      className={cn(
+                                        "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors",
+                                        isActive
+                                          ? "bg-emerald-600 text-white"
+                                          : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                                      )}
+                                      data-testid={`nav-mobile-director-${item.href.replace(/\//g, '-')}`}
+                                    >
+                                      <item.icon className="h-4 w-4" />
+                                      <span>{item.title}</span>
+                                    </Link>
+                                  </SheetClose>
+                                );
+                              })}
+                            </div>
+                          </CollapsibleContent>
+                        </Collapsible>
                       )}
                       {hasSuperAdminRole && (
                         <SheetClose asChild>
