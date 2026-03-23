@@ -264,7 +264,7 @@ export const supabaseAuth = async (
     
     // Check user_roles table for superAdmin role (multi-role system)
     // This is the source of truth for roles in the new system
-    let effectiveRole = dbUserData?.role || 'parent';
+    let effectiveRole = dbUserData?.activeRole || dbUserData?.role || 'parent';
     if (dbUserId) {
       try {
         const { getDb } = await import('../db');

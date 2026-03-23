@@ -351,6 +351,7 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
       const normalizedSwitchedRole = data.activeRole ? normalizeRoleCasing(data.activeRole) : '';
       setActiveRole(normalizedSwitchedRole);
       setActiveRoleId(data.activeRoleId);
+      localStorage.setItem('activeRole', normalizedSwitchedRole);
       setShowRoleSelection(false);
 
       // Invalidate all role-scoped queries to ensure fresh data
