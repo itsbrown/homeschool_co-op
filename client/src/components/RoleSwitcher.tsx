@@ -18,6 +18,7 @@ const roleConfig: Record<string, { icon: any; label: string }> = {
   learner: { icon: BookOpen, label: 'Learner' },
   student: { icon: BookOpen, label: 'Student' },
   schooladmin: { icon: School, label: 'School Admin' },
+  director: { icon: School, label: 'Director' },
   admin: { icon: Shield, label: 'Admin' },
   superadmin: { icon: Shield, label: 'Super Admin' }
 };
