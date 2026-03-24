@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import SchoolAdminLayout from "@/components/layout/SchoolAdminLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
@@ -16,7 +17,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
   Plus, Copy, Sparkles, Search, CheckCircle2, Edit, History, Trash2,
   ChevronRight, Calendar, Clock, Loader2, ExternalLink, AlertTriangle,
-  ThumbsUp, Lightbulb, X
+  ThumbsUp, Lightbulb, X, Download, Upload
 } from "lucide-react";
 import type { WeekPlan, WeekPlanBlock, WeeklySkeleton, SkeletonBlock } from "@shared/schema";
 import { BLOCK_TYPE_COLORS, BLOCK_TYPE_BADGE_COLORS } from "@/lib/blockColors";
@@ -85,6 +86,13 @@ export default function WeekPlannerPage() {
   const [gapsResult, setGapsResult] = useState<any>(null);
   const [deleteBlockId, setDeleteBlockId] = useState<number | null>(null);
   const [completionOverrides, setCompletionOverrides] = useState<Record<number, boolean>>({});
+  const [csvUploadDialog, setCsvUploadDialog] = useState(false);
+  const [csvUploadFile, setCsvUploadFile] = useState<File | null>(null);
+  const [csvPreviewRows, setCsvPreviewRows] = useState<any[] | null>(null);
+  const [csvPreviewErrors, setCsvPreviewErrors] = useState<string[]>([]);
+  const [csvImporting, setCsvImporting] = useState(false);
+  const [csvWarningAccepted, setCsvWarningAccepted] = useState(false);
+  const csvFileInputRef = useRef<HTMLInputElement>(null);
 
   const templateId = selectedTemplateId ? parseInt(selectedTemplateId) : null;
 
@@ -263,6 +271,81 @@ export default function WeekPlannerPage() {
     },
     onError: (err: any) => toast({ title: "Error deleting block", description: err.message, variant: "destructive" }),
   });
+
+  const downloadWeekPlanCsv = () => {
+    if (!selectedWeekPlanId) return;
+    const a = document.createElement("a");
+    a.href = `/api/schedule-builder/week-plans/${selectedWeekPlanId}/blocks/export-csv`;
+    a.download = "";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
+  const openWeekCsvUpload = () => {
+    setCsvUploadDialog(true);
+    setCsvUploadFile(null);
+    setCsvPreviewRows(null);
+    setCsvPreviewErrors([]);
+    setCsvWarningAccepted(false);
+    if (csvFileInputRef.current) csvFileInputRef.current.value = "";
+  };
+
+  const handleWeekCsvFileSelect = (file: File) => {
+    setCsvUploadFile(file);
+    setCsvPreviewRows(null);
+    setCsvPreviewErrors([]);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = e.target?.result as string;
+      const allLines = text.split("\n");
+      const filtered = allLines.filter((l) => !l.trim().startsWith("#") && l.trim() !== "");
+      if (filtered.length <= 1) {
+        setCsvPreviewErrors(["CSV has no data rows."]);
+        return;
+      }
+      const headers = filtered[0].split(",").map((h) => h.trim());
+      const rows: any[] = [];
+      for (let i = 1; i < Math.min(filtered.length, 6); i++) {
+        const vals = filtered[i].split(",").map((v) => v.trim().replace(/^"|"$/g, ""));
+        const row: any = {};
+        headers.forEach((h, idx) => { row[h] = vals[idx] || ""; });
+        rows.push(row);
+      }
+      setCsvPreviewRows(rows);
+    };
+    reader.readAsText(file);
+  };
+
+  const handleWeekCsvImport = async () => {
+    if (!selectedWeekPlanId || !csvUploadFile) return;
+    setCsvImporting(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", csvUploadFile);
+      const response = await fetch(`/api/schedule-builder/week-plans/${selectedWeekPlanId}/blocks/import-csv`, {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        if (data.errors && data.errors.length > 0) {
+          setCsvPreviewErrors(data.errors);
+        } else {
+          toast({ title: "Import failed", description: data.message || "Unknown error", variant: "destructive" });
+        }
+      } else {
+        toast({ title: "Import successful", description: data.message });
+        queryClient.invalidateQueries({ queryKey: ["/api/schedule-builder/week-plans", selectedWeekPlanId] });
+        setCsvUploadDialog(false);
+      }
+    } catch (err: any) {
+      toast({ title: "Import failed", description: err.message, variant: "destructive" });
+    } finally {
+      setCsvImporting(false);
+    }
+  };
 
   const sortedWeekPlans = [...weekPlans].sort((a, b) => a.weekNumber - b.weekNumber);
 
@@ -519,6 +602,22 @@ export default function WeekPlannerPage() {
                             AI generation is currently unavailable. Fill blocks manually or contact support.
                           </p>
                         )}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={downloadWeekPlanCsv}
+                        >
+                          <Download className="h-4 w-4 mr-1" />
+                          Download CSV
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={openWeekCsvUpload}
+                        >
+                          <Upload className="h-4 w-4 mr-1" />
+                          Upload CSV
+                        </Button>
                         <Button
                           size="sm"
                           variant="outline"
@@ -958,6 +1057,99 @@ export default function WeekPlannerPage() {
           ) : (
             <p className="text-sm text-muted-foreground py-4 text-center">No analysis results.</p>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={csvUploadDialog} onOpenChange={(open) => { if (!open) setCsvUploadDialog(false); }}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Upload CSV — Week {selectedWeekData?.weekNumber}</DialogTitle>
+            <DialogDescription>
+              Upload a CSV file to bulk-update the block content for this week plan. Blocks are matched by day and start time.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Alert>
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>
+                Uploading will <strong>overwrite existing block content</strong> for matched blocks. Download the current week CSV first to preserve existing content.
+              </AlertDescription>
+            </Alert>
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="csv-warning-accept"
+                checked={csvWarningAccepted}
+                onCheckedChange={(v) => setCsvWarningAccepted(!!v)}
+              />
+              <label htmlFor="csv-warning-accept" className="text-sm cursor-pointer">
+                I understand this will overwrite existing block content
+              </label>
+            </div>
+            <div className="space-y-2">
+              <Label>CSV File</Label>
+              <input
+                type="file"
+                accept=".csv"
+                ref={csvFileInputRef}
+                className="block w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 cursor-pointer"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) handleWeekCsvFileSelect(f);
+                }}
+              />
+              <p className="text-xs text-muted-foreground">
+                Required columns: <code>day_of_week, start_time</code>. Optional: <code>title, description, objectives (semicolon-separated), lesson_link, notes</code>.
+              </p>
+            </div>
+            {csvPreviewErrors.length > 0 && (
+              <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>
+                  <p className="font-semibold mb-1">Validation errors:</p>
+                  <ul className="text-sm list-disc pl-4 space-y-0.5">
+                    {csvPreviewErrors.map((e, i) => <li key={i}>{e}</li>)}
+                  </ul>
+                </AlertDescription>
+              </Alert>
+            )}
+            {csvPreviewRows && csvPreviewRows.length > 0 && csvPreviewErrors.length === 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-sm text-green-700">
+                  <CheckCircle2 className="h-4 w-4" />
+                  <span>Preview (first {csvPreviewRows.length} rows):</span>
+                </div>
+                <div className="overflow-x-auto rounded border">
+                  <table className="text-xs w-full">
+                    <thead className="bg-muted">
+                      <tr>
+                        {Object.keys(csvPreviewRows[0]).map((h) => (
+                          <th key={h} className="px-2 py-1.5 text-left font-medium whitespace-nowrap">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {csvPreviewRows.map((row, i) => (
+                        <tr key={i} className="border-t">
+                          {Object.values(row).map((v: any, j) => (
+                            <td key={j} className="px-2 py-1 whitespace-nowrap max-w-[150px] truncate">{v}</td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCsvUploadDialog(false)}>Cancel</Button>
+            <Button
+              onClick={handleWeekCsvImport}
+              disabled={!csvUploadFile || csvImporting || csvPreviewErrors.length > 0 || !csvWarningAccepted}
+            >
+              {csvImporting ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Importing...</> : <><Upload className="h-4 w-4 mr-2" />Import</>}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </SchoolAdminLayout>
