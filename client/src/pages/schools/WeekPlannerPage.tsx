@@ -86,6 +86,7 @@ export default function WeekPlannerPage() {
   const [gapsResult, setGapsResult] = useState<any>(null);
   const [deleteBlockId, setDeleteBlockId] = useState<number | null>(null);
   const [completionOverrides, setCompletionOverrides] = useState<Record<number, boolean>>({});
+  const [isDownloadingCsv, setIsDownloadingCsv] = useState(false);
   const [csvUploadDialog, setCsvUploadDialog] = useState(false);
   const [csvUploadFile, setCsvUploadFile] = useState<File | null>(null);
   const [csvPreviewRows, setCsvPreviewRows] = useState<any[] | null>(null);
@@ -272,14 +273,26 @@ export default function WeekPlannerPage() {
     onError: (err: any) => toast({ title: "Error deleting block", description: err.message, variant: "destructive" }),
   });
 
-  const downloadWeekPlanCsv = () => {
+  const downloadWeekPlanCsv = async () => {
     if (!selectedWeekPlanId) return;
-    const a = document.createElement("a");
-    a.href = `/api/schedule-builder/week-plans/${selectedWeekPlanId}/blocks/export-csv`;
-    a.download = "";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    setIsDownloadingCsv(true);
+    try {
+      const response = await apiRequest("GET", `/api/schedule-builder/week-plans/${selectedWeekPlanId}/blocks/export-csv`);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const wp = weekPlans.find((w) => w.id === selectedWeekPlanId);
+      a.download = wp ? `week-${wp.weekNumber}-blocks.csv` : `week-plan-${selectedWeekPlanId}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (err: any) {
+      toast({ title: "Download failed", description: err.message, variant: "destructive" });
+    } finally {
+      setIsDownloadingCsv(false);
+    }
   };
 
   const openWeekCsvUpload = () => {
@@ -606,8 +619,9 @@ export default function WeekPlannerPage() {
                           size="sm"
                           variant="outline"
                           onClick={downloadWeekPlanCsv}
+                          disabled={isDownloadingCsv}
                         >
-                          <Download className="h-4 w-4 mr-1" />
+                          {isDownloadingCsv ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Download className="h-4 w-4 mr-1" />}
                           Download CSV
                         </Button>
                         <Button

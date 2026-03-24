@@ -80,6 +80,7 @@ export default function ScheduleBuilderPage() {
   const [deleteBlockInfo, setDeleteBlockInfo] = useState<{ skeletonId: number; blockId: number } | null>(null);
   const [activeTemplateForBlock, setActiveTemplateForBlock] = useState<WeeklySkeleton | null>(null);
   const [csvUploadDialog, setCsvUploadDialog] = useState<{ skeletonId: number; skeletonName: string } | null>(null);
+  const [downloadingCsvId, setDownloadingCsvId] = useState<number | null>(null);
   const [csvUploadFile, setCsvUploadFile] = useState<File | null>(null);
   const [csvPreviewRows, setCsvPreviewRows] = useState<any[] | null>(null);
   const [csvPreviewErrors, setCsvPreviewErrors] = useState<string[]>([]);
@@ -336,13 +337,24 @@ export default function ScheduleBuilderPage() {
   const templateIsPending = createTemplateMutation.isPending || updateTemplateMutation.isPending;
   const blockIsPending = createBlockMutation.isPending || updateBlockMutation.isPending;
 
-  const downloadSkeletonCsv = (template: WeeklySkeleton) => {
-    const a = document.createElement("a");
-    a.href = `/api/schedule-builder/skeletons/${template.id}/blocks/export-csv`;
-    a.download = "";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+  const downloadSkeletonCsv = async (template: WeeklySkeleton) => {
+    setDownloadingCsvId(template.id);
+    try {
+      const response = await apiRequest("GET", `/api/schedule-builder/skeletons/${template.id}/blocks/export-csv`);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${template.name.replace(/\s+/g, "-")}-blocks.csv`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (err: any) {
+      toast({ title: "Download failed", description: err.message, variant: "destructive" });
+    } finally {
+      setDownloadingCsvId(null);
+    }
   };
 
   const openCsvUploadDialog = (template: WeeklySkeleton) => {
@@ -456,6 +468,7 @@ export default function ScheduleBuilderPage() {
                 onEditBlock={(block) => openEditBlock(template, block)}
                 onDeleteBlock={(blockId) => setDeleteBlockInfo({ skeletonId: template.id, blockId })}
                 onDownloadCsv={() => downloadSkeletonCsv(template)}
+                isDownloadingCsv={downloadingCsvId === template.id}
                 onUploadCsv={() => openCsvUploadDialog(template)}
               />
             ))}
@@ -752,6 +765,7 @@ function TemplateCard({
   onEditBlock,
   onDeleteBlock,
   onDownloadCsv,
+  isDownloadingCsv,
   onUploadCsv,
 }: {
   template: WeeklySkeleton;
@@ -766,6 +780,7 @@ function TemplateCard({
   onEditBlock: (block: SkeletonBlock) => void;
   onDeleteBlock: (blockId: number) => void;
   onDownloadCsv: () => void;
+  isDownloadingCsv: boolean;
   onUploadCsv: () => void;
 }) {
   const linkedSession = sessions.find((s) => s.id === template.sessionId);
@@ -829,6 +844,7 @@ function TemplateCard({
             onEditBlock={onEditBlock}
             onDeleteBlock={onDeleteBlock}
             onDownloadCsv={onDownloadCsv}
+            isDownloadingCsv={isDownloadingCsv}
             onUploadCsv={onUploadCsv}
           />
         </CardContent>
@@ -844,6 +860,7 @@ function BlockEditor({
   onEditBlock,
   onDeleteBlock,
   onDownloadCsv,
+  isDownloadingCsv,
   onUploadCsv,
 }: {
   template: WeeklySkeleton;
@@ -852,6 +869,7 @@ function BlockEditor({
   onEditBlock: (block: SkeletonBlock) => void;
   onDeleteBlock: (blockId: number) => void;
   onDownloadCsv: () => void;
+  isDownloadingCsv: boolean;
   onUploadCsv: () => void;
 }) {
   const { data: blocks = [], isLoading } = useQuery<SkeletonBlock[]>({
@@ -887,8 +905,8 @@ function BlockEditor({
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h4 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">Time Blocks</h4>
         <div className="flex items-center gap-2">
-          <Button size="sm" variant="outline" onClick={onDownloadCsv}>
-            <Download className="h-3.5 w-3.5 mr-1" />
+          <Button size="sm" variant="outline" onClick={onDownloadCsv} disabled={isDownloadingCsv}>
+            {isDownloadingCsv ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Download className="h-3.5 w-3.5 mr-1" />}
             Download CSV
           </Button>
           <Button size="sm" variant="outline" onClick={onUploadCsv}>
