@@ -7,7 +7,7 @@ import { storage } from "../storage";
 
 const router = Router();
 
-const requireSchoolAdmin = requireRole(['schoolAdmin', 'admin', 'superAdmin']);
+const requireSchoolAdmin = requireRole(['schoolAdmin', 'admin', 'superAdmin', 'director']);
 
 router.get("/", supabaseAuth, requireSchoolAdmin, requireSchoolContext, async (req: any, res) => {
   try {
