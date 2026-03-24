@@ -2829,7 +2829,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       console.log('🗑️ Attempting to delete child with ID:', childId);
 
       // First, get the child data
-      const child = await storage.getChild(childId);
+      const child = await storage.getChildById(childId);
       
       if (!child) {
         return res.status(404).json({ message: 'Child not found' });
