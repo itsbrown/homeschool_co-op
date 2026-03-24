@@ -921,7 +921,8 @@ router.put("/classes/:id", supabaseAuth, async (req: any, res) => {
       instructorId: instructorId,
       price: req.body.price !== undefined ? req.body.price : existingClass.price,
       isAdminOnly: req.body.isAdminOnly !== undefined ? req.body.isAdminOnly : existingClass.isAdminOnly,
-      prorateEnabled: req.body.prorateEnabled !== undefined ? req.body.prorateEnabled : existingClass.prorateEnabled
+      prorateEnabled: req.body.prorateEnabled !== undefined ? req.body.prorateEnabled : existingClass.prorateEnabled,
+      sessionId: req.body.sessionId !== undefined ? (req.body.sessionId || null) : existingClass.sessionId,
     };
 
     const updatedClass = await storage.updateClass(classId, updateData);
@@ -1043,7 +1044,8 @@ router.patch("/classes/:id", supabaseAuth, async (req: any, res) => {
       instructorId: instructorId,
       price: req.body.price !== undefined ? req.body.price : existingClass.price,
       isAdminOnly: req.body.isAdminOnly !== undefined ? req.body.isAdminOnly : existingClass.isAdminOnly,
-      prorateEnabled: req.body.prorateEnabled !== undefined ? req.body.prorateEnabled : existingClass.prorateEnabled
+      prorateEnabled: req.body.prorateEnabled !== undefined ? req.body.prorateEnabled : existingClass.prorateEnabled,
+      sessionId: req.body.sessionId !== undefined ? (req.body.sessionId || null) : existingClass.sessionId,
     };
 
     const updatedClass = await storage.updateClass(classId, updateData);
@@ -2745,6 +2747,7 @@ router.post("/classes", supabaseAuth, requireSchoolContext, async (req: any, res
       instructorName: req.body.instructorName,
       instructorId,
       isPublished: false,
+      sessionId: req.body.sessionId || null,
     };
 
     console.log('💰 Extracted price from variants:', price);

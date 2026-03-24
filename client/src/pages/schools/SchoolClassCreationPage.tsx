@@ -43,6 +43,7 @@ const classFormSchema = z.object({
   instructorName: z.string().optional(), // Legacy field - educators now managed via ClassEducatorAssignments
   status: z.string().min(1, "Please select a status"),
   isAdminOnly: z.boolean().default(false),
+  sessionId: z.number().int().optional(),
 });
 
 type ClassFormValues = z.infer<typeof classFormSchema>;
@@ -86,6 +87,7 @@ export default function SchoolClassCreationPage() {
       instructorName: "",
       status: "upcoming",
       isAdminOnly: false,
+      sessionId: undefined,
     },
   });
 
@@ -133,6 +135,11 @@ export default function SchoolClassCreationPage() {
   const { data: schoolDocuments = [] } = useQuery<any[]>({
     queryKey: ["/api/school-admin/documents"],
     enabled: !!schoolId,
+  });
+
+  // Fetch available sessions for the session dropdown
+  const { data: sessionsData = [] } = useQuery<any[]>({
+    queryKey: ["/api/admin/sessions"],
   });
 
   // Stabilize categories and filter to only active ones
@@ -252,7 +259,7 @@ export default function SchoolClassCreationPage() {
       form.reset({
         title: classData.title || "",
         description: classData.description || "",
-        category: classData.category || "",
+        category: classData.categoryName || classData.category || "",
         gradeLevels: targetGradeLevels,
         startDate,
         endDate,
@@ -269,6 +276,7 @@ export default function SchoolClassCreationPage() {
         instructorName: instructorValue,
         status: classData.status || "upcoming",
         isAdminOnly: classData.isAdminOnly || false,
+        sessionId: classData.sessionId || undefined,
       });
       
       console.log('📍 Form reset with locationId:', targetLocationId, 'from classData.locationId:', classData.locationId, 'or location:', classData.location);
@@ -461,7 +469,7 @@ export default function SchoolClassCreationPage() {
                           disabled={categoriesLoading}
                         >
                           <FormControl>
-                            <SelectTrigger data-testid="select-category">
+                            <SelectTrigger data-testid="select-category" style={{ fontSize: '16px' }}>
                               <SelectValue placeholder={categoriesLoading ? "Loading categories..." : "Select a category"} />
                             </SelectTrigger>
                           </FormControl>
@@ -481,6 +489,35 @@ export default function SchoolClassCreationPage() {
                                 </SelectItem>
                               ))
                             )}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="sessionId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Session</FormLabel>
+                        <Select
+                          onValueChange={(value) => field.onChange(value === "none" ? undefined : parseInt(value, 10))}
+                          value={field.value !== undefined && field.value !== null ? String(field.value) : "none"}
+                        >
+                          <FormControl>
+                            <SelectTrigger data-testid="select-session" style={{ fontSize: '16px' }}>
+                              <SelectValue placeholder="Select a session (optional)" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="none">No session assigned</SelectItem>
+                            {sessionsData.map((session: any) => (
+                              <SelectItem key={session.id} value={String(session.id)}>
+                                {session.name}
+                              </SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                         <FormMessage />
