@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import SchoolAdminLayout from "@/components/layout/SchoolAdminLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Plus, Edit, Trash2, Calendar, Clock, ChevronDown, ChevronUp, LayoutGrid, BookOpen } from "lucide-react";
+import { Plus, Edit, Trash2, Calendar, Clock, ChevronDown, ChevronUp, LayoutGrid, BookOpen, Download, Upload, AlertTriangle, CheckCircle2 } from "lucide-react";
 import type { WeeklySkeleton, SkeletonBlock, Session } from "@shared/schema";
 
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
@@ -611,9 +611,97 @@ function BlockEditor({
   onEditBlock: (block: SkeletonBlock) => void;
   onDeleteBlock: (blockId: number) => void;
 }) {
+  const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [csvImportDialog, setCsvImportDialog] = useState(false);
+  const [csvPreviewRows, setCsvPreviewRows] = useState<any[] | null>(null);
+  const [csvErrors, setCsvErrors] = useState<string[]>([]);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+
   const { data: blocks = [], isLoading } = useQuery<SkeletonBlock[]>({
     queryKey: ["/api/schedule-builder/skeletons", template.id, "blocks"],
   });
+
+  const handleDownloadTemplate = async () => {
+    try {
+      const res = await apiRequest("GET", `/api/schedule-builder/skeletons/${template.id}/blocks/export-csv`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `skeleton-${template.id}-blocks.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      toast({ title: "Download failed", description: err.message, variant: "destructive" });
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPendingFile(file);
+    setCsvErrors([]);
+    setCsvPreviewRows(null);
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string;
+      const lines = text.split("\n").filter((l) => l.trim());
+      if (lines.length < 2) {
+        setCsvErrors(["CSV file is empty or has no data rows."]);
+        setCsvImportDialog(true);
+        return;
+      }
+      const headers = lines[0].split(",").map((h) => h.replace(/^"|"$/g, "").trim());
+      const previewData = lines.slice(1, 6).map((line) => {
+        const vals = line.split(",").map((v) => v.replace(/^"|"$/g, "").trim());
+        const row: Record<string, string> = {};
+        headers.forEach((h, i) => { row[h] = vals[i] || ""; });
+        return row;
+      });
+      setCsvPreviewRows(previewData);
+      setCsvImportDialog(true);
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  };
+
+  const handleConfirmUpload = async () => {
+    if (!pendingFile) return;
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", pendingFile);
+      const res = await apiRequest("POST", `/api/schedule-builder/skeletons/${template.id}/blocks/import-csv`, formData);
+      const data = await res.json();
+      toast({ title: `Successfully imported ${data.imported} blocks` });
+      queryClient.invalidateQueries({ queryKey: ["/api/schedule-builder/skeletons", template.id, "blocks"] });
+      setCsvImportDialog(false);
+      setPendingFile(null);
+      setCsvPreviewRows(null);
+      setCsvErrors([]);
+    } catch (err: any) {
+      const msg: string = err.message || "";
+      const jsonStart = msg.indexOf("{");
+      if (jsonStart !== -1) {
+        try {
+          const parsed = JSON.parse(msg.slice(jsonStart));
+          if (parsed.errors && parsed.errors.length > 0) {
+            setCsvErrors(parsed.errors);
+            return;
+          }
+          if (parsed.message) {
+            toast({ title: "Upload failed", description: parsed.message, variant: "destructive" });
+            return;
+          }
+        } catch {}
+      }
+      toast({ title: "Upload failed", description: msg, variant: "destructive" });
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -641,12 +729,29 @@ function BlockEditor({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <h4 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">Time Blocks</h4>
-        <Button size="sm" variant="outline" onClick={onAddBlock}>
-          <Plus className="h-3.5 w-3.5 mr-1" />
-          Add Block
-        </Button>
+        <div className="flex gap-2 flex-wrap">
+          <Button size="sm" variant="outline" onClick={handleDownloadTemplate}>
+            <Download className="h-3.5 w-3.5 mr-1" />
+            Download Template
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => fileInputRef.current?.click()}>
+            <Upload className="h-3.5 w-3.5 mr-1" />
+            Upload CSV
+          </Button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv"
+            className="hidden"
+            onChange={handleFileChange}
+          />
+          <Button size="sm" variant="outline" onClick={onAddBlock}>
+            <Plus className="h-3.5 w-3.5 mr-1" />
+            Add Block
+          </Button>
+        </div>
       </div>
       {operatingDayNumbers.length === 0 ? (
         <p className="text-sm text-muted-foreground">No operating days configured.</p>
@@ -693,6 +798,67 @@ function BlockEditor({
           ))}
         </div>
       )}
+
+      <Dialog open={csvImportDialog} onOpenChange={(open) => { setCsvImportDialog(open); if (!open) { setPendingFile(null); setCsvPreviewRows(null); setCsvErrors([]); } }}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Import Blocks from CSV</DialogTitle>
+            <DialogDescription>
+              Review the rows below. This will <strong>replace all existing blocks</strong> for this template. Any current blocks will be deleted.
+            </DialogDescription>
+          </DialogHeader>
+          {csvErrors.length > 0 && (
+            <div className="bg-red-50 border border-red-200 rounded p-3 space-y-1">
+              <p className="text-sm font-semibold text-red-700 flex items-center gap-1">
+                <AlertTriangle className="h-4 w-4" />
+                Validation errors — please fix the CSV and try again:
+              </p>
+              {csvErrors.map((err, i) => (
+                <p key={i} className="text-sm text-red-700">{err}</p>
+              ))}
+            </div>
+          )}
+          {csvPreviewRows && csvPreviewRows.length > 0 && csvErrors.length === 0 && (
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">Preview (first 5 data rows, hint row excluded):</p>
+              <div className="overflow-x-auto">
+                <table className="text-xs w-full border-collapse">
+                  <thead>
+                    <tr className="bg-muted">
+                      {Object.keys(csvPreviewRows[0]).map((h) => (
+                        <th key={h} className="border px-2 py-1 text-left font-medium">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {csvPreviewRows.map((row, i) => (
+                      <tr key={i} className="even:bg-muted/30">
+                        {Object.values(row).map((v: any, j) => (
+                          <td key={j} className="border px-2 py-1 truncate max-w-[120px]">{v}</td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+          {csvPreviewRows && csvErrors.length === 0 && (
+            <div className="bg-amber-50 border border-amber-200 rounded p-3 text-sm text-amber-800 flex items-start gap-2">
+              <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+              All existing blocks for <strong>{template.name}</strong> will be permanently deleted and replaced with the CSV contents.
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCsvImportDialog(false)}>Cancel</Button>
+            {csvPreviewRows && csvErrors.length === 0 && (
+              <Button onClick={handleConfirmUpload} disabled={isUploading}>
+                {isUploading ? "Importing..." : "Confirm Import"}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

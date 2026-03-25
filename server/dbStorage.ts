@@ -5197,6 +5197,16 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  async bulkReplaceSkeletonBlocks(skeletonId: number, blocks: Omit<InsertSkeletonBlock, 'skeletonId' | 'createdBy'>[], createdBy: number): Promise<SkeletonBlock[]> {
+    const db = await getDb();
+    return await db.transaction(async (tx) => {
+      await tx.delete(skeletonBlocks).where(eq(skeletonBlocks.skeletonId, skeletonId));
+      if (blocks.length === 0) return [];
+      const toInsert = blocks.map((b) => ({ ...b, skeletonId, createdBy }));
+      return await tx.insert(skeletonBlocks).values(toInsert).returning();
+    });
+  }
+
   // Schedule Builder - Week Plans
   async getWeekPlansBySkeletonId(skeletonId: number): Promise<WeekPlan[]> {
     const db = await getDb();
@@ -5313,6 +5323,30 @@ export class DatabaseStorage implements IStorage {
   async deleteWeekPlanBlock(id: number): Promise<void> {
     const db = await getDb();
     await db.delete(weekPlanBlocks).where(eq(weekPlanBlocks.id, id));
+  }
+
+  async bulkUpdateWeekPlanBlocks(weekPlanId: number, updates: { dayOfWeek: number; startTime: string; data: Partial<InsertWeekPlanBlock> }[], updatedBy: number): Promise<void> {
+    const db = await getDb();
+    const plan = await this.getWeekPlanById(weekPlanId);
+    if (!plan) throw new Error(`Week plan ${weekPlanId} not found`);
+    const allSkeletonBlocks = await this.getSkeletonBlocksBySkeletonId(plan.skeletonId);
+    const existingBlocks = await this.getWeekPlanBlocksByWeekPlanId(weekPlanId);
+    for (const update of updates) {
+      const sb = allSkeletonBlocks.find(
+        (b) => b.dayOfWeek === update.dayOfWeek && b.startTime === update.startTime
+      );
+      if (!sb) continue;
+      const wb = existingBlocks.find((b) => b.skeletonBlockId === sb.id);
+      if (wb) {
+        await this.updateWeekPlanBlock(wb.id, update.data, updatedBy);
+      } else {
+        await db.insert(weekPlanBlocks).values({
+          weekPlanId,
+          skeletonBlockId: sb.id,
+          ...update.data,
+        });
+      }
+    }
   }
 
   async markBlockCompleted(id: number, completedBy: number): Promise<WeekPlanBlock | undefined> {

@@ -10,6 +10,31 @@ import {
   insertWeekPlanBlockSchema,
 } from "@shared/schema";
 import { fileUploadService } from "../services/fileUploadService";
+import { parse as csvParse } from "csv-parse/sync";
+import { stringify as csvStringify } from "csv-stringify/sync";
+import { UploadedFile } from "express-fileupload";
+
+const DAY_NUMBER_TO_NAME: Record<number, string> = {
+  0: "Sunday", 1: "Monday", 2: "Tuesday", 3: "Wednesday",
+  4: "Thursday", 5: "Friday", 6: "Saturday",
+};
+const DAY_NAME_TO_NUMBER: Record<string, number> = {
+  Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3, Thursday: 4, Friday: 5, Saturday: 6,
+};
+const BLOCK_TYPES = ["anchor", "curriculum", "flexible"] as const;
+const TIME_REGEX = /^\d{2}:\d{2}(:\d{2})?$/;
+
+function isRtfOrBinary(buf: Buffer): boolean {
+  // RTF starts with {\rtf
+  if (buf.length >= 5 && buf.slice(0, 5).toString('ascii') === '{\\rtf') return true;
+  // Check for non-printable, non-UTF8-control bytes in first 512 bytes (binary detection)
+  const sample = buf.slice(0, 512);
+  let nonText = 0;
+  for (const b of sample) {
+    if (b < 9 || (b > 13 && b < 32 && b !== 27)) nonText++;
+  }
+  return nonText > sample.length * 0.1;
+}
 
 const router = Router();
 
@@ -592,6 +617,313 @@ router.get(
     } catch (error) {
       console.error("Error fetching block history:", error);
       res.status(500).json({ message: "Failed to fetch block history" });
+    }
+  }
+);
+
+// ============================================================
+// SKELETON BLOCKS - CSV EXPORT & IMPORT
+// ============================================================
+
+router.get(
+  "/skeletons/:id/blocks/export-csv",
+  supabaseAuth,
+  requireRole(['schoolAdmin', 'admin', 'superAdmin', 'director']),
+  requireSchoolContext,
+  async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ message: "Invalid skeleton ID" });
+      const skeleton = await storage.getWeeklySkeletonById(id);
+      if (!skeleton) return res.status(404).json({ message: "Skeleton not found" });
+      const schoolId = parseInt(req.schoolId);
+      if (skeleton.schoolId !== schoolId) return res.status(403).json({ message: "Access denied" });
+
+      const blocks = await storage.getSkeletonBlocksBySkeletonId(id);
+      const header = ["day_of_week", "start_time", "end_time", "block_type", "default_title", "subject_area", "sort_order"];
+      const hintRow = ["Monday", "08:00", "09:00", "curriculum", "Math 101", "Math", "0"];
+
+      const rows = blocks.map((b) => [
+        DAY_NUMBER_TO_NAME[b.dayOfWeek] || String(b.dayOfWeek),
+        b.startTime,
+        b.endTime,
+        b.blockType,
+        b.defaultTitle,
+        b.subjectArea || "",
+        String(b.sortOrder),
+      ]);
+
+      const csv = csvStringify([header, hintRow, ...rows]);
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="skeleton-${id}-blocks.csv"`);
+      res.send(csv);
+    } catch (error) {
+      console.error("Error exporting skeleton CSV:", error);
+      res.status(500).json({ message: "Failed to export CSV" });
+    }
+  }
+);
+
+router.post(
+  "/skeletons/:id/blocks/import-csv",
+  supabaseAuth,
+  requireRole(['schoolAdmin', 'admin', 'superAdmin', 'director']),
+  requireSchoolContext,
+  async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ message: "Invalid skeleton ID" });
+      const skeleton = await storage.getWeeklySkeletonById(id);
+      if (!skeleton) return res.status(404).json({ message: "Skeleton not found" });
+      const schoolId = parseInt(req.schoolId);
+      if (skeleton.schoolId !== schoolId) return res.status(403).json({ message: "Access denied" });
+
+      if (!req.files || !req.files.file) {
+        return res.status(400).json({ message: "No file uploaded" });
+      }
+      const uploadedFile = req.files.file as UploadedFile;
+      if (!uploadedFile.name.toLowerCase().endsWith('.csv')) {
+        return res.status(400).json({ message: "Only CSV files are allowed" });
+      }
+      if (isRtfOrBinary(uploadedFile.data)) {
+        return res.status(400).json({ message: "File appears to be binary or RTF. Only plain UTF-8 CSV files are supported." });
+      }
+
+      const content = uploadedFile.data.toString("utf-8");
+      let records: any[];
+      try {
+        records = csvParse(content, { columns: true, skip_empty_lines: true, trim: true });
+      } catch (e: any) {
+        return res.status(400).json({ message: `CSV parse error: ${e.message}` });
+      }
+
+      if (records.length === 0) return res.status(400).json({ message: "CSV file is empty" });
+
+      // Skip the hint row (example/valid values row)
+      const isHintRow = (r: any) =>
+        (r.day_of_week || "").toLowerCase() === "monday" &&
+        (r.start_time || "") === "08:00" &&
+        (r.end_time || "") === "09:00" &&
+        (r.default_title || "").toLowerCase().includes("math 101");
+      const dataRows = records.filter((r) => !isHintRow(r));
+
+      const errors: string[] = [];
+      const parsedBlocks: any[] = [];
+
+      for (let i = 0; i < dataRows.length; i++) {
+        const r = dataRows[i];
+        const rowNum = i + 1;
+        const dayStr = (r.day_of_week || "").trim();
+        const dayNum = DAY_NAME_TO_NUMBER[dayStr];
+        if (dayNum === undefined) {
+          errors.push(`Row ${rowNum}: Invalid day_of_week "${dayStr}". Must be a full day name (e.g. Monday).`);
+          continue;
+        }
+        const startTime = (r.start_time || "").trim().substring(0, 5);
+        const endTime = (r.end_time || "").trim().substring(0, 5);
+        if (!TIME_REGEX.test(startTime)) {
+          errors.push(`Row ${rowNum}: Invalid start_time "${r.start_time}". Use HH:MM format.`);
+          continue;
+        }
+        if (!TIME_REGEX.test(endTime)) {
+          errors.push(`Row ${rowNum}: Invalid end_time "${r.end_time}". Use HH:MM format.`);
+          continue;
+        }
+        if (endTime <= startTime) {
+          errors.push(`Row ${rowNum}: end_time must be after start_time.`);
+          continue;
+        }
+        const blockType = (r.block_type || "").trim().toLowerCase();
+        if (!BLOCK_TYPES.includes(blockType as (typeof BLOCK_TYPES)[number])) {
+          errors.push(`Row ${rowNum}: Invalid block_type "${r.block_type}". Must be anchor, curriculum, or flexible.`);
+          continue;
+        }
+        const defaultTitle = (r.default_title || "").trim();
+        if (!defaultTitle) {
+          errors.push(`Row ${rowNum}: default_title is required.`);
+          continue;
+        }
+        parsedBlocks.push({
+          dayOfWeek: dayNum,
+          startTime,
+          endTime,
+          blockType,
+          defaultTitle,
+          subjectArea: (r.subject_area || "").trim() || null,
+          sortOrder: parseInt(r.sort_order || "0") || 0,
+          defaultDescription: null,
+        });
+      }
+
+      // Check for overlapping blocks within a day
+      const dayGroups: Record<number, { startTime: string; endTime: string; row: number }[]> = {};
+      parsedBlocks.forEach((b, idx) => {
+        if (!dayGroups[b.dayOfWeek]) dayGroups[b.dayOfWeek] = [];
+        dayGroups[b.dayOfWeek].push({ startTime: b.startTime, endTime: b.endTime, row: idx + 1 });
+      });
+      for (const dayBlocks of Object.values(dayGroups)) {
+        for (let i = 0; i < dayBlocks.length; i++) {
+          for (let j = i + 1; j < dayBlocks.length; j++) {
+            const a = dayBlocks[i], b = dayBlocks[j];
+            if (a.startTime < b.endTime && b.startTime < a.endTime) {
+              errors.push(`Rows ${a.row} and ${b.row}: Overlapping blocks on ${DAY_NUMBER_TO_NAME[parsedBlocks[a.row - 1].dayOfWeek]} (${a.startTime}–${a.endTime} and ${b.startTime}–${b.endTime}).`);
+            }
+          }
+        }
+      }
+
+      if (errors.length > 0) {
+        return res.status(400).json({ message: "Validation errors in CSV", errors });
+      }
+
+      const userId = req.user?.id;
+      if (!userId) return res.status(401).json({ message: "Not authenticated" });
+
+      await storage.bulkReplaceSkeletonBlocks(id, parsedBlocks, userId);
+      res.json({ success: true, imported: parsedBlocks.length });
+    } catch (error: any) {
+      console.error("Error importing skeleton CSV:", error);
+      res.status(500).json({ message: "Failed to import CSV", error: error.message });
+    }
+  }
+);
+
+// ============================================================
+// WEEK PLAN BLOCKS - CSV EXPORT & IMPORT
+// ============================================================
+
+router.get(
+  "/week-plans/:id/blocks/export-csv",
+  supabaseAuth,
+  requireRole(['schoolAdmin', 'admin', 'superAdmin', 'director']),
+  requireSchoolContext,
+  async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ message: "Invalid week plan ID" });
+      const plan = await storage.getWeekPlanById(id);
+      if (!plan) return res.status(404).json({ message: "Week plan not found" });
+      const schoolId = parseInt(req.schoolId);
+      if (plan.schoolId !== schoolId) return res.status(403).json({ message: "Access denied" });
+
+      const skeletonBlocks = await storage.getSkeletonBlocksBySkeletonId(plan.skeletonId);
+      const weekPlanBlocks = await storage.getWeekPlanBlocksByWeekPlanId(id);
+
+      const header = ["day_of_week", "start_time", "end_time", "block_type", "title", "description", "objectives", "lesson_link", "notes"];
+      const hintRow = ["Monday", "08:00", "09:00", "curriculum", "Science Basics – Intro", "Overview of the lesson", "Obj 1; Obj 2", "https://example.com/lesson", "Any extra notes"];
+
+      const rows = skeletonBlocks.map((sb) => {
+        const wb = weekPlanBlocks.find((b) => b.skeletonBlockId === sb.id);
+        const objectives = Array.isArray(wb?.objectives) ? (wb!.objectives as string[]).join("; ") : "";
+        return [
+          DAY_NUMBER_TO_NAME[sb.dayOfWeek] || String(sb.dayOfWeek),
+          sb.startTime,
+          sb.endTime,
+          sb.blockType,
+          wb?.title || sb.defaultTitle || "",
+          wb?.description || "",
+          objectives,
+          wb?.lessonLink || "",
+          wb?.notes || "",
+        ];
+      });
+
+      const csv = csvStringify([header, hintRow, ...rows]);
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="week-plan-${id}-blocks.csv"`);
+      res.send(csv);
+    } catch (error) {
+      console.error("Error exporting week plan CSV:", error);
+      res.status(500).json({ message: "Failed to export CSV" });
+    }
+  }
+);
+
+router.post(
+  "/week-plans/:id/blocks/import-csv",
+  supabaseAuth,
+  requireRole(['schoolAdmin', 'admin', 'superAdmin', 'director']),
+  requireSchoolContext,
+  async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ message: "Invalid week plan ID" });
+      const plan = await storage.getWeekPlanById(id);
+      if (!plan) return res.status(404).json({ message: "Week plan not found" });
+      const schoolId = parseInt(req.schoolId);
+      if (plan.schoolId !== schoolId) return res.status(403).json({ message: "Access denied" });
+
+      if (!req.files || !req.files.file) {
+        return res.status(400).json({ message: "No file uploaded" });
+      }
+      const uploadedFile = req.files.file as UploadedFile;
+      if (!uploadedFile.name.toLowerCase().endsWith('.csv')) {
+        return res.status(400).json({ message: "Only CSV files are allowed" });
+      }
+      if (isRtfOrBinary(uploadedFile.data)) {
+        return res.status(400).json({ message: "File appears to be binary or RTF. Only plain UTF-8 CSV files are supported." });
+      }
+
+      const content = uploadedFile.data.toString("utf-8");
+      let records: any[];
+      try {
+        records = csvParse(content, { columns: true, skip_empty_lines: true, trim: true });
+      } catch (e: any) {
+        return res.status(400).json({ message: `CSV parse error: ${e.message}` });
+      }
+
+      if (records.length === 0) return res.status(400).json({ message: "CSV file is empty" });
+
+      // Skip hint rows
+      const isHintRow = (r: any) =>
+        (r.title || "").toLowerCase().includes("science basics") &&
+        (r.lesson_link || "").includes("example.com");
+
+      const dataRows = records.filter((r) => !isHintRow(r));
+
+      const errors: string[] = [];
+      const updates: { dayOfWeek: number; startTime: string; data: any }[] = [];
+
+      for (let i = 0; i < dataRows.length; i++) {
+        const r = dataRows[i];
+        const rowNum = i + 1;
+        const dayStr = (r.day_of_week || "").trim();
+        const dayNum = DAY_NAME_TO_NUMBER[dayStr];
+        if (dayNum === undefined) {
+          errors.push(`Row ${rowNum}: Invalid day_of_week "${dayStr}".`);
+          continue;
+        }
+        const startTime = (r.start_time || "").trim().substring(0, 5);
+        if (!TIME_REGEX.test(startTime)) {
+          errors.push(`Row ${rowNum}: Invalid start_time "${r.start_time}".`);
+          continue;
+        }
+        const objectives = (r.objectives || "").split(";").map((s: string) => s.trim()).filter(Boolean);
+        updates.push({
+          dayOfWeek: dayNum,
+          startTime,
+          data: {
+            title: (r.title || "").trim() || null,
+            description: (r.description || "").trim() || null,
+            objectives,
+            lessonLink: (r.lesson_link || "").trim() || null,
+            notes: (r.notes || "").trim() || null,
+          },
+        });
+      }
+
+      if (errors.length > 0) {
+        return res.status(400).json({ message: "Validation errors in CSV", errors });
+      }
+
+      const userId = req.user?.id;
+      if (!userId) return res.status(401).json({ message: "Not authenticated" });
+
+      await storage.bulkUpdateWeekPlanBlocks(id, updates, userId);
+      res.json({ success: true, updated: updates.length });
+    } catch (error: any) {
+      console.error("Error importing week plan CSV:", error);
+      res.status(500).json({ message: "Failed to import CSV", error: error.message });
     }
   }
 );

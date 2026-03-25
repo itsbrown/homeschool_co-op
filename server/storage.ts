@@ -781,6 +781,7 @@ export interface IStorage {
   updateSkeletonBlock(id: number, block: Partial<InsertSkeletonBlock>): Promise<SkeletonBlock | undefined>;
   deleteSkeletonBlock(id: number): Promise<void>;
   reorderSkeletonBlocks(skeletonId: number, blockIds: number[]): Promise<void>;
+  bulkReplaceSkeletonBlocks(skeletonId: number, blocks: Omit<InsertSkeletonBlock, 'skeletonId' | 'createdBy'>[], createdBy: number): Promise<SkeletonBlock[]>;
 
   // Schedule Builder - Week Plans
   getWeekPlansBySkeletonId(skeletonId: number): Promise<WeekPlan[]>;
@@ -798,6 +799,7 @@ export interface IStorage {
   updateWeekPlanBlock(id: number, block: Partial<InsertWeekPlanBlock>, updatedBy: number): Promise<WeekPlanBlock | undefined>;
   deleteWeekPlanBlock(id: number): Promise<void>;
   markBlockCompleted(id: number, completedBy: number): Promise<WeekPlanBlock | undefined>;
+  bulkUpdateWeekPlanBlocks(weekPlanId: number, updates: { dayOfWeek: number; startTime: string; data: Partial<InsertWeekPlanBlock> }[], updatedBy: number): Promise<void>;
 
   // Schedule Builder - Block History
   getBlockHistory(blockId: number): Promise<WeekPlanBlockHistory[]>;
@@ -7782,6 +7784,9 @@ import { DatabaseStorage } from "./dbStorage";
       async reorderSkeletonBlocks(skeletonId: number, blockIds: number[]): Promise<void> {
         return this.dbStorage.reorderSkeletonBlocks(skeletonId, blockIds);
       }
+      async bulkReplaceSkeletonBlocks(skeletonId: number, blocks: Omit<InsertSkeletonBlock, 'skeletonId' | 'createdBy'>[], createdBy: number): Promise<SkeletonBlock[]> {
+        return this.dbStorage.bulkReplaceSkeletonBlocks(skeletonId, blocks, createdBy);
+      }
       async getWeekPlansBySkeletonId(skeletonId: number): Promise<WeekPlan[]> {
         return this.dbStorage.getWeekPlansBySkeletonId(skeletonId);
       }
@@ -7820,6 +7825,9 @@ import { DatabaseStorage } from "./dbStorage";
       }
       async markBlockCompleted(id: number, completedBy: number): Promise<WeekPlanBlock | undefined> {
         return this.dbStorage.markBlockCompleted(id, completedBy);
+      }
+      async bulkUpdateWeekPlanBlocks(weekPlanId: number, updates: { dayOfWeek: number; startTime: string; data: Partial<InsertWeekPlanBlock> }[], updatedBy: number): Promise<void> {
+        return this.dbStorage.bulkUpdateWeekPlanBlocks(weekPlanId, updates, updatedBy);
       }
       async getBlockHistory(blockId: number): Promise<WeekPlanBlockHistory[]> {
         return this.dbStorage.getBlockHistory(blockId);
