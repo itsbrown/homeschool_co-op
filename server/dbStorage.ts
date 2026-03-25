@@ -206,6 +206,17 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(userRoles).where(eq(userRoles.userId, userId));
   }
 
+  async createUserRole(data: { userId: number; role: string; schoolId?: number | null; isPrimary?: boolean }): Promise<UserRole> {
+    const db = await getDb();
+    const [created] = await db.insert(userRoles).values({
+      userId: data.userId,
+      role: data.role,
+      schoolId: data.schoolId ?? null,
+      isPrimary: data.isPrimary ?? false,
+    }).returning();
+    return created;
+  }
+
   async deleteUserRolesByUserId(userId: number): Promise<void> {
     const db = await getDb();
     await db.delete(userRoles).where(eq(userRoles.userId, userId));

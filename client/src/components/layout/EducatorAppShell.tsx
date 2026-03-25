@@ -5,7 +5,8 @@ import RoleSwitcher from "@/components/RoleSwitcher.tsx";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetTrigger, SheetClose } from "@/components/ui/sheet";
-import { LogOut, Menu, User, Bell, Home, BookOpen, Calendar, Clock, Users, Settings, GraduationCap, PlayCircle, Shield, HelpCircle } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { LogOut, Menu, User, Bell, Home, BookOpen, Calendar, Clock, Users, Settings, GraduationCap, PlayCircle, Shield, HelpCircle, ChevronDown, ClipboardList, LayoutTemplate, CalendarDays, UserCheck } from "lucide-react";
 import StaffGuideModal from "@/components/StaffGuideModal";
 import { StaffGuideProvider } from "@/contexts/StaffGuideContext";
 import { cn } from "@/lib/utils";
@@ -71,12 +72,22 @@ const educatorNavigationItems = [
   },
 ];
 
+// Director Academics nav items — shown in a collapsible section when activeRole === 'director'
+const directorAcademicsItems = [
+  { href: "/educator/templates", title: "Weekly Templates", icon: LayoutTemplate },
+  { href: "/educator/week-plans", title: "Week Planner", icon: CalendarDays },
+  { href: "/educator/assessments", title: "Assessments", icon: ClipboardList },
+  { href: "/educator/attendance", title: "Attendance", icon: UserCheck },
+];
+
 function EducatorSidebar() {
   const [location] = useLocation();
   const { user, signOut } = useAuth();
   const { activeRole, availableRoles } = useRole();
   const [userSchool, setUserSchool] = useState<any>(null);
+  const [academicsOpen, setAcademicsOpen] = useState(true);
   
+  const isDirector = activeRole === 'director';
   const hasSuperAdminRole = (availableRoles || []).some(r => r.role.toLowerCase() === 'superadmin');
 
   const { data: notifications = [] } = useQuery<Notification[]>({
@@ -116,6 +127,7 @@ function EducatorSidebar() {
       mentor: 'Mentor',
       educator: 'Educator',
       teacher: 'Teacher',
+      director: 'Director of Education',
     };
     return labels[role.toLowerCase()] || 'Educator';
   };
@@ -172,6 +184,40 @@ function EducatorSidebar() {
               </Link>
             );
           })}
+
+          {/* Director-only: collapsible Academics section */}
+          {isDirector && (
+            <Collapsible open={academicsOpen} onOpenChange={setAcademicsOpen}>
+              <CollapsibleTrigger className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-300 hover:bg-slate-800 hover:text-white transition-colors">
+                <BookOpen className="h-5 w-5" />
+                <span className="flex-1 text-left">Academics</span>
+                <ChevronDown className={cn("h-4 w-4 transition-transform", academicsOpen && "rotate-180")} />
+              </CollapsibleTrigger>
+              <CollapsibleContent className="ml-4 mt-1 space-y-1">
+                {directorAcademicsItems.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = location === item.href || location.startsWith(item.href + '/');
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={cn(
+                        "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                        isActive
+                          ? "bg-emerald-600 text-white"
+                          : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                      )}
+                      data-testid={`nav-director-${item.href.split('/').pop()}`}
+                    >
+                      <Icon className="h-4 w-4" />
+                      <span>{item.title}</span>
+                    </Link>
+                  );
+                })}
+              </CollapsibleContent>
+            </Collapsible>
+          )}
+
           {hasSuperAdminRole && (
             <Link
               href="/superadmin/schools"
@@ -272,6 +318,7 @@ export default function EducatorAppShell({ children }: EducatorAppShellProps) {
       mentor: 'Mentor',
       educator: 'Educator',
       teacher: 'Teacher',
+      director: 'Director of Education',
     };
     return labels[role.toLowerCase()] || 'Educator';
   };

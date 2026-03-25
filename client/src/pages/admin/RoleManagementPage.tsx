@@ -47,6 +47,7 @@ export default function RoleManagementPage() {
     const baseRoles = [
       { value: 'parent', label: 'Parent' },
       { value: 'teacher', label: 'Educator/Teacher' },
+      { value: 'director', label: 'Director of Education' },
       { value: 'student', label: 'Learner/Student' }
     ];
 

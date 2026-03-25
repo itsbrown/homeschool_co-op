@@ -98,6 +98,7 @@ export function InvitationsPage() {
     const roleLabels: Record<string, string> = {
       schoolAdmin: "School Admin",
       teacher: "Teacher",
+      director: "Director of Education",
       admin: "Admin",
       superAdmin: "Super Admin"
     };
@@ -149,6 +150,7 @@ export function InvitationsPage() {
                       <SelectContent>
                         <SelectItem value="schoolAdmin">School Admin</SelectItem>
                         <SelectItem value="teacher">Teacher</SelectItem>
+                        <SelectItem value="director">Director of Education</SelectItem>
                         <SelectItem value="admin">Admin</SelectItem>
                         <SelectItem value="superAdmin">Super Admin</SelectItem>
                       </SelectContent>

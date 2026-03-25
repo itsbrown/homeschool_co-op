@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { sessions, insertSessionSchema } from "@shared/schema";
 import { supabaseAuth } from "../middleware/supabase-auth";
-import { requireAdmin } from "../middleware/auth0-auth";
+import { requireRole } from "../middleware/auth0-auth";
 import { requireSchoolContext } from "../middleware/require-school-context";
 import { storage } from "../storage";
 import { getDb } from "../db";
@@ -9,7 +9,12 @@ import { eq, and, desc, inArray } from "drizzle-orm";
 
 const router = Router();
 
-router.get("/", supabaseAuth, requireAdmin, requireSchoolContext, async (req: any, res) => {
+// Director has full access to admin-sessions routes.
+// Note: requireAdmin is intentionally NOT used here because it uses 'school-admin' (hyphen)
+// which does NOT match the DB value 'schoolAdmin' (camelCase), causing 403s for school admins.
+const requireAdminOrDirector = requireRole(['admin', 'superAdmin', 'schoolAdmin', 'director']);
+
+router.get("/", supabaseAuth, requireAdminOrDirector, requireSchoolContext, async (req: any, res) => {
   try {
     const db = getDb();
     const schoolId = parseInt(req.schoolId);
@@ -61,7 +66,7 @@ router.get("/open", supabaseAuth, async (req: any, res) => {
   }
 });
 
-router.get("/:id", supabaseAuth, requireAdmin, requireSchoolContext, async (req: any, res) => {
+router.get("/:id", supabaseAuth, requireAdminOrDirector, requireSchoolContext, async (req: any, res) => {
   try {
     const db = getDb();
     const schoolId = parseInt(req.schoolId);
@@ -86,7 +91,7 @@ router.get("/:id", supabaseAuth, requireAdmin, requireSchoolContext, async (req:
   }
 });
 
-router.post("/", supabaseAuth, requireAdmin, requireSchoolContext, async (req: any, res) => {
+router.post("/", supabaseAuth, requireAdminOrDirector, requireSchoolContext, async (req: any, res) => {
   try {
     const db = getDb();
     const schoolId = parseInt(req.schoolId);
@@ -108,7 +113,7 @@ router.post("/", supabaseAuth, requireAdmin, requireSchoolContext, async (req: a
   }
 });
 
-router.patch("/:id", supabaseAuth, requireAdmin, requireSchoolContext, async (req: any, res) => {
+router.patch("/:id", supabaseAuth, requireAdminOrDirector, requireSchoolContext, async (req: any, res) => {
   try {
     const db = getDb();
     const schoolId = parseInt(req.schoolId);
@@ -144,7 +149,7 @@ router.patch("/:id", supabaseAuth, requireAdmin, requireSchoolContext, async (re
   }
 });
 
-router.delete("/:id", supabaseAuth, requireAdmin, requireSchoolContext, async (req: any, res) => {
+router.delete("/:id", supabaseAuth, requireAdminOrDirector, requireSchoolContext, async (req: any, res) => {
   try {
     const db = getDb();
     const schoolId = parseInt(req.schoolId);

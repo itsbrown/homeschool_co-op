@@ -103,6 +103,7 @@ export interface IStorage {
 
   // User Role methods
   getUserRolesByUserId(userId: number): Promise<UserRole[]>;
+  createUserRole(data: { userId: number; role: string; schoolId?: number | null; isPrimary?: boolean }): Promise<UserRole>;
   deleteUserRolesByUserId(userId: number): Promise<void>;
   getParentsBySchoolId(schoolId: number): Promise<User[]>;
 
@@ -1215,6 +1216,18 @@ export class MemStorage implements IStorage {
 
   async getUserRolesByUserId(userId: number): Promise<UserRole[]> {
     return [];
+  }
+
+  async createUserRole(data: { userId: number; role: string; schoolId?: number | null; isPrimary?: boolean }): Promise<UserRole> {
+    // MemStorage doesn't track user roles - return a stub
+    return {
+      id: Date.now(),
+      userId: data.userId,
+      role: data.role,
+      schoolId: data.schoolId ?? null,
+      isPrimary: data.isPrimary ?? false,
+      createdAt: new Date(),
+    } as UserRole;
   }
 
   async deleteUserRolesByUserId(userId: number): Promise<void> {
@@ -5336,6 +5349,14 @@ import { DatabaseStorage } from "./dbStorage";
         return await this.dbStorage.getUserRolesByUserId(userId);
       } catch (error) {
         return this.memStorage.getUserRolesByUserId(userId);
+      }
+    }
+
+    async createUserRole(data: { userId: number; role: string; schoolId?: number | null; isPrimary?: boolean }): Promise<UserRole> {
+      try {
+        return await this.dbStorage.createUserRole(data);
+      } catch (error) {
+        return this.memStorage.createUserRole(data);
       }
     }
 

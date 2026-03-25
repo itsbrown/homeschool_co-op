@@ -6,10 +6,11 @@ import { nlpService } from "./nlp-service";
 import bcrypt from "bcryptjs";
 import session from "express-session";
 import { z } from "zod";
-import { insertUserSchema, insertCurriculumSchema, insertLessonSchema, insertEventSchema, insertMarketplaceItemSchema, insertKnowledgeBaseSchema, insertChildSchema, insertEmergencyContactSchema, insertProgramSchema, insertProgramEnrollmentSchema, insertMembershipEnrollmentSchema, userRoles, users } from "@shared/schema";
+import { insertUserSchema, insertCurriculumSchema, insertLessonSchema, insertEventSchema, insertMarketplaceItemSchema, insertKnowledgeBaseSchema, insertChildSchema, insertEmergencyContactSchema, insertProgramSchema, insertProgramEnrollmentSchema, insertMembershipEnrollmentSchema, userRoles, users, systemRoles, type SystemRole } from "@shared/schema";
 import { getDb } from "./db";
 import { eq } from "drizzle-orm";
 import { supabaseAuth } from "./middleware/supabase-auth";
+import { requireRole } from "./middleware/auth0-auth";
 
 // Type for authenticated requests with our auth structure
 interface AuthenticatedRequest extends Request {
@@ -233,36 +234,99 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
-  // Role update endpoint for Firebase users
-  app.post("/api/auth/update-role", async (req, res) => {
-    try {
-      const { role } = req.body;
+  // Role assignment endpoint — requires authentication and enforces a role hierarchy.
+  // Dual-write: updates both users.role (legacy) and user_roles table (new system).
+  // Hierarchy: superAdmin → any role; admin → any except superAdmin;
+  //            schoolAdmin → teacher/director/educator/parent/student (own school only)
+  app.post(
+    "/api/auth/update-role",
+    supabaseAuth,
+    requireRole(['superAdmin', 'admin', 'schoolAdmin']),
+    async (req: any, res) => {
+      try {
+        const callerDbId: number | undefined = req.user?.id;
+        if (!callerDbId) {
+          return res.status(401).json({ message: 'Authentication required' });
+        }
 
-      if (!role || !['parent', 'instructor', 'schoolAdmin', 'admin'].includes(role)) {
-        return res.status(400).json({ message: 'Invalid role provided' });
+        const { targetUserId, role: newRole } = req.body;
+
+        // Validate new role is a known system role
+        if (!newRole || typeof newRole !== 'string' || !(systemRoles as readonly string[]).includes(newRole)) {
+          return res.status(400).json({ message: 'Invalid role provided' });
+        }
+        const typedRole = newRole as SystemRole;
+
+        // Determine caller's effective role from the database (user_roles is source of truth)
+        const callerDbRoles = await storage.getUserRolesByUserId(callerDbId);
+        const callerRoleNames = callerDbRoles.map((r: any) => r.role as string);
+        let callerRole: string;
+        if (callerRoleNames.includes('superAdmin')) callerRole = 'superAdmin';
+        else if (callerRoleNames.includes('admin')) callerRole = 'admin';
+        else if (callerRoleNames.includes('schoolAdmin')) callerRole = 'schoolAdmin';
+        else callerRole = req.auth?.role ?? '';
+
+        // Apply role-assignment hierarchy
+        const SUPERADMIN_ONLY: SystemRole[] = ['superAdmin'];
+        const SCHOOLADMIN_ASSIGNABLE: SystemRole[] = ['teacher', 'director', 'educator', 'parent', 'student'];
+
+        if (callerRole === 'schoolAdmin' && !SCHOOLADMIN_ASSIGNABLE.includes(typedRole)) {
+          return res.status(403).json({ message: `School admins cannot assign the '${typedRole}' role` });
+        }
+        if (callerRole === 'admin' && SUPERADMIN_ONLY.includes(typedRole)) {
+          return res.status(403).json({ message: `Admins cannot assign the '${typedRole}' role` });
+        }
+
+        // Determine target user — defaults to self if not specified
+        const userId = targetUserId ? parseInt(targetUserId, 10) : callerDbId;
+        if (isNaN(userId)) {
+          return res.status(400).json({ message: 'Invalid targetUserId' });
+        }
+
+        // Fetch target user via storage to validate existence and enforce tenant scope
+        const targetUser = await storage.getUser(userId);
+        if (!targetUser) {
+          return res.status(404).json({ message: 'User not found' });
+        }
+
+        // Tenant scope enforcement: schoolAdmin may only modify users in their own school
+        if (callerRole === 'schoolAdmin') {
+          const callerUser = await storage.getUser(callerDbId);
+          if (!callerUser?.schoolId || callerUser.schoolId !== targetUser.schoolId) {
+            return res.status(403).json({ message: 'School admins can only assign roles to users in their own school' });
+          }
+        }
+
+        // Dual-write: update users.role (legacy) and user_roles (new system) via storage
+        const updatedUser = await storage.updateUser(userId, { role: typedRole });
+        if (!updatedUser) {
+          return res.status(404).json({ message: 'User not found' });
+        }
+
+        // Upsert user_roles entry for the new role (dual-write to new system via storage)
+        const existingRoles = await storage.getUserRolesByUserId(userId);
+        const alreadyExists = existingRoles.some((r: any) => r.role === typedRole);
+        if (!alreadyExists) {
+          await storage.createUserRole({
+            userId,
+            role: typedRole,
+            schoolId: updatedUser.schoolId ?? null,
+            isPrimary: false,
+          });
+        }
+
+        res.setHeader('Content-Type', 'application/json');
+        return res.status(200).json({
+          message: 'Role updated successfully',
+          user: { id: updatedUser.id, email: updatedUser.email, role: typedRole },
+        });
+      } catch (error) {
+        console.error('Error updating user role:', error);
+        res.setHeader('Content-Type', 'application/json');
+        return res.status(500).json({ message: 'Internal server error' });
       }
-
-      // Update the user role and return updated user data
-      const updatedUser = {
-        id: 1, // This would be dynamic in a real system
-        name: req.body.name || 'User',
-        email: req.body.email || '',
-        role: role,
-        avatar: null,
-        subscription: 'free'
-      };
-
-      res.setHeader('Content-Type', 'application/json');
-      return res.status(200).json({
-        message: 'Role updated successfully',
-        user: updatedUser
-      });
-    } catch (error) {
-      console.error('Error updating user role:', error);
-      res.setHeader('Content-Type', 'application/json');
-      return res.status(500).json({ message: 'Internal server error' });
-    }
-  });
+    },
+  );
 
   // Aliases already defined at top of registerRoutes function
 

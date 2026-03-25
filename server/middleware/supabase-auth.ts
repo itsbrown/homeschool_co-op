@@ -262,9 +262,10 @@ export const supabaseAuth = async (
     // Only include non-sensitive metadata from user_metadata (like name, avatar)
     const { role: _, school_id: __, ...safeUserMetadata } = user.user_metadata || {};
     
-    // Check user_roles table for superAdmin role (multi-role system)
-    // This is the source of truth for roles in the new system
-    let effectiveRole = dbUserData?.role || 'parent';
+    // Determine effective role: use activeRole (persisted active role) when non-null,
+    // fall back to users.role, then default to 'parent'.
+    // This ensures a user who has switched to 'director' is correctly identified as director.
+    let effectiveRole = dbUserData?.activeRole ?? dbUserData?.role ?? 'parent';
     if (dbUserId) {
       try {
         const { getDb } = await import('../db');
@@ -280,7 +281,8 @@ export const supabaseAuth = async (
         console.log('📋 supabaseAuth - User roles from user_roles table:', userRolesList);
         
         // If user has superAdmin in their roles, set effectiveRole to superAdmin
-        if (userRolesList.some((r: string) => r.toLowerCase() === 'superadmin')) {
+        // (unless they have explicitly switched to a different active role)
+        if (!dbUserData?.activeRole && userRolesList.some((r: string) => r.toLowerCase() === 'superadmin')) {
           effectiveRole = 'superAdmin';
           console.log('🔑 supabaseAuth - User has superAdmin role in user_roles table');
         }

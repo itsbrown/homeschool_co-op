@@ -284,6 +284,15 @@ async function runMigrations() {
       console.log('✅ Migration completed: role enum type already exists');
     }
     
+    // Add 'director' role value to existing role enum (idempotent)
+    console.log('Running migration: Adding director role value to enum...');
+    try {
+      await db.execute(sql.raw(`ALTER TYPE role ADD VALUE IF NOT EXISTS 'director'`));
+      console.log('✅ Migration completed: director value added to role enum');
+    } catch (directorEnumError) {
+      console.log('✅ Migration completed: director value already exists in role enum');
+    }
+    
     // Add missing role values to existing role enum if they don't exist
     console.log('Running migration: Adding missing role values to enum...');
     const rolesToAdd = ['educator', 'learner', 'mentor'];
