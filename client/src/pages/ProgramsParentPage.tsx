@@ -242,16 +242,10 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
   });
 
   // Transform school admin classes data to match expected format
-  // Filter out expired classes (endDate < today) for parent-facing view
-  const now = new Date();
+  // The server already filters by status, endDate, isAdminOnly, and category visibility.
+  // Do not re-apply those filters here — the server is the single source of truth.
   const classesData: ClassesResponse = {
     classes: ((schoolClassesResponse as any)?.items || [])
-      .filter((item: any) => {
-        if (item.endDate && new Date(item.endDate) < now) return false;
-        // Hide classes whose category has been hidden by an admin
-        if (item.categoryId && item.categoryIsPublic === false) return false;
-        return true;
-      })
       .map((item: any) => ({
         id: item.id,
         title: item.title,

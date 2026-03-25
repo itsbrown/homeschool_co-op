@@ -6067,7 +6067,8 @@ async function seedDefaultCategories(schoolId: number): Promise<void> {
         schoolId: schoolId,
         name: category.name,
         description: category.description,
-        isActive: true
+        isActive: true,
+        isPublic: true
       });
       seededCount++;
       console.log(`✅ Created default category: ${category.name}`);
@@ -6140,7 +6141,8 @@ router.post("/categories", supabaseAuth, async (req: any, res) => {
       schoolId: user.schoolId,
       name,
       description: description || null,
-      isActive: true
+      isActive: true,
+      isPublic: true
     });
 
     res.status(201).json(newCategory);

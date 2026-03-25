@@ -232,6 +232,24 @@ async function runMigrations() {
     `);
     console.log('✅ Migration completed: existing class categories mapped to category IDs');
     
+    // Fix category visibility: ensure all categories are public by default
+    // (the table was originally created without is_public column, so existing rows may be false)
+    console.log('Running migration: Ensuring all categories are public by default...');
+    try {
+      // Add is_public column if it doesn't exist (idempotent)
+      await db.execute(sql`
+        ALTER TABLE categories 
+        ADD COLUMN IF NOT EXISTS is_public BOOLEAN NOT NULL DEFAULT true;
+      `);
+      // Repair any categories that ended up with is_public = false
+      await db.execute(sql`
+        UPDATE categories SET is_public = true WHERE is_public = false;
+      `);
+      console.log('✅ Migration completed: all categories set to is_public = true');
+    } catch (categoryPublicError) {
+      console.log('Migration note: Could not fix category is_public:', categoryPublicError instanceof Error ? categoryPublicError.message : String(categoryPublicError));
+    }
+    
     // Fix discount ID sequence to prevent duplicate key errors
     console.log('Running migration: Fixing discounts table ID sequence...');
     try {

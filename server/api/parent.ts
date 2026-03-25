@@ -1257,12 +1257,25 @@ router.get('/classes', supabaseAuth, async (req: any, res) => {
     console.log(`📊 Parent classes for schoolId=${effectiveSchoolId}: ${allClasses.length} total, statuses: ${[...new Set(allClasses.map(c => c.status))].join(', ')}`);
 
     // Filter out cancelled, completed, expired, admin-only, and hidden-category classes
-    const now = new Date();
+    // Normalize today to a YYYY-MM-DD string (UTC) so same-day end dates are not expired
+    const todayStr = new Date().toISOString().slice(0, 10);
     const filtered = classesWithEnrichment.filter((cls) => {
-      if (['cancelled', 'completed'].includes(cls.status)) return false;
-      if (cls.endDate && new Date(cls.endDate) < now) return false;
-      if (cls.isAdminOnly) return false;
-      if (cls.categoryId && !cls.categoryIsPublic) return false;
+      if (['cancelled', 'completed'].includes(cls.status)) {
+        console.log(`🔍 [parent/classes] Excluding class ${cls.id} "${cls.title}": status=${cls.status}`);
+        return false;
+      }
+      if (cls.endDate && cls.endDate < todayStr) {
+        console.log(`🔍 [parent/classes] Excluding class ${cls.id} "${cls.title}": endDate=${cls.endDate} < today=${todayStr}`);
+        return false;
+      }
+      if (cls.isAdminOnly) {
+        console.log(`🔍 [parent/classes] Excluding class ${cls.id} "${cls.title}": isAdminOnly=true`);
+        return false;
+      }
+      if (cls.categoryId && !cls.categoryIsPublic) {
+        console.log(`🔍 [parent/classes] Excluding class ${cls.id} "${cls.title}": categoryId=${cls.categoryId} categoryIsPublic=${cls.categoryIsPublic}`);
+        return false;
+      }
       return true;
     });
 
