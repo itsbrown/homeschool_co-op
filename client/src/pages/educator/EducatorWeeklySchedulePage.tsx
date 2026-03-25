@@ -1,11 +1,16 @@
-import { useState, useMemo } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet";
 import {
   Printer,
   CalendarDays,
@@ -14,20 +19,12 @@ import {
   Loader2,
   ChevronLeft,
   ChevronRight,
-  ChevronDown,
   ExternalLink,
   Users,
   Target,
-  Pencil,
-  Save,
+  Clock,
 } from "lucide-react";
 import type { WeekPlan, WeekPlanBlock, WeeklySkeleton, SkeletonBlock } from "@shared/schema";
-import { cn } from "@/lib/utils";
-import { apiRequest, queryClient } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
-import { BLOCK_TYPE_COLORS, BLOCK_TYPE_BADGE_COLORS, type BlockType } from "@/lib/blockColors";
-import { useRole } from "@/contexts/RoleContext";
-import { useAuth } from "@/components/SupabaseProvider";
 
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const DAY_NAMES_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -47,7 +44,7 @@ function formatWeekDate(dateStr: string): string {
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-function formatWeekRange(dateStr: string): string {
+function formatWeekRange(dateStr: string, _operatingDays: string[]): string {
   if (!dateStr) return "";
   const start = new Date(dateStr + "T00:00:00");
   const end = new Date(start);
@@ -55,12 +52,46 @@ function formatWeekRange(dateStr: string): string {
   return `${start.toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${end.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
 }
 
-function blockTypeBadge(blockType: BlockType) {
-  const badgeColors = BLOCK_TYPE_BADGE_COLORS[blockType] || BLOCK_TYPE_BADGE_COLORS.flexible;
-  const label = blockType === "anchor" ? "Core" : blockType === "curriculum" ? "Curriculum" : "Flexible";
+function blockTypeBadge(blockType: string) {
+  if (blockType === "anchor") {
+    return (
+      <Badge className="text-[10px] px-1.5 py-0 bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-100">
+        Core
+      </Badge>
+    );
+  }
+  if (blockType === "curriculum") {
+    return (
+      <Badge className="text-[10px] px-1.5 py-0 bg-purple-100 text-purple-700 border-purple-200 hover:bg-purple-100">
+        Curriculum
+      </Badge>
+    );
+  }
   return (
-    <Badge className={cn("text-[10px] px-1.5 py-0", badgeColors)}>
-      {label}
+    <Badge className="text-[10px] px-1.5 py-0 bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-100">
+      Flexible
+    </Badge>
+  );
+}
+
+function blockTypeBadgeLg(blockType: string) {
+  if (blockType === "anchor") {
+    return (
+      <Badge className="px-2.5 py-0.5 bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-100">
+        Core
+      </Badge>
+    );
+  }
+  if (blockType === "curriculum") {
+    return (
+      <Badge className="px-2.5 py-0.5 bg-purple-100 text-purple-700 border-purple-200 hover:bg-purple-100">
+        Curriculum
+      </Badge>
+    );
+  }
+  return (
+    <Badge className="px-2.5 py-0.5 bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-100">
+      Flexible
     </Badge>
   );
 }
@@ -69,104 +100,155 @@ interface WeekPlanWithDetails extends WeekPlan {
   blocks: WeekPlanBlock[];
 }
 
+interface SelectedBlock {
+  skelBlock: SkeletonBlock;
+  planBlock: WeekPlanBlock | null;
+  dayIdx: number;
+}
+
 interface ScheduleGridProps {
   weekPlan: WeekPlanWithDetails;
   skeleton: WeeklySkeleton;
   skeletonBlocks: SkeletonBlock[];
-  completionOverrides: Record<number, boolean>;
-  onToggle: (planBlock: WeekPlanBlock) => void;
-  isToggling: boolean;
 }
 
-function InlineBlockDetails({ planBlock }: { planBlock: WeekPlanBlock | null | undefined }) {
-  if (!planBlock) return null;
+function BlockDetailSheet({
+  selected,
+  onClose,
+}: {
+  selected: SelectedBlock | null;
+  onClose: () => void;
+}) {
+  if (!selected) return null;
 
-  const objectives: string[] = Array.isArray(planBlock.objectives) ? (planBlock.objectives as string[]) : [];
-  const groups: string[] = Array.isArray(planBlock.groups) ? (planBlock.groups as string[]) : [];
-  const description = planBlock.description || "";
-  const notes = planBlock.notes || "";
-  const lessonLink = planBlock.lessonLink || "";
-
-  const hasContent = description || objectives.length > 0 || groups.length > 0 || notes || lessonLink;
-
-  if (!hasContent) {
-    return (
-      <p className="text-xs text-slate-400 italic py-2">No additional details for this block.</p>
-    );
-  }
+  const { skelBlock, planBlock, dayIdx } = selected;
+  const title = planBlock?.title || skelBlock.defaultTitle || "";
+  const description = planBlock?.description || skelBlock.defaultDescription || "";
+  const blockType = skelBlock.blockType || "flexible";
+  const isCompleted = planBlock?.isCompleted || false;
+  const objectives: string[] = Array.isArray(planBlock?.objectives) ? (planBlock.objectives as string[]) : [];
+  const groups: string[] = Array.isArray(planBlock?.groups) ? (planBlock.groups as string[]) : [];
+  const lessonLink = planBlock?.lessonLink || "";
+  const notes = planBlock?.notes || "";
 
   return (
-    <div className="space-y-3 pt-2 border-t border-slate-100 mt-2">
-      {description && (
-        <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-wrap">{description}</p>
-      )}
-
-      {objectives.length > 0 && (
-        <div>
-          <div className="flex items-center gap-1 mb-1">
-            <Target className="h-3 w-3 text-purple-500" />
-            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Objectives</span>
+    <Sheet open={!!selected} onOpenChange={(open) => !open && onClose()}>
+      <SheetContent
+        side="right"
+        className="w-full sm:max-w-md overflow-y-auto no-print"
+        aria-label={`Block details for ${title || "this block"}`}
+      >
+        <SheetHeader className="mb-6">
+          <div className="flex items-center gap-2 mb-1">
+            <Clock className="h-3.5 w-3.5 text-slate-400" />
+            <SheetDescription className="text-slate-500 text-sm">
+              {DAY_NAMES[dayIdx]} · {formatTime(skelBlock.startTime)} – {formatTime(skelBlock.endTime)}
+            </SheetDescription>
           </div>
-          <ul className="space-y-0.5">
-            {objectives.map((obj: string, i: number) => (
-              <li key={i} className="flex gap-1.5 text-xs text-slate-700">
-                <span className="text-purple-400 font-bold flex-shrink-0">•</span>
-                <span>{obj}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {groups.length > 0 && (
-        <div>
-          <div className="flex items-center gap-1 mb-1">
-            <Users className="h-3 w-3 text-amber-500" />
-            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Groups</span>
-          </div>
-          <div className="flex flex-wrap gap-1">
-            {groups.map((g: string, i: number) => (
-              <Badge key={i} className="px-1.5 py-0 text-[10px] bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-50">
-                {g}
+          <div className="flex items-center gap-2 flex-wrap">
+            {blockTypeBadgeLg(blockType)}
+            {isCompleted && (
+              <Badge className="px-2.5 py-0.5 bg-green-100 text-green-700 border-green-200 hover:bg-green-100 flex items-center gap-1">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                Completed
               </Badge>
-            ))}
+            )}
           </div>
-        </div>
-      )}
+          <SheetTitle className="text-xl font-bold text-slate-900 leading-snug mt-2">
+            {title || <span className="text-slate-400 italic">No title set</span>}
+          </SheetTitle>
+        </SheetHeader>
 
-      {notes && (
-        <div>
-          <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Notes</span>
-          <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-wrap bg-amber-50 border border-amber-100 rounded p-2 mt-1">
-            {notes}
-          </p>
-        </div>
-      )}
+        <div className="space-y-6">
+          {description && (
+            <section>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+                Description
+              </p>
+              <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
+                {description}
+              </p>
+            </section>
+          )}
 
-      {lessonLink && (
-        <>
-          <a
-            href={lessonLink}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium print:hidden"
-          >
-            <ExternalLink className="h-3 w-3" />
-            Open Lesson Resource
-          </a>
-          <span className="hidden print:inline text-xs text-slate-600">{lessonLink}</span>
-        </>
-      )}
-    </div>
+          {objectives.length > 0 && (
+            <section>
+              <div className="flex items-center gap-1.5 mb-2">
+                <Target className="h-3.5 w-3.5 text-purple-500" />
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                  Learning Objectives
+                </p>
+              </div>
+              <ul className="space-y-2">
+                {objectives.map((obj: string, i: number) => (
+                  <li key={i} className="flex gap-2 text-sm text-slate-700">
+                    <span className="text-purple-400 font-bold flex-shrink-0 mt-0.5">•</span>
+                    <span>{obj}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {groups.length > 0 && (
+            <section>
+              <div className="flex items-center gap-1.5 mb-2">
+                <Users className="h-3.5 w-3.5 text-amber-500" />
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                  Groups
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {groups.map((g: string, i: number) => (
+                  <Badge
+                    key={i}
+                    className="px-2.5 py-1 bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-50 text-sm"
+                  >
+                    {g}
+                  </Badge>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {notes && (
+            <section>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+                Notes
+              </p>
+              <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap bg-amber-50 border border-amber-100 rounded-md p-3">
+                {notes}
+              </p>
+            </section>
+          )}
+
+          {lessonLink && (
+            <section>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+                Resource
+              </p>
+              <Button asChild variant="outline" className="w-full justify-between">
+                <a href={lessonLink} target="_blank" rel="noopener noreferrer">
+                  <span>Open Lesson</span>
+                  <ExternalLink className="h-4 w-4 text-slate-400" />
+                </a>
+              </Button>
+            </section>
+          )}
+
+          {!description && !objectives.length && !groups.length && !notes && !lessonLink && (
+            <p className="text-sm text-slate-400 italic text-center py-4">
+              No additional details for this block.
+            </p>
+          )}
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }
 
-function ScheduleGrid({ weekPlan, skeleton, skeletonBlocks, completionOverrides, onToggle, isToggling }: ScheduleGridProps) {
-  const [expandedBlocks, setExpandedBlocks] = useState<Record<number, boolean>>({});
-
-  const toggleExpand = (blockId: number) => {
-    setExpandedBlocks((prev) => ({ ...prev, [blockId]: !prev[blockId] }));
-  };
+function ScheduleGrid({ weekPlan, skeleton, skeletonBlocks }: ScheduleGridProps) {
+  const [selectedBlock, setSelectedBlock] = useState<SelectedBlock | null>(null);
 
   const operatingDays: string[] = skeleton.operatingDays || [];
   const dayIndices = operatingDays
@@ -201,369 +283,191 @@ function ScheduleGrid({ weekPlan, skeleton, skeletonBlocks, completionOverrides,
   });
 
   return (
-    <div className="schedule-grid-container">
-      {/* Desktop table view */}
-      <div className="hidden md:block print:block">
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse schedule-table">
-            <thead>
-              <tr>
-                <th className="border border-slate-200 bg-gradient-to-b from-blue-50 to-blue-100 px-3 py-3 text-left text-sm font-semibold text-blue-900 w-28 print:bg-blue-50">
-                  Time
-                </th>
-                {dayIndices.map((dayIdx: number) => (
-                  <th
-                    key={dayIdx}
-                    className="border border-slate-200 bg-gradient-to-b from-blue-50 to-blue-100 px-3 py-3 text-center text-sm font-semibold text-blue-900 print:bg-blue-50"
-                  >
-                    <span className="hidden lg:inline print:inline">{DAY_NAMES[dayIdx]}</span>
-                    <span className="lg:hidden print:hidden">{DAY_NAMES_SHORT[dayIdx]}</span>
+    <>
+      <div className="schedule-grid-container">
+        {/* Desktop table view */}
+        <div className="hidden md:block print:block">
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse schedule-table">
+              <thead>
+                <tr>
+                  <th className="border border-slate-200 bg-gradient-to-b from-blue-50 to-blue-100 px-3 py-3 text-left text-sm font-semibold text-blue-900 w-28 print:bg-blue-50">
+                    Time
                   </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {uniqueTimeSlots.map((slot: SkeletonBlock, idx: number) => (
-                <tr
-                  key={`${slot.startTime}-${slot.endTime}-${idx}`}
-                  className={idx % 2 === 0 ? "bg-white" : "bg-slate-50/50"}
-                >
-                  <td className="border border-slate-200 px-3 py-2 text-xs text-slate-600 font-medium whitespace-nowrap align-top">
-                    <div>{formatTime(slot.startTime)}</div>
-                    <div className="text-slate-400">to {formatTime(slot.endTime)}</div>
-                  </td>
-                  {dayIndices.map((dayIdx: number) => {
-                    const key = `${dayIdx}-${slot.startTime}-${slot.endTime}-${slot.sortOrder}`;
-                    const skelBlock = skeletonBlocksByDayAndTime.get(key);
-                    const planBlock = skelBlock ? blocksBySkeletonBlockId.get(skelBlock.id) : null;
+                  {dayIndices.map((dayIdx: number) => (
+                    <th
+                      key={dayIdx}
+                      className="border border-slate-200 bg-gradient-to-b from-blue-50 to-blue-100 px-3 py-3 text-center text-sm font-semibold text-blue-900 print:bg-blue-50"
+                    >
+                      <span className="hidden lg:inline print:inline">{DAY_NAMES[dayIdx]}</span>
+                      <span className="lg:hidden print:hidden">{DAY_NAMES_SHORT[dayIdx]}</span>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {uniqueTimeSlots.map((slot: SkeletonBlock, idx: number) => (
+                  <tr
+                    key={`${slot.startTime}-${slot.endTime}-${idx}`}
+                    className={idx % 2 === 0 ? "bg-white" : "bg-slate-50/50"}
+                  >
+                    <td className="border border-slate-200 px-3 py-2 text-xs text-slate-600 font-medium whitespace-nowrap align-top">
+                      <div>{formatTime(slot.startTime)}</div>
+                      <div className="text-slate-400">to {formatTime(slot.endTime)}</div>
+                    </td>
+                    {dayIndices.map((dayIdx: number) => {
+                      const key = `${dayIdx}-${slot.startTime}-${slot.endTime}-${slot.sortOrder}`;
+                      const skelBlock = skeletonBlocksByDayAndTime.get(key);
+                      const planBlock = skelBlock ? blocksBySkeletonBlockId.get(skelBlock.id) : null;
 
-                    if (!skelBlock) {
+                      if (!skelBlock) {
+                        return (
+                          <td
+                            key={dayIdx}
+                            className="border border-slate-200 px-3 py-2 text-center text-slate-300 text-xs"
+                          >
+                            —
+                          </td>
+                        );
+                      }
+
+                      const title = planBlock?.title || skelBlock.defaultTitle || "";
+                      const description = planBlock?.description || skelBlock.defaultDescription || "";
+                      const isCompleted = planBlock?.isCompleted || false;
+                      const blockType = skelBlock.blockType || "flexible";
+                      const hasExtra =
+                        Array.isArray(planBlock?.objectives)
+                          ? (planBlock.objectives as string[]).length > 0
+                          : false;
+
                       return (
                         <td
                           key={dayIdx}
-                          className="day-col border border-slate-200 px-3 py-2 text-center text-slate-300 text-xs"
+                          className={`border border-slate-200 p-0 align-top ${isCompleted ? "bg-green-50/40 print:bg-green-50" : ""}`}
                         >
-                          —
-                        </td>
-                      );
-                    }
-
-                    const isExpanded = !!expandedBlocks[skelBlock.id];
-                    const title = planBlock?.title || skelBlock.defaultTitle || "";
-                    const effectiveCompleted = planBlock ? (completionOverrides[planBlock.id] ?? planBlock.isCompleted) : false;
-                    const blockType = skelBlock.blockType || "flexible";
-
-                    return (
-                      <td
-                        key={dayIdx}
-                        className={cn(
-                          "day-col border border-slate-200 p-0 align-top",
-                          effectiveCompleted ? "bg-green-50/40 print:bg-green-50" : ""
-                        )}
-                      >
-                        <div className="flex flex-col px-3 py-2 gap-1 min-w-0">
-                          <div className="flex items-center gap-1 flex-wrap">
-                            {blockTypeBadge(blockType)}
-                            {effectiveCompleted && (
-                              <CheckCircle2 className="h-3.5 w-3.5 text-green-500 flex-shrink-0 print:text-green-700" />
-                            )}
-                            <div className="ml-auto print:hidden" onClick={(e) => e.stopPropagation()}>
-                              {isToggling && planBlock ? (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400 print:hidden" />
-                              ) : (
-                                <Checkbox
-                                  data-testid={`complete-checkbox-${skelBlock.id}`}
-                                  checked={effectiveCompleted}
-                                  onCheckedChange={() => planBlock && onToggle(planBlock)}
-                                  disabled={!planBlock || isToggling}
-                                  aria-label={`Mark ${title || "block"} as ${effectiveCompleted ? "incomplete" : "complete"}`}
-                                />
-                              )}
-                            </div>
-                          </div>
                           <button
-                            data-testid={`expand-toggle-${skelBlock.id}`}
-                            className={cn(
-                              "w-full text-left hover:text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded transition-colors group print:hidden",
-                              effectiveCompleted ? "opacity-60" : ""
-                            )}
-                            onClick={() => toggleExpand(skelBlock.id)}
-                            aria-expanded={isExpanded}
-                            aria-label={`${isExpanded ? "Collapse" : "Expand"} details for ${title || "block"} on ${DAY_NAMES[dayIdx]}`}
+                            className="w-full h-full text-left px-3 py-2 hover:bg-blue-50/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 transition-colors group print:pointer-events-none"
+                            onClick={() => setSelectedBlock({ skelBlock, planBlock: planBlock ?? null, dayIdx })}
+                            aria-label={`View details for ${title || "block"} on ${DAY_NAMES[dayIdx]}`}
                           >
-                            <div className="flex items-start justify-between gap-1">
-                              <div className="flex-1 min-w-0">
-                                {title && (
-                                  <p className={cn(
-                                    "text-sm font-semibold text-slate-800 leading-tight",
-                                    effectiveCompleted && "line-through",
-                                    isExpanded ? "" : "line-clamp-2"
-                                  )}>
-                                    {title}
-                                  </p>
+                            <div className="flex flex-col gap-1 min-w-0">
+                              <div className="flex items-center gap-1 flex-wrap">
+                                {blockTypeBadge(blockType)}
+                                {isCompleted && (
+                                  <CheckCircle2 className="h-3.5 w-3.5 text-green-500 flex-shrink-0 print:text-green-700" />
                                 )}
                               </div>
-                              <ChevronDown
-                                className={cn(
-                                  "h-3.5 w-3.5 text-slate-400 mt-0.5 flex-shrink-0 transition-transform duration-200",
-                                  isExpanded ? "rotate-180" : ""
-                                )}
-                              />
+                              {title && (
+                                <p className="text-sm font-semibold text-slate-800 leading-tight line-clamp-2 print:line-clamp-none">
+                                  {title}
+                                </p>
+                              )}
+                              {description && (
+                                <p className="text-xs text-slate-500 mt-0.5 line-clamp-2 print:line-clamp-none">
+                                  {description}
+                                </p>
+                              )}
+                              {hasExtra && (
+                                <span className="text-[10px] text-blue-500 group-hover:text-blue-700 flex items-center gap-0.5 mt-0.5 print:hidden">
+                                  More detail
+                                  <ChevronRight className="h-3 w-3" />
+                                </span>
+                              )}
                             </div>
                           </button>
-                          {title && (
-                            <p className={cn(
-                              "hidden print:block text-sm font-semibold text-slate-800 leading-tight",
-                              effectiveCompleted && "line-through"
-                            )}>
-                              {title}
-                            </p>
-                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-xs text-slate-400 mt-2 print:hidden">
+            Click any block to view full lesson details.
+          </p>
+        </div>
 
-                          {isExpanded && (
-                            <div>
-                              <InlineBlockDetails planBlock={planBlock} />
-                              {planBlock && (
-                                <div className="flex items-center gap-2 pt-2 mt-2 border-t border-slate-100 print:hidden">
-                                  <Checkbox
-                                    id={`complete-desktop-${planBlock.id}`}
-                                    checked={effectiveCompleted}
-                                    onCheckedChange={() => onToggle(planBlock)}
-                                    disabled={isToggling}
-                                    aria-label={`Mark ${title || "block"} as ${effectiveCompleted ? "incomplete" : "complete"}`}
-                                  />
-                                  <label htmlFor={`complete-desktop-${planBlock.id}`} className="text-xs text-slate-600 cursor-pointer select-none">
-                                    {effectiveCompleted ? "Completed" : "Mark as complete"}
-                                  </label>
-                                  {isToggling && <Loader2 className="h-3 w-3 animate-spin text-slate-400 print:hidden" />}
-                                </div>
-                              )}
-                            </div>
-                          )}
-                          {!isExpanded && (
-                            <div className="hidden print:block">
-                              <InlineBlockDetails planBlock={planBlock} />
-                            </div>
-                          )}
+        {/* Mobile card view */}
+        <div className="md:hidden print:hidden space-y-4">
+          {dayIndices.map((dayIdx: number) => {
+            const dayBlocks = skeletonBlocks
+              .filter((sb: SkeletonBlock) => sb.dayOfWeek === dayIdx)
+              .sort((a: SkeletonBlock, b: SkeletonBlock) => {
+                if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
+                return a.startTime.localeCompare(b.startTime);
+              });
+
+            if (dayBlocks.length === 0) return null;
+
+            return (
+              <Card key={dayIdx} className="border-slate-200 shadow-sm">
+                <CardHeader className="py-3 px-4 bg-gradient-to-r from-blue-50 to-indigo-50">
+                  <CardTitle className="text-base font-semibold text-blue-900">
+                    {DAY_NAMES[dayIdx]}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  {dayBlocks.map((sb: SkeletonBlock) => {
+                    const planBlock = blocksBySkeletonBlockId.get(sb.id);
+                    const title = planBlock?.title || sb.defaultTitle || "";
+                    const description = planBlock?.description || sb.defaultDescription || "";
+                    const isCompleted = planBlock?.isCompleted || false;
+
+                    return (
+                      <button
+                        key={sb.id}
+                        className={`w-full text-left px-4 py-3 border-b last:border-b-0 border-slate-100 hover:bg-blue-50/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 transition-colors group ${
+                          isCompleted ? "bg-green-50/30" : ""
+                        }`}
+                        onClick={() =>
+                          setSelectedBlock({ skelBlock: sb, planBlock: planBlock ?? null, dayIdx })
+                        }
+                        aria-label={`View details for ${title || "block"} at ${formatTime(sb.startTime)}`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs text-slate-500 font-medium">
+                            {formatTime(sb.startTime)} – {formatTime(sb.endTime)}
+                          </span>
+                          <div className="flex items-center gap-1">
+                            {blockTypeBadge(sb.blockType || "flexible")}
+                            {isCompleted && <CheckCircle2 className="h-4 w-4 text-green-500" />}
+                          </div>
                         </div>
-                      </td>
+
+                        {title && (
+                          <p className="text-sm font-semibold text-slate-800 mt-1 text-left line-clamp-2">
+                            {title}
+                          </p>
+                        )}
+                        {description && (
+                          <p className="text-xs text-slate-500 mt-0.5 text-left line-clamp-2">
+                            {description}
+                          </p>
+                        )}
+                        <span className="text-[10px] text-blue-500 group-hover:text-blue-700 flex items-center gap-0.5 mt-1">
+                          Tap for full details
+                          <ChevronRight className="h-3 w-3" />
+                        </span>
+                      </button>
                     );
                   })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
-        <p className="text-xs text-slate-400 mt-2 print:hidden">
-          Click any block to expand full lesson details.
-        </p>
       </div>
 
-      {/* Mobile card view */}
-      <div className="md:hidden print:hidden space-y-4">
-        {dayIndices.map((dayIdx: number) => {
-          const dayBlocks = skeletonBlocks
-            .filter((sb: SkeletonBlock) => sb.dayOfWeek === dayIdx)
-            .sort((a: SkeletonBlock, b: SkeletonBlock) => {
-              if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
-              return a.startTime.localeCompare(b.startTime);
-            });
-
-          if (dayBlocks.length === 0) return null;
-
-          return (
-            <Card key={dayIdx} className="border-slate-200 shadow-sm">
-              <CardHeader className="py-3 px-4 bg-gradient-to-r from-blue-50 to-indigo-50">
-                <CardTitle className="text-base font-semibold text-blue-900">
-                  {DAY_NAMES[dayIdx]}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
-                {dayBlocks.map((sb: SkeletonBlock) => {
-                  const planBlock = blocksBySkeletonBlockId.get(sb.id);
-                  const title = planBlock?.title || sb.defaultTitle || "";
-                  const effectiveCompleted = planBlock ? (completionOverrides[planBlock.id] ?? planBlock.isCompleted) : false;
-                  const isExpanded = expandedBlocks[sb.id] || false;
-
-                  return (
-                    <div
-                      key={sb.id}
-                      className={cn(
-                        "px-4 py-3 border-b last:border-b-0 border-slate-100 border-l-4 transition-colors",
-                        BLOCK_TYPE_COLORS[sb.blockType || "flexible"] || "border-l-slate-200",
-                        effectiveCompleted ? "bg-green-50/30 opacity-60" : ""
-                      )}
-                    >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs text-slate-500 font-medium">
-                          {formatTime(sb.startTime)} – {formatTime(sb.endTime)}
-                        </span>
-                        <div className="flex items-center gap-1.5">
-                          {blockTypeBadge(sb.blockType || "flexible")}
-                          {effectiveCompleted && <CheckCircle2 className="h-4 w-4 text-green-500" />}
-                          <div onClick={(e) => e.stopPropagation()}>
-                            {isToggling && planBlock ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400" />
-                            ) : (
-                              <Checkbox
-                                data-testid={`complete-checkbox-mobile-${sb.id}`}
-                                checked={effectiveCompleted}
-                                onCheckedChange={() => planBlock && onToggle(planBlock)}
-                                disabled={!planBlock || isToggling}
-                                aria-label={`Mark ${planBlock?.title || sb.defaultTitle || "block"} as ${effectiveCompleted ? "incomplete" : "complete"}`}
-                              />
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                      <button
-                        data-testid={`expand-toggle-mobile-${sb.id}`}
-                        className={cn(
-                          "w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 group",
-                          effectiveCompleted ? "opacity-60" : ""
-                        )}
-                        onClick={() => toggleExpand(sb.id)}
-                        aria-expanded={isExpanded}
-                        aria-label={`${isExpanded ? "Collapse" : "Expand"} details for ${title || "block"} at ${formatTime(sb.startTime)}`}
-                      >
-                        <div className="flex items-start justify-between gap-1">
-                          <div className="flex-1 min-w-0">
-                            {title && (
-                              <p className={cn(
-                                "text-sm font-semibold text-slate-800 mt-1 text-left",
-                                effectiveCompleted && "line-through",
-                                isExpanded ? "" : "line-clamp-2"
-                              )}>
-                                {title}
-                              </p>
-                            )}
-                          </div>
-                          <span className="flex-shrink-0 text-blue-400 mt-1">
-                            <ChevronDown
-                              className={cn(
-                                "h-3.5 w-3.5 transition-transform duration-200",
-                                isExpanded ? "rotate-180" : ""
-                              )}
-                            />
-                          </span>
-                        </div>
-                      </button>
-
-                      {isExpanded && (
-                        <div className="mt-1">
-                          <InlineBlockDetails planBlock={planBlock} />
-                          {planBlock && (
-                            <div className="flex items-center gap-2 pt-2 mt-2 border-t border-slate-100">
-                              <Checkbox
-                                id={`complete-mobile-${planBlock.id}`}
-                                checked={effectiveCompleted}
-                                onCheckedChange={() => onToggle(planBlock)}
-                                disabled={isToggling}
-                                aria-label={`Mark ${title || "block"} as ${effectiveCompleted ? "incomplete" : "complete"}`}
-                              />
-                              <label htmlFor={`complete-mobile-${planBlock.id}`} className="text-xs text-slate-600 cursor-pointer select-none">
-                                {effectiveCompleted ? "Completed" : "Mark as complete"}
-                              </label>
-                              {isToggling && <Loader2 className="h-3 w-3 animate-spin text-slate-400" />}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-    </div>
+      <BlockDetailSheet
+        selected={selectedBlock}
+        onClose={() => setSelectedBlock(null)}
+      />
+    </>
   );
 }
 
-function WeekNoteSection({ weekPlan, canEdit }: { weekPlan: WeekPlan; canEdit: boolean }) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(weekPlan.notes || "");
-  const { toast } = useToast();
-
-  const saveMutation = useMutation({
-    mutationFn: (notes: string) =>
-      apiRequest("PATCH", `/api/schedule-builder/week-plans/${weekPlan.id}`, { notes }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/schedule-builder/week-plans", weekPlan.id] });
-      queryClient.invalidateQueries({ queryKey: ["/api/schedule-builder/week-plans", "published"] });
-      setEditing(false);
-      toast({ title: "Week note saved" });
-    },
-    onError: () => {
-      toast({ title: "Failed to save note", variant: "destructive" });
-    },
-  });
-
-  if (canEdit && editing) {
-    return (
-      <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg print:hidden">
-        <label className="text-sm font-semibold text-amber-800 block mb-1">Week Note</label>
-        <Textarea
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          rows={3}
-          className="text-sm bg-white border-amber-300 focus-visible:ring-amber-400"
-          placeholder="Add a note for this week..."
-        />
-        <div className="flex gap-2 mt-2">
-          <Button
-            size="sm"
-            onClick={() => saveMutation.mutate(draft.trim())}
-            disabled={saveMutation.isPending}
-          >
-            {saveMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Save className="h-3 w-3 mr-1" />}
-            Save
-          </Button>
-          <Button size="sm" variant="ghost" onClick={() => { setEditing(false); setDraft(weekPlan.notes || ""); }} disabled={saveMutation.isPending}>
-            Cancel
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  if (weekPlan.notes) {
-    return (
-      <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
-        <div className="flex items-start justify-between gap-2">
-          <div>
-            <strong>Week Note:</strong> {weekPlan.notes}
-          </div>
-          {canEdit && (
-            <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-amber-600 hover:text-amber-800 print:hidden" onClick={() => { setDraft(weekPlan.notes || ""); setEditing(true); }} aria-label="Edit week note">
-              <Pencil className="h-3.5 w-3.5" />
-            </Button>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  if (canEdit) {
-    return (
-      <div className="mb-4 print:hidden">
-        <Button size="sm" variant="outline" className="text-amber-600 border-amber-300 hover:bg-amber-50" onClick={() => { setDraft(""); setEditing(true); }}>
-          <Pencil className="h-3 w-3 mr-1" /> Add Week Note
-        </Button>
-      </div>
-    );
-  }
-
-  return null;
-}
-
 function WeekPlanView({ weekPlan }: { weekPlan: WeekPlan }) {
-  const { activeRole } = useRole();
-  const canEditWeekNote = ["schoolAdmin", "admin", "superAdmin"].includes(activeRole || "");
-  const { toast } = useToast();
-  const [completionOverrides, setCompletionOverrides] = useState<Record<number, boolean>>({});
-
   const { data: planDetails, isLoading: loadingDetails } = useQuery<WeekPlanWithDetails>({
     queryKey: ["/api/schedule-builder/week-plans", weekPlan.id],
   });
@@ -578,47 +482,18 @@ function WeekPlanView({ weekPlan }: { weekPlan: WeekPlan }) {
     enabled: !!weekPlan.skeletonId,
   });
 
-  const toggleCompletionMutation = useMutation({
-    mutationFn: ({ id, isCompleted }: { id: number; isCompleted: boolean }) =>
-      apiRequest("PATCH", `/api/schedule-builder/week-plan-blocks/${id}`, { isCompleted }),
-    onSuccess: (_res, { id }) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/schedule-builder/week-plans", weekPlan.id] });
-      setCompletionOverrides((prev) => {
-        const next = { ...prev };
-        delete next[id];
-        return next;
-      });
-    },
-    onError: (_err, { id }) => {
-      setCompletionOverrides((prev) => {
-        const next = { ...prev };
-        delete next[id];
-        return next;
-      });
-      toast({ title: "Failed to update block", description: "Could not save the completion status. Please try again.", variant: "destructive" });
-    },
-  });
-
-  function handleToggle(planBlock: WeekPlanBlock) {
-    const current = completionOverrides[planBlock.id] ?? planBlock.isCompleted;
-    const newValue = !current;
-    console.log(`Toggled block ${planBlock.id} to completed: ${newValue}`);
-    setCompletionOverrides((prev) => ({ ...prev, [planBlock.id]: newValue }));
-    toggleCompletionMutation.mutate({ id: planBlock.id, isCompleted: newValue });
-  }
-
   if (loadingDetails || loadingSkeleton || loadingSkelBlocks) {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
-        <span className="ml-2 text-slate-500">Loading schedule...</span>
+        <span className="ml-2 text-slate-500">Loading lesson plan...</span>
       </div>
     );
   }
 
   if (!planDetails || !skeleton || !skelBlocks) {
     return (
-      <div className="text-center py-8 text-slate-500">Unable to load schedule details.</div>
+      <div className="text-center py-8 text-slate-500">Unable to load lesson plan details.</div>
     );
   }
 
@@ -635,35 +510,24 @@ function WeekPlanView({ weekPlan }: { weekPlan: WeekPlan }) {
         </Badge>
         {weekPlan.weekStartDate && (
           <span className="text-sm text-slate-500">
-            {formatWeekRange(weekPlan.weekStartDate)}
+            {formatWeekRange(weekPlan.weekStartDate, skeleton.operatingDays || [])}
           </span>
         )}
       </div>
 
-      <WeekNoteSection weekPlan={planDetails} canEdit={canEditWeekNote} />
-      <ScheduleGrid
-        weekPlan={planDetails}
-        skeleton={skeleton}
-        skeletonBlocks={skelBlocks}
-        completionOverrides={completionOverrides}
-        onToggle={handleToggle}
-        isToggling={toggleCompletionMutation.isPending}
-      />
+      {weekPlan.notes && (
+        <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+          <strong>Week Note:</strong> {weekPlan.notes}
+        </div>
+      )}
+
+      <ScheduleGrid weekPlan={planDetails} skeleton={skeleton} skeletonBlocks={skelBlocks} />
     </div>
   );
 }
 
 export default function EducatorWeeklySchedulePage() {
   const [selectedPlanId, setSelectedPlanId] = useState<number | null>(null);
-  const { user } = useAuth();
-  const { toast } = useToast();
-
-  const { data: schoolData } = useQuery<{ school: { logo: string | null; name: string } }>({
-    queryKey: ['/api/school-parents/school', user?.email],
-    enabled: !!user?.email,
-  });
-
-  const school = schoolData?.school;
 
   const { data: publishedPlans, isLoading } = useQuery<WeekPlan[]>({
     queryKey: ["/api/schedule-builder/week-plans", "published"],
@@ -671,23 +535,7 @@ export default function EducatorWeeklySchedulePage() {
 
   const plans = publishedPlans || [];
 
-  const defaultPlanId = useMemo(() => {
-    if (plans.length === 0) return null;
-    const now = new Date();
-    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-    let best: WeekPlan | null = null;
-    for (const p of plans) {
-      if (!p.weekStartDate) continue;
-      if (p.weekStartDate <= today) {
-        if (!best || p.weekStartDate > best.weekStartDate!) {
-          best = p;
-        }
-      }
-    }
-    return best?.id ?? plans[0].id;
-  }, [plans]);
-
-  const activePlanId = selectedPlanId ?? defaultPlanId;
+  const activePlanId = selectedPlanId ?? (plans.length > 0 ? plans[0].id : null);
   const activePlan = plans.find((p) => p.id === activePlanId) ?? plans[0];
   const activeIndex = activePlan ? plans.indexOf(activePlan) : 0;
 
@@ -699,10 +547,7 @@ export default function EducatorWeeklySchedulePage() {
     if (activeIndex < plans.length - 1) setSelectedPlanId(plans[activeIndex + 1].id);
   };
 
-  const handlePrint = () => {
-    toast({ title: "Preparing print view\u2026" });
-    window.print();
-  };
+  const handlePrint = () => window.print();
 
   if (isLoading) {
     return (
@@ -720,16 +565,16 @@ export default function EducatorWeeklySchedulePage() {
   if (plans.length === 0) {
     return (
       <div className="p-4 md:p-6 lg:p-8 max-w-7xl mx-auto">
-        <title>Schedule & Plans | ASA Educator Portal</title>
+        <title>Lesson Plans | ASA Educator Portal</title>
         <h1 className="text-2xl md:text-3xl font-bold text-slate-800 mb-2 flex items-center gap-2">
           <BookOpen className="h-7 w-7 text-blue-600" />
-          Schedule & Plans
+          Lesson Plans
         </h1>
-        <p className="text-slate-500 mb-8">Your weekly schedule with full lesson plan details</p>
+        <p className="text-slate-500 mb-8">Published weekly lesson plans from your school admin</p>
         <Card className="border-dashed border-2 border-slate-200">
           <CardContent className="flex flex-col items-center justify-center py-16 px-4 text-center">
             <CalendarDays className="h-16 w-16 text-slate-300 mb-4" />
-            <h3 className="text-xl font-semibold text-slate-600 mb-2">No Schedule Published Yet</h3>
+            <h3 className="text-xl font-semibold text-slate-600 mb-2">No Lesson Plans Published Yet</h3>
             <p className="text-slate-500 max-w-md">
               Your school admin hasn't published any week plans yet. Once they publish a week from
               the Week Planner, it will appear here for you to teach from.
@@ -742,45 +587,34 @@ export default function EducatorWeeklySchedulePage() {
 
   return (
     <div className="p-4 md:p-6 lg:p-8 max-w-7xl mx-auto educator-lesson-plans">
-      <title>Schedule & Plans | ASA Educator Portal</title>
+      <title>Lesson Plans | ASA Educator Portal</title>
 
-      {/* Print-only branded header */}
-      <div className={cn("hidden print:block mb-4 border-b-2 border-slate-300 pb-4 text-center")}>
-        {school?.logo && (
-          <img
-            src={school.logo}
-            alt={school.name}
-            className="mx-auto mb-2 h-16 w-auto object-contain"
-          />
-        )}
-        {school?.name && (
-          <h1 className="text-2xl font-bold text-slate-900">{school.name}</h1>
-        )}
+      {/* Print header — only visible when printing */}
+      <div className="print-header hidden print:block mb-4 border-b-2 border-blue-200 pb-3">
+        <h1 className="text-xl font-bold text-slate-900">ASA Lesson Plan</h1>
         {activePlan && (
-          <p className="text-sm text-slate-600 mt-1">
-            {activePlan.weekStartDate
-              ? `Week of ${formatWeekRange(activePlan.weekStartDate)} · `
-              : ""}
+          <p className="text-sm text-slate-600">
             Week {activePlan.weekNumber}
+            {activePlan.weekStartDate ? ` · Starting ${formatWeekDate(activePlan.weekStartDate)}` : ""}
           </p>
         )}
       </div>
 
-      {/* Screen-only header */}
-      <div className="print:hidden">
+      {/* Screen header */}
+      <div className="no-print">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-6">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold text-slate-800 flex items-center gap-2">
               <BookOpen className="h-7 w-7 text-blue-600" />
-              Schedule & Plans
+              Lesson Plans
             </h1>
-            <p className="text-slate-500 mt-1">Click any block to expand full lesson details</p>
+            <p className="text-slate-500 mt-1">Published weekly plans from your school admin</p>
           </div>
           <Button
             variant="outline"
             size="sm"
             onClick={handlePrint}
-            className="flex items-center gap-2 self-start print:hidden"
+            className="flex items-center gap-2 self-start"
           >
             <Printer className="h-4 w-4" />
             Print
@@ -844,56 +678,58 @@ export default function EducatorWeeklySchedulePage() {
 
       {/* Active week plan */}
       <Card className="shadow-sm">
-        <CardHeader className="border-b border-slate-100 py-4 print:hidden">
+        <CardHeader className="border-b border-slate-100 py-4">
           <CardTitle className="text-lg font-semibold text-slate-800">
             {activePlan
               ? `Week ${activePlan.weekNumber}${
                   activePlan.weekStartDate
-                    ? ` · ${formatWeekRange(activePlan.weekStartDate)}`
+                    ? ` · ${formatWeekRange(activePlan.weekStartDate, [])}`
                     : ""
                 }`
-              : "Schedule"}
+              : "Lesson Plan"}
           </CardTitle>
         </CardHeader>
-        <CardContent className="p-4 md:p-6 print:p-0">
+        <CardContent className="p-4 md:p-6">
           {activePlan ? (
             <WeekPlanView weekPlan={activePlan} />
           ) : (
             <p className="text-slate-400 text-center py-8">
-              Select a week above to view the schedule.
+              Select a week above to view its lesson plan.
             </p>
           )}
         </CardContent>
       </Card>
 
       <style>{`
-        @page {
-          size: portrait;
-          margin: 1.5cm;
-        }
-
         @media print {
-          body {
-            font-family: Arial, sans-serif;
-            font-size: 10pt;
-          }
-
           .educator-lesson-plans {
+            position: fixed;
+            left: 0;
+            top: 0;
             width: 100%;
             padding: 12px 16px !important;
             max-width: none !important;
           }
 
-          .schedule-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 9pt;
+          .no-print,
+          nav,
+          header,
+          footer,
+          aside,
+          [role="navigation"],
+          [data-sidebar],
+          .sidebar,
+          button {
+            display: none !important;
           }
 
-          .schedule-table th,
-          .schedule-table td {
-            border: 1px solid #94a3b8 !important;
-            padding: 6px !important;
+          .print-header {
+            display: block !important;
+          }
+
+          .schedule-table {
+            font-size: 11px;
+            page-break-inside: avoid;
           }
 
           .schedule-table th {
@@ -902,8 +738,17 @@ export default function EducatorWeeklySchedulePage() {
             print-color-adjust: exact;
           }
 
-          .schedule-table .day-col {
-            page-break-inside: avoid;
+          .schedule-table td {
+            padding: 6px 8px !important;
+            border: 1px solid #cbd5e1 !important;
+          }
+
+          .schedule-grid-container > div:first-child {
+            display: block !important;
+          }
+
+          .schedule-grid-container > div:last-child {
+            display: none !important;
           }
 
           .line-clamp-2 {

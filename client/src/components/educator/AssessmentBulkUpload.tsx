@@ -92,11 +92,11 @@ export default function AssessmentBulkUpload() {
   const [availableStudents, setAvailableStudents] = useState<AvailableStudent[]>([]);
   const [selectedTypeId, setSelectedTypeId] = useState<string>('');
   const [selectedBookId, setSelectedBookId] = useState<string>('');
-  const [importResults, setImportResults] = useState<{successCount: number; failedRows: {row: number; error: string}[]}>({
-    successCount: 0,
-    failedRows: [],
+  const [importResults, setImportResults] = useState<{successful: number; failed: number; errors: {row: number; error: string}[]}>({
+    successful: 0,
+    failed: 0,
+    errors: [],
   });
-  const [fileTypeError, setFileTypeError] = useState<string | null>(null);
 
   const { data: assessmentTypes = [] } = useQuery<AssessmentType[]>({
     queryKey: ['/api/assessments/types'],
@@ -187,18 +187,14 @@ export default function AssessmentBulkUpload() {
       });
       return response.json();
     },
-    onSuccess: (data: { successCount?: number; failedRows?: { row: number; error: string }[]; successful?: number; failed?: number; errors?: { row: number; error: string }[] }) => {
-      const normalized = {
-        successCount: data.successCount ?? data.successful ?? 0,
-        failedRows: data.failedRows ?? data.errors ?? [],
-      };
-      setImportResults(normalized);
+    onSuccess: (data: { successful: number; failed: number; errors: { row: number; error: string }[] }) => {
+      setImportResults(data);
       setStep('complete');
       queryClient.invalidateQueries({ queryKey: ['/api/assessments/students'] });
       
       toast({
         title: 'Import Complete',
-        description: `Successfully imported ${normalized.successCount} assessments.`,
+        description: `Successfully imported ${data.successful} assessments.`,
       });
     },
     onError: (error: Error) => {
@@ -211,19 +207,8 @@ export default function AssessmentBulkUpload() {
   });
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
-    setFileTypeError(null);
     if (acceptedFiles.length > 0) {
       const uploadedFile = acceptedFiles[0];
-      // Pre-submit CSV extension validation
-      if (!uploadedFile.name.toLowerCase().endsWith('.csv')) {
-        setFileTypeError('Only CSV files (.csv) are accepted. Please upload a CSV file.');
-        toast({
-          variant: 'destructive',
-          title: 'Invalid File Type',
-          description: 'Only CSV files (.csv) are accepted. Please upload a CSV file.',
-        });
-        return;
-      }
       setFile(uploadedFile);
       previewMutation.mutate(uploadedFile);
     }
@@ -270,8 +255,7 @@ export default function AssessmentBulkUpload() {
     setParsedAssessments([]);
     setSelectedTypeId('');
     setSelectedBookId('');
-    setImportResults({ successCount: 0, failedRows: [] });
-    setFileTypeError(null);
+    setImportResults({ successful: 0, failed: 0, errors: [] });
   };
 
   const matchedCount = parsedAssessments.filter(a => a.matchedChildId).length;
@@ -361,14 +345,6 @@ export default function AssessmentBulkUpload() {
                 </div>
               )}
             </div>
-
-            {fileTypeError && (
-              <Alert variant="destructive" className="mt-4">
-                <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Invalid File Type</AlertTitle>
-                <AlertDescription>{fileTypeError}</AlertDescription>
-              </Alert>
-            )}
 
             <div className="mt-6 text-sm text-muted-foreground">
               <p className="font-medium mb-2">Expected columns:</p>
@@ -699,40 +675,30 @@ export default function AssessmentBulkUpload() {
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="p-4 rounded-lg bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800">
-                <div className="text-3xl font-bold text-green-600">{importResults.successCount}</div>
+                <div className="text-3xl font-bold text-green-600">{importResults.successful}</div>
                 <div className="text-sm text-green-600">Successfully Imported</div>
               </div>
               <div className="p-4 rounded-lg bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800">
-                <div className="text-3xl font-bold text-red-600">{importResults.failedRows.length}</div>
+                <div className="text-3xl font-bold text-red-600">{importResults.failed}</div>
                 <div className="text-sm text-red-600">Failed</div>
               </div>
             </div>
 
-            {importResults.failedRows.length > 0 && (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 text-red-700 font-medium">
-                  <AlertCircle className="h-4 w-4" />
-                  <span>Failed Rows ({importResults.failedRows.length})</span>
-                </div>
-                <div className="border border-red-200 rounded-md overflow-hidden">
-                  <table className="w-full text-sm">
-                    <thead className="bg-red-50">
-                      <tr>
-                        <th className="text-left px-3 py-2 font-medium text-red-800 w-20">Row #</th>
-                        <th className="text-left px-3 py-2 font-medium text-red-800">Error</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {importResults.failedRows.map((err, i) => (
-                        <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-red-50/50'}>
-                          <td className="px-3 py-2 text-muted-foreground">{err.row}</td>
-                          <td className="px-3 py-2 text-red-700">{err.error}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+            {importResults.errors.length > 0 && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Import Errors</AlertTitle>
+                <AlertDescription>
+                  <ul className="list-disc list-inside mt-2">
+                    {importResults.errors.slice(0, 5).map((err, i) => (
+                      <li key={i}>Row {err.row}: {err.error}</li>
+                    ))}
+                    {importResults.errors.length > 5 && (
+                      <li>...and {importResults.errors.length - 5} more errors</li>
+                    )}
+                  </ul>
+                </AlertDescription>
+              </Alert>
             )}
 
             <div className="flex justify-end gap-2 pt-4">

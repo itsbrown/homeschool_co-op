@@ -4,7 +4,7 @@ import { storage } from "../storage";
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import { sendEmailDirect } from '../lib/email-service';
+import * as brevo from '@getbrevo/brevo';
 import { createClient } from '@supabase/supabase-js';
 import { parse as parseCSV } from 'csv-parse';
 import bcrypt from 'bcryptjs';
@@ -68,6 +68,16 @@ router.get('/csv-template/:type', (req: any, res) => {
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
   res.send(csvContent);
 });
+
+// Initialize Brevo
+let brevoApiInstance: brevo.TransactionalEmailsApi | null = null;
+if (process.env.BREVO_API_KEY) {
+  brevoApiInstance = new brevo.TransactionalEmailsApi();
+  brevoApiInstance.setApiKey(brevo.TransactionalEmailsApiApiKeys.apiKey, process.env.BREVO_API_KEY);
+  console.log('✅ Brevo initialized for staff invitations');
+} else {
+  console.warn('⚠️ BREVO_API_KEY not found - staff invitation emails will not be sent');
+}
 
 // Initialize Supabase Admin Client
 const supabaseAdmin = createClient(
@@ -193,6 +203,11 @@ export async function createStaffAccount(email: string, firstName: string, lastN
 // Send account credentials email (exported for use in public invitation flow)
 export async function sendAccountCredentialsEmail(email: string, firstName: string, lastName: string, temporaryPassword: string, role: string): Promise<boolean> {
   try {
+    if (!brevoApiInstance) {
+      console.log('📧 Brevo not configured, skipping credentials email');
+      return false;
+    }
+
     const loginUrl = `${process.env.CLIENT_URL || 'https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev'}/login`;
 
     const htmlContent = `
@@ -251,7 +266,17 @@ Please visit: ${loginUrl}
 If you have any questions, please contact us at support@americanseekersacademy.com
     `;
 
-    return await sendEmailDirect(email, `${firstName} ${lastName}`, "Your Account is Ready - ASA Platform Access", htmlContent, textContent);
+    const sendSmtpEmail = new brevo.SendSmtpEmail();
+    sendSmtpEmail.subject = "Your Account is Ready - ASA Platform Access";
+    sendSmtpEmail.htmlContent = htmlContent;
+    sendSmtpEmail.textContent = textContent;
+    sendSmtpEmail.sender = { name: "American Seekers Academy", email: "noreply@americanseekersacademy.com" };
+    sendSmtpEmail.to = [{ email, name: `${firstName} ${lastName}` }];
+
+    const response = await brevoApiInstance.sendTransacEmail(sendSmtpEmail);
+    console.log(`✅ Account credentials email sent successfully via Brevo to: ${email}`);
+    console.log(`📧 Brevo Message ID: ${response.body.messageId}`);
+    return true;
 
   } catch (error) {
     console.error('❌ Error sending credentials email:', error);
@@ -709,19 +734,6 @@ router.get("/classes", supabaseAuth, requireSchoolContext, async (req: any, res:
         }
       }
       
-      // Look up session name if sessionId exists
-      let sessionName = null;
-      if (classItem.sessionId) {
-        try {
-          const session = await storage.getSessionById(classItem.sessionId);
-          if (session) {
-            sessionName = session.name;
-          }
-        } catch (error) {
-          console.log(`⚠️ Could not fetch session for class ${classItem.id}:`, error);
-        }
-      }
-      
       // Derive instructor name from instructorId join (source of truth) instead of hardcoded field
       let derivedInstructorName = null;
       if (classItem.instructorId) {
@@ -758,9 +770,7 @@ router.get("/classes", supabaseAuth, requireSchoolContext, async (req: any, res:
           ? !hiddenCategoryIds.includes(classItem.categoryId)
           : true,
         // Override instructorName with derived value from instructorId (source of truth)
-        instructorName: derivedInstructorName || classItem.instructorName || null,
-        // Include session name for display
-        sessionName: sessionName || null
+        instructorName: derivedInstructorName || classItem.instructorName || null
       };
     }));
 
@@ -921,8 +931,7 @@ router.put("/classes/:id", supabaseAuth, async (req: any, res) => {
       instructorId: instructorId,
       price: req.body.price !== undefined ? req.body.price : existingClass.price,
       isAdminOnly: req.body.isAdminOnly !== undefined ? req.body.isAdminOnly : existingClass.isAdminOnly,
-      prorateEnabled: req.body.prorateEnabled !== undefined ? req.body.prorateEnabled : existingClass.prorateEnabled,
-      sessionId: req.body.sessionId !== undefined ? (req.body.sessionId || null) : existingClass.sessionId,
+      prorateEnabled: req.body.prorateEnabled !== undefined ? req.body.prorateEnabled : existingClass.prorateEnabled
     };
 
     const updatedClass = await storage.updateClass(classId, updateData);
@@ -1044,8 +1053,7 @@ router.patch("/classes/:id", supabaseAuth, async (req: any, res) => {
       instructorId: instructorId,
       price: req.body.price !== undefined ? req.body.price : existingClass.price,
       isAdminOnly: req.body.isAdminOnly !== undefined ? req.body.isAdminOnly : existingClass.isAdminOnly,
-      prorateEnabled: req.body.prorateEnabled !== undefined ? req.body.prorateEnabled : existingClass.prorateEnabled,
-      sessionId: req.body.sessionId !== undefined ? (req.body.sessionId || null) : existingClass.sessionId,
+      prorateEnabled: req.body.prorateEnabled !== undefined ? req.body.prorateEnabled : existingClass.prorateEnabled
     };
 
     const updatedClass = await storage.updateClass(classId, updateData);
@@ -2747,7 +2755,6 @@ router.post("/classes", supabaseAuth, requireSchoolContext, async (req: any, res
       instructorName: req.body.instructorName,
       instructorId,
       isPublished: false,
-      sessionId: req.body.sessionId || null,
     };
 
     console.log('💰 Extracted price from variants:', price);
@@ -5220,7 +5227,7 @@ router.get('/users/:userId', supabaseAuth, requireSchoolContext, async (req: any
 });
 
 // Validation schema for user creation (follows registration.ts and user-roles.ts patterns)
-// systemRoles is imported from @shared/schema — keep that list in sync with the pgEnum
+const systemRoles = ['student', 'parent', 'learner', 'educator', 'mentor', 'teacher', 'schoolAdmin', 'admin', 'superAdmin'];
 const createUserSchema = z.object({
   firstName: z.string().min(1, 'First name is required'),
   lastName: z.string().min(1, 'Last name is required'),
@@ -5276,7 +5283,7 @@ router.post('/users', supabaseAuth, requireSchoolContext, async (req: any, res) 
       firstName,
       lastName,
       email,
-      role: role as 'student' | 'parent' | 'learner' | 'educator' | 'mentor' | 'teacher' | 'schoolAdmin' | 'director' | 'admin' | 'superAdmin',
+      role: role as 'student' | 'parent' | 'learner' | 'educator' | 'mentor' | 'teacher' | 'schoolAdmin' | 'admin' | 'superAdmin',
       phone: phone || null,
       password: 'pending_setup', // Placeholder - user will set via invite/reset
       schoolId: Number(schoolId),
@@ -6129,24 +6136,6 @@ router.post("/categories", supabaseAuth, async (req: any, res) => {
     }
 
     console.log(`➕ Creating new category "${name}" for school ID: ${user.schoolId}`);
-
-    // Check if an active category with the same name already exists — return 409
-    const existingActive = await storage.getCategoryByNameAndSchool(user.schoolId, name, true);
-    if (existingActive) {
-      return res.status(409).json({ message: `A category named "${name}" already exists` });
-    }
-
-    // Check if a soft-deleted (inactive) category with the same name exists — reactivate it
-    const existingInactive = await storage.getCategoryByNameAndSchool(user.schoolId, name, false);
-    if (existingInactive) {
-      console.log(`♻️ Reactivating soft-deleted category "${name}" (id=${existingInactive.id})`);
-      const reactivated = await storage.updateCategory(existingInactive.id, {
-        isActive: true,
-        description: description !== undefined ? description || null : existingInactive.description
-      });
-      return res.status(201).json(reactivated);
-    }
-
     const newCategory = await storage.createCategory({
       schoolId: user.schoolId,
       name,
@@ -7424,7 +7413,6 @@ router.get('/attendance/records', supabaseAuth, async (req: any, res) => {
         checkInTime: sessionAttendance.checkInTime,
         checkOutTime: sessionAttendance.checkOutTime,
         tardyMinutes: sessionAttendance.tardyMinutes,
-        earlyDepartureMinutes: sessionAttendance.earlyDepartureMinutes,
         notes: sessionAttendance.notes,
         locationVerified: sessionAttendance.locationVerified,
         childFirstName: children.firstName,
@@ -7442,13 +7430,12 @@ router.get('/attendance/records', supabaseAuth, async (req: any, res) => {
       .where(and(...conditions))
       .orderBy(sql`${classSessions.scheduledDate} DESC`);
 
-    const records = results.map((row: typeof results[number]) => ({
+    const records = results.map((row: any) => ({
       id: row.id,
       status: row.status,
       checkInTime: row.checkInTime,
       checkOutTime: row.checkOutTime,
       tardyMinutes: row.tardyMinutes,
-      earlyDepartureMinutes: row.earlyDepartureMinutes,
       notes: row.notes,
       locationVerified: row.locationVerified,
       childName: [row.childFirstName, row.childLastName].filter(Boolean).join(' ') || 'Unknown',
@@ -7527,29 +7514,9 @@ router.get('/attendance/summary', supabaseAuth, async (req: any, res) => {
         sql`${sessionAttendance.status} IN ('present', 'late')`
       ));
 
-    const [presentOnlyResult] = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(sessionAttendance)
-      .innerJoin(classSessions, eq(sessionAttendance.sessionId, classSessions.id))
-      .where(and(
-        ...attendanceConditions,
-        sql`${sessionAttendance.status} = 'present'`
-      ));
-
-    const [absentResult] = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(sessionAttendance)
-      .innerJoin(classSessions, eq(sessionAttendance.sessionId, classSessions.id))
-      .where(and(
-        ...attendanceConditions,
-        sql`${sessionAttendance.status} = 'absent'`
-      ));
-
     const totalRecords = totalRecordsResult?.count || 0;
     const presentLateCount = presentLateResult?.count || 0;
     const overallAttendanceRate = totalRecords > 0 ? Math.round((presentLateCount / totalRecords) * 10000) / 100 : 0;
-    const totalPresent = presentOnlyResult?.count || 0;
-    const totalAbsent = absentResult?.count || 0;
 
     const schoolData = await db
       .select({ absenteeismThresholdPercent: schools.absenteeismThresholdPercent })
@@ -7616,10 +7583,7 @@ router.get('/attendance/summary', supabaseAuth, async (req: any, res) => {
       sessionsToday: sessionsTodayResult?.count || 0,
       activeSessionsNow: activeSessionsResult?.count || 0,
       overallAttendanceRate,
-      averageAttendanceRate: overallAttendanceRate,
       totalStudentRecords: totalRecords,
-      totalPresent,
-      totalAbsent,
       chronicAbsentees,
       educatorPunctuality,
     });

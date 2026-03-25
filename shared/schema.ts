@@ -4,7 +4,7 @@ import { z } from "zod";
 import { relations } from "drizzle-orm";
 
 // Define the enum for user roles
-const roleEnum = pgEnum('role', ["student", "parent", "learner", "educator", "mentor", "teacher", "schoolAdmin", "director", "admin", "superAdmin"]);
+const roleEnum = pgEnum('role', ["student", "parent", "learner", "educator", "mentor", "teacher", "schoolAdmin", "admin", "superAdmin"]);
 
 // Users table
 export const users = pgTable("users", {
@@ -56,9 +56,8 @@ export const userRoles = pgTable("user_roles", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-// IMPORTANT: This list must match the pgEnum('role') definition above.
-// When adding a new role, update BOTH the pgEnum and this array.
-export const systemRoles = ["student", "parent", "learner", "educator", "mentor", "teacher", "schoolAdmin", "director", "admin", "superAdmin"] as const;
+// System roles that are always valid, plus custom staff positions validated at API layer
+export const systemRoles = ["student", "parent", "learner", "educator", "mentor", "teacher", "schoolAdmin", "admin", "superAdmin"] as const;
 export type SystemRole = typeof systemRoles[number];
 
 export const insertUserRoleSchema = createInsertSchema(userRoles).omit({ id: true, createdAt: true });
@@ -1865,7 +1864,10 @@ export const categories = pgTable("categories", {
   isPublic: boolean("is_public").default(true).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (table) => ({
+  // Unique constraint to prevent duplicate categories within the same school
+  uniqueSchoolCategory: unique("categories_school_id_name_unique").on(table.schoolId, table.name)
+}));
 
 export const insertCategorySchema = createInsertSchema(categories)
   .omit({ id: true, createdAt: true, updatedAt: true })
@@ -2118,7 +2120,6 @@ export const weeklySkeletons = pgTable("weekly_skeletons", {
   id: serial("id").primaryKey(),
   schoolId: integer("school_id").notNull().references(() => schools.id),
   sessionId: integer("session_id").references(() => sessions.id),
-  classId: integer("class_id").references(() => schoolClasses.id, { onDelete: 'set null' }),
   name: text("name").notNull(),
   description: text("description"),
   gradeLevel: text("grade_level").notNull(),
@@ -2233,10 +2234,7 @@ export const weekPlanBlockHistoryRelations = relations(weekPlanBlockHistory, ({ 
 
 // Schedule Builder schemas for validation
 export const insertWeeklySkeletonSchema = createInsertSchema(weeklySkeletons)
-  .omit({ id: true, createdAt: true, updatedAt: true })
-  .extend({
-    classId: z.number().nullable().default(null),
-  });
+  .omit({ id: true, createdAt: true, updatedAt: true });
 export const insertSkeletonBlockSchema = createInsertSchema(skeletonBlocks)
   .omit({ id: true, createdAt: true, updatedAt: true });
 export const insertWeekPlanSchema = createInsertSchema(weekPlans)
@@ -2256,24 +2254,6 @@ export type InsertWeekPlanBlock = z.infer<typeof insertWeekPlanBlockSchema>;
 export type WeekPlanBlock = typeof weekPlanBlocks.$inferSelect;
 export type InsertWeekPlanBlockHistory = z.infer<typeof insertWeekPlanBlockHistorySchema>;
 export type WeekPlanBlockHistory = typeof weekPlanBlockHistory.$inferSelect;
-
-// Schedule Permissions - Grant-based permission model for educator-scoped access
-export const schedulePermissions = pgTable("schedule_permissions", {
-  id: serial("id").primaryKey(),
-  grantedToUserId: integer("granted_to_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  grantedByUserId: integer("granted_by_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  resourceType: text("resource_type").notNull(),
-  resourceId: integer("resource_id").notNull(),
-  permissionLevel: text("permission_level").notNull().$type<'read' | 'write' | 'manage'>(),
-  scope: text("scope").default('granted'),
-  createdAt: timestamp("created_at").defaultNow(),
-  expiresAt: timestamp("expires_at"),
-});
-
-export const insertSchedulePermissionSchema = createInsertSchema(schedulePermissions)
-  .omit({ id: true, createdAt: true });
-export type InsertSchedulePermission = z.infer<typeof insertSchedulePermissionSchema>;
-export type SchedulePermission = typeof schedulePermissions.$inferSelect;
 
 // Custom Forms - Form Builder System
 export const customForms = pgTable("custom_forms", {

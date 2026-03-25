@@ -210,13 +210,9 @@ router.patch('/:enrollmentId/payment-plan', async (req: any, res) => {
       });
     }
     
-    // 1. Cancel all pending and overdue scheduled payments for this enrollment (never hard-delete)
-    const existingPayments = await storage.getScheduledPaymentsByEnrollmentId(enrollmentId);
-    const paymentsToCancel = existingPayments.filter(p => p.status === 'pending' || p.status === 'overdue');
-    for (const payment of paymentsToCancel) {
-      await storage.updateScheduledPaymentStatus(payment.id, 'cancelled');
-    }
-    console.log(`🚫 Cancelled ${paymentsToCancel.length} pending/overdue scheduled payments for enrollment ${enrollmentId}`);
+    // 1. Delete all pending scheduled payments for this enrollment
+    const deletedCount = await storage.deletePendingScheduledPaymentsByEnrollmentId(enrollmentId);
+    console.log(`🗑️ Deleted ${deletedCount} old pending scheduled payments for enrollment ${enrollmentId}`);
     
     // 2. Create new scheduled payments based on recalculated schedule
     const createdPayments = [];
@@ -275,7 +271,7 @@ router.patch('/:enrollmentId/payment-plan', async (req: any, res) => {
         totalAmount: newSchedule.totalAmount
       },
       scheduledPaymentsCreated: createdPayments.length,
-      scheduledPaymentsCancelled: paymentsToCancel.length,
+      scheduledPaymentsDeleted: deletedCount,
       stripeUpdate: stripeUpdateResult,
       auditLog: auditEntry,
       // Include parent info for frontend cache invalidation

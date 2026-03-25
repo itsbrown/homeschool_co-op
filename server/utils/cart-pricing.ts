@@ -43,7 +43,6 @@ export interface CartPricingResult {
     freeItemIds: string[];
   };
   total: number;
-  taxAmount: number;
   itemPrices: Array<{ classId: number; variantId?: string; price: number }>;
   schoolSettings?: {
     freeAfterThresholdEnabled: boolean;
@@ -821,7 +820,6 @@ export async function calculateCartPricing(
       freeItemIds,
     },
     total,
-    taxAmount: 0,
     itemPrices,
     schoolSettings: {
       freeAfterThresholdEnabled: freeAfterThreeEnabled,
@@ -843,16 +841,19 @@ export async function validateCartTotal(
   const result = await calculateCartPricing(items, userId, schoolId, appliedPromoCode, parentEmail);
   
   const discrepancy = clientTotal - result.total;
-  const valid = Math.abs(discrepancy) < 30 && (result.total === 0 || Math.abs(discrepancy) / result.total < 0.003); // 30 cents or 0.3%
+  const discrepancyPercent = result.total > 0 ? Math.abs(discrepancy) / result.total * 100 : 0;
+  
+  // Use 0.5% tolerance to match payment validation in stripe.ts
+  // Allow up to $1 absolute difference OR up to 0.5% relative difference
+  const valid = Math.abs(discrepancy) < 1 || discrepancyPercent < 0.5;
 
   if (!valid) {
-    const discrepancyPercent = result.total > 0 ? Math.abs(discrepancy) / result.total * 100 : 0;
     console.warn('⚠️ Cart total mismatch:', {
       clientTotal,
       serverTotal: result.total,
       discrepancy,
-      discrepancyPercent: `${discrepancyPercent.toFixed(3)}%`,
-      tolerance: '30 cents AND 0.3%',
+      discrepancyPercent: `${discrepancyPercent.toFixed(2)}%`,
+      tolerance: '0.5% or $1',
       appliedDiscounts: result.discounts.appliedDiscounts.map(d => ({
         name: d.name,
         amount: d.discountAmount
@@ -907,7 +908,6 @@ export interface CartSnapshot {
   totals: {
     itemsTotal: number; // Cart items after discounts
     membershipTotal: number; // Membership fee (0 if already paid or not required)
-    taxAmount: number; // Tax (always 0 — stub for future use)
     grandTotal: number; // Items + Membership
     payableAmount: number; // Grand total minus applied credits (what user actually pays)
   };
@@ -1138,7 +1138,6 @@ export async function calculateCartSnapshot(
     totals: {
       itemsTotal,
       membershipTotal,
-      taxAmount: 0,
       grandTotal,
       payableAmount
     },

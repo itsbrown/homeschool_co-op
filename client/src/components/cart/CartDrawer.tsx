@@ -253,12 +253,10 @@ export default function CartDrawer() {
                 )}
 
                 <Separator />
-                {/* SERVER-AUTHORITATIVE - final amount set at checkout via CartSnapshot */}
                 <div className="flex justify-between font-medium">
-                  <span>Estimated Total (before final review)</span>
-                  <span className="font-bold">{formatCurrency(cart.total + (cart.membership?.amount || 0))}</span>
+                  <span>Total:</span>
+                  <span>{formatCurrency(cart.total + (cart.membership?.amount || 0))}</span>
                 </div>
-                <small className="text-xs text-muted-foreground">Final amount confirmed at checkout. Credits, discounts applied server-side.</small>
               </div>
 
               {/* Discount Info */}

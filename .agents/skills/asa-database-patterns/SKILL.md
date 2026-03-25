@@ -231,7 +231,6 @@ Rules: check `!== undefined` before comparing (undefined means lookup failed, no
 
 ## Common Pitfalls
 
-- **`getDb()` called without `await`**: `getDb()` is an async function that returns a `Promise<NodePgDatabase>`. Omitting `await` means `db` is a raw Promise, not the database instance — every subsequent `.select()`, `.insert()`, `.update()`, `.delete()` call throws a `TypeError` that is silently caught as a 500 error. Always write `const db = await getDb();`. Better yet, don't call `getDb()` in route handlers at all — add methods to `IStorage` and use `storage.*` instead (see "Best Practices" below).
 - **`remainingBalance` is unreliable for aggregations**: It is `0` (not NULL) for `deposit_only`/`stripe_managed` enrollments after a deposit, and `0` for comped accounts — `COALESCE` won't help. Use `effective_balance` in SQL or `totalCost - totalPaid - (compAmountCents ?? 0)` in TypeScript. See "Derived Financial Fields" above.
 - **Outstanding balance undercount in reports**: Querying `SUM(scheduled_payments.amount WHERE status='pending')` misses families with no scheduled_payment records — always use `effective_balance FROM program_enrollments` for financial aggregations.
 - **Express route ordering**: Specific named routes (e.g., `/classes/assignments`) BEFORE parameterized routes (e.g., `/classes/:id`)
@@ -249,7 +248,6 @@ Rules: check `!== undefined` before comparing (undefined means lookup failed, no
 - Never add columns without defaults to tables with existing data — use `.default()` or make nullable
 
 ### Storage & Query Patterns
-- **Don't** call `getDb()` directly in route handlers — add CRUD methods to `IStorage` in `server/storage.ts`, implement them in `DatabaseStorage` in `server/dbStorage.ts`, wire them through `CombinedStorage`, and call `storage.*` from route handlers
 - Always go through the `IStorage` interface — never import `db` directly in route handlers
 - When adding a new query, check if a similar storage method already exists before creating a new one
 - Use `Promise.all()` for independent lookups (e.g., fetching parent + emergency contacts in parallel)

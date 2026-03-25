@@ -1,7 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { getDb } from '../db';
 import { sql, eq, and, ne } from 'drizzle-orm';
-import { users, userRoles, schools, insertUserRoleSchema, StaffPosition, systemRoles } from '@shared/schema';
+import { users, userRoles, schools, insertUserRoleSchema, StaffPosition } from '@shared/schema';
 import { supabaseAuth } from '../middleware/supabase-auth';
 import type { Request as ExpressRequest } from 'express-serve-static-core';
 import { storage } from '../storage';
@@ -583,8 +583,8 @@ userRolesRouter.post('/admin/users/:userId/roles', supabaseAuth, async (req: Aut
     }
 
     // Validate role: either a system role or a custom staff position
-    // systemRoles is imported from @shared/schema — keep that list in sync with the pgEnum
-    const isSystemRole = (systemRoles as readonly string[]).includes(role);
+    const systemRoles = ['student', 'parent', 'learner', 'educator', 'teacher', 'schoolAdmin', 'admin', 'superAdmin'];
+    const isSystemRole = systemRoles.includes(role);
     let isValidRole = isSystemRole;
     
     // If not a system role, check if it's a valid staff position with proper tenant scoping

@@ -250,7 +250,6 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
         if (item.endDate && new Date(item.endDate) < now) return false;
         // Hide classes whose category has been hidden by an admin
         if (item.categoryId && item.categoryIsPublic === false) return false;
-        if (item.isAdminOnly) return false;
         return true;
       })
       .map((item: any) => ({

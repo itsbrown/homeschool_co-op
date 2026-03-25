@@ -15,19 +15,6 @@ const updateMembershipSchema = z.object({
   notes: z.string().optional(),
 });
 
-// Schema for bulk update
-const bulkUpdateSchema = z.object({
-  membershipIds: z.array(z.number()).min(1),
-  updates: z.object({
-    status: z.enum(["pending_payment", "enrolled", "expired", "grace_period", "suspended"]).optional(),
-    expirationDate: z.string().or(z.date()).optional(),
-    amountPaid: z.number().optional(),
-    remainingBalance: z.number().optional(),
-    balanceDue: z.number().optional(),
-    notes: z.string().optional(),
-  }),
-});
-
 // Schema for manual payment recording
 const recordPaymentSchema = z.object({
   amount: z.number().min(0),
@@ -127,19 +114,15 @@ export const getMySchoolMembershipSummary = async (req: any, res: Response) => {
     const total = memberships.length;
     const active = memberships.filter((m: any) => m.status === 'active' || m.status === 'enrolled').length;
     const pending = memberships.filter((m: any) => m.status === 'pending_payment').length;
-    const partial = memberships.filter((m: any) => m.status === 'partial_payment').length;
     const expired = memberships.filter((m: any) => m.status === 'expired').length;
     const gracePeriod = memberships.filter((m: any) => m.status === 'grace_period').length;
-    const totalOutstanding = memberships.reduce((sum: number, m: any) => sum + (m.remainingBalance || 0), 0);
 
     res.json({
       total,
       active,
       pending,
-      partial,
       expired,
-      gracePeriod,
-      totalOutstanding
+      gracePeriod
     });
   } catch (error: any) {
     console.error('Error fetching membership summary:', error);
@@ -1248,129 +1231,5 @@ export const getParentMembershipStatus = async (req: any, res: Response) => {
   } catch (error: any) {
     console.error("Error getting membership status:", error);
     res.status(500).json({ message: "Failed to get membership status", error: error.message });
-  }
-};
-
-/**
- * Bulk update membership enrollments (admin only)
- */
-export const bulkUpdateMemberships = async (req: any, res: Response) => {
-  try {
-    const userEmail = req.user?.email || req.auth?.email;
-    if (!userEmail) {
-      return res.status(401).json({ message: "Not authenticated" });
-    }
-
-    const user = await storage.getUserByEmail(userEmail);
-    if (!user) {
-      return res.status(401).json({ message: "User not found" });
-    }
-
-    if (user.role !== 'schoolAdmin' && user.role !== 'admin' && user.role !== 'superAdmin') {
-      return res.status(403).json({ message: "Not authorized - admin access required" });
-    }
-
-    if (!user.schoolId) {
-      return res.status(400).json({ message: "User does not have a school assigned" });
-    }
-
-    const parseResult = bulkUpdateSchema.safeParse(req.body);
-    if (!parseResult.success) {
-      return res.status(400).json({ message: "Invalid request data", errors: parseResult.error.errors });
-    }
-
-    const { membershipIds, updates } = parseResult.data;
-
-    // Normalize the update payload: convert date strings to Date objects for storage
-    type BulkUpdatePayload = Parameters<typeof storage.bulkUpdateMembershipEnrollments>[2];
-    const processedUpdates: BulkUpdatePayload = {};
-    if (updates.status !== undefined) processedUpdates.status = updates.status;
-    if (updates.amountPaid !== undefined) processedUpdates.amountPaid = updates.amountPaid;
-    if (updates.remainingBalance !== undefined) processedUpdates.remainingBalance = updates.remainingBalance;
-    if (updates.balanceDue !== undefined) processedUpdates.balanceDue = updates.balanceDue;
-    if (updates.notes !== undefined) processedUpdates.notes = updates.notes;
-    if (updates.expirationDate !== undefined) {
-      processedUpdates.expirationDate = typeof updates.expirationDate === 'string'
-        ? new Date(updates.expirationDate)
-        : updates.expirationDate;
-    }
-
-    const updatedCount = await storage.bulkUpdateMembershipEnrollments(membershipIds, user.schoolId, processedUpdates);
-
-    console.log(`✅ Admin ${userEmail} bulk updated ${updatedCount} memberships`);
-    res.json({ updatedCount, message: `Updated ${updatedCount} membership(s)` });
-  } catch (error: any) {
-    if (error.message?.includes('Unauthorized')) {
-      return res.status(403).json({ message: error.message });
-    }
-    if (error.message?.includes('not found') || error.message?.includes('rejected')) {
-      return res.status(404).json({ message: error.message });
-    }
-    console.error("Error bulk updating memberships:", error);
-    res.status(500).json({ message: "Error bulk updating memberships", error: error.message });
-  }
-};
-
-/**
- * Get winter session fix preview (admin only)
- */
-export const getWinterSessionFixPreview = async (req: any, res: Response) => {
-  try {
-    const userEmail = req.user?.email || req.auth?.email;
-    if (!userEmail) {
-      return res.status(401).json({ message: "Not authenticated" });
-    }
-
-    const user = await storage.getUserByEmail(userEmail);
-    if (!user) {
-      return res.status(401).json({ message: "User not found" });
-    }
-
-    if (user.role !== 'schoolAdmin' && user.role !== 'admin' && user.role !== 'superAdmin') {
-      return res.status(403).json({ message: "Not authorized - admin access required" });
-    }
-
-    if (!user.schoolId) {
-      return res.status(400).json({ message: "User does not have a school assigned" });
-    }
-
-    const preview = await storage.getWinterSessionFixPreview(user.schoolId);
-    res.json(preview);
-  } catch (error: any) {
-    console.error("Error fetching winter session fix preview:", error);
-    res.status(500).json({ message: "Error fetching preview", error: error.message });
-  }
-};
-
-/**
- * Apply winter session fix (admin only)
- */
-export const applyWinterSessionFix = async (req: any, res: Response) => {
-  try {
-    const userEmail = req.user?.email || req.auth?.email;
-    if (!userEmail) {
-      return res.status(401).json({ message: "Not authenticated" });
-    }
-
-    const user = await storage.getUserByEmail(userEmail);
-    if (!user) {
-      return res.status(401).json({ message: "User not found" });
-    }
-
-    if (user.role !== 'schoolAdmin' && user.role !== 'admin' && user.role !== 'superAdmin') {
-      return res.status(403).json({ message: "Not authorized - admin access required" });
-    }
-
-    if (!user.schoolId) {
-      return res.status(400).json({ message: "User does not have a school assigned" });
-    }
-
-    const updatedCount = await storage.applyWinterSessionFix(user.schoolId);
-
-    console.log(`✅ Admin ${userEmail} applied winter session fix: updated ${updatedCount} memberships`);
-    res.json({ updatedCount, message: `Fixed ${updatedCount} membership(s) for winter session` });
-  } catch (error: any) {
-    console.error("Error applying winter session fix:", error);
-    res.status(500).json({ message: "Error applying winter session fix", error: error.message });
   }
 };

@@ -84,7 +84,7 @@ const adminNavGroups: NavGroup[] = [
     title: 'People',
     icon: Users,
     items: [
-      { title: 'Educator Management', href: '/schools/educators', icon: GraduationCap },
+      { title: 'Staff', href: '/schools/staff', icon: Users },
       { title: 'Staff Hours', href: '/schools/staff-hours', icon: Clock },
       { title: 'Staff Permissions', href: '/school-admin/staff-permissions', icon: Shield },
       { title: 'Students', href: '/schools/students', icon: GraduationCap },
@@ -114,7 +114,6 @@ const adminNavGroups: NavGroup[] = [
     icon: Wallet,
     items: [
       { title: 'Financial Reports', href: '/school-admin/financial-reports', icon: BarChart3 },
-      { title: 'Retention Report', href: '/school-admin/retention-report', icon: Users },
       { title: 'Manual Payments', href: '/schools/manual-payments', icon: CreditCard },
       { title: 'Discounts', href: '/schools/discounts', icon: Target },
       { title: 'Credits', href: '/school-admin/credits', icon: Coins },

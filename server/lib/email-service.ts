@@ -172,7 +172,27 @@ Thank you for choosing American Seekers Academy!
 If you have any questions about this payment, please contact us at support@americanseekersacademy.com
     `;
 
-    await sendEmailDirect(parentEmail, parentName || 'Parent', 'Payment Confirmation - American Seekers Academy', htmlContent, textContent);
+    // Create Brevo email object
+    const sendSmtpEmail = new brevo.SendSmtpEmail();
+    sendSmtpEmail.to = [{ email: parentEmail, name: parentName || 'Parent' }];
+    sendSmtpEmail.sender = { 
+      email: process.env.BREVO_SENDER_EMAIL || 'support@americanseekersacademy.com', 
+      name: 'American Seekers Academy' 
+    };
+    sendSmtpEmail.subject = 'Payment Confirmation - American Seekers Academy';
+    sendSmtpEmail.htmlContent = htmlContent;
+    sendSmtpEmail.textContent = textContent;
+
+    // Send email via Brevo
+    if (!apiInstance) {
+      console.log('📧 Brevo not configured, skipping payment confirmation email send');
+      return false;
+    }
+
+    const result = await apiInstance.sendTransacEmail(sendSmtpEmail);
+    
+    console.log('✅ Payment confirmation email sent successfully via Brevo to:', parentEmail);
+    console.log('📧 Brevo Message ID:', result.body.messageId);
     return true;
   } catch (error: any) {
     // Handle specific Brevo authorization errors gracefully
@@ -354,7 +374,7 @@ This is an automated receipt. Please keep this for your records.
   }
 }
 
-// Send payment receipt email
+// Send payment receipt using Brevo template
 export async function sendPaymentReceipt(data: {
   parentEmail: string;
   parentName: string;
@@ -369,107 +389,47 @@ export async function sendPaymentReceipt(data: {
   notes?: string;
 }): Promise<boolean> {
   try {
-    const htmlContent = `
-    <html>
-      <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto;">
-        <div style="background-color: #4F46E5; padding: 24px; text-align: center;">
-          <h1 style="color: white; margin: 0;">Payment Receipt</h1>
-          <p style="color: #E0E7FF; margin: 8px 0 0 0;">American Seekers Academy</p>
-        </div>
-        
-        <div style="padding: 24px;">
-          <div style="background-color: #f8f9fa; padding: 16px; border-radius: 8px; margin-bottom: 24px;">
-            <h2 style="margin: 0 0 16px 0; color: #495057;">Receipt Details</h2>
-            <p style="margin: 0 0 8px 0;"><strong>Receipt #:</strong> ${data.receiptNumber}</p>
-            <p style="margin: 0 0 8px 0;"><strong>Date:</strong> ${data.paymentDate}</p>
-            <p style="margin: 0 0 8px 0;"><strong>Payment Method:</strong> ${data.paymentMethod}</p>
-            <p style="margin: 0 0 8px 0;"><strong>Amount Paid:</strong> <span style="font-size: 1.2em; font-weight: bold; color: #28a745;">${data.amount}</span></p>
-          </div>
+    if (!apiInstance) {
+      console.log('📧 Brevo not configured, skipping payment receipt email send');
+      return false;
+    }
 
-          <div style="margin-bottom: 24px;">
-            <h3 style="margin: 0 0 16px 0; color: #495057;">Payment For</h3>
-            <div style="background-color: #ffffff; border: 1px solid #dee2e6; border-radius: 8px;">
-              <table style="width: 100%; border-collapse: collapse;">
-                <thead>
-                  <tr style="background-color: #f8f9fa;">
-                    <th style="padding: 12px 8px; text-align: left; border-bottom: 1px solid #dee2e6;">Child</th>
-                    <th style="padding: 12px 8px; text-align: left; border-bottom: 1px solid #dee2e6;">Program/Class</th>
-                    <th style="padding: 12px 8px; text-align: right; border-bottom: 1px solid #dee2e6;">Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td style="padding: 12px 8px; border-bottom: 1px solid #eee;">${data.childName}</td>
-                    <td style="padding: 12px 8px; border-bottom: 1px solid #eee;">${data.className}</td>
-                    <td style="padding: 12px 8px; border-bottom: 1px solid #eee; text-align: right;">${data.amount}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
+    // Try to get template ID from environment or create template
+    let templateId = process.env.BREVO_PAYMENT_RECEIPT_TEMPLATE_ID ? 
+      parseInt(process.env.BREVO_PAYMENT_RECEIPT_TEMPLATE_ID) : null;
+    
+    if (!templateId) {
+      templateId = await createPaymentReceiptTemplate();
+      if (!templateId) {
+        console.log('📧 Could not create payment receipt template, skipping receipt email - payment still successful');
+        return true; // Payment successful, just skip the email
+      }
+    }
 
-          ${data.remainingBalance ? `
-          <div style="margin-bottom: 24px; padding: 16px; background-color: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px;">
-            <h3 style="margin: 0 0 12px 0; color: #856404;">Payment Plan Information</h3>
-            <p style="margin: 0 0 8px 0;"><strong>Remaining Balance:</strong> ${data.remainingBalance}</p>
-            ${data.nextPaymentDate ? `<p style="margin: 0;"><strong>Next Payment Due:</strong> ${data.nextPaymentDate}</p>` : ''}
-          </div>
-          ` : ''}
+    const sendSmtpEmail = new brevo.SendSmtpEmail();
+    sendSmtpEmail.to = [{ email: data.parentEmail, name: data.parentName }];
+    sendSmtpEmail.sender = { 
+      email: process.env.BREVO_SENDER_EMAIL || 'support@americanseekersacademy.com', 
+      name: 'American Seekers Academy' 
+    };
+    sendSmtpEmail.templateId = templateId;
+    sendSmtpEmail.params = {
+      RECEIPT_NUMBER: data.receiptNumber,
+      PAYMENT_DATE: data.paymentDate,
+      PAYMENT_METHOD: data.paymentMethod,
+      AMOUNT: data.amount,
+      CHILD_NAME: data.childName,
+      CLASS_NAME: data.className,
+      REMAINING_BALANCE: data.remainingBalance || '',
+      NEXT_PAYMENT_DATE: data.nextPaymentDate || '',
+      NOTES: data.notes || ''
+    };
 
-          ${data.notes ? `
-          <div style="margin-bottom: 24px; padding: 16px; background-color: #e7f3ff; border-radius: 8px;">
-            <h3 style="margin: 0 0 12px 0; color: #0c5aa6;">Additional Notes</h3>
-            <p style="margin: 0;">${data.notes}</p>
-          </div>
-          ` : ''}
-
-          <div style="margin-top: 32px; padding-top: 24px; border-top: 2px solid #eee;">
-            <p style="margin: 0 0 16px 0; font-size: 16px; font-weight: 600;">Thank you for choosing American Seekers Academy!</p>
-            <p style="margin: 0 0 8px 0; font-size: 14px;">For questions about this payment, please contact us:</p>
-            <p style="margin: 0 0 8px 0; font-size: 14px;">Email: <a href="mailto:support@americanseekersacademy.com" style="color: #4F46E5;">support@americanseekersacademy.com</a></p>
-          </div>
-        </div>
-
-        <div style="background-color: #f8f9fa; padding: 16px; text-align: center; color: #6c757d; font-size: 12px;">
-          <p style="margin: 0;">This is an automated receipt. Please keep this for your records.</p>
-          <p style="margin: 8px 0 0 0;">© 2025 American Seekers Academy. All rights reserved.</p>
-        </div>
-      </body>
-    </html>
-    `;
-
-    const textContent = `
-PAYMENT RECEIPT - AMERICAN SEEKERS ACADEMY
-
-Receipt #: ${data.receiptNumber}
-Date: ${data.paymentDate}
-Payment Method: ${data.paymentMethod}
-Amount Paid: ${data.amount}
-
-PAYMENT FOR:
-Child: ${data.childName}
-Program/Class: ${data.className}
-Amount: ${data.amount}
-
-${data.remainingBalance ? `PAYMENT PLAN INFORMATION:\nRemaining Balance: ${data.remainingBalance}\n${data.nextPaymentDate ? `Next Payment Due: ${data.nextPaymentDate}\n` : ''}` : ''}
-${data.notes ? `ADDITIONAL NOTES:\n${data.notes}\n` : ''}
-Thank you for choosing American Seekers Academy!
-
-For questions about this payment, please contact us:
-Email: support@americanseekersacademy.com
-
-This is an automated receipt. Please keep this for your records.
-© 2025 American Seekers Academy. All rights reserved.
-    `;
-
-    const sent = await sendEmailDirect(
-      data.parentEmail,
-      data.parentName,
-      `Payment Receipt - ${data.receiptNumber}`,
-      htmlContent,
-      textContent
-    );
-    return sent || true; // Return true to indicate payment success despite email failure
+    const result = await apiInstance.sendTransacEmail(sendSmtpEmail);
+    
+    console.log('✅ Payment receipt email sent successfully to:', data.parentEmail);
+    console.log('📧 Brevo Message ID:', result.body.messageId);
+    return true;
   } catch (error: any) {
     // Handle specific Brevo authorization errors gracefully
     if (error.body?.code === 'unauthorized' || error.statusCode === 401) {
@@ -489,25 +449,7 @@ export async function sendEmail(
   htmlContent: string,
   textContent?: string
 ): Promise<boolean> {
-  return sendEmailDirect(to, toName, subject, htmlContent, textContent);
-}
-
-// Single internal dispatch point for all email sends.
-// Supports both inline HTML sends and Brevo-template-based sends.
-export async function sendEmailDirect(
-  to: string,
-  toName: string,
-  subject: string,
-  htmlContent: string,
-  textContent?: string
-): Promise<boolean> {
-  console.log(`[Email] ${subject} → ${to}`);
   try {
-    if (!apiInstance) {
-      console.log('📧 Brevo not configured, skipping email send');
-      return false;
-    }
-
     const sendSmtpEmail = new brevo.SendSmtpEmail();
     sendSmtpEmail.to = [{ email: to, name: toName }];
     sendSmtpEmail.sender = { 
@@ -520,6 +462,11 @@ export async function sendEmailDirect(
       sendSmtpEmail.textContent = textContent;
     }
 
+    if (!apiInstance) {
+      console.log('📧 Brevo not configured, skipping email send');
+      return false;
+    }
+
     const result = await apiInstance.sendTransacEmail(sendSmtpEmail);
     
     console.log('✅ Email sent successfully via Brevo to:', to);
@@ -529,11 +476,11 @@ export async function sendEmailDirect(
     console.error('❌ Failed to send email via Brevo:', error);
     if (error && typeof error === 'object') {
       console.error('Error details:', JSON.stringify(error, null, 2));
-      if ('response' in error && error !== null) {
-        console.error('API response:', (error as Record<string, unknown>)['response']);
+      if ('response' in error) {
+        console.error('API response:', error.response);
       }
-      if ('body' in error && error !== null) {
-        console.error('Error body:', (error as Record<string, unknown>)['body']);
+      if ('body' in error) {
+        console.error('Error body:', error.body);
       }
     }
     return false;
@@ -1179,8 +1126,26 @@ Thank you for choosing ${displaySchoolName}!
 © 2025 ${displaySchoolName}. All rights reserved.
     `;
 
-    const sent = await sendEmailDirect(email, fullName, `Welcome to ${displaySchoolName}!`, htmlContent, textContent);
-    return sent || true; // Return true to indicate registration success despite email failure
+    const sendSmtpEmail = new brevo.SendSmtpEmail();
+    sendSmtpEmail.to = [{ email: email, name: fullName }];
+    sendSmtpEmail.sender = { 
+      email: process.env.BREVO_SENDER_EMAIL || 'contact@americanseekersacademy.com', 
+      name: displaySchoolName
+    };
+    sendSmtpEmail.subject = `Welcome to ${displaySchoolName}!`;
+    sendSmtpEmail.htmlContent = htmlContent;
+    sendSmtpEmail.textContent = textContent;
+
+    if (!apiInstance) {
+      console.log('📧 Brevo not configured, skipping welcome email send');
+      return false;
+    }
+
+    const result = await apiInstance.sendTransacEmail(sendSmtpEmail);
+    
+    console.log('✅ Welcome email sent successfully via Brevo to:', email);
+    console.log('📧 Brevo Message ID:', result.body.messageId);
+    return true;
   } catch (error: any) {
     if (error.body?.code === 'unauthorized' || error.statusCode === 401) {
       console.log('📧 Brevo authorization issue (IP not whitelisted), skipping welcome email - registration still successful');
@@ -1366,7 +1331,21 @@ If you have any questions, please contact us at support@americanseekersacademy.c
 Thank you for choosing ${schoolName}!
     `;
 
-    return await sendEmailDirect(parentEmail, parentEmail, subjectLine, htmlContent, textContent);
+    const sendSmtpEmail = new brevo.SendSmtpEmail();
+    sendSmtpEmail.to = [{ email: parentEmail }];
+    sendSmtpEmail.sender = { 
+      email: process.env.BREVO_SENDER_EMAIL || 'contact@americanseekersacademy.com', 
+      name: schoolName
+    };
+    sendSmtpEmail.subject = subjectLine;
+    sendSmtpEmail.htmlContent = htmlContent;
+    sendSmtpEmail.textContent = textContent;
+
+    const result = await apiInstance.sendTransacEmail(sendSmtpEmail);
+    
+    console.log('✅ Payment reminder email sent successfully to:', parentEmail);
+    console.log('📧 Brevo Message ID:', result.body.messageId);
+    return true;
   } catch (error: any) {
     console.error('❌ Failed to send payment reminder email:', error.message || error);
     return false;
@@ -1544,7 +1523,21 @@ If you have any questions, please contact us at support@americanseekersacademy.c
 Thank you for choosing ${schoolName}!
     `;
 
-    return await sendEmailDirect(parentEmail, parentName, subjectLine, htmlContent, textContent);
+    const sendSmtpEmail = new brevo.SendSmtpEmail();
+    sendSmtpEmail.to = [{ email: parentEmail }];
+    sendSmtpEmail.sender = { 
+      email: process.env.BREVO_SENDER_EMAIL || 'contact@americanseekersacademy.com', 
+      name: schoolName
+    };
+    sendSmtpEmail.subject = subjectLine;
+    sendSmtpEmail.htmlContent = htmlContent;
+    sendSmtpEmail.textContent = textContent;
+
+    const result = await apiInstance.sendTransacEmail(sendSmtpEmail);
+    
+    console.log('✅ Consolidated payment reminder sent successfully to:', parentEmail);
+    console.log('📧 Brevo Message ID:', result.body.messageId);
+    return true;
   } catch (error: any) {
     console.error('❌ Failed to send consolidated payment reminder:', error.message || error);
     return false;
@@ -1705,7 +1698,21 @@ Thank you,
 ${schoolName} Team
     `;
 
-    return await sendEmailDirect(parentEmail, parentEmail, subjectLine, htmlContent, textContent);
+    const sendSmtpEmail = new brevo.SendSmtpEmail();
+    sendSmtpEmail.to = [{ email: parentEmail }];
+    sendSmtpEmail.sender = { 
+      email: process.env.BREVO_SENDER_EMAIL || 'contact@americanseekersacademy.com', 
+      name: schoolName
+    };
+    sendSmtpEmail.subject = subjectLine;
+    sendSmtpEmail.htmlContent = htmlContent;
+    sendSmtpEmail.textContent = textContent;
+
+    const result = await apiInstance.sendTransacEmail(sendSmtpEmail);
+    
+    console.log('✅ Overdue payment notice sent successfully to:', parentEmail);
+    console.log('📧 Brevo Message ID:', result.body.messageId);
+    return true;
   } catch (error: any) {
     console.error('❌ Failed to send overdue payment notice:', error.message || error);
     return false;

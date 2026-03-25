@@ -182,14 +182,12 @@ export const requireSchoolAccess = (req: any, res: Response, next: NextFunction)
 
   // Super admin and admin have access to all schools
   if (['superAdmin', 'admin'].includes(role)) {
-    console.log('School access granted for role', role);
     return next();
   }
 
-  // School admin, director, and staff can only access their own school
-  if (['schoolAdmin', 'director', 'teacher'].includes(role)) {
+  // School admin and staff can only access their own school
+  if (['schoolAdmin', 'teacher'].includes(role)) {
     if (schoolId && schoolId.toString() === requestedSchoolId?.toString()) {
-      console.log('School access granted for role', role);
       return next();
     }
   }
@@ -200,5 +198,5 @@ export const requireSchoolAccess = (req: any, res: Response, next: NextFunction)
 
 // Export alias for backward compatibility
 export const verifyAuth0Token = jwtCheck;
-export const requireAdmin = requireRole(['admin', 'superAdmin', 'schoolAdmin']);
-export const requireEducator = requireRole(['admin', 'superAdmin', 'schoolAdmin', 'teacher']);
+export const requireAdmin = requireRole(['admin', 'superAdmin', 'school-admin']);
+export const requireEducator = requireRole(['admin', 'superAdmin', 'school-admin', 'teacher']);

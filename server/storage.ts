@@ -67,8 +67,7 @@ import {
   skeletonBlocks, type SkeletonBlock, type InsertSkeletonBlock,
   weekPlans, type WeekPlan, type InsertWeekPlan,
   weekPlanBlocks, type WeekPlanBlock, type InsertWeekPlanBlock,
-  weekPlanBlockHistory, type WeekPlanBlockHistory, type InsertWeekPlanBlockHistory,
-  sessions, type Session, type InsertSession
+  weekPlanBlockHistory, type WeekPlanBlockHistory, type InsertWeekPlanBlockHistory
 } from "@shared/schema";
 import { eq, inArray } from 'drizzle-orm';
 import { getDb } from './db';
@@ -105,7 +104,6 @@ export interface IStorage {
   // User Role methods
   getUserRolesByUserId(userId: number): Promise<UserRole[]>;
   deleteUserRolesByUserId(userId: number): Promise<void>;
-  updatePrimaryUserRole(userId: number, newRole: string, schoolId?: number | null): Promise<void>;
   getParentsBySchoolId(schoolId: number): Promise<User[]>;
 
   // User cleanup methods (for deletion)
@@ -140,9 +138,6 @@ export interface IStorage {
   
   // Transactional soft-delete (best practice: atomic operation with proper ordering)
   softDeleteUserWithCleanup(userId: number): Promise<{ success: boolean; error?: string }>;
-
-  // Session methods
-  getSessionById(id: number): Promise<Session | undefined>;
 
   // Location methods
   getLocationsBySchool(schoolId: number): Promise<Location[]>;
@@ -295,7 +290,6 @@ export interface IStorage {
   getStripeCustomerIdsByParentEmail(parentEmail: string): Promise<string[]>;
   getStripeLinkedEnrollmentsByParentEmail(parentEmail: string): Promise<ProgramEnrollment[]>;
   getEnrollmentsByParentEmail(parentEmail: string): Promise<ProgramEnrollment[]>;
-  getEnrollmentFamiliesByPeriod(schoolId: number, startDate: string, endDate: string): Promise<{ parentEmail: string; parentId: number; childName: string; className: string }[]>;
 
   // Membership Enrollment methods
   getMembershipEnrollmentById(id: number): Promise<MembershipEnrollment | undefined>;
@@ -306,9 +300,6 @@ export interface IStorage {
   updateMembershipEnrollment(id: number, enrollment: Partial<InsertMembershipEnrollment>): Promise<MembershipEnrollment | undefined>;
   deleteMembershipEnrollment(id: number): Promise<void>;
   createOrUpdateMembershipEnrollment(parentUserId: number, schoolId: number, membershipYear: number): Promise<MembershipEnrollment>;
-  bulkUpdateMembershipEnrollments(ids: number[], schoolId: number, updates: Partial<MembershipEnrollment>): Promise<number>;
-  getWinterSessionFixPreview(schoolId: number): Promise<Array<{ membershipId: number; parentName: string; parentEmail: string; amountPaid: number; totalAmount: number; currentStatus: string }>>;
-  applyWinterSessionFix(schoolId: number): Promise<number>;
 
   // Membership Agreement methods
   getMembershipAgreementById(id: number): Promise<MembershipAgreement | undefined>;
@@ -393,7 +384,6 @@ export interface IStorage {
   getStripePaymentHistoryByUserId(userId: number): Promise<StripePaymentHistory[]>;
   getStripePaymentsBySubscription(subscriptionId: string): Promise<StripePaymentHistory[]>;
   getStripePaymentByIntentId(paymentIntentId: string): Promise<StripePaymentHistory | undefined>;
-  getStripePaymentHistoryById(id: number): Promise<StripePaymentHistory | undefined>;
   getPaymentByIdempotencyKey(idempotencyKey: string): Promise<StripePaymentHistory | undefined>;
   
   // Payment Discounts methods (for discount tracking/analytics)
@@ -489,7 +479,6 @@ export interface IStorage {
   // Category methods
   getCategoryById(id: number): Promise<any>;
   getCategoriesBySchoolId(schoolId: number): Promise<any[]>;
-  getCategoryByNameAndSchool(schoolId: number, name: string, isActive: boolean): Promise<any>;
   getHiddenCategoryIds(): Promise<number[]>;
   createCategory(category: any): Promise<any>;
   updateCategory(id: number, category: any): Promise<any>;
@@ -712,7 +701,6 @@ export interface IStorage {
   createPaymentAllocations(allocations: InsertPaymentAllocation[]): Promise<PaymentAllocation[]>;
   getTotalPaidForEnrollment(enrollmentId: number): Promise<number>;
   getTotalPaidForMembershipEnrollment(membershipEnrollmentId: number): Promise<number>;
-  getStrandedPaymentAllocationsForParent(parentId: number): Promise<{ totalStrandedCents: number }>;
   
   // ==================== ASSESSMENT TRACKING ====================
   // Assessment Types
@@ -812,14 +800,6 @@ export interface IStorage {
 
   // Schedule Builder - Block History
   getBlockHistory(blockId: number): Promise<WeekPlanBlockHistory[]>;
-
-  // Enrollment Session methods
-  getEnrollmentSessionsBySchoolId(schoolId: number): Promise<Session[]>;
-  getEnrollmentSessionById(id: number): Promise<Session | undefined>;
-  getOpenEnrollmentSessionsBySchoolIds(schoolIds: number[]): Promise<Session[]>;
-  createEnrollmentSession(session: InsertSession): Promise<Session>;
-  updateEnrollmentSession(id: number, data: Partial<InsertSession>): Promise<Session | undefined>;
-  deleteEnrollmentSession(id: number): Promise<void>;
 }
 
 export class MemStorage implements IStorage {
@@ -1239,13 +1219,6 @@ export class MemStorage implements IStorage {
 
   async deleteUserRolesByUserId(userId: number): Promise<void> {
     // MemStorage doesn't track user roles - no-op
-  }
-
-  async updatePrimaryUserRole(userId: number, newRole: string, schoolId?: number | null): Promise<void> {
-    const user = this.usersStore.get(userId);
-    if (user) {
-      this.usersStore.set(userId, { ...user, role: newRole });
-    }
   }
 
   async getParentsBySchoolId(schoolId: number): Promise<User[]> {
@@ -2174,23 +2147,6 @@ export class MemStorage implements IStorage {
       .filter(e => e.parentEmail === parentEmail);
   }
 
-  async getEnrollmentFamiliesByPeriod(schoolId: number, startDate: string, endDate: string): Promise<{ parentEmail: string; parentId: number; childName: string; className: string }[]> {
-    const terminalStatuses = ['cancelled', 'waitlist', 'withdrawn', 'failed'];
-    return Array.from(this.programEnrollmentsStore.values())
-      .filter(e => {
-        if (e.schoolId !== schoolId) return false;
-        if (terminalStatuses.includes(e.status)) return false;
-        if (!e.programStartDate) return false;
-        return e.programStartDate >= startDate && e.programStartDate <= endDate;
-      })
-      .map(e => ({
-        parentEmail: e.parentEmail,
-        parentId: e.parentId,
-        childName: e.childName,
-        className: e.className,
-      }));
-  }
-
   // Membership Enrollment methods
   async getMembershipEnrollmentById(id: number): Promise<MembershipEnrollment | undefined> {
     return this.membershipEnrollmentsStore.get(id);
@@ -2246,139 +2202,6 @@ export class MemStorage implements IStorage {
 
   async deleteMembershipEnrollment(id: number): Promise<void> {
     this.membershipEnrollmentsStore.delete(id);
-  }
-
-  async bulkUpdateMembershipEnrollments(ids: number[], schoolId: number, updates: Partial<MembershipEnrollment>): Promise<number> {
-    if (ids.length === 0) return 0;
-
-    // Fail-fast: reject if ANY ID does not belong to this school or does not exist
-    for (const id of ids) {
-      const enrollment = this.membershipEnrollmentsStore.get(id);
-      if (!enrollment) {
-        throw new Error(`Unauthorized: membership ID ${id} not found`);
-      }
-      if (enrollment.schoolId !== schoolId) {
-        throw new Error(`Unauthorized: membership ID ${id} does not belong to school ${schoolId}`);
-      }
-    }
-
-    let count = 0;
-    for (const id of ids) {
-      const enrollment = this.membershipEnrollmentsStore.get(id)!;
-      // If zeroing out balanceDue and remainingBalance (marking as paid), sync amountPaid to the full amount
-      const resolvedUpdates = { ...updates };
-      if (resolvedUpdates.balanceDue === 0 && resolvedUpdates.remainingBalance === 0 && resolvedUpdates.amountPaid === undefined) {
-        resolvedUpdates.amountPaid = enrollment.amount ?? 0;
-      }
-      const updatedEnrollment: MembershipEnrollment = {
-        ...enrollment,
-        ...resolvedUpdates,
-        id,
-        updatedAt: new Date()
-      };
-      this.membershipEnrollmentsStore.set(id, updatedEnrollment);
-      count++;
-    }
-    return count;
-  }
-
-  async getWinterSessionFixPreview(schoolId: number): Promise<Array<{ membershipId: number; parentName: string; parentEmail: string; amountPaid: number; totalAmount: number; currentStatus: string }>> {
-    // Winter session date range: 2026-01-05 to 2026-03-13
-    const winterStart = new Date('2026-01-05T00:00:00Z');
-    const winterEnd = new Date('2026-03-13T23:59:59Z');
-
-    // Find pending_payment memberships for this school that have some payment recorded
-    const pendingMemberships = Array.from(this.membershipEnrollmentsStore.values())
-      .filter(m => m.schoolId === schoolId && m.status === 'pending_payment' && (m.amountPaid || 0) > 0);
-
-    if (pendingMemberships.length === 0) return [];
-
-    // Find all payment allocations where membershipEnrollmentId matches a pending membership
-    // AND the same paymentHistoryId also has an allocation to a class enrollment in the winter window
-    const pendingIds = new Set(pendingMemberships.map(m => m.id));
-
-    // Get membership allocations that link to our pending memberships
-    const membershipAllocations = Array.from(this.paymentAllocationsStore.values())
-      .filter(a => a.membershipEnrollmentId !== null && pendingIds.has(a.membershipEnrollmentId!));
-
-    if (membershipAllocations.length === 0) return [];
-
-    // Collect the paymentHistoryIds from membership allocations
-    const paymentHistoryIds = new Set(membershipAllocations.map(a => a.paymentHistoryId));
-
-    // Find class enrollment allocations with same paymentHistoryId where enrollment date is in winter window
-    const winterClassAllocations = Array.from(this.paymentAllocationsStore.values())
-      .filter(a => {
-        if (!a.enrollmentId || !paymentHistoryIds.has(a.paymentHistoryId)) return false;
-        const classEnrollment = this.schoolClassEnrollmentsStore.get(a.enrollmentId);
-        if (!classEnrollment || classEnrollment.status !== 'enrolled') return false;
-        const enrollmentDate = new Date(classEnrollment.enrollmentDate);
-        return enrollmentDate >= winterStart && enrollmentDate <= winterEnd;
-      });
-
-    if (winterClassAllocations.length === 0) return [];
-
-    // Validate that the payments associated with winter class allocations are succeeded
-    const uniquePaymentIds = [...new Set(winterClassAllocations.map(a => a.paymentHistoryId))];
-    const succeededPaymentIds = new Set<number>();
-    for (const pid of uniquePaymentIds) {
-      const paymentRecord = await this.getStripePaymentHistoryById(pid);
-      if (paymentRecord && paymentRecord.status === 'succeeded') {
-        succeededPaymentIds.add(pid);
-      }
-    }
-
-    if (succeededPaymentIds.size === 0) return [];
-
-    const qualifyingPaymentIds = succeededPaymentIds;
-
-    // Collect membership IDs whose payments qualify
-    const qualifyingMembershipIds = new Set<number>();
-    for (const alloc of membershipAllocations) {
-      if (qualifyingPaymentIds.has(alloc.paymentHistoryId) && alloc.membershipEnrollmentId !== null) {
-        qualifyingMembershipIds.add(alloc.membershipEnrollmentId!);
-      }
-    }
-
-    if (qualifyingMembershipIds.size === 0) return [];
-
-    const results = [];
-    for (const m of pendingMemberships) {
-      if (!qualifyingMembershipIds.has(m.id)) continue;
-      const user = this.usersStore.get(m.parentUserId);
-      results.push({
-        membershipId: m.id,
-        parentName: user?.name || 'Unknown',
-        parentEmail: user?.email || 'Unknown',
-        amountPaid: m.amountPaid || 0,
-        totalAmount: m.totalAmount || m.amount || 0,
-        currentStatus: m.status,
-      });
-    }
-    return results;
-  }
-
-  async applyWinterSessionFix(schoolId: number): Promise<number> {
-    const preview = await this.getWinterSessionFixPreview(schoolId);
-    let count = 0;
-    for (const item of preview) {
-      const enrollment = this.membershipEnrollmentsStore.get(item.membershipId);
-      if (enrollment) {
-        const totalAmount = enrollment.totalAmount || enrollment.amount || 0;
-        const enrolledStatus: MembershipEnrollment['status'] = 'enrolled';
-        const updatedEnrollment: MembershipEnrollment = {
-          ...enrollment,
-          status: enrolledStatus,
-          amountPaid: totalAmount,
-          balanceDue: 0,
-          remainingBalance: 0,
-          updatedAt: new Date()
-        };
-        this.membershipEnrollmentsStore.set(item.membershipId, updatedEnrollment);
-        count++;
-      }
-    }
-    return count;
   }
 
   async createOrUpdateMembershipEnrollment(parentUserId: number, schoolId: number, membershipYear: number): Promise<MembershipEnrollment> {
@@ -3698,14 +3521,6 @@ export class MemStorage implements IStorage {
     return result[0];
   }
 
-  // Note: MemStorage's stripe payment history methods are DB-backed by design —
-  // Stripe payment records are never stored purely in-memory for data integrity.
-  async getStripePaymentHistoryById(id: number): Promise<StripePaymentHistory | undefined> {
-    const db = await getDb();
-    const result = await db.select().from(stripePaymentHistory).where(eq(stripePaymentHistory.id, id)).limit(1);
-    return result[0];
-  }
-
   async getPaymentByIdempotencyKey(idempotencyKey: string): Promise<StripePaymentHistory | undefined> {
     const db = await getDb();
     const result = await db.select().from(stripePaymentHistory).where(eq(stripePaymentHistory.idempotencyKey, idempotencyKey)).limit(1);
@@ -4202,10 +4017,6 @@ export class MemStorage implements IStorage {
     }
   }
 
-  async getSessionById(id: number): Promise<Session | undefined> {
-    return undefined;
-  }
-
   async getLocationById(id: number): Promise<Location | undefined> {
     return this.locationsStore.get(id);
   }
@@ -4395,10 +4206,6 @@ export class MemStorage implements IStorage {
 
   async getCategoriesBySchoolId(schoolId: number): Promise<any[]> {
     return [];
-  }
-
-  async getCategoryByNameAndSchool(schoolId: number, name: string, isActive: boolean): Promise<any> {
-    return null;
   }
 
   async getHiddenCategoryIds(): Promise<number[]> {
@@ -4905,21 +4712,6 @@ export class MemStorage implements IStorage {
     return allocations.reduce((sum, a) => sum + a.allocatedAmountCents, 0);
   }
 
-  async getStrandedPaymentAllocationsForParent(parentId: number): Promise<{ totalStrandedCents: number }> {
-    const strandedStatuses = ['cancelled', 'withdrawn', 'failed', 'waitlist'];
-    const enrollments = await this.getProgramEnrollmentsByParent(parentId);
-    const strandedEnrollmentIds = new Set(
-      enrollments.filter(e => strandedStatuses.includes(e.status)).map(e => e.id)
-    );
-    let total = 0;
-    for (const allocation of this.paymentAllocationsStore.values()) {
-      if (allocation.enrollmentId && allocation.allocationType === 'payment' && strandedEnrollmentIds.has(allocation.enrollmentId)) {
-        total += allocation.allocatedAmountCents;
-      }
-    }
-    return { totalStrandedCents: total };
-  }
-
   // ==================== ASSESSMENT TRACKING ====================
   private assessmentTypesStore: Map<number, AssessmentType> = new Map();
   private assessmentTypeIdCounter: number = 1;
@@ -5095,14 +4887,6 @@ export class MemStorage implements IStorage {
   // Payment Reminder Log methods
   async createPaymentReminderLog(log: InsertPaymentReminderLog): Promise<PaymentReminderLog> { throw new Error('Not implemented'); }
   async getPaymentReminderLogsBySchool(schoolId: number, limit: number = 100): Promise<PaymentReminderLog[]> { return []; }
-
-  // Enrollment Session methods (MemStorage stubs)
-  async getEnrollmentSessionsBySchoolId(schoolId: number): Promise<Session[]> { return []; }
-  async getEnrollmentSessionById(id: number): Promise<Session | undefined> { return undefined; }
-  async getOpenEnrollmentSessionsBySchoolIds(schoolIds: number[]): Promise<Session[]> { return []; }
-  async createEnrollmentSession(session: InsertSession): Promise<Session> { throw new Error('Not implemented'); }
-  async updateEnrollmentSession(id: number, data: Partial<InsertSession>): Promise<Session | undefined> { return undefined; }
-  async deleteEnrollmentSession(id: number): Promise<void> {}
 }
 
 import { DatabaseStorage } from "./dbStorage";
@@ -5557,10 +5341,6 @@ import { DatabaseStorage } from "./dbStorage";
 
     async deleteUserRolesByUserId(userId: number): Promise<void> {
       return this.dbStorage.deleteUserRolesByUserId(userId);
-    }
-
-    async updatePrimaryUserRole(userId: number, newRole: string, schoolId?: number | null): Promise<void> {
-      return this.dbStorage.updatePrimaryUserRole(userId, newRole, schoolId);
     }
 
     async deleteUserLocationsByUserId(userId: number): Promise<void> {
@@ -6169,10 +5949,6 @@ import { DatabaseStorage } from "./dbStorage";
       return await db.select()
         .from(programEnrollments)
         .where(eq(programEnrollments.parentEmail, parentEmail));
-    }
-
-    async getEnrollmentFamiliesByPeriod(schoolId: number, startDate: string, endDate: string): Promise<{ parentEmail: string; parentId: number; childName: string; className: string }[]> {
-      return this.dbStorage.getEnrollmentFamiliesByPeriod(schoolId, startDate, endDate);
     }
 
     async createEnrollment(enrollment: any): Promise<any> {
@@ -6810,14 +6586,6 @@ import { DatabaseStorage } from "./dbStorage";
         return this.dbStorage.deleteUserLocation(id);
       }
 
-      async getSessionById(id: number): Promise<Session | undefined> {
-        try {
-          return await this.dbStorage.getSessionById(id);
-        } catch (error) {
-          return this.memStorage.getSessionById(id);
-        }
-      }
-
       // Location methods - use database storage with fallback to memory
       async getLocationById(id: number): Promise<Location | undefined> {
         try {
@@ -6884,14 +6652,6 @@ import { DatabaseStorage } from "./dbStorage";
         }
       }
 
-      async getCategoryByNameAndSchool(schoolId: number, name: string, isActive: boolean): Promise<any> {
-        try {
-          return await this.dbStorage.getCategoryByNameAndSchool(schoolId, name, isActive);
-        } catch (error) {
-          return this.memStorage.getCategoryByNameAndSchool(schoolId, name, isActive);
-        }
-      }
-
       async getHiddenCategoryIds(): Promise<number[]> {
         try {
           return await this.dbStorage.getHiddenCategoryIds();
@@ -6904,8 +6664,7 @@ import { DatabaseStorage } from "./dbStorage";
         try {
           return await this.dbStorage.createCategory(category);
         } catch (error) {
-          console.error('❌ CombinedStorage.createCategory DB error:', error);
-          throw error;
+          return this.memStorage.createCategory(category);
         }
       }
 
@@ -7119,18 +6878,6 @@ import { DatabaseStorage } from "./dbStorage";
 
       async createOrUpdateMembershipEnrollment(parentUserId: number, schoolId: number, membershipYear: number): Promise<MembershipEnrollment> {
         return this.dbStorage.createOrUpdateMembershipEnrollment(parentUserId, schoolId, membershipYear);
-      }
-
-      async bulkUpdateMembershipEnrollments(ids: number[], schoolId: number, updates: Partial<MembershipEnrollment>): Promise<number> {
-        return this.dbStorage.bulkUpdateMembershipEnrollments(ids, schoolId, updates);
-      }
-
-      async getWinterSessionFixPreview(schoolId: number): Promise<Array<{ membershipId: number; parentName: string; parentEmail: string; amountPaid: number; totalAmount: number; currentStatus: string }>> {
-        return this.dbStorage.getWinterSessionFixPreview(schoolId);
-      }
-
-      async applyWinterSessionFix(schoolId: number): Promise<number> {
-        return this.dbStorage.applyWinterSessionFix(schoolId);
       }
 
       // Membership Agreement methods
@@ -7806,10 +7553,6 @@ import { DatabaseStorage } from "./dbStorage";
         return this.dbStorage.getTotalPaidForMembershipEnrollment(membershipEnrollmentId);
       }
 
-      async getStrandedPaymentAllocationsForParent(parentId: number): Promise<{ totalStrandedCents: number }> {
-        return this.dbStorage.getStrandedPaymentAllocationsForParent(parentId);
-      }
-
       // ==================== STRIPE PAYMENT HISTORY ====================
       async saveStripePayment(payment: InsertStripePaymentHistory): Promise<StripePaymentHistory> {
         return this.memStorage.saveStripePayment(payment);
@@ -7825,10 +7568,6 @@ import { DatabaseStorage } from "./dbStorage";
 
       async getStripePaymentByIntentId(paymentIntentId: string): Promise<StripePaymentHistory | undefined> {
         return this.memStorage.getStripePaymentByIntentId(paymentIntentId);
-      }
-
-      async getStripePaymentHistoryById(id: number): Promise<StripePaymentHistory | undefined> {
-        return this.dbStorage.getStripePaymentHistoryById(id);
       }
 
       async getPaymentByIdempotencyKey(idempotencyKey: string): Promise<StripePaymentHistory | undefined> {
@@ -8063,26 +7802,6 @@ import { DatabaseStorage } from "./dbStorage";
       }
       async getBlockHistory(blockId: number): Promise<WeekPlanBlockHistory[]> {
         return this.dbStorage.getBlockHistory(blockId);
-      }
-
-      // Enrollment Session methods
-      async getEnrollmentSessionsBySchoolId(schoolId: number): Promise<Session[]> {
-        return this.dbStorage.getEnrollmentSessionsBySchoolId(schoolId);
-      }
-      async getEnrollmentSessionById(id: number): Promise<Session | undefined> {
-        return this.dbStorage.getEnrollmentSessionById(id);
-      }
-      async getOpenEnrollmentSessionsBySchoolIds(schoolIds: number[]): Promise<Session[]> {
-        return this.dbStorage.getOpenEnrollmentSessionsBySchoolIds(schoolIds);
-      }
-      async createEnrollmentSession(session: InsertSession): Promise<Session> {
-        return this.dbStorage.createEnrollmentSession(session);
-      }
-      async updateEnrollmentSession(id: number, data: Partial<InsertSession>): Promise<Session | undefined> {
-        return this.dbStorage.updateEnrollmentSession(id, data);
-      }
-      async deleteEnrollmentSession(id: number): Promise<void> {
-        return this.dbStorage.deleteEnrollmentSession(id);
       }
 
       // Clear all data from storage (for testing)

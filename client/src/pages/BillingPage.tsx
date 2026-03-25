@@ -745,7 +745,6 @@ function UpcomingPaymentsTab({
     queryClient.invalidateQueries({ queryKey: ['scheduled-payments-upcoming'] });
     queryClient.invalidateQueries({ queryKey: ['billing-summary'] });
     queryClient.invalidateQueries({ queryKey: ['/api/payment-history/history'] });
-    queryClient.invalidateQueries({ queryKey: ['/api/parent/enrollments'] });
     
     toast({
       title: "Payment Successful!",
@@ -1356,7 +1355,6 @@ export default function BillingPage() {
       queryClient.invalidateQueries({ queryKey: ['/api/enrollments'] });
       queryClient.invalidateQueries({ queryKey: ['/api/parent/memberships'] });
       queryClient.invalidateQueries({ queryKey: ['stripe-subscription-schedules'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/parent/enrollments'] });
       
       // Show appropriate toast based on status
       if (redirectStatus === 'succeeded') {
@@ -1695,11 +1693,7 @@ export default function BillingPage() {
                     <div className="text-2xl font-bold text-red-600">
                       {formatCurrency(getSelectedTotal())}
                     </div>
-                    <div className="text-sm text-muted-foreground">
-                      {(billingSummary.scheduledPaymentsBalance || 0) > 0
-                        ? 'Total Outstanding (Enrollments + Pending Installments)'
-                        : 'Total Outstanding'}
-                    </div>
+                    <div className="text-sm text-muted-foreground">Total Outstanding</div>
                   </div>
                   <div className="text-center p-4 border rounded-lg">
                     <div className="text-2xl font-bold">
@@ -1721,19 +1715,18 @@ export default function BillingPage() {
                   </div>
                 </div>
                 
-                {/* Breakdown of outstanding balance — shows when scheduled installments add to the total */}
+                {/* Breakdown of outstanding balance if there are scheduled payments */}
                 {(billingSummary.scheduledPaymentsBalance || 0) > 0 && (
                   <div className="mt-4 p-4 bg-orange-50 border border-orange-200 rounded-lg">
                     <div className="text-sm font-medium text-orange-800 mb-2">Outstanding Balance Breakdown</div>
                     <div className="grid grid-cols-2 gap-2 text-sm">
                       <div className="text-gray-600">Enrollment Balances:</div>
                       <div className="text-right font-medium">{formatCurrency(billingSummary.enrollmentBalance || 0)}</div>
-                      <div className="text-gray-600">Scheduled Installments (payment plan):</div>
+                      <div className="text-gray-600">Scheduled Payments (payment plan):</div>
                       <div className="text-right font-medium text-orange-600">{formatCurrency(billingSummary.scheduledPaymentsBalance || 0)}</div>
-                      <div className="border-t pt-1 text-gray-800 font-semibold">Total Owed / Net Due:</div>
-                      <div className="border-t pt-1 text-right font-bold text-red-600">{formatCurrency(billingSummary.totalBalance || 0)}</div>
+                      <div className="border-t pt-1 text-gray-800 font-medium">Total:</div>
+                      <div className="border-t pt-1 text-right font-bold text-red-600">{formatCurrency(getSelectedTotal())}</div>
                     </div>
-                    <p className="mt-2 text-xs text-orange-600">Includes pending/overdue installments for fully-paid enrollments</p>
                   </div>
                 )}
               </CardContent>
@@ -1975,7 +1968,6 @@ export default function BillingPage() {
                           queryClient.invalidateQueries({ queryKey: ['/api/billing/summary'] });
                           queryClient.invalidateQueries({ queryKey: ['/api/enrollments'] });
                           queryClient.invalidateQueries({ queryKey: ['scheduled-payments-upcoming'] });
-                          queryClient.invalidateQueries({ queryKey: ['/api/parent/enrollments'] });
                           
                           console.log('✅ Payment success handling complete');
                         }}

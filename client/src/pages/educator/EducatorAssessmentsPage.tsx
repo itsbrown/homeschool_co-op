@@ -35,7 +35,6 @@ import {
 } from "@/components/ui/collapsible";
 import AssessmentBulkUpload from '@/components/educator/AssessmentBulkUpload';
 import { Upload } from 'lucide-react';
-import { displayScoreWithMax } from '@/lib/assessmentUtils';
 
 interface AssessmentType {
   id: number;
@@ -47,7 +46,6 @@ interface AssessmentType {
   minScore: number | null;
   maxScore: number | null;
   passingScore: number | null;
-  levelOptions: string[] | null;
   isActive: boolean;
 }
 
@@ -199,10 +197,6 @@ export default function EducatorAssessmentsPage() {
 
   const getAssessmentTypeName = (typeId: number) => {
     return assessmentTypes.find(t => t.id === typeId)?.name || 'Unknown';
-  };
-
-  const getAssessmentType = (typeId: number) => {
-    return assessmentTypes.find(t => t.id === typeId);
   };
 
   const getChildName = (childId: number) => {
@@ -391,12 +385,7 @@ export default function EducatorAssessmentsPage() {
                         </div>
                         <div className="text-right">
                           <Badge variant="outline" className="text-lg font-mono">
-                            {displayScoreWithMax(
-                              assessment.scoreValue || (assessment.scoreNumeric != null ? String(assessment.scoreNumeric) : null),
-                              getAssessmentType(assessment.assessmentTypeId)?.scoreFormat ?? 'numeric',
-                              getAssessmentType(assessment.assessmentTypeId)?.levelOptions ?? undefined,
-                              getAssessmentType(assessment.assessmentTypeId)?.maxScore ?? undefined
-                            )}
+                            {assessment.scoreValue || assessment.scoreNumeric || '—'}
                           </Badge>
                           <p className="text-xs text-muted-foreground mt-1">
                             {format(new Date(assessment.assessmentDate), 'MMM d, yyyy')}

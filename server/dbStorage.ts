@@ -1,4 +1,4 @@
-import { eq, and, desc, asc, like, or, sql, lt, gt, gte, lte, isNull, inArray, not } from 'drizzle-orm';
+import { eq, and, desc, asc, like, or, sql, lt, gt, gte, lte, isNull, inArray } from 'drizzle-orm';
 import { getDb } from './db';
 import { IStorage } from './storage';
 import {
@@ -15,7 +15,6 @@ import {
   MembershipAgreement, InsertMembershipAgreement, membershipAgreements,
   SchoolDocument, InsertSchoolDocument, schoolDocuments,
   PaymentReceipt, InsertPaymentReceipt, paymentReceipts,
-  StripePaymentHistory, InsertStripePaymentHistory, stripePaymentHistory,
   StripeSubscriptionSchedule, InsertStripeSubscriptionSchedule, stripeSubscriptionSchedules,
   MarketingLink, InsertMarketingLink, marketingLinks,
   Child, InsertChild, children,
@@ -68,9 +67,7 @@ import {
   SkeletonBlock, InsertSkeletonBlock, skeletonBlocks,
   WeekPlan, InsertWeekPlan, weekPlans,
   WeekPlanBlock, InsertWeekPlanBlock, weekPlanBlocks,
-  WeekPlanBlockHistory, InsertWeekPlanBlockHistory, weekPlanBlockHistory,
-  Session, InsertSession, sessions,
-  SchoolClassEnrollment, schoolClassEnrollments
+  WeekPlanBlockHistory, InsertWeekPlanBlockHistory, weekPlanBlockHistory
 } from '../shared/schema';
 
 /**
@@ -212,29 +209,6 @@ export class DatabaseStorage implements IStorage {
   async deleteUserRolesByUserId(userId: number): Promise<void> {
     const db = await getDb();
     await db.delete(userRoles).where(eq(userRoles.userId, userId));
-  }
-
-  async updatePrimaryUserRole(userId: number, newRole: string, schoolId?: number | null): Promise<void> {
-    const db = await getDb();
-    const existing = await db
-      .select({ id: userRoles.id })
-      .from(userRoles)
-      .where(and(eq(userRoles.userId, userId), eq(userRoles.isPrimary, true)))
-      .limit(1);
-
-    if (existing.length > 0) {
-      await db
-        .update(userRoles)
-        .set({ role: newRole as any, schoolId: schoolId ?? null })
-        .where(eq(userRoles.id, existing[0].id));
-    } else {
-      await db.insert(userRoles).values({
-        userId,
-        role: newRole as any,
-        schoolId: schoolId ?? undefined,
-        isPrimary: true,
-      });
-    }
   }
 
   async deleteUserLocationsByUserId(userId: number): Promise<void> {
@@ -1219,27 +1193,6 @@ export class DatabaseStorage implements IStorage {
     return { cancelled, skipped, errors };
   }
 
-  async getEnrollmentFamiliesByPeriod(schoolId: number, startDate: string, endDate: string): Promise<{ parentEmail: string; parentId: number; childName: string; className: string }[]> {
-    const db = await getDb();
-    const rows = await db
-      .select({
-        parentEmail: programEnrollments.parentEmail,
-        parentId: programEnrollments.parentId,
-        childName: programEnrollments.childName,
-        className: programEnrollments.className,
-      })
-      .from(programEnrollments)
-      .where(
-        and(
-          eq(programEnrollments.schoolId, schoolId),
-          gte(programEnrollments.programStartDate, startDate),
-          lte(programEnrollments.programStartDate, endDate),
-          not(inArray(programEnrollments.status, ['cancelled', 'waitlist', 'withdrawn', 'failed']))
-        )
-      );
-    return rows;
-  }
-
   // Membership Enrollment methods
   async getMembershipEnrollmentById(id: number): Promise<MembershipEnrollment | undefined> {
     const db = await getDb();
@@ -1326,190 +1279,6 @@ export class DatabaseStorage implements IStorage {
     };
 
     return this.createMembershipEnrollment(enrollmentData);
-  }
-
-  async bulkUpdateMembershipEnrollments(ids: number[], schoolId: number, updates: Partial<MembershipEnrollment>): Promise<number> {
-    if (ids.length === 0) return 0;
-    const db = await getDb();
-
-    // Validate school ownership — strict: fail-fast if any ID is missing or belongs to another school
-    const existingEnrollments = await db
-      .select({ id: membershipEnrollments.id, schoolId: membershipEnrollments.schoolId })
-      .from(membershipEnrollments)
-      .where(inArray(membershipEnrollments.id, ids));
-
-    if (existingEnrollments.length !== ids.length) {
-      const foundIds = new Set(existingEnrollments.map((e: { id: number; schoolId: number | null }) => e.id));
-      const missingIds = ids.filter(id => !foundIds.has(id));
-      throw new Error(`Bulk update rejected: membership IDs not found: ${missingIds.join(', ')}`);
-    }
-
-    const unauthorizedIds = existingEnrollments.filter((e: { id: number; schoolId: number | null }) => e.schoolId !== schoolId).map((e: { id: number; schoolId: number | null }) => e.id);
-    if (unauthorizedIds.length > 0) {
-      throw new Error(`Unauthorized: membership IDs ${unauthorizedIds.join(', ')} do not belong to school ${schoolId}`);
-    }
-
-    // Strip non-updatable fields
-    const { id: _id, createdAt: _createdAt, schoolId: _schoolId, parentUserId: _parentUserId, ...safeUpdates } = updates;
-
-    // When zeroing balanceDue and remainingBalance (mark as paid) without specifying amountPaid,
-    // set amountPaid per-record to that membership's full amount for accounting consistency.
-    const syncAmountPaid = safeUpdates.balanceDue === 0 && safeUpdates.remainingBalance === 0 && safeUpdates.amountPaid === undefined;
-
-    if (syncAmountPaid) {
-      // Need per-record amounts — do individual updates
-      const fullRecords = await db
-        .select({ id: membershipEnrollments.id, amount: membershipEnrollments.amount })
-        .from(membershipEnrollments)
-        .where(inArray(membershipEnrollments.id, ids));
-      for (const record of fullRecords) {
-        await db
-          .update(membershipEnrollments)
-          .set({ ...safeUpdates, amountPaid: record.amount ?? 0, updatedAt: new Date() })
-          .where(eq(membershipEnrollments.id, record.id));
-      }
-    } else {
-      await db
-        .update(membershipEnrollments)
-        .set({ ...safeUpdates, updatedAt: new Date() })
-        .where(inArray(membershipEnrollments.id, ids));
-    }
-
-    return ids.length;
-  }
-
-  async getWinterSessionFixPreview(schoolId: number): Promise<Array<{ membershipId: number; parentName: string; parentEmail: string; amountPaid: number; totalAmount: number; currentStatus: string }>> {
-    const db = await getDb();
-
-    // Winter session date range: 2026-01-05 to 2026-03-13
-    const winterStart = new Date('2026-01-05T00:00:00Z');
-    const winterEnd = new Date('2026-03-13T23:59:59Z');
-
-    // Find payment_history_ids for succeeded payments that also have a class enrollment
-    // in the winter session window. Use the same stripe_payment_history ID to link
-    // membership allocations (via membershipEnrollmentId) to class allocations (via enrollmentId).
-    //
-    // Join chain: payment_allocations (membershipEnrollmentId) →
-    //             membership_enrollments (pending_payment, schoolId) →
-    //             [same paymentHistoryId in payment_allocations] →
-    //             stripe_payment_history (succeeded) →
-    //             payment_allocations.enrollmentId → school_class_enrollments (enrolled) →
-    //             school_classes.enrollmentDate in winter window
-
-    // Step 1: Find all pending_payment membership IDs for this school that have a succeeded payment allocation
-    const membershipAllocations = await db
-      .select({
-        membershipEnrollmentId: paymentAllocations.membershipEnrollmentId,
-        paymentHistoryId: paymentAllocations.paymentHistoryId,
-      })
-      .from(paymentAllocations)
-      .innerJoin(stripePaymentHistory, eq(paymentAllocations.paymentHistoryId, stripePaymentHistory.id))
-      .innerJoin(membershipEnrollments, eq(paymentAllocations.membershipEnrollmentId, membershipEnrollments.id))
-      .where(
-        and(
-          eq(membershipEnrollments.schoolId, schoolId),
-          eq(membershipEnrollments.status, 'pending_payment'),
-          eq(stripePaymentHistory.status, 'succeeded')
-        )
-      );
-
-    if (membershipAllocations.length === 0) return [];
-
-    // Step 2: For each payment, check if the same payment also allocated to a winter session class enrollment
-    const paymentHistoryIds: number[] = [...new Set(membershipAllocations.map(a => a.paymentHistoryId))];
-
-    // Find payment allocations where the same payment also paid for a class enrollment
-    // that was active during the winter session window (2026-01-05 to 2026-03-13).
-    // school_class_enrollments.enrollment_date is the canonical class date field —
-    // the schoolClasses table has no start/end date columns, so enrollment_date
-    // (the date the class session enrollment was activated) is the authoritative
-    // "class date" used to identify winter session activity.
-    const winterClassAllocations = await db
-      .select({
-        paymentHistoryId: paymentAllocations.paymentHistoryId,
-      })
-      .from(paymentAllocations)
-      .innerJoin(schoolClassEnrollments, eq(paymentAllocations.enrollmentId, schoolClassEnrollments.id))
-      .where(
-        and(
-          inArray(paymentAllocations.paymentHistoryId, paymentHistoryIds),
-          eq(schoolClassEnrollments.status, 'enrolled'),
-          gte(schoolClassEnrollments.enrollmentDate, winterStart),
-          lte(schoolClassEnrollments.enrollmentDate, winterEnd)
-        )
-      );
-
-    if (winterClassAllocations.length === 0) return [];
-
-    const qualifyingPaymentIds = new Set(winterClassAllocations.map(a => a.paymentHistoryId));
-
-    // Step 3: Collect the membership IDs whose payments qualify
-    const qualifyingMembershipIds = new Set<number>();
-    for (const alloc of membershipAllocations) {
-      if (qualifyingPaymentIds.has(alloc.paymentHistoryId) && alloc.membershipEnrollmentId !== null) {
-        qualifyingMembershipIds.add(alloc.membershipEnrollmentId);
-      }
-    }
-
-    if (qualifyingMembershipIds.size === 0) return [];
-
-    // Step 4: Fetch membership details and parent info
-    const pendingMemberships = await db
-      .select()
-      .from(membershipEnrollments)
-      .where(
-        and(
-          eq(membershipEnrollments.schoolId, schoolId),
-          eq(membershipEnrollments.status, 'pending_payment'),
-          inArray(membershipEnrollments.id, [...qualifyingMembershipIds])
-        )
-      );
-
-    const results: Array<{ membershipId: number; parentName: string; parentEmail: string; amountPaid: number; totalAmount: number; currentStatus: string }> = [];
-
-    for (const m of pendingMemberships) {
-      const [parent] = await db.select().from(users).where(eq(users.id, m.parentUserId));
-      results.push({
-        membershipId: m.id,
-        parentName: parent?.name || 'Unknown',
-        parentEmail: parent?.email || 'Unknown',
-        amountPaid: m.amountPaid || 0,
-        totalAmount: m.totalAmount || m.amount || 0,
-        currentStatus: m.status,
-      });
-    }
-
-    return results;
-  }
-
-  async applyWinterSessionFix(schoolId: number): Promise<number> {
-    const preview = await this.getWinterSessionFixPreview(schoolId);
-    if (preview.length === 0) return 0;
-
-    const db = await getDb();
-
-    // For each membership, set status = enrolled, amountPaid = totalAmount, balanceDue = 0, remainingBalance = 0
-    let count = 0;
-    for (const item of preview) {
-      const [m] = await db.select().from(membershipEnrollments).where(eq(membershipEnrollments.id, item.membershipId));
-      if (!m) continue;
-      const totalAmount = m.totalAmount || m.amount || 0;
-
-      const enrolledStatus: MembershipEnrollment['status'] = 'enrolled';
-      await db
-        .update(membershipEnrollments)
-        .set({
-          status: enrolledStatus,
-          amountPaid: totalAmount,
-          balanceDue: 0,
-          remainingBalance: 0,
-          updatedAt: new Date()
-        })
-        .where(eq(membershipEnrollments.id, item.membershipId));
-      count++;
-    }
-
-    return count;
   }
 
   // Membership Agreement methods
@@ -2255,40 +2024,6 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(payments).orderBy(desc(payments.createdAt));
   }
 
-  async saveStripePayment(payment: InsertStripePaymentHistory): Promise<StripePaymentHistory> {
-    const db = await getDb();
-    const result = await db.insert(stripePaymentHistory).values(payment).returning();
-    return result[0];
-  }
-
-  async getStripePaymentHistoryByUserId(userId: number): Promise<StripePaymentHistory[]> {
-    const db = await getDb();
-    return await db.select().from(stripePaymentHistory).where(eq(stripePaymentHistory.userId, userId));
-  }
-
-  async getStripePaymentsBySubscription(subscriptionId: string): Promise<StripePaymentHistory[]> {
-    const db = await getDb();
-    return await db.select().from(stripePaymentHistory).where(eq(stripePaymentHistory.subscriptionId, subscriptionId));
-  }
-
-  async getStripePaymentByIntentId(paymentIntentId: string): Promise<StripePaymentHistory | undefined> {
-    const db = await getDb();
-    const [result] = await db.select().from(stripePaymentHistory).where(eq(stripePaymentHistory.paymentIntentId, paymentIntentId)).limit(1);
-    return result;
-  }
-
-  async getStripePaymentHistoryById(id: number): Promise<StripePaymentHistory | undefined> {
-    const db = await getDb();
-    const [result] = await db.select().from(stripePaymentHistory).where(eq(stripePaymentHistory.id, id)).limit(1);
-    return result;
-  }
-
-  async getPaymentByIdempotencyKey(idempotencyKey: string): Promise<StripePaymentHistory | undefined> {
-    const db = await getDb();
-    const [result] = await db.select().from(stripePaymentHistory).where(eq(stripePaymentHistory.idempotencyKey, idempotencyKey)).limit(1);
-    return result;
-  }
-
   async updatePaymentStatus(
     id: number,
     status: 'pending' | 'succeeded' | 'failed' | 'canceled'
@@ -2693,12 +2428,6 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Location methods
-  async getSessionById(id: number): Promise<Session | undefined> {
-    const db = await getDb();
-    const [session] = await db.select().from(sessions).where(eq(sessions.id, id));
-    return session;
-  }
-
   async getLocation(id: number): Promise<Location | undefined> {
     const db = await getDb();
     const [location] = await db.select().from(locations).where(eq(locations.id, id));
@@ -2767,15 +2496,6 @@ export class DatabaseStorage implements IStorage {
       .from(categories)
       .where(and(eq(categories.schoolId, schoolId), eq(categories.isActive, true)))
       .orderBy(asc(categories.name));
-  }
-
-  async getCategoryByNameAndSchool(schoolId: number, name: string, isActive: boolean): Promise<Category | undefined> {
-    const db = await getDb();
-    const [category] = await db
-      .select()
-      .from(categories)
-      .where(and(eq(categories.schoolId, schoolId), eq(categories.name, name), eq(categories.isActive, isActive)));
-    return category;
   }
 
   async getHiddenCategoryIds(): Promise<number[]> {
@@ -4497,7 +4217,7 @@ export class DatabaseStorage implements IStorage {
   async getAvailableCredits(userId: number): Promise<Credit[]> {
     const db = await getDb();
     const now = new Date();
-    const allCredits = await db.select().from(credits)
+    return db.select().from(credits)
       .where(and(
         eq(credits.userId, userId),
         or(
@@ -4510,8 +4230,6 @@ export class DatabaseStorage implements IStorage {
         )
       ))
       .orderBy(asc(credits.expiresAt)); // FIFO - use soonest to expire first
-    // Only include credits that still have a positive remaining balance
-    return allCredits.filter(c => (c.creditAmountCents - c.usedAmountCents) > 0);
   }
 
   async getTotalAvailableCredits(userId: number): Promise<number> {
@@ -4734,23 +4452,6 @@ export class DatabaseStorage implements IStorage {
     .from(paymentAllocations)
     .where(eq(paymentAllocations.membershipEnrollmentId, membershipEnrollmentId));
     return Number(result[0]?.total || 0);
-  }
-
-  async getStrandedPaymentAllocationsForParent(parentId: number): Promise<{ totalStrandedCents: number }> {
-    const db = await getDb();
-    const result = await db.select({
-      total: sql<number>`COALESCE(SUM(${paymentAllocations.allocatedAmountCents}), 0)`
-    })
-    .from(paymentAllocations)
-    .innerJoin(programEnrollments, eq(paymentAllocations.enrollmentId, programEnrollments.id))
-    .where(
-      and(
-        eq(programEnrollments.parentId, parentId),
-        inArray(programEnrollments.status, ['cancelled', 'withdrawn', 'failed', 'waitlist']),
-        eq(paymentAllocations.allocationType, 'payment')
-      )
-    );
-    return { totalStrandedCents: Number(result[0]?.total || 0) };
   }
 
   // ==================== CREDIT HOLDS (Reserve-then-Finalize Pattern) ====================
@@ -5620,47 +5321,5 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(weekPlanBlockHistory)
       .where(eq(weekPlanBlockHistory.blockId, blockId))
       .orderBy(desc(weekPlanBlockHistory.changedAt));
-  }
-
-  // Enrollment Session methods
-  async getEnrollmentSessionsBySchoolId(schoolId: number): Promise<Session[]> {
-    const db = await getDb();
-    return await db.select().from(sessions)
-      .where(eq(sessions.schoolId, schoolId))
-      .orderBy(desc(sessions.sortOrder));
-  }
-
-  async getEnrollmentSessionById(id: number): Promise<Session | undefined> {
-    const db = await getDb();
-    const [session] = await db.select().from(sessions).where(eq(sessions.id, id));
-    return session;
-  }
-
-  async getOpenEnrollmentSessionsBySchoolIds(schoolIds: number[]): Promise<Session[]> {
-    const db = await getDb();
-    if (schoolIds.length === 0) return [];
-    return await db.select().from(sessions)
-      .where(and(inArray(sessions.schoolId, schoolIds), eq(sessions.enrollmentOpen, true)))
-      .orderBy(desc(sessions.sortOrder));
-  }
-
-  async createEnrollmentSession(session: InsertSession): Promise<Session> {
-    const db = await getDb();
-    const [created] = await db.insert(sessions).values(session).returning();
-    return created;
-  }
-
-  async updateEnrollmentSession(id: number, data: Partial<InsertSession>): Promise<Session | undefined> {
-    const db = await getDb();
-    const [updated] = await db.update(sessions)
-      .set({ ...data, updatedAt: new Date() })
-      .where(eq(sessions.id, id))
-      .returning();
-    return updated;
-  }
-
-  async deleteEnrollmentSession(id: number): Promise<void> {
-    const db = await getDb();
-    await db.delete(sessions).where(eq(sessions.id, id));
   }
 }

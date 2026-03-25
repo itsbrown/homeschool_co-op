@@ -29,9 +29,8 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
-import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
+import AppShell from '@/components/layout/AppShell';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { displayScoreWithMax } from '@/lib/assessmentUtils';
 
 interface AssessmentType {
   id: number;
@@ -43,7 +42,6 @@ interface AssessmentType {
   minScore: number | null;
   maxScore: number | null;
   passingScore: number | null;
-  levelOptions: string[] | null;
   isActive: boolean;
   sortOrder: number;
   createdAt: string;
@@ -77,7 +75,7 @@ interface StudentAssessment {
   source: string;
   recordedBy: number;
   child?: { firstName: string; lastName: string };
-  assessmentType?: { name: string; scoreFormat?: string; maxScore?: number | null; levelOptions?: string[] | null };
+  assessmentType?: { name: string };
   curriculumBook?: { name: string } | null;
   recorder?: { firstName: string; lastName: string };
 }
@@ -415,7 +413,7 @@ export default function AssessmentManagementPage() {
   };
 
   return (
-    <SchoolAdminLayout pageTitle="Assessments">
+    <AppShell>
       <div className="container mx-auto py-6 px-4">
         <div className="flex items-center justify-between mb-6">
           <div>
@@ -631,12 +629,7 @@ export default function AssessmentManagementPage() {
                             </TableCell>
                             <TableCell>
                               <Badge variant="outline" className="bg-blue-50 text-blue-700">
-                                {displayScoreWithMax(
-                                  assessment.score,
-                                  assessment.assessmentType?.scoreFormat ?? 'numeric',
-                                  assessment.assessmentType?.levelOptions ?? undefined,
-                                  assessment.assessmentType?.maxScore ?? undefined
-                                )}
+                                {assessment.score}
                               </Badge>
                             </TableCell>
                             <TableCell>
@@ -917,7 +910,7 @@ export default function AssessmentManagementPage() {
           </DialogContent>
         </Dialog>
       </div>
-    </SchoolAdminLayout>
+    </AppShell>
   );
 }
 

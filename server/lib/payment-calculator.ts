@@ -17,22 +17,6 @@ export interface PaymentSchedule {
 }
 
 /**
- * Distribute remainder cents evenly across all payments (round-robin).
- * Prevents a visually jarring "giant final payment" caused by lumping all
- * rounding cents onto the last installment.
- *
- * Example: $1300 over 9 payments → base=$144, remainder=4¢
- *   → [145, 145, 145, 145, 144, 144, 144, 144, 144]  (first 4 get +1¢)
- */
-function distributeRemainder(base: number, remainder: number, count: number): number[] {
-  const amounts = new Array(count).fill(base);
-  for (let i = 0; i < remainder; i++) {
-    amounts[i % count] += 1;
-  }
-  return amounts;
-}
-
-/**
  * Calculate the number of days between two dates
  */
 function daysBetween(start: Date, end: Date): number {
@@ -78,8 +62,6 @@ export function calculatePaymentSchedule(
   endDate: Date,
   frequency: PaymentFrequency
 ): PaymentSchedule {
-  if (totalAmountCents < 50) throw new Error('Amount below Stripe minimum (50 cents)');
-
   // Validate dates first
   const validStartDate = safeParseDate(startDate, 'startDate');
   const validEndDate = safeParseDate(endDate, 'endDate');
@@ -167,18 +149,17 @@ export function calculatePaymentSchedule(
   }
   
   const numberOfPayments = paymentDates.length;
-
-  // Distribute remainder cents evenly (round-robin) so no single payment
-  // is visibly larger than the others by more than 1 cent.
-  const base = Math.floor(totalAmountCents / numberOfPayments);
-  const remainder = totalAmountCents - (base * numberOfPayments);
-  const paymentAmounts = distributeRemainder(base, remainder, numberOfPayments);
-
+  
+  // Calculate payment amounts based on actual number of payments
+  const basePaymentAmount = Math.floor(totalAmountCents / numberOfPayments);
+  const remainder = totalAmountCents - (basePaymentAmount * numberOfPayments);
+  const finalPaymentAmount = basePaymentAmount + remainder; // Add any rounding difference to final payment
+  
   return {
     totalAmount: totalAmountCents,
     numberOfPayments,
-    paymentAmount: paymentAmounts[0],
-    finalPaymentAmount: paymentAmounts[numberOfPayments - 1],
+    paymentAmount: basePaymentAmount,
+    finalPaymentAmount,
     paymentDates,
     frequency,
     startDate: new Date(startDate),
@@ -240,16 +221,16 @@ export function calculateCheckoutBiweeklySchedule(
   }
   
   const totalPayments = allPaymentDates.length;
-
-  const base = Math.floor(totalAmountCents / totalPayments);
-  const remainder = totalAmountCents - (base * totalPayments);
-  const paymentAmounts = distributeRemainder(base, remainder, totalPayments);
-
+  
+  const basePaymentAmount = Math.floor(totalAmountCents / totalPayments);
+  const remainder = totalAmountCents - (basePaymentAmount * totalPayments);
+  const finalPaymentAmount = basePaymentAmount + remainder;
+  
   return {
-    firstPaymentAmount: paymentAmounts[0],
+    firstPaymentAmount: basePaymentAmount,
     numberOfPayments: totalPayments,
-    paymentAmount: paymentAmounts[0],
-    finalPaymentAmount: paymentAmounts[totalPayments - 1],
+    paymentAmount: basePaymentAmount,
+    finalPaymentAmount,
     paymentDates: allPaymentDates,
     totalAmount: totalAmountCents
   };
@@ -322,32 +303,21 @@ export function recalculatePaymentSchedule(
   if (remainingBalance <= 0) {
     errors.push('Enrollment is already paid in full');
   }
-
-  const programEnded = currentDate > programEndDate;
-
-  // Validation: Ended programs only allow one-time payments
-  if (programEnded) {
-    if (newFrequency !== 'one_time') {
-      errors.push('Program has ended — only a one-time payment is allowed.');
-    } else if (remainingBalance < 50) {
-      // Balance too small for Stripe (already caught above if <= 0, but catch < 50 cents too)
-      if (remainingBalance > 0) {
-        errors.push('Enrollment is already paid in full');
-      }
-    }
+  
+  // Validation: Ensure program hasn't ended
+  if (currentDate > programEndDate) {
+    errors.push('Program has already ended');
   }
-
+  
   // Calculate remaining days from now to program end
   const remainingDays = daysBetween(currentDate, programEndDate);
-
-  // Validation: Check if enough time remains for the requested frequency (active programs only)
-  if (!programEnded) {
-    const minDaysRequired = newFrequency === 'weekly' ? 7 : newFrequency === 'biweekly' ? 14 : 30;
-    if (remainingDays < minDaysRequired && newFrequency !== 'one_time') {
-      errors.push(`Not enough time remaining (${remainingDays} days) for ${newFrequency} payments. Minimum required: ${minDaysRequired} days.`);
-    }
+  
+  // Validation: Check if enough time remains for the requested frequency
+  const minDaysRequired = newFrequency === 'weekly' ? 7 : newFrequency === 'biweekly' ? 14 : 30;
+  if (remainingDays < minDaysRequired && newFrequency !== 'one_time') {
+    errors.push(`Not enough time remaining (${remainingDays} days) for ${newFrequency} payments. Minimum required: ${minDaysRequired} days.`);
   }
-
+  
   // If there are validation errors, return them
   if (errors.length > 0) {
     return {
@@ -362,15 +332,12 @@ export function recalculatePaymentSchedule(
       validationErrors: errors
     };
   }
-
-  // For ended programs with one_time payment, schedule date is today
-  const scheduleEndDate = programEnded ? currentDate : programEndDate;
-
+  
   // Calculate schedule for the remaining balance starting from today
   const recalculatedSchedule = calculatePaymentSchedule(
     remainingBalance,
     currentDate,
-    scheduleEndDate,
+    programEndDate,
     newFrequency
   );
   

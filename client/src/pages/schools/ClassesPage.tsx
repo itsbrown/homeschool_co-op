@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Loader2, PlusCircle, Search, Filter, FileDown, Calendar, Users, Clock, Settings, ArrowUpDown, ArrowUp, ArrowDown, Upload, X, Pencil } from "lucide-react";
+import { Loader2, PlusCircle, Search, Filter, FileDown, Calendar, Users, Clock, Settings, ArrowUpDown, ArrowUp, ArrowDown, Upload, X, Tags } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -30,20 +30,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, safeJsonParse } from "@/lib/queryClient";
 import { useRole } from "@/contexts/RoleContext";
 import { formatDate } from "@/lib/utils";
 
@@ -132,15 +123,13 @@ export default function SchoolClassesPage() {
   
   // Bulk selection state
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-  const [bulkEditOpen, setBulkEditOpen] = useState(false);
-  const [bulkFields, setBulkFields] = useState<Record<string, string>>({});
+  const [bulkSessionId, setBulkSessionId] = useState<string>("");
 
   // Column visibility state
   const [visibleColumns, setVisibleColumns] = useState({
     className: true,
     category: true,
     instructor: true,
-    session: true,
     gradeLevel: true,
     location: true,
     status: true,
@@ -201,7 +190,12 @@ export default function SchoolClassesPage() {
   // Only fetch when user has an active role (school context is set)
   const { data: classes, isLoading, error, refetch } = useQuery({
     queryKey: ['/api/school-admin/classes'],
-    enabled: !!activeRole,
+    queryFn: async () => {
+      const response = await apiRequest("GET", "/api/school-admin/classes");
+      const data = await safeJsonParse(response);
+      return data;
+    },
+    enabled: !!activeRole, // Only run query when school context is available
   });
 
   // Fetch sessions for bulk assignment
@@ -210,67 +204,33 @@ export default function SchoolClassesPage() {
     enabled: !!activeRole,
   });
 
-  const { data: staffMembers = [] } = useQuery<any[]>({
-    queryKey: ["/api/school-admin/staff"],
-    enabled: !!activeRole,
-  });
-
-  const { data: locationData = [] } = useQuery<any[]>({
-    queryKey: ["/api/locations"],
-    enabled: !!activeRole,
-  });
-
-  const { data: curricula = [] } = useQuery<any[]>({
-    queryKey: ["/api/curricula"],
-    enabled: !!activeRole,
-  });
-
-  const bulkUpdateMutation = useMutation({
-    mutationFn: async ({ classIds, fields }: { classIds: number[]; fields: Record<string, any> }) => {
-      const res = await apiRequest("PATCH", "/api/school-admin/classes/bulk-update", { classIds, fields });
-      if (!res.ok) throw new Error("Failed to bulk update classes");
+  // Bulk assign session mutation
+  const bulkAssignSessionMutation = useMutation({
+    mutationFn: async ({ classIds, sessionId }: { classIds: number[]; sessionId: number | null }) => {
+      const res = await apiRequest("PATCH", "/api/school-admin/classes/bulk-session", { classIds, sessionId });
+      if (!res.ok) throw new Error("Failed to assign session");
       return res.json();
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/school-admin/classes"] });
       queryClient.invalidateQueries({ queryKey: ["/api/school-admin/classes-list"] });
       setSelectedIds(new Set());
-      setBulkEditOpen(false);
-      setBulkFields({});
-      toast({ title: "Bulk edit complete", description: `Updated ${data.updated} class${data.updated !== 1 ? "es" : ""}.` });
+      setBulkSessionId("");
+      toast({ title: "Session assigned", description: `Updated ${data.updated} class${data.updated !== 1 ? "es" : ""}.` });
     },
     onError: () => {
-      toast({ title: "Error", description: "Failed to update classes. Please try again.", variant: "destructive" });
+      toast({ title: "Error", description: "Failed to assign session. Please try again.", variant: "destructive" });
     },
   });
 
-  const handleBulkEditSubmit = () => {
+  const handleBulkAssignSession = () => {
     if (selectedIds.size === 0) return;
-    const fields: Record<string, any> = {};
-    if (bulkFields.status) fields.status = bulkFields.status;
-    if (bulkFields.categoryName) fields.categoryName = bulkFields.categoryName;
-    if (bulkFields.gradeLevel) fields.gradeLevel = bulkFields.gradeLevel;
-    if (bulkFields.subject) fields.subject = bulkFields.subject;
-    if (bulkFields.instructorId) {
-      if (bulkFields.instructorId === "none") {
-        fields.instructorId = null;
-        fields.instructorName = "no-instructor";
-      } else {
-        fields.instructorId = parseInt(bulkFields.instructorId);
-        const staff = (staffMembers || []).find((s: any) => String(s.id) === bulkFields.instructorId);
-        if (staff) fields.instructorName = staff.name || `${staff.firstName || ''} ${staff.lastName || ''}`.trim();
-      }
-    }
-    if (bulkFields.locationId) fields.locationId = bulkFields.locationId === "none" ? null : parseInt(bulkFields.locationId);
-    if (bulkFields.curriculumId) fields.curriculumId = bulkFields.curriculumId === "none" ? null : parseInt(bulkFields.curriculumId);
-    if (bulkFields.maxEnrollment) fields.maxEnrollment = parseInt(bulkFields.maxEnrollment);
-    if (bulkFields.sessionId) fields.sessionId = bulkFields.sessionId === "none" ? null : parseInt(bulkFields.sessionId);
-
-    if (Object.keys(fields).length === 0) {
-      toast({ title: "No changes", description: "Please fill in at least one field to update.", variant: "destructive" });
+    const sessionId = bulkSessionId === "none" ? null : bulkSessionId ? parseInt(bulkSessionId) : null;
+    if (bulkSessionId === "") {
+      toast({ title: "No session selected", description: "Please pick a session to assign.", variant: "destructive" });
       return;
     }
-    bulkUpdateMutation.mutate({ classIds: Array.from(selectedIds), fields });
+    bulkAssignSessionMutation.mutate({ classIds: Array.from(selectedIds), sessionId });
   };
 
   const toggleSelectAll = () => {
@@ -539,12 +499,11 @@ export default function SchoolClassesPage() {
 
   const exportClassList = () => {
     const csvContent = [
-      ['Class Name', 'Category', 'Instructor', 'Session', 'Grade Level', 'Status', 'Enrollment', 'Start Date', 'End Date', 'Schedule'],
+      ['Class Name', 'Category', 'Instructor', 'Grade Level', 'Status', 'Enrollment', 'Start Date', 'End Date', 'Schedule'],
       ...sortedClasses.map((cls: any) => [
         cls.title,
         cls.categoryName || cls.category || '',
         cls.instructorName || cls.instructor || 'Unassigned',
-        cls.sessionName || '',
         cls.gradeLevel,
         cls.status,
         `${cls.enrollmentCount || 0}/${cls.capacity || cls.maxEnrollment || 0}`,
@@ -718,12 +677,6 @@ export default function SchoolClassesPage() {
                         Instructor
                       </DropdownMenuCheckboxItem>
                       <DropdownMenuCheckboxItem
-                        checked={visibleColumns.session}
-                        onCheckedChange={() => toggleColumn('session')}
-                      >
-                        Session
-                      </DropdownMenuCheckboxItem>
-                      <DropdownMenuCheckboxItem
                         checked={visibleColumns.gradeLevel}
                         onCheckedChange={() => toggleColumn('gradeLevel')}
                       >
@@ -782,146 +735,33 @@ export default function SchoolClassesPage() {
                     </Button>
                   </div>
                   <div className="flex items-center gap-2 flex-1">
+                    <Tags className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <Select value={bulkSessionId} onValueChange={setBulkSessionId}>
+                      <SelectTrigger className="w-[220px] h-8">
+                        <SelectValue placeholder="Pick a session..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">— No Session —</SelectItem>
+                        {(sessions || []).map((s: any) => (
+                          <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <Button
                       size="sm"
                       className="h-8"
-                      onClick={() => { setBulkFields({}); setBulkEditOpen(true); }}
+                      disabled={!bulkSessionId || bulkAssignSessionMutation.isPending}
+                      onClick={handleBulkAssignSession}
                     >
-                      <Pencil className="h-3.5 w-3.5 mr-1.5" />
-                      Bulk Edit
+                      {bulkAssignSessionMutation.isPending ? (
+                        <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />Assigning...</>
+                      ) : (
+                        "Assign Session"
+                      )}
                     </Button>
                   </div>
                 </div>
               )}
-
-              <Dialog open={bulkEditOpen} onOpenChange={setBulkEditOpen}>
-                <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
-                  <DialogHeader>
-                    <DialogTitle>Bulk Edit {selectedIds.size} Class{selectedIds.size !== 1 ? "es" : ""}</DialogTitle>
-                    <DialogDescription>Only fields you fill in will be updated. Leave fields blank to keep their current values.</DialogDescription>
-                  </DialogHeader>
-                  <div className="grid gap-4 py-4">
-                    <div className="grid gap-2">
-                      <Label>Status</Label>
-                      <Select value={bulkFields.status || ""} onValueChange={(v) => setBulkFields(prev => ({ ...prev, status: v }))}>
-                        <SelectTrigger style={{ fontSize: '16px' }}>
-                          <SelectValue placeholder="— No change —" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="upcoming">Upcoming</SelectItem>
-                          <SelectItem value="active">Active</SelectItem>
-                          <SelectItem value="completed">Completed</SelectItem>
-                          <SelectItem value="cancelled">Cancelled</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="grid gap-2">
-                      <Label>Category / Program Name</Label>
-                      <Input
-                        placeholder="e.g. SPRING 2025 10 WEEK PROGRAM"
-                        value={bulkFields.categoryName || ""}
-                        onChange={(e) => setBulkFields(prev => ({ ...prev, categoryName: e.target.value }))}
-                        style={{ fontSize: '16px' }}
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label>Grade Level</Label>
-                      <Input
-                        placeholder="e.g. 9-12"
-                        value={bulkFields.gradeLevel || ""}
-                        onChange={(e) => setBulkFields(prev => ({ ...prev, gradeLevel: e.target.value }))}
-                        style={{ fontSize: '16px' }}
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label>Subject</Label>
-                      <Input
-                        placeholder="e.g. Mathematics"
-                        value={bulkFields.subject || ""}
-                        onChange={(e) => setBulkFields(prev => ({ ...prev, subject: e.target.value }))}
-                        style={{ fontSize: '16px' }}
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label>Instructor</Label>
-                      <Select value={bulkFields.instructorId || ""} onValueChange={(v) => setBulkFields(prev => ({ ...prev, instructorId: v }))}>
-                        <SelectTrigger style={{ fontSize: '16px' }}>
-                          <SelectValue placeholder="— No change —" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">— Unassign —</SelectItem>
-                          {(staffMembers || []).map((s: any) => (
-                            <SelectItem key={s.id} value={String(s.id)}>{s.name || `${s.firstName || ''} ${s.lastName || ''}`.trim()}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="grid gap-2">
-                      <Label>Location</Label>
-                      <Select value={bulkFields.locationId || ""} onValueChange={(v) => setBulkFields(prev => ({ ...prev, locationId: v }))}>
-                        <SelectTrigger style={{ fontSize: '16px' }}>
-                          <SelectValue placeholder="— No change —" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">— Unassign —</SelectItem>
-                          {(locationData || []).map((loc: any) => (
-                            <SelectItem key={loc.id} value={String(loc.id)}>{loc.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="grid gap-2">
-                      <Label>Curriculum</Label>
-                      <Select value={bulkFields.curriculumId || ""} onValueChange={(v) => setBulkFields(prev => ({ ...prev, curriculumId: v }))}>
-                        <SelectTrigger style={{ fontSize: '16px' }}>
-                          <SelectValue placeholder="— No change —" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">— Unassign —</SelectItem>
-                          {(curricula || []).map((c: any) => (
-                            <SelectItem key={c.id} value={String(c.id)}>{c.title || c.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="grid gap-2">
-                      <Label>Max Enrollment</Label>
-                      <Input
-                        type="number"
-                        min={1}
-                        placeholder="e.g. 25"
-                        value={bulkFields.maxEnrollment || ""}
-                        onChange={(e) => setBulkFields(prev => ({ ...prev, maxEnrollment: e.target.value }))}
-                        style={{ fontSize: '16px' }}
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label>Session</Label>
-                      <Select value={bulkFields.sessionId || ""} onValueChange={(v) => setBulkFields(prev => ({ ...prev, sessionId: v }))}>
-                        <SelectTrigger style={{ fontSize: '16px' }}>
-                          <SelectValue placeholder="— No change —" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">— No Session —</SelectItem>
-                          {(sessions || []).map((s: any) => (
-                            <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <DialogFooter>
-                    <Button variant="outline" onClick={() => setBulkEditOpen(false)}>Cancel</Button>
-                    <Button onClick={handleBulkEditSubmit} disabled={bulkUpdateMutation.isPending}>
-                      {bulkUpdateMutation.isPending ? (
-                        <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving...</>
-                      ) : (
-                        "Save Changes"
-                      )}
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
 
               {/* List View */}
               <TabsContent value="list">
@@ -948,7 +788,6 @@ export default function SchoolClassesPage() {
                             {visibleColumns.className && <TableHead>Class Name</TableHead>}
                             {visibleColumns.category && <TableHead>Category</TableHead>}
                             {visibleColumns.instructor && <TableHead>Instructor</TableHead>}
-                            {visibleColumns.session && <TableHead>Session</TableHead>}
                             {visibleColumns.gradeLevel && <TableHead>Grade Level</TableHead>}
                             {visibleColumns.location && <TableHead>Location</TableHead>}
                             {visibleColumns.status && <TableHead>Status</TableHead>}
@@ -977,7 +816,6 @@ export default function SchoolClassesPage() {
                                       : (cls.instructor || "No Instructor Assigned")}
                                   </TableCell>
                                 )}
-                                {visibleColumns.session && <TableCell>{cls.sessionName || ''}</TableCell>}
                                 {visibleColumns.gradeLevel && <TableCell>{cls.gradeLevel}</TableCell>}
                                 {visibleColumns.location && <TableCell>{cls.locationName || cls.location || "Not Specified"}</TableCell>}
                                 {visibleColumns.status && (
@@ -1086,12 +924,6 @@ export default function SchoolClassesPage() {
                               <span className="font-medium">Location:</span>
                               <p className="text-muted-foreground">{cls.locationName || cls.location || "Not Specified"}</p>
                             </div>
-                            {cls.sessionName && (
-                              <div>
-                                <span className="font-medium">Session:</span>
-                                <p className="text-muted-foreground">{cls.sessionName}</p>
-                              </div>
-                            )}
                             {(cls.startDate || cls.endDate) && (
                               <div className="col-span-2">
                                 <span className="font-medium">Dates:</span>

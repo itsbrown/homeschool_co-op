@@ -268,8 +268,7 @@ export async function processPayment(
           }
           
           const newPaid = currentPaid + allocation.amountCents + creditShareForThisEnrollment;
-          const compAmount = enrollment.compAmountCents ?? 0;
-          const newBalance = Math.max(0, (enrollment.totalCost || 0) - newPaid - compAmount);
+          const newBalance = Math.max(0, (enrollment.totalCost || 0) - newPaid);
           
           await storage.updateProgramEnrollment(enrollment.id, {
             totalPaid: newPaid,
@@ -316,12 +315,8 @@ export async function processPayment(
                 continue;
               }
               
-              if (newBalance === 0 && (sp.status === 'pending' || sp.status === 'overdue')) {
-                // Enrollment is fully paid — cancel ALL remaining pending/overdue installments
-                await storage.updateScheduledPayment(sp.id, { status: 'cancelled' });
-                paymentsMarked++;
-              } else if (cumulativeAmount <= newPaid) {
-                // For pending/failed payments: mark as completed if cumulative is covered by totalPaid
+              // For pending/failed payments: mark as completed if cumulative is covered by totalPaid
+              if (cumulativeAmount <= newPaid) {
                 await storage.updateScheduledPayment(sp.id, {
                   status: 'completed',
                   processedAt: new Date(),

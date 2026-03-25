@@ -62,11 +62,6 @@ export async function reconcileEnrollmentScheduledPayments(
     .filter(sp => sp.status !== 'cancelled' && sp.status !== 'skipped')
     .reduce((sum, sp) => sum + sp.amount, 0);
 
-  // Compute effective balance using the canonical formula
-  const totalCost = enrollment.totalCost || 0;
-  const compAmount = enrollment.compAmountCents ?? 0;
-  const effectiveBalance = Math.max(0, totalCost - totalPaid - compAmount);
-
   for (const sp of sortedPayments) {
     if (sp.status === 'cancelled' || sp.status === 'skipped') {
       continue;
@@ -78,20 +73,7 @@ export async function reconcileEnrollmentScheduledPayments(
       continue;
     }
 
-    if (effectiveBalance === 0) {
-      // Enrollment is fully paid — cancel ALL remaining pending/overdue installments
-      if (sp.status === 'pending' || sp.status === 'overdue') {
-        if (!dryRun) {
-          await storage.updateScheduledPayment(sp.id, { status: 'cancelled' });
-        }
-        details.push({
-          scheduledPaymentId: sp.id,
-          amount: sp.amount,
-          previousStatus: sp.status,
-          newStatus: 'cancelled',
-        });
-      }
-    } else if (cumulativeAmount <= totalPaid) {
+    if (cumulativeAmount <= totalPaid) {
       if (!dryRun) {
         await storage.updateScheduledPayment(sp.id, {
           status: 'completed',

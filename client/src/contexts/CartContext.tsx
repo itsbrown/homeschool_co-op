@@ -797,8 +797,6 @@ const calculateCartTotalsSync = (
   }
   
   const totalDiscountAmount = siblingDiscount + freeAfterThreeDiscount + promoDiscount;
-  // CLIENT-SIDE ESTIMATE ONLY — for cart badge & drawer preview.
-  // Final authoritative totals come from CartSnapshot after checkout initiation.
   const total = Math.max(0, subtotal - totalDiscountAmount);
 
   return {
@@ -949,8 +947,6 @@ const calculateCartTotalsWithDiscounts = async (
   const autoAndPromoDiscountAmount = allDiscounts.reduce((sum, discount) => sum + discount.discountAmount, 0);
   const totalDiscountAmount = siblingDiscount + freeAfterThreeDiscount + autoAndPromoDiscountAmount;
 
-  // CLIENT-SIDE ESTIMATE ONLY — for cart badge & drawer preview.
-  // Final authoritative totals come from CartSnapshot after checkout initiation.
   const total = Math.max(0, subtotal - totalDiscountAmount);
 
   return {
@@ -1397,16 +1393,26 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
           new Date(b.enrollmentDate).getTime() - new Date(a.enrollmentDate).getTime()
         );
 
-        // Find the latest enrollment
+        // Find the latest enrollment and check if it has a balance due
         const latestEnrollment = sortedEnrollments[0];
+        const hasBalance = latestEnrollment.remainingBalance > 0 && 
+                          latestEnrollment.paymentSystemVersion === 'v2_stripe';
+        
+        // Check if there's a fully paid enrollment (enrolled with no balance)
+        const hasFullyPaidEnrollment = sortedEnrollments.some(e => 
+          (e.status === 'enrolled' && (e.remainingBalance === 0 || e.remainingBalance === null)) ||
+          (e.paymentStatus === 'completed' && (e.remainingBalance === 0 || e.remainingBalance === null))
+        );
 
-        // Only pending_payment enrollments with a remaining balance belong in the cart.
-        // enrolled-status enrollments (even with installment balances) are managed by
-        // the billing/scheduled payments system, not the cart.
-        const isPendingPayment = latestEnrollment.status === 'pending_payment';
-        const hasBalance = latestEnrollment.remainingBalance > 0;
+        // Check if latest enrollment is fully paid
+        const latestIsPaid = (latestEnrollment.status === 'enrolled' && (latestEnrollment.remainingBalance === 0 || latestEnrollment.remainingBalance === null)) ||
+                           (latestEnrollment.paymentStatus === 'completed' && (latestEnrollment.remainingBalance === 0 || latestEnrollment.remainingBalance === null));
 
-        if (isPendingPayment && hasBalance) {
+        // Skip items where there's a fully paid enrollment OR latest enrollment is paid OR on waitlist
+        const isWaitlisted = latestEnrollment.status === 'waitlist';
+        const shouldSkip = hasFullyPaidEnrollment || latestIsPaid || isWaitlisted;
+
+        if (!isWaitlisted && !shouldSkip && (hasBalance || (latestEnrollment.status === 'pending_payment' && latestEnrollment.remainingBalance > 0))) {
           unpaidEnrollments.push(latestEnrollment);
         }
       }
@@ -1427,13 +1433,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         let statusText = 'Payment Required';
 
         // Determine appropriate status text based on payment state
-        if (enrollment.statusText) {
-          // Preserve explicitly-set statusText (e.g. "Installment Due" for enrolled-status items)
-          statusText = enrollment.statusText;
-        } else if (enrollment.status === 'partially_paid') {
+        if (enrollment.status === 'partially_paid') {
           statusText = 'Partially Paid';
-        } else if (enrollment.status === 'enrolled' && remainingBalance > 0) {
-          statusText = 'Installment Due';
         } else if (enrollment.paymentSystemVersion === 'v2_stripe' && remainingBalance > 0) {
           statusText = 'Balance Due';
         } else if (enrollment.paymentSystemVersion === 'v2_stripe') {

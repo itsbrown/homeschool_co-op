@@ -10,7 +10,7 @@ description: Frontend UI conventions, TanStack Query patterns, apiRequest usage,
 - **Never use bare `fetch()`** for authenticated endpoints — use TanStack Query (GET) or `apiRequest` (mutations). See `asa-auth-patterns` for details.
 - **Never define custom `queryFn`** in `useQuery` — the default fetcher in `queryClient.ts` handles auth headers, token refresh, and error tracking automatically.
 - **Never import React explicitly** — Vite's JSX transformer handles it.
-- **Server is the source of truth** for all pricing, enrollment status, and role data — frontend only displays. Any component showing a money amount must receive it from a server API response or CartSnapshot — never derive it from multiple primitive fields (e.g. `price + membership`, `subtotal - discount`, `amount - amountPaid`). See `asa-payment-patterns` § Frontend Money Display Rules for the full pattern.
+- **Server is the source of truth** for all pricing, enrollment status, and role data — frontend only displays.
 - **Use `@`-prefixed imports** for all project files — `@/components/...`, `@/lib/...`, `@/hooks/...`.
 - **Use `import.meta.env.VITE_*`** for frontend env vars — not `process.env`.
 

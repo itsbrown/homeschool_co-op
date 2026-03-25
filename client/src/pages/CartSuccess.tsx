@@ -80,7 +80,6 @@ export default function CartSuccess() {
           queryClient.invalidateQueries({ queryKey: ['/api/enrollments'] });
           queryClient.invalidateQueries({ queryKey: ['/api/my-credits'] });
           queryClient.invalidateQueries({ queryKey: ['billing-summary'] });
-          queryClient.invalidateQueries({ queryKey: ['/api/parent/enrollments'] });
           
           toast({
             title: "Credits Applied Successfully!",
@@ -205,7 +204,6 @@ export default function CartSuccess() {
           queryClient.invalidateQueries({ queryKey: ['billing-summary'] });
           queryClient.invalidateQueries({ queryKey: ['payment-history'] });
           queryClient.invalidateQueries({ queryKey: ['scheduled-payments-upcoming'] });
-          queryClient.invalidateQueries({ queryKey: ['/api/parent/enrollments'] });
           
           console.log('✅ Cart cleared and queries invalidated');
           

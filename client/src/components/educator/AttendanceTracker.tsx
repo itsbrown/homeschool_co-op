@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { Users, Check, X, Clock, AlertCircle, UserCheck, Loader2, Save, MessageSquare, LogOut } from 'lucide-react';
+import { Users, Check, X, Clock, AlertCircle, UserCheck, Loader2, Save, MessageSquare } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -31,7 +31,7 @@ import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { EducatorLoadingState, EducatorErrorState } from './EducatorErrorBoundary';
 
-type AttendanceStatus = 'present' | 'absent' | 'late' | 'excused' | 'early_departure';
+type AttendanceStatus = 'present' | 'absent' | 'late' | 'excused';
 
 interface RosterStudent {
   childId: number;
@@ -56,7 +56,6 @@ const STATUS_CONFIG: Record<AttendanceStatus, { label: string; icon: typeof Chec
   absent: { label: 'Absent', icon: X, color: 'text-red-600', bgColor: 'bg-red-100' },
   late: { label: 'Late', icon: Clock, color: 'text-yellow-600', bgColor: 'bg-yellow-100' },
   excused: { label: 'Excused', icon: AlertCircle, color: 'text-blue-600', bgColor: 'bg-blue-100' },
-  early_departure: { label: 'Early Departure', icon: LogOut, color: 'text-orange-600', bgColor: 'bg-orange-100' },
 };
 
 export function AttendanceTracker({ sessionId, isSessionActive, schoolId }: AttendanceTrackerProps) {
@@ -309,16 +308,6 @@ export function AttendanceTracker({ sessionId, isSessionActive, schoolId }: Atte
                     <Clock className="h-3 w-3" />
                     Late
                   </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="gap-1 text-orange-600 border-orange-300 hover:bg-orange-50"
-                    onClick={() => markSelectedAs('early_departure')}
-                    data-testid="button-mark-early-departure"
-                  >
-                    <LogOut className="h-3 w-3" />
-                    Early Departure
-                  </Button>
                 </>
               )}
 
@@ -434,12 +423,6 @@ export function AttendanceTracker({ sessionId, isSessionActive, schoolId }: Atte
                             <span className="flex items-center gap-2">
                               <AlertCircle className="h-4 w-4 text-blue-600" />
                               Excused
-                            </span>
-                          </SelectItem>
-                          <SelectItem value="early_departure">
-                            <span className="flex items-center gap-2">
-                              <LogOut className="h-4 w-4 text-orange-600" />
-                              Early Departure
                             </span>
                           </SelectItem>
                         </SelectContent>

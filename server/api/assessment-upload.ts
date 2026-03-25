@@ -4,7 +4,6 @@ import { supabaseAuth, requireSchoolContext } from '../middleware/supabase-auth'
 import { storage } from '../storage';
 import { anthropicService } from '../services/anthropic';
 import { UploadedFile } from 'express-fileupload';
-import { validateScore, normalizeScore } from './assessments';
 
 const router = Router();
 
@@ -215,7 +214,7 @@ router.post('/match-students', supabaseAuth, requireSchoolContext, async (req: R
       const record = records[i];
       const parsed: ParsedAssessment = {
         studentName: '',
-        rowIndex: i + 2,
+        rowIndex: i + 1,
         errors: [],
         warnings: [],
       };
@@ -429,42 +428,17 @@ router.post('/import', supabaseAuth, requireSchoolContext, async (req: Request, 
             : String(assessment.scoreNumerator);
         }
         
-        if (!scoreText) {
-          results.failed++;
-          results.errors.push({ row: assessment.rowIndex, error: 'Missing score value' });
-          continue;
-        }
-        
-        // Validate score against the assessment type's format
-        const scoreError = validateScore(
-          scoreText,
-          assessmentType.scoreFormat,
-          assessmentType.levelOptions,
-          assessmentType.maxScore
-        );
-        if (scoreError) {
-          results.failed++;
-          results.errors.push({ row: assessment.rowIndex, error: scoreError });
-          continue;
-        }
-        
-        // Normalize score (e.g. uppercase letter grades)
-        const normalizedScore = normalizeScore(scoreText, assessmentType.scoreFormat);
-        
         await storage.createStudentAssessment({
           schoolId,
           childId: assessment.matchedChildId,
           assessmentTypeId,
           curriculumBookId: curriculumBookId || null,
           locationId: locationId || null,
-          sessionId: null,
           assessmentDate,
-          score: normalizedScore,
+          score: scoreText || '0',
           lesson: assessment.lessonNumber || null,
           notes: assessment.notes || null,
           recordedBy,
-          source: 'manual_entry',
-          lexileScore: null,
         });
         
         results.successful++;
@@ -479,12 +453,9 @@ router.post('/import', supabaseAuth, requireSchoolContext, async (req: Request, 
     
     res.json({
       message: `Successfully imported ${results.successful} assessments. Failed: ${results.failed}.`,
-      successCount: results.successful,
-      failedRows: results.errors,
-      errors: results.errors,
-      // Legacy keys for backwards compatibility
       successful: results.successful,
       failed: results.failed,
+      errors: results.errors,
     });
   } catch (error) {
     console.error('Error importing assessments:', error);

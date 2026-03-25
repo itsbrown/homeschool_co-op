@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Printer, CalendarDays, CheckCircle2, Loader2, BookOpen } from "lucide-react";
+import { Printer, Download, CalendarDays, CheckCircle2, Loader2, BookOpen } from "lucide-react";
 import type { WeekPlan, WeekPlanBlock, WeeklySkeleton, SkeletonBlock } from "@shared/schema";
 
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -311,31 +311,7 @@ export default function WeeklySchedulePage() {
     );
   }
 
-  // Auto-select the week plan closest to (but not after) today, falling back to the most recent
-  const activeTab = (() => {
-    if (selectedTab) return selectedTab;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const pastOrCurrentPlans = plans.filter((p) => {
-      const startDate = new Date(p.weekStartDate + "T00:00:00");
-      return startDate <= today;
-    });
-    if (pastOrCurrentPlans.length > 0) {
-      const closest = pastOrCurrentPlans.reduce((best, plan) => {
-        const planDate = new Date(plan.weekStartDate + "T00:00:00");
-        const bestDate = new Date(best.weekStartDate + "T00:00:00");
-        return planDate > bestDate ? plan : best;
-      });
-      return String(closest.id);
-    }
-    // No past plans (all are in the future), fall back to earliest upcoming (latest weekStartDate)
-    const mostRecent = plans.reduce((best, plan) => {
-      const planDate = new Date(plan.weekStartDate + "T00:00:00");
-      const bestDate = new Date(best.weekStartDate + "T00:00:00");
-      return planDate < bestDate ? plan : best;
-    });
-    return String(mostRecent.id);
-  })();
+  const activeTab = selectedTab || String(plans[0].id);
 
   return (
     <div className="p-4 md:p-6 lg:p-8 max-w-7xl mx-auto weekly-schedule-page">
@@ -347,7 +323,11 @@ export default function WeeklySchedulePage() {
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={handlePrint} className="gap-1.5">
             <Printer className="h-4 w-4" />
-            <span className="hidden sm:inline">Print / Save as PDF</span>
+            <span className="hidden sm:inline">Print</span>
+          </Button>
+          <Button variant="outline" size="sm" onClick={handlePrint} className="gap-1.5">
+            <Download className="h-4 w-4" />
+            <span className="hidden sm:inline">Download PDF</span>
           </Button>
         </div>
       </div>

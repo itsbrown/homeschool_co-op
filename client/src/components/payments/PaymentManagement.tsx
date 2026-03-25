@@ -255,8 +255,7 @@ function ScheduledPaymentDialog({
   const [loadingCredits, setLoadingCredits] = useState(false);
   const [creditPaymentComplete, setCreditPaymentComplete] = useState(false);
   
-  // NOT displayed to user — used only for payment flow logic (isFullyCoveredByCredits) and submit payload.
-  // Server is authoritative; the actual credit deduction is confirmed on submit, not here.
+  // Calculate credits to apply (capped at payment amount)
   const creditsToApply = applyCredits ? Math.min(availableCredits, payment.amount) : 0;
   const amountAfterCredits = Math.max(0, payment.amount - creditsToApply);
   const isFullyCoveredByCredits = amountAfterCredits === 0 && creditsToApply > 0;
@@ -385,10 +384,6 @@ function ScheduledPaymentDialog({
         throw new Error(data.error || 'Failed to process credit payment');
       }
 
-      if (data.creditsApplied !== undefined && data.creditsApplied !== creditsToApply) {
-        console.warn('[PaymentManagement] Single-payment credit drift: local preview =', creditsToApply, ', server applied =', data.creditsApplied);
-      }
-
       setCreditPaymentComplete(true);
       toast({
         title: "Payment Successful",
@@ -399,7 +394,6 @@ function ScheduledPaymentDialog({
       queryClient.invalidateQueries({ queryKey: ['/api/parent/credits'] });
       queryClient.invalidateQueries({ queryKey: ['scheduled-payments-upcoming'] });
       queryClient.invalidateQueries({ queryKey: ['/api/parent/enrollments'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/enrollments'] });
       onSuccess();
       onClose();
     } catch (err: any) {
@@ -423,9 +417,6 @@ function ScheduledPaymentDialog({
     queryClient.invalidateQueries({ queryKey: ['/api/payment-history'] });
     queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments'] });
     queryClient.invalidateQueries({ queryKey: ['scheduled-payments-upcoming'] });
-    queryClient.invalidateQueries({ queryKey: ['/api/parent/enrollments'] });
-    queryClient.invalidateQueries({ queryKey: ['/api/parent/credits'] });
-    queryClient.invalidateQueries({ queryKey: ['/api/enrollments'] });
     onSuccess();
     onClose();
   };
@@ -470,9 +461,19 @@ function ScheduledPaymentDialog({
                   <span className="font-medium">{formatDate(payment.dueDate)}</span>
                 </div>
               )}
+              <div className="flex justify-between pt-2 border-t border-border">
+                <span>Payment Amount:</span>
+                <span className="font-medium">{formatCurrency(payment.amount)}</span>
+              </div>
+              {creditsToApply > 0 && (
+                <div className="flex justify-between text-amber-600">
+                  <span>Credits Applied:</span>
+                  <span className="font-medium">-{formatCurrency(creditsToApply)}</span>
+                </div>
+              )}
               <div className="flex justify-between pt-2 border-t border-border mt-2">
-                <span className="font-semibold">Amount due:</span>
-                <span className="font-bold text-lg">{formatCurrency(payment.amount)}</span>
+                <span className="font-semibold">Amount Due:</span>
+                <span className="font-bold text-lg">{formatCurrency(amountAfterCredits)}</span>
               </div>
             </div>
           </div>
@@ -484,8 +485,8 @@ function ScheduledPaymentDialog({
                 <div className="flex items-center gap-2">
                   <Award className="h-5 w-5 text-amber-600" />
                   <div>
-                    <p className="text-sm font-medium text-amber-800">Available credits: {formatCurrency(availableCredits)}</p>
-                    <p className="text-xs text-amber-700">The server will confirm the final credit deduction on submit.</p>
+                    <p className="text-sm font-medium text-amber-800">Available Credits</p>
+                    <p className="text-lg font-bold text-amber-600">{formatCurrency(availableCredits)}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -502,6 +503,19 @@ function ScheduledPaymentDialog({
                   />
                 </div>
               </div>
+              {applyCredits && (
+                <div className="mt-3 p-2 bg-amber-100 rounded text-sm text-amber-800">
+                  <div className="flex items-center gap-1">
+                    <Check className="h-4 w-4" />
+                    <span>
+                      {isFullyCoveredByCredits 
+                        ? `Full payment covered by credits! Remaining credits: ${formatCurrency(availableCredits - creditsToApply)}`
+                        : `${formatCurrency(creditsToApply)} will be applied. You'll pay ${formatCurrency(amountAfterCredits)} with card.`
+                      }
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -708,8 +722,6 @@ function CombinedPaymentDialog({
   const [creditPaymentComplete, setCreditPaymentComplete] = useState(false);
 
   const totalAmount = payments.reduce((sum: number, p: any) => sum + p.amount, 0);
-  // NOT displayed to user — used only for payment flow logic (isFullyCoveredByCredits) and submit payload.
-  // Server is authoritative; the actual credit deduction is confirmed on submit, not here.
   const creditsToApply = applyCredits ? Math.min(availableCredits, totalAmount) : 0;
   const amountAfterCredits = Math.max(0, totalAmount - creditsToApply);
   const isFullyCoveredByCredits = amountAfterCredits === 0 && creditsToApply > 0;
@@ -823,10 +835,6 @@ function CombinedPaymentDialog({
         throw new Error(data.error || 'Failed to process credit payment');
       }
 
-      if (data.creditsApplied !== undefined && data.creditsApplied !== creditsToApply) {
-        console.warn('[PaymentManagement] Bulk-payment credit drift: local preview =', creditsToApply, ', server applied =', data.creditsApplied);
-      }
-
       setCreditPaymentComplete(true);
       toast({
         title: "Payment Successful",
@@ -838,7 +846,6 @@ function CombinedPaymentDialog({
       queryClient.invalidateQueries({ queryKey: ['scheduled-payments-upcoming'] });
       queryClient.invalidateQueries({ queryKey: ['scheduled-payments-grouped'] });
       queryClient.invalidateQueries({ queryKey: ['/api/parent/enrollments'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/enrollments'] });
       onSuccess();
       onClose();
     } catch (err: any) {
@@ -863,8 +870,6 @@ function CombinedPaymentDialog({
     queryClient.invalidateQueries({ queryKey: ['scheduled-payments-upcoming'] });
     queryClient.invalidateQueries({ queryKey: ['scheduled-payments-grouped'] });
     queryClient.invalidateQueries({ queryKey: ['/api/parent/credits'] });
-    queryClient.invalidateQueries({ queryKey: ['/api/parent/enrollments'] });
-    queryClient.invalidateQueries({ queryKey: ['/api/enrollments'] });
     onSuccess();
     onClose();
   };
@@ -902,10 +907,20 @@ function CombinedPaymentDialog({
                   <span className="font-medium">{formatCurrency(payment.amount)}</span>
                 </div>
               ))}
-              <div className="border-t pt-2 border-border mt-2">
+              <div className="border-t pt-2 border-border">
                 <div className="flex justify-between">
-                  <span className="font-semibold">Amount due:</span>
-                  <span className="font-bold text-lg">{formatCurrency(totalAmount)}</span>
+                  <span>Payment Amount:</span>
+                  <span className="font-medium">{formatCurrency(totalAmount)}</span>
+                </div>
+                {creditsToApply > 0 && (
+                  <div className="flex justify-between text-amber-600">
+                    <span>Credits Applied:</span>
+                    <span className="font-medium">-{formatCurrency(creditsToApply)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between pt-2 border-t border-border mt-2">
+                  <span className="font-semibold">Amount Due:</span>
+                  <span className="font-bold text-lg">{formatCurrency(amountAfterCredits)}</span>
                 </div>
               </div>
             </div>
@@ -917,8 +932,8 @@ function CombinedPaymentDialog({
                 <div className="flex items-center gap-2">
                   <Award className="h-5 w-5 text-amber-600" />
                   <div>
-                    <p className="text-sm font-medium text-amber-800">Available credits: {formatCurrency(availableCredits)}</p>
-                    <p className="text-xs text-amber-700">The server will confirm the final credit deduction on submit.</p>
+                    <p className="text-sm font-medium text-amber-800">Available Credits</p>
+                    <p className="text-lg font-bold text-amber-600">{formatCurrency(availableCredits)}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -935,6 +950,19 @@ function CombinedPaymentDialog({
                   />
                 </div>
               </div>
+              {applyCredits && (
+                <div className="mt-3 p-2 bg-amber-100 rounded text-sm text-amber-800">
+                  <div className="flex items-center gap-1">
+                    <Check className="h-4 w-4" />
+                    <span>
+                      {isFullyCoveredByCredits
+                        ? `Full payment covered by credits! Remaining credits: ${formatCurrency(availableCredits - creditsToApply)}`
+                        : `${formatCurrency(creditsToApply)} will be applied. You'll pay ${formatCurrency(amountAfterCredits)} with card.`
+                      }
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -1030,7 +1058,6 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
       queryClient.invalidateQueries({ queryKey: ['/api/enrollments'] });
       queryClient.invalidateQueries({ queryKey: ['/api/parent/enrollments'] });
       queryClient.invalidateQueries({ queryKey: ['/api/parent/memberships'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/parent/credits'] });
       
       // Show appropriate toast based on status
       if (redirectStatus === 'succeeded') {
@@ -1300,15 +1327,12 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
       );
 
       const latestEnrollment = sortedEnrollments[0];
-      // Use effectiveBalance (canonical server-computed field) to determine outstanding amount.
-      // Falls back to remainingBalance for backwards-compat if effectiveBalance is absent.
-      const getBalance = (e: any) => e.effectiveBalance ?? e.remainingBalance ?? 0;
-      const hasBalance = getBalance(latestEnrollment) > 0;
+      const hasBalance = latestEnrollment.remainingBalance > 0;
       const hasFullyPaidEnrollment = sortedEnrollments.some((e: any) => 
-        e.status === 'enrolled' && getBalance(e) === 0
+        e.status === 'enrolled' && e.remainingBalance === 0
       );
 
-      if (hasBalance || (!hasFullyPaidEnrollment && latestEnrollment.status === 'pending_payment' && getBalance(latestEnrollment) > 0)) {
+      if (hasBalance || (!hasFullyPaidEnrollment && latestEnrollment.status === 'pending_payment' && latestEnrollment.remainingBalance > 0)) {
         unpaidEnrollments.push(latestEnrollment);
       }
     }
@@ -1336,35 +1360,24 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
       }
       
       return acc;
-    }, { paid: 0, succeeded: 0, pending: 0, failed: 0, refunded: 0, canceled: 0, total: 0, totalPaid: 0, totalPending: 0, totalOutstanding: 0, outstandingCount: 0, successfulCount: 0, scheduledPaymentsTotal: 0, scheduledPaymentsCount: 0, membershipOutstanding: 0 });
+    }, { paid: 0, succeeded: 0, pending: 0, failed: 0, refunded: 0, canceled: 0, total: 0, totalPaid: 0, totalPending: 0, totalOutstanding: 0, outstandingCount: 0, successfulCount: 0, scheduledPaymentsTotal: 0, scheduledPaymentsCount: 0 });
     
-    // Add outstanding balances from enrollments.
-    // Prefer effectiveBalance (canonical server-computed field); fall back to remainingBalance for compat.
+    // Add outstanding balances from enrollments
     stats.totalOutstanding = outstandingData.reduce((total: number, enrollment: any) => 
-      total + (enrollment.effectiveBalance ?? enrollment.remainingBalance ?? 0), 0
+      total + (enrollment.remainingBalance || 0), 0
     );
     stats.outstandingCount = outstandingData.length;
 
-    // Compute membership outstanding separately (displayed as a labelled line item at the bottom of the list).
-    // Added to card total so the card total equals the sum of all visible line items (enrollments + membership).
+    // Add membership fees to outstanding balance (denylist per asa-payment-patterns gold-standard).
     // 'grace_period' is intentionally included — fee is overdue but membership is still active.
+    // Use ?? not || for balance fallback — || treats a genuine $0 balance as falsy.
     const activeMemberships = (membershipEnrollments || []).filter(
       (m: any) => !['expired', 'suspended'].includes(m.status)
     );
     const membershipOutstanding = activeMemberships.reduce((total: number, m: any) => {
-      // SERVER-AUTHORITATIVE - never recalculate. Prefer effectiveBalance (server-computed,
-      // includes compAmountCents); fall back to remainingBalance for legacy records only.
-      const balance = m.effectiveBalance ?? m.remainingBalance ?? 0;
-      if (import.meta.env.MODE !== 'production' && m.effectiveBalance !== undefined) {
-        const legacyCalc = Math.max(0, m.amount - (m.amountPaid ?? 0));
-        if (Math.abs(m.effectiveBalance - legacyCalc) > 1) {
-          console.warn('[PaymentManagement] Balance drift detected: effectiveBalance =', m.effectiveBalance, ', legacy calc =', legacyCalc, 'for membership', m.id);
-        }
-      }
+      const balance = m.remainingBalance ?? Math.max(0, m.amount - (m.amountPaid ?? 0));
       return total + Math.max(0, balance);
     }, 0);
-    stats.membershipOutstanding = membershipOutstanding;
-    // Include membership in total so the card total matches the full visible list (enrollments + membership line item).
     stats.totalOutstanding += membershipOutstanding;
 
     // Add scheduled/upcoming payments from database (single source of truth)
@@ -1438,9 +1451,6 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
     }
   };
   
-  // SERVER-DERIVED NET DUE — both operands (totalOutstanding, totalAvailableCents) come from server API.
-  const netDue = Math.max(0, (paymentStats.totalOutstanding || 0) - (creditsData?.totalAvailableCents || 0));
-
   return (
     <div className="space-y-6">
       <Tabs defaultValue="all-payments" className="w-full">
@@ -1483,7 +1493,7 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
             
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Next Scheduled Installments</CardTitle>
+                <CardTitle className="text-sm font-medium">Upcoming Payments</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{formatCurrency(paymentStats.scheduledPaymentsTotal || 0)}</div>
@@ -1511,7 +1521,7 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-amber-600">
-                  {isLoadingCredits ? "Loading..." : formatCurrency(creditsData?.totalAvailableCents || 0)}
+                  {isLoadingCredits ? "Loading..." : (creditsData?.totalAvailableFormatted || '$0.00')}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
                   {creditsData?.credits?.length || 0} credit{(creditsData?.credits?.length || 0) !== 1 ? 's' : ''} on account
@@ -1519,76 +1529,7 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
               </CardContent>
             </Card>
           </div>
-
-          {/* Net Due Summary */}
-          {(!isLoadingEnrollments && !isLoadingCredits) && (
-            <Card className="border-blue-200 bg-blue-50/50">
-              <CardContent className="pt-4 pb-4">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                  <div className="flex flex-wrap gap-6 sm:gap-10">
-                    <div>
-                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Total Owed</p>
-                      <p className="text-xl font-bold text-orange-600">{formatCurrency(paymentStats.totalOutstanding || 0)}</p>
-                    </div>
-                    <div className="text-muted-foreground self-center hidden sm:block">−</div>
-                    <div>
-                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Credits Available</p>
-                      <p className="text-xl font-bold text-amber-600">{formatCurrency(creditsData?.totalAvailableCents || 0)}</p>
-                    </div>
-                    <div className="text-muted-foreground self-center hidden sm:block">=</div>
-                    <div>
-                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Net Due</p>
-                      {/* SERVER-AUTHORITATIVE - never recalculate; uses netDue const derived from server API values */}
-                      <p className={`text-xl font-bold ${netDue > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                        {formatCurrency(netDue)}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
           
-          {/* Outstanding Enrollments — per-enrollment effective_balance breakdown */}
-          {((outstandingBalances && outstandingBalances.length > 0) || (paymentStats.membershipOutstanding || 0) > 0) && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Outstanding Enrollments</CardTitle>
-                <CardDescription>Remaining balance per enrollment</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {(outstandingBalances || []).map((enrollment: any) => {
-                  const balance = enrollment.effectiveBalance ?? enrollment.remainingBalance ?? 0;
-                  return (
-                    <div key={enrollment.id} className="flex justify-between items-center p-3 border rounded-lg">
-                      <div>
-                        <p className="font-medium text-sm">{enrollment.childName || 'Child'}</p>
-                        <p className="text-xs text-muted-foreground">{enrollment.className || 'Class'}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-medium text-orange-600">{formatCurrency(balance)}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {formatCurrency(enrollment.totalPaid ?? 0)} paid of {formatCurrency(enrollment.totalCost ?? 0)}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })}
-                {(paymentStats.membershipOutstanding || 0) > 0 && (
-                  <div className="flex justify-between items-center p-3 border rounded-lg">
-                    <div>
-                      <p className="font-medium text-sm">Annual Membership Fee</p>
-                      <p className="text-xs text-muted-foreground">Membership dues</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-medium text-orange-600">{formatCurrency(paymentStats.membershipOutstanding)}</p>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
           <Card>
             <CardHeader>
               <CardTitle>Recent Transactions</CardTitle>

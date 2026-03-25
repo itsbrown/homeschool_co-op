@@ -97,7 +97,6 @@ export function InvitationsPage() {
   const getRoleLabel = (role: string) => {
     const roleLabels: Record<string, string> = {
       schoolAdmin: "School Admin",
-      director: "Director of Education",
       teacher: "Teacher",
       admin: "Admin",
       superAdmin: "Super Admin"
@@ -149,7 +148,6 @@ export function InvitationsPage() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="schoolAdmin">School Admin</SelectItem>
-                        <SelectItem value="director" data-testid="role-option-director">Director of Education</SelectItem>
                         <SelectItem value="teacher">Teacher</SelectItem>
                         <SelectItem value="admin">Admin</SelectItem>
                         <SelectItem value="superAdmin">Super Admin</SelectItem>

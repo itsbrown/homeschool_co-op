@@ -351,7 +351,6 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
       const normalizedSwitchedRole = data.activeRole ? normalizeRoleCasing(data.activeRole) : '';
       setActiveRole(normalizedSwitchedRole);
       setActiveRoleId(data.activeRoleId);
-      localStorage.setItem('activeRole', normalizedSwitchedRole);
       setShowRoleSelection(false);
 
       // Invalidate all role-scoped queries to ensure fresh data
@@ -363,7 +362,6 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
       await queryClient.invalidateQueries({ queryKey: ['/api/educator'] });
       await queryClient.invalidateQueries({ queryKey: ['/api/users'] });
       await queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
-      await queryClient.invalidateQueries({ queryKey: ['/api/schedule-builder'] });
       console.log('✅ Cache invalidation complete');
 
       toast({

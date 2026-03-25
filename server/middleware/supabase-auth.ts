@@ -264,7 +264,7 @@ export const supabaseAuth = async (
     
     // Check user_roles table for superAdmin role (multi-role system)
     // This is the source of truth for roles in the new system
-    let effectiveRole = dbUserData?.activeRole || dbUserData?.role || 'parent';
+    let effectiveRole = dbUserData?.role || 'parent';
     if (dbUserId) {
       try {
         const { getDb } = await import('../db');
@@ -340,7 +340,7 @@ export const requireEducatorRole = async (
     // Define educator-type roles (case-insensitive matching)
     const educatorRolePatterns = [
       'educator', 'mentor', 'teacher', 'instructor', 'tutor', 'facilitator',
-      'schoolAdmin', 'school_admin', 'admin', 'superAdmin', 'director'
+      'schoolAdmin', 'school_admin', 'admin', 'superAdmin'
     ];
     
     const hasEducatorRole = userRoles.some(r => 

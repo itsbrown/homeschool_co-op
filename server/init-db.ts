@@ -167,24 +167,6 @@ async function runMigrations() {
       // Constraint already exists, which is fine
       console.log('✅ Migration completed: unique constraint already exists on categories');
     }
-
-    // Replace hard unique constraint with a partial index scoped to active rows only
-    // This allows soft-deleted categories to be recreated with the same name
-    console.log('Running migration: Replacing categories unique constraint with partial index...');
-    try {
-      await db.execute(sql`
-        ALTER TABLE categories
-        DROP CONSTRAINT IF EXISTS categories_school_id_name_unique;
-      `);
-      await db.execute(sql`
-        CREATE UNIQUE INDEX IF NOT EXISTS categories_school_id_name_active_unique
-        ON categories(school_id, name)
-        WHERE is_active = true;
-      `);
-      console.log('✅ Migration completed: categories partial unique index created');
-    } catch (partialIndexError) {
-      console.log('✅ Migration completed: categories partial unique index already in place or constraint already dropped');
-    }
     
     // Seed default categories for all existing schools
     console.log('Running migration: Seeding default categories for existing schools...');
@@ -300,16 +282,6 @@ async function runMigrations() {
       } catch (roleError) {
         console.log(`✅ Migration completed: ${roleValue} value already exists in role enum`);
       }
-    }
-
-    // Add 'director' role value to existing role enum (idempotent)
-    // director has schedule-builder-level access but is scoped to educator-facing views
-    console.log('Running migration: Adding director value to role enum...');
-    try {
-      await db.execute(sql`ALTER TYPE role ADD VALUE IF NOT EXISTS 'director'`);
-      console.log('✅ Migration completed: director value added to role enum');
-    } catch (directorRoleError) {
-      console.log('✅ Migration completed: director value already exists in role enum');
     }
     
     // Create user_roles table for multi-role assignments
@@ -2321,7 +2293,6 @@ async function runMigrations() {
     await db.execute(sql`ALTER TABLE week_plan_block_history ADD COLUMN IF NOT EXISTS previous_groups JSONB`);
     await db.execute(sql`ALTER TABLE week_plan_block_history ADD COLUMN IF NOT EXISTS previous_attachments JSONB`);
     await db.execute(sql`ALTER TABLE week_plan_block_history ADD COLUMN IF NOT EXISTS changed_at TIMESTAMP DEFAULT NOW() NOT NULL`);
-    await db.execute(sql`ALTER TABLE week_plan_block_history ALTER COLUMN week_plan_block_id DROP NOT NULL`);
 
     // Drop NOT NULL from legacy columns that Drizzle no longer writes to.
     // These columns were renamed in the Drizzle schema; the old names still exist in the
@@ -2441,43 +2412,6 @@ async function runMigrations() {
     }
   } catch (repairError: any) {
     console.log('Data repair note (non-blocking):', repairError.message);
-  }
-
-  // Add classId FK to weekly_skeletons and create schedule_permissions table
-  try {
-    await db.execute(sql`
-      ALTER TABLE weekly_skeletons
-        ADD COLUMN IF NOT EXISTS class_id INTEGER REFERENCES classes(id) ON DELETE SET NULL;
-    `);
-    await db.execute(sql`
-      CREATE TABLE IF NOT EXISTS schedule_permissions (
-        id SERIAL PRIMARY KEY,
-        granted_to_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        granted_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        resource_type TEXT NOT NULL,
-        resource_id INTEGER NOT NULL,
-        permission_level TEXT NOT NULL,
-        scope TEXT DEFAULT 'granted',
-        created_at TIMESTAMP DEFAULT NOW(),
-        expires_at TIMESTAMP
-      );
-    `);
-    await db.execute(sql`
-      CREATE INDEX IF NOT EXISTS idx_schedule_permissions_user
-        ON schedule_permissions(granted_to_user_id);
-    `);
-    await db.execute(sql`
-      CREATE INDEX IF NOT EXISTS idx_schedule_permissions_resource
-        ON schedule_permissions(resource_type, resource_id);
-    `);
-    // One-time backfill (run manually in DB console — do NOT uncomment here):
-    // UPDATE weekly_skeletons ws SET class_id = c.id
-    // FROM classes c
-    // WHERE LOWER(TRIM(ws.grade_level)) = LOWER(TRIM(c.title))
-    //   AND ws.class_id IS NULL;
-    console.log('✅ Migration completed: weekly_skeletons.class_id added and schedule_permissions table created');
-  } catch (schedulePermError: any) {
-    console.log('Migration note (schedule permissions):', schedulePermError.message);
   }
 }
 

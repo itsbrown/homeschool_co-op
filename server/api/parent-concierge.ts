@@ -7,30 +7,6 @@ import { knowledgeBaseProcessor } from '../services/knowledgeBaseProcessor';
 
 const router = Router();
 
-function deduplicateEnrollments(enrollments: any[]): any[] {
-  const groups: Record<string, any[]> = {};
-  for (const e of enrollments) {
-    const key = `${e.classId}-${e.childId}`;
-    if (!groups[key]) groups[key] = [];
-    groups[key].push(e);
-  }
-  const result: any[] = [];
-  for (const group of Object.values(groups)) {
-    const sorted = group.sort((a: any, b: any) =>
-      new Date(b.enrollmentDate || b.createdAt || 0).getTime() - new Date(a.enrollmentDate || a.createdAt || 0).getTime()
-    );
-    const latest = sorted[0];
-    const hasFullyPaid = sorted.some((e: any) =>
-      e.status === 'enrolled' && Math.max(0, (e.totalCost ?? 0) - (e.totalPaid ?? 0) - (e.compAmountCents ?? 0)) === 0
-    );
-    const balance = Math.max(0, (latest.totalCost ?? 0) - (latest.totalPaid ?? 0) - (latest.compAmountCents ?? 0));
-    if (balance > 0 || (!hasFullyPaid && latest.status === 'pending_payment' && balance > 0)) {
-      result.push(latest);
-    }
-  }
-  return result;
-}
-
 const chatLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 20,
@@ -358,44 +334,43 @@ Remaining: $${(remaining / 100).toFixed(2)}`;
       }
 
       case 'check_payments': {
-        const parentEnrollments = await storage.getProgramEnrollmentsByParent(userId);
-        // Enrich with effectiveBalance — same as parent.ts to avoid stale remaining_balance
-        const enrichedPaymentEnrollments = parentEnrollments.map((e: any) => {
-          const totalPaid = e.totalPaid ?? 0;
-          const totalCost = e.totalCost ?? 0;
-          const compAmount = e.compAmountCents ?? 0;
-          const effectiveBalance = Math.max(0, totalCost - totalPaid - compAmount);
-          return { ...e, effectiveBalance };
-        });
-        const activePaymentEnrollments = enrichedPaymentEnrollments.filter((e: any) =>
-          !['cancelled', 'waitlist', 'withdrawn', 'failed', 'completed'].includes(e.status) &&
-          (!schoolId || e.schoolId === schoolId)
+        const scheduledPayments = await storage.getScheduledPaymentsByParentEmail(userEmail);
+        const pendingPayments = scheduledPayments.filter(p =>
+          p.status === 'pending' && (!schoolId || p.schoolId === schoolId)
         );
-        const dedupedEnrollments = deduplicateEnrollments(activePaymentEnrollments);
-        const unpaidEnrollments = dedupedEnrollments.filter((e: any) => e.effectiveBalance > 0);
 
-        if (unpaidEnrollments.length === 0) {
-          return 'No outstanding balances found. All payments are up to date!';
+        if (pendingPayments.length === 0) {
+          return 'No upcoming payments found. All payments are up to date!';
         }
 
-        const totalDue = unpaidEnrollments.reduce((sum: number, e: any) => sum + e.effectiveBalance, 0);
+        const totalDue = pendingPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
 
-        let result = `Total Outstanding: $${(totalDue / 100).toFixed(2)}\n\n`;
+        const overdue = pendingPayments.filter(p => {
+          if (!p.scheduledDate) return false;
+          return new Date(p.scheduledDate) < new Date();
+        });
 
-        result += unpaidEnrollments.slice(0, 8).map((e: any) =>
-          `📋 $${(e.effectiveBalance / 100).toFixed(2)} remaining — ${e.className || 'Class'}
-   Child: ${e.childName || 'Unknown'}
-   Paid: $${((e.totalPaid ?? 0) / 100).toFixed(2)} of $${((e.totalCost ?? 0) / 100).toFixed(2)}`
-        ).join('\n\n');
+        let result = `Total Outstanding: $${(totalDue / 100).toFixed(2)}\n`;
+        if (overdue.length > 0) {
+          result += `⚠️ OVERDUE PAYMENTS: ${overdue.length}\n\n`;
+        }
+
+        const allEnrollments = await storage.getAllEnrollments();
+
+        result += pendingPayments.slice(0, 8).map(p => {
+          const enrollment = allEnrollments.find((e: any) => e.id === p.enrollmentId);
+          const isOverdue = p.scheduledDate && new Date(p.scheduledDate) < new Date();
+          return `${isOverdue ? '🔴 OVERDUE' : '📅'} $${((p.amount || 0) / 100).toFixed(2)} — Due: ${p.scheduledDate ? new Date(p.scheduledDate).toLocaleDateString() : 'TBD'}
+   Class: ${enrollment?.className || 'Unknown'}
+   Child: ${enrollment?.childName || 'Unknown'}`;
+        }).join('\n\n');
 
         return result;
       }
 
       case 'check_credits': {
-        // Match /api/parent/credits filter: approved or partially_used
-        const allUserCredits = await storage.getCredits({ userId });
-        const activeCredits = allUserCredits.filter(c => {
-          if (c.status !== 'approved' && c.status !== 'partially_used') return false;
+        const credits = await storage.getCredits({ userId, status: 'approved' as any });
+        const activeCredits = credits.filter(c => {
           const remaining = (c.creditAmountCents || 0) - (c.usedAmountCents || 0);
           if (remaining <= 0) return false;
           if (c.expiresAt && new Date(c.expiresAt) < new Date()) return false;
@@ -729,59 +704,22 @@ router.get('/context', supabaseAuth, async (req: any, res) => {
       }
     }
 
-    const parentEnrollments = await storage.getProgramEnrollmentsByParent(user.id);
-    const childIds = children.map(c => c.id);
-
-    // Enrich with effectiveBalance — same as parent.ts lines 397-403 to avoid stale remaining_balance
-    const enrichedEnrollments = parentEnrollments.map((enrollment: any) => {
-      const totalPaid = enrollment.totalPaid ?? 0;
-      const totalCost = enrollment.totalCost ?? 0;
-      const compAmount = enrollment.compAmountCents ?? 0;
-      const effectiveBalance = Math.max(0, totalCost - totalPaid - compAmount);
-      return { ...enrollment, effectiveBalance, remainingBalance: effectiveBalance };
-    });
-
-    // Status filtering: skip non-active enrollments (aligned with billing API terminalStatuses)
-    const nonTerminalEnrollments = enrichedEnrollments.filter((e: any) => {
-      if (['cancelled', 'completed', 'waitlist', 'withdrawn', 'failed', 'rejected'].includes(e.status)) return false;
-      if (user.schoolId && e.schoolId !== user.schoolId) return false;
-      return true;
-    });
-    const dedupedContextEnrollments = deduplicateEnrollments(nonTerminalEnrollments);
-    const unpaidParentEnrollments = dedupedContextEnrollments.filter((e: any) => e.effectiveBalance > 0);
-    const enrollmentDue = unpaidParentEnrollments.reduce((sum: number, e: any) => sum + e.effectiveBalance, 0);
-
     const scheduledPayments = await storage.getScheduledPaymentsByParentEmail(userEmail);
-
-    // ANTI-DOUBLE-COUNTING: build set of enrollment IDs where effectiveBalance > 0.
-    // Scheduled installments for these enrollments are already captured in enrollmentDue,
-    // so we must NOT add them again. Only add installments for enrollments with effectiveBalance === 0.
-    const enrollmentIdsWithPositiveBalance = new Set(unpaidParentEnrollments.map((e: any) => e.id));
-
-    const rawPendingOrOverdue = scheduledPayments.filter(
-      p => (p.status === 'pending' || p.status === 'overdue') && (!user.schoolId || p.schoolId === user.schoolId)
-    );
-    const nonDoubleCountedInstallmentsTotal = rawPendingOrOverdue
-      .filter(p => !enrollmentIdsWithPositiveBalance.has(p.enrollmentId))
-      .reduce((sum, p) => sum + (p.amount || 0), 0);
-
-    // COMBINED TOTAL: enrollment effectiveBalances + pending/overdue installments for zero-balance enrollments
-    // This formula is identical to billing API's totalBalance computation.
-    const totalDue = enrollmentDue + nonDoubleCountedInstallmentsTotal;
-
     const pendingPayments = scheduledPayments
-      .filter(p => (p.status === 'pending' || p.status === 'overdue') && (!user.schoolId || p.schoolId === user.schoolId))
+      .filter(p => p.status === 'pending' && (!user.schoolId || p.schoolId === user.schoolId))
       .sort((a, b) => {
         const dateA = a.scheduledDate ? new Date(a.scheduledDate).getTime() : Infinity;
         const dateB = b.scheduledDate ? new Date(b.scheduledDate).getTime() : Infinity;
         return dateA - dateB;
       });
 
+    const totalDue = pendingPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
     const overdueCount = pendingPayments.filter(p =>
       p.scheduledDate && new Date(p.scheduledDate) < new Date()
     ).length;
 
     const allEnrollments = await storage.getAllEnrollments();
+    const childIds = children.map(c => c.id);
 
     const upcomingPayments = pendingPayments.slice(0, 3).map(p => {
       const enrollment = allEnrollments.find((e: any) => e.id === p.enrollmentId);
@@ -804,8 +742,16 @@ router.get('/context', supabaseAuth, async (req: any, res) => {
       e.status === 'waitlist'
     );
 
-    // Use canonical method — filters approved/partially_used, excludes expired, subtracts credit_holds
-    const totalCredits = await storage.getTotalAvailableCredits(user.id);
+    const credits = await storage.getCredits({ userId: user.id, status: 'approved' as any });
+    const activeCredits = credits.filter(c => {
+      const remaining = (c.creditAmountCents || 0) - (c.usedAmountCents || 0);
+      if (remaining <= 0) return false;
+      if (c.expiresAt && new Date(c.expiresAt) < new Date()) return false;
+      return true;
+    });
+    const totalCredits = activeCredits.reduce((sum, c) =>
+      sum + ((c.creditAmountCents || 0) - (c.usedAmountCents || 0)), 0
+    );
 
     let announcements: any[] = [];
     if (user.schoolId) {
@@ -898,13 +844,16 @@ router.get('/context', supabaseAuth, async (req: any, res) => {
       membershipExpired,
       payments: {
         totalDue,
-        netDue: Math.max(0, totalDue - totalCredits),
         overdueCount,
         upcoming: upcomingPayments,
       },
       credits: {
         totalAvailable: totalCredits,
-        breakdown: [],
+        breakdown: activeCredits.map(c => ({
+          type: c.creditType,
+          amount: (c.creditAmountCents || 0) - (c.usedAmountCents || 0),
+          title: c.title,
+        })),
       },
       enrollments: {
         activeCount: activeEnrollments.length,

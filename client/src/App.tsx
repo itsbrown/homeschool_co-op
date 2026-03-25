@@ -78,7 +78,6 @@ const StaffPermissionsPage = lazy(() => import("./pages/schooladmin/StaffPermiss
 const LocationEnrollmentsPage = lazy(() => import("./pages/schooladmin/LocationEnrollmentsPage"));
 const RefundHistoryPage = lazy(() => import("./pages/schooladmin/RefundHistoryPage"));
 const FinancialReportsPage = lazy(() => import("./pages/schooladmin/FinancialReportsPage"));
-const RetentionReportPage = lazy(() => import("./pages/schooladmin/RetentionReportPage"));
 const FundraiserStorePage = lazy(() => import("./pages/FundraiserStorePage"));
 const FundraiserSuccessPage = lazy(() => import("./pages/FundraiserSuccessPage"));
 const DynamicFormPage = lazy(() => import("./pages/DynamicFormPage"));
@@ -134,7 +133,7 @@ const EducatorDashboardPage = lazy(() => import('./pages/educator/EducatorDashbo
 const EducatorSchedulePage = lazy(() => import('./pages/educator/EducatorSchedulePage'));
 const EducatorSettingsPage = lazy(() => import('./pages/educator/EducatorSettingsPage'));
 const MyClassesPage = lazy(() => import('./pages/educator/MyClasses'));
-
+const WeeklyCalendarPage = lazy(() => import('./pages/educator/WeeklyCalendar'));
 const MyHoursPage = lazy(() => import('./pages/educator/MyHours'));
 const ActiveSessionPage = lazy(() => import('./pages/educator/ActiveSession'));
 const StartSessionPage = lazy(() => import('./pages/educator/StartSession'));
@@ -246,8 +245,8 @@ function DashboardRouter() {
     );
   }
 
-  // For educator, mentor, director - route to EducatorDashboard with EducatorAppShell
-  if (['educator', 'mentor', 'director'].includes(activeRole)) {
+  // For educator, mentor - route to EducatorDashboard with EducatorAppShell
+  if (['educator', 'mentor'].includes(activeRole)) {
     console.log(`🎯 Routing ${activeRole} to EducatorDashboard with EducatorAppShell`);
     return (
       <EducatorAppShell key={`dashboard-${activeRole}`}>
@@ -549,8 +548,7 @@ function Router() {
       <Route path="/educator/dashboard" component={() => <EducatorAppShell><EducatorDashboardPage /></EducatorAppShell>} />
       <Route path="/educator/my-classes" component={() => <EducatorAppShell><MyClassesPage /></EducatorAppShell>} />
       <Route path="/educator/session/:id" component={() => <EducatorAppShell><ActiveSessionPage /></EducatorAppShell>} />
-      <Route path="/educator/weekly-calendar" component={() => <Redirect to="/educator/week-plans" />} />
-
+      <Route path="/educator/weekly-calendar" component={() => <EducatorAppShell><WeeklyCalendarPage /></EducatorAppShell>} />
       <Route path="/educator/my-hours" component={() => <EducatorAppShell><MyHoursPage /></EducatorAppShell>} />
       <Route path="/educator/classes" component={() => <EducatorAppShell><EducatorClassesPage /></EducatorAppShell>} />
       <Route path="/educator/classes/:id" component={() => <EducatorAppShell><EducatorClassDetailsPage /></EducatorAppShell>} />
@@ -639,7 +637,6 @@ function Router() {
       <Route path="/school-admin/location-enrollments" component={LocationEnrollmentsPage} />
       <Route path="/school-admin/refunds" component={RefundHistoryPage} />
       <Route path="/school-admin/financial-reports" component={FinancialReportsPage} />
-      <Route path="/school-admin/retention-report" component={RetentionReportPage} />
       <Route path="/fundraiser/:campaignId/:familySlug">
         {(params) => <FundraiserStorePage campaignId={params?.campaignId || ''} familySlug={params?.familySlug || ''} />}
       </Route>

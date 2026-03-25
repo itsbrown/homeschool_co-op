@@ -1,8 +1,6 @@
 import React from "react";
 import UnifiedSchoolAdminSidebar from "./UnifiedSchoolAdminSidebar";
-import EducatorAppShell from "./EducatorAppShell";
 import RoleSwitcher from "@/components/RoleSwitcher";
-import { useRole } from "@/contexts/RoleContext";
 import { Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -15,16 +13,11 @@ interface SchoolAdminLayoutProps {
 }
 
 export default function SchoolAdminLayout({ children, pageTitle }: SchoolAdminLayoutProps) {
-  const { activeRole } = useRole();
   const { data: notifications = [] } = useQuery<any[]>({
     queryKey: ['/api/notifications'],
   });
   
   const unreadNotifications = notifications.filter((n: any) => !n.read).length;
-
-  if (activeRole === 'director') {
-    return <EducatorAppShell>{children}</EducatorAppShell>;
-  }
 
   return (
     <div className="flex h-screen bg-gray-100">

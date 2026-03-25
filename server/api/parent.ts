@@ -399,8 +399,7 @@ router.get('/enrollments', supabaseAuth, async (req: any, res) => {
       const totalCost = enrollment.totalCost ?? 0;
       const compAmount = enrollment.compAmountCents ?? 0;
       const effectiveBalance = Math.max(0, totalCost - totalPaid - compAmount);
-      // Set both fields: effectiveBalance (canonical, stable) and remainingBalance (backwards-compat alias).
-      return { ...enrollment, effectiveBalance, remainingBalance: effectiveBalance };
+      return { ...enrollment, remainingBalance: effectiveBalance };
     });
 
     // Exclude terminal-status enrollments (denylist per asa-payment-patterns gold-standard).
@@ -936,29 +935,24 @@ router.get('/credits', supabaseAuth, async (req: any, res) => {
 
     const allCredits = await storage.getCredits({ userId: user.id });
     
-    const isUsableCredit = (credit: any) => {
-      if (credit.status !== 'approved' && credit.status !== 'partially_used') return false;
-      const remaining = (credit.creditAmountCents || 0) - (credit.usedAmountCents || 0);
-      if (remaining <= 0) return false;
-      if (credit.expiresAt && new Date(credit.expiresAt) < new Date()) return false;
-      return true;
-    };
-
     const totalAvailableCents = allCredits.reduce((sum, credit) => {
-      if (!isUsableCredit(credit)) return sum;
-      const remaining = (credit.creditAmountCents || 0) - (credit.usedAmountCents || 0);
-      return sum + remaining;
+      if (credit.status === 'approved' || credit.status === 'partially_used') {
+        const remaining = (credit.creditAmountCents || 0) - (credit.usedAmountCents || 0);
+        return sum + Math.max(0, remaining);
+      }
+      return sum;
     }, 0);
 
     const creditsByType: Record<string, { count: number; totalCents: number }> = {};
     for (const credit of allCredits) {
-      if (!isUsableCredit(credit)) continue;
       const remaining = (credit.creditAmountCents || 0) - (credit.usedAmountCents || 0);
-      if (!creditsByType[credit.creditType]) {
-        creditsByType[credit.creditType] = { count: 0, totalCents: 0 };
+      if (remaining > 0 && (credit.status === 'approved' || credit.status === 'partially_used')) {
+        if (!creditsByType[credit.creditType]) {
+          creditsByType[credit.creditType] = { count: 0, totalCents: 0 };
+        }
+        creditsByType[credit.creditType].count++;
+        creditsByType[credit.creditType].totalCents += remaining;
       }
-      creditsByType[credit.creditType].count++;
-      creditsByType[credit.creditType].totalCents += remaining;
     }
 
     console.log(`💰 Found ${allCredits.length} credits (${totalAvailableCents} cents available) for ${userEmail}`);
@@ -1110,60 +1104,6 @@ router.get('/payment-receipts', supabaseAuth, async (req: any, res) => {
       message: 'Failed to get payment receipts',
       error: error.message || 'GET_PAYMENT_RECEIPTS_ERROR'
     });
-  }
-});
-
-// GET /api/parent/children/:id/attendance - Get attendance history for a child (parent view)
-router.get('/children/:id/attendance', supabaseAuth, async (req: any, res) => {
-  try {
-    const childId = parseInt(req.params.id);
-    const userEmail = req.auth?.email || req.user?.email;
-
-    if (!userEmail) {
-      return res.status(401).json({ message: 'Authentication required' });
-    }
-
-    if (isNaN(childId)) {
-      return res.status(400).json({ message: 'Invalid child ID' });
-    }
-
-    // Verify parent owns this child or is a guardian
-    const child = await storage.getChildById(childId);
-    if (!child) {
-      return res.status(404).json({ message: 'Child not found' });
-    }
-
-    if (child.parentEmail !== userEmail) {
-      const user = await storage.getUserByEmail(userEmail);
-      let isGuardian = false;
-      if (user) {
-        const guardians = await storage.getGuardiansByChildId(childId);
-        isGuardian = guardians.some((g: any) => g.guardianUserId === user.id);
-      }
-      if (!isGuardian) {
-        return res.status(403).json({ message: 'Access denied: You can only view your own children' });
-      }
-    }
-
-    const attendance = await storage.getAttendanceByChildId(childId);
-
-    // Enrich with session and class info
-    const enriched = await Promise.all(
-      attendance.map(async (record: any) => {
-        const session = await storage.getClassSessionById(record.sessionId);
-        const classInfo = session ? await storage.getClassById(session.classId) : null;
-        return {
-          ...record,
-          sessionDate: session?.scheduledDate,
-          className: classInfo?.title || 'Unknown',
-        };
-      })
-    );
-
-    return res.status(200).json(enriched);
-  } catch (error: any) {
-    console.error('❌ Error fetching child attendance:', error);
-    return res.status(500).json({ message: 'Failed to fetch attendance' });
   }
 });
 

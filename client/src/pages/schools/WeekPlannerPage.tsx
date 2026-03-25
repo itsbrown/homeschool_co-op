@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import SchoolAdminLayout from "@/components/layout/SchoolAdminLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,7 +9,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
@@ -17,14 +16,25 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
   Plus, Copy, Sparkles, Search, CheckCircle2, Edit, History, Trash2,
   ChevronRight, Calendar, Clock, Loader2, ExternalLink, AlertTriangle,
-  ThumbsUp, Lightbulb, X, Download, Upload
+  ThumbsUp, Lightbulb, X
 } from "lucide-react";
 import type { WeekPlan, WeekPlanBlock, WeeklySkeleton, SkeletonBlock } from "@shared/schema";
-import { BLOCK_TYPE_COLORS, BLOCK_TYPE_BADGE_COLORS } from "@/lib/blockColors";
 
 const DAY_NAMES: Record<number, string> = {
   0: "Sunday", 1: "Monday", 2: "Tuesday", 3: "Wednesday",
   4: "Thursday", 5: "Friday", 6: "Saturday",
+};
+
+const BLOCK_TYPE_COLORS: Record<string, string> = {
+  anchor: "border-l-indigo-500",
+  curriculum: "border-l-emerald-500",
+  flexible: "border-l-amber-500",
+};
+
+const BLOCK_TYPE_BADGE: Record<string, string> = {
+  anchor: "bg-indigo-100 text-indigo-800",
+  curriculum: "bg-emerald-100 text-emerald-800",
+  flexible: "bg-amber-100 text-amber-800",
 };
 
 const STATUS_BADGE: Record<string, string> = {
@@ -84,16 +94,6 @@ export default function WeekPlannerPage() {
   const [historyBlockId, setHistoryBlockId] = useState<number | null>(null);
   const [gapsDialog, setGapsDialog] = useState(false);
   const [gapsResult, setGapsResult] = useState<any>(null);
-  const [deleteBlockId, setDeleteBlockId] = useState<number | null>(null);
-  const [completionOverrides, setCompletionOverrides] = useState<Record<number, boolean>>({});
-  const [isDownloadingCsv, setIsDownloadingCsv] = useState(false);
-  const [csvUploadDialog, setCsvUploadDialog] = useState(false);
-  const [csvUploadFile, setCsvUploadFile] = useState<File | null>(null);
-  const [csvPreviewRows, setCsvPreviewRows] = useState<any[] | null>(null);
-  const [csvPreviewErrors, setCsvPreviewErrors] = useState<string[]>([]);
-  const [csvImporting, setCsvImporting] = useState(false);
-  const [csvWarningAccepted, setCsvWarningAccepted] = useState(false);
-  const csvFileInputRef = useRef<HTMLInputElement>(null);
 
   const templateId = selectedTemplateId ? parseInt(selectedTemplateId) : null;
 
@@ -119,11 +119,6 @@ export default function WeekPlannerPage() {
   const { data: aiStatus } = useQuery<{ available: boolean }>({
     queryKey: ["/api/schedule-ai/status"],
   });
-
-  const { data: classesData } = useQuery<{ items: any[]; classes?: any[] }>({
-    queryKey: ["/api/school-admin/classes"],
-  });
-  const classesList = classesData?.items ?? classesData?.classes ?? [];
 
   const { data: blockHistory = [] } = useQuery<any[]>({
     queryKey: ["/api/schedule-builder/week-plan-blocks", historyBlockId, "history"],
@@ -197,37 +192,17 @@ export default function WeekPlannerPage() {
     onError: (err: any) => toast({ title: "Error updating block", description: err.message, variant: "destructive" }),
   });
 
-  const toggleCompletionMutation = useMutation({
-    mutationFn: ({ id, isCompleted }: { id: number; isCompleted: boolean }) =>
-      apiRequest("PATCH", `/api/schedule-builder/week-plan-blocks/${id}`, { isCompleted }),
-    onSuccess: (_res, { id }) => {
+  const completeBlockMutation = useMutation({
+    mutationFn: (id: number) => apiRequest("POST", `/api/schedule-builder/week-plan-blocks/${id}/complete`),
+    onSuccess: () => {
       if (selectedWeekPlanId) queryClient.invalidateQueries({ queryKey: ["/api/schedule-builder/week-plans", selectedWeekPlanId] });
-      setCompletionOverrides((prev) => {
-        const next = { ...prev };
-        delete next[id];
-        return next;
-      });
+      toast({ title: "Block completion toggled" });
     },
-    onError: (err: any, { id }) => {
-      console.error("Error toggling block completion:", err);
-      setCompletionOverrides((prev) => {
-        const next = { ...prev };
-        delete next[id];
-        return next;
-      });
-    },
+    onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
   });
 
-  function toggleBlockCompletion(wb: { id: number; isCompleted: boolean } | null) {
-    console.log("toggleBlockCompletion called", wb);
-    if (!wb) return;
-    const newValue = !(completionOverrides[wb.id] ?? wb.isCompleted);
-    setCompletionOverrides((prev) => ({ ...prev, [wb.id]: newValue }));
-    toggleCompletionMutation.mutate({ id: wb.id, isCompleted: newValue });
-  }
-
   const generateWeekMutation = useMutation({
-    mutationFn: (data: { skeletonId: number; weekNumber: number; weekPlanId?: number }) =>
+    mutationFn: (data: { skeletonId: number; weekNumber: number }) =>
       apiRequest("POST", "/api/schedule-ai/generate-week", data),
     onSuccess: () => {
       if (selectedWeekPlanId) queryClient.invalidateQueries({ queryKey: ["/api/schedule-builder/week-plans", selectedWeekPlanId] });
@@ -263,102 +238,6 @@ export default function WeekPlannerPage() {
     },
     onError: (err: any) => toast({ title: "Gap analysis failed", description: err.message, variant: "destructive" }),
   });
-
-  const deleteBlockMutation = useMutation({
-    mutationFn: (id: number) => apiRequest("DELETE", `/api/schedule-builder/week-plan-blocks/${id}`),
-    onSuccess: () => {
-      if (selectedWeekPlanId) queryClient.invalidateQueries({ queryKey: ["/api/schedule-builder/week-plans", selectedWeekPlanId] });
-      toast({ title: "Block deleted" });
-    },
-    onError: (err: any) => toast({ title: "Error deleting block", description: err.message, variant: "destructive" }),
-  });
-
-  const downloadWeekPlanCsv = async () => {
-    if (!selectedWeekPlanId) return;
-    setIsDownloadingCsv(true);
-    try {
-      const response = await apiRequest("GET", `/api/schedule-builder/week-plans/${selectedWeekPlanId}/blocks/export-csv`);
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      const wp = weekPlans.find((w) => w.id === selectedWeekPlanId);
-      a.download = wp ? `week-${wp.weekNumber}-blocks.csv` : `week-plan-${selectedWeekPlanId}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-    } catch (err: any) {
-      toast({ title: "Download failed", description: err.message, variant: "destructive" });
-    } finally {
-      setIsDownloadingCsv(false);
-    }
-  };
-
-  const openWeekCsvUpload = () => {
-    setCsvUploadDialog(true);
-    setCsvUploadFile(null);
-    setCsvPreviewRows(null);
-    setCsvPreviewErrors([]);
-    setCsvWarningAccepted(false);
-    if (csvFileInputRef.current) csvFileInputRef.current.value = "";
-  };
-
-  const handleWeekCsvFileSelect = (file: File) => {
-    setCsvUploadFile(file);
-    setCsvPreviewRows(null);
-    setCsvPreviewErrors([]);
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const text = e.target?.result as string;
-      const allLines = text.split("\n");
-      const filtered = allLines.filter((l) => !l.trim().startsWith("#") && l.trim() !== "");
-      if (filtered.length <= 1) {
-        setCsvPreviewErrors(["CSV has no data rows."]);
-        return;
-      }
-      const headers = filtered[0].split(",").map((h) => h.trim());
-      const rows: any[] = [];
-      for (let i = 1; i < Math.min(filtered.length, 6); i++) {
-        const vals = filtered[i].split(",").map((v) => v.trim().replace(/^"|"$/g, ""));
-        const row: any = {};
-        headers.forEach((h, idx) => { row[h] = vals[idx] || ""; });
-        rows.push(row);
-      }
-      setCsvPreviewRows(rows);
-    };
-    reader.readAsText(file);
-  };
-
-  const handleWeekCsvImport = async () => {
-    if (!selectedWeekPlanId || !csvUploadFile) return;
-    setCsvImporting(true);
-    try {
-      const formData = new FormData();
-      formData.append("file", csvUploadFile);
-      const response = await fetch(`/api/schedule-builder/week-plans/${selectedWeekPlanId}/blocks/import-csv`, {
-        method: "POST",
-        body: formData,
-        credentials: "include",
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        if (data.errors && data.errors.length > 0) {
-          setCsvPreviewErrors(data.errors);
-        } else {
-          toast({ title: "Import failed", description: data.message || "Unknown error", variant: "destructive" });
-        }
-      } else {
-        toast({ title: "Import successful", description: data.message });
-        queryClient.invalidateQueries({ queryKey: ["/api/schedule-builder/week-plans", selectedWeekPlanId] });
-        setCsvUploadDialog(false);
-      }
-    } catch (err: any) {
-      toast({ title: "Import failed", description: err.message, variant: "destructive" });
-    } finally {
-      setCsvImporting(false);
-    }
-  };
 
   const sortedWeekPlans = [...weekPlans].sort((a, b) => a.weekNumber - b.weekNumber);
 
@@ -409,14 +288,9 @@ export default function WeekPlannerPage() {
 
   const handleCreateWeek = () => {
     if (!newWeekNumber || !newWeekStartDate || !templateId) return;
-    const num = parseInt(newWeekNumber);
-    if (sortedWeekPlans.some((wp) => wp.weekNumber === num)) {
-      toast({ title: "Duplicate week number", description: `Week ${num} already exists for this template.`, variant: "destructive" });
-      return;
-    }
     createWeekMutation.mutate({
       skeletonId: templateId,
-      weekNumber: num,
+      weekNumber: parseInt(newWeekNumber),
       weekStartDate: newWeekStartDate,
       notes: newWeekNotes || null,
     });
@@ -424,14 +298,9 @@ export default function WeekPlannerPage() {
 
   const handleCloneWeek = () => {
     if (!cloneSourceId || !cloneWeekNumber || !cloneWeekStartDate) return;
-    const num = parseInt(cloneWeekNumber);
-    if (sortedWeekPlans.some((wp) => wp.weekNumber === num)) {
-      toast({ title: "Duplicate week number", description: `Week ${num} already exists for this template.`, variant: "destructive" });
-      return;
-    }
     cloneWeekMutation.mutate({
       id: cloneSourceId,
-      data: { weekNumber: num, weekStartDate: cloneWeekStartDate },
+      data: { weekNumber: parseInt(cloneWeekNumber), weekStartDate: cloneWeekStartDate },
     });
   };
 
@@ -473,13 +342,9 @@ export default function WeekPlannerPage() {
                 <SelectValue placeholder="Select a template..." />
               </SelectTrigger>
               <SelectContent>
-                {templates.map((s) => {
-                  const linkedClass = s.classId ? classesList.find((c: any) => c.id === s.classId) : null;
-                  const displayClass = linkedClass ? (linkedClass.title || linkedClass.name || `Class ${linkedClass.id}`) : s.gradeLevel;
-                  return (
-                    <SelectItem key={s.id} value={String(s.id)}>{s.name} ({displayClass})</SelectItem>
-                  );
-                })}
+                {templates.map((s) => (
+                  <SelectItem key={s.id} value={String(s.id)}>{s.name} ({s.gradeLevel})</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -589,12 +454,12 @@ export default function WeekPlannerPage() {
                           <Copy className="h-4 w-4 mr-1" />
                           Clone
                         </Button>
-                        {aiAvailable ? (
+                        {aiAvailable && (
                           <>
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => templateId && generateWeekMutation.mutate({ skeletonId: templateId, weekNumber: selectedWeekData.weekNumber, weekPlanId: selectedWeekPlanId ?? undefined })}
+                              onClick={() => templateId && generateWeekMutation.mutate({ skeletonId: templateId, weekNumber: selectedWeekData.weekNumber })}
                               disabled={generateWeekMutation.isPending}
                             >
                               {generateWeekMutation.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Sparkles className="h-4 w-4 mr-1" />}
@@ -610,28 +475,7 @@ export default function WeekPlannerPage() {
                               Analyze Gaps
                             </Button>
                           </>
-                        ) : (
-                          <p className="text-xs text-muted-foreground italic">
-                            AI generation is currently unavailable. Fill blocks manually or contact support.
-                          </p>
                         )}
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={downloadWeekPlanCsv}
-                          disabled={isDownloadingCsv}
-                        >
-                          {isDownloadingCsv ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Download className="h-4 w-4 mr-1" />}
-                          Download CSV
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={openWeekCsvUpload}
-                        >
-                          <Upload className="h-4 w-4 mr-1" />
-                          Upload CSV
-                        </Button>
                         <Button
                           size="sm"
                           variant="outline"
@@ -654,7 +498,7 @@ export default function WeekPlannerPage() {
                       {blocksByDay[dayNum]?.map(({ skeletonBlock: sb, weekBlock: wb }) => (
                         <Card
                           key={sb.id}
-                          className={`border-l-4 ${BLOCK_TYPE_COLORS[sb.blockType] || "border-l-gray-300"} ${wb && (completionOverrides[wb.id] ?? wb.isCompleted) ? "opacity-60" : ""}`}
+                          className={`border-l-4 ${BLOCK_TYPE_COLORS[sb.blockType] || "border-l-gray-300"} ${wb?.isCompleted ? "opacity-60" : ""}`}
                         >
                           <CardContent className="p-3 space-y-2">
                             <div className="flex items-center justify-between gap-1">
@@ -662,17 +506,16 @@ export default function WeekPlannerPage() {
                                 <Clock className="h-3 w-3" />
                                 {formatTime(sb.startTime)} – {formatTime(sb.endTime)}
                               </span>
-                              <Badge className={`text-[10px] ${BLOCK_TYPE_BADGE_COLORS[sb.blockType] || ""}`}>{sb.blockType}</Badge>
+                              <Badge className={`text-[10px] ${BLOCK_TYPE_BADGE[sb.blockType] || ""}`}>{sb.blockType}</Badge>
                             </div>
                             <div className="flex items-start gap-2">
                               <Checkbox
-                                checked={completionOverrides[wb?.id ?? 0] ?? wb?.isCompleted ?? false}
-                                onCheckedChange={() => toggleBlockCompletion(wb ?? null)}
-                                disabled={!wb}
+                                checked={wb?.isCompleted ?? false}
+                                onCheckedChange={() => wb && completeBlockMutation.mutate(wb.id)}
                                 className="mt-0.5"
                               />
                               <div className="flex-1 min-w-0">
-                                <p className={`text-sm font-medium truncate ${wb && (completionOverrides[wb.id] ?? wb.isCompleted) ? "line-through opacity-60" : ""}`}>
+                                <p className={`text-sm font-medium truncate ${wb?.isCompleted ? "line-through" : ""}`}>
                                   {wb?.title || sb.defaultTitle}
                                 </p>
                                 {(wb?.description || sb.defaultDescription) && (
@@ -709,7 +552,7 @@ export default function WeekPlannerPage() {
                                   History
                                 </Button>
                               )}
-                              {aiAvailable ? (
+                              {aiAvailable && (
                                 <Button
                                   variant="ghost" size="sm" className="h-7 px-2 text-xs"
                                   onClick={() => {
@@ -724,16 +567,6 @@ export default function WeekPlannerPage() {
                                 >
                                   <Sparkles className="h-3 w-3 mr-1" />
                                   AI
-                                </Button>
-                              ) : (
-                                <span className="text-xs text-muted-foreground px-2 py-1">AI generation is currently unavailable. Fill blocks manually or contact support.</span>
-                              )}
-                              {wb && (
-                                <Button
-                                  variant="ghost" size="sm" className="h-7 px-2 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 ml-auto"
-                                  onClick={() => setDeleteBlockId(wb.id)}
-                                >
-                                  <Trash2 className="h-3 w-3" />
                                 </Button>
                               )}
                             </div>
@@ -945,7 +778,7 @@ export default function WeekPlannerPage() {
             </div>
           </div>
           <DialogFooter className="flex-col sm:flex-row gap-2">
-            {aiAvailable && editingSkeletonBlockId ? (
+            {aiAvailable && editingSkeletonBlockId && (
               <Button
                 type="button"
                 variant="outline"
@@ -956,11 +789,7 @@ export default function WeekPlannerPage() {
                 {suggestBlockMutation.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Sparkles className="h-4 w-4 mr-1" />}
                 AI Suggest
               </Button>
-            ) : !aiAvailable ? (
-              <p className="text-xs text-muted-foreground italic sm:mr-auto self-center">
-                AI generation is currently unavailable. Fill blocks manually or contact support.
-              </p>
-            ) : null}
+            )}
             <Button variant="outline" onClick={() => setBlockEditDialog(false)}>Cancel</Button>
             <Button onClick={handleBlockSubmit} disabled={createBlockMutation.isPending || updateBlockMutation.isPending}>
               {(createBlockMutation.isPending || updateBlockMutation.isPending) ? "Saving..." : editingBlockId ? "Update Block" : "Add Block"}
@@ -979,21 +808,6 @@ export default function WeekPlannerPage() {
             <Button variant="outline" onClick={() => setDeleteWeekId(null)}>Cancel</Button>
             <Button variant="destructive" onClick={() => deleteWeekId && deleteWeekMutation.mutate(deleteWeekId)} disabled={deleteWeekMutation.isPending}>
               {deleteWeekMutation.isPending ? "Deleting..." : "Delete"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={deleteBlockId !== null} onOpenChange={() => setDeleteBlockId(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete Block</DialogTitle>
-            <DialogDescription>Are you sure you want to delete this block's content? The skeleton block slot remains. This cannot be undone.</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteBlockId(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={() => { if (deleteBlockId) { deleteBlockMutation.mutate(deleteBlockId); setDeleteBlockId(null); } }} disabled={deleteBlockMutation.isPending}>
-              {deleteBlockMutation.isPending ? "Deleting..." : "Delete"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1071,99 +885,6 @@ export default function WeekPlannerPage() {
           ) : (
             <p className="text-sm text-muted-foreground py-4 text-center">No analysis results.</p>
           )}
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={csvUploadDialog} onOpenChange={(open) => { if (!open) setCsvUploadDialog(false); }}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Upload CSV — Week {selectedWeekData?.weekNumber}</DialogTitle>
-            <DialogDescription>
-              Upload a CSV file to bulk-update the block content for this week plan. Blocks are matched by day and start time.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <Alert>
-              <AlertTriangle className="h-4 w-4" />
-              <AlertDescription>
-                Uploading will <strong>overwrite existing block content</strong> for matched blocks. Download the current week CSV first to preserve existing content.
-              </AlertDescription>
-            </Alert>
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="csv-warning-accept"
-                checked={csvWarningAccepted}
-                onCheckedChange={(v) => setCsvWarningAccepted(!!v)}
-              />
-              <label htmlFor="csv-warning-accept" className="text-sm cursor-pointer">
-                I understand this will overwrite existing block content
-              </label>
-            </div>
-            <div className="space-y-2">
-              <Label>CSV File</Label>
-              <input
-                type="file"
-                accept=".csv"
-                ref={csvFileInputRef}
-                className="block w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 cursor-pointer"
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) handleWeekCsvFileSelect(f);
-                }}
-              />
-              <p className="text-xs text-muted-foreground">
-                Required columns: <code>day_of_week, start_time</code>. Optional: <code>title, description, objectives (semicolon-separated), lesson_link, notes</code>.
-              </p>
-            </div>
-            {csvPreviewErrors.length > 0 && (
-              <Alert variant="destructive">
-                <AlertTriangle className="h-4 w-4" />
-                <AlertDescription>
-                  <p className="font-semibold mb-1">Validation errors:</p>
-                  <ul className="text-sm list-disc pl-4 space-y-0.5">
-                    {csvPreviewErrors.map((e, i) => <li key={i}>{e}</li>)}
-                  </ul>
-                </AlertDescription>
-              </Alert>
-            )}
-            {csvPreviewRows && csvPreviewRows.length > 0 && csvPreviewErrors.length === 0 && (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 text-sm text-green-700">
-                  <CheckCircle2 className="h-4 w-4" />
-                  <span>Preview (first {csvPreviewRows.length} rows):</span>
-                </div>
-                <div className="overflow-x-auto rounded border">
-                  <table className="text-xs w-full">
-                    <thead className="bg-muted">
-                      <tr>
-                        {Object.keys(csvPreviewRows[0]).map((h) => (
-                          <th key={h} className="px-2 py-1.5 text-left font-medium whitespace-nowrap">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {csvPreviewRows.map((row, i) => (
-                        <tr key={i} className="border-t">
-                          {Object.values(row).map((v: any, j) => (
-                            <td key={j} className="px-2 py-1 whitespace-nowrap max-w-[150px] truncate">{v}</td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCsvUploadDialog(false)}>Cancel</Button>
-            <Button
-              onClick={handleWeekCsvImport}
-              disabled={!csvUploadFile || csvImporting || csvPreviewErrors.length > 0 || !csvWarningAccepted}
-            >
-              {csvImporting ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Importing...</> : <><Upload className="h-4 w-4 mr-2" />Import</>}
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
     </SchoolAdminLayout>

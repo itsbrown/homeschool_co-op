@@ -305,8 +305,7 @@ export async function handleDirectPaymentSuccess(paymentIntent: Stripe.PaymentIn
         const creditShare = enrollmentCreditShares.get(enrollment.id) || 0;
         const currentPaid = enrollment.totalPaid || 0;
         const newTotalPaid = currentPaid + enrollmentAmount + creditShare;
-        const compAmount = enrollment.compAmountCents ?? 0;
-        const newBalance = Math.max(0, enrollment.totalCost - newTotalPaid - compAmount);
+        const newBalance = Math.max(0, enrollment.totalCost - newTotalPaid);
         
         await storage.updateProgramEnrollment(enrollment.id, {
           totalPaid: newTotalPaid,
@@ -317,36 +316,24 @@ export async function handleDirectPaymentSuccess(paymentIntent: Stripe.PaymentIn
         });
         console.log(`✅ Updated enrollment ${enrollment.id}: paid=${newTotalPaid}, balance=${newBalance}`);
         
-        // Sync scheduled payments for this enrollment
+        // Mark matching scheduled payment as completed
+        // Find pending scheduled payments for this enrollment and mark as completed
         try {
+          // Storage already returns payments sorted by scheduledDate, no need to re-sort
           const scheduledPayments = await storage.getScheduledPaymentsByEnrollmentId(enrollment.id);
-
-          if (newBalance === 0) {
-            // Enrollment is fully paid — cancel ALL remaining pending/overdue installments
-            let cancelledCount = 0;
-            for (const sp of scheduledPayments) {
-              if (sp.status === 'pending' || sp.status === 'overdue') {
-                await storage.updateScheduledPayment(sp.id, {
-                  status: 'cancelled',
-                });
-                cancelledCount++;
-              }
-            }
-            if (cancelledCount > 0) {
-              console.log(`✅ Auto-cancelled ${cancelledCount} stale scheduled payment(s) for fully-paid enrollment ${enrollment.id}`);
-            }
+          // Find first pending payment (FIFO - oldest first since storage returns sorted)
+          const paymentToComplete = scheduledPayments.find((sp: any) => sp.status === 'pending');
+          
+          if (paymentToComplete) {
+            // Use updateScheduledPayment to set status to 'completed' (matches schema enum)
+            await storage.updateScheduledPayment(paymentToComplete.id, {
+              status: 'completed',
+              processedAt: new Date(),
+            });
+            console.log(`✅ Marked scheduled payment ${paymentToComplete.id} as completed for enrollment ${enrollment.id}`);
           } else {
-            // Partial payment — mark only the first pending installment as completed (FIFO)
-            const paymentToComplete = scheduledPayments.find((sp: any) => sp.status === 'pending');
-            if (paymentToComplete) {
-              await storage.updateScheduledPayment(paymentToComplete.id, {
-                status: 'completed',
-                processedAt: new Date(),
-              });
-              console.log(`✅ Marked scheduled payment ${paymentToComplete.id} as completed for enrollment ${enrollment.id}`);
-            } else {
-              console.warn(`⚠️ No pending scheduled payment found for enrollment ${enrollment.id} after successful payment - all may already be completed or data anomaly`);
-            }
+            // Log when no pending payment found - may need manual reconciliation
+            console.warn(`⚠️ No pending scheduled payment found for enrollment ${enrollment.id} after successful payment - all may already be completed or data anomaly`);
           }
         } catch (spError) {
           console.error(`❌ Failed to update scheduled payment for enrollment ${enrollment.id}:`, spError);

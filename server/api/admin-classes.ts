@@ -162,63 +162,6 @@ router.post("/classes", supabaseAuth, requireAdmin, requireSchoolContext, async 
 });
 
 // Bulk assign session to multiple classes
-const bulkUpdateFieldsSchema = z.object({
-  classIds: z.array(z.number()).min(1, "classIds must be a non-empty array"),
-  fields: z.object({
-    status: z.enum(["upcoming", "active", "completed", "cancelled"]).optional(),
-    categoryName: z.string().optional(),
-    gradeLevel: z.string().optional(),
-    subject: z.string().optional(),
-    instructorId: z.number().nullable().optional(),
-    instructorName: z.string().optional(),
-    locationId: z.number().nullable().optional(),
-    curriculumId: z.number().nullable().optional(),
-    maxEnrollment: z.number().int().min(1).optional(),
-    sessionId: z.number().nullable().optional(),
-  }).refine(obj => Object.keys(obj).length > 0, { message: "At least one field must be provided" }),
-});
-
-router.patch("/classes/bulk-update", supabaseAuth, requireAdmin, requireSchoolContext, async (req: any, res) => {
-  try {
-    const schoolId = req.schoolId;
-    const parsed = bulkUpdateFieldsSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ message: parsed.error.errors.map(e => e.message).join(", ") });
-    }
-    const { classIds, fields } = parsed.data;
-
-    let updated = 0;
-    let skipped = 0;
-
-    for (const id of classIds) {
-      const existing = await storage.getClassById(id);
-      if (!existing || String(existing.school_id) !== schoolId) {
-        skipped++;
-        continue;
-      }
-      const updateData: Record<string, any> = {};
-      if (fields.status !== undefined) updateData.status = fields.status;
-      if (fields.sessionId !== undefined) updateData.sessionId = fields.sessionId;
-      if (fields.instructorId !== undefined) updateData.instructorId = fields.instructorId;
-      if (fields.instructorName !== undefined) updateData.instructorName = fields.instructorName;
-      if (fields.locationId !== undefined) updateData.locationId = fields.locationId;
-      if (fields.curriculumId !== undefined) updateData.curriculumId = fields.curriculumId;
-      if (fields.maxEnrollment !== undefined) updateData.capacity = fields.maxEnrollment;
-      if (fields.gradeLevel !== undefined) updateData.gradeLevels = [fields.gradeLevel];
-      if (fields.subject !== undefined) updateData.category = fields.subject;
-      if (fields.categoryName !== undefined) updateData.categoryName = fields.categoryName;
-
-      await storage.updateClass(id, updateData);
-      updated++;
-    }
-
-    return res.status(200).json({ updated, skipped });
-  } catch (error) {
-    console.error("Error bulk-updating classes:", error);
-    return res.status(500).json({ message: "Error updating classes" });
-  }
-});
-
 router.patch("/classes/bulk-session", supabaseAuth, requireAdmin, requireSchoolContext, async (req: any, res) => {
   try {
     const schoolId = req.schoolId;
