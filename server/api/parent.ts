@@ -1254,10 +1254,12 @@ router.get('/classes', supabaseAuth, async (req: any, res) => {
       };
     }));
 
-    // Filter out unpublished, expired, admin-only, and hidden-category classes
+    console.log(`📊 Parent classes for schoolId=${effectiveSchoolId}: ${allClasses.length} total, statuses: ${[...new Set(allClasses.map(c => c.status))].join(', ')}`);
+
+    // Filter out cancelled, completed, expired, admin-only, and hidden-category classes
     const now = new Date();
     const filtered = classesWithEnrichment.filter((cls) => {
-      if (cls.status && cls.status !== 'published') return false;
+      if (['cancelled', 'completed'].includes(cls.status)) return false;
       if (cls.endDate && new Date(cls.endDate) < now) return false;
       if (cls.isAdminOnly) return false;
       if (cls.categoryId && !cls.categoryIsPublic) return false;
