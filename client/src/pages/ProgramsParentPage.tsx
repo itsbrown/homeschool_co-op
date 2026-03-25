@@ -235,9 +235,9 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
     }
   }
 
-  // Fetch school admin classes and transform the response
+  // Fetch parent classes and transform the response
   const { data: schoolClassesResponse, isLoading: classesLoading, error: classesError } = useQuery({
-    queryKey: ["/api/school-admin/classes"],
+    queryKey: ["/api/parent/classes"],
     enabled: activeTab === "classes" || activeTab === "all",
   });
 

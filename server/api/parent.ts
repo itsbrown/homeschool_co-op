@@ -1107,4 +1107,174 @@ router.get('/payment-receipts', supabaseAuth, async (req: any, res) => {
   }
 });
 
+// GET /api/parent/children/:id/attendance - Get attendance history for a child (parent view)
+router.get('/children/:id/attendance', supabaseAuth, async (req: any, res) => {
+  try {
+    const childId = parseInt(req.params.id);
+    const userEmail = req.auth?.email || req.user?.email;
+
+    if (!userEmail) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    if (isNaN(childId)) {
+      return res.status(400).json({ message: 'Invalid child ID' });
+    }
+
+    // Verify parent owns this child or is a guardian
+    const child = await storage.getChildById(childId);
+    if (!child) {
+      return res.status(404).json({ message: 'Child not found' });
+    }
+
+    if (child.parentEmail !== userEmail) {
+      const user = await storage.getUserByEmail(userEmail);
+      let isGuardian = false;
+      if (user) {
+        const guardians = await storage.getGuardiansByChildId(childId);
+        isGuardian = guardians.some((g: any) => g.guardianUserId === user.id);
+      }
+      if (!isGuardian) {
+        return res.status(403).json({ message: 'Access denied: You can only view your own children' });
+      }
+    }
+
+    const attendance = await storage.getAttendanceByChildId(childId);
+
+    // Enrich with session and class info
+    const enriched = await Promise.all(
+      attendance.map(async (record: any) => {
+        const session = await storage.getClassSessionById(record.sessionId);
+        const classInfo = session ? await storage.getClassById(session.classId) : null;
+        return {
+          ...record,
+          sessionDate: session?.scheduledDate,
+          className: classInfo?.title || 'Unknown',
+        };
+      })
+    );
+
+    return res.status(200).json(enriched);
+  } catch (error: any) {
+    console.error('❌ Error fetching child attendance:', error);
+    return res.status(500).json({ message: 'Failed to fetch attendance' });
+  }
+});
+
+// Get published classes for the authenticated parent's school
+router.get('/classes', supabaseAuth, async (req: any, res) => {
+  try {
+    const userEmail = req.auth?.email || req.user?.email;
+    if (!userEmail) {
+      return res.status(401).json({ message: 'Authentication required', error: 'NO_USER_EMAIL' });
+    }
+
+    const user = await storage.getUserByEmail(userEmail);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found', error: 'USER_NOT_FOUND' });
+    }
+
+    // Derive schoolId from enrollments if user.schoolId is null
+    let effectiveSchoolId = user.schoolId;
+    if (!effectiveSchoolId) {
+      const enrollments = await storage.getProgramEnrollmentsByParent(user.id);
+      if (enrollments.length > 0) {
+        effectiveSchoolId = enrollments[0].schoolId;
+        console.log(`📄 Derived schoolId ${effectiveSchoolId} from parent's enrollments`);
+      }
+    }
+
+    if (!effectiveSchoolId) {
+      return res.status(404).json({ message: 'School not found for this parent', error: 'NO_SCHOOL_ID' });
+    }
+
+    const allClasses = await storage.getClassesBySchoolId(String(effectiveSchoolId));
+    const hiddenCategoryIds = await storage.getHiddenCategoryIds();
+
+    const classesWithEnrichment = await Promise.all(allClasses.map(async (classItem) => {
+      const classEnrollmentCount = await storage.getEnrollmentCountForClass(classItem.id);
+
+      let variants = undefined;
+      if (classItem.schedule && typeof classItem.schedule === 'string') {
+        try {
+          const scheduleData = JSON.parse(classItem.schedule);
+          if (scheduleData && scheduleData.variants && Array.isArray(scheduleData.variants)) {
+            variants = scheduleData.variants;
+          }
+        } catch (e) {}
+      } else if (classItem.schedule && typeof classItem.schedule === 'object') {
+        if ((classItem.schedule as any).variants && Array.isArray((classItem.schedule as any).variants)) {
+          variants = (classItem.schedule as any).variants;
+        }
+      }
+
+      let locationName = null;
+      if (classItem.locationId) {
+        try {
+          const location = await storage.getLocationById(classItem.locationId);
+          if (location) locationName = location.name;
+        } catch (e) {}
+      }
+
+      let sessionName = null;
+      if (classItem.sessionId) {
+        try {
+          const session = await storage.getSessionById(classItem.sessionId);
+          if (session) sessionName = session.name;
+        } catch (e) {}
+      }
+
+      let derivedInstructorName = null;
+      if (classItem.instructorId) {
+        try {
+          const instructor = await storage.getUser(classItem.instructorId);
+          if (instructor) {
+            derivedInstructorName = instructor.name
+              || (instructor.firstName && instructor.lastName ? `${instructor.firstName} ${instructor.lastName}` : null)
+              || instructor.email
+              || null;
+          }
+        } catch (e) {}
+      }
+
+      return {
+        ...classItem,
+        enrollmentCount: classEnrollmentCount,
+        capacity: classItem.capacity || 20,
+        enrolled: classEnrollmentCount,
+        variants: variants || undefined,
+        location: locationName || classItem.location || null,
+        categoryName: classItem.categoryName || classItem.category || null,
+        categoryId: classItem.categoryId || null,
+        categoryIsPublic: classItem.categoryId
+          ? !hiddenCategoryIds.includes(classItem.categoryId)
+          : true,
+        instructorName: derivedInstructorName || classItem.instructorName || null,
+        sessionName: sessionName || null
+      };
+    }));
+
+    // Filter out unpublished, expired, admin-only, and hidden-category classes
+    const now = new Date();
+    const filtered = classesWithEnrichment.filter((cls) => {
+      if (cls.status && cls.status !== 'published') return false;
+      if (cls.endDate && new Date(cls.endDate) < now) return false;
+      if (cls.isAdminOnly) return false;
+      if (cls.categoryId && !cls.categoryIsPublic) return false;
+      return true;
+    });
+
+    return res.json({
+      items: filtered,
+      total: filtered.length,
+      page: 1,
+      limit: filtered.length,
+      totalPages: 1
+    });
+  } catch (error) {
+    console.error('❌ Error fetching parent classes:', error);
+    return res.status(500).json({ message: 'Error fetching classes' });
+  }
+});
+
 export default router;
