@@ -31,6 +31,7 @@ declare module 'express-serve-static-core' {
       activeRoleId?: number | null;
       permissions?: any;
       name?: string;
+      allRoles?: string[];  // All roles the user holds at their current school (additive permissions)
     };
     schoolId?: string | number;
   }

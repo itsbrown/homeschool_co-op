@@ -144,29 +144,48 @@ export const requireRole = (allowedRoles: string[]) => {
       return next();
     }
 
-    // Check if user's role is in allowed roles
-    if (allowedRoles.includes(userRole)) {
-      return next();
-    }
-
     // Check for hierarchical permissions
-    const roleHierarchy = {
-      'superAdmin': ['admin', 'schoolAdmin', 'teacher', 'parent', 'student'],
-      'admin': ['schoolAdmin', 'teacher', 'parent', 'student'],
-      'schoolAdmin': ['teacher', 'parent', 'student'],
-      'teacher': ['parent', 'student'],
-      'parent': ['student'],
-      'student': []
+    const roleHierarchy: Record<string, string[]> = {
+      'superAdmin': ['admin', 'schoolAdmin', 'director', 'teacher', 'educator', 'mentor', 'parent', 'student', 'learner'],
+      'admin': ['schoolAdmin', 'director', 'teacher', 'educator', 'mentor', 'parent', 'student', 'learner'],
+      'schoolAdmin': ['director', 'teacher', 'educator', 'mentor', 'parent', 'student', 'learner'],
+      'director': ['teacher', 'educator', 'mentor', 'parent', 'student', 'learner'],
+      'teacher': ['parent', 'student', 'learner'],
+      'educator': ['parent', 'student', 'learner'],
+      'mentor': ['student', 'learner'],
+      'parent': ['student', 'learner'],
+      'student': [],
+      'learner': []
     };
 
-    const userPermissions = (roleHierarchy as any)[userRole] || [];
-    const hasHierarchicalAccess = allowedRoles.some(role => userPermissions.includes(role));
+    // Additive permissions: user passes if any of their roles satisfy the requirement
+    // Build the set of roles to check: allRoles (if present) plus the active role
+    const rolesToCheck: string[] = req.user?.allRoles && req.user.allRoles.length > 0
+      ? req.user.allRoles
+      : [userRole];
 
-    if (hasHierarchicalAccess) {
-      return next();
+    // Also ensure the active role (from req.auth.role) is included
+    if (!rolesToCheck.includes(userRole)) {
+      rolesToCheck.push(userRole);
     }
 
-    console.log('🚫 Access denied for user role:', userRole);
+    for (const role of rolesToCheck) {
+      // Super admin bypass per role
+      if (role === 'superAdmin') {
+        return next();
+      }
+      // Direct role match
+      if (allowedRoles.includes(role)) {
+        return next();
+      }
+      // Hierarchical access
+      const subordinates = roleHierarchy[role] || [];
+      if (allowedRoles.some(allowed => subordinates.includes(allowed))) {
+        return next();
+      }
+    }
+
+    console.log('🚫 Access denied for user role:', userRole, 'allRoles:', rolesToCheck);
     res.status(403).json({ message: 'Insufficient permissions' });
   };
 };

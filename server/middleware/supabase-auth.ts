@@ -65,6 +65,20 @@ export const supabaseAuth = async (
           // Use numeric database ID directly (no string conversion)
           // NOTE: For session auth, we don't have a Supabase UUID, so we use the DB ID as sub
           // This is acceptable for session-based auth (tests and legacy support)
+          // Fetch all roles for this user via storage (additive permissions)
+          let sessionAllRoles: string[] = [];
+          try {
+            const sessionUserRoles = await storage.getUserRolesByUserId(user.id);
+            const sessionSchoolId = user.schoolId;
+            // Include roles scoped to this user's school; exclude roles scoped to other schools.
+            // Roles with null schoolId are global/platform roles (e.g., superAdmin) and are always included.
+            sessionAllRoles = sessionUserRoles
+              .filter(r => r.schoolId === null || r.schoolId === sessionSchoolId)
+              .map(r => r.role);
+          } catch (rolesErr) {
+            console.error('Error loading allRoles for session user:', rolesErr);
+          }
+
           req.user = {
             id: user.id, // Numeric database ID
             email: user.email,
@@ -73,7 +87,12 @@ export const supabaseAuth = async (
             permissions: user.permissions,
             schoolId: user.schoolId,
             name: user.name,
+            allRoles: sessionAllRoles,
           };
+
+          if (process.env.NODE_ENV === 'development') {
+            console.log("User roles loaded:", req.user.allRoles);
+          }
           
           req.auth = {
             payload: {
@@ -247,6 +266,20 @@ export const supabaseAuth = async (
       });
     }
     
+    // Fetch all roles for this user via storage (additive permissions)
+    let allRoles: string[] = [];
+    try {
+      const userRolesData = await storage.getUserRolesByUserId(dbUserId);
+      const userSchoolId = dbUserData?.schoolId;
+      // Include roles scoped to this user's school; exclude roles scoped to other schools.
+      // Roles with null schoolId are global/platform roles (e.g., superAdmin) and are always included.
+      allRoles = userRolesData
+        .filter(r => r.schoolId === null || r.schoolId === userSchoolId)
+        .map(r => r.role);
+    } catch (rolesErr) {
+      console.error('Error loading allRoles for token user:', rolesErr);
+    }
+
     req.user = {
       id: dbUserId, // Always a database integer ID (enforced by check above)
       email: user.email!,
@@ -255,7 +288,12 @@ export const supabaseAuth = async (
       schoolId: dbUserData?.schoolId,
       permissions: dbUserData?.permissions,
       name: dbUserData?.name,
+      allRoles,
     };
+
+    if (process.env.NODE_ENV === 'development') {
+      console.log("User roles loaded:", req.user.allRoles);
+    }
 
     // 🔒 SECURITY: req.auth.payload MUST use database values exclusively
     // Never trust Supabase metadata (app_metadata or user_metadata) for role/school
