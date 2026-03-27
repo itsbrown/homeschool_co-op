@@ -1,3 +1,23 @@
+/**
+ * Schedule Builder API — Role Access Matrix (Additive Roles Phase 2)
+ *
+ * All routes in this file require one of: schoolAdmin | admin | superAdmin | director
+ * via requireRole([...]). The director role is explicitly included in every route guard.
+ *
+ * Test matrix (expected behavior):
+ *   - Single-role educator (teacher): view-only access, NO schedule builder write access.
+ *     Blocked at requireRole — 'teacher' is not in any allowedRoles array here.
+ *   - Multi-role parent + director: full scheduler access.
+ *     Passes via req.auth.role === 'director' (active role) or allRoles.includes('director').
+ *   - schoolAdmin: behavior completely unchanged. Passes via existing 'schoolAdmin' allowedRoles entry.
+ *
+ * IMPORTANT: Never use requireAdmin — it uses 'school-admin' (hyphen) which does NOT match
+ * the DB value 'schoolAdmin' (camelCase). Always use requireRole with explicit camelCase strings.
+ *
+ * School data isolation is enforced via requireSchoolContext which injects req.schoolId from
+ * the database (never from JWT). All handlers verify resource.schoolId === req.schoolId.
+ */
+
 import { Router } from "express";
 import { supabaseAuth } from "../middleware/supabase-auth";
 import { requireRole } from "../middleware/auth0-auth";
@@ -36,6 +56,21 @@ function isRtfOrBinary(buf: Buffer): boolean {
   return nonText > sample.length * 0.1;
 }
 
+/**
+ * Middleware that logs when a director successfully passes a schedule builder check.
+ * Only active in development. Must be placed after requireRole.
+ */
+function logDirectorAccess(req: any, res: any, next: any) {
+  if (process.env.NODE_ENV === 'development') {
+    const userRole: string = req.auth?.role || req.user?.role || '';
+    const allRoles: string[] = req.user?.allRoles || [];
+    if (userRole === 'director' || allRoles.includes('director')) {
+      console.log("Director access granted for user", req.user?.id);
+    }
+  }
+  next();
+}
+
 const router = Router();
 
 // ============================================================
@@ -46,6 +81,7 @@ router.get(
   "/skeletons",
   supabaseAuth,
   requireRole(['schoolAdmin', 'admin', 'superAdmin', 'director']), // director has full schedule-builder access
+  logDirectorAccess,
   requireSchoolContext,
   async (req: any, res) => {
     try {
@@ -64,6 +100,7 @@ router.get(
   "/skeletons/:id",
   supabaseAuth,
   requireRole(['schoolAdmin', 'admin', 'superAdmin', 'director']),
+  logDirectorAccess,
   requireSchoolContext,
   async (req: any, res) => {
     try {
@@ -85,6 +122,7 @@ router.post(
   "/skeletons",
   supabaseAuth,
   requireRole(['schoolAdmin', 'admin', 'superAdmin', 'director']), // director has full schedule-builder access
+  logDirectorAccess,
   requireSchoolContext,
   async (req: any, res) => {
     try {
@@ -110,6 +148,7 @@ router.patch(
   "/skeletons/:id",
   supabaseAuth,
   requireRole(['schoolAdmin', 'admin', 'superAdmin', 'director']), // director has full schedule-builder access
+  logDirectorAccess,
   requireSchoolContext,
   async (req: any, res) => {
     try {
@@ -135,6 +174,7 @@ router.delete(
   "/skeletons/:id",
   supabaseAuth,
   requireRole(['schoolAdmin', 'admin', 'superAdmin', 'director']), // director has full schedule-builder access
+  logDirectorAccess,
   requireSchoolContext,
   async (req: any, res) => {
     try {
@@ -161,6 +201,7 @@ router.get(
   "/skeletons/:skeletonId/blocks",
   supabaseAuth,
   requireRole(['schoolAdmin', 'admin', 'superAdmin', 'director']),
+  logDirectorAccess,
   requireSchoolContext,
   async (req: any, res) => {
     try {
@@ -183,6 +224,7 @@ router.post(
   "/skeletons/:skeletonId/blocks",
   supabaseAuth,
   requireRole(['schoolAdmin', 'admin', 'superAdmin', 'director']), // director has full schedule-builder access
+  logDirectorAccess,
   requireSchoolContext,
   async (req: any, res) => {
     try {
@@ -212,6 +254,7 @@ router.patch(
   "/skeletons/:skeletonId/blocks/:blockId",
   supabaseAuth,
   requireRole(['schoolAdmin', 'admin', 'superAdmin', 'director']), // director has full schedule-builder access
+  logDirectorAccess,
   requireSchoolContext,
   async (req: any, res) => {
     try {
@@ -239,6 +282,7 @@ router.delete(
   "/skeletons/:skeletonId/blocks/:blockId",
   supabaseAuth,
   requireRole(['schoolAdmin', 'admin', 'superAdmin', 'director']), // director has full schedule-builder access
+  logDirectorAccess,
   requireSchoolContext,
   async (req: any, res) => {
     try {
@@ -263,6 +307,7 @@ router.post(
   "/skeletons/:skeletonId/blocks/reorder",
   supabaseAuth,
   requireRole(['schoolAdmin', 'admin', 'superAdmin', 'director']), // director has full schedule-builder access
+  logDirectorAccess,
   requireSchoolContext,
   async (req: any, res) => {
     try {
@@ -287,6 +332,7 @@ router.get(
   "/skeletons/:skeletonId/week-plans",
   supabaseAuth,
   requireRole(['schoolAdmin', 'admin', 'superAdmin', 'director']),
+  logDirectorAccess,
   requireSchoolContext,
   async (req: any, res) => {
     try {
@@ -309,6 +355,7 @@ router.get(
   "/week-plans/published",
   supabaseAuth,
   requireRole(['schoolAdmin', 'admin', 'superAdmin', 'director']),
+  logDirectorAccess,
   requireSchoolContext,
   async (req: any, res) => {
     try {
@@ -327,6 +374,7 @@ router.get(
   "/week-plans/:id",
   supabaseAuth,
   requireRole(['schoolAdmin', 'admin', 'superAdmin', 'director']),
+  logDirectorAccess,
   requireSchoolContext,
   async (req: any, res) => {
     try {
@@ -349,6 +397,7 @@ router.post(
   "/week-plans",
   supabaseAuth,
   requireRole(['schoolAdmin', 'admin', 'superAdmin', 'director']), // director has full schedule-builder access
+  logDirectorAccess,
   requireSchoolContext,
   async (req: any, res) => {
     try {
@@ -374,6 +423,7 @@ router.patch(
   "/week-plans/:id",
   supabaseAuth,
   requireRole(['schoolAdmin', 'admin', 'superAdmin', 'director']), // director has full schedule-builder access
+  logDirectorAccess,
   requireSchoolContext,
   async (req: any, res) => {
     try {
@@ -422,6 +472,7 @@ router.delete(
   "/week-plans/:id",
   supabaseAuth,
   requireRole(['schoolAdmin', 'admin', 'superAdmin', 'director']), // director has full schedule-builder access
+  logDirectorAccess,
   requireSchoolContext,
   async (req: any, res) => {
     try {
@@ -444,6 +495,7 @@ router.post(
   "/week-plans/:id/clone",
   supabaseAuth,
   requireRole(['schoolAdmin', 'admin', 'superAdmin', 'director']), // director has full schedule-builder access
+  logDirectorAccess,
   requireSchoolContext,
   async (req: any, res) => {
     try {
@@ -473,6 +525,7 @@ router.get(
   "/week-plans/:weekPlanId/blocks",
   supabaseAuth,
   requireRole(['schoolAdmin', 'admin', 'superAdmin', 'director']),
+  logDirectorAccess,
   requireSchoolContext,
   async (req: any, res) => {
     try {
@@ -495,6 +548,7 @@ router.post(
   "/week-plans/:weekPlanId/blocks",
   supabaseAuth,
   requireRole(['schoolAdmin', 'admin', 'superAdmin', 'director']),
+  logDirectorAccess,
   requireSchoolContext,
   async (req: any, res) => {
     try {
@@ -523,6 +577,7 @@ router.patch(
   "/week-plan-blocks/:id",
   supabaseAuth,
   requireRole(['schoolAdmin', 'admin', 'superAdmin', 'director']),
+  logDirectorAccess,
   requireSchoolContext,
   async (req: any, res) => {
     try {
@@ -548,6 +603,7 @@ router.delete(
   "/week-plan-blocks/:id",
   supabaseAuth,
   requireRole(['schoolAdmin', 'admin', 'superAdmin', 'director']), // director has full schedule-builder access
+  logDirectorAccess,
   requireSchoolContext,
   async (req: any, res) => {
     try {
@@ -572,6 +628,7 @@ router.post(
   "/week-plan-blocks/:id/complete",
   supabaseAuth,
   requireRole(['schoolAdmin', 'admin', 'superAdmin', 'director']),
+  logDirectorAccess,
   requireSchoolContext,
   async (req: any, res) => {
     try {
@@ -601,6 +658,7 @@ router.get(
   "/week-plan-blocks/:id/history",
   supabaseAuth,
   requireRole(['schoolAdmin', 'admin', 'superAdmin', 'director']),
+  logDirectorAccess,
   requireSchoolContext,
   async (req: any, res) => {
     try {
@@ -629,6 +687,7 @@ router.get(
   "/skeletons/:id/blocks/export-csv",
   supabaseAuth,
   requireRole(['schoolAdmin', 'admin', 'superAdmin', 'director']),
+  logDirectorAccess,
   requireSchoolContext,
   async (req: any, res) => {
     try {
@@ -668,6 +727,7 @@ router.post(
   "/skeletons/:id/blocks/import-csv",
   supabaseAuth,
   requireRole(['schoolAdmin', 'admin', 'superAdmin', 'director']),
+  logDirectorAccess,
   requireSchoolContext,
   async (req: any, res) => {
     try {
@@ -796,6 +856,7 @@ router.get(
   "/week-plans/:id/blocks/export-csv",
   supabaseAuth,
   requireRole(['schoolAdmin', 'admin', 'superAdmin', 'director']),
+  logDirectorAccess,
   requireSchoolContext,
   async (req: any, res) => {
     try {
@@ -843,6 +904,7 @@ router.post(
   "/week-plans/:id/blocks/import-csv",
   supabaseAuth,
   requireRole(['schoolAdmin', 'admin', 'superAdmin', 'director']),
+  logDirectorAccess,
   requireSchoolContext,
   async (req: any, res) => {
     try {
@@ -936,6 +998,7 @@ router.post(
   "/upload/request-url",
   supabaseAuth,
   requireRole(['schoolAdmin', 'admin', 'superAdmin', 'director']),
+  logDirectorAccess,
   requireSchoolContext,
   async (req: any, res) => {
     try {

@@ -74,14 +74,53 @@ async function extractSchoolId(req: any): Promise<number | null> {
 /**
  * Express middleware that injects req.schoolId from PostgreSQL database
  * Apply this middleware AFTER supabaseAuth on all school-scoped routes
- * 
+ *
+ * Role access model (additive roles — Phase 2):
+ *   - superAdmin / admin: always pass (no school restriction needed)
+ *   - schoolAdmin: full school-scoped access (existing behavior, unchanged)
+ *   - director (single-role OR additive via allRoles): treated identically to schoolAdmin
+ *     This is the Phase 2 extension. Covers:
+ *       - userRole === 'director' (single-role director)
+ *       - req.user.allRoles includes 'director' (multi-role: e.g., parent + director)
+ *   - educator (teacher, single-role only): view-only — blocked upstream by requireRole
+ *
+ * Test matrix (expected behavior):
+ *   - Single-role educator: view-only, no schedule builder write access (blocked by requireRole)
+ *   - Multi-role parent + director: full scheduler access (passes via allRoles includes 'director')
+ *   - schoolAdmin: behavior completely unchanged (passes via userRole check)
+ *
  * Usage:
- *   router.get("/students", supabaseAuth, requireSchoolContext, async (req: any, res) => {
+ *   router.get("/students", supabaseAuth, requireRole([...]), requireSchoolContext, async (req: any, res) => {
  *     const schoolId = req.schoolId; // Always populated from database
  *   });
  */
 export async function requireSchoolContext(req: any, res: Response, next: NextFunction) {
   try {
+    const userRole: string = req.auth?.role || req.user?.role || '';
+    const allRoles: string[] = req.user?.allRoles || [];
+
+    // Roles that bypass school-scoped restrictions entirely
+    const isSuperAdmin = ['superAdmin', 'admin'].includes(userRole);
+
+    // Phase 2: Director is treated the same as schoolAdmin for school-scoped access.
+    // Check both the single-role path (userRole) and the additive-roles path (allRoles).
+    // Pattern: if (['schoolAdmin', 'director'].includes(userRole) || req.user.allRoles?.includes('director'))
+    const hasSchoolAdminAccess =
+      isSuperAdmin ||
+      ['schoolAdmin', 'director'].includes(userRole) ||
+      allRoles.includes('director');
+
+    if (!hasSchoolAdminAccess) {
+      console.log(`⚠️  [requireSchoolContext] Role "${userRole}" does not have school-admin-level access; proceeding as school-scoped observer`);
+    }
+
+    // Log director access for observability (development only)
+    if (userRole === 'director' || allRoles.includes('director')) {
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Director access granted for user', req.user?.id);
+      }
+    }
+
     const schoolId = await extractSchoolId(req);
     
     if (schoolId === null) {
@@ -93,6 +132,8 @@ export async function requireSchoolContext(req: any, res: Response, next: NextFu
     
     // Inject schoolId into request for downstream handlers (as STRING to match storage contracts)
     req.schoolId = String(schoolId);
+    // Expose whether user has school-admin-level access for downstream handlers
+    req.hasSchoolAdminAccess = hasSchoolAdminAccess;
     console.log(`✅ [requireSchoolContext] Injected req.schoolId="${req.schoolId}" (string) for user ${req.user?.email}`);
     next();
   } catch (error) {
