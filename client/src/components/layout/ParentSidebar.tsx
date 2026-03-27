@@ -19,6 +19,10 @@ import {
   FolderOpen,
   Shield,
   Sparkles,
+  GraduationCap,
+  Clock,
+  ClipboardList,
+  Building2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -130,9 +134,11 @@ export function SidebarNav({ className, items, expandedSections, onToggleExpande
 
 export default function ParentSidebar() {
   const { user, signOut } = useAuth();
-  const { activeRole, availableRoles } = useRole();
+  const { activeRole, availableRoles, hasRole } = useRole();
   
-  const hasSuperAdminRole = (availableRoles || []).some(r => r.role.toLowerCase() === 'superadmin');
+  const hasSuperAdminRole = hasRole('superadmin');
+  const hasEducatorRole = hasRole(['educator', 'teacher', 'mentor']);
+  const hasSchoolAdminRole = hasRole(['schoolAdmin', 'director']);
   const [isOpen, setIsOpen] = React.useState(false);
   const [location, setLocation] = useLocation();
   const [expandedSections, setExpandedSections] = React.useState<{ [key: string]: boolean }>({});
@@ -259,6 +265,71 @@ export default function ParentSidebar() {
       title: "Settings",
       icon: <Settings className="h-5 w-5" />,
     },
+    ...(hasEducatorRole ? [
+      {
+        href: "/educator/dashboard",
+        title: "Educator",
+        icon: <GraduationCap className="h-5 w-5" />,
+        isSectionHeader: true,
+        subItems: [
+          {
+            href: "/educator/dashboard",
+            title: "Educator Dashboard",
+            icon: <Home className="h-5 w-5" />,
+          },
+          {
+            href: "/educator/my-classes",
+            title: "My Classes",
+            icon: <BookOpen className="h-5 w-5" />,
+          },
+          {
+            href: "/educator/students",
+            title: "My Students",
+            icon: <Users className="h-5 w-5" />,
+          },
+          {
+            href: "/educator/weekly-calendar",
+            title: "Schedule",
+            icon: <Calendar className="h-5 w-5" />,
+          },
+          {
+            href: "/educator/attendance",
+            title: "Attendance",
+            icon: <ClipboardList className="h-5 w-5" />,
+          },
+          {
+            href: "/educator/my-hours",
+            title: "My Hours",
+            icon: <Clock className="h-5 w-5" />,
+          },
+        ],
+      },
+    ] : []),
+    ...(hasSchoolAdminRole ? [
+      {
+        href: "/school-admin",
+        title: "School Admin",
+        icon: <Building2 className="h-5 w-5" />,
+        isSectionHeader: true,
+        subItems: [
+          {
+            href: "/school-admin",
+            title: "Admin Dashboard",
+            icon: <Home className="h-5 w-5" />,
+          },
+          {
+            href: "/school-admin/attendance",
+            title: "Attendance",
+            icon: <ClipboardList className="h-5 w-5" />,
+          },
+          {
+            href: "/school-admin/assessments",
+            title: "Assessments",
+            icon: <BookOpen className="h-5 w-5" />,
+          },
+        ],
+      },
+    ] : []),
     ...(hasSuperAdminRole ? [{
       href: "/superadmin/schools",
       title: "Super Admin",

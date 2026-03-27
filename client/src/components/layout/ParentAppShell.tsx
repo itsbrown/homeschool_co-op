@@ -9,7 +9,7 @@ import RoleSwitcher from "@/components/RoleSwitcher.tsx";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetTrigger, SheetClose } from "@/components/ui/sheet";
-import { LogOut, Menu, User, Bell, X, Home, Users, BookOpen, Calendar, DollarSign, Bot, Brain, Settings, FolderOpen, Sparkles } from "lucide-react";
+import { LogOut, Menu, User, Bell, X, Home, Users, BookOpen, Calendar, DollarSign, Bot, Brain, Settings, FolderOpen, Sparkles, GraduationCap, Clock, ClipboardList, Building2, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { Link, useLocation } from "wouter";
@@ -87,7 +87,7 @@ const mobileNavigationItems = [
 
 export default function ParentAppShell({ children }: ParentAppShellProps) {
   const { user, signOut, isAuthenticated } = useAuth();
-  const { activeRole } = useRole();
+  const { activeRole, hasRole } = useRole();
   const [location] = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userSchool, setUserSchool] = useState<any>(null);
@@ -224,6 +224,90 @@ export default function ParentAppShell({ children }: ParentAppShellProps) {
                             </SheetClose>
                           );
                         })}
+
+                        {hasRole(['educator', 'teacher', 'mentor']) && (
+                          <>
+                            <div className="pt-3 pb-1 px-3">
+                              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Educator</p>
+                            </div>
+                            {[
+                              { href: "/educator/dashboard", title: "Educator Dashboard", icon: GraduationCap },
+                              { href: "/educator/my-classes", title: "My Classes", icon: BookOpen },
+                              { href: "/educator/students", title: "My Students", icon: Users },
+                              { href: "/educator/weekly-calendar", title: "Schedule", icon: Calendar },
+                              { href: "/educator/attendance", title: "Attendance", icon: ClipboardList },
+                              { href: "/educator/my-hours", title: "My Hours", icon: Clock },
+                            ].map((item) => {
+                              const Icon = item.icon;
+                              const isActive = location === item.href;
+                              return (
+                                <SheetClose asChild key={item.href}>
+                                  <Link
+                                    href={item.href}
+                                    className={cn(
+                                      "flex items-center gap-3 rounded-lg px-3 py-3 pl-6 text-base font-medium transition-colors",
+                                      isActive
+                                        ? "bg-primary text-primary-foreground"
+                                        : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                                    )}
+                                  >
+                                    <Icon className="h-5 w-5" />
+                                    <span className="flex-1">{item.title}</span>
+                                  </Link>
+                                </SheetClose>
+                              );
+                            })}
+                          </>
+                        )}
+
+                        {hasRole(['schoolAdmin', 'director']) && (
+                          <>
+                            <div className="pt-3 pb-1 px-3">
+                              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">School Admin</p>
+                            </div>
+                            {[
+                              { href: "/school-admin", title: "Admin Dashboard", icon: Building2 },
+                              { href: "/school-admin/attendance", title: "Attendance", icon: ClipboardList },
+                              { href: "/school-admin/assessments", title: "Assessments", icon: BookOpen },
+                            ].map((item) => {
+                              const Icon = item.icon;
+                              const isActive = location === item.href;
+                              return (
+                                <SheetClose asChild key={item.href}>
+                                  <Link
+                                    href={item.href}
+                                    className={cn(
+                                      "flex items-center gap-3 rounded-lg px-3 py-3 pl-6 text-base font-medium transition-colors",
+                                      isActive
+                                        ? "bg-primary text-primary-foreground"
+                                        : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                                    )}
+                                  >
+                                    <Icon className="h-5 w-5" />
+                                    <span className="flex-1">{item.title}</span>
+                                  </Link>
+                                </SheetClose>
+                              );
+                            })}
+                          </>
+                        )}
+
+                        {hasRole('superadmin') && (
+                          <SheetClose asChild>
+                            <Link
+                              href="/superadmin/schools"
+                              className={cn(
+                                "flex items-center gap-3 rounded-lg px-3 py-3 text-base font-medium transition-colors",
+                                location === "/superadmin/schools"
+                                  ? "bg-primary text-primary-foreground"
+                                  : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                              )}
+                            >
+                              <Shield className="h-5 w-5" />
+                              <span className="flex-1">Super Admin</span>
+                            </Link>
+                          </SheetClose>
+                        )}
                       </nav>
                     </ScrollArea>
 
