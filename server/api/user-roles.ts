@@ -13,7 +13,7 @@ async function isAdminOrSchoolAdmin(userId: number): Promise<{ isAdmin: boolean;
   const db = await getDb();
   
   const user = await db
-    .select({ role: users.role, activeRole: users.activeRole, schoolId: users.schoolId })
+    .select({ role: users.role, activeRole: users.activeRole, activeRoleId: users.activeRoleId, schoolId: users.schoolId })
     .from(users)
     .where(eq(users.id, userId))
     .limit(1);
@@ -25,10 +25,43 @@ async function isAdminOrSchoolAdmin(userId: number): Promise<{ isAdmin: boolean;
   const effectiveRole = user[0].activeRole || user[0].role;
   const isAdmin = effectiveRole === 'admin' || effectiveRole === 'superAdmin' || effectiveRole === 'schoolAdmin' || effectiveRole === 'director';
   
-  return { 
-    isAdmin, 
-    schoolId: (effectiveRole === 'schoolAdmin' || effectiveRole === 'director') ? user[0].schoolId : null 
-  };
+  if (!isAdmin) {
+    return { isAdmin: false, schoolId: null };
+  }
+
+  // For global admins, no school scoping needed
+  if (effectiveRole === 'admin' || effectiveRole === 'superAdmin') {
+    return { isAdmin: true, schoolId: null };
+  }
+
+  // For schoolAdmin and director: resolve school using the same chain as /current-role endpoint:
+  // Priority 1: activeRoleId lookup in user_roles (precise, always current after role switches)
+  // Priority 2: role-string match in user_roles (backward compatibility for users without activeRoleId)
+  // Priority 3: users.schoolId fallback (may be stale)
+  const userRolesList = await storage.getUserRolesByUserId(userId);
+  let resolvedSchoolId: number | null | undefined;
+
+  if (user[0].activeRoleId) {
+    const activeRoleEntry = userRolesList.find(r => r.id === user[0].activeRoleId);
+    // Use entry's schoolId; if entry found but schoolId is null, that's authoritative (don't fall through)
+    if (activeRoleEntry) {
+      resolvedSchoolId = activeRoleEntry.schoolId ?? null;
+    }
+  }
+
+  if (resolvedSchoolId === undefined) {
+    // Fallback: role-string match (backward compat when activeRoleId not set)
+    const roleStringEntry = userRolesList.find(r => r.role === effectiveRole);
+    if (roleStringEntry) {
+      resolvedSchoolId = roleStringEntry.schoolId ?? null;
+    }
+  }
+
+  if (resolvedSchoolId === undefined) {
+    resolvedSchoolId = user[0].schoolId ?? null;
+  }
+
+  return { isAdmin: true, schoolId: resolvedSchoolId };
 }
 
 /**
@@ -584,46 +617,54 @@ userRolesRouter.post('/admin/users/:userId/roles', supabaseAuth, async (req: Aut
 
     // Validate role: either a system role or a custom staff position
     const isSystemRole = (SYSTEM_ROLES as readonly string[]).includes(role);
-    let isValidRole = isSystemRole;
-    
-    // If not a system role, check if it's a valid staff position with proper tenant scoping
+
     if (!isSystemRole) {
       // Custom positions require a valid school context for tenant isolation
       // School admins use their schoolId, global admins must provide schoolId in request
       const targetSchoolId = adminSchoolId !== null ? adminSchoolId : schoolId;
-      
+
+      console.log(`[role-validation] submitted role="${role}", resolvedTargetSchoolId=${targetSchoolId}, adminSchoolId=${adminSchoolId}, requestSchoolId=${schoolId}`);
+
       // Strict validation: must be a valid, finite number (catches null, undefined, NaN, strings, etc.)
       if (!Number.isFinite(targetSchoolId)) {
+        console.log(`[role-validation] FAILED: school context missing for custom position "${role}"`);
         return res.status(400).json({ 
-          error: 'School selection is required when assigning custom staff positions' 
+          error: 'School selection is required when assigning custom staff positions. Please select a school and try again.' 
         });
       }
       
       const allPositions = await storage.getAllStaffPositions();
-      
+
+      console.log(`[role-validation] checking ${allPositions.length} positions for school ${targetSchoolId}, looking for title="${role}"`);
+
       // Filter positions to ONLY those that belong to the target school
-      // Custom positions are school-scoped, so we only allow positions where:
-      // 1. The position belongs to the target school (schoolId matches)
-      // 2. OR the position is a global position (schoolId is null)
       const schoolPositions = allPositions.filter(
         (pos: StaffPosition) => pos.schoolId === targetSchoolId || pos.schoolId === null
       );
-      
-      isValidRole = schoolPositions.some((pos: StaffPosition) => pos.title === role);
-      
-      if (!isValidRole) {
-        // Check if the role exists at another school (for better error message)
+
+      const matchInSchool = schoolPositions.some((pos: StaffPosition) => pos.title === role);
+
+      if (!matchInSchool) {
+        // Check if the role exists at another school (for better diagnostic)
         const existsElsewhere = allPositions.some((pos: StaffPosition) => pos.title === role);
         if (existsElsewhere) {
+          console.log(`[role-validation] FAILED: position "${role}" exists but belongs to a different school (checked ${schoolPositions.length} positions for school ${targetSchoolId})`);
           return res.status(400).json({ 
-            error: 'This staff position belongs to a different school' 
+            error: `The staff position "${role}" belongs to a different school and cannot be assigned here.` 
+          });
+        } else {
+          console.log(`[role-validation] FAILED: position "${role}" not found anywhere (checked ${allPositions.length} total positions)`);
+          return res.status(400).json({ 
+            error: `The staff position "${role}" does not exist. Please create it in Staff Positions before assigning it.` 
           });
         }
       }
-    }
-    
-    if (!isValidRole) {
-      return res.status(400).json({ error: 'Invalid role value' });
+
+      // Valid custom position
+      console.log(`[role-validation] PASSED: custom position "${role}" found in school ${targetSchoolId} (${schoolPositions.length} positions checked)`);
+    } else {
+      // System role — always valid
+      console.log(`[role-validation] PASSED: system role "${role}" accepted`);
     }
 
     const db = await getDb();

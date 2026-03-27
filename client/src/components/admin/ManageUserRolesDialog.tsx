@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Trash2, Plus, Crown, Building2, AlertCircle } from 'lucide-react';
 import { queryClient, apiRequest } from '@/lib/queryClient';
+import { useRole } from '@/contexts/RoleContext';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -75,11 +76,29 @@ export default function ManageUserRolesDialog({
   userName,
 }: ManageUserRolesDialogProps) {
   const { toast } = useToast();
+  const { activeRole, activeRoleId, availableRoles } = useRole();
   const [showAddRole, setShowAddRole] = useState(false);
   const [selectedRole, setSelectedRole] = useState<string>('');
   const [selectedSchoolId, setSelectedSchoolId] = useState<string>('none');
   const [isPrimary, setIsPrimary] = useState(false);
   const [roleToDelete, setRoleToDelete] = useState<UserRole | null>(null);
+
+  // Derive the current admin's schoolId using the same priority chain as the backend:
+  // 1. Active role entry (by activeRoleId) — always current after role switches
+  // 2. Role-string match in availableRoles — backward compat when activeRoleId not set
+  // 3. Primary role fallback
+  const adminSchoolId = (() => {
+    if (activeRoleId) {
+      const activeEntry = availableRoles.find(r => r.id === activeRoleId);
+      if (activeEntry) return activeEntry.schoolId ?? null;
+    }
+    // Backward compat: match by role string
+    const roleStringEntry = availableRoles.find(r => r.role === activeRole);
+    if (roleStringEntry) return roleStringEntry.schoolId ?? null;
+    // Final fallback
+    const primary = availableRoles.find(r => r.isPrimary);
+    return primary?.schoolId ?? availableRoles[0]?.schoolId ?? null;
+  })();
 
   // Fetch user's roles
   const { data: rolesResponse, isLoading: rolesLoading } = useQuery<{
@@ -100,12 +119,6 @@ export default function ManageUserRolesDialog({
   // Extract roles from the response
   const userRoles = rolesResponse?.roles;
 
-  // Fetch current admin's profile to determine school access
-  const { data: adminProfile } = useQuery<{ role: string; schoolId: number | null }>({
-    queryKey: ['/api/users/profile'],
-    enabled: open,
-  });
-
   // Fetch schools (for school selection)
   const { data: allSchools } = useQuery<School[]>({
     queryKey: ['/api/schools'],
@@ -118,10 +131,13 @@ export default function ManageUserRolesDialog({
     enabled: open,
   });
 
+  // Determine if the current admin is school-scoped (schoolAdmin or director)
+  const isSchoolScopedAdmin = activeRole === 'schoolAdmin' || activeRole === 'director';
+
   // Filter schools based on admin privileges
-  // SchoolAdmins can only assign roles to their own school
-  const schools = adminProfile?.role === 'schoolAdmin' && adminProfile?.schoolId
-    ? allSchools?.filter(school => school.id === adminProfile.schoolId)
+  // SchoolAdmins and directors can only assign roles to their own school
+  const schools = isSchoolScopedAdmin && adminSchoolId
+    ? allSchools?.filter(school => school.id === adminSchoolId)
     : allSchools;
 
   // Build combined role options: base roles + custom staff positions + admin roles (if applicable)
@@ -134,7 +150,7 @@ export default function ManageUserRolesDialog({
       isCustom: true,
     })) || []),
     // Add admin roles only for super admins
-    ...(adminProfile?.role === 'superAdmin' ? ADMIN_ROLE_OPTIONS : []),
+    ...(activeRole === 'superAdmin' ? ADMIN_ROLE_OPTIONS : []),
   ];
 
   // Add role mutation
@@ -467,18 +483,18 @@ export default function ManageUserRolesDialog({
 
                   <div>
                     <Label htmlFor="school-select">
-                      {adminProfile?.role === 'schoolAdmin' ? 'School' : 'School (Optional)'}
+                      {isSchoolScopedAdmin ? 'School' : 'School (Optional)'}
                     </Label>
                     <Select value={selectedSchoolId} onValueChange={setSelectedSchoolId}>
                       <SelectTrigger id="school-select" data-testid="select-school">
                         <SelectValue placeholder={
-                          adminProfile?.role === 'schoolAdmin' 
+                          isSchoolScopedAdmin
                             ? "Select a school" 
                             : "Select a school (optional)"
                         } />
                       </SelectTrigger>
                       <SelectContent>
-                        {adminProfile?.role !== 'schoolAdmin' && (
+                        {!isSchoolScopedAdmin && (
                           <SelectItem value="none">No School</SelectItem>
                         )}
                         {schools?.map((school) => (

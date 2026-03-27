@@ -280,13 +280,46 @@ export const supabaseAuth = async (
     let allRoles: string[] = [];
     try {
       const userRolesData = await storage.getUserRolesByUserId(dbUserId);
-      const userSchoolId = dbUserData?.schoolId;
-      // Include roles scoped to this user's school; exclude roles scoped to other schools.
+
+      // Resolve effective school using the same chain as /current-role endpoint:
+      // Priority 1: activeRoleId lookup in user_roles (authoritative after role switches)
+      // Priority 2: role-string match in user_roles (backward compatibility)
+      // Priority 3: users.schoolId fallback (may be stale)
+      // NOTE: If activeRoleId lookup succeeds (entry found), its schoolId is authoritative
+      //       even if null — we do NOT fall through to stale users.schoolId in that case.
+      let effectiveSchoolId: number | null | undefined;
+      const activeRoleIdVal = dbUserData?.activeRoleId;
+
+      if (activeRoleIdVal) {
+        const activeRoleEntry = userRolesData.find((r: any) => r.id === activeRoleIdVal);
+        if (activeRoleEntry) {
+          // Entry found: its schoolId is authoritative (null means global role)
+          effectiveSchoolId = activeRoleEntry.schoolId ?? null;
+        }
+      }
+
+      if (effectiveSchoolId === undefined) {
+        // Fallback: role-string match for backward compat when activeRoleId not set
+        const effectiveRoleForLookup = dbUserData?.activeRole ?? dbUserData?.role;
+        if (effectiveRoleForLookup) {
+          const roleStringEntry = userRolesData.find((r: any) => r.role === effectiveRoleForLookup);
+          if (roleStringEntry) {
+            effectiveSchoolId = roleStringEntry.schoolId ?? null;
+          }
+        }
+      }
+
+      if (effectiveSchoolId === undefined) {
+        // Final fallback: users.schoolId (may be stale but better than nothing)
+        effectiveSchoolId = dbUserData?.schoolId ?? null;
+      }
+
+      // Include roles scoped to this user's effective school; exclude roles scoped to other schools.
       // Roles with null schoolId are global/platform roles (e.g., superAdmin) and are always included.
       allRoles = userRolesData
-        .filter(r => r.schoolId === null || r.schoolId === userSchoolId)
-        .map(r => r.role);
-      console.log(`📋 supabaseAuth - allRoles for school ${userSchoolId}:`, allRoles);
+        .filter((r: any) => r.schoolId === null || r.schoolId === effectiveSchoolId)
+        .map((r: any) => r.role);
+      console.log(`📋 supabaseAuth - allRoles for school ${effectiveSchoolId}:`, allRoles);
 
       // If user has superAdmin in their roles, set effectiveRole to superAdmin
       // (unless they have explicitly switched to a different active role)

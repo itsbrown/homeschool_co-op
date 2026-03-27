@@ -129,12 +129,8 @@ async function getSchoolIdFromRequest(req: any, res: any): Promise<number | null
       return null;
     }
     
-    // Prioritize legacy schoolId field
-    if (user.schoolId !== null && user.schoolId !== undefined && user.schoolId > 0) {
-      return user.schoolId;
-    }
-    
-    // Multi-role support: Get school ID from active role
+    // Prioritize activeRoleId (always current after role switches)
+    // over users.schoolId which may be stale.
     if (user.activeRoleId) {
       const db = await getDb();
       const activeRoles = await db
@@ -146,6 +142,11 @@ async function getSchoolIdFromRequest(req: any, res: any): Promise<number | null
       if (activeRoles.length > 0 && activeRoles[0].schoolId) {
         return activeRoles[0].schoolId;
       }
+    }
+
+    // Fall back to legacy schoolId field
+    if (user.schoolId !== null && user.schoolId !== undefined && user.schoolId > 0) {
+      return user.schoolId;
     }
     
     res.status(400).json({ message: "School ID not found in database" });
