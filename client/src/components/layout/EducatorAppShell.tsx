@@ -72,7 +72,7 @@ const educatorNavigationItems = [
   },
 ];
 
-// Director Academics nav items — shown in a collapsible section when activeRole === 'director'
+// Director Academics nav items — shown in a collapsible section when hasRole('director') is true
 const directorAcademicsItems = [
   { href: "/educator/templates", title: "Weekly Templates", icon: LayoutTemplate },
   { href: "/educator/week-plans", title: "Week Planner", icon: CalendarDays },
@@ -83,12 +83,12 @@ const directorAcademicsItems = [
 function EducatorSidebar() {
   const [location] = useLocation();
   const { user, signOut } = useAuth();
-  const { activeRole, availableRoles, hasRole } = useRole();
+  const { activeRole, hasRole } = useRole();
   const [userSchool, setUserSchool] = useState<any>(null);
   const [academicsOpen, setAcademicsOpen] = useState(true);
   
   const isDirector = hasRole('director');
-  const hasSuperAdminRole = hasRole('superAdmin');
+  const hasSuperAdminRole = hasRole('superadmin');
 
   const { data: notifications = [] } = useQuery<Notification[]>({
     queryKey: ['/api/notifications'],
@@ -268,12 +268,12 @@ function EducatorSidebar() {
 
 export default function EducatorAppShell({ children }: EducatorAppShellProps) {
   const { user, signOut, isAuthenticated } = useAuth();
-  const { activeRole, availableRoles, hasRole } = useRole();
+  const { activeRole, hasRole } = useRole();
   const [location, setLocation] = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userSchool, setUserSchool] = useState<any>(null);
   
-  const hasSuperAdminRole = hasRole('superAdmin');
+  const hasSuperAdminRole = hasRole('superadmin');
 
   const { data: notifications = [] } = useQuery<Notification[]>({
     queryKey: ['/api/notifications'],

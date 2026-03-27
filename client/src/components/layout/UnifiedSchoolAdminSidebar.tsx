@@ -208,10 +208,12 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
   });
   const { user, isAuthenticated, signOut } = useAuth();
   const { activeRole, availableRoles, hasRole } = useRole();
+  // Whether user can see admin nav groups (director or schoolAdmin role at any school)
+  const showAdminNavGroups = hasRole(['director', 'schoolAdmin', 'superAdmin', 'admin']);
 
   // Auto-expand group containing current route
   useEffect(() => {
-    if (hasRole('schoolAdmin') || hasRole('superAdmin') || hasRole('admin')) {
+    if (showAdminNavGroups) {
       for (const group of adminNavGroups) {
         const hasActiveItem = group.items.some(item => 
           location === item.href || location.startsWith(`${item.href}/`)
@@ -221,7 +223,7 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
         }
       }
     }
-  }, [location, activeRole]);
+  }, [location, showAdminNavGroups]);
 
   // Save expanded state to localStorage (guarded for SSR safety)
   useEffect(() => {
@@ -246,12 +248,12 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
     });
   };
   
-  const hasSuperAdminRole = hasRole('superAdmin');
+  const hasSuperAdminRole = hasRole('superadmin');
 
   // Fetch school data for logo and name (for any school-scoped role)
   const { data: schoolData } = useQuery<SchoolData>({
     queryKey: ['/api/school-admin/my-school'],
-    enabled: !!user && (hasRole('schoolAdmin') || hasRole('superAdmin') || hasRole('educator') || hasRole('director')),
+    enabled: !!user && hasRole(['schoolAdmin', 'superAdmin', 'educator', 'director']),
   });
 
   // Reset logo load failed states when school logo changes
@@ -388,8 +390,8 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
               </div>
             </Link>
 
-            {/* Grouped Navigation - for admin roles (additive: also show if user has schoolAdmin alongside educator) */}
-            {(hasRole('schoolAdmin') || hasRole('superAdmin') || hasRole('admin')) && adminNavGroups.map((group) => {
+            {/* Grouped Navigation - for users with admin or director roles */}
+            {showAdminNavGroups && adminNavGroups.map((group) => {
               const isGroupExpanded = expandedGroups.has(group.title);
               const hasActiveItem = group.items.some(item => 
                 location === item.href || location.startsWith(`${item.href}/`)
@@ -453,8 +455,8 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
               );
             })}
 
-            {/* Educator-specific nav items (shown whenever user has any educator-type role) */}
-            {(hasRole('educator') || hasRole('teacher') || hasRole('mentor')) && educatorNavItems.filter(item => 
+            {/* Educator-specific nav items (separate from Dashboard/Settings which are always shown) */}
+            {!showAdminNavGroups && educatorNavItems.filter(item => 
               item.href !== '/dashboard' && item.href !== '/schools/settings'
             ).map((item) => {
               const isActive = location === item.href || location.startsWith(`${item.href}/`);
@@ -612,8 +614,8 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
                     </div>
                   </Link>
 
-                  {/* Grouped Navigation - for admin roles (additive) */}
-                  {(hasRole('schoolAdmin') || hasRole('superAdmin') || hasRole('admin')) && adminNavGroups.map((group) => {
+                  {/* Grouped Navigation - for users with admin or director roles */}
+                  {showAdminNavGroups && adminNavGroups.map((group) => {
                     const isGroupExpanded = expandedGroups.has(group.title);
                     const hasActiveItem = group.items.some(item => 
                       location === item.href || location.startsWith(`${item.href}/`)
@@ -674,8 +676,8 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
                     );
                   })}
 
-                  {/* Educator-specific nav items (shown whenever user has any educator-type role) */}
-                  {(hasRole('educator') || hasRole('teacher') || hasRole('mentor')) && educatorNavItems.filter(item => 
+                  {/* Educator-specific nav items (separate from Dashboard/Settings which are always shown) */}
+                  {!showAdminNavGroups && educatorNavItems.filter(item => 
                     item.href !== '/dashboard' && item.href !== '/schools/settings'
                   ).map((item) => {
                     const isActive = location === item.href || location.startsWith(`${item.href}/`);

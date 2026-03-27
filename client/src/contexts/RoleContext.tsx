@@ -22,7 +22,7 @@ interface RoleContextType {
   setActiveRole: (roleId: number) => void;
   availableRoles: UserRole[];
   allRoles: string[];
-  hasRole: (role: string) => boolean;
+  hasRole: (role: string | string[]) => boolean;
   canSwitchRoles: boolean;
   showRoleSelection: boolean;
   setShowRoleSelection: (show: boolean) => void;
@@ -195,8 +195,8 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
   // Determine if user has multiple roles
   const hasMultipleRoles = availableRoles.length > 1;
 
-  // Compute all roles at the user's current school for additive permission checks
-  // When activeRole is set, derive the current schoolId from that role's entry
+  // Compute all roles at the user's current school for additive permission checks.
+  // When activeRole is set, derive the current schoolId from that role's entry.
   const getCurrentSchoolId = (): number | null => {
     if (activeRoleId) {
       const r = availableRoles.find(r => r.id === activeRoleId);
@@ -206,20 +206,22 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
     return primary?.schoolId ?? availableRoles[0]?.schoolId ?? null;
   };
 
+  // allRoles: all role names the user holds at their current school (lowercased).
+  // School-scoped for multi-tenant security.
   const allRoles: string[] = (() => {
     const schoolId = getCurrentSchoolId();
-    if (!schoolId) return activeRole ? [activeRole] : [];
+    if (!schoolId) return activeRole ? [activeRole.toLowerCase()] : [];
     const rolesAtSchool = availableRoles
       .filter(r => r.schoolId === schoolId)
-      .map(r => r.role);
-    return rolesAtSchool.length > 0 ? rolesAtSchool : (activeRole ? [activeRole] : []);
+      .map(r => r.role.toLowerCase());
+    return rolesAtSchool.length > 0 ? rolesAtSchool : (activeRole ? [activeRole.toLowerCase()] : []);
   })();
 
   // Role hierarchy: higher roles implicitly satisfy lower role requirements
   const roleHierarchyMap: Record<string, string[]> = {
-    superAdmin: ['admin', 'schoolAdmin', 'director', 'teacher', 'educator', 'mentor', 'parent', 'student', 'learner'],
-    admin: ['schoolAdmin', 'director', 'teacher', 'educator', 'mentor', 'parent', 'student', 'learner'],
-    schoolAdmin: ['director', 'teacher', 'educator', 'mentor', 'parent', 'student', 'learner'],
+    superadmin: ['admin', 'schooladmin', 'director', 'teacher', 'educator', 'mentor', 'parent', 'student', 'learner'],
+    admin: ['schooladmin', 'director', 'teacher', 'educator', 'mentor', 'parent', 'student', 'learner'],
+    schooladmin: ['director', 'teacher', 'educator', 'mentor', 'parent', 'student', 'learner'],
     director: ['teacher', 'educator', 'mentor', 'parent', 'student', 'learner'],
     teacher: ['parent', 'student', 'learner'],
     educator: ['parent', 'student', 'learner'],
@@ -229,13 +231,19 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
     learner: [],
   };
 
-  const hasRole = (role: string): boolean => {
-    // Direct check in allRoles (case-insensitive)
-    if (allRoles.some(r => r.toLowerCase() === role.toLowerCase())) return true;
-    // Hierarchical check: any role in allRoles that subsumes the target
-    return allRoles.some(r => {
-      const inherited = roleHierarchyMap[r] || [];
-      return inherited.some(i => i.toLowerCase() === role.toLowerCase());
+  // hasRole: returns true if the user holds any of the given roles at their current school,
+  // either directly or via hierarchy. Accepts a single role or an array of roles.
+  const hasRole = (role: string | string[]): boolean => {
+    const roleList = Array.isArray(role) ? role : [role];
+    return roleList.some(target => {
+      const t = target.toLowerCase();
+      // Direct check
+      if (allRoles.includes(t)) return true;
+      // Hierarchical check: any role in allRoles that subsumes the target
+      return allRoles.some(r => {
+        const inherited = roleHierarchyMap[r] || [];
+        return inherited.includes(t);
+      });
     });
   };
 
@@ -334,19 +342,22 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
       
       const normalizedRole = normalizeRoleCasing(currentActiveRole);
       
+      // canSwitchRoles: true only when the user has roles spanning more than one school
+      const distinctSchoolIds = new Set(availableRoles.map(r => r.schoolId));
+      const rolesAcrossMultipleSchools = distinctSchoolIds.size > 1;
+
       if (hasMultipleRoles) {
         console.log(`🎯 Multi-role user detected:`, user.email, 'roles:', availableRoles.map(r => r.role));
         setActiveRole(normalizedRole);
         setActiveRoleId(currentActiveRoleId);
-        setCanSwitchRoles(true);
+        setCanSwitchRoles(rolesAcrossMultipleSchools);
         setShowRoleSelection(false);
       } else {
         // Single role user (or user with basic role only)
         console.log(`🎯 Single role user - setting role: ${normalizedRole} for ${user.email}`);
         setActiveRole(normalizedRole);
         setActiveRoleId(currentActiveRoleId);
-        // Allow role switching for superAdmin
-        setCanSwitchRoles(normalizedRole === 'superAdmin');
+        setCanSwitchRoles(false);
         setShowRoleSelection(false);
       }
     };
