@@ -207,11 +207,11 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
     }
   });
   const { user, isAuthenticated, signOut } = useAuth();
-  const { activeRole, availableRoles } = useRole();
+  const { activeRole, availableRoles, hasRole } = useRole();
 
   // Auto-expand group containing current route
   useEffect(() => {
-    if (activeRole !== 'educator') {
+    if (hasRole('schoolAdmin') || hasRole('superAdmin') || hasRole('admin')) {
       for (const group of adminNavGroups) {
         const hasActiveItem = group.items.some(item => 
           location === item.href || location.startsWith(`${item.href}/`)
@@ -246,12 +246,12 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
     });
   };
   
-  const hasSuperAdminRole = (availableRoles || []).some(r => r.role.toLowerCase() === 'superadmin');
+  const hasSuperAdminRole = hasRole('superAdmin');
 
-  // Fetch school data for logo and name
+  // Fetch school data for logo and name (for any school-scoped role)
   const { data: schoolData } = useQuery<SchoolData>({
     queryKey: ['/api/school-admin/my-school'],
-    enabled: !!user && (activeRole === 'schoolAdmin' || activeRole === 'superAdmin' || activeRole === 'educator'),
+    enabled: !!user && (hasRole('schoolAdmin') || hasRole('superAdmin') || hasRole('educator') || hasRole('director')),
   });
 
   // Reset logo load failed states when school logo changes
@@ -262,18 +262,13 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
     }
   }, [schoolData?.logo]);
 
-  // Get role display name
+  // Get role display name (based on highest privilege role)
   const getRoleDisplayName = () => {
-    switch (activeRole) {
-      case 'educator':
-        return 'Educator';
-      case 'schoolAdmin':
-        return 'School Administrator';
-      case 'superAdmin':
-        return 'Super Administrator';
-      default:
-        return 'School Administrator';
-    }
+    if (hasRole('superAdmin')) return 'Super Administrator';
+    if (hasRole('schoolAdmin') || hasRole('admin')) return 'School Administrator';
+    if (hasRole('director')) return 'Director of Education';
+    if (hasRole('educator') || hasRole('teacher') || hasRole('mentor')) return 'Educator';
+    return 'School Administrator';
   };
 
   const toggleSidebar = () => {
@@ -393,8 +388,8 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
               </div>
             </Link>
 
-            {/* Grouped Navigation - only for admin roles */}
-            {activeRole !== 'educator' && adminNavGroups.map((group) => {
+            {/* Grouped Navigation - for admin roles (additive: also show if user has schoolAdmin alongside educator) */}
+            {(hasRole('schoolAdmin') || hasRole('superAdmin') || hasRole('admin')) && adminNavGroups.map((group) => {
               const isGroupExpanded = expandedGroups.has(group.title);
               const hasActiveItem = group.items.some(item => 
                 location === item.href || location.startsWith(`${item.href}/`)
@@ -458,8 +453,8 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
               );
             })}
 
-            {/* Educator-specific nav items (separate from Dashboard/Settings which are always shown) */}
-            {activeRole === 'educator' && educatorNavItems.filter(item => 
+            {/* Educator-specific nav items (shown whenever user has any educator-type role) */}
+            {(hasRole('educator') || hasRole('teacher') || hasRole('mentor')) && educatorNavItems.filter(item => 
               item.href !== '/dashboard' && item.href !== '/schools/settings'
             ).map((item) => {
               const isActive = location === item.href || location.startsWith(`${item.href}/`);
@@ -617,8 +612,8 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
                     </div>
                   </Link>
 
-                  {/* Grouped Navigation - only for admin roles */}
-                  {activeRole !== 'educator' && adminNavGroups.map((group) => {
+                  {/* Grouped Navigation - for admin roles (additive) */}
+                  {(hasRole('schoolAdmin') || hasRole('superAdmin') || hasRole('admin')) && adminNavGroups.map((group) => {
                     const isGroupExpanded = expandedGroups.has(group.title);
                     const hasActiveItem = group.items.some(item => 
                       location === item.href || location.startsWith(`${item.href}/`)
@@ -679,8 +674,8 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
                     );
                   })}
 
-                  {/* Educator-specific nav items (separate from Dashboard/Settings which are always shown) */}
-                  {activeRole === 'educator' && educatorNavItems.filter(item => 
+                  {/* Educator-specific nav items (shown whenever user has any educator-type role) */}
+                  {(hasRole('educator') || hasRole('teacher') || hasRole('mentor')) && educatorNavItems.filter(item => 
                     item.href !== '/dashboard' && item.href !== '/schools/settings'
                   ).map((item) => {
                     const isActive = location === item.href || location.startsWith(`${item.href}/`);

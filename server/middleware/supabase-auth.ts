@@ -266,6 +266,16 @@ export const supabaseAuth = async (
       });
     }
     
+    // 🔒 SECURITY: req.auth.payload MUST use database values exclusively
+    // Never trust Supabase metadata (app_metadata or user_metadata) for role/school
+    // Only include non-sensitive metadata from user_metadata (like name, avatar)
+    const { role: _, school_id: __, ...safeUserMetadata } = user.user_metadata || {};
+    
+    // Determine effective role: use activeRole (persisted active role) when non-null,
+    // fall back to users.role, then default to 'parent'.
+    // This ensures a user who has switched to 'director' is correctly identified as director.
+    let effectiveRole = dbUserData?.activeRole ?? dbUserData?.role ?? 'parent';
+
     // Fetch all roles for this user via storage (additive permissions)
     let allRoles: string[] = [];
     try {
@@ -276,6 +286,14 @@ export const supabaseAuth = async (
       allRoles = userRolesData
         .filter(r => r.schoolId === null || r.schoolId === userSchoolId)
         .map(r => r.role);
+      console.log(`📋 supabaseAuth - allRoles for school ${userSchoolId}:`, allRoles);
+
+      // If user has superAdmin in their roles, set effectiveRole to superAdmin
+      // (unless they have explicitly switched to a different active role)
+      if (!dbUserData?.activeRole && allRoles.some(r => r.toLowerCase() === 'superadmin')) {
+        effectiveRole = 'superAdmin';
+        console.log('🔑 supabaseAuth - User has superAdmin role in user_roles table');
+      }
     } catch (rolesErr) {
       console.error('Error loading allRoles for token user:', rolesErr);
     }
@@ -293,40 +311,6 @@ export const supabaseAuth = async (
 
     if (process.env.NODE_ENV === 'development') {
       console.log("User roles loaded:", req.user.allRoles);
-    }
-
-    // 🔒 SECURITY: req.auth.payload MUST use database values exclusively
-    // Never trust Supabase metadata (app_metadata or user_metadata) for role/school
-    // Only include non-sensitive metadata from user_metadata (like name, avatar)
-    const { role: _, school_id: __, ...safeUserMetadata } = user.user_metadata || {};
-    
-    // Determine effective role: use activeRole (persisted active role) when non-null,
-    // fall back to users.role, then default to 'parent'.
-    // This ensures a user who has switched to 'director' is correctly identified as director.
-    let effectiveRole = dbUserData?.activeRole ?? dbUserData?.role ?? 'parent';
-    if (dbUserId) {
-      try {
-        const { getDb } = await import('../db');
-        const { userRoles } = await import('../../shared/schema');
-        const { eq } = await import('drizzle-orm');
-        
-        const database = await getDb();
-        const rolesResult = await database.select({
-          role: userRoles.role
-        }).from(userRoles).where(eq(userRoles.userId, dbUserId));
-        
-        const userRolesList = rolesResult.map((r: { role: string }) => r.role);
-        console.log('📋 supabaseAuth - User roles from user_roles table:', userRolesList);
-        
-        // If user has superAdmin in their roles, set effectiveRole to superAdmin
-        // (unless they have explicitly switched to a different active role)
-        if (!dbUserData?.activeRole && userRolesList.some((r: string) => r.toLowerCase() === 'superadmin')) {
-          effectiveRole = 'superAdmin';
-          console.log('🔑 supabaseAuth - User has superAdmin role in user_roles table');
-        }
-      } catch (rolesError) {
-        console.error('❌ supabaseAuth - Failed to fetch user_roles:', rolesError);
-      }
     }
     
     req.auth = {

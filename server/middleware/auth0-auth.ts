@@ -137,14 +137,14 @@ export const requireRole = (allowedRoles: string[]) => {
     }
 
     const userRole = req.auth.role;
-    console.log('🔒 Checking role access - User:', userRole, 'Required:', allowedRoles);
+    // Collect all roles for the user at their current school (additive permissions model)
+    // Prefer req.user.allRoles (set by supabaseAuth), fallback to active role only
+    const allUserRoles: string[] = (req.user?.allRoles && Array.isArray(req.user.allRoles) && req.user.allRoles.length > 0)
+      ? req.user.allRoles
+      : (userRole ? [userRole] : []);
+    console.log('🔒 Checking role access - User allRoles:', allUserRoles, 'Required:', allowedRoles);
 
-    // Super admin has access to everything
-    if (userRole === 'superAdmin') {
-      return next();
-    }
-
-    // Check for hierarchical permissions
+    // Role hierarchy for inheritance checks
     const roleHierarchy: Record<string, string[]> = {
       'superAdmin': ['admin', 'schoolAdmin', 'director', 'teacher', 'educator', 'mentor', 'parent', 'student', 'learner'],
       'admin': ['schoolAdmin', 'director', 'teacher', 'educator', 'mentor', 'parent', 'student', 'learner'],
@@ -158,34 +158,26 @@ export const requireRole = (allowedRoles: string[]) => {
       'learner': []
     };
 
-    // Additive permissions: user passes if any of their roles satisfy the requirement
-    // Build the set of roles to check: allRoles (if present) plus the active role
-    const rolesToCheck: string[] = req.user?.allRoles && req.user.allRoles.length > 0
-      ? req.user.allRoles
-      : [userRole];
+    // Helper: check if a single role satisfies the requirement (direct match or hierarchy)
+    const roleSatisfies = (role: string, required: string[]): boolean => {
+      if (required.includes(role)) return true;
+      const inherited = roleHierarchy[role] || [];
+      return required.some(r => inherited.includes(r));
+    };
 
-    // Also ensure the active role (from req.auth.role) is included
-    if (!rolesToCheck.includes(userRole)) {
-      rolesToCheck.push(userRole);
+    // Super admin in any role → full access
+    if (allUserRoles.some(r => r.toLowerCase() === 'superadmin' || r === 'superAdmin')) {
+      return next();
     }
 
-    for (const role of rolesToCheck) {
-      // Super admin bypass per role
-      if (role === 'superAdmin') {
-        return next();
-      }
-      // Direct role match
-      if (allowedRoles.includes(role)) {
-        return next();
-      }
-      // Hierarchical access
-      const subordinates = roleHierarchy[role] || [];
-      if (allowedRoles.some(allowed => subordinates.includes(allowed))) {
-        return next();
-      }
+    // Check if ANY of the user's roles (additive) satisfy the requirement
+    const hasSatisfyingRole = allUserRoles.some(r => roleSatisfies(r, allowedRoles));
+
+    if (hasSatisfyingRole) {
+      return next();
     }
 
-    console.log('🚫 Access denied for user role:', userRole, 'allRoles:', rolesToCheck);
+    console.log('🚫 Access denied for user allRoles:', allUserRoles);
     res.status(403).json({ message: 'Insufficient permissions' });
   };
 };

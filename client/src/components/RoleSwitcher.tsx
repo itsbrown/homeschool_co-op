@@ -4,17 +4,19 @@ import {
   DropdownMenu, 
   DropdownMenuContent, 
   DropdownMenuItem, 
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { ChevronDown, User, School, GraduationCap, BookOpen, Shield } from "lucide-react";
 
-// Map role names to icons and labels (lowercase keys for case-insensitive lookup)
 const roleConfig: Record<string, { icon: any; label: string }> = {
   parent: { icon: User, label: 'Parent' },
   educator: { icon: GraduationCap, label: 'Educator' },
   mentor: { icon: GraduationCap, label: 'Mentor' },
   teacher: { icon: GraduationCap, label: 'Teacher' },
+  director: { icon: GraduationCap, label: 'Director' },
   learner: { icon: BookOpen, label: 'Learner' },
   student: { icon: BookOpen, label: 'Student' },
   schooladmin: { icon: School, label: 'School Admin' },
@@ -22,13 +24,11 @@ const roleConfig: Record<string, { icon: any; label: string }> = {
   superadmin: { icon: Shield, label: 'Super Admin' }
 };
 
-// Helper function to normalize role casing for consistent lookup
 const normalizeRole = (role: string): string => role.toLowerCase();
 
 export default function RoleSwitcher() {
   const { activeRole, activeRoleId, availableRoles, canSwitchRoles, setActiveRole, isLoadingRoles } = useRole();
 
-  // DEBUG: Always log on every render
   console.warn('🎯 ROLE_SWITCHER_DEBUG:', JSON.stringify({
     canSwitchRoles,
     roleCount: availableRoles.length,
@@ -38,92 +38,99 @@ export default function RoleSwitcher() {
     roles: availableRoles.map(r => ({ id: r.id, role: r.role, schoolId: r.schoolId }))
   }));
 
-  // Don't show switcher for single-role users
-  if (!canSwitchRoles || availableRoles.length <= 1 || isLoadingRoles) {
-    console.warn('🎯 ROLE_SWITCHER_EARLY_EXIT:', JSON.stringify({ canSwitchRoles, count: availableRoles.length, isLoadingRoles }));
-    return null;
-  }
-
-  // SECURITY FIX: Find current active role data using activeRoleId to prevent duplicate role name issues
-  // Users might have the same role name at multiple schools (e.g., "educator" at school 1 and school 2)
-  // Using roleId ensures we always reference the correct active role at the correct school
-  const currentRoleData = activeRoleId 
-    ? availableRoles.find(r => r.id === activeRoleId)
-    : availableRoles.find(r => r.role === activeRole) || availableRoles[0];
-  
-  console.log('🎯 RoleSwitcher currentRoleData:', JSON.stringify(currentRoleData));
-  
-  // Defensive guard: If we can't find current role data, don't render the switcher
-  if (!currentRoleData || !currentRoleData.schoolId) {
-    console.error('⚠️🎯🎯🎯 RoleSwitcher MISSING DATA EXIT:', { activeRoleId, activeRole, currentRoleData, availableRoles });
-    return null;
-  }
-  
-  const currentRoleInfo = roleConfig[normalizeRole(currentRoleData.role)] || roleConfig.parent;
-  const CurrentIcon = currentRoleInfo.icon;
-  
-  // SECURITY: Only show roles from the same school to prevent cross-school switching
-  const currentSchoolId = currentRoleData.schoolId;
-  const sameSchoolRoles = availableRoles.filter(r => r.schoolId === currentSchoolId);
-  
-  console.log(`🎯 RoleSwitcher render - activeRole:`, activeRole, 'same-school roles:', sameSchoolRoles.length, 'of', availableRoles.length);
-
-  // Don't show switcher if only one role at current school
-  if (sameSchoolRoles.length <= 1) {
-    return null;
-  }
-
-  // Check if user has roles at multiple schools (for informational purposes)
+  // Determine how many distinct schools this user has roles at
   const schoolIds = new Set(availableRoles.map(r => r.schoolId));
   const hasMultipleSchools = schoolIds.size > 1;
 
+  // Task #52: For single-school multi-role users, all permissions are additive — no switcher needed.
+  // The RoleSwitcher is preserved only for multi-school users to change their school context.
+  if (!canSwitchRoles || availableRoles.length <= 1 || isLoadingRoles || !hasMultipleSchools) {
+    console.warn('🎯 ROLE_SWITCHER_EARLY_EXIT:', JSON.stringify({ canSwitchRoles, count: availableRoles.length, isLoadingRoles, hasMultipleSchools }));
+    return null;
+  }
+
+  // Find current active role entry
+  const currentRoleData = activeRoleId
+    ? availableRoles.find(r => r.id === activeRoleId)
+    : availableRoles.find(r => r.role === activeRole) || availableRoles[0];
+
+  if (!currentRoleData) {
+    console.error('⚠️ RoleSwitcher: No current role data', { activeRoleId, activeRole, availableRoles });
+    return null;
+  }
+
+  const currentRoleInfo = roleConfig[normalizeRole(currentRoleData.role)] || { icon: User, label: currentRoleData.role };
+  const CurrentIcon = currentRoleInfo.icon;
+
+  // Group roles by school for the dropdown — switching selects a school's representative role
+  // For each school, pick the most privileged role as the "school context" entry
+  const privilegeOrder = ['superAdmin', 'admin', 'schoolAdmin', 'director', 'educator', 'teacher', 'mentor', 'parent', 'student', 'learner'];
+  const schoolGroups = Array.from(schoolIds).map(schoolId => {
+    const rolesAtSchool = availableRoles.filter(r => r.schoolId === schoolId);
+    rolesAtSchool.sort((a, b) => {
+      const ai = privilegeOrder.findIndex(p => p.toLowerCase() === a.role.toLowerCase());
+      const bi = privilegeOrder.findIndex(p => p.toLowerCase() === b.role.toLowerCase());
+      return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+    });
+    return {
+      schoolId,
+      schoolName: rolesAtSchool[0]?.schoolName,
+      roles: rolesAtSchool,
+      primaryRole: rolesAtSchool[0],
+    };
+  });
+
+  const isCurrentSchool = (schoolId: number | null) => schoolId === currentRoleData.schoolId;
+
   return (
     <div className="flex items-center gap-2">
-      <span className="text-sm text-muted-foreground">Role:</span>
+      <span className="text-sm text-muted-foreground">School:</span>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="outline" size="sm" className="gap-2">
             <CurrentIcon className="h-4 w-4" />
             <Badge variant="secondary">
-              {currentRoleInfo.label}
-              {hasMultipleSchools && currentRoleData?.schoolName && ` - ${currentRoleData.schoolName}`}
+              {currentRoleData.schoolName || `School ${currentRoleData.schoolId}`}
             </Badge>
             <ChevronDown className="h-4 w-4" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-72">
-          {sameSchoolRoles.map((role) => {
-            const roleInfo = roleConfig[normalizeRole(role.role)] || roleConfig.parent;
-            const RoleIcon = roleInfo.icon;
-            const isActive = role.id === currentRoleData?.id;
-            
-            return (
-              <DropdownMenuItem
-                key={role.id}
-                onClick={() => {
-                  console.log(`🎯 Switching to role ID: ${role.id} (${role.role} at school ${role.schoolId})`);
-                  setActiveRole(role.id);
-                }}
-                className="flex items-start gap-3 p-3"
-              >
-                <RoleIcon className="h-5 w-5 mt-0.5" />
-                <div className="flex-1">
-                  <div className="font-medium">
-                    {roleInfo.label}
-                    {role.isPrimary && <Badge variant="outline" className="ml-2 text-xs">Primary</Badge>}
-                  </div>
-                  {role.schoolName && (
-                    <div className="text-sm text-muted-foreground">
-                      {role.schoolName}
+          {schoolGroups.map(group => (
+            <div key={group.schoolId}>
+              <DropdownMenuLabel className="text-xs font-semibold text-muted-foreground px-3 pt-2">
+                {group.schoolName || `School ${group.schoolId}`}
+              </DropdownMenuLabel>
+              {group.roles.map(role => {
+                const roleInfo = roleConfig[normalizeRole(role.role)] || { icon: User, label: role.role };
+                const RoleIcon = roleInfo.icon;
+                const isActive = role.id === currentRoleData?.id;
+
+                return (
+                  <DropdownMenuItem
+                    key={role.id}
+                    onClick={() => {
+                      console.log(`🎯 Switching to role ID: ${role.id} (${role.role} at school ${role.schoolId})`);
+                      setActiveRole(role.id);
+                    }}
+                    className="flex items-start gap-3 p-3"
+                  >
+                    <RoleIcon className="h-5 w-5 mt-0.5" />
+                    <div className="flex-1">
+                      <div className="font-medium">
+                        {roleInfo.label}
+                        {role.isPrimary && <Badge variant="outline" className="ml-2 text-xs">Primary</Badge>}
+                      </div>
                     </div>
-                  )}
-                </div>
-                {isActive && (
-                  <Badge variant="default" className="ml-2">Active</Badge>
-                )}
-              </DropdownMenuItem>
-            );
-          })}
+                    {isActive && (
+                      <Badge variant="default" className="ml-2">Active</Badge>
+                    )}
+                  </DropdownMenuItem>
+                );
+              })}
+              <DropdownMenuSeparator />
+            </div>
+          ))}
         </DropdownMenuContent>
       </DropdownMenu>
     </div>

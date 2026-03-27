@@ -21,6 +21,8 @@ interface RoleContextType {
   activeRoleId: number | null;
   setActiveRole: (roleId: number) => void;
   availableRoles: UserRole[];
+  allRoles: string[];
+  hasRole: (role: string) => boolean;
   canSwitchRoles: boolean;
   showRoleSelection: boolean;
   setShowRoleSelection: (show: boolean) => void;
@@ -192,6 +194,50 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
 
   // Determine if user has multiple roles
   const hasMultipleRoles = availableRoles.length > 1;
+
+  // Compute all roles at the user's current school for additive permission checks
+  // When activeRole is set, derive the current schoolId from that role's entry
+  const getCurrentSchoolId = (): number | null => {
+    if (activeRoleId) {
+      const r = availableRoles.find(r => r.id === activeRoleId);
+      if (r) return r.schoolId;
+    }
+    const primary = availableRoles.find(r => r.isPrimary);
+    return primary?.schoolId ?? availableRoles[0]?.schoolId ?? null;
+  };
+
+  const allRoles: string[] = (() => {
+    const schoolId = getCurrentSchoolId();
+    if (!schoolId) return activeRole ? [activeRole] : [];
+    const rolesAtSchool = availableRoles
+      .filter(r => r.schoolId === schoolId)
+      .map(r => r.role);
+    return rolesAtSchool.length > 0 ? rolesAtSchool : (activeRole ? [activeRole] : []);
+  })();
+
+  // Role hierarchy: higher roles implicitly satisfy lower role requirements
+  const roleHierarchyMap: Record<string, string[]> = {
+    superAdmin: ['admin', 'schoolAdmin', 'director', 'teacher', 'educator', 'mentor', 'parent', 'student', 'learner'],
+    admin: ['schoolAdmin', 'director', 'teacher', 'educator', 'mentor', 'parent', 'student', 'learner'],
+    schoolAdmin: ['director', 'teacher', 'educator', 'mentor', 'parent', 'student', 'learner'],
+    director: ['teacher', 'educator', 'mentor', 'parent', 'student', 'learner'],
+    teacher: ['parent', 'student', 'learner'],
+    educator: ['parent', 'student', 'learner'],
+    mentor: ['student', 'learner'],
+    parent: ['student', 'learner'],
+    student: [],
+    learner: [],
+  };
+
+  const hasRole = (role: string): boolean => {
+    // Direct check in allRoles (case-insensitive)
+    if (allRoles.some(r => r.toLowerCase() === role.toLowerCase())) return true;
+    // Hierarchical check: any role in allRoles that subsumes the target
+    return allRoles.some(r => {
+      const inherited = roleHierarchyMap[r] || [];
+      return inherited.some(i => i.toLowerCase() === role.toLowerCase());
+    });
+  };
 
   // Get the primary role from available roles
   const getPrimaryRole = (): string => {
@@ -387,6 +433,8 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
         activeRoleId,
         setActiveRole: handleRoleChange,
         availableRoles,
+        allRoles,
+        hasRole,
         canSwitchRoles,
         showRoleSelection,
         setShowRoleSelection,

@@ -83,12 +83,12 @@ const directorAcademicsItems = [
 function EducatorSidebar() {
   const [location] = useLocation();
   const { user, signOut } = useAuth();
-  const { activeRole, availableRoles } = useRole();
+  const { activeRole, availableRoles, hasRole } = useRole();
   const [userSchool, setUserSchool] = useState<any>(null);
   const [academicsOpen, setAcademicsOpen] = useState(true);
   
-  const isDirector = activeRole === 'director';
-  const hasSuperAdminRole = (availableRoles || []).some(r => r.role.toLowerCase() === 'superadmin');
+  const isDirector = hasRole('director');
+  const hasSuperAdminRole = hasRole('superAdmin');
 
   const { data: notifications = [] } = useQuery<Notification[]>({
     queryKey: ['/api/notifications'],
@@ -268,12 +268,12 @@ function EducatorSidebar() {
 
 export default function EducatorAppShell({ children }: EducatorAppShellProps) {
   const { user, signOut, isAuthenticated } = useAuth();
-  const { activeRole, availableRoles } = useRole();
+  const { activeRole, availableRoles, hasRole } = useRole();
   const [location, setLocation] = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userSchool, setUserSchool] = useState<any>(null);
   
-  const hasSuperAdminRole = (availableRoles || []).some(r => r.role.toLowerCase() === 'superadmin');
+  const hasSuperAdminRole = hasRole('superAdmin');
 
   const { data: notifications = [] } = useQuery<Notification[]>({
     queryKey: ['/api/notifications'],
