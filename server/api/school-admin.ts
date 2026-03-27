@@ -5227,12 +5227,12 @@ router.get('/users/:userId', supabaseAuth, requireSchoolContext, async (req: any
 });
 
 // Validation schema for user creation (follows registration.ts and user-roles.ts patterns)
-const systemRoles = ['student', 'parent', 'learner', 'educator', 'mentor', 'teacher', 'schoolAdmin', 'admin', 'superAdmin'];
+// systemRoles is imported from @shared/schema above — includes director
 const createUserSchema = z.object({
   firstName: z.string().min(1, 'First name is required'),
   lastName: z.string().min(1, 'Last name is required'),
   email: z.string().email('Invalid email format'),
-  role: z.string().refine((val) => systemRoles.includes(val), {
+  role: z.string().refine((val) => (systemRoles as readonly string[]).includes(val), {
     message: `Role must be one of: ${systemRoles.join(', ')}`
   }),
   phone: z.string().optional().nullable(),

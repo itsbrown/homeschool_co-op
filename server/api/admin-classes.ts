@@ -3,7 +3,7 @@ import { z } from "zod";
 import { insertClassSchema } from "@shared/schema";
 import { storage } from "../storage";
 import { supabaseAuth } from '../middleware/supabase-auth';
-import { requireAdmin } from '../middleware/auth0-auth';
+import { requireRole } from '../middleware/auth0-auth';
 import { requireSchoolContext } from '../middleware/require-school-context';
 import fs from "fs";
 import path from "path";
@@ -11,8 +11,13 @@ import { parse } from "csv-parse";
 
 const router = Router();
 
+// Director has full access to class management routes.
+// Note: requireAdmin is intentionally NOT used because it uses 'school-admin' (hyphen)
+// which does NOT match the DB value 'schoolAdmin' (camelCase), causing 403s for school admins.
+const requireAdminOrDirector = requireRole(['admin', 'superAdmin', 'schoolAdmin', 'director']);
+
 // Get educators (for assigning to classes)
-router.get("/educators", supabaseAuth, requireAdmin, async (req, res) => {
+router.get("/educators", supabaseAuth, requireAdminOrDirector, async (req, res) => {
   try {
     // For now, we'll use the test users since we're working without a database
     const educators = [
@@ -30,7 +35,7 @@ router.get("/educators", supabaseAuth, requireAdmin, async (req, res) => {
 });
 
 // Get a specific class by ID
-router.get("/classes/:id", supabaseAuth, requireAdmin, requireSchoolContext, async (req: any, res) => {
+router.get("/classes/:id", supabaseAuth, requireAdminOrDirector, requireSchoolContext, async (req: any, res) => {
   try {
     // [FIX:v3.0] School ID injected by middleware from database
     const schoolId = req.schoolId;
@@ -60,7 +65,7 @@ router.get("/classes/:id", supabaseAuth, requireAdmin, requireSchoolContext, asy
 });
 
 // Get all classes (with pagination and filters)
-router.get("/classes", supabaseAuth, requireAdmin, requireSchoolContext, async (req: any, res) => {
+router.get("/classes", supabaseAuth, requireAdminOrDirector, requireSchoolContext, async (req: any, res) => {
   try {
     // [FIX:v3.0] School ID injected by middleware from database
     const schoolId = req.schoolId;
@@ -120,7 +125,7 @@ router.get("/classes", supabaseAuth, requireAdmin, requireSchoolContext, async (
 });
 
 // Create a new class
-router.post("/classes", supabaseAuth, requireAdmin, requireSchoolContext, async (req: any, res) => {
+router.post("/classes", supabaseAuth, requireAdminOrDirector, requireSchoolContext, async (req: any, res) => {
   try {
     // [FIX:v3.0] School ID injected by middleware from database
     const schoolId = req.schoolId;
@@ -162,7 +167,7 @@ router.post("/classes", supabaseAuth, requireAdmin, requireSchoolContext, async 
 });
 
 // Bulk assign session to multiple classes
-router.patch("/classes/bulk-session", supabaseAuth, requireAdmin, requireSchoolContext, async (req: any, res) => {
+router.patch("/classes/bulk-session", supabaseAuth, requireAdminOrDirector, requireSchoolContext, async (req: any, res) => {
   try {
     const schoolId = req.schoolId;
     const { classIds, sessionId } = req.body;
@@ -202,7 +207,7 @@ router.patch("/classes/bulk-session", supabaseAuth, requireAdmin, requireSchoolC
 });
 
 // Update a class
-router.patch("/classes/:id", supabaseAuth, requireAdmin, requireSchoolContext, async (req: any, res) => {
+router.patch("/classes/:id", supabaseAuth, requireAdminOrDirector, requireSchoolContext, async (req: any, res) => {
   try {
     const id = parseInt(req.params.id);
     if (isNaN(id)) {
@@ -291,7 +296,7 @@ router.patch("/classes/:id", supabaseAuth, requireAdmin, requireSchoolContext, a
 });
 
 // Delete a class
-router.delete("/classes/:id", supabaseAuth, requireAdmin, requireSchoolContext, async (req: any, res) => {
+router.delete("/classes/:id", supabaseAuth, requireAdminOrDirector, requireSchoolContext, async (req: any, res) => {
   try {
     const id = parseInt(req.params.id);
     if (isNaN(id)) {
@@ -333,7 +338,7 @@ router.delete("/classes/:id", supabaseAuth, requireAdmin, requireSchoolContext, 
 });
 
 // Handle CSV file upload for classes
-router.post("/classes/upload", supabaseAuth, requireAdmin, requireSchoolContext, async (req: any, res) => {
+router.post("/classes/upload", supabaseAuth, requireAdminOrDirector, requireSchoolContext, async (req: any, res) => {
   try {
     // [FIX:v3.0] School ID injected by middleware from database
     const schoolId = req.schoolId;

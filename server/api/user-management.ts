@@ -3,6 +3,7 @@ import { Router } from "express";
 import { jwtCheck, requireRole } from "../middleware/auth0-auth";
 import { isAuthenticated } from "./auth";
 import { UserSyncService } from "../services/userSyncService";
+import { systemRoles as SYSTEM_ROLES } from "@shared/schema";
 
 const router = Router();
 
@@ -72,8 +73,7 @@ router.put('/users/:id/role', jwtCheck, requireRole(['admin', 'superAdmin']), as
       });
     }
 
-    const validRoles = ['superAdmin', 'admin', 'schoolAdmin', 'educator', 'teacher', 'parent', 'student', 'learner'];
-    if (!validRoles.includes(role)) {
+    if (!(SYSTEM_ROLES as readonly string[]).includes(role)) {
       return res.status(400).json({ 
         success: false, 
         message: 'Invalid role' 

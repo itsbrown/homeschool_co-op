@@ -55,7 +55,7 @@ const BASE_ROLE_OPTIONS = [
   { value: 'parent', label: 'Parent' },
   { value: 'educator', label: 'Educator' },
   { value: 'teacher', label: 'Teacher' },
-  { value: 'director', label: 'Director of Education' },
+  { value: 'director', label: 'Director' },
   { value: 'student', label: 'Student' },
   { value: 'learner', label: 'Learner' },
 ];
