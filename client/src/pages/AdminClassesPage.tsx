@@ -18,6 +18,12 @@ import {
   CardTitle,
 } from "../components/ui/card";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "../components/ui/tooltip";
+import {
   Table,
   TableBody,
   TableCell,
@@ -286,6 +292,7 @@ export function AdminClassesPage() {
                             <>
                               
                               <div className="rounded-md border">
+                                <TooltipProvider>
                                 <Table>
                                   <TableHeader>
                                     <TableRow>
@@ -294,6 +301,7 @@ export function AdminClassesPage() {
                                       <TableHead>Dates</TableHead>
                                       <TableHead>Price</TableHead>
                                       <TableHead>Enrollment</TableHead>
+                                      <TableHead>Supplies</TableHead>
                                       <TableHead>Status</TableHead>
                                       <TableHead>Visibility</TableHead>
                                       <TableHead className="text-right">Actions</TableHead>
@@ -339,6 +347,22 @@ export function AdminClassesPage() {
                                             <Users className="h-3 w-3" />
                                             {classItem.enrollmentCount || 0}/{classItem.maxEnrollment || classItem.capacity || 20}
                                           </div>
+                                        </TableCell>
+                                        <TableCell>
+                                          {classItem.materials && String(classItem.materials).trim() ? (
+                                            <Tooltip>
+                                              <TooltipTrigger asChild>
+                                                <span className="block max-w-[140px] truncate cursor-default text-sm">
+                                                  {String(classItem.materials).trim()}
+                                                </span>
+                                              </TooltipTrigger>
+                                              <TooltipContent className="max-w-xs whitespace-pre-wrap">
+                                                {String(classItem.materials).trim()}
+                                              </TooltipContent>
+                                            </Tooltip>
+                                          ) : (
+                                            <span className="text-muted-foreground">—</span>
+                                          )}
                                         </TableCell>
                                         <TableCell>
                                           <Badge
@@ -414,6 +438,7 @@ export function AdminClassesPage() {
                                     ))}
                                   </TableBody>
                                 </Table>
+                                </TooltipProvider>
                               </div>
 
                               {/* Pagination */}
