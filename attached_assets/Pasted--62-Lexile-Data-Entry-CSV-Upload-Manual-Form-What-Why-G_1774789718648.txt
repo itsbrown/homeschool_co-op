@@ -1,0 +1,84 @@
+#62 - Lexile Data Entry: CSV Upload + Manual Form
+
+What & Why
+Give educators and school admins two reliable ways to record Lexile reading data:
+
+1. Manual entry form — searchable student dropdown + fields for Reading Grade Level, Lexile Range, Book List.
+2. Bulk CSV upload — multi-step wizard (upload → preview → match/review → import → summary) with fuzzy name matching and manual override.
+
+Data is stored as current snapshot on the child record (for quick profile view) AND as historical assessment records (for timeline).
+
+Done looks like
+- New "Lexile & Reading Levels" tab in both AssessmentManagementPage and EducatorAssessmentsPage
+- Manual form: searchable StudentSearchSelect + fields; saves to child profile + inserts history record
+- Bulk upload wizard: preview table, fuzzy name matching with manual dropdown override, progress during import, summary of updated/skipped rows
+- Student profile shows current Lexile/Grade/Book List as read-only fields + history timeline
+- Status badges and computed indicators (e.g. "Lexile 420-650")
+- Toast feedback on all actions; per-row errors in bulk upload
+
+Out of scope
+- Parent visibility of Lexile data
+- Editing/deleting history entries
+- Automatic class/group assignment from CSV
+
+Tasks
+
+1. Schema + migration (server/init-db.ts)
+   - Add nullable text columns to children: current_lexile_range, current_reading_grade_level, current_book_list
+   - Use idempotent ALTER TABLE ... ADD COLUMN IF NOT EXISTS
+   - Upsert "Lexile Reading Level" assessment_type on startup
+
+2. Storage methods (server/storage.ts + IStorage)
+   - upsertChildLexileProfile(childId, data) — transaction that updates child fields
+   - insertLexileAssessment(data) — inserts into student_assessments
+   - getChildrenForSchool(schoolId) — for dropdown (include name + grade)
+
+3. Backend endpoints (server/api/lexile.ts or routes.ts)
+   - POST /api/lexile/entry — manual single entry (Zod validation)
+   - GET /api/lexile/students — list for dropdown
+   - POST /api/lexile/upload/preview — parse CSV, return rows
+   - POST /api/lexile/upload/match — fuzzy match names, return candidates
+   - POST /api/lexile/upload/import — process confirmed matches (transaction per row)
+
+4. Reusable StudentSearchSelect component
+   - Searchable Shadcn Select with name + grade
+   - style={{ fontSize: '16px' }} for iOS
+   - onSelect callback
+   - Use TanStack Query with full array key (no custom queryFn)
+
+5. Manual entry form
+   - Shadcn Form + zodResolver
+   - Use apiRequest for mutation
+   - Invalidate relevant queries on success
+   - "Save & Add Another" button
+
+6. Bulk CSV upload wizard
+   - Multi-step (upload → preview → match/review → import → summary)
+   - Use StudentSearchSelect for unresolved names
+   - Partial success support (process good rows, show skipped with reasons)
+   - Progress bar during import
+
+7. Student profile display
+   - Add current lexile/grade/book list as labeled read-only fields
+   - Show lexile entries in assessment history with badge
+
+8. Tab wiring
+   - Add "Lexile & Reading Levels" tab to both assessment pages
+
+Architectural constraints (must follow)
+- All DB access via storage interface (no raw queries in routes)
+- Migrations via idempotent SQL in server/init-db.ts only
+- No custom queryFn in useQuery
+- No bare fetch() — use TanStack Query + apiRequest
+- iOS inputs: fontSize: '16px'
+- Use useToast from @/hooks/use-toast
+- Full array query keys
+
+Relevant files
+* shared/schema.ts
+* server/storage.ts
+* server/init-db.ts
+* client/src/components/educator/AssessmentBulkUpload.tsx
+* client/src/pages/educator/EducatorAssessmentsPage.tsx
+* client/src/pages/schooladmin/AssessmentManagementPage.tsx
+* client/src/lib/queryClient.ts
