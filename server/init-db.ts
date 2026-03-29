@@ -2440,6 +2440,48 @@ async function runMigrations() {
   } catch (repairError: any) {
     console.log('Data repair note (non-blocking):', repairError.message);
   }
+
+  // Add Lexile reading level columns to children table
+  try {
+    const db = await getDb();
+    console.log('Running migration: Adding Lexile columns to children table...');
+    await db.execute(sql`
+      ALTER TABLE children
+      ADD COLUMN IF NOT EXISTS current_lexile_range TEXT,
+      ADD COLUMN IF NOT EXISTS current_reading_grade_level TEXT,
+      ADD COLUMN IF NOT EXISTS current_book_list TEXT;
+    `);
+    console.log('✅ Migration completed: Lexile columns added to children table');
+  } catch (lexileError: any) {
+    console.log('Migration note (non-blocking):', lexileError.message);
+  }
+
+  // Upsert "Lexile Reading Level" assessment type for all schools
+  try {
+    const db = await getDb();
+    console.log('Running migration: Upserting Lexile Reading Level assessment type...');
+    await db.execute(sql`
+      INSERT INTO assessment_types (school_id, name, description, category, score_format, is_active, sort_order, created_at, updated_at)
+      SELECT 
+        s.id,
+        'Lexile Reading Level',
+        'Tracks student Lexile reading range, grade level, and book list',
+        'reading',
+        'level',
+        true,
+        100,
+        NOW(),
+        NOW()
+      FROM schools s
+      WHERE NOT EXISTS (
+        SELECT 1 FROM assessment_types at2
+        WHERE at2.school_id = s.id AND at2.name = 'Lexile Reading Level'
+      );
+    `);
+    console.log('✅ Migration completed: Lexile Reading Level assessment type upserted');
+  } catch (lexileTypeError: any) {
+    console.log('Migration note (non-blocking):', lexileTypeError.message);
+  }
 }
 
 // Initialize database tables

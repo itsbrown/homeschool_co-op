@@ -725,6 +725,16 @@ export interface IStorage {
   createStudentAssessment(assessment: InsertStudentAssessment): Promise<StudentAssessment>;
   updateStudentAssessment(id: number, assessment: Partial<InsertStudentAssessment>): Promise<StudentAssessment | undefined>;
   deleteStudentAssessment(id: number): Promise<void>;
+
+  // Lexile methods
+  upsertChildLexileProfile(childId: number, data: { readingGradeLevel?: string; lexileRange?: string; bookList?: string }): Promise<Child | undefined>;
+  insertLexileAssessmentWithProfile(childId: number, schoolId: number, assessmentTypeId: number, recordedBy: number, data: { readingGradeLevel?: string; lexileRange?: string; bookList?: string; notes?: string }): Promise<StudentAssessment>;
+  recordLexileAssessment(childId: number, schoolId: number, recordedBy: number, data: { readingGradeLevel?: string; lexileRange?: string; bookList?: string; notes?: string }): Promise<StudentAssessment>;
+  getChildrenForSchool(schoolId: number): Promise<Array<{ id: number; firstName: string; lastName: string; gradeLevel: string; currentLexileRange?: string | null; currentReadingGradeLevel?: string | null; currentBookList?: string | null }>>;
+  getLexileHistoryForChild(childId: number, assessmentTypeId: number): Promise<StudentAssessment[]>;
+  getLexileHistoryForChildBySchool(childId: number, schoolId: number): Promise<StudentAssessment[]>;
+  fuzzyMatchStudentsForSchool(schoolId: number, rawName: string): Promise<Array<{ id: number; name: string; gradeLevel: string }>>;
+  getChildByIdForSchool(childId: number, schoolId: number): Promise<Child | undefined>;
   
   // ==================== FUNDRAISER SYSTEM ====================
   // Campaigns
@@ -4870,7 +4880,86 @@ export class MemStorage implements IStorage {
   async deleteStudentAssessment(id: number): Promise<void> {
     this.studentAssessmentsStore.delete(id);
   }
-  
+
+  async upsertChildLexileProfile(childId: number, data: { readingGradeLevel?: string; lexileRange?: string; bookList?: string }): Promise<Child | undefined> {
+    return undefined;
+  }
+
+  async insertLexileAssessmentWithProfile(childId: number, schoolId: number, assessmentTypeId: number, recordedBy: number, data: { readingGradeLevel?: string; lexileRange?: string; bookList?: string; notes?: string }): Promise<StudentAssessment> {
+    const assessment = await this.createStudentAssessment({
+      childId,
+      schoolId,
+      assessmentTypeId,
+      recordedBy,
+      score: data.lexileRange || data.readingGradeLevel || 'Recorded',
+      assessmentDate: new Date(),
+      notes: data.notes || null,
+      source: 'manual_entry',
+      sessionId: null,
+      locationId: null,
+      lesson: null,
+      curriculumBookId: null,
+      lexileScore: null,
+    });
+    return assessment;
+  }
+
+  async getChildrenForSchool(schoolId: number): Promise<Array<{ id: number; firstName: string; lastName: string; gradeLevel: string; currentLexileRange?: string | null; currentReadingGradeLevel?: string | null; currentBookList?: string | null }>> {
+    return Array.from(this.childrenStore.values())
+      .filter(c => c.schoolId === schoolId)
+      .map(c => ({ id: c.id, firstName: c.firstName, lastName: c.lastName, gradeLevel: c.gradeLevel, currentLexileRange: c.currentLexileRange, currentReadingGradeLevel: c.currentReadingGradeLevel, currentBookList: c.currentBookList }));
+  }
+
+  async getLexileHistoryForChild(childId: number, assessmentTypeId: number): Promise<StudentAssessment[]> {
+    return Array.from(this.studentAssessmentsStore.values())
+      .filter(a => a.childId === childId && a.assessmentTypeId === assessmentTypeId)
+      .sort((a, b) => b.assessmentDate.getTime() - a.assessmentDate.getTime());
+  }
+
+  async recordLexileAssessment(childId: number, schoolId: number, recordedBy: number, data: { readingGradeLevel?: string; lexileRange?: string; bookList?: string; notes?: string }): Promise<StudentAssessment> {
+    const existingType = Array.from(this.assessmentTypesStore.values())
+      .find(t => t.schoolId === schoolId && t.name.toLowerCase().includes('lexile'));
+    let assessmentTypeId: number;
+    if (existingType) {
+      assessmentTypeId = existingType.id;
+    } else {
+      const newType = await this.createAssessmentType({
+        schoolId,
+        name: 'Lexile Reading Level',
+        description: 'Lexile measure of reading ability',
+        sortOrder: 100,
+        isActive: true,
+      });
+      assessmentTypeId = newType.id;
+    }
+    return this.insertLexileAssessmentWithProfile(childId, schoolId, assessmentTypeId, recordedBy, data);
+  }
+
+  async getLexileHistoryForChildBySchool(childId: number, schoolId: number): Promise<StudentAssessment[]> {
+    const lexileType = Array.from(this.assessmentTypesStore.values())
+      .find(t => t.schoolId === schoolId && t.name.toLowerCase().includes('lexile'));
+    if (!lexileType) return [];
+    return Array.from(this.studentAssessmentsStore.values())
+      .filter(a => a.childId === childId && a.schoolId === schoolId && a.assessmentTypeId === lexileType.id)
+      .sort((a, b) => b.assessmentDate.getTime() - a.assessmentDate.getTime());
+  }
+
+  async fuzzyMatchStudentsForSchool(schoolId: number, rawName: string): Promise<Array<{ id: number; name: string; gradeLevel: string }>> {
+    const lower = rawName.toLowerCase();
+    return Array.from(this.childrenStore.values())
+      .filter(c => c.schoolId === schoolId && (
+        `${c.firstName} ${c.lastName}`.toLowerCase().includes(lower) ||
+        `${c.lastName} ${c.firstName}`.toLowerCase().includes(lower)
+      ))
+      .map(c => ({ id: c.id, name: `${c.firstName} ${c.lastName}`, gradeLevel: c.gradeLevel }))
+      .slice(0, 5);
+  }
+
+  async getChildByIdForSchool(childId: number, schoolId: number): Promise<Child | undefined> {
+    const child = this.childrenStore.get(childId);
+    return child?.schoolId === schoolId ? child : undefined;
+  }
+
   // ==================== FUNDRAISER SYSTEM (MemStorage stubs) ====================
   async getFundraiserCampaignById(id: number): Promise<FundraiserCampaign | undefined> { return undefined; }
   async getFundraiserCampaignsBySchoolId(schoolId: number): Promise<FundraiserCampaign[]> { return []; }
@@ -7661,7 +7750,39 @@ import { DatabaseStorage } from "./dbStorage";
       async deleteStudentAssessment(id: number): Promise<void> {
         return this.dbStorage.deleteStudentAssessment(id);
       }
-      
+
+      async upsertChildLexileProfile(childId: number, data: { readingGradeLevel?: string; lexileRange?: string; bookList?: string }): Promise<Child | undefined> {
+        return this.dbStorage.upsertChildLexileProfile(childId, data);
+      }
+
+      async insertLexileAssessmentWithProfile(childId: number, schoolId: number, assessmentTypeId: number, recordedBy: number, data: { readingGradeLevel?: string; lexileRange?: string; bookList?: string; notes?: string }): Promise<StudentAssessment> {
+        return this.dbStorage.insertLexileAssessmentWithProfile(childId, schoolId, assessmentTypeId, recordedBy, data);
+      }
+
+      async getChildrenForSchool(schoolId: number): Promise<Array<{ id: number; firstName: string; lastName: string; gradeLevel: string; currentLexileRange?: string | null; currentReadingGradeLevel?: string | null; currentBookList?: string | null }>> {
+        return this.dbStorage.getChildrenForSchool(schoolId);
+      }
+
+      async getLexileHistoryForChild(childId: number, assessmentTypeId: number): Promise<StudentAssessment[]> {
+        return this.dbStorage.getLexileHistoryForChild(childId, assessmentTypeId);
+      }
+
+      async recordLexileAssessment(childId: number, schoolId: number, recordedBy: number, data: { readingGradeLevel?: string; lexileRange?: string; bookList?: string; notes?: string }): Promise<StudentAssessment> {
+        return this.dbStorage.recordLexileAssessment(childId, schoolId, recordedBy, data);
+      }
+
+      async getLexileHistoryForChildBySchool(childId: number, schoolId: number): Promise<StudentAssessment[]> {
+        return this.dbStorage.getLexileHistoryForChildBySchool(childId, schoolId);
+      }
+
+      async fuzzyMatchStudentsForSchool(schoolId: number, rawName: string): Promise<Array<{ id: number; name: string; gradeLevel: string }>> {
+        return this.dbStorage.fuzzyMatchStudentsForSchool(schoolId, rawName);
+      }
+
+      async getChildByIdForSchool(childId: number, schoolId: number): Promise<Child | undefined> {
+        return this.dbStorage.getChildByIdForSchool(childId, schoolId);
+      }
+
       // ==================== FUNDRAISER SYSTEM ====================
       async getFundraiserCampaignById(id: number): Promise<FundraiserCampaign | undefined> {
         return this.dbStorage.getFundraiserCampaignById(id);

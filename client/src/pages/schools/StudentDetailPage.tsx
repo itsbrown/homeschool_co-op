@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import SchoolAdminLayout from "@/components/layout/SchoolAdminLayout";
+import LexileProfileSection from "@/components/lexile/LexileProfileSection";
 
 interface Student {
   id: number;
@@ -41,6 +42,13 @@ export default function StudentDetailPage() {
     queryKey: [`/api/school-admin/students/${id}`],
     enabled: !!id,
   });
+
+  const studentId = id ? parseInt(id) : null;
+  const { data: lexileStudents = [] } = useQuery<Array<{ id: number; currentLexileRange?: string | null; currentReadingGradeLevel?: string | null; currentBookList?: string | null }>>({
+    queryKey: ['/api/lexile/students'],
+    enabled: !!studentId,
+  });
+  const lexileData = lexileStudents.find((s: { id: number }) => s.id === studentId);
 
   if (isLoading) {
     return (
@@ -286,12 +294,23 @@ export default function StudentDetailPage() {
             </CardHeader>
             <CardContent>
               <div className="flex flex-wrap gap-2">
-                {student.interests.map((interest, index) => (
+                {student.interests.map((interest: string, index: number) => (
                   <Badge key={index} variant="outline">{interest}</Badge>
                 ))}
               </div>
             </CardContent>
           </Card>
+        )}
+
+        {/* Lexile Reading Level */}
+        {studentId && (
+          <LexileProfileSection
+            childId={studentId}
+            currentLexileRange={lexileData?.currentLexileRange}
+            currentReadingGradeLevel={lexileData?.currentReadingGradeLevel}
+            currentBookList={lexileData?.currentBookList}
+            showAIInsights={true}
+          />
         )}
       </div>
     </SchoolAdminLayout>

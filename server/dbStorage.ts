@@ -4792,7 +4792,150 @@ export class DatabaseStorage implements IStorage {
     const db = await getDb();
     await db.delete(studentAssessments).where(eq(studentAssessments.id, id));
   }
-  
+
+  // ==================== LEXILE METHODS ====================
+
+  async upsertChildLexileProfile(childId: number, data: { readingGradeLevel?: string; lexileRange?: string; bookList?: string }): Promise<Child | undefined> {
+    const db = await getDb();
+    const updateData: Partial<{ currentReadingGradeLevel: string; currentLexileRange: string; currentBookList: string; updatedAt: Date }> = {
+      updatedAt: new Date(),
+    };
+    if (data.readingGradeLevel !== undefined) updateData.currentReadingGradeLevel = data.readingGradeLevel;
+    if (data.lexileRange !== undefined) updateData.currentLexileRange = data.lexileRange;
+    if (data.bookList !== undefined) updateData.currentBookList = data.bookList;
+    const [result] = await db.update(children).set(updateData).where(eq(children.id, childId)).returning();
+    return result;
+  }
+
+  async insertLexileAssessmentWithProfile(childId: number, schoolId: number, assessmentTypeId: number, recordedBy: number, data: { readingGradeLevel?: string; lexileRange?: string; bookList?: string; notes?: string }): Promise<StudentAssessment> {
+    const db = await getDb();
+    const scoreValue = data.lexileRange || data.readingGradeLevel || 'Recorded';
+    const notesValue = [
+      data.readingGradeLevel ? `Grade Level: ${data.readingGradeLevel}` : null,
+      data.lexileRange ? `Lexile Range: ${data.lexileRange}` : null,
+      data.bookList ? `Books: ${data.bookList}` : null,
+      data.notes || null,
+    ].filter(Boolean).join(' | ') || null;
+
+    const result = await db.transaction(async (tx) => {
+      const updateData: Partial<{ currentReadingGradeLevel: string; currentLexileRange: string; currentBookList: string; updatedAt: Date }> = {
+        updatedAt: new Date(),
+      };
+      if (data.readingGradeLevel !== undefined) updateData.currentReadingGradeLevel = data.readingGradeLevel;
+      if (data.lexileRange !== undefined) updateData.currentLexileRange = data.lexileRange;
+      if (data.bookList !== undefined) updateData.currentBookList = data.bookList;
+      await tx.update(children).set(updateData).where(eq(children.id, childId));
+
+      const [assessment] = await tx.insert(studentAssessments).values({
+        childId,
+        schoolId,
+        assessmentTypeId,
+        recordedBy,
+        score: scoreValue,
+        assessmentDate: new Date(),
+        notes: notesValue,
+        source: 'manual_entry',
+      }).returning();
+      return assessment;
+    });
+    return result;
+  }
+
+  async getChildrenForSchool(schoolId: number): Promise<Array<{ id: number; firstName: string; lastName: string; gradeLevel: string; currentLexileRange?: string | null; currentReadingGradeLevel?: string | null; currentBookList?: string | null }>> {
+    const db = await getDb();
+    const results = await db.select({
+      id: children.id,
+      firstName: children.firstName,
+      lastName: children.lastName,
+      gradeLevel: children.gradeLevel,
+      currentLexileRange: children.currentLexileRange,
+      currentReadingGradeLevel: children.currentReadingGradeLevel,
+      currentBookList: children.currentBookList,
+    }).from(children)
+      .where(eq(children.schoolId, schoolId))
+      .orderBy(asc(children.firstName), asc(children.lastName));
+    return results;
+  }
+
+  async getLexileHistoryForChild(childId: number, assessmentTypeId: number): Promise<StudentAssessment[]> {
+    const db = await getDb();
+    return db.select().from(studentAssessments)
+      .where(and(eq(studentAssessments.childId, childId), eq(studentAssessments.assessmentTypeId, assessmentTypeId)))
+      .orderBy(desc(studentAssessments.assessmentDate));
+  }
+
+  private async ensureLexileAssessmentType(schoolId: number): Promise<number> {
+    const db = await getDb();
+    const [existing] = await db.select({ id: assessmentTypes.id }).from(assessmentTypes)
+      .where(and(eq(assessmentTypes.schoolId, schoolId), sql`lower(${assessmentTypes.name}) like '%lexile%'`))
+      .limit(1);
+    if (existing) return existing.id;
+    const [created] = await db.insert(assessmentTypes).values({
+      schoolId,
+      name: 'Lexile Reading Level',
+      description: 'Lexile measure of reading ability',
+      sortOrder: 100,
+      isActive: true,
+    }).returning({ id: assessmentTypes.id });
+    return created.id;
+  }
+
+  async recordLexileAssessment(childId: number, schoolId: number, recordedBy: number, data: { readingGradeLevel?: string; lexileRange?: string; bookList?: string; notes?: string }): Promise<StudentAssessment> {
+    const assessmentTypeId = await this.ensureLexileAssessmentType(schoolId);
+    return this.insertLexileAssessmentWithProfile(childId, schoolId, assessmentTypeId, recordedBy, data);
+  }
+
+  async getLexileHistoryForChildBySchool(childId: number, schoolId: number): Promise<StudentAssessment[]> {
+    const db = await getDb();
+    const [lexileType] = await db.select({ id: assessmentTypes.id }).from(assessmentTypes)
+      .where(and(eq(assessmentTypes.schoolId, schoolId), sql`lower(${assessmentTypes.name}) like '%lexile%'`))
+      .limit(1);
+    if (!lexileType) {
+      return [];
+    }
+    return db.select().from(studentAssessments)
+      .where(and(
+        eq(studentAssessments.childId, childId),
+        eq(studentAssessments.schoolId, schoolId),
+        eq(studentAssessments.assessmentTypeId, lexileType.id)
+      ))
+      .orderBy(desc(studentAssessments.assessmentDate));
+  }
+
+  async fuzzyMatchStudentsForSchool(schoolId: number, rawName: string): Promise<Array<{ id: number; name: string; gradeLevel: string }>> {
+    const db = await getDb();
+    const nameParts = rawName.trim().split(/\s+/);
+    const searchTerm = `%${rawName.replace(/\s+/g, '%')}%`;
+    const firstPart = `%${nameParts[0]}%`;
+    const lastPart = `%${nameParts[nameParts.length - 1]}%`;
+
+    const matched = await db.select({
+      id: children.id,
+      firstName: children.firstName,
+      lastName: children.lastName,
+      gradeLevel: children.gradeLevel,
+    }).from(children)
+      .where(and(
+        eq(children.schoolId, schoolId),
+        or(
+          sql`CONCAT(${children.firstName}, ' ', ${children.lastName}) ILIKE ${searchTerm}`,
+          sql`CONCAT(${children.lastName}, ' ', ${children.firstName}) ILIKE ${searchTerm}`,
+          sql`${children.firstName} ILIKE ${firstPart}`,
+          sql`${children.lastName} ILIKE ${lastPart}`
+        )
+      ))
+      .limit(5);
+
+    return matched.map(c => ({ id: c.id, name: `${c.firstName} ${c.lastName}`, gradeLevel: c.gradeLevel }));
+  }
+
+  async getChildByIdForSchool(childId: number, schoolId: number): Promise<Child | undefined> {
+    const db = await getDb();
+    const [result] = await db.select().from(children)
+      .where(and(eq(children.id, childId), eq(children.schoolId, schoolId)));
+    return result;
+  }
+
   // ==================== FUNDRAISER SYSTEM ====================
   async getFundraiserCampaignById(id: number): Promise<FundraiserCampaign | undefined> {
     const db = await getDb();

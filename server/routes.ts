@@ -64,6 +64,8 @@ import cartRouter from "./api/cart";
 import userSearchRouter from "./api/user-search";
 import assessmentsRouter from "./api/assessments";
 import assessmentUploadRouter from "./api/assessment-upload";
+import lexileRouter from "./api/lexile";
+import lexileAiRouter from "./api/lexile-ai";
 import fundraisersRouter from "./api/fundraisers";
 import guardiansRouter from "./api/guardians";
 import archiver from 'archiver';
@@ -2879,6 +2881,8 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
   app.use("/api/user-search", userSearchRouter);
   app.use("/api/assessments", assessmentsRouter);
   app.use("/api/assessment-upload", assessmentUploadRouter);
+  app.use("/api/lexile", lexileRouter);
+  app.use("/api/lexile/insights", lexileAiRouter);
   app.use("/api/fundraisers", fundraisersRouter);
   
   // School Admin Child Management endpoints (with JWT auth for school admins)

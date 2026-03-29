@@ -25,8 +25,10 @@ import {
   GraduationCap,
   Users,
   Calendar,
-  Search
+  Search,
+  BookMarked
 } from 'lucide-react';
+import LexileTab from '@/components/lexile/LexileTab';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import AppShell from '@/components/layout/AppShell';
@@ -441,6 +443,10 @@ export default function AssessmentManagementPage() {
               <BookOpen className="h-4 w-4" />
               Overview
             </TabsTrigger>
+            <TabsTrigger value="lexile" className="flex items-center gap-2" data-testid="tab-lexile">
+              <BookMarked className="h-4 w-4" />
+              Lexile
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="types">
@@ -693,6 +699,10 @@ export default function AssessmentManagementPage() {
                 </div>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="lexile">
+            <LexileTab />
           </TabsContent>
         </Tabs>
 

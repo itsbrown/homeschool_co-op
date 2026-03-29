@@ -482,6 +482,9 @@ export const children = pgTable("children", {
   emergencyContact: text("emergency_contact"),
   additionalLanguages: text("additional_languages"),
   notes: text("notes"),
+  currentLexileRange: text("current_lexile_range"),
+  currentReadingGradeLevel: text("current_reading_grade_level"),
+  currentBookList: text("current_book_list"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

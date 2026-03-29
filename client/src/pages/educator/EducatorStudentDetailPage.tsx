@@ -13,6 +13,7 @@ import {
   BookOpen,
   Cake
 } from "lucide-react";
+import LexileProfileSection from "@/components/lexile/LexileProfileSection";
 
 interface Student {
   id: number;
@@ -54,7 +55,13 @@ export default function EducatorStudentDetailPage() {
     queryKey: ["/api/educator/my-students"],
   });
 
+  const { data: lexileStudents = [] } = useQuery<Array<{ id: number; currentLexileRange?: string | null; currentReadingGradeLevel?: string | null; currentBookList?: string | null }>>({
+    queryKey: ['/api/lexile/students'],
+    enabled: !!studentId,
+  });
+
   const student = studentsResponse?.students?.find(s => s.id === studentId);
+  const lexileData = lexileStudents.find(s => s.id === studentId);
 
   if (isLoading) {
     return (
@@ -179,6 +186,16 @@ export default function EducatorStudentDetailPage() {
             </div>
           </CardContent>
         </Card>
+
+        <div className="md:col-span-2">
+          <LexileProfileSection
+            childId={studentId}
+            currentLexileRange={lexileData?.currentLexileRange}
+            currentReadingGradeLevel={lexileData?.currentReadingGradeLevel}
+            currentBookList={lexileData?.currentBookList}
+            showAIInsights={true}
+          />
+        </div>
 
         <Card className="md:col-span-2">
           <CardHeader>

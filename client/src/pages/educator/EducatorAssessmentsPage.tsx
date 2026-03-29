@@ -34,7 +34,8 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import AssessmentBulkUpload from '@/components/educator/AssessmentBulkUpload';
-import { Upload } from 'lucide-react';
+import { Upload, BookMarked } from 'lucide-react';
+import LexileTab from '@/components/lexile/LexileTab';
 
 interface AssessmentType {
   id: number;
@@ -260,6 +261,10 @@ export default function EducatorAssessmentsPage() {
               <Upload className="h-4 w-4" />
               Bulk Upload
             </TabsTrigger>
+            <TabsTrigger value="lexile" className="flex items-center gap-2" data-testid="tab-lexile">
+              <BookMarked className="h-4 w-4" />
+              Lexile
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="record" className="mt-4">
@@ -401,6 +406,10 @@ export default function EducatorAssessmentsPage() {
 
           <TabsContent value="bulk" className="mt-4">
             <AssessmentBulkUpload />
+          </TabsContent>
+
+          <TabsContent value="lexile" className="mt-4">
+            <LexileTab />
           </TabsContent>
         </Tabs>
 
