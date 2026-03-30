@@ -47,6 +47,17 @@ export async function getTwilioFromPhoneNumber() {
   return phoneNumber;
 }
 
+function normalizeToE164(to: string): string {
+  const digits = to.replace(/\D/g, '');
+  if (digits.length === 10) {
+    return `+1${digits}`;
+  }
+  if (digits.length === 11 && digits.startsWith('1')) {
+    return `+${digits}`;
+  }
+  throw new Error(`Invalid US phone number: "${to}" — must be a 10-digit number or 11-digit number starting with 1`);
+}
+
 export async function sendSMS(to: string, message: string) {
   try {
     const client = await getTwilioClient();
@@ -56,13 +67,16 @@ export async function sendSMS(to: string, message: string) {
       throw new Error('Twilio phone number not configured');
     }
 
+    const normalized = normalizeToE164(to);
+    console.log(`📱 Sending SMS to normalized number: ${normalized}`);
+
     const result = await client.messages.create({
       body: message,
       from: fromNumber,
-      to: to
+      to: normalized
     });
 
-    console.log(`📱 SMS sent successfully to ${to}. SID: ${result.sid}`);
+    console.log(`📱 SMS sent successfully to ${normalized}. SID: ${result.sid}`);
     return { success: true, sid: result.sid };
   } catch (error) {
     console.error('❌ Failed to send SMS:', error);

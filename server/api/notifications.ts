@@ -604,10 +604,26 @@ async function sendNotificationEmails(notification: any, recipientIds: number[])
 }
 
 async function sendNotificationSMS(notification: any, recipientIds: number[]): Promise<void> {
+  let smsDelivered = 0;
+  let smsFailed = 0;
+
+  const allRecipientRecords = await storage.getNotificationRecipientsByNotificationId(notification.id);
+
   for (const recipientId of recipientIds) {
     const user = await storage.getUser(recipientId);
+    const recipientRecord = allRecipientRecords.find(
+      r => r.recipientId === recipientId && r.deliveryType === "sms"
+    );
+
     if (!user || !user.phone) {
       console.log(`⚠️ No phone number for user ${recipientId}, skipping SMS`);
+      if (recipientRecord) {
+        await storage.updateNotificationRecipient(recipientRecord.id, {
+          status: "failed",
+          errorMessage: "No phone number on file",
+        });
+      }
+      smsFailed++;
       continue;
     }
     
@@ -615,10 +631,6 @@ async function sendNotificationSMS(notification: any, recipientIds: number[]): P
       const smsMessage = `${notification.subject}\n\n${notification.content}`;
       await sendSMS(user.phone, smsMessage);
       
-      const recipients = await storage.getNotificationRecipientsByNotificationId(notification.id);
-      const recipientRecord = recipients.find(
-        r => r.recipientId === recipientId && r.deliveryType === "sms"
-      );
       if (recipientRecord) {
         await storage.updateNotificationRecipient(recipientRecord.id, {
           status: "sent",
@@ -626,22 +638,30 @@ async function sendNotificationSMS(notification: any, recipientIds: number[]): P
         });
       }
       
+      smsDelivered++;
       console.log(`📱 SMS sent to ${user.phone} for notification: ${notification.subject}`);
     } catch (error) {
       console.error(`❌ Failed to send SMS to user ${recipientId}:`, error);
       
-      const recipients = await storage.getNotificationRecipientsByNotificationId(notification.id);
-      const recipientRecord = recipients.find(
-        r => r.recipientId === recipientId && r.deliveryType === "sms"
-      );
       if (recipientRecord) {
         await storage.updateNotificationRecipient(recipientRecord.id, {
           status: "failed",
           errorMessage: error instanceof Error ? error.message : 'Unknown error',
         });
       }
+      smsFailed++;
     }
   }
+
+  const existingNotification = await storage.getNotificationById(notification.id);
+  const existingStats = (existingNotification?.deliveryStats as Record<string, any>) || {};
+  await storage.updateNotification(notification.id, {
+    deliveryStats: {
+      ...existingStats,
+      smsDelivered,
+      smsFailed,
+    },
+  } as any);
 }
 
 async function getNotificationStats(notificationId: number): Promise<any> {
@@ -928,6 +948,54 @@ router.post("/:id/resend", async (req, res) => {
   } catch (error) {
     console.error("Error resending notification:", error);
     res.status(500).json({ message: "Failed to resend notification" });
+  }
+});
+
+const testSmsSchema = z.object({
+  phoneNumber: z.string().min(1, "Phone number is required"),
+  message: z.string().min(1, "Message is required"),
+});
+
+router.post("/test-sms", async (req, res) => {
+  try {
+    const email = (req as any).auth?.payload?.email || (req as any).auth?.email || (req as any).user?.email;
+    if (!email) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
+
+    const user = await storage.getUserByEmail(email);
+    if (!user) {
+      return res.status(401).json({ message: "User not found" });
+    }
+
+    const userRoles = await storage.getUserRolesByUserId(user.id);
+    const adminRoles = userRoles.filter(r =>
+      r.role?.toLowerCase() === 'school_admin' ||
+      r.role?.toLowerCase() === 'schooladmin' ||
+      r.role?.toLowerCase() === 'superadmin'
+    );
+
+    if (adminRoles.length === 0) {
+      return res.status(403).json({ message: "School admin or super admin role required to send test SMS" });
+    }
+
+    const parseResult = testSmsSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      return res.status(400).json({ message: "Invalid request", errors: parseResult.error.errors });
+    }
+
+    const { phoneNumber, message } = parseResult.data;
+
+    const result = await sendSMS(phoneNumber, message);
+    return res.json({ success: true, sid: result.sid });
+  } catch (error) {
+    console.error("❌ Test SMS failed:", error);
+    const errorMessage = error instanceof Error ? error.message : "Failed to send test SMS";
+    const isFormatError = errorMessage.startsWith("Invalid US phone number");
+    return res.status(isFormatError ? 400 : 500).json({
+      success: false,
+      message: errorMessage,
+    });
   }
 });
 
