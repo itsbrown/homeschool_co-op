@@ -87,6 +87,7 @@ router.get('/search', supabaseAuth, async (req: any, res) => {
       lastName: user.lastName,
       role: user.role,
       schoolId: user.schoolId,
+      phone: user.phone,
       avatar: user.avatar,
     }));
 
