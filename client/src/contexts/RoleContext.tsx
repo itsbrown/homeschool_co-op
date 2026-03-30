@@ -1,8 +1,21 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from "react";
 import { useAuth } from "@/components/SupabaseProvider";
+import { supabase } from "@/components/SupabaseProvider";
 import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+
+// Typed error for definitive auth failures that should not be retried
+class RolesAuthError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'RolesAuthError';
+    this.status = status;
+  }
+}
+
+const ROLES_FETCH_TIMEOUT_MS = 10_000;
 
 // Maximum retry attempts for role loading (for newly registered users)
 const MAX_ROLE_RETRY_ATTEMPTS = 3;
@@ -28,6 +41,8 @@ interface RoleContextType {
   setShowRoleSelection: (show: boolean) => void;
   isLoadingRoles: boolean;
   isSettingUpAccount: boolean;
+  /** True after all retries are exhausted and roles could not be loaded */
+  rolesLoadFailed: boolean;
 }
 
 export const RoleContext = createContext<RoleContextType | undefined>(undefined);
@@ -67,18 +82,55 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
   // Fetch user roles from database with retry logic
   const { data: rolesData, isLoading: isLoadingRoles, error: rolesError, refetch: refetchRoles } = useQuery({
     queryKey: ['/api/user/roles', user?.email],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       console.log('🔍 Fetching user roles from database...');
-      const token = localStorage.getItem('supabase_token');
-      const response = await fetch('/api/user/roles', {
-        headers: {
-          ...(token && { Authorization: `Bearer ${token}` })
-        }
-      });
-      if (!response.ok) {
-        throw new Error('Failed to fetch roles');
+
+      // Combine TanStack abort signal with our own timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), ROLES_FETCH_TIMEOUT_MS);
+
+      // Propagate external abort (e.g. query cancellation) to our controller
+      signal?.addEventListener('abort', () => controller.abort());
+
+      let response: Response;
+      try {
+        response = await apiRequest('GET', '/api/user/roles', undefined, { signal: controller.signal });
+      } finally {
+        clearTimeout(timeoutId);
       }
-      const data = await response.json();
+
+      if (response.status === 403) {
+        let errorCode = '';
+        let errorMessage = '';
+        let errorEmail = '';
+        try {
+          const body = await response.json() as { error?: string; message?: string; email?: string };
+          errorCode = body.error ?? '';
+          errorMessage = body.message ?? '';
+          errorEmail = body.email ?? '';
+        } catch {
+          // ignore JSON parse errors
+        }
+
+        if (errorCode === 'REGISTRATION_REQUIRED') {
+          console.log('🚫 REGISTRATION_REQUIRED on roles fetch — signing out and redirecting to login');
+          localStorage.removeItem('supabase_token');
+          localStorage.removeItem('activeRole');
+          await supabase.auth.signOut();
+          sessionStorage.setItem('registration_required_message', errorMessage);
+          sessionStorage.setItem('registration_required_email', errorEmail);
+          if (!window.location.pathname.includes('/login')) {
+            window.location.href = '/login?error=registration_required';
+          }
+          // Throw non-retryable error
+          throw new RolesAuthError('REGISTRATION_REQUIRED', 403);
+        }
+
+        // Other 403 — exit loading state gracefully, do not retry
+        throw new RolesAuthError(`403: ${errorCode || 'Forbidden'}`, 403);
+      }
+
+      const data = await response.json() as { roles: UserRole[]; activeRole: string; activeRoleId?: number; userId?: number };
       console.log('📋 Roles data received:', { 
         roleCount: data.roles?.length || 0, 
         activeRole: data.activeRole,
@@ -88,7 +140,12 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
     },
     enabled: !!user,
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
-    retry: 2, // Built-in retry for network failures
+    retry: (failureCount, error: unknown) => {
+      // Do not retry on definitive auth failures (403)
+      if (error instanceof RolesAuthError) return false;
+      // Retry up to 2 times for network/server errors
+      return failureCount < 2;
+    },
   });
 
   // Cleanup retry timeout on unmount
@@ -441,6 +498,10 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
 
   console.log(`🔄 RoleProvider rendering - activeRole: ${activeRole}, canSwitchRoles: ${canSwitchRoles}, showRoleSelection: ${showRoleSelection}, isSettingUpAccount: ${isSettingUpAccount}, user: ${user?.email}`);
 
+  // rolesLoadFailed: true when roles query has errored out (all retries exhausted)
+  // and we are no longer loading — signals UI to redirect instead of spinning forever
+  const rolesLoadFailed = !!rolesError && !isLoadingRoles;
+
   return (
     <RoleContext.Provider
       value={{
@@ -455,6 +516,7 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
         setShowRoleSelection,
         isLoadingRoles,
         isSettingUpAccount,
+        rolesLoadFailed,
       }}
     >
       {children}
