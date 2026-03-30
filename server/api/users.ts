@@ -1,7 +1,18 @@
 import { Router } from "express";
+import { z } from 'zod';
 import { storage } from '../storage';
 
 const router = Router();
+
+// Shared phone validation: strip non-digits, accept 10-digit or 11-digit starting with 1
+const phoneValidation = z.string().optional().nullable().transform(val => val || null).refine(
+  (val) => {
+    if (!val) return true;
+    const digits = val.replace(/\D/g, '');
+    return digits.length === 10 || (digits.length === 11 && digits.startsWith('1'));
+  },
+  { message: 'Invalid US phone number. Must be a 10-digit number or 11-digit number starting with 1.' }
+);
 
 // Get current user profile
 router.get("/profile", async (req: any, res) => {
@@ -47,7 +58,7 @@ router.get("/profile", async (req: any, res) => {
       email: user.email,
       firstName: user.firstName || "",
       lastName: user.lastName || "",
-      phoneNumber: user.phone || "",
+      phone: user.phone || "",
       avatar: authUser?.user_metadata?.avatar_url || "",
       subscription: "free",
       role: user.role,
@@ -64,12 +75,25 @@ router.get("/profile", async (req: any, res) => {
   }
 });
 
+// Validation schema for profile update
+const updateProfileSchema = z.object({
+  firstName: z.string().optional(),
+  lastName: z.string().optional(),
+  phone: phoneValidation,
+});
+
 // Update user profile
 router.patch("/profile", async (req: any, res) => {
   try {
-    const { firstName, lastName, phoneNumber } = req.body;
+    const parseResult = updateProfileSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      const errors = parseResult.error.errors.map(e => e.message).join(', ');
+      return res.status(400).json({ message: errors });
+    }
+
+    const { firstName, lastName, phone } = parseResult.data;
     
-    console.log("✏️ PATCH /profile - Request body:", { firstName, lastName, phoneNumber });
+    console.log("✏️ PATCH /profile - Request body:", { firstName, lastName, phone });
     
     const userEmail = req.user?.email;
     
@@ -94,7 +118,7 @@ router.patch("/profile", async (req: any, res) => {
     const updateData = {
       firstName: firstName || user.firstName,
       lastName: lastName || user.lastName,
-      phone: phoneNumber || user.phone
+      phone: phone || user.phone
     };
     
     console.log("💾 PATCH /profile - Updating user with data:", updateData);
@@ -115,7 +139,7 @@ router.patch("/profile", async (req: any, res) => {
       email: updatedUser.email,
       firstName: updatedUser.firstName || "",
       lastName: updatedUser.lastName || "",
-      phoneNumber: updatedUser.phone || "",
+      phone: updatedUser.phone || "",
       avatar: req.user?.user_metadata?.avatar_url || "",
       subscription: "free"
     };

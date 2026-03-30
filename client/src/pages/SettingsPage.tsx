@@ -23,6 +23,7 @@ export default function SettingsPage() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
+  const [phoneError, setPhoneError] = useState<string | null>(null);
 
   // Notification preferences state
   const [emailNotifications, setEmailNotifications] = useState(true);
@@ -40,7 +41,7 @@ export default function SettingsPage() {
     if (profileData) {
       setFirstName(profileData.firstName || "");
       setLastName(profileData.lastName || "");
-      setPhoneNumber(profileData.phoneNumber || "");
+      setPhoneNumber(profileData.phone || "");
     }
   }, [profileData]);
 
@@ -49,7 +50,7 @@ export default function SettingsPage() {
     mutationFn: async (profileData: {
       firstName: string;
       lastName: string;
-      phoneNumber: string;
+      phone: string;
     }) => {
       return await apiRequest('PATCH', '/api/users/profile', profileData);
     },
@@ -69,11 +70,22 @@ export default function SettingsPage() {
     },
   });
 
+  const validatePhone = (val: string) => {
+    if (!val) return true;
+    const digits = val.replace(/\D/g, '');
+    return digits.length === 10 || (digits.length === 11 && digits.startsWith('1'));
+  };
+
   const handleSaveSettings = () => {
+    if (phoneNumber && !validatePhone(phoneNumber)) {
+      setPhoneError('Invalid US phone number. Must be a 10-digit number or 11-digit number starting with 1.');
+      return;
+    }
+    setPhoneError(null);
     updateProfileMutation.mutate({
       firstName,
       lastName,
-      phoneNumber,
+      phone: phoneNumber,
     });
   };
 
@@ -153,9 +165,13 @@ export default function SettingsPage() {
                     id="phone"
                     type="tel"
                     value={phoneNumber}
-                    onChange={(e) => setPhoneNumber(e.target.value)}
+                    onChange={(e) => { setPhoneNumber(e.target.value); setPhoneError(null); }}
                     placeholder="Enter your phone number"
+                    className={phoneError ? "border-destructive" : ""}
                   />
+                  {phoneError && (
+                    <p className="text-sm text-destructive">{phoneError}</p>
+                  )}
                 </div>
               </div>
             </CardContent>

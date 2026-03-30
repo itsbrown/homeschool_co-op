@@ -23,7 +23,7 @@ interface ProfileData {
   email: string;
   firstName: string;
   lastName: string;
-  phoneNumber: string;
+  phone: string;
   role: string;
 }
 
@@ -34,6 +34,7 @@ export default function EducatorSettingsPage() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
+  const [phoneError, setPhoneError] = useState<string | null>(null);
   const [emailNotifications, setEmailNotifications] = useState(true);
 
   const { data: profile, isLoading } = useQuery<ProfileData>({
@@ -44,12 +45,12 @@ export default function EducatorSettingsPage() {
     if (profile) {
       setFirstName(profile.firstName || "");
       setLastName(profile.lastName || "");
-      setPhoneNumber(profile.phoneNumber || "");
+      setPhoneNumber(profile.phone || "");
     }
   }, [profile]);
 
   const updateProfileMutation = useMutation({
-    mutationFn: async (data: { firstName: string; lastName: string; phoneNumber: string }) => {
+    mutationFn: async (data: { firstName: string; lastName: string; phone: string }) => {
       return apiRequest('PATCH', '/api/users/profile', data);
     },
     onSuccess: () => {
@@ -68,8 +69,19 @@ export default function EducatorSettingsPage() {
     },
   });
 
+  const validatePhone = (val: string) => {
+    if (!val) return true;
+    const digits = val.replace(/\D/g, '');
+    return digits.length === 10 || (digits.length === 11 && digits.startsWith('1'));
+  };
+
   const handleSaveProfile = () => {
-    updateProfileMutation.mutate({ firstName, lastName, phoneNumber });
+    if (phoneNumber && !validatePhone(phoneNumber)) {
+      setPhoneError('Invalid US phone number. Must be a 10-digit number or 11-digit number starting with 1.');
+      return;
+    }
+    setPhoneError(null);
+    updateProfileMutation.mutate({ firstName, lastName, phone: phoneNumber });
   };
 
   if (isLoading) {
@@ -155,10 +167,14 @@ export default function EducatorSettingsPage() {
             <Input
               id="phone"
               value={phoneNumber}
-              onChange={(e) => setPhoneNumber(e.target.value)}
+              onChange={(e) => { setPhoneNumber(e.target.value); setPhoneError(null); }}
               placeholder="Enter your phone number"
               data-testid="input-phone"
+              className={phoneError ? "border-destructive" : ""}
             />
+            {phoneError && (
+              <p className="text-sm text-destructive">{phoneError}</p>
+            )}
           </div>
 
           <Button 

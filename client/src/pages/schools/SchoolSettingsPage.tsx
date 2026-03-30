@@ -42,7 +42,7 @@ interface UserProfile {
   email: string;
   firstName: string;
   lastName: string;
-  phoneNumber: string;
+  phone: string;
   role: string;
   school?: {
     id: number;
@@ -89,6 +89,7 @@ export default function SchoolSettingsPage() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
+  const [phoneError, setPhoneError] = useState<string | null>(null);
   const [username, setUsername] = useState("");
 
   // Password change state
@@ -130,7 +131,7 @@ export default function SchoolSettingsPage() {
     if (userProfile) {
       setFirstName(userProfile.firstName || "");
       setLastName(userProfile.lastName || "");
-      setPhoneNumber(userProfile.phoneNumber || "");
+      setPhoneNumber(userProfile.phone || "");
       setUsername(userProfile.email || "");
     }
   }, [userProfile]);
@@ -169,7 +170,7 @@ export default function SchoolSettingsPage() {
     mutationFn: async (profileData: {
       firstName: string;
       lastName: string;
-      phoneNumber: string;
+      phone: string;
       username: string;
     }) => {
       return await apiRequest('PATCH', '/api/users/profile', profileData);
@@ -179,6 +180,7 @@ export default function SchoolSettingsPage() {
         title: "Profile updated",
         description: "Your profile information has been saved successfully.",
       });
+      queryClient.invalidateQueries({ queryKey: ['/api/users/profile'] });
     },
     onError: (error) => {
       toast({
@@ -236,10 +238,19 @@ export default function SchoolSettingsPage() {
   });
 
   const handleSaveProfile = () => {
+    if (phoneNumber) {
+      const digits = phoneNumber.replace(/\D/g, '');
+      const valid = digits.length === 10 || (digits.length === 11 && digits.startsWith('1'));
+      if (!valid) {
+        setPhoneError('Invalid US phone number. Must be a 10-digit number or 11-digit number starting with 1.');
+        return;
+      }
+    }
+    setPhoneError(null);
     updateProfileMutation.mutate({
       firstName,
       lastName,
-      phoneNumber,
+      phone: phoneNumber,
       username,
     });
   };
@@ -667,9 +678,13 @@ export default function SchoolSettingsPage() {
                         id="phone"
                         type="tel"
                         value={phoneNumber}
-                        onChange={(e) => setPhoneNumber(e.target.value)}
+                        onChange={(e) => { setPhoneNumber(e.target.value); setPhoneError(null); }}
                         placeholder="Enter your phone number"
+                        className={phoneError ? "border-destructive" : ""}
                       />
+                      {phoneError && (
+                        <p className="text-sm text-destructive">{phoneError}</p>
+                      )}
                     </div>
                   </div>
 

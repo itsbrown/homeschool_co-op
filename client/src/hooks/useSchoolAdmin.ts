@@ -6,7 +6,7 @@ interface UserProfile {
   email: string;
   firstName: string;
   lastName: string;
-  phoneNumber: string;
+  phone: string;
   avatar: string;
   subscription: string;
   role: string;

@@ -1092,6 +1092,14 @@ function NotificationComposeDialog({
               </TabsContent>
 
               <TabsContent value="role" className="space-y-4">
+                {(type === 'sms' || type === 'all') && (
+                  <Alert className="border-amber-200 bg-amber-50 text-amber-800">
+                    <AlertCircle className="h-4 w-4 text-amber-600" />
+                    <AlertDescription>
+                      Recipients without a valid phone number on file will be skipped when sending SMS.
+                    </AlertDescription>
+                  </Alert>
+                )}
                 <div className="grid gap-2">
                   <Label>Select Roles</Label>
                   <div className="grid grid-cols-2 gap-2">
@@ -1145,6 +1153,14 @@ function NotificationComposeDialog({
               </TabsContent>
 
               <TabsContent value="location" className="space-y-4">
+                {(type === 'sms' || type === 'all') && (
+                  <Alert className="border-amber-200 bg-amber-50 text-amber-800">
+                    <AlertCircle className="h-4 w-4 text-amber-600" />
+                    <AlertDescription>
+                      Recipients without a valid phone number on file will be skipped when sending SMS.
+                    </AlertDescription>
+                  </Alert>
+                )}
                 <div className="grid gap-2">
                   <Label>Select Locations</Label>
                   {locations.length === 0 ? (
@@ -1212,6 +1228,14 @@ function NotificationComposeDialog({
               </TabsContent>
 
               <TabsContent value="class" className="space-y-4">
+                {(type === 'sms' || type === 'all') && (
+                  <Alert className="border-amber-200 bg-amber-50 text-amber-800">
+                    <AlertCircle className="h-4 w-4 text-amber-600" />
+                    <AlertDescription>
+                      Recipients without a valid phone number on file will be skipped when sending SMS.
+                    </AlertDescription>
+                  </Alert>
+                )}
                 <div className="grid gap-2">
                   <Label>Select Classes</Label>
                   <p className="text-sm text-muted-foreground">
@@ -1265,6 +1289,14 @@ function NotificationComposeDialog({
               </TabsContent>
 
               <TabsContent value="all" className="space-y-4">
+                {(type === 'sms' || type === 'all') && (
+                  <Alert className="border-amber-200 bg-amber-50 text-amber-800">
+                    <AlertCircle className="h-4 w-4 text-amber-600" />
+                    <AlertDescription>
+                      Recipients without a valid phone number on file will be skipped when sending SMS.
+                    </AlertDescription>
+                  </Alert>
+                )}
                 <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg">
                   <div className="flex items-center space-x-2">
                     <AlertCircle className="h-5 w-5 text-orange-600" />

@@ -27,10 +27,38 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
 import { apiRequest } from "@/lib/queryClient";
 import { formatClassSchedule } from "@/lib/utils";
+
+// Phone validation: optional, but if provided must be 10-digit or 11-digit starting with 1
+const phoneSchema = z.string().optional().nullable().refine(
+  (val) => {
+    if (!val) return true;
+    const digits = val.replace(/\D/g, '');
+    return digits.length === 10 || (digits.length === 11 && digits.startsWith('1'));
+  },
+  { message: 'Invalid US phone number. Must be a 10-digit number or 11-digit number starting with 1.' }
+);
+
+const staffEditSchema = z.object({
+  name: z.string().optional(),
+  email: z.string().email('Invalid email address').optional().or(z.literal('')),
+  phone: phoneSchema,
+  role: z.string().optional(),
+  locationId: z.any().optional().nullable(),
+  department: z.string().optional(),
+  subjects: z.array(z.string()).optional(),
+  status: z.string().optional(),
+  joinDate: z.string().optional(),
+  avatar: z.string().optional(),
+  classIds: z.array(z.number()).optional(),
+});
+
+type StaffFormValues = z.infer<typeof staffEditSchema> & { id?: number };
 
 interface StaffMember {
   id: number;
@@ -84,7 +112,8 @@ export default function StaffEditPage() {
   const [showAssignDialog, setShowAssignDialog] = useState(false);
   const [selectedClassId, setSelectedClassId] = useState<number | null>(null);
 
-  const form = useForm<StaffMember>({
+  const form = useForm<StaffFormValues>({
+    resolver: zodResolver(staffEditSchema),
     defaultValues: {
       name: "",
       email: "",
@@ -144,7 +173,7 @@ export default function StaffEditPage() {
 
   // Update staff member mutation
   const updateStaffMutation = useMutation({
-    mutationFn: async (data: StaffMember) => {
+    mutationFn: async (data: StaffFormValues) => {
       return await apiRequest("PUT", `/api/school-admin/staff/${id}`, data);
     },
     onSuccess: (response: any) => {
@@ -264,7 +293,7 @@ export default function StaffEditPage() {
     },
   });
 
-  const onSubmit = (data: StaffMember) => {
+  const onSubmit = (data: StaffFormValues) => {
     updateStaffMutation.mutate(data);
   };
 

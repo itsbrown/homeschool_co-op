@@ -66,6 +66,7 @@ export default function UsersPage() {
   const [isExporting, setIsExporting] = useState(false);
   const [editPhoneUser, setEditPhoneUser] = useState<any>(null);
   const [editPhoneValue, setEditPhoneValue] = useState('');
+  const [editPhoneError, setEditPhoneError] = useState<string | null>(null);
   
   const queryClient = useQueryClient();
   const { schoolId, isLoading: isLoadingSchool, userProfile } = useSchoolAdmin();
@@ -675,15 +676,31 @@ export default function UsersPage() {
               type="tel"
               placeholder="e.g. (555) 123-4567"
               value={editPhoneValue}
-              onChange={(e) => setEditPhoneValue(e.target.value)}
-              className="mt-1"
+              onChange={(e) => { setEditPhoneValue(e.target.value); setEditPhoneError(null); }}
+              className={`mt-1${editPhoneError ? ' border-destructive' : ''}`}
             />
-            <p className="text-xs text-muted-foreground mt-1">Enter a US phone number (10 digits).</p>
+            {editPhoneError ? (
+              <p className="text-xs text-destructive mt-1">{editPhoneError}</p>
+            ) : (
+              <p className="text-xs text-muted-foreground mt-1">Enter a US phone number (10 digits).</p>
+            )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditPhoneUser(null)}>Cancel</Button>
+            <Button variant="outline" onClick={() => { setEditPhoneUser(null); setEditPhoneError(null); }}>Cancel</Button>
             <Button
-              onClick={() => editPhoneUser && editPhoneMutation.mutate({ userId: editPhoneUser.id, phone: editPhoneValue })}
+              onClick={() => {
+                if (!editPhoneUser) return;
+                if (editPhoneValue) {
+                  const digits = editPhoneValue.replace(/\D/g, '');
+                  const valid = digits.length === 10 || (digits.length === 11 && digits.startsWith('1'));
+                  if (!valid) {
+                    setEditPhoneError('Invalid US phone number. Must be a 10-digit number or 11-digit number starting with 1.');
+                    return;
+                  }
+                }
+                setEditPhoneError(null);
+                editPhoneMutation.mutate({ userId: editPhoneUser.id, phone: editPhoneValue });
+              }}
               disabled={editPhoneMutation.isPending}
             >
               {editPhoneMutation.isPending ? 'Saving...' : 'Save'}

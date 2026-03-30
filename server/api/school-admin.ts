@@ -38,6 +38,16 @@ import { users, schools, userRoles, userLocations, locations, classSessions, ses
 
 const router = Router();
 
+// Shared phone validation: strip non-digits, accept 10-digit or 11-digit starting with 1
+const phoneValidation = z.string().optional().nullable().transform(val => val || null).refine(
+  (val) => {
+    if (!val) return true;
+    const digits = val.replace(/\D/g, '');
+    return digits.length === 10 || (digits.length === 11 && digits.startsWith('1'));
+  },
+  { message: 'Invalid US phone number. Must be a 10-digit number or 11-digit number starting with 1.' }
+);
+
 // Download CSV template - Must be first to avoid conflicts
 router.get('/csv-template/:type', (req: any, res) => {
   const type = req.params.type;
@@ -2098,7 +2108,14 @@ router.put("/staff/:id", supabaseAuth, async (req: any, res) => {
       return res.status(400).json({ message: "Invalid staff ID format" });
     }
 
-    const { name, email, phone, role, locationId: rawLocationId } = req.body;
+    const { name, email, role, locationId: rawLocationId } = req.body;
+    
+    // Validate phone number if provided
+    const phoneParseResult = phoneValidation.safeParse(req.body.phone);
+    if (!phoneParseResult.success) {
+      return res.status(400).json({ message: phoneParseResult.error.errors.map(e => e.message).join(', ') });
+    }
+    const phone = phoneParseResult.data;
     
     // Normalize locationId: convert string to number, empty string/null to null
     let locationId: number | null = null;
@@ -4823,11 +4840,17 @@ router.post('/contact-import', supabaseAuth, requireSchoolContext, async (req: a
 
             if (fileType === 'parents') {
               // Create parent account associated with school and location
+              const rawParentPhone = record.Phone || record.phone || null;
+              const parentPhoneResult = phoneValidation.safeParse(rawParentPhone);
+              if (!parentPhoneResult.success) {
+                results.parents.failed++;
+                results.errors.push(`Invalid phone number for parent ${record['First Name'] || ''} ${record['Last Name'] || ''}: ${parentPhoneResult.error.errors.map((e: any) => e.message).join(', ')}`);
+              } else {
               const parentData = {
                 email: record.Email || record.email,
                 firstName: record['First Name'] || record.firstName || record.first_name,
                 lastName: record['Last Name'] || record.lastName || record.last_name,
-                phone: record.Phone || record.phone,
+                phone: parentPhoneResult.data,
                 emergencyContactFirstName: record['Emergency Contact - First Name'] || record.emergencyContactFirstName,
                 emergencyContactLastName: record['Emergency Contact - Last Name'] || record.emergencyContactLastName,
                 emergencyContactPhone: record['Emergency Contact Phone'] || record.emergencyContactPhone,
@@ -4853,6 +4876,7 @@ router.post('/contact-import', supabaseAuth, requireSchoolContext, async (req: a
               } else {
                 results.parents.failed++;
                 results.errors.push(`Missing required fields for parent: ${JSON.stringify(record)}`);
+              }
               }
             } else if (fileType === 'children') {
               // Create child record associated with school and location
@@ -5236,7 +5260,7 @@ const createUserSchema = z.object({
   role: z.string().refine((val) => (systemRoles as readonly string[]).includes(val), {
     message: `Role must be one of: ${systemRoles.join(', ')}`
   }),
-  phone: z.string().optional().nullable(),
+  phone: phoneValidation,
   // Accept string or number for locationId (forms send strings, API may send numbers)
   locationId: z.union([z.string(), z.number()]).optional().nullable().transform(val => val ? Number(val) : null),
 });
@@ -5399,6 +5423,14 @@ router.put('/users/:id', supabaseAuth, requireSchoolContext, async (req: any, re
     if (String(userSchoolId) !== schoolId) {
       console.log(`❌ School ID mismatch: user has ${userSchoolId}, admin has ${schoolId}`);
       return res.status(403).json({ message: 'Access denied - user belongs to different school' });
+    }
+
+    // Validate phone if provided
+    if (req.body.phone !== undefined && req.body.phone !== null && req.body.phone !== '') {
+      const phoneParseResult = phoneValidation.safeParse(req.body.phone);
+      if (!phoneParseResult.success) {
+        return res.status(400).json({ message: phoneParseResult.error.errors.map((e: any) => e.message).join(', ') });
+      }
     }
 
     const userData = {
@@ -5685,12 +5717,20 @@ async function processParentRecords(records: any[], results: any, schoolId: numb
       const lastName = record['Last Name'] || record.lastName;
       const email = record['Email'] || record.email;
       
+      const rawPhone = record['Phone'] || record.phone || null;
+      const phoneResult = phoneValidation.safeParse(rawPhone);
+      if (!phoneResult.success) {
+        results.errors.push(`Invalid phone number for parent ${firstName} ${lastName}: ${phoneResult.error.errors.map(e => e.message).join(', ')}`);
+        results.parents.failed++;
+        continue;
+      }
+
       const userData = {
         firstName,
         lastName,
         email,
         name: `${firstName} ${lastName}`,
-        phone: record['Phone'] || record.phone,
+        phone: phoneResult.data,
         emergencyContactFirstName: record['Emergency Contact - First Name'] || record.emergencyContactFirstName,
         emergencyContactLastName: record['Emergency Contact - Last Name'] || record.emergencyContactLastName,
         emergencyContactPhone: record['Emergency Contact Phone'] || record.emergencyContactPhone,
@@ -5760,12 +5800,20 @@ async function processStaffRecords(records: any[], results: any, schoolId: numbe
       const lastName = record['Last Name'] || record.lastName;
       const email = record['Email'] || record.email;
       
+      const rawPhone = record['Phone'] || record.phone || null;
+      const phoneResult = phoneValidation.safeParse(rawPhone);
+      if (!phoneResult.success) {
+        results.errors.push(`Invalid phone number for staff ${firstName} ${lastName}: ${phoneResult.error.errors.map(e => e.message).join(', ')}`);
+        results.staff.failed++;
+        continue;
+      }
+
       const userData = {
         firstName,
         lastName,
         email,
         name: `${firstName} ${lastName}`,
-        phone: record['Phone'] || record.phone,
+        phone: phoneResult.data,
         role: 'educator' as const,
         schoolId: Number(schoolId), // [FIX:v3.0] Convert string to number for Drizzle schema
         username: email?.split('@')[0] || '',
