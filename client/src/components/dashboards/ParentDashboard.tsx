@@ -1082,12 +1082,10 @@ export default function ParentDashboard() {
                           <Button 
                             className="w-full mt-3" 
                             size="sm"
-                            asChild
+                            onClick={() => setLocation("/payments?tab=upcoming")}
                           >
-                            <Link href="/payments">
-                              <CreditCard className="mr-2 h-4 w-4" />
-                              Pay Now
-                            </Link>
+                            <CreditCard className="mr-2 h-4 w-4" />
+                            Pay Now
                           </Button>
                         ) : null}
                       </div>
