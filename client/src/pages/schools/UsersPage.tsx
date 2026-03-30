@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
@@ -20,7 +21,8 @@ import {
   UserCog,
   Eye,
   RefreshCw,
-  Download
+  Download,
+  Phone
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -28,6 +30,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   Table,
   TableBody,
@@ -54,6 +64,8 @@ export default function UsersPage() {
   const [editingUser, setEditingUser] = useState<any>(null);
   const [manageRolesUser, setManageRolesUser] = useState<any>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [editPhoneUser, setEditPhoneUser] = useState<any>(null);
+  const [editPhoneValue, setEditPhoneValue] = useState('');
   
   const queryClient = useQueryClient();
   const { schoolId, isLoading: isLoadingSchool, userProfile } = useSchoolAdmin();
@@ -138,6 +150,26 @@ export default function UsersPage() {
     setEditingUser(user);
     setShowCreateDialog(true); // Reuse the create dialog for editing
   };
+
+  const editPhoneMutation = useMutation({
+    mutationFn: async ({ userId, phone }: { userId: number; phone: string }) => {
+      const response = await apiRequest('PUT', `/api/school-admin/users/${userId}`, { phone });
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.message || 'Failed to update phone number');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({ title: 'Phone Updated', description: 'Phone number updated successfully.' });
+      queryClient.invalidateQueries({ queryKey: ['/api/school-admin/users'] });
+      setEditPhoneUser(null);
+      setEditPhoneValue('');
+    },
+    onError: (error: any) => {
+      toast({ title: 'Error', description: error.message || 'Failed to update phone number', variant: 'destructive' });
+    },
+  });
 
   const handleExportUsers = async () => {
     setIsExporting(true);
@@ -470,6 +502,7 @@ export default function UsersPage() {
                 <TableRow>
                   <TableHead>Name</TableHead>
                   <TableHead>Email</TableHead>
+                  <TableHead>Phone</TableHead>
                   <TableHead>Role</TableHead>
                   <TableHead>Location</TableHead>
                   <TableHead>Status</TableHead>
@@ -480,7 +513,7 @@ export default function UsersPage() {
               <TableBody>
                 {filteredUsers.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="h-24 text-center">
+                    <TableCell colSpan={8} className="h-24 text-center">
                       {searchTerm || selectedRole !== 'all' || selectedLocation !== 'all' ? 'No users match your filters.' : 'No users found.'}
                     </TableCell>
                   </TableRow>
@@ -498,6 +531,21 @@ export default function UsersPage() {
                         </Link>
                       </TableCell>
                       <TableCell>{user.email}</TableCell>
+                      <TableCell>
+                        {user.phone ? (
+                          <span className="text-sm flex items-center gap-1">
+                            <Phone className="h-3 w-3 text-muted-foreground" />
+                            {user.phone}
+                          </span>
+                        ) : (
+                          <button
+                            className="text-xs text-muted-foreground hover:text-foreground underline"
+                            onClick={() => { setEditPhoneUser(user); setEditPhoneValue(''); }}
+                          >
+                            Add phone
+                          </button>
+                        )}
+                      </TableCell>
                       <TableCell>
                         <Badge variant={getRoleBadgeVariant(user.role)}>
                           {getRoleDisplayName(user.role)}
@@ -541,6 +589,10 @@ export default function UsersPage() {
                             <DropdownMenuItem onClick={() => handleEditUser(user)}>
                               <Edit className="h-4 w-4 mr-2" />
                               Edit User
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => { setEditPhoneUser(user); setEditPhoneValue(user.phone || ''); }}>
+                              <Phone className="h-4 w-4 mr-2" />
+                              Edit Phone Number
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => setManageRolesUser(user)} data-testid={`button-manage-roles-${user.id}`}>
                               <UserCog className="h-4 w-4 mr-2" />
@@ -606,6 +658,40 @@ export default function UsersPage() {
           userName={`${manageRolesUser.firstName || ''} ${manageRolesUser.lastName || ''}`.trim()}
         />
       )}
+
+      {/* Edit Phone Dialog */}
+      <Dialog open={!!editPhoneUser} onOpenChange={(open) => !open && setEditPhoneUser(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Edit Phone Number</DialogTitle>
+            <DialogDescription>
+              Update the phone number for {editPhoneUser ? `${editPhoneUser.firstName || ''} ${editPhoneUser.lastName || ''}`.trim() || editPhoneUser.email : 'this user'}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Label htmlFor="phone-input">Phone Number</Label>
+            <Input
+              id="phone-input"
+              type="tel"
+              placeholder="e.g. (555) 123-4567"
+              value={editPhoneValue}
+              onChange={(e) => setEditPhoneValue(e.target.value)}
+              className="mt-1"
+            />
+            <p className="text-xs text-muted-foreground mt-1">Enter a US phone number (10 digits).</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditPhoneUser(null)}>Cancel</Button>
+            <Button
+              onClick={() => editPhoneUser && editPhoneMutation.mutate({ userId: editPhoneUser.id, phone: editPhoneValue })}
+              disabled={editPhoneMutation.isPending}
+            >
+              {editPhoneMutation.isPending ? 'Saving...' : 'Save'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       </div>
     </SchoolAdminLayout>
   );

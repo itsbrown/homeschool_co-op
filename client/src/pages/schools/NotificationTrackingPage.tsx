@@ -306,7 +306,7 @@ export default function NotificationTrackingPage() {
                     <RecipientTable recipients={recipientDetails.recipients.email} />
                   </TabsContent>
                   <TabsContent value="sms" className="mt-4">
-                    <RecipientTable recipients={recipientDetails.recipients.sms} />
+                    <SmsRecipientTable recipients={recipientDetails.recipients.sms} />
                   </TabsContent>
                 </Tabs>
               </div>
@@ -398,6 +398,123 @@ function RecipientTable({ recipients }: { recipients: Recipient[] }) {
                     </TableRow>
                   );
                 })}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SmsRecipientTable({ recipients }: { recipients: Recipient[] }) {
+  if (recipients.length === 0) {
+    return (
+      <div className="text-center py-8 text-muted-foreground">
+        <EyeOff className="h-8 w-8 mx-auto mb-2 opacity-50" />
+        <p>No SMS recipients for this notification</p>
+      </div>
+    );
+  }
+
+  const deliveredRecipients = recipients.filter(r => r.status === 'sent' || r.status === 'delivered');
+  const failedRecipients = recipients.filter(r => r.status === 'failed');
+  const pendingRecipients = recipients.filter(r => r.status !== 'sent' && r.status !== 'delivered' && r.status !== 'failed');
+
+  return (
+    <div className="space-y-4">
+      {deliveredRecipients.length > 0 && (
+        <div>
+          <h4 className="text-sm font-medium text-blue-700 mb-2 flex items-center gap-1">
+            <CheckCircle className="h-4 w-4" />
+            Delivered ({deliveredRecipients.length})
+          </h4>
+          <div className="border rounded-lg overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Sent At</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {deliveredRecipients.map((recipient) => (
+                  <TableRow key={recipient.id}>
+                    <TableCell className="font-medium">{recipient.name || '-'}</TableCell>
+                    <TableCell className="text-muted-foreground">{recipient.email}</TableCell>
+                    <TableCell>
+                      {recipient.sentAt
+                        ? format(new Date(recipient.sentAt), 'MMM d, h:mm a')
+                        : '-'}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+      )}
+
+      {failedRecipients.length > 0 && (
+        <div>
+          <h4 className="text-sm font-medium text-red-700 mb-2 flex items-center gap-1">
+            <AlertCircle className="h-4 w-4" />
+            Failed ({failedRecipients.length})
+          </h4>
+          <div className="border rounded-lg overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Reason</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {failedRecipients.map((recipient) => (
+                  <TableRow key={recipient.id}>
+                    <TableCell className="font-medium">{recipient.name || '-'}</TableCell>
+                    <TableCell className="text-muted-foreground">{recipient.email}</TableCell>
+                    <TableCell className="text-red-600 text-sm">
+                      {recipient.errorMessage || 'Unknown error'}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+      )}
+
+      {pendingRecipients.length > 0 && (
+        <div>
+          <h4 className="text-sm font-medium text-yellow-700 mb-2 flex items-center gap-1">
+            <Clock className="h-4 w-4" />
+            Pending ({pendingRecipients.length})
+          </h4>
+          <div className="border rounded-lg overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {pendingRecipients.map((recipient) => (
+                  <TableRow key={recipient.id}>
+                    <TableCell className="font-medium">{recipient.name || '-'}</TableCell>
+                    <TableCell className="text-muted-foreground">{recipient.email}</TableCell>
+                    <TableCell>
+                      <Badge className="bg-yellow-100 text-yellow-800">
+                        <Clock className="h-3 w-3 mr-1" />
+                        Pending
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
               </TableBody>
             </Table>
           </div>

@@ -2,8 +2,10 @@ import express from "express";
 import { z } from "zod";
 import { insertNotificationSchema } from "@shared/schema";
 import { storage } from '../storage';
-import { sendSMS, isTwilioConfigured } from '../services/twilio';
+import { sendSMS, isTwilioConfigured, getTwilioClient } from '../services/twilio';
 import * as brevo from '@getbrevo/brevo';
+import { supabaseAuth } from '../middleware/supabase-auth';
+import { requireRole } from '../middleware/auth0-auth';
 
 const router = express.Router();
 
@@ -715,6 +717,36 @@ async function markAllNotificationsAsRead(userId: number): Promise<void> {
     }
   }
 }
+
+// GET /api/notifications/twilio-status - Check if Twilio account is in trial mode
+router.get(
+  "/twilio-status",
+  supabaseAuth,
+  requireRole(['schoolAdmin', 'admin', 'superAdmin']),
+  async (req: any, res) => {
+    try {
+      const configured = await isTwilioConfigured();
+      if (!configured) {
+        return res.json({ configured: false, trial: false });
+      }
+
+      try {
+        const client = await getTwilioClient();
+        // Use the accounts endpoint to list accounts and find trial status
+        const acctList = await client.api.v2010.accounts.list({ limit: 20 });
+        const mainAcct = acctList.find((a: any) => a.type === 'Trial' || a.type === 'Full') || acctList[0];
+        const isTrial = mainAcct?.type === 'Trial';
+        return res.json({ configured: true, trial: isTrial, accountType: mainAcct?.type || 'unknown' });
+      } catch (twilioError) {
+        console.error('[TwilioStatus] Error fetching account info:', twilioError);
+        return res.json({ configured: true, trial: false, error: 'Could not determine account type' });
+      }
+    } catch (error) {
+      console.error('[TwilioStatus] Error:', error);
+      res.status(500).json({ message: "Failed to check Twilio status" });
+    }
+  }
+);
 
 // GET /api/notifications/:id - Get a single notification by ID
 router.get("/:id", async (req, res) => {

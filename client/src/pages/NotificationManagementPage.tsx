@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { 
   Send, 
@@ -114,6 +115,11 @@ export default function NotificationManagementPage() {
   const { data: selectedNotification, isLoading: isLoadingDetails } = useQuery<Notification>({
     queryKey: [`/api/notifications/${selectedNotificationId}`],
     enabled: !!selectedNotificationId,
+  });
+
+  // Fetch Twilio status for trial warning
+  const { data: twilioStatus } = useQuery<{ configured: boolean; trial: boolean; accountType?: string }>({
+    queryKey: ['/api/notifications/twilio-status'],
   });
 
   // Resend notification mutation
@@ -405,6 +411,16 @@ export default function NotificationManagementPage() {
 
   return (
     <div className="container mx-auto p-6 space-y-6">
+      {/* Twilio Trial Warning Banner */}
+      {twilioStatus?.configured && twilioStatus?.trial && (
+        <Alert className="border-yellow-400 bg-yellow-50 text-yellow-800">
+          <AlertCircle className="h-4 w-4 text-yellow-600" />
+          <AlertDescription>
+            <strong>Twilio Trial Account:</strong> Your Twilio account is in trial mode. SMS messages can only be delivered to verified phone numbers. To send to any number, upgrade your Twilio account at <a href="https://www.twilio.com/console" target="_blank" rel="noopener noreferrer" className="underline font-medium">twilio.com/console</a>.
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -1059,6 +1075,19 @@ function NotificationComposeDialog({
                       Search and select specific users to notify
                     </p>
                   )}
+                  {(type === 'sms' || type === 'all') && selectedUsers.length > 0 && (() => {
+                    const missingPhone = selectedUsers.filter(u => !u.phone);
+                    if (missingPhone.length === 0) return null;
+                    return (
+                      <Alert variant="destructive" className="mt-2">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertDescription>
+                          <strong>Missing phone numbers:</strong> The following selected recipients have no phone number on file and will not receive SMS messages:{' '}
+                          {missingPhone.map(u => u.name || u.email).join(', ')}.
+                        </AlertDescription>
+                      </Alert>
+                    );
+                  })()}
                 </div>
               </TabsContent>
 
