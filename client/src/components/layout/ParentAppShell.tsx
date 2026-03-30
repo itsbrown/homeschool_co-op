@@ -1,15 +1,19 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "@/components/SupabaseProvider";
-import { useRole } from "@/contexts/RoleContext";
+import { useRole, silentRoleContextUpdate } from "@/contexts/RoleContext";
 import { CartProvider } from "@/contexts/CartContext";
+import { StaffGuideProvider } from "@/contexts/StaffGuideContext";
+import { LayoutShellProvider } from "@/contexts/LayoutShellContext";
 import ParentSidebar from "./ParentSidebar";
 import CartDrawer from "@/components/cart/CartDrawer";
 import CartButton from "@/components/cart/CartButton";
 import RoleSwitcher from "@/components/RoleSwitcher.tsx";
+import StaffGuideModal from "@/components/StaffGuideModal";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetTrigger, SheetClose } from "@/components/ui/sheet";
-import { LogOut, Menu, User, Bell, X, Home, Users, BookOpen, Calendar, DollarSign, Bot, Brain, Settings, FolderOpen, Sparkles, GraduationCap, Clock, ClipboardList, Building2, Shield } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { LogOut, Menu, User, Bell, Home, Users, BookOpen, Calendar, DollarSign, Settings, FolderOpen, Sparkles, GraduationCap, Clock, ClipboardList, Building2, Shield, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { Link, useLocation } from "wouter";
@@ -25,79 +29,83 @@ interface Notification {
   recipientStatus?: string;
 }
 
-// Mobile menu items
 const mobileNavigationItems = [
-  {
-    href: "/dashboard",
-    title: "ASA Assistant",
-    icon: Sparkles,
-  },
-  {
-    href: "/parent/home",
-    title: "Dashboard",
-    icon: Home,
-  },
-  {
-    href: "/notifications",
-    title: "Notifications",
-    icon: Bell,
-  },
-  {
-    href: "/children",
-    title: "My Children",
-    icon: Users,
-  },
-  {
-    href: "/programs",
-    title: "Programs & Classes",
-    icon: BookOpen,
-  },
-  {
-    href: "/schedule",
-    title: "Family Schedule",
-    icon: Calendar,
-  },
-  {
-    href: "/payments",
-    title: "Payments",
-    icon: DollarSign,
-  },
-  {
-    href: "/parent/documents",
-    title: "My Documents",
-    icon: FolderOpen,
-  },
-  // Hidden: AI features not yet ready for production
-  // {
-  //   href: "/enrollment-assistant",
-  //   title: "AI Enrollment Assistant",
-  //   icon: Bot,
-  // },
-  // {
-  //   href: "/ai-insights",
-  //   title: "AI Insights",
-  //   icon: Brain,
-  // },
-  {
-    href: "/settings",
-    title: "Settings",
-    icon: Settings,
-  },
+  { href: "/dashboard", title: "ASA Assistant", icon: Sparkles },
+  { href: "/parent/home", title: "Dashboard", icon: Home },
+  { href: "/notifications", title: "Notifications", icon: Bell },
+  { href: "/children", title: "My Children", icon: Users },
+  { href: "/programs", title: "Programs & Classes", icon: BookOpen },
+  { href: "/schedule", title: "Family Schedule", icon: Calendar },
+  { href: "/payments", title: "Payments", icon: DollarSign },
+  { href: "/parent/documents", title: "My Documents", icon: FolderOpen },
+  { href: "/settings", title: "Settings", icon: Settings },
+];
+
+const educatorMobileItems = [
+  { href: "/educator/dashboard", title: "Educator Dashboard", icon: GraduationCap },
+  { href: "/educator/my-classes", title: "My Classes", icon: BookOpen },
+  { href: "/educator/students", title: "My Students", icon: Users },
+  { href: "/educator/weekly-calendar", title: "Schedule", icon: Calendar },
+  { href: "/educator/attendance", title: "Attendance", icon: ClipboardList },
+  { href: "/educator/my-hours", title: "My Hours", icon: Clock },
+];
+
+const schoolAdminMobileItems = [
+  { href: "/school-admin", title: "Admin Dashboard", icon: Building2 },
+  { href: "/school-admin/attendance", title: "Attendance", icon: ClipboardList },
+  { href: "/school-admin/assessments", title: "Assessments", icon: BookOpen },
 ];
 
 export default function ParentAppShell({ children }: ParentAppShellProps) {
   const { user, signOut, isAuthenticated } = useAuth();
-  const { activeRole, hasRole } = useRole();
+  const { activeRole, availableRoles, hasRole } = useRole();
   const [location] = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userSchool, setUserSchool] = useState<any>(null);
 
-  // Fetch notifications to get unread count
+  const hasEducatorRole = hasRole(['educator', 'teacher', 'mentor']);
+  const hasSchoolAdminRole = hasRole(['schoolAdmin', 'director']);
+  const hasParentRole = hasRole('parent');
+
+  const isMultiRoleUser = hasParentRole && (hasEducatorRole || hasSchoolAdminRole || availableRoles.length > 1);
+
+  const isEducatorRoute = location.startsWith('/educator/') || location === '/educator';
+  const isSchoolAdminRoute = location.startsWith('/school-admin/') || location === '/school-admin';
+
+  const [educatorSectionOpen, setEducatorSectionOpen] = useState(isEducatorRoute);
+  const [adminSectionOpen, setAdminSectionOpen] = useState(isSchoolAdminRoute);
+
+  useEffect(() => {
+    if (isEducatorRoute) setEducatorSectionOpen(true);
+    if (isSchoolAdminRoute) setAdminSectionOpen(true);
+  }, [isEducatorRoute, isSchoolAdminRoute]);
+
+  useEffect(() => {
+    if (isEducatorRoute) {
+      const educatorRole = availableRoles.find(r =>
+        ['educator', 'teacher', 'mentor'].includes(r.role.toLowerCase())
+      );
+      silentRoleContextUpdate(educatorRole ? educatorRole.role : 'educator');
+    } else if (isSchoolAdminRoute) {
+      const adminRole = availableRoles.find(r =>
+        ['schooladmin', 'director'].includes(r.role.toLowerCase())
+      );
+      silentRoleContextUpdate(adminRole ? adminRole.role : 'schoolAdmin');
+    } else if (
+      location.startsWith('/parent/') ||
+      ['/dashboard', '/children', '/payments', '/schedule', '/notifications', '/settings'].some(
+        p => location === p || location.startsWith(p + '/')
+      )
+    ) {
+      silentRoleContextUpdate('parent');
+    }
+  }, [location, availableRoles]);
+
   const { data: notifications = [] } = useQuery<Notification[]>({
     queryKey: ['/api/notifications'],
     enabled: !!user?.id,
   });
-  
+
   const unreadNotifications = notifications.filter(n => n.recipientStatus !== "read").length;
 
   const handleLogout = async () => {
@@ -105,7 +113,6 @@ export default function ParentAppShell({ children }: ParentAppShellProps) {
     await signOut();
   };
 
-  // Fetch user's associated school
   useEffect(() => {
     if (user?.email) {
       const fetchUserSchool = async () => {
@@ -118,36 +125,26 @@ export default function ParentAppShell({ children }: ParentAppShellProps) {
               return;
             }
           }
-          
-          console.log('No school association found for user');
-          // Use a generic placeholder without hardcoded school ID
-          setUserSchool({
-            name: "Learning Platform",
-            logo: null
-          });
+          setUserSchool({ name: "Learning Platform", logo: null });
         } catch (error) {
-          console.log('Error fetching school association:', error);
-          setUserSchool({
-            name: "Learning Platform",
-            logo: null
-          });
+          setUserSchool({ name: "Learning Platform", logo: null });
         }
       };
       fetchUserSchool();
     }
   }, [user?.email]);
 
-  // Redirect to login if not authenticated
   const [, setLocation] = useLocation();
-  
+
   useEffect(() => {
     if (!isAuthenticated) {
-      console.log('🔒 ParentAppShell: User not authenticated, redirecting to login');
       setLocation('/login');
     }
   }, [isAuthenticated, setLocation]);
 
   return (
+    <LayoutShellProvider>
+    <StaffGuideProvider>
     <CartProvider>
       <div className="min-h-screen bg-gray-50">
         {/* Desktop sidebar */}
@@ -155,12 +152,10 @@ export default function ParentAppShell({ children }: ParentAppShellProps) {
           <ParentSidebar />
         </div>
 
-        {/* Main content area */}
         <div className="lg:pl-64">
           {/* Mobile header */}
           <div className="lg:hidden">
             <div className="flex items-center justify-between bg-white px-4 py-4 shadow-sm border-b">
-              {/* Mobile Menu Trigger */}
               <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
                 <SheetTrigger asChild>
                   <Button
@@ -172,32 +167,27 @@ export default function ParentAppShell({ children }: ParentAppShellProps) {
                     <Menu className="h-6 w-6" />
                   </Button>
                 </SheetTrigger>
-                
+
                 <SheetContent side="left" className="w-[300px] p-0">
                   <div className="flex h-full flex-col">
-                    {/* Mobile Menu Header */}
                     <div className="flex items-center gap-3 border-b p-4">
                       {userSchool?.logo && (
                         <img
                           src={userSchool.logo}
                           alt={`${userSchool.name} Logo`}
                           className="h-10 w-10 object-contain"
-                          onError={(e) => {
-                            e.currentTarget.style.display = 'none';
-                          }}
+                          onError={(e) => { e.currentTarget.style.display = 'none'; }}
                         />
                       )}
                       <h2 className="text-lg font-semibold">{userSchool?.name || 'American Seekers Academy'}</h2>
                     </div>
 
-                    {/* Mobile Menu Navigation */}
                     <ScrollArea className="flex-1 px-3 py-4">
                       <nav className="space-y-1">
                         {mobileNavigationItems.map((item) => {
                           const Icon = item.icon;
                           const isActive = location === item.href;
                           const showBadge = item.href === "/notifications" && unreadNotifications > 0;
-                          
                           return (
                             <SheetClose asChild key={item.href}>
                               <Link
@@ -213,10 +203,7 @@ export default function ParentAppShell({ children }: ParentAppShellProps) {
                                 <Icon className="h-5 w-5" />
                                 <span className="flex-1">{item.title}</span>
                                 {showBadge && (
-                                  <Badge 
-                                    variant="destructive" 
-                                    className="h-5 min-w-5 rounded-full px-1.5 text-[10px]"
-                                  >
+                                  <Badge variant="destructive" className="h-5 min-w-5 rounded-full px-1.5 text-[10px]">
                                     {unreadNotifications > 9 ? '9+' : unreadNotifications}
                                   </Badge>
                                 )}
@@ -225,71 +212,88 @@ export default function ParentAppShell({ children }: ParentAppShellProps) {
                           );
                         })}
 
-                        {hasRole(['educator', 'teacher', 'mentor']) && (
-                          <>
-                            <div className="pt-3 pb-1 px-3">
-                              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Educator</p>
-                            </div>
-                            {[
-                              { href: "/educator/dashboard", title: "Educator Dashboard", icon: GraduationCap },
-                              { href: "/educator/my-classes", title: "My Classes", icon: BookOpen },
-                              { href: "/educator/students", title: "My Students", icon: Users },
-                              { href: "/educator/weekly-calendar", title: "Schedule", icon: Calendar },
-                              { href: "/educator/attendance", title: "Attendance", icon: ClipboardList },
-                              { href: "/educator/my-hours", title: "My Hours", icon: Clock },
-                            ].map((item) => {
-                              const Icon = item.icon;
-                              const isActive = location === item.href;
-                              return (
-                                <SheetClose asChild key={item.href}>
-                                  <Link
-                                    href={item.href}
-                                    className={cn(
-                                      "flex items-center gap-3 rounded-lg px-3 py-3 pl-6 text-base font-medium transition-colors",
-                                      isActive
-                                        ? "bg-primary text-primary-foreground"
-                                        : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                                    )}
-                                  >
-                                    <Icon className="h-5 w-5" />
-                                    <span className="flex-1">{item.title}</span>
-                                  </Link>
-                                </SheetClose>
-                              );
-                            })}
-                          </>
+                        {hasEducatorRole && (
+                          <Collapsible open={educatorSectionOpen} onOpenChange={setEducatorSectionOpen}>
+                            <CollapsibleTrigger className={cn(
+                              "flex w-full items-center justify-between rounded-lg px-3 py-3 text-base font-medium transition-colors",
+                              educatorSectionOpen
+                                ? "bg-accent text-accent-foreground"
+                                : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                            )}>
+                              <div className="flex items-center gap-3">
+                                <GraduationCap className="h-5 w-5" />
+                                <span>Educator</span>
+                              </div>
+                              <ChevronDown className={cn(
+                                "h-4 w-4 transition-transform duration-200",
+                                educatorSectionOpen && "rotate-180"
+                              )} />
+                            </CollapsibleTrigger>
+                            <CollapsibleContent className="mt-1 space-y-1 pl-4">
+                              {educatorMobileItems.map((item) => {
+                                const Icon = item.icon;
+                                const isActive = location === item.href || location.startsWith(item.href + '/');
+                                return (
+                                  <SheetClose asChild key={item.href}>
+                                    <Link
+                                      href={item.href}
+                                      className={cn(
+                                        "flex items-center gap-3 rounded-lg px-3 py-2.5 text-base font-medium transition-colors",
+                                        isActive
+                                          ? "bg-accent text-accent-foreground"
+                                          : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                                      )}
+                                    >
+                                      <Icon className="h-5 w-5" />
+                                      <span className="flex-1">{item.title}</span>
+                                    </Link>
+                                  </SheetClose>
+                                );
+                              })}
+                            </CollapsibleContent>
+                          </Collapsible>
                         )}
 
-                        {hasRole(['schoolAdmin', 'director']) && (
-                          <>
-                            <div className="pt-3 pb-1 px-3">
-                              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">School Admin</p>
-                            </div>
-                            {[
-                              { href: "/school-admin", title: "Admin Dashboard", icon: Building2 },
-                              { href: "/school-admin/attendance", title: "Attendance", icon: ClipboardList },
-                              { href: "/school-admin/assessments", title: "Assessments", icon: BookOpen },
-                            ].map((item) => {
-                              const Icon = item.icon;
-                              const isActive = location === item.href;
-                              return (
-                                <SheetClose asChild key={item.href}>
-                                  <Link
-                                    href={item.href}
-                                    className={cn(
-                                      "flex items-center gap-3 rounded-lg px-3 py-3 pl-6 text-base font-medium transition-colors",
-                                      isActive
-                                        ? "bg-primary text-primary-foreground"
-                                        : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                                    )}
-                                  >
-                                    <Icon className="h-5 w-5" />
-                                    <span className="flex-1">{item.title}</span>
-                                  </Link>
-                                </SheetClose>
-                              );
-                            })}
-                          </>
+                        {hasSchoolAdminRole && (
+                          <Collapsible open={adminSectionOpen} onOpenChange={setAdminSectionOpen}>
+                            <CollapsibleTrigger className={cn(
+                              "flex w-full items-center justify-between rounded-lg px-3 py-3 text-base font-medium transition-colors",
+                              adminSectionOpen
+                                ? "bg-accent text-accent-foreground"
+                                : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                            )}>
+                              <div className="flex items-center gap-3">
+                                <Building2 className="h-5 w-5" />
+                                <span>School Admin</span>
+                              </div>
+                              <ChevronDown className={cn(
+                                "h-4 w-4 transition-transform duration-200",
+                                adminSectionOpen && "rotate-180"
+                              )} />
+                            </CollapsibleTrigger>
+                            <CollapsibleContent className="mt-1 space-y-1 pl-4">
+                              {schoolAdminMobileItems.map((item) => {
+                                const Icon = item.icon;
+                                const isActive = location === item.href || location.startsWith(item.href + '/');
+                                return (
+                                  <SheetClose asChild key={item.href}>
+                                    <Link
+                                      href={item.href}
+                                      className={cn(
+                                        "flex items-center gap-3 rounded-lg px-3 py-2.5 text-base font-medium transition-colors",
+                                        isActive
+                                          ? "bg-accent text-accent-foreground"
+                                          : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                                      )}
+                                    >
+                                      <Icon className="h-5 w-5" />
+                                      <span className="flex-1">{item.title}</span>
+                                    </Link>
+                                  </SheetClose>
+                                );
+                              })}
+                            </CollapsibleContent>
+                          </Collapsible>
                         )}
 
                         {hasRole('superadmin') && (
@@ -311,7 +315,6 @@ export default function ParentAppShell({ children }: ParentAppShellProps) {
                       </nav>
                     </ScrollArea>
 
-                    {/* Mobile Menu Footer */}
                     <div className="border-t p-4">
                       <div className="flex items-center gap-3 mb-4">
                         <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
@@ -322,12 +325,13 @@ export default function ParentAppShell({ children }: ParentAppShellProps) {
                           <p className="text-xs text-muted-foreground">Parent Account</p>
                         </div>
                       </div>
-                      
-                      {/* Role Switcher for multi-role users */}
-                      <div className="mb-3">
-                        <RoleSwitcher />
-                      </div>
-                      
+
+                      {!isMultiRoleUser && (
+                        <div className="mb-3">
+                          <RoleSwitcher />
+                        </div>
+                      )}
+
                       <Button
                         variant="outline"
                         className="w-full"
@@ -342,31 +346,26 @@ export default function ParentAppShell({ children }: ParentAppShellProps) {
                 </SheetContent>
               </Sheet>
 
-              {/* Logo - Center on Mobile */}
               <div className="flex-1 flex items-center justify-center px-2">
                 {userSchool?.logo ? (
                   <img
                     src={userSchool.logo}
                     alt={`${userSchool.name} Logo`}
                     className="h-32 w-auto max-w-[280px] object-contain"
-                    onError={(e) => {
-                      e.currentTarget.style.display = 'none';
-                    }}
+                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
                   />
                 ) : (
                   <h1 className="text-lg font-semibold">{userSchool?.name || 'American Seekers Academy'}</h1>
                 )}
               </div>
 
-              {/* Right Actions */}
               <div className="flex items-center gap-2">
-                {/* Notification Bell */}
                 <Link href="/notifications">
                   <Button variant="ghost" size="icon" className="relative h-10 w-10" data-testid="button-notifications-mobile">
                     <Bell className="h-5 w-5" />
                     {unreadNotifications > 0 && (
-                      <Badge 
-                        variant="destructive" 
+                      <Badge
+                        variant="destructive"
                         className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-[10px]"
                         data-testid="badge-notification-count-mobile"
                       >
@@ -375,27 +374,23 @@ export default function ParentAppShell({ children }: ParentAppShellProps) {
                     )}
                   </Button>
                 </Link>
-                
-                {/* Cart Button */}
                 <CartButton key="cart-button" />
               </div>
             </div>
           </div>
 
-          {/* Desktop header with cart */}
+          {/* Desktop header */}
           <div className="hidden lg:block">
             <div className="flex items-center justify-end bg-white px-6 py-3 shadow-sm border-b">
               <div className="flex items-center gap-4">
-                {/* Role Switcher */}
-                <RoleSwitcher />
-                
-                {/* Notification Bell */}
+                {!isMultiRoleUser && <RoleSwitcher />}
+
                 <Link href="/notifications">
                   <Button variant="ghost" size="icon" className="relative" data-testid="button-notifications-desktop">
                     <Bell className="h-5 w-5" />
                     {unreadNotifications > 0 && (
-                      <Badge 
-                        variant="destructive" 
+                      <Badge
+                        variant="destructive"
                         className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs"
                         data-testid="badge-notification-count-desktop"
                       >
@@ -404,7 +399,6 @@ export default function ParentAppShell({ children }: ParentAppShellProps) {
                     )}
                   </Button>
                 </Link>
-                {/* Cart Button */}
                 <CartButton key="cart-button" />
                 {isAuthenticated && user && (
                   <div className="flex items-center gap-3">
@@ -417,11 +411,7 @@ export default function ParentAppShell({ children }: ParentAppShellProps) {
                     <div className="rounded-full bg-primary/10 p-2">
                       <User className="h-4 w-4 text-primary" />
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={handleLogout}
-                    >
+                    <Button variant="ghost" size="sm" onClick={handleLogout}>
                       <LogOut className="h-4 w-4" />
                     </Button>
                   </div>
@@ -430,15 +420,16 @@ export default function ParentAppShell({ children }: ParentAppShellProps) {
             </div>
           </div>
 
-          {/* Page content */}
           <main className="flex-1">
             {children}
           </main>
         </div>
 
-        {/* Cart drawer */}
         <CartDrawer />
+        <StaffGuideModal />
       </div>
     </CartProvider>
+    </StaffGuideProvider>
+    </LayoutShellProvider>
   );
 }

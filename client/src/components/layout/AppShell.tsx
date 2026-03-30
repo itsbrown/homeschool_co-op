@@ -1,17 +1,27 @@
 import { ReactNode, useState } from "react";
 import Sidebar from "./Sidebar";
 import Header from "./Header";
+import { useLayoutShell } from "@/contexts/LayoutShellContext";
 
 interface AppShellProps {
   children: ReactNode;
 }
 
 export default function AppShell({ children }: AppShellProps) {
+  const { hasShell } = useLayoutShell();
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const toggleSidebar = () => {
     setSidebarOpen(!sidebarOpen);
   };
+
+  if (hasShell) {
+    return (
+      <main className="flex-1 overflow-auto bg-background p-6">
+        {children}
+      </main>
+    );
+  }
 
   return (
     <div className="flex h-screen overflow-hidden">

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
+import { useLayoutShell } from "@/contexts/LayoutShellContext";
 
 interface SchoolAdminLayoutProps {
   children: React.ReactNode;
@@ -13,11 +14,25 @@ interface SchoolAdminLayoutProps {
 }
 
 export default function SchoolAdminLayout({ children, pageTitle }: SchoolAdminLayoutProps) {
+  const { hasShell } = useLayoutShell();
   const { data: notifications = [] } = useQuery<any[]>({
     queryKey: ['/api/notifications'],
   });
   
   const unreadNotifications = notifications.filter((n: any) => !n.read).length;
+
+  if (hasShell) {
+    return (
+      <div className="flex flex-col min-h-full">
+        <div className="bg-white shadow-sm border-b px-4 py-3">
+          <h1 className="text-2xl font-semibold text-gray-800">{pageTitle}</h1>
+        </div>
+        <main className="flex-1 p-4 bg-gray-50">
+          {children}
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen bg-gray-100">

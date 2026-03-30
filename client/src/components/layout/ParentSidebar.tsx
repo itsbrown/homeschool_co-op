@@ -23,14 +23,29 @@ import {
   Clock,
   ClipboardList,
   Building2,
+  ChevronDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { useAuth } from "@/components/SupabaseProvider";
 import { useRole } from "@/contexts/RoleContext";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+
+const getRoleLabel = (role: string): string => {
+  const lowerRole = role?.toLowerCase() || '';
+  if (lowerRole === 'parent') return 'Parent Account';
+  if (['educator', 'mentor', 'teacher'].includes(lowerRole)) return 'Educator';
+  if (['schooladmin', 'director'].includes(lowerRole)) return 'School Administrator';
+  if (lowerRole === 'superadmin') return 'Super Admin';
+  return role || 'User';
+};
 
 interface SidebarNavProps extends React.HTMLAttributes<HTMLElement> {
   items: {
@@ -62,13 +77,17 @@ export function SidebarNav({ className, items, expandedSections, onToggleExpande
     >
       {items.map((item) => {
         if (item.isSectionHeader) {
+          const isOpen = !!expandedSections[item.title];
           return (
-            <div key={item.title}>
-              <button
-                onClick={() => onToggleExpanded(item.title)}
+            <Collapsible
+              key={item.title}
+              open={isOpen}
+              onOpenChange={() => onToggleExpanded(item.title)}
+            >
+              <CollapsibleTrigger
                 className={cn(
                   "group flex w-full items-center rounded-md px-3 py-2.5 font-medium hover:bg-accent hover:text-accent-foreground",
-                  expandedSections[item.title]
+                  isOpen
                     ? "bg-accent text-accent-foreground"
                     : "text-muted-foreground",
                   "justify-between"
@@ -78,30 +97,33 @@ export function SidebarNav({ className, items, expandedSections, onToggleExpande
                   <div className="mr-2 h-5 w-5">{item.icon}</div>
                   <span>{item.title}</span>
                 </div>
-                <span>{expandedSections[item.title] ? "-" : "+"}</span>
-              </button>
-              {expandedSections[item.title] && item.subItems && (
-                <div className="space-y-1 pl-4">
-                  {item.subItems.map((subItem) => (
-                    <Link
-                      key={subItem.href}
-                      href={subItem.href}
-                      className={cn(
-                        "group flex items-center rounded-md px-3 py-2.5 font-medium hover:bg-accent hover:text-accent-foreground",
-                        location === subItem.href
-                          ? "bg-accent text-accent-foreground"
-                          : "text-muted-foreground",
-                      )}
-                    >
-                      <div className="flex items-center">
-                        <div className="mr-2 h-5 w-5">{subItem.icon}</div>
-                        <span>{subItem.title}</span>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              )}
-            </div>
+                <ChevronDown
+                  className={cn(
+                    "h-4 w-4 transition-transform duration-200",
+                    isOpen && "rotate-180"
+                  )}
+                />
+              </CollapsibleTrigger>
+              <CollapsibleContent className="space-y-1 pl-4 mt-1">
+                {item.subItems?.map((subItem) => (
+                  <Link
+                    key={subItem.href}
+                    href={subItem.href}
+                    className={cn(
+                      "group flex items-center rounded-md px-3 py-2.5 font-medium hover:bg-accent hover:text-accent-foreground",
+                      location === subItem.href || location.startsWith(subItem.href + '/')
+                        ? "bg-accent text-accent-foreground"
+                        : "text-muted-foreground",
+                    )}
+                  >
+                    <div className="flex items-center">
+                      <div className="mr-2 h-5 w-5">{subItem.icon}</div>
+                      <span>{subItem.title}</span>
+                    </div>
+                  </Link>
+                ))}
+              </CollapsibleContent>
+            </Collapsible>
           );
         } else {
           return (
@@ -140,16 +162,31 @@ export default function ParentSidebar() {
   const hasEducatorRole = hasRole(['educator', 'teacher', 'mentor']);
   const hasSchoolAdminRole = hasRole(['schoolAdmin', 'director']);
   const [isOpen, setIsOpen] = React.useState(false);
-  const [location, setLocation] = useLocation();
-  const [expandedSections, setExpandedSections] = React.useState<{ [key: string]: boolean }>({});
+  const [location] = useLocation();
+
+  const isEducatorRoute = location.startsWith('/educator/') || location === '/educator';
+  const isSchoolAdminRoute = location.startsWith('/school-admin/') || location === '/school-admin';
+
+  const [expandedSections, setExpandedSections] = React.useState<{ [key: string]: boolean }>(() => ({
+    'Educator': isEducatorRoute,
+    'School Admin': isSchoolAdminRoute,
+  }));
   const [logoLoadFailed, setLogoLoadFailed] = React.useState(false);
   const [mobileLogoLoadFailed, setMobileLogoLoadFailed] = React.useState(false);
 
-  // Fetch user's associated school for branding
+  React.useEffect(() => {
+    if (isEducatorRoute) {
+      setExpandedSections(prev => ({ ...prev, 'Educator': true }));
+    }
+    if (isSchoolAdminRoute) {
+      setExpandedSections(prev => ({ ...prev, 'School Admin': true }));
+    }
+  }, [isEducatorRoute, isSchoolAdminRoute]);
+
   const { data: schoolData } = useQuery({
     queryKey: [`/api/school-parents/school/${user?.email}`],
     enabled: !!user?.email,
-    staleTime: 300000, // Cache for 5 minutes
+    staleTime: 300000,
     queryFn: async () => {
       try {
         const response = await apiRequest("GET", `/api/school-parents/school/${user?.email}`);
@@ -159,7 +196,6 @@ export default function ParentSidebar() {
             return { success: true, school: result.school };
           }
         }
-        // No school association - return generic placeholder
         return {
           success: true,
           school: {
@@ -179,7 +215,6 @@ export default function ParentSidebar() {
     }
   });
 
-  // Reset logo load failed states when school logo changes
   React.useEffect(() => {
     if (schoolData?.school?.logo) {
       setLogoLoadFailed(false);
@@ -247,19 +282,6 @@ export default function ParentSidebar() {
       icon: <BookOpen className="h-5 w-5" />,
       description: "View reading assessments and Lexile scores"
     },
-    // TODO: Future feature - AI Enrollment Assistant
-    // {
-    //   href: "/enrollment-assistant",
-    //   title: "AI Enrollment Assistant",
-    //   icon: <Bot className="h-5 w-5" />,
-    // },
-    // TODO: Future feature - AI Insights
-    // {
-    //   href: "/ai-insights",
-    //   title: "AI Insights",
-    //   icon: <Brain className="h-5 w-5" />,
-    //   badge: "Beta"
-    // },
     {
       href: "/settings",
       title: "Settings",
@@ -337,6 +359,8 @@ export default function ParentSidebar() {
     }] : []),
   ];
 
+  const roleLabel = getRoleLabel(activeRole);
+
   return (
     <>
       {/* Mobile sidebar trigger */}
@@ -394,7 +418,7 @@ export default function ParentSidebar() {
                   <div className="min-w-0 flex-1">
                     <p className="font-medium truncate">{user?.email}</p>
                     <p className="text-xs text-muted-foreground">
-                      {activeRole === 'parent' ? 'Parent Account' : 'School Administrator'}
+                      {roleLabel}
                     </p>
                   </div>
                 </div>
@@ -455,7 +479,7 @@ export default function ParentSidebar() {
                 <div className="min-w-0 flex-1">
                   <p className="font-medium truncate">{user?.email}</p>
                   <p className="text-xs text-muted-foreground">
-                    {activeRole === 'parent' ? 'Parent Account' : 'School Administrator'}
+                    {roleLabel}
                   </p>
                 </div>
               </div>

@@ -40,6 +40,10 @@ export const useRole = () => {
   return context;
 };
 
+export const silentRoleContextUpdate = (roleName: string): void => {
+  localStorage.setItem('activeRole', roleName);
+};
+
 interface RoleProviderProps {
   children: React.ReactNode;
 }

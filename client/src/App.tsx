@@ -225,6 +225,23 @@ const CategoriesManagementPage = lazy(() => import("./pages/schools/CategoriesMa
 const NotificationManagementPage = lazy(() => import("@/pages/NotificationManagementPage"));
 const EnrollmentsAdminPage = lazy(() => import("./pages/schools/EnrollmentsAdminPage"));
 
+function EducatorShellWrapper({ children }: { children: React.ReactNode }) {
+  const { hasRole } = useRole();
+  if (hasRole('parent')) {
+    return <ParentAppShell>{children}</ParentAppShell>;
+  }
+  return <EducatorAppShell>{children}</EducatorAppShell>;
+}
+
+function SchoolAdminShellWrapper({ children }: { children: React.ReactNode }) {
+  const { hasRole } = useRole();
+  if (hasRole('parent')) {
+    return <ParentAppShell>{children}</ParentAppShell>;
+  }
+  return <>{children}</>;
+}
+
+
 function DashboardRouter() {
   const { user } = useAuth();
   const { activeRole, showRoleSelection, setActiveRole } = useRole();
@@ -543,24 +560,25 @@ function Router() {
       <Route path="/parent/assessments" component={MyAssessmentsPage} />
       <Route path="/parent/weekly-schedule" component={WeeklySchedulePage} />
 
-      {/* Educator routes - using EducatorAppShell for dedicated navigation */}
-      <Route path="/educator" component={() => <EducatorAppShell><EducatorDashboardPage /></EducatorAppShell>} />
-      <Route path="/educator/dashboard" component={() => <EducatorAppShell><EducatorDashboardPage /></EducatorAppShell>} />
-      <Route path="/educator/my-classes" component={() => <EducatorAppShell><MyClassesPage /></EducatorAppShell>} />
-      <Route path="/educator/session/:id" component={() => <EducatorAppShell><ActiveSessionPage /></EducatorAppShell>} />
-      <Route path="/educator/weekly-calendar" component={() => <EducatorAppShell><WeeklyCalendarPage /></EducatorAppShell>} />
-      <Route path="/educator/my-hours" component={() => <EducatorAppShell><MyHoursPage /></EducatorAppShell>} />
-      <Route path="/educator/classes" component={() => <EducatorAppShell><EducatorClassesPage /></EducatorAppShell>} />
-      <Route path="/educator/classes/:id" component={() => <EducatorAppShell><EducatorClassDetailsPage /></EducatorAppShell>} />
-      <Route path="/educator/classes/:id/start-session" component={() => <EducatorAppShell><StartSessionPage /></EducatorAppShell>} />
-      <Route path="/educator/students" component={() => <EducatorAppShell><EducatorStudentsPage /></EducatorAppShell>} />
-      <Route path="/educator/students/:id" component={() => <EducatorAppShell><EducatorStudentDetailPage /></EducatorAppShell>} />
-      <Route path="/educator/schedule" component={() => <EducatorAppShell><EducatorSchedulePage /></EducatorAppShell>} />
-      <Route path="/educator/settings" component={() => <EducatorAppShell><EducatorSettingsPage /></EducatorAppShell>} />
-      <Route path="/educator/notifications" component={() => <EducatorAppShell><EducatorNotificationsPage /></EducatorAppShell>} />
-      <Route path="/educator/assessments" component={() => <EducatorAppShell><EducatorAssessmentsPage /></EducatorAppShell>} />
-      <Route path="/educator/week-plans" component={() => <EducatorAppShell><EducatorWeeklySchedulePage /></EducatorAppShell>} />
-      <Route path="/educator/staff-guide" component={() => <EducatorAppShell><StaffGuidePage /></EducatorAppShell>} />
+      {/* Educator routes - use ParentAppShell for multi-role users (parent + educator), EducatorAppShell for pure educators */}
+      <Route path="/educator" component={() => <EducatorShellWrapper><EducatorDashboardPage /></EducatorShellWrapper>} />
+      <Route path="/educator/dashboard" component={() => <EducatorShellWrapper><EducatorDashboardPage /></EducatorShellWrapper>} />
+      <Route path="/educator/my-classes" component={() => <EducatorShellWrapper><MyClassesPage /></EducatorShellWrapper>} />
+      <Route path="/educator/session/:id" component={() => <EducatorShellWrapper><ActiveSessionPage /></EducatorShellWrapper>} />
+      <Route path="/educator/weekly-calendar" component={() => <EducatorShellWrapper><WeeklyCalendarPage /></EducatorShellWrapper>} />
+      <Route path="/educator/my-hours" component={() => <EducatorShellWrapper><MyHoursPage /></EducatorShellWrapper>} />
+      <Route path="/educator/attendance" component={() => <EducatorShellWrapper><AttendanceManagementPage /></EducatorShellWrapper>} />
+      <Route path="/educator/classes" component={() => <EducatorShellWrapper><EducatorClassesPage /></EducatorShellWrapper>} />
+      <Route path="/educator/classes/:id" component={() => <EducatorShellWrapper><EducatorClassDetailsPage /></EducatorShellWrapper>} />
+      <Route path="/educator/classes/:id/start-session" component={() => <EducatorShellWrapper><StartSessionPage /></EducatorShellWrapper>} />
+      <Route path="/educator/students" component={() => <EducatorShellWrapper><EducatorStudentsPage /></EducatorShellWrapper>} />
+      <Route path="/educator/students/:id" component={() => <EducatorShellWrapper><EducatorStudentDetailPage /></EducatorShellWrapper>} />
+      <Route path="/educator/schedule" component={() => <EducatorShellWrapper><EducatorSchedulePage /></EducatorShellWrapper>} />
+      <Route path="/educator/settings" component={() => <EducatorShellWrapper><EducatorSettingsPage /></EducatorShellWrapper>} />
+      <Route path="/educator/notifications" component={() => <EducatorShellWrapper><EducatorNotificationsPage /></EducatorShellWrapper>} />
+      <Route path="/educator/assessments" component={() => <EducatorShellWrapper><EducatorAssessmentsPage /></EducatorShellWrapper>} />
+      <Route path="/educator/week-plans" component={() => <EducatorShellWrapper><EducatorWeeklySchedulePage /></EducatorShellWrapper>} />
+      <Route path="/educator/staff-guide" component={() => <EducatorShellWrapper><StaffGuidePage /></EducatorShellWrapper>} />
       
       
       <Route path="/children" component={ChildrenPage} />
@@ -622,21 +640,22 @@ function Router() {
       <Route path="/schools/educators" component={EducatorManagementPage} />
       <Route path="/schools/educators/:educatorId" component={EducatorManagementPage} />
       <Route path="/schools/staff/positions" component={StaffPositionsPage} />
-      <Route path="/school-admin/staff-positions" component={StaffPositionsPage} />
-      <Route path="/school-admin/children" component={StudentsPage} />
-      <Route path="/school-admin/forms" component={FormBuilderPage} />
-      <Route path="/school-admin/forms/:id/edit" component={FormEditorPage} />
-      <Route path="/school-admin/forms/:id/preview" component={PreviewFormPage} />
-      <Route path="/school-admin/forms/:id/submissions" component={SubmissionsPage} />
-      <Route path="/school-admin/documents" component={DocumentManagementPage} />
-      <Route path="/school-admin/assessments" component={AssessmentManagementPage} />
-      <Route path="/school-admin/attendance" component={AttendanceManagementPage} />
-      <Route path="/school-admin/credits" component={CreditManagementPage} />
-      <Route path="/school-admin/fundraisers" component={FundraiserManagementPage} />
-      <Route path="/school-admin/staff-permissions" component={StaffPermissionsPage} />
-      <Route path="/school-admin/location-enrollments" component={LocationEnrollmentsPage} />
-      <Route path="/school-admin/refunds" component={RefundHistoryPage} />
-      <Route path="/school-admin/financial-reports" component={FinancialReportsPage} />
+      <Route path="/school-admin" component={() => <SchoolAdminShellWrapper><MySchoolPage /></SchoolAdminShellWrapper>} />
+      <Route path="/school-admin/staff-positions" component={() => <SchoolAdminShellWrapper><StaffPositionsPage /></SchoolAdminShellWrapper>} />
+      <Route path="/school-admin/children" component={() => <SchoolAdminShellWrapper><StudentsPage /></SchoolAdminShellWrapper>} />
+      <Route path="/school-admin/forms" component={() => <SchoolAdminShellWrapper><FormBuilderPage /></SchoolAdminShellWrapper>} />
+      <Route path="/school-admin/forms/:id/edit" component={() => <SchoolAdminShellWrapper><FormEditorPage /></SchoolAdminShellWrapper>} />
+      <Route path="/school-admin/forms/:id/preview" component={() => <SchoolAdminShellWrapper><PreviewFormPage /></SchoolAdminShellWrapper>} />
+      <Route path="/school-admin/forms/:id/submissions" component={() => <SchoolAdminShellWrapper><SubmissionsPage /></SchoolAdminShellWrapper>} />
+      <Route path="/school-admin/documents" component={() => <SchoolAdminShellWrapper><DocumentManagementPage /></SchoolAdminShellWrapper>} />
+      <Route path="/school-admin/assessments" component={() => <SchoolAdminShellWrapper><AssessmentManagementPage /></SchoolAdminShellWrapper>} />
+      <Route path="/school-admin/attendance" component={() => <SchoolAdminShellWrapper><AttendanceManagementPage /></SchoolAdminShellWrapper>} />
+      <Route path="/school-admin/credits" component={() => <SchoolAdminShellWrapper><CreditManagementPage /></SchoolAdminShellWrapper>} />
+      <Route path="/school-admin/fundraisers" component={() => <SchoolAdminShellWrapper><FundraiserManagementPage /></SchoolAdminShellWrapper>} />
+      <Route path="/school-admin/staff-permissions" component={() => <SchoolAdminShellWrapper><StaffPermissionsPage /></SchoolAdminShellWrapper>} />
+      <Route path="/school-admin/location-enrollments" component={() => <SchoolAdminShellWrapper><LocationEnrollmentsPage /></SchoolAdminShellWrapper>} />
+      <Route path="/school-admin/refunds" component={() => <SchoolAdminShellWrapper><RefundHistoryPage /></SchoolAdminShellWrapper>} />
+      <Route path="/school-admin/financial-reports" component={() => <SchoolAdminShellWrapper><FinancialReportsPage /></SchoolAdminShellWrapper>} />
       <Route path="/fundraiser/:campaignId/:familySlug">
         {(params) => <FundraiserStorePage campaignId={params?.campaignId || ''} familySlug={params?.familySlug || ''} />}
       </Route>
