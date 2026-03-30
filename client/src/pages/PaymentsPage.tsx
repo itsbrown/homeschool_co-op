@@ -9,11 +9,6 @@ export default function PaymentsPage() {
   const [, setLocation] = useLocation();
   const { user, isAuthenticated, isLoading } = useAuth();
   const { activeRole } = useRole();
-
-  const defaultTab = React.useMemo(() => {
-    const params = new URLSearchParams(window.location.search);
-    return params.get("tab") || undefined;
-  }, []);
   
   // Redirect if not authenticated
   React.useEffect(() => {
@@ -62,7 +57,7 @@ export default function PaymentsPage() {
           </div>
         </div>
         
-        <PaymentManagement defaultTab={defaultTab} />
+        <PaymentManagement />
       </div>
     </ParentAppShell>
   );

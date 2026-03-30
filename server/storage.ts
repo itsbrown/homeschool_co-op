@@ -70,7 +70,7 @@ import {
   weekPlanBlockHistory, type WeekPlanBlockHistory, type InsertWeekPlanBlockHistory
 } from "@shared/schema";
 import { eq, inArray } from 'drizzle-orm';
-import { getDb, markConnectionFailed } from './db';
+import { getDb } from './db';
 
 export interface IStorage {
   // Methods for backup
@@ -5247,8 +5247,6 @@ import { DatabaseStorage } from "./dbStorage";
           stack: error instanceof Error ? error.stack : undefined,
           email: email
         });
-        // Signal the DB layer to attempt reconnect on next request
-        markConnectionFailed();
         console.log('💾 Database query failed, checking memory storage for email lookup');
         
         // Try memory storage first as it's most up-to-date

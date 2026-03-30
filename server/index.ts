@@ -35,32 +35,6 @@ if (currentEnv === 'production') {
   console.log('⚙️ Development/Test mode: Database fallbacks enabled for testing');
 }
 
-// Log database connection source at startup so deployment failures are immediately visible.
-// buildPostgresUrl() in db.ts prefers individual PG vars over DATABASE_URL when the latter
-// points to the old Supabase pooler (supabase.co). This guard surfaces missing config early.
-{
-  const { PGHOST, PGUSER, PGPASSWORD, PGDATABASE, DATABASE_URL } = process.env;
-  const hasPgVars = !!(PGHOST && PGUSER && PGPASSWORD && PGDATABASE);
-  const hasDbUrl = !!DATABASE_URL;
-  const dbUrlIsSupabase = hasDbUrl && DATABASE_URL!.includes('supabase.co');
-
-  if (hasPgVars) {
-    console.log(`🗄️  DB config: individual PG vars present (PGHOST=${PGHOST})`);
-    if (hasDbUrl && !dbUrlIsSupabase) {
-      console.log(`🗄️  DB config: DATABASE_URL also present and non-Supabase — will use DATABASE_URL`);
-    } else if (dbUrlIsSupabase) {
-      console.log(`🗄️  DB config: DATABASE_URL points to supabase.co — will use PG vars instead`);
-    }
-  } else if (hasDbUrl) {
-    console.log(`🗄️  DB config: using DATABASE_URL (no individual PG vars set)`);
-    const missingPg = ['PGHOST', 'PGUSER', 'PGPASSWORD', 'PGDATABASE'].filter(k => !process.env[k]);
-    console.warn(`⚠️  DB config: missing PG vars: ${missingPg.join(', ')}`);
-  } else {
-    console.error('❌ DB config: NO database connection info found (no PGHOST/PGUSER/PGPASSWORD/PGDATABASE and no DATABASE_URL)');
-    console.error('   Set PGHOST, PGUSER, PGPASSWORD, PGDATABASE in deployment secrets to connect to PostgreSQL');
-  }
-}
-
 const app = express();
 
 // Lightweight health check — must respond instantly for deployment health probes.

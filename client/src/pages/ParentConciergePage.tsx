@@ -29,8 +29,8 @@ import {
   FileText,
   ExternalLink,
 } from "lucide-react";
-import { Link, useLocation } from "wouter";
-import { cn, formatCurrency } from "@/lib/utils";
+import { Link } from "wouter";
+import { cn } from "@/lib/utils";
 import { useCart } from "@/contexts/CartContext";
 
 interface SuggestedAction {
@@ -93,9 +93,11 @@ interface ContextData {
   quickActions: QuickAction[];
 }
 
-function ContextSidebar({ context, isLoading }: { context: ContextData | null; isLoading: boolean }) {
-  const [, navigate] = useLocation();
+function formatCurrency(cents: number): string {
+  return `$${(cents / 100).toFixed(2)}`;
+}
 
+function ContextSidebar({ context, isLoading }: { context: ContextData | null; isLoading: boolean }) {
   if (isLoading) {
     return (
       <div className="space-y-4 p-4">
@@ -132,23 +134,13 @@ function ContextSidebar({ context, isLoading }: { context: ContextData | null; i
               </Badge>
             )}
             {context.payments.upcoming.length > 0 && (
-              <div className="mt-2 space-y-2">
+              <div className="mt-2 space-y-1">
                 {context.payments.upcoming.map((p, i) => (
-                  <div key={i} className="flex items-center justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <div className="text-xs text-muted-foreground truncate">{p.className}</div>
-                      <div className={cn("text-xs whitespace-nowrap", p.isOverdue ? "text-red-600 font-medium" : "text-muted-foreground")}>
-                        {formatCurrency(p.amount)} · {p.dueDate}
-                      </div>
-                    </div>
-                    <Button
-                      size="sm"
-                      aria-label="Pay now"
-                      onClick={() => navigate("/payments?tab=upcoming")}
-                      className="shrink-0 h-7 text-xs px-2"
-                    >
-                      Pay Now
-                    </Button>
+                  <div key={i} className="text-xs text-muted-foreground flex justify-between">
+                    <span className="truncate mr-2">{p.className}</span>
+                    <span className={cn("whitespace-nowrap", p.isOverdue && "text-red-600 font-medium")}>
+                      {formatCurrency(p.amount)} · {p.dueDate}
+                    </span>
                   </div>
                 ))}
               </div>

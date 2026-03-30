@@ -244,28 +244,10 @@ function SchoolAdminShellWrapper({ children }: { children: React.ReactNode }) {
 
 function DashboardRouter() {
   const { user } = useAuth();
-  const { activeRole, showRoleSelection, setActiveRole, isLoadingRoles, rolesLoadFailed } = useRole();
-  const [, setLocation] = useLocation();
+  const { activeRole, showRoleSelection, setActiveRole } = useRole();
 
   console.log(`🚀 DashboardRouter called!`);
   console.log(`🔍 DashboardRouter - showRoleSelection:`, showRoleSelection, 'user email:', user?.email, 'activeRole:', activeRole);
-
-  // Redirect to login when roles fail or finish loading without producing a role.
-  // Must be in useEffect — never call setLocation during render.
-  useEffect(() => {
-    if (isLoadingRoles) return; // still loading — wait
-
-    if (rolesLoadFailed) {
-      console.error('❌ DashboardRouter: roles load failed, redirecting to login');
-      setLocation('/login');
-      return;
-    }
-
-    if (!activeRole) {
-      console.warn('⚠️ DashboardRouter: loading done but no activeRole, redirecting to login');
-      setLocation('/login');
-    }
-  }, [isLoadingRoles, rolesLoadFailed, activeRole, setLocation]);
 
   // Show dashboard based on selected role (roles come from database via RoleContext)
   console.log(`🏠 Dashboard routing - activeRole:`, activeRole);
@@ -309,7 +291,7 @@ function DashboardRouter() {
     return <MySchoolPage key={`dashboard-${activeRole}`} />;
   }
 
-  // No active role yet (still loading or waiting for effect to redirect)
+  // Default fallback - show loading while role is being determined
   if (!activeRole) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -318,7 +300,7 @@ function DashboardRouter() {
     );
   }
 
-  // Role is set but not recognised
+  // If we reach here, the role is not recognized
   console.error(`❌ Unknown role: ${activeRole}`);
   return (
     <div className="min-h-screen flex items-center justify-center">
