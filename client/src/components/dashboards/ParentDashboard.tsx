@@ -1084,7 +1084,7 @@ export default function ParentDashboard() {
                             size="sm"
                             asChild
                           >
-                            <Link href="/payments">
+                            <Link href="/payments?tab=upcoming">
                               <CreditCard className="mr-2 h-4 w-4" />
                               Pay Now
                             </Link>

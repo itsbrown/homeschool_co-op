@@ -88,6 +88,7 @@ interface Payment {
 
 interface PaymentManagementProps {
   childId?: string; // Optional child ID to filter payments for a specific child
+  defaultTab?: string; // Optional default tab to open on mount
 }
 
 // Stripe payment form for scheduled payments
@@ -1026,7 +1027,7 @@ function CombinedPaymentDialog({
   );
 }
 
-export default function PaymentManagement({ childId }: PaymentManagementProps) {
+export default function PaymentManagement({ childId, defaultTab }: PaymentManagementProps) {
   const { toast } = useToast();
   const [selectedPaymentId, setSelectedPaymentId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -1453,7 +1454,7 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
   
   return (
     <div className="space-y-6">
-      <Tabs defaultValue="all-payments" className="w-full">
+      <Tabs defaultValue={defaultTab ?? "all-payments"} className="w-full">
         <TabsList className="w-full flex-col sm:flex-row justify-start h-auto">
           <TabsTrigger value="overview" className="w-full sm:w-auto sm:mr-2">Overview</TabsTrigger>
           <TabsTrigger value="all-payments" className="w-full sm:w-auto sm:mr-2">All Payments</TabsTrigger>
