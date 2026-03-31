@@ -67,7 +67,8 @@ import {
   SkeletonBlock, InsertSkeletonBlock, skeletonBlocks,
   WeekPlan, InsertWeekPlan, weekPlans,
   WeekPlanBlock, InsertWeekPlanBlock, weekPlanBlocks,
-  WeekPlanBlockHistory, InsertWeekPlanBlockHistory, weekPlanBlockHistory
+  WeekPlanBlockHistory, InsertWeekPlanBlockHistory, weekPlanBlockHistory,
+  StripePaymentHistory, InsertStripePaymentHistory, stripePaymentHistory
 } from '../shared/schema';
 
 /**
@@ -1192,6 +1193,24 @@ export class DatabaseStorage implements IStorage {
   async deleteProgramEnrollment(id: number): Promise<void> {
     const db = await getDb();
     await db.delete(programEnrollments).where(eq(programEnrollments.id, id));
+  }
+
+  async getEnrollmentByChildAndClass(childId: number, classId: number): Promise<ProgramEnrollment | undefined> {
+    const db = await getDb();
+    const [enrollment] = await db.select()
+      .from(programEnrollments)
+      .where(
+        and(
+          eq(programEnrollments.childId, childId),
+          or(
+            eq(programEnrollments.classId, classId),
+            eq(programEnrollments.programId, classId),
+            eq(programEnrollments.marketplaceClassId, classId)
+          )
+        )
+      )
+      .limit(1);
+    return enrollment;
   }
 
   async cancelPendingEnrollments(enrollmentIds: number[], parentUserId: number): Promise<{ cancelled: number[]; skipped: number[]; errors: string[] }> {
@@ -4480,6 +4499,34 @@ export class DatabaseStorage implements IStorage {
     if (allocations.length === 0) return [];
     const db = await getDb();
     return db.insert(paymentAllocations).values(allocations).returning();
+  }
+
+  async saveStripePayment(payment: InsertStripePaymentHistory): Promise<StripePaymentHistory> {
+    const db = await getDb();
+    const [record] = await db.insert(stripePaymentHistory).values(payment).returning();
+    return record;
+  }
+
+  async getStripePaymentHistoryByUserId(userId: number): Promise<StripePaymentHistory[]> {
+    const db = await getDb();
+    return db.select().from(stripePaymentHistory).where(eq(stripePaymentHistory.userId, userId));
+  }
+
+  async getStripePaymentsBySubscription(subscriptionId: string): Promise<StripePaymentHistory[]> {
+    const db = await getDb();
+    return db.select().from(stripePaymentHistory).where(eq(stripePaymentHistory.subscriptionId, subscriptionId));
+  }
+
+  async getStripePaymentByIntentId(paymentIntentId: string): Promise<StripePaymentHistory | undefined> {
+    const db = await getDb();
+    const [record] = await db.select().from(stripePaymentHistory).where(eq(stripePaymentHistory.paymentIntentId, paymentIntentId)).limit(1);
+    return record;
+  }
+
+  async getPaymentByIdempotencyKey(idempotencyKey: string): Promise<StripePaymentHistory | undefined> {
+    const db = await getDb();
+    const [record] = await db.select().from(stripePaymentHistory).where(eq(stripePaymentHistory.idempotencyKey, idempotencyKey)).limit(1);
+    return record;
   }
 
   async getTotalPaidForEnrollment(enrollmentId: number): Promise<number> {

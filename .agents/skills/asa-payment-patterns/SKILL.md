@@ -277,7 +277,11 @@ Previously, the cart display and payment processor used independent calculation 
 ### Don't
 - Don't trust client-side pricing or discount calculations
 - Don't create PaymentIntents with amounts below $0.50 (50 cents)
-- Don't modify `totalPaid` or `remainingBalance` on enrollments directly — let the payment flow update them
+- Don't modify `totalPaid` or `remainingBalance` on enrollments directly — let the payment flow update them.
+  **Exception**: The `PATCH /api/admin/enrollments/:id/correct-balance` endpoint in `server/api/admin-enrollment-payment.ts`
+  is the ONLY sanctioned code path that directly modifies `totalPaid`. It exists exclusively for admin-initiated
+  data corrections (e.g., fixing webhook double-processing). Any other code path that writes `totalPaid` directly
+  is a bug. Do not treat this endpoint as a general pattern for payment updates.
 - Don't skip the Stripe payment confirmation step — always verify server-side
 - Don't delete scheduled payments — use `cancelled` status instead
 - Don't assume enrollment financial fields match Stripe — enrollment fields are the source of truth for display

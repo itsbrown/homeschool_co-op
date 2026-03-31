@@ -292,6 +292,7 @@ export interface IStorage {
   getStripeCustomerIdsByParentEmail(parentEmail: string): Promise<string[]>;
   getStripeLinkedEnrollmentsByParentEmail(parentEmail: string): Promise<ProgramEnrollment[]>;
   getEnrollmentsByParentEmail(parentEmail: string): Promise<ProgramEnrollment[]>;
+  getEnrollmentByChildAndClass(childId: number, classId: number): Promise<ProgramEnrollment | undefined>;
 
   // Membership Enrollment methods
   getMembershipEnrollmentById(id: number): Promise<MembershipEnrollment | undefined>;
@@ -2208,6 +2209,11 @@ export class MemStorage implements IStorage {
   async getEnrollmentsByParentEmail(parentEmail: string): Promise<ProgramEnrollment[]> {
     return Array.from(this.programEnrollmentsStore.values())
       .filter(e => e.parentEmail === parentEmail);
+  }
+
+  async getEnrollmentByChildAndClass(childId: number, classId: number): Promise<ProgramEnrollment | undefined> {
+    return Array.from(this.programEnrollmentsStore.values())
+      .find(e => e.childId === childId && (e.classId === classId || e.programId === classId || e.marketplaceClassId === classId));
   }
 
   // Membership Enrollment methods
@@ -6105,6 +6111,17 @@ import { DatabaseStorage } from "./dbStorage";
         .where(eq(programEnrollments.parentEmail, parentEmail));
     }
 
+    async getEnrollmentByChildAndClass(childId: number, classId: number): Promise<ProgramEnrollment | undefined> {
+      try {
+        if (this.dbStorage instanceof DatabaseStorage) {
+          return await this.dbStorage.getEnrollmentByChildAndClass(childId, classId);
+        }
+        return await this.memStorage.getEnrollmentByChildAndClass(childId, classId);
+      } catch (error) {
+        return await this.memStorage.getEnrollmentByChildAndClass(childId, classId);
+      }
+    }
+
     async createEnrollment(enrollment: any): Promise<any> {
       try {
         // All enrollments now stored in unified program_enrollments table
@@ -7709,18 +7726,57 @@ import { DatabaseStorage } from "./dbStorage";
 
       // ==================== STRIPE PAYMENT HISTORY ====================
       async saveStripePayment(payment: InsertStripePaymentHistory): Promise<StripePaymentHistory> {
+        if (this.dbStorage instanceof DatabaseStorage) {
+          try {
+            return await this.dbStorage.saveStripePayment(payment);
+          } catch (err: any) {
+            // CRITICAL: unique constraint violations (Postgres code 23505) MUST propagate.
+            // The webhook idempotency mechanism depends on this throw to skip duplicate events.
+            // Swallowing it would allow double-processing to proceed.
+            const isUniqueViolation =
+              err?.code === '23505' ||
+              err?.message?.includes('unique') ||
+              err?.message?.includes('duplicate');
+            if (isUniqueViolation) {
+              throw err;
+            }
+            // Only fall back to mem for genuine infrastructure errors (e.g. DB connection lost)
+            console.warn('[CombinedStorage] saveStripePayment DB failed (non-unique error), falling back to mem:', err);
+          }
+        }
         return this.memStorage.saveStripePayment(payment);
       }
 
       async getStripePaymentHistoryByUserId(userId: number): Promise<StripePaymentHistory[]> {
+        if (this.dbStorage instanceof DatabaseStorage) {
+          try {
+            return await this.dbStorage.getStripePaymentHistoryByUserId(userId);
+          } catch (err) {
+            console.warn('[CombinedStorage] getStripePaymentHistoryByUserId DB failed, falling back to mem:', err);
+          }
+        }
         return this.memStorage.getStripePaymentHistoryByUserId(userId);
       }
 
       async getStripePaymentsBySubscription(subscriptionId: string): Promise<StripePaymentHistory[]> {
+        if (this.dbStorage instanceof DatabaseStorage) {
+          try {
+            return await this.dbStorage.getStripePaymentsBySubscription(subscriptionId);
+          } catch (err) {
+            console.warn('[CombinedStorage] getStripePaymentsBySubscription DB failed, falling back to mem:', err);
+          }
+        }
         return this.memStorage.getStripePaymentsBySubscription(subscriptionId);
       }
 
       async getStripePaymentByIntentId(paymentIntentId: string): Promise<StripePaymentHistory | undefined> {
+        if (this.dbStorage instanceof DatabaseStorage) {
+          try {
+            return await this.dbStorage.getStripePaymentByIntentId(paymentIntentId);
+          } catch (err) {
+            console.warn('[CombinedStorage] getStripePaymentByIntentId DB failed, falling back to mem:', err);
+          }
+        }
         return this.memStorage.getStripePaymentByIntentId(paymentIntentId);
       }
 

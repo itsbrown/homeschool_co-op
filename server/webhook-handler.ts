@@ -233,6 +233,70 @@ export const webhookHandler = async (req: Request, res: Response) => {
           const items = JSON.parse(itemsJson);
           console.log('💰 Processing checkout payment enrollments:', items.length, 'items for', parentEmail);
           
+          // IDEMPOTENCY-FIRST: Attempt to claim this event by inserting into stripe_payment_history
+          // with a unique idempotency_key before performing any side effects. If the insert fails
+          // with a unique constraint violation, this event was already processed — exit immediately.
+          // This is race-safe: two concurrent deliveries of the same event will compete on the DB insert,
+          // and only one will win; the other gets a unique violation and skips.
+          const idempotencyKey = `checkout:${session.id}`;
+          const parentUserForSession = await storage.getUserByEmail(parentEmail);
+          
+          // Build description upfront (needed for stripe_payment_history insert)
+          const allChildNamesEarly = [...new Set(items.map((i: any) => i.childName))].join(', ');
+          const paymentDescriptionEarly = items.length > 1
+            ? `Checkout payment for ${allChildNamesEarly}`
+            : `Checkout payment for ${items[0]?.childName || 'student'}`;
+          
+          let stripeHistoryRecord: { id: number } | null = null;
+          if (parentUserForSession) {
+            try {
+              stripeHistoryRecord = await storage.saveStripePayment({
+                userId: parentUserForSession.id,
+                paymentIntentId: paymentIntent.id,
+                customerId: (paymentIntent.customer as string) || null,
+                subscriptionId: null,
+                amount: paymentIntent.amount,
+                currency: paymentIntent.currency || 'usd',
+                status: 'succeeded',
+                paymentMethod: null,
+                description: paymentDescriptionEarly,
+                idempotencyKey,
+                source: 'stripe',
+                snapshotJson: null,
+                snapshotChecksum: null,
+                subtotalAmount: null,
+                discountTotal: null,
+                discountSnapshot: null,
+                stripeCreatedAt: new Date(),
+              });
+              console.log('🔒 Claimed checkout event via stripe_payment_history:', stripeHistoryRecord.id, 'key:', idempotencyKey);
+            } catch (historyErr: any) {
+              // Check for unique constraint violation (duplicate event)
+              const isUniquenessViolation = 
+                historyErr?.code === '23505' || // Postgres unique violation
+                historyErr?.message?.includes('unique') ||
+                historyErr?.message?.includes('duplicate');
+              if (isUniquenessViolation) {
+                console.log('⚠️ Duplicate checkout.session.completed detected via unique constraint — skipping event', session.id);
+                break;
+              }
+              // Belt-and-suspenders: also check payments table for legacy records
+              const alreadyInPayments = await storage.getPaymentByStripeId(paymentIntent.id);
+              if (alreadyInPayments) {
+                console.log('⚠️ checkout.session.completed already in payments table — skipping:', paymentIntent.id);
+                break;
+              }
+              console.error('⚠️ stripe_payment_history insert failed (proceeding without allocation records):', historyErr);
+            }
+          } else {
+            // No user found — fall back to payments-table idempotency check
+            const alreadyInPayments = await storage.getPaymentByStripeId(paymentIntent.id);
+            if (alreadyInPayments) {
+              console.log('⚠️ checkout.session.completed already in payments table — skipping:', paymentIntent.id);
+              break;
+            }
+          }
+          
           // Check if membership was included in this payment
           const hasMembership = paymentIntent.metadata.hasMembership === 'true';
           const membershipAmount = hasMembership ? parseInt(paymentIntent.metadata.membershipAmount || '0') : 0;
@@ -320,14 +384,11 @@ export const webhookHandler = async (req: Request, res: Response) => {
           }
           
           // Update each class enrollment in database
+          // Use getEnrollmentByChildAndClass for targeted lookup (avoids full-table scan anti-pattern)
           const updatedEnrollments = [];
           for (const item of items) {
             try {
-              // Get all program enrollments from database
-              const allEnrollments = await storage.getAllEnrollments();
-              const enrollment = allEnrollments.find((e: any) => 
-                e.childId === item.childId && (e.programId === item.classId || e.classId === item.classId)
-              );
+              const enrollment = await storage.getEnrollmentByChildAndClass(item.childId, item.classId);
               
               if (enrollment) {
                 const currentAmount = enrollment.totalPaid || 0;
@@ -347,7 +408,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
                   console.log(`✅ Updated enrollment ${enrollment.id} for ${item.childName} in ${item.className}: paid=${newAmount}, remaining=${remainingBalance}`);
                 }
               } else {
-                console.log(`❌ Enrollment not found for ${item.childName} in ${item.className}`);
+                console.log(`❌ Enrollment not found for child=${item.childId} class=${item.classId} (${item.childName} / ${item.className})`);
               }
             } catch (error) {
               console.error(`❌ Error updating enrollment for ${item.childName}:`, error);
@@ -356,17 +417,21 @@ export const webhookHandler = async (req: Request, res: Response) => {
           
           console.log(`✅ Updated ${updatedEnrollments.length} enrollments for checkout session ${session.id}`);
           
-          // Create payment record in database
-          const parentUserForSession = await storage.getUserByEmail(parentEmail);
-          const schoolIdForSession = parentUserForSession?.schoolId || updatedEnrollments[0]?.schoolId || 1;
+          // Build all-children description for payment history
+          // (reuse allChildNamesEarly/paymentDescriptionEarly computed above for the history record)
+          const allChildNames = allChildNamesEarly;
+          const paymentDescription = paymentDescriptionEarly;
+          
+          // Create payment record in database — full checkout total (not per-enrollment split)
+          const schoolIdForSession = parentUserForSession?.schoolId || (updatedEnrollments[0] as any)?.schoolId || 1;
           
           const payment = {
             schoolId: schoolIdForSession,
             parentId: parentUserForSession?.id || null,
             parentEmail: parentEmail,
-            childName: items[0]?.childName || 'Unknown',
+            childName: allChildNames || items[0]?.childName || 'Unknown',
             className: items.length > 1 ? `${items.length} classes` : (items[0]?.className || 'Unknown'),
-            description: `Checkout payment for ${items.length} enrollment${items.length > 1 ? 's' : ''}`,
+            description: paymentDescription,
             amount: paymentIntent.amount,
             currency: paymentIntent.currency || 'usd',
             status: 'completed' as const,
@@ -385,15 +450,36 @@ export const webhookHandler = async (req: Request, res: Response) => {
           await storage.createPayment(payment);
           console.log('✅ Payment record created in database for checkout session:', session.id);
           
+          // Create payment_allocation records per enrollment
+          // stripeHistoryRecord was created at the top of this block (idempotency-first insert);
+          if (stripeHistoryRecord && updatedEnrollments.length > 0) {
+            try {
+              const allocations = updatedEnrollments.map((enrollment: any) => ({
+                paymentHistoryId: stripeHistoryRecord!.id,
+                enrollmentId: enrollment.id,
+                membershipEnrollmentId: null,
+                allocatedAmountCents: amountPerItem,
+                allocationType: 'payment' as const,
+                sourceAllocationId: null,
+                adminComment: null,
+                metadata: { checkoutSessionId: session.id, paymentIntentId: paymentIntent.id },
+              }));
+              await storage.createPaymentAllocations(allocations);
+              console.log(`✅ Created ${allocations.length} payment_allocation records for checkout session ${session.id}`);
+            } catch (allocErr) {
+              console.error('⚠️ Failed to create payment_allocations (non-fatal):', allocErr);
+            }
+          }
+          
           // Create payment receipt record for parent documents
           await createReceiptFromPayment({
             schoolId: schoolIdForSession,
             parentId: parentUserForSession?.id,
             parentEmail: parentEmail,
             amount: paymentIntent.amount,
-            description: payment.description,
-            childName: payment.childName,
-            className: payment.className,
+            description: paymentDescription,
+            childName: allChildNames || items[0]?.childName || 'Unknown',
+            className: items.length > 1 ? `${items.length} classes` : (items[0]?.className || 'Unknown'),
             enrollmentIds: updatedEnrollments.map((e: any) => e.id)
           });
         }
@@ -409,6 +495,68 @@ export const webhookHandler = async (req: Request, res: Response) => {
       console.log('🔍 Payment metadata:', paymentIntent.metadata);
       
       try {
+        // CRITICAL: Skip cart-checkout payments — checkout.session.completed is the single
+        // source of truth for these. Stripe always fires both events for Checkout Sessions.
+        //
+        // Detection strategy (four independent signals, cheapest first):
+        //   1. metadata.paymentType === 'cart_checkout'  (set by this app's checkout flow)
+        //   2. metadata.itemsJson is present              (only set on cart checkout payment intents)
+        //   3. Stripe API: checkout.sessions.list confirms an associated Checkout Session
+        //      whose own metadata also indicates a cart checkout (explicit checkout_session_id signal)
+        //   4. stripe_payment_history has a record with idempotency_key = 'checkout:<sessionId>'
+        //      — i.e., checkout.session.completed already claimed this payment
+        //
+        // Signals 1 or 2 are checked first (cheap), then 3 (Stripe API), then 4 (DB lookup).
+        const isCartCheckoutByMetadata = 
+          paymentIntent.metadata?.paymentType === 'cart_checkout' ||
+          !!paymentIntent.metadata?.itemsJson;
+        
+        if (isCartCheckoutByMetadata) {
+          console.log('⏭️ Skipping payment_intent.succeeded for checkout-originated payment (metadata signal) — checkout.session.completed owns this flow', {
+            paymentIntentId: paymentIntent.id,
+            paymentType: paymentIntent.metadata?.paymentType,
+            hasItemsJson: !!paymentIntent.metadata?.itemsJson,
+          });
+          break;
+        }
+
+        // Signal 3: explicit checkout_session_id check via Stripe API
+        // For PaymentIntents created through Checkout Sessions, list associated sessions.
+        // If the session's own metadata confirms cart checkout, this PI is owned by checkout.session.completed.
+        try {
+          const sessions = await stripe.checkout.sessions.list({
+            payment_intent: paymentIntent.id,
+            limit: 1,
+          });
+          if (sessions.data.length > 0) {
+            const checkoutSession = sessions.data[0];
+            const sessionIsCartCheckout =
+              checkoutSession.metadata?.paymentType === 'cart_checkout' ||
+              !!checkoutSession.metadata?.itemsJson;
+            if (sessionIsCartCheckout) {
+              console.log('⏭️ Skipping payment_intent.succeeded — Stripe checkout.sessions API confirms cart checkout origin', {
+                paymentIntentId: paymentIntent.id,
+                checkoutSessionId: checkoutSession.id,
+                checkoutStatus: checkoutSession.status,
+              });
+              break;
+            }
+          }
+        } catch (listErr) {
+          console.warn('⚠️ stripe.checkout.sessions.list lookup failed (non-fatal, continuing):', listErr);
+        }
+        
+        // Signal 4: check if checkout.session.completed already processed this via stripe_payment_history
+        // This catches edge cases where metadata may not be set (e.g., older checkout sessions)
+        const alreadyClaimedByCheckout = await storage.getStripePaymentByIntentId(paymentIntent.id);
+        if (alreadyClaimedByCheckout) {
+          console.log('⏭️ Skipping payment_intent.succeeded — already processed by checkout.session.completed (found in stripe_payment_history)', {
+            paymentIntentId: paymentIntent.id,
+            historyId: alreadyClaimedByCheckout.id,
+          });
+          break;
+        }
+        
         // Check if this is a balance payment or new enrollment
         const paymentType = paymentIntent.metadata.paymentType || paymentIntent.metadata.type;
         console.log('🔍 Payment type:', paymentType);
@@ -918,124 +1066,12 @@ export const webhookHandler = async (req: Request, res: Response) => {
             console.error('❌ Failed to send balance payment receipt email:', emailError);
           }
         } else {
-          // Handle new enrollment payments (cart checkout)
-          const itemsJson = paymentIntent.metadata.itemsJson;
-          const paymentType = paymentIntent.metadata.paymentType;
-          const parentEmail = paymentIntent.metadata.parentEmail;
-          
-          console.log('💰 Processing cart checkout payment:', {
+          // Unknown payment type — log and skip. Cart-checkout payments are handled by
+          // checkout.session.completed and are rejected above via the early-exit guard.
+          console.log('⚠️ Unhandled payment type in payment_intent.succeeded — skipping', {
+            paymentIntentId: paymentIntent.id,
             paymentType,
-            parentEmail,
-            hasItemsJson: !!itemsJson,
-            paymentIntentId: paymentIntent.id
           });
-          
-          if (itemsJson && parentEmail) {
-            const items = JSON.parse(itemsJson);
-            console.log('💰 Processing cart payment enrollments:', items.length, 'items for', parentEmail);
-            
-            // Calculate payment per item
-            const amountPerItem = Math.round(paymentIntent.amount / items.length);
-            
-            // Update each enrollment in database
-            const updatedEnrollments = [];
-            for (const item of items) {
-              try {
-                // Get program enrollments from database
-                const allEnrollments = await storage.getAllEnrollments();
-                const enrollment = allEnrollments.find((e: any) => 
-                  e.childId === item.childId && (e.programId === item.classId || e.classId === item.classId)
-                );
-                
-                if (enrollment) {
-                  const currentAmount = enrollment.totalPaid || 0;
-                  const newAmount = currentAmount + amountPerItem;
-                  const remainingBalance = Math.max(0, (enrollment.totalCost || 0) - newAmount);
-                  
-                  // Update program enrollment in database
-                  const updatedEnrollment = await storage.updateProgramEnrollment(enrollment.id, {
-                    totalPaid: newAmount,
-                    remainingBalance: remainingBalance,
-                    paymentStatus: remainingBalance <= 0 ? 'completed' : 'partial_payment',
-                    status: 'enrolled'
-                  });
-                  
-                  if (updatedEnrollment) {
-                    updatedEnrollments.push(updatedEnrollment);
-                    console.log(`✅ Updated enrollment ${enrollment.id} for ${item.childName} in ${item.className}: paid=${newAmount}, remaining=${remainingBalance}`);
-                  }
-                } else {
-                  console.log(`❌ Enrollment not found for ${item.childName} in ${item.className}`);
-                }
-              } catch (error) {
-                console.error(`❌ Error updating enrollment for ${item.childName}:`, error);
-              }
-            }
-            
-            console.log(`✅ Updated ${updatedEnrollments.length} enrollments in database for payment ${paymentIntent.id}`);
-            
-            // Create payment record
-            // Get schoolId from enrollment or parent user
-            const parentUserForPayment = await storage.getUserByEmail(parentEmail);
-            const schoolIdForPayment = updatedEnrollments[0]?.schoolId || parentUserForPayment?.schoolId || 1;
-            
-            const payment = {
-              schoolId: schoolIdForPayment,
-              parentId: parentUserForPayment?.id || null,
-              stripePaymentIntentId: paymentIntent.id,
-              stripeChargeId: null,
-              stripeRefundId: null,
-              originalPaymentId: null,
-              parentEmail: parentEmail,
-              childName: items[0]?.childName || 'Unknown',
-              className: items.length > 1 ? `${items.length} classes` : (items[0]?.className || 'Unknown'),
-              description: `Cart payment for ${items.length} enrollment${items.length > 1 ? 's' : ''}`,
-              amount: paymentIntent.amount,
-              currency: paymentIntent.currency || 'usd',
-              status: 'completed' as const,
-              enrollmentIds: updatedEnrollments.map((e: any) => e.id),
-              metadata: {
-                itemCount: items.length
-              },
-              paymentDate: new Date()
-            };
-
-            await storage.createPayment(payment);
-            console.log('✅ Payment record created for payment:', paymentIntent.id);
-            
-            // Create payment receipt record for parent documents
-            await createReceiptFromPayment({
-              schoolId: schoolIdForPayment,
-              parentId: parentUserForPayment?.id,
-              parentEmail: parentEmail,
-              amount: paymentIntent.amount,
-              description: payment.description,
-              childName: payment.childName,
-              className: payment.className,
-              enrollmentIds: updatedEnrollments.map((e: any) => e.id)
-            });
-            
-            // Real-time update for cart payments
-            try {
-              const { dataLayer } = await import('./services/dataLayer.js');
-              
-              dataLayer.broadcastPaymentComplete(parentEmail, {
-                amount: paymentIntent.amount,
-                paymentId: paymentIntent.id,
-                description: `Payment for ${items.length} enrollment${items.length > 1 ? 's' : ''}`,
-                timestamp: new Date().toISOString()
-              });
-              
-              await dataLayer.refreshUserData(parentEmail);
-              console.log('📡 Pushed real-time update for cart payment');
-            } catch (error) {
-              console.error('❌ Failed to push real-time update for cart payment:', error);
-            }
-          }
-
-          // NOTE: Enrollments are now created BEFORE payment in stripe.ts using createProgramEnrollment()
-          // This legacy code path for creating enrollments AFTER payment has been removed to prevent
-          // database divergence. All enrollments should exist before the payment intent succeeds.
         }
 
         // AUTO-PAY: Capture payment method ID for future auto-pay charges

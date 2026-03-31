@@ -2114,6 +2114,43 @@ async function runMigrations() {
       console.log('Migration note (stripe_created_at nullable):', stripeCreatedAtError.message || String(stripeCreatedAtError));
     }
 
+    // Add partial unique index on stripe_payment_history.idempotency_key for atomic idempotency
+    // Only applies to rows where idempotency_key IS NOT NULL — safe to add after dedup check
+    try {
+      console.log('Running migration: Adding unique index on stripe_payment_history.idempotency_key...');
+      // Verify no duplicates exist before creating the unique index
+      const dupCheck = await db.execute(sql`
+        SELECT idempotency_key, COUNT(*) AS cnt
+        FROM stripe_payment_history
+        WHERE idempotency_key IS NOT NULL
+        GROUP BY idempotency_key
+        HAVING COUNT(*) > 1
+      `);
+      if ((dupCheck as any).rows && (dupCheck as any).rows.length > 0) {
+        console.warn('⚠️ Duplicate idempotency_keys found — removing duplicates before creating unique index:', (dupCheck as any).rows);
+        // Keep only the oldest row (MIN id) per idempotency_key, delete the rest
+        await db.execute(sql`
+          DELETE FROM stripe_payment_history
+          WHERE idempotency_key IS NOT NULL
+            AND id NOT IN (
+              SELECT MIN(id)
+              FROM stripe_payment_history
+              WHERE idempotency_key IS NOT NULL
+              GROUP BY idempotency_key
+            )
+        `);
+        console.log('✅ Duplicate idempotency_key rows removed — proceeding to create unique index');
+      }
+      await db.execute(sql`
+        CREATE UNIQUE INDEX IF NOT EXISTS stripe_payment_history_idempotency_idx
+        ON stripe_payment_history (idempotency_key)
+        WHERE idempotency_key IS NOT NULL;
+      `);
+      console.log('✅ Migration completed: unique index on stripe_payment_history.idempotency_key added');
+    } catch (idempotencyIdxError: any) {
+      console.log('Migration note (idempotency_key unique index):', idempotencyIdxError.message || String(idempotencyIdxError));
+    }
+
     // Add prorate_enabled column to classes table
     console.log('Running migration: Adding prorate_enabled column to classes table...');
     await db.execute(sql`

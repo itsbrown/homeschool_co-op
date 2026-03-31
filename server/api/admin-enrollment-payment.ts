@@ -1420,4 +1420,161 @@ function detectPaymentIssues(enrollment: any, scheduledPayments: any[]): string[
   return issues;
 }
 
+/**
+ * PATCH /api/admin/enrollments/:id/correct-balance
+ * Admin-only endpoint to correct an enrollment's totalPaid value after a data anomaly
+ * (e.g., webhook double-processing). This is the ONLY sanctioned code path that directly
+ * modifies totalPaid outside the normal payment flow.
+ *
+ * Body: { totalPaidCents: number, syncSchedule: boolean, reason: string }
+ * Auth: requireRole(['admin', 'schoolAdmin', 'superAdmin']) — applied at router level
+ */
+router.patch('/:id/correct-balance', async (req: any, res) => {
+  try {
+    const enrollmentId = parseInt(req.params.id);
+    const { totalPaidCents, syncSchedule, reason } = req.body;
+
+    // Auth: require an authenticated user with admin/schoolAdmin role.
+    // Primary guard is requireRole(['schoolAdmin','admin','superAdmin']) middleware at the router level
+    // (app-init.ts line ~298). This in-handler check is defense-in-depth for the legacy
+    // supabaseAuth-only route also mounted in routes.ts.
+    const actorId = req.user?.id as number | undefined;
+    const actorEmail = req.user?.email || req.auth?.email;
+    if (!actorId || !actorEmail) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    // Use allRoles set by auth middleware (populated from user_roles table) for role check
+    const allRoles: string[] = (req.user?.allRoles && Array.isArray(req.user.allRoles)) 
+      ? req.user.allRoles 
+      : (req.user?.role ? [req.user.role] : []);
+    const hasAdminRole = allRoles.some(r => ['admin', 'superAdmin', 'schoolAdmin'].includes(r));
+    if (!hasAdminRole) {
+      return res.status(403).json({ error: 'Only administrators can correct enrollment balances' });
+    }
+    // Also fetch actorUser for school-scope check (need schoolId from user record)
+    const actorUser = await storage.getUserByEmail(actorEmail);
+    if (!actorUser) {
+      return res.status(403).json({ error: 'User not found in database' });
+    }
+    // Rebuild actorRoles for school-scope check (allRoles may lack schoolId context)
+    const actorRoles = await storage.getUserRolesByUserId(actorId);
+
+    if (!Number.isInteger(enrollmentId) || enrollmentId <= 0) {
+      return res.status(400).json({ error: 'Invalid enrollment ID' });
+    }
+    if (!Number.isInteger(totalPaidCents) || totalPaidCents < 0) {
+      return res.status(400).json({ error: 'totalPaidCents must be a non-negative integer (cents)' });
+    }
+    if (!reason || typeof reason !== 'string' || reason.trim().length === 0) {
+      return res.status(400).json({ error: 'reason is required to justify the balance correction' });
+    }
+
+    const enrollment = await storage.getProgramEnrollmentById(enrollmentId);
+    if (!enrollment) {
+      return res.status(404).json({ error: 'Enrollment not found' });
+    }
+
+    // School-scope check: schoolAdmins can only correct their own school's enrollments
+    const isFullAdmin = actorRoles.some(r => ['admin', 'superAdmin'].includes(r.role)) ||
+      ['admin', 'superAdmin'].includes(actorUser.role || '');
+    if (!isFullAdmin) {
+      const schoolAdminRole = actorRoles.find(r => r.role === 'schoolAdmin');
+      const effectiveSchoolId = schoolAdminRole?.schoolId || actorUser.schoolId;
+      if (enrollment.schoolId && enrollment.schoolId !== effectiveSchoolId) {
+        return res.status(403).json({ error: 'Cannot correct enrollments from other schools' });
+      }
+    }
+
+    const beforeTotalPaid = enrollment.totalPaid || 0;
+    // Include compAmountCents so remainingBalance mirrors effective_balance (generated column = totalCost - totalPaid - compAmountCents)
+    const compAmountCents = enrollment.compAmountCents || 0;
+    const newRemainingBalance = Math.max(0, (enrollment.totalCost || 0) - totalPaidCents - compAmountCents);
+
+    console.log(`[correct-balance] Admin ${actorEmail} correcting enrollment ${enrollmentId}: totalPaid ${beforeTotalPaid} → ${totalPaidCents}, reason: ${reason}`);
+
+    const updatedEnrollment = await storage.updateProgramEnrollment(enrollmentId, {
+      totalPaid: totalPaidCents,
+      remainingBalance: newRemainingBalance,
+      paymentStatus: newRemainingBalance <= 0 ? 'completed' : (totalPaidCents > 0 ? 'partial_payment' : 'pending'),
+    });
+
+    if (!updatedEnrollment) {
+      return res.status(500).json({ error: 'Failed to update enrollment' });
+    }
+
+    await storage.createAuditLog({
+      actorId,
+      actorRole: 'admin',
+      actorEmail: actorEmail || null,
+      actionType: 'enrollment_balance_corrected',
+      targetType: 'program_enrollment',
+      targetId: String(enrollmentId),
+      schoolId: enrollment.schoolId || null,
+      metadata: {
+        reason: reason.trim(),
+        beforeTotalPaid,
+        afterTotalPaid: totalPaidCents,
+        beforeRemainingBalance: enrollment.remainingBalance || 0,
+        afterRemainingBalance: newRemainingBalance,
+        totalCost: enrollment.totalCost || 0,
+        actorEmail,
+        correctedAt: new Date().toISOString(),
+      },
+    });
+
+    if (syncSchedule) {
+      try {
+        const { recalculatePaymentSchedule } = await import('../lib/payment-calculator');
+        const scheduledPayments = await storage.getScheduledPaymentsByEnrollmentId(enrollmentId);
+        const pendingPayments = scheduledPayments.filter(p => p.status === 'pending');
+
+        if (pendingPayments.length > 0 && enrollment.programStartDate && enrollment.programEndDate) {
+          const frequency = enrollment.paymentFrequency || 'biweekly';
+          const newSchedule = recalculatePaymentSchedule(
+            enrollment.totalCost || 0,
+            totalPaidCents,
+            new Date(enrollment.programStartDate),
+            new Date(enrollment.programEndDate),
+            frequency,
+            new Date()
+          );
+
+          // Distribute the recalculated schedule across pending payments
+          // Last payment gets the finalPaymentAmount to handle rounding
+          for (let i = 0; i < pendingPayments.length; i++) {
+            const isLast = i === pendingPayments.length - 1;
+            const newAmount = isLast ? newSchedule.finalPaymentAmount : newSchedule.paymentAmount;
+            await storage.updateScheduledPayment(pendingPayments[i].id, {
+              amount: newAmount,
+            });
+          }
+          console.log(`[correct-balance] Synced ${pendingPayments.length} pending scheduled payments for enrollment ${enrollmentId}`);
+        }
+      } catch (scheduleError) {
+        console.error(`[correct-balance] Failed to sync schedule for enrollment ${enrollmentId}:`, scheduleError);
+      }
+    }
+
+    console.log(`[correct-balance] ✅ Enrollment ${enrollmentId} corrected: totalPaid=${totalPaidCents}, remainingBalance=${newRemainingBalance}`);
+
+    return res.json({
+      success: true,
+      enrollment: updatedEnrollment,
+      correction: {
+        enrollmentId,
+        beforeTotalPaid,
+        afterTotalPaid: totalPaidCents,
+        beforeRemainingBalance: enrollment.remainingBalance || 0,
+        afterRemainingBalance: newRemainingBalance,
+        reason: reason.trim(),
+        correctedBy: actorEmail,
+        correctedAt: new Date().toISOString(),
+      },
+    });
+  } catch (error: any) {
+    console.error('❌ Error in correct-balance endpoint:', error);
+    return res.status(500).json({ error: error.message || 'Internal server error' });
+  }
+});
+
 export default router;
