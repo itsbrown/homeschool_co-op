@@ -1,0 +1,53 @@
+#77 - Fix Extra DB Calls Per Request (Auth Middleware)
+
+What & Why
+The additive roles feature added two DB queries per authenticated request. Investigation revealed three additional issues causing up to 4 DB calls on some routes:
+- requireEducatorRole ignores req.user.allRoles and re-queries the DB
+- /api/admin/enrollments has duplicate supabaseAuth mounts
+- Verbose console.log calls fire on every request in production
+- Missing functional index on LOWER(email) causes slow lookups as users table grows
+
+Done looks like
+- /api/educator/* routes make exactly 2 DB queries (supabaseAuth only)
+- /api/admin/enrollments routes make exactly 2 DB queries (single mount)
+- Auth middleware logs are development-only (no session data in production logs)
+- Functional index on LOWER(email) exists and is used by getUserByEmail
+- All changes are safe, backward-compatible, and documented
+
+Out of scope
+- Redis or cross-request caching
+- Removing Supabase getUser(token) call
+- Changing the 2-query baseline
+
+Tasks
+
+1. Fix requireEducatorRole redundant query (server/middleware/supabase-auth.ts)
+   - Replace getUserRolesByUserId with direct check of req.user.allRoles
+   - If allRoles not present (edge case), fall back to DB fetch with warning log
+   - Add comment explaining the optimization
+
+2. Fix double supabaseAuth mount (server/routes.ts)
+   - Combine adminEnrollmentsRouter and adminEnrollmentPaymentRouter behind a single supabaseAuth mount
+   - Or move supabaseAuth inside each router (preferred for clarity)
+
+3. Guard console logs (server/middleware/supabase-auth.ts)
+   - Wrap all non-error console.log calls with if (process.env.NODE_ENV === 'development')
+   - Keep console.error and console.warn unconditional
+
+4. Add functional index (server/init-db.ts)
+   - Add idempotent SQL:
+     CREATE UNIQUE INDEX IF NOT EXISTS users_email_lower_idx ON users (LOWER(email));
+   - Add comment explaining performance reason and reference to schema.ts line 254 pattern
+
+Architectural constraints
+- All DB access via IStorage (no raw queries in middleware if possible)
+- Migrations via idempotent SQL in init-db.ts only
+- No behavior change for single-role or multi-school users
+
+Relevant files
+* server/middleware/supabase-auth.ts
+* server/api/educator.ts
+* server/routes.ts
+* server/dbStorage.ts
+* server/init-db.ts
+* shared/schema.ts
