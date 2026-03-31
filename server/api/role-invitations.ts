@@ -2,6 +2,8 @@ import { Router } from "express";
 import { z } from "zod";
 import * as brevo from '@getbrevo/brevo';
 import { storage } from "../storage";
+import { systemRoles } from "@shared/schema";
+import type { SystemRole } from "@shared/schema";
 
 const router = Router();
 
@@ -284,7 +286,41 @@ router.post("/accept", async (req, res) => {
       return res.status(400).json({ message: "Invitation has expired" });
     }
 
-    // Mark invitation as used in database (local PostgreSQL storage)
+    // Validate that the invited role is a recognised system role before writing
+    const grantedRole = invitationDTO.role;
+    if (!(systemRoles as readonly string[]).includes(grantedRole)) {
+      return res.status(400).json({ message: `Invalid role on invitation: ${grantedRole}` });
+    }
+    const typedRole = grantedRole as SystemRole;
+
+    // Grant the invited role FIRST (before marking the invitation as used).
+    // This ensures the invitation remains re-tryable if the role write fails.
+    const invitedUser = await storage.getUserByEmail(invitationDTO.email);
+    if (invitedUser) {
+      const existingRoles = await storage.getUserRolesByUserId(invitedUser.id);
+      const hasPrimary = existingRoles.some(r => r.isPrimary);
+      const hasThisRole = existingRoles.some(
+        r => r.role === typedRole && r.schoolId === invitedUser.schoolId
+      );
+      if (!hasThisRole) {
+        await storage.createUserRole({
+          userId: invitedUser.id,
+          role: typedRole,
+          schoolId: invitedUser.schoolId ?? null,
+          isPrimary: !hasPrimary,
+        });
+        console.log(`✅ Granted role ${typedRole} to ${invitationDTO.email} in user_roles`);
+      }
+      // If user has no existing primary role, update users.role too so legacy checks work
+      if (!hasPrimary) {
+        await storage.updateUser(invitedUser.id, { role: typedRole });
+        console.log(`✅ Updated users.role to ${typedRole} for ${invitationDTO.email}`);
+      }
+    } else {
+      console.warn(`⚠️ Accepted invitation for ${invitationDTO.email} but user not found in DB — role will be applied on registration`);
+    }
+
+    // Mark invitation as used only after the role grant succeeded
     await storage.acceptRoleInvitation(token, invitationDTO.email);
 
     res.status(200).json({

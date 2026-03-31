@@ -266,6 +266,8 @@ export default function ManageUserRolesDialog({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/user/admin/users', userId, 'roles'] });
       queryClient.invalidateQueries({ queryKey: ['/api/school-admin/users'] });
+      // Invalidate /api/user/roles so the additive-roles system reflects the new primary role
+      queryClient.invalidateQueries({ queryKey: ['/api/user/roles'] });
       queryClient.invalidateQueries({ 
         predicate: (query) => {
           const key = query.queryKey;

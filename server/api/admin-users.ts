@@ -236,6 +236,24 @@ router.post('/users/update-role', async (req, res) => {
     }
     
     console.log(`✅ Updated database role for ${email}: ${role}`);
+
+    // Dual-write: upsert the role into user_roles so the additive-roles system stays in sync
+    const existingRoles = await storage.getUserRolesByUserId(user.id);
+    const hasPrimary = existingRoles.some(r => r.isPrimary);
+    const hasThisRoleAtSchool = existingRoles.some(
+      r => r.role === role && r.schoolId === user.schoolId
+    );
+    if (!hasThisRoleAtSchool) {
+      await storage.createUserRole({
+        userId: user.id,
+        role,
+        schoolId: user.schoolId ?? null,
+        isPrimary: !hasPrimary,
+      });
+      console.log(`✅ Upserted user_roles entry for ${email}: ${role}`);
+    } else {
+      console.log(`ℹ️ user_roles already has ${role} for ${email} at school ${user.schoolId}, skipping insert`);
+    }
     
     // Now sync with Supabase - use paginated lookup to find user by email
     let supabaseUser = null;

@@ -65,6 +65,15 @@ router.post('/complete', async (req, res) => {
       
       parentUser = await storage.createUser(parentData);
       console.log('👤 Created new parent user:', parentUser.id);
+
+      // Initialize user_roles entry so the additive-roles system works from day one
+      await storage.createUserRole({
+        userId: parentUser.id,
+        role: 'parent',
+        schoolId: data.schoolId ?? null,
+        isPrimary: true,
+      });
+      console.log('👤 Created user_roles entry for new parent:', parentUser.id);
     } else if (data.schoolId && !parentUser.schoolId) {
       // Associate existing user with school
       try {

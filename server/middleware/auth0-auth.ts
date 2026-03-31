@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { supabase } from '../lib/supabase';
 import { UserSyncService } from '../services/userSyncService';
+import { storage } from '../storage';
 
 // Supabase JWT verification middleware with fallback for development
 export const jwtCheck = async (req: any, res: Response, next: NextFunction) => {
@@ -56,21 +57,13 @@ export const jwtCheck = async (req: any, res: Response, next: NextFunction) => {
     // Use role from database if available, otherwise use user metadata, otherwise default
     let effectiveRole = dbUser?.role || user.user_metadata?.role || 'parent';
     
-    // Check user_roles table for superAdmin role (multi-role system)
+    // Fetch all roles for this user via storage (additive permissions model)
     // This is the source of truth for roles in the new system
     let userRoles: string[] = [];
     if (dbUser?.id) {
       try {
-        const { getDb } = await import('../db');
-        const schemaModule = await import('../../shared/schema');
-        const drizzleModule = await import('drizzle-orm');
-        
-        const database = await getDb();
-        const rolesResult = await database.select({
-          role: schemaModule.userRoles.role
-        }).from(schemaModule.userRoles).where(drizzleModule.eq(schemaModule.userRoles.userId, dbUser.id));
-        
-        userRoles = rolesResult.map((r: { role: string }) => r.role);
+        const userRoleEntries = await storage.getUserRolesByUserId(dbUser.id);
+        userRoles = userRoleEntries.map((r: { role: string }) => r.role);
         console.log('📋 User roles from user_roles table:', userRoles);
         
         // If user has superAdmin in their roles, set effectiveRole to superAdmin for API access
@@ -83,7 +76,7 @@ export const jwtCheck = async (req: any, res: Response, next: NextFunction) => {
       }
     }
 
-    // Allow role switching via header (for UI role switching)
+    // Allow role switching via header (for UI role switching — display preference only, not authz)
     if (activeRoleHeader && userRoles.length > 0) {
       // Only allow switching to roles the user actually has
       const hasRole = userRoles.some(r => r.toLowerCase() === (activeRoleHeader as string).toLowerCase());
@@ -93,16 +86,17 @@ export const jwtCheck = async (req: any, res: Response, next: NextFunction) => {
       }
     }
 
-    // Use the correct user ID field (id is the standard field for Supabase)
-    const userIdentifier = user.id || user.email;
+    // Use DB integer ID when available (required for all DB queries downstream)
+    const userIdentifier = dbUser?.id ?? user.id ?? user.email;
 
-    // Include database user info if available
+    // Include database user info and all roles for additive-permissions checks
     req.user = {
       ...user,
-      role: effectiveRole,
+      role: dbUser?.role ?? effectiveRole,
       id: userIdentifier,
       email: user.email,
-      dbUser: dbUser // Include database user data
+      allRoles: userRoles, // All roles from user_roles table — used by requireRole for authz
+      dbUser: dbUser,
     };
 
     // Also set req.auth for compatibility with existing code
@@ -136,12 +130,13 @@ export const requireRole = (allowedRoles: string[]) => {
       return res.status(401).json({ message: 'Authentication required' });
     }
 
-    const userRole = req.auth.role;
-    // Collect all roles for the user at their current school (additive permissions model)
-    // Prefer req.user.allRoles (set by supabaseAuth), fallback to active role only
+    // Always evaluate against req.user.allRoles (populated from user_roles table by supabaseAuth).
+    // activeRole / effectiveRole is intentionally excluded here — it is a UI display preference only.
+    // Fall back to req.user.role (users.role column) only when user_roles is empty (e.g. legacy user
+    // with no entries in the user_roles table yet), so they are not completely locked out.
     const allUserRoles: string[] = (req.user?.allRoles && Array.isArray(req.user.allRoles) && req.user.allRoles.length > 0)
       ? req.user.allRoles
-      : (userRole ? [userRole] : []);
+      : (req.user?.role ? [req.user.role] : []);
     console.log('🔒 Checking role access - User allRoles:', allUserRoles, 'Required:', allowedRoles);
 
     // Role hierarchy for inheritance checks
