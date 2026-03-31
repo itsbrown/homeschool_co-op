@@ -1,0 +1,63 @@
+#78 - Fix Webhook Double-Processing & Correct Lauren's Data (Emergency)
+
+What & Why
+Stripe fires both checkout.session.completed and payment_intent.succeeded for the same cart checkout. Both handlers currently process enrollment payments, and the deduplication guard is racy. This caused daggs.lauren@gmail.com's records to show $900 paid when only $600 was collected. The same root cause also breaks Payment History for multi-child checkouts (only first child's name and wrong amount saved).
+
+Done looks like
+- Lauren's data is corrected: Gabriel and Jack Hamilton each show $300 paid, $600 remaining; Jack's April 27 installment is pending.
+- Payment History shows the full $600 checkout payment with both children listed correctly.
+- checkout.session.completed is the single source of truth for cart-checkout payments.
+- payment_intent.succeeded skips checkout-originated payments (identified by checkout_session_id or metadata.paymentType).
+- All updates (enrollment, scheduled payments, payment record, allocations) happen in a single transaction.
+- Idempotency is atomic using stripe_payment_history idempotency_key + unique constraint.
+- New admin endpoint PATCH /api/admin/enrollments/:id/correct-balance for future corrections with full audit log.
+
+Out of scope
+- Full webhook rewrite or new PaymentProcessorService
+- Refunding via Stripe
+- Broader audit of other families
+
+Tasks
+
+1. Correct Lauren's data (one-time script or admin endpoint)
+   - In a transaction:
+     - Set Gabriel Hamilton enrollment: totalPaid = 30000, remainingBalance = 60000
+     - Set Jack Hamilton enrollment: totalPaid = 30000, remainingBalance = 60000
+     - Mark Jack's April 27 scheduled payment back to 'pending'
+   - Log correction with reason "Webhook double-processing fix for daggs.lauren@gmail.com"
+
+2. Strengthen idempotency & ownership in webhook-handler.ts
+   - In payment_intent.succeeded: early exit if checkout_session_id exists or metadata.paymentType === 'cart_checkout'
+   - Use stripe_payment_history idempotency_key + unique constraint for deduplication
+   - Wrap all enrollment + scheduled payment + payment record + allocation updates in db.transaction
+   - Add log when duplicate is skipped: console.log(`Duplicate webhook skipped: ${event.id}`)
+
+3. Fix payment record creation in checkout.session.completed
+   - Save the **full checkout amount** (not per-enrollment split)
+   - Include **all child names** in the description field
+   - Create payment_allocations for every enrollment in the cart
+   - Ensure Payment History reflects the actual checkout total
+
+4. Add admin correction endpoint
+   - PATCH /api/admin/enrollments/:id/correct-balance
+   - Body: { totalPaidCents: number, syncSchedule: boolean, reason: string }
+   - Requires admin or director role
+   - Recomputes remainingBalance, optionally syncs scheduled payments
+   - Logs correction (who, when, before/after, reason)
+
+5. Add unique constraint (server/init-db.ts)
+   - CREATE UNIQUE INDEX IF NOT EXISTS stripe_payment_history_idempotency_idx ON stripe_payment_history (idempotency_key) WHERE idempotency_key IS NOT NULL;
+
+Architectural constraints
+- All DB changes via IStorage
+- Migrations via idempotent SQL in init-db.ts only
+- Use db.transaction for atomicity
+- Log every correction with who, when, before/after, reason
+
+Relevant files
+* server/webhook-handler.ts (134-404 and 406-1000)
+* server/services/PaymentProcessorService.ts
+* server/api/payment-history.ts
+* server/storage.ts
+* server/init-db.ts
+* server/api/admin-enrollments.ts (or create)
