@@ -256,6 +256,13 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
     enabled: !!user && hasRole(['schoolAdmin', 'superAdmin', 'educator', 'director']),
   });
 
+  // Fetch staff permissions for non-admin staff members
+  const { data: staffPermissionsData } = useQuery<{ userLocations: Array<{ permissions: { canManageClasses?: boolean } }> }>({
+    queryKey: ['/api/school-admin/user-locations/my-permissions'],
+    enabled: !!user && !showAdminNavGroups,
+  });
+  const canManageClasses = staffPermissionsData?.userLocations?.[0]?.permissions?.canManageClasses ?? false;
+
   // Reset logo load failed states when school logo changes
   useEffect(() => {
     if (schoolData?.logo) {
@@ -478,6 +485,40 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
               );
             })}
 
+            {/* Class management nav items for staff with canManageClasses permission */}
+            {!showAdminNavGroups && canManageClasses && (
+              <>
+                {!isCollapsed && (
+                  <div className="px-3 pt-3 pb-1">
+                    <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Academics</span>
+                  </div>
+                )}
+                {[
+                  { title: 'Weekly Templates', href: '/schools/schedule-builder', icon: LayoutGrid },
+                  { title: 'Week Planner', href: '/schools/week-planner', icon: CalendarDays },
+                ].map((item) => {
+                  const isActive = location === item.href || location.startsWith(`${item.href}/`);
+                  return (
+                    <Link key={item.href} href={item.href}>
+                      <div
+                        className={cn(
+                          "flex items-center gap-3 rounded-lg px-3 py-2.5 transition-all cursor-pointer min-h-[44px]",
+                          isActive
+                            ? "bg-blue-600 text-white"
+                            : "text-gray-700 hover:bg-gray-100",
+                          isCollapsed ? "justify-center" : "justify-start"
+                        )}
+                        data-testid={`nav-${item.href.replace(/\//g, '-')}`}
+                      >
+                        <item.icon className="h-5 w-5 flex-shrink-0" />
+                        {!isCollapsed && <span className="font-medium">{item.title}</span>}
+                      </div>
+                    </Link>
+                  );
+                })}
+              </>
+            )}
+
             {/* Settings - always visible at bottom of nav */}
             <Link href="/schools/settings">
               <div
@@ -698,6 +739,38 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
                       </Link>
                     );
                   })}
+
+                  {/* Class management nav items for staff with canManageClasses permission */}
+                  {!showAdminNavGroups && canManageClasses && (
+                    <>
+                      <div className="px-3 pt-3 pb-1">
+                        <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Academics</span>
+                      </div>
+                      {[
+                        { title: 'Weekly Templates', href: '/schools/schedule-builder', icon: LayoutGrid },
+                        { title: 'Week Planner', href: '/schools/week-planner', icon: CalendarDays },
+                      ].map((item) => {
+                        const isActive = location === item.href || location.startsWith(`${item.href}/`);
+                        return (
+                          <Link key={item.href} href={item.href}>
+                            <div
+                              className={cn(
+                                "flex items-center gap-3 rounded-lg px-3 py-3 transition-all cursor-pointer min-h-[48px]",
+                                isActive
+                                  ? "bg-blue-600 text-white"
+                                  : "text-gray-700 hover:bg-gray-100"
+                              )}
+                              onClick={closeMobileMenu}
+                              data-testid={`mobile-nav-${item.href.replace(/\//g, '-')}`}
+                            >
+                              <item.icon className="h-5 w-5 flex-shrink-0" />
+                              <span className="font-medium">{item.title}</span>
+                            </div>
+                          </Link>
+                        );
+                      })}
+                    </>
+                  )}
 
                   {/* Settings - always visible */}
                   <Link href="/schools/settings">
