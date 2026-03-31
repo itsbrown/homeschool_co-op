@@ -69,12 +69,13 @@ import {
   weekPlanBlocks, type WeekPlanBlock, type InsertWeekPlanBlock,
   weekPlanBlockHistory, type WeekPlanBlockHistory, type InsertWeekPlanBlockHistory
 } from "@shared/schema";
-import { eq, inArray } from 'drizzle-orm';
+import { eq, inArray, or, ilike, and, sql } from 'drizzle-orm';
 import { getDb } from './db';
 
 export interface IStorage {
   // Methods for backup
   getAllUsers(): Promise<User[]>;
+  searchUsers(params: { schoolId: number | null, query?: string, role?: User['role'], limit?: number, offset?: number }): Promise<{ users: User[]; total: number }>;
   getAllCurricula(): Promise<Curriculum[]>;
   getAllKnowledgeBases(): Promise<KnowledgeBase[]>;
   getAllActivities(): Promise<Activity[]>;
@@ -1150,6 +1151,43 @@ export class MemStorage implements IStorage {
 
   async getAllUsers(): Promise<User[]> {
     return Array.from(this.usersStore.values());
+  }
+
+  async searchUsers(params: { schoolId: number | null, query?: string, role?: User['role'], limit?: number, offset?: number }): Promise<{ users: User[]; total: number }> {
+    const db = await getDb();
+    const { schoolId, query, role, limit = 20, offset = 0 } = params;
+
+    const conditions = [eq(users.isActive, true)];
+
+    if (schoolId !== null) {
+      conditions.push(eq(users.schoolId, schoolId));
+    }
+
+    if (role) {
+      conditions.push(eq(users.role, role));
+    }
+
+    if (query && query.trim()) {
+      const pattern = `%${query.trim()}%`;
+      conditions.push(
+        or(
+          ilike(users.name, pattern),
+          ilike(users.firstName, pattern),
+          ilike(users.lastName, pattern),
+          ilike(users.email, pattern),
+        )
+      );
+    }
+
+    const whereClause = and(...conditions);
+
+    const [countResult, results] = await Promise.all([
+      db.select({ count: sql`count(*)` }).from(users).where(whereClause),
+      db.select().from(users).where(whereClause).orderBy(users.name).limit(limit).offset(offset),
+    ]);
+
+    const total = Number(countResult[0]?.count ?? 0);
+    return { users: results, total };
   }
 
   // School methods
@@ -5097,6 +5135,10 @@ import { DatabaseStorage } from "./dbStorage";
         this.logStorageError(operation, error, true);
         return await memOperation();
       }
+    }
+
+    async searchUsers(params: { schoolId: number | null, query?: string, role?: User['role'], limit?: number, offset?: number }): Promise<{ users: User[]; total: number }> {
+      return this.dbStorage.searchUsers(params);
     }
 
     async getAllUsers(): Promise<User[]> {

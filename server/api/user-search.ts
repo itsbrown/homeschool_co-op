@@ -2,8 +2,11 @@ import { Router } from 'express';
 import { storage } from '../storage';
 import { supabaseAuth } from '../middleware/supabase-auth';
 import { z } from 'zod';
+import type { User } from '@shared/schema';
 
 const router = Router();
+
+const validRoles: User['role'][] = ["student", "parent", "learner", "educator", "mentor", "teacher", "schoolAdmin", "director", "admin", "superAdmin"];
 
 const searchQuerySchema = z.object({
   query: z.string().optional().default(''),
@@ -30,13 +33,11 @@ router.get('/search', supabaseAuth, async (req: any, res) => {
     }
 
     const params = searchQuerySchema.parse(req.query);
-    const query = params.query.toLowerCase().trim();
-    const roleFilter = params.role;
     const limit = Math.min(parseInt(String(params.limit)), 100);
     const offset = parseInt(String(params.offset));
 
     let effectiveSchoolId: number | null = null;
-    
+
     if (currentUser.role === 'superAdmin' || currentUser.role === 'admin') {
       const requestedSchoolId = params.schoolId ? parseInt(String(params.schoolId)) : null;
       effectiveSchoolId = requestedSchoolId;
@@ -47,39 +48,19 @@ router.get('/search', supabaseAuth, async (req: any, res) => {
       effectiveSchoolId = currentUser.schoolId;
     }
 
-    const allUsers = await storage.getAllUsers();
+    const roleFilter = params.role && validRoles.includes(params.role as User['role'])
+      ? (params.role as User['role'])
+      : undefined;
 
-    let filteredUsers = allUsers.filter((user: any) => {
-      if (effectiveSchoolId !== null && user.schoolId !== effectiveSchoolId) {
-        return false;
-      }
-
-      if (roleFilter && user.role !== roleFilter) return false;
-
-      if (query) {
-        const nameMatch = (user.name || '').toLowerCase().includes(query);
-        const emailMatch = (user.email || '').toLowerCase().includes(query);
-        const firstNameMatch = (user.firstName || '').toLowerCase().includes(query);
-        const lastNameMatch = (user.lastName || '').toLowerCase().includes(query);
-        
-        if (!nameMatch && !emailMatch && !firstNameMatch && !lastNameMatch) {
-          return false;
-        }
-      }
-
-      return true;
+    const { users: matchedUsers, total } = await storage.searchUsers({
+      schoolId: effectiveSchoolId,
+      query: params.query,
+      role: roleFilter,
+      limit,
+      offset,
     });
 
-    filteredUsers.sort((a: any, b: any) => {
-      const aName = (a.name || a.email || '').toLowerCase();
-      const bName = (b.name || b.email || '').toLowerCase();
-      return aName.localeCompare(bName);
-    });
-
-    const total = filteredUsers.length;
-    const paginatedUsers = filteredUsers.slice(offset, offset + limit);
-
-    const sanitizedUsers = paginatedUsers.map((user: any) => ({
+    const sanitizedUsers = matchedUsers.map((user) => ({
       id: user.id,
       email: user.email,
       name: user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email,

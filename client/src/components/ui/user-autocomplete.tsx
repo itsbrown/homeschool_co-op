@@ -44,26 +44,14 @@ export function UserAutocomplete({
 
   const debouncedQuery = useDebounce(query, 300);
 
-  const { data, isLoading } = useQuery({
-    queryKey: [endpoint, { query: debouncedQuery, role: roleFilter }],
-    queryFn: async () => {
-      const params = new URLSearchParams();
-      if (debouncedQuery) params.set("query", debouncedQuery);
-      if (roleFilter) params.set("role", roleFilter);
-      params.set("limit", "10");
+  const searchParams = new URLSearchParams();
+  if (debouncedQuery) searchParams.set("query", debouncedQuery);
+  if (roleFilter) searchParams.set("role", roleFilter);
+  searchParams.set("limit", "10");
+  const searchUrl = `${endpoint}?${searchParams}`;
 
-      const token = localStorage.getItem('supabase_token');
-      const activeRole = localStorage.getItem('activeRole');
-      const res = await fetch(`${endpoint}?${params}`, {
-        credentials: "include",
-        headers: {
-          ...(token && { Authorization: `Bearer ${token}` }),
-          ...(activeRole && { 'X-Active-Role': activeRole }),
-        },
-      });
-      if (!res.ok) throw new Error("Failed to search users");
-      return res.json();
-    },
+  const { data, isLoading } = useQuery({
+    queryKey: [searchUrl],
     enabled: debouncedQuery.length >= 1,
   });
 
