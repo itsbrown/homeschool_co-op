@@ -24,6 +24,10 @@ import {
   ClipboardList,
   Building2,
   ChevronDown,
+  LayoutGrid,
+  CalendarDays,
+  ClipboardCheck,
+  UserCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -166,10 +170,18 @@ export default function ParentSidebar() {
 
   const isEducatorRoute = location.startsWith('/educator/') || location === '/educator';
   const isSchoolAdminRoute = location.startsWith('/school-admin/') || location === '/school-admin';
+  const isAcademicsRoute =
+    location.startsWith('/schools/') ||
+    location === '/schools' ||
+    location === '/school-admin/assessments' ||
+    location.startsWith('/school-admin/assessments/') ||
+    location === '/school-admin/attendance' ||
+    location.startsWith('/school-admin/attendance/');
 
   const [expandedSections, setExpandedSections] = React.useState<{ [key: string]: boolean }>(() => ({
     'Educator': isEducatorRoute,
     'School Admin': isSchoolAdminRoute,
+    'Academics': isAcademicsRoute,
   }));
   const [logoLoadFailed, setLogoLoadFailed] = React.useState(false);
   const [mobileLogoLoadFailed, setMobileLogoLoadFailed] = React.useState(false);
@@ -181,7 +193,16 @@ export default function ParentSidebar() {
     if (isSchoolAdminRoute) {
       setExpandedSections(prev => ({ ...prev, 'School Admin': true }));
     }
-  }, [isEducatorRoute, isSchoolAdminRoute]);
+    if (isAcademicsRoute) {
+      setExpandedSections(prev => ({ ...prev, 'Academics': true }));
+    }
+  }, [isEducatorRoute, isSchoolAdminRoute, isAcademicsRoute]);
+
+  const { data: permissionsData } = useQuery<{ userLocations: Array<{ permissions: { canManageClasses?: boolean } }> }>({
+    queryKey: ['/api/school-admin/user-locations/my-permissions'],
+    enabled: !!user,
+  });
+  const canManageClasses = permissionsData?.userLocations?.[0]?.permissions?.canManageClasses ?? false;
 
   const { data: schoolData } = useQuery({
     queryKey: [`/api/school-parents/school/${user?.email}`],
@@ -282,11 +303,6 @@ export default function ParentSidebar() {
       icon: <BookOpen className="h-5 w-5" />,
       description: "View reading assessments and Lexile scores"
     },
-    {
-      href: "/settings",
-      title: "Settings",
-      icon: <Settings className="h-5 w-5" />,
-    },
     ...(hasEducatorRole ? [
       {
         href: "/educator/dashboard",
@@ -327,6 +343,41 @@ export default function ParentSidebar() {
         ],
       },
     ] : []),
+    ...(canManageClasses ? [
+      {
+        href: "/schools/schedule-builder",
+        title: "Academics",
+        icon: <LayoutGrid className="h-5 w-5" />,
+        isSectionHeader: true,
+        subItems: [
+          {
+            href: "/schools/schedule-builder",
+            title: "Weekly Templates",
+            icon: <LayoutGrid className="h-5 w-5" />,
+          },
+          {
+            href: "/schools/week-planner",
+            title: "Week Planner",
+            icon: <CalendarDays className="h-5 w-5" />,
+          },
+          {
+            href: "/school-admin/assessments",
+            title: "Assessments",
+            icon: <ClipboardCheck className="h-5 w-5" />,
+          },
+          {
+            href: "/school-admin/attendance",
+            title: "Attendance",
+            icon: <UserCheck className="h-5 w-5" />,
+          },
+        ],
+      },
+    ] : []),
+    {
+      href: "/settings",
+      title: "Settings",
+      icon: <Settings className="h-5 w-5" />,
+    },
     ...(hasSchoolAdminRole ? [
       {
         href: "/school-admin",

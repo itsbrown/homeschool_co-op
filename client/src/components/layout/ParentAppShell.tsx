@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetTrigger, SheetClose } from "@/components/ui/sheet";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { LogOut, Menu, User, Bell, Home, Users, BookOpen, Calendar, DollarSign, Settings, FolderOpen, Sparkles, GraduationCap, Clock, ClipboardList, Building2, Shield, ChevronDown } from "lucide-react";
+import { LogOut, Menu, User, Bell, Home, Users, BookOpen, Calendar, DollarSign, Settings, FolderOpen, Sparkles, GraduationCap, Clock, ClipboardList, Building2, Shield, ChevronDown, LayoutGrid, CalendarDays, ClipboardCheck, UserCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { Link, useLocation } from "wouter";
@@ -56,6 +56,13 @@ const schoolAdminMobileItems = [
   { href: "/school-admin/assessments", title: "Assessments", icon: BookOpen },
 ];
 
+const academicsMobileItems = [
+  { href: "/schools/schedule-builder", title: "Weekly Templates", icon: LayoutGrid },
+  { href: "/schools/week-planner", title: "Week Planner", icon: CalendarDays },
+  { href: "/school-admin/assessments", title: "Assessments", icon: ClipboardCheck },
+  { href: "/school-admin/attendance", title: "Attendance", icon: UserCheck },
+];
+
 export default function ParentAppShell({ children }: ParentAppShellProps) {
   const { user, signOut, isAuthenticated } = useAuth();
   const { activeRole, availableRoles, hasRole } = useRole();
@@ -71,14 +78,29 @@ export default function ParentAppShell({ children }: ParentAppShellProps) {
 
   const isEducatorRoute = location.startsWith('/educator/') || location === '/educator';
   const isSchoolAdminRoute = location.startsWith('/school-admin/') || location === '/school-admin';
+  const isAcademicsRoute =
+    location.startsWith('/schools/') ||
+    location === '/schools' ||
+    location === '/school-admin/assessments' ||
+    location.startsWith('/school-admin/assessments/') ||
+    location === '/school-admin/attendance' ||
+    location.startsWith('/school-admin/attendance/');
 
   const [educatorSectionOpen, setEducatorSectionOpen] = useState(isEducatorRoute);
   const [adminSectionOpen, setAdminSectionOpen] = useState(isSchoolAdminRoute);
+  const [academicsSectionOpen, setAcademicsSectionOpen] = useState(isAcademicsRoute);
 
   useEffect(() => {
     if (isEducatorRoute) setEducatorSectionOpen(true);
     if (isSchoolAdminRoute) setAdminSectionOpen(true);
-  }, [isEducatorRoute, isSchoolAdminRoute]);
+    if (isAcademicsRoute) setAcademicsSectionOpen(true);
+  }, [isEducatorRoute, isSchoolAdminRoute, isAcademicsRoute]);
+
+  const { data: permissionsData } = useQuery<{ userLocations: Array<{ permissions: { canManageClasses?: boolean } }> }>({
+    queryKey: ['/api/school-admin/user-locations/my-permissions'],
+    enabled: !!user,
+  });
+  const canManageClasses = permissionsData?.userLocations?.[0]?.permissions?.canManageClasses ?? false;
 
   useEffect(() => {
     if (isEducatorRoute) {
@@ -273,6 +295,48 @@ export default function ParentAppShell({ children }: ParentAppShellProps) {
                             </CollapsibleTrigger>
                             <CollapsibleContent className="mt-1 space-y-1 pl-4">
                               {schoolAdminMobileItems.map((item) => {
+                                const Icon = item.icon;
+                                const isActive = location === item.href || location.startsWith(item.href + '/');
+                                return (
+                                  <SheetClose asChild key={item.href}>
+                                    <Link
+                                      href={item.href}
+                                      className={cn(
+                                        "flex items-center gap-3 rounded-lg px-3 py-2.5 text-base font-medium transition-colors",
+                                        isActive
+                                          ? "bg-accent text-accent-foreground"
+                                          : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                                      )}
+                                    >
+                                      <Icon className="h-5 w-5" />
+                                      <span className="flex-1">{item.title}</span>
+                                    </Link>
+                                  </SheetClose>
+                                );
+                              })}
+                            </CollapsibleContent>
+                          </Collapsible>
+                        )}
+
+                        {canManageClasses && (
+                          <Collapsible open={academicsSectionOpen} onOpenChange={setAcademicsSectionOpen}>
+                            <CollapsibleTrigger className={cn(
+                              "flex w-full items-center justify-between rounded-lg px-3 py-3 text-base font-medium transition-colors",
+                              academicsSectionOpen
+                                ? "bg-accent text-accent-foreground"
+                                : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                            )}>
+                              <div className="flex items-center gap-3">
+                                <LayoutGrid className="h-5 w-5" />
+                                <span>Academics</span>
+                              </div>
+                              <ChevronDown className={cn(
+                                "h-4 w-4 transition-transform duration-200",
+                                academicsSectionOpen && "rotate-180"
+                              )} />
+                            </CollapsibleTrigger>
+                            <CollapsibleContent className="mt-1 space-y-1 pl-4">
+                              {academicsMobileItems.map((item) => {
                                 const Icon = item.icon;
                                 const isActive = location === item.href || location.startsWith(item.href + '/');
                                 return (
