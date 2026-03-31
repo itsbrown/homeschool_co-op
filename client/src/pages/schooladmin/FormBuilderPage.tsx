@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { Plus, Edit, Copy, Trash2, Eye, FileText, BarChart3, Link2 } from 'lucide-react';
+import { Plus, Edit, Copy, Trash2, Eye, FileText, BarChart3, Link2, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -13,6 +13,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -27,6 +28,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { NotificationTargetingPanel, defaultTargetingState, type TargetingState } from '@/components/NotificationTargetingPanel';
 
 interface CustomForm {
   id: number;
@@ -45,6 +47,7 @@ export default function FormBuilderPage() {
   const { toast } = useToast();
   const { user } = useAuth();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [sendSurveyForm, setSendSurveyForm] = useState<CustomForm | null>(null);
   const [newForm, setNewForm] = useState({
     title: '',
     description: '',
@@ -432,6 +435,17 @@ export default function FormBuilderPage() {
                   >
                     <Link2 className="h-4 w-4" />
                   </Button>
+                  {form.formType === 'survey' && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setSendSurveyForm(form)}
+                      data-testid={`button-send-survey-${form.id}`}
+                      title="Send survey to recipients"
+                    >
+                      <Send className="h-4 w-4" />
+                    </Button>
+                  )}
                   <Button
                     variant="outline"
                     size="sm"
@@ -462,6 +476,139 @@ export default function FormBuilderPage() {
         </div>
       )}
       </div>
+
+      {/* Send Survey Dialog */}
+      {sendSurveyForm && (
+        <SendSurveyDialog
+          form={sendSurveyForm}
+          onClose={() => setSendSurveyForm(null)}
+        />
+      )}
     </SchoolAdminLayout>
+  );
+}
+
+function SendSurveyDialog({ form, onClose }: { form: CustomForm; onClose: () => void }) {
+  const { toast } = useToast();
+  const surveyUrl = `${window.location.origin}/forms/${form.slug}`;
+  const [targeting, setTargeting] = useState<TargetingState>({
+    ...defaultTargetingState(),
+  });
+  const [message, setMessage] = useState(
+    `Please take a moment to fill out our survey: "${form.title}"\n\n${surveyUrl}`
+  );
+
+  type NotifyBase = { senderId: number; subject: string; content: string; type: string; priority: string };
+  type NotifyPayload =
+    | (NotifyBase & { userIds: number[] })
+    | (NotifyBase & { roles: string[]; locationIds?: number[] })
+    | (NotifyBase & { locationIds: number[]; includeRoles?: string[] })
+    | (NotifyBase & { classIds: number[] })
+    | NotifyBase;
+
+  const sendMutation = useMutation({
+    mutationFn: async () => {
+      const { targetType, selectedUsers, selectedRoles, selectedLocations, selectedClasses, deliveryType, priority } = targeting;
+      const subject = form.title;
+      const content = message;
+      const baseData: NotifyBase = { senderId: 1, subject, content, type: deliveryType, priority };
+
+      let endpoint: string;
+      let body: NotifyPayload;
+
+      switch (targetType) {
+        case 'individual': {
+          const userIds = selectedUsers.map(u => u.id);
+          if (userIds.length === 0) throw new Error('Please select at least one recipient.');
+          endpoint = '/api/notifications/send-individual';
+          body = { ...baseData, userIds };
+          break;
+        }
+        case 'role':
+          if (selectedRoles.length === 0) throw new Error('Please select at least one role.');
+          endpoint = '/api/notifications/send-by-role';
+          body = { ...baseData, roles: selectedRoles, locationIds: selectedLocations.length > 0 ? selectedLocations : undefined };
+          break;
+        case 'location':
+          if (selectedLocations.length === 0) throw new Error('Please select at least one location.');
+          endpoint = '/api/notifications/send-by-location';
+          body = { ...baseData, locationIds: selectedLocations, includeRoles: selectedRoles.length > 0 ? selectedRoles : undefined };
+          break;
+        case 'class':
+          if (selectedClasses.length === 0) throw new Error('Please select at least one class.');
+          endpoint = '/api/notifications/send-by-class';
+          body = { ...baseData, classIds: selectedClasses };
+          break;
+        case 'all':
+          endpoint = '/api/notifications/send-all';
+          body = { ...baseData };
+          break;
+        default:
+          throw new Error('Invalid target type.');
+      }
+
+      const response = await apiRequest('POST', endpoint, body);
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(errText || 'Failed to send survey');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/notifications?view=sent'] });
+      toast({ title: 'Survey Sent', description: 'The survey notification has been sent successfully.' });
+      onClose();
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Error', description: error.message || 'Failed to send survey', variant: 'destructive' });
+    },
+  });
+
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Send className="h-5 w-5" />
+            Send Survey
+          </DialogTitle>
+          <DialogDescription>
+            Send "{form.title}" to selected recipients via the notification system.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="grid gap-4 py-4">
+          <div className="grid gap-2">
+            <Label htmlFor="survey-message">Message</Label>
+            <Textarea
+              id="survey-message"
+              rows={4}
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              data-testid="textarea-survey-message"
+            />
+            <p className="text-xs text-muted-foreground">
+              Survey link: <span className="font-mono">{surveyUrl}</span>
+            </p>
+          </div>
+
+          <NotificationTargetingPanel value={targeting} onChange={setTargeting} />
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={sendMutation.isPending}>
+            Cancel
+          </Button>
+          <Button
+            onClick={() => sendMutation.mutate()}
+            disabled={sendMutation.isPending}
+            data-testid="button-send-survey-submit"
+          >
+            {sendMutation.isPending ? 'Sending...' : 'Send Survey'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

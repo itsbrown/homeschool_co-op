@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import { formatClassSchedule } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -11,14 +10,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { 
   Send, 
   Users, 
-  MapPin, 
   Mail, 
   MessageSquare, 
   Clock, 
@@ -26,13 +22,13 @@ import {
   AlertCircle,
   X,
   User,
-  Building2,
   Shield,
+  MapPin,
   Plus,
   Eye,
   RefreshCw
 } from "lucide-react";
-import { UserLookup, type UserResult } from "@/components/ui/user-lookup";
+import { NotificationTargetingPanel, defaultTargetingState, type TargetingState, type TargetType } from "@/components/NotificationTargetingPanel";
 
 interface Notification {
   id: number;
@@ -51,39 +47,8 @@ interface Notification {
   updatedAt: string;
 }
 
-interface Location {
-  id: number;
-  name: string;
-  code: string;
-}
-
-interface ScheduleVariant {
-  id: string;
-  name: string;
-  days: string[];
-  startTime: string;
-  endTime: string;
-  price: number;
-}
-
-interface ClassInfo {
-  id: number;
-  title: string;
-  schedule?: string | { variants: ScheduleVariant[] };
-  enrollmentCount?: number;
-}
-
-interface StaffPosition {
-  id: number;
-  title: string;
-  description?: string;
-  isDefault: boolean;
-  schoolId?: number;
-}
-
 export default function NotificationManagementPage() {
   const [isComposeDialogOpen, setIsComposeDialogOpen] = useState(false);
-  const [selectedTab, setSelectedTab] = useState("individual");
   const [editingNotification, setEditingNotification] = useState<Notification | null>(null);
   const [selectedNotificationId, setSelectedNotificationId] = useState<number | null>(null);
   const { toast } = useToast();
@@ -92,23 +57,6 @@ export default function NotificationManagementPage() {
   // Fetch all sent notifications (admin view)
   const { data: notifications = [], isLoading } = useQuery<Notification[]>({
     queryKey: ["/api/notifications?view=sent"],
-  });
-
-  // Fetch locations for targeting
-  const { data: locations = [] } = useQuery<Location[]>({
-    queryKey: ["/api/locations"],
-  });
-
-  // Fetch classes for class-specific notifications (use school-admin endpoint)
-  // API returns paginated response { items: ClassInfo[], total, page, limit, totalPages }
-  const { data: schoolClassesData } = useQuery<{ items: ClassInfo[], total: number }>({
-    queryKey: ["/api/school-admin/classes"],
-  });
-  const classes = schoolClassesData?.items || [];
-
-  // Fetch staff positions for role targeting
-  const { data: staffPositions = [] } = useQuery<StaffPosition[]>({
-    queryKey: ["/api/school-admin/staff-positions"],
   });
 
   // Fetch selected notification details
@@ -437,9 +385,6 @@ export default function NotificationManagementPage() {
             </Button>
           </DialogTrigger>
           <NotificationComposeDialog
-            locations={locations}
-            classes={classes}
-            staffPositions={staffPositions}
             editingNotification={editingNotification}
             onSendIndividual={sendIndividualMutation.mutate}
             onSendRole={sendRoleMutation.mutate}
@@ -735,9 +680,6 @@ export default function NotificationManagementPage() {
 
 // Notification Compose Dialog Component
 function NotificationComposeDialog({
-  locations,
-  classes,
-  staffPositions,
   editingNotification,
   onSendIndividual,
   onSendRole,
@@ -748,9 +690,6 @@ function NotificationComposeDialog({
   onDeleteDraft,
   isLoading,
 }: {
-  locations: Location[];
-  classes: ClassInfo[];
-  staffPositions: StaffPosition[];
   editingNotification: Notification | null;
   onSendIndividual: (data: any) => void;
   onSendRole: (data: any) => void;
@@ -761,104 +700,49 @@ function NotificationComposeDialog({
   onDeleteDraft: () => void;
   isLoading: boolean;
 }) {
-  type TargetType = "individual" | "role" | "location" | "all" | "class";
   
   const { toast } = useToast();
   const isEditMode = !!editingNotification;
-  
-  // Parse targetData from editing notification
-  const existingTargetData = editingNotification?.targetData as {
-    userIds?: number[];
-    roles?: string[];
-    locationIds?: number[];
-    classIds?: number[];
-  } | null;
-  
-  const [targetType, setTargetType] = useState<TargetType>(
-    (editingNotification?.targetType as TargetType) || "individual"
-  );
-  // Hydrate selections from existing targetData when editing
-  const [selectedLocations, setSelectedLocations] = useState<number[]>(
-    existingTargetData?.locationIds || []
-  );
-  const [selectedRoles, setSelectedRoles] = useState<string[]>(
-    existingTargetData?.roles || []
-  );
-  const [selectedUsers, setSelectedUsers] = useState<UserResult[]>(
-    // Convert userIds to UserResult objects for editing - will show IDs only
-    (existingTargetData?.userIds || []).map(id => ({ id, email: `User #${id}`, displayName: `User #${id}` }))
-  );
-  const [selectedClasses, setSelectedClasses] = useState<number[]>(
-    existingTargetData?.classIds || []
-  );
-  const [subject, setSubject] = useState(editingNotification?.subject || "");
-  const [content, setContent] = useState(editingNotification?.content || "");
-  const [type, setType] = useState(editingNotification?.type || "both");
-  const [priority, setPriority] = useState(editingNotification?.priority || "normal");
-  
-  // Get user role for default delivery method
-  const userRole = localStorage.getItem('activeRole') || 'parent';
-  const defaultDeliveryMethod = userRole === 'schoolAdmin' || userRole === 'platform_admin' ? 'in_app' : 'both';
-  
-  // Sync state when editingNotification changes (for when dialog opens with a draft)
-  useEffect(() => {
-    if (editingNotification) {
-      const targetData = editingNotification.targetData as {
-        userIds?: number[];
-        roles?: string[];
-        locationIds?: number[];
-        classIds?: number[];
-      } | null;
-      
-      setSubject(editingNotification.subject || "");
-      setContent(editingNotification.content || "");
-      setType(editingNotification.type || "both");
-      setPriority(editingNotification.priority || "normal");
-      setTargetType((editingNotification.targetType as TargetType) || "individual");
-      setSelectedLocations(targetData?.locationIds || []);
-      setSelectedRoles(targetData?.roles || []);
-      setSelectedUsers(
-        (targetData?.userIds || []).map(id => ({ id, email: `User #${id}`, displayName: `User #${id}` }))
-      );
-      setSelectedClasses(targetData?.classIds || []);
-    } else {
-      // Reset to defaults for new notification
-      setSubject("");
-      setContent("");
-      setType("both");
-      setPriority("normal");
-      setTargetType("individual");
-      setSelectedLocations([]);
-      setSelectedRoles([]);
-      setSelectedUsers([]);
-      setSelectedClasses([]);
-    }
-  }, [editingNotification]);
-  
-  // Reset selections when changing target type
-  const handleTargetTypeChange = (newType: string) => {
-    setTargetType(newType as TargetType);
-    setSelectedLocations([]);
-    setSelectedRoles([]);
-    setSelectedUsers([]);
-    setSelectedClasses([]);
+
+  const buildInitialTargeting = (): TargetingState => {
+    if (!editingNotification) return defaultTargetingState();
+    const targetData = editingNotification.targetData as {
+      userIds?: number[];
+      roles?: string[];
+      locationIds?: number[];
+      classIds?: number[];
+    } | null;
+    return {
+      targetType: (editingNotification.targetType as TargetType) || "individual",
+      selectedUsers: (targetData?.userIds || []).map(id => ({ id, email: `User #${id}`, displayName: `User #${id}` })),
+      selectedRoles: targetData?.roles || [],
+      selectedLocations: targetData?.locationIds || [],
+      selectedClasses: targetData?.classIds || [],
+      deliveryType: editingNotification.type || "both",
+      priority: editingNotification.priority || "normal",
+    };
   };
 
-  // Build targetData based on current target type and selections
+  const [targeting, setTargeting] = useState<TargetingState>(buildInitialTargeting);
+  const [subject, setSubject] = useState(editingNotification?.subject || "");
+  const [content, setContent] = useState(editingNotification?.content || "");
+
+  // Sync state when editingNotification changes
+  useEffect(() => {
+    setTargeting(buildInitialTargeting());
+    setSubject(editingNotification?.subject || "");
+    setContent(editingNotification?.content || "");
+  }, [editingNotification]);
+
   const buildTargetData = () => {
+    const { targetType, selectedUsers, selectedRoles, selectedLocations, selectedClasses } = targeting;
     switch (targetType) {
       case "individual":
         return { userIds: selectedUsers.map(u => u.id) };
       case "role":
-        return { 
-          roles: selectedRoles, 
-          locationIds: selectedLocations.length > 0 ? selectedLocations : undefined 
-        };
+        return { roles: selectedRoles, locationIds: selectedLocations.length > 0 ? selectedLocations : undefined };
       case "location":
-        return { 
-          locationIds: selectedLocations, 
-          roles: selectedRoles.length > 0 ? selectedRoles : undefined 
-        };
+        return { locationIds: selectedLocations, roles: selectedRoles.length > 0 ? selectedRoles : undefined };
       case "class":
         return { classIds: selectedClasses };
       case "all":
@@ -868,85 +752,54 @@ function NotificationComposeDialog({
   };
 
   const handleSubmit = (sendNow: boolean = false) => {
+    const { targetType, selectedUsers, selectedClasses, deliveryType, priority: prio } = targeting;
     const baseData = {
       senderId: 1,
       subject,
       content,
-      type,
-      priority,
+      type: deliveryType,
+      priority: prio,
       targetType,
     };
 
-    // If editing a draft, use update mutation with targetData
     if (isEditMode) {
       const targetData = buildTargetData();
-      
-      // Validate recipients if sending now
       if (sendNow) {
         if (targetType === "individual" && selectedUsers.length === 0) {
-          toast({
-            title: "No recipients selected",
-            description: "Please select at least one user to send the notification to.",
-            variant: "destructive",
-          });
+          toast({ title: "No recipients selected", description: "Please select at least one user.", variant: "destructive" });
           return;
         }
         if (targetType === "class" && selectedClasses.length === 0) {
-          toast({
-            title: "No classes selected",
-            description: "Please select at least one class to send the notification to.",
-            variant: "destructive",
-          });
+          toast({ title: "No classes selected", description: "Please select at least one class.", variant: "destructive" });
           return;
         }
       }
-      
       onUpdateDraft({ ...baseData, targetData, sendNow });
       return;
     }
 
-    // For new notifications, use the appropriate send mutation
     switch (targetType) {
-      case "individual":
+      case "individual": {
         const userIds = selectedUsers.map(u => u.id);
         if (userIds.length === 0) {
-          toast({
-            title: "No recipients selected",
-            description: "Please select at least one user to send the notification to.",
-            variant: "destructive",
-          });
+          toast({ title: "No recipients selected", description: "Please select at least one user.", variant: "destructive" });
           return;
         }
         onSendIndividual({ ...baseData, userIds });
         break;
-
+      }
       case "role":
-        onSendRole({
-          ...baseData,
-          roles: selectedRoles,
-          locationIds: selectedLocations.length > 0 ? selectedLocations : undefined,
-        });
+        onSendRole({ ...baseData, roles: targeting.selectedRoles, locationIds: targeting.selectedLocations.length > 0 ? targeting.selectedLocations : undefined });
         break;
-
       case "location":
-        onSendLocation({
-          ...baseData,
-          locationIds: selectedLocations,
-          includeRoles: selectedRoles.length > 0 ? selectedRoles : undefined,
-        });
+        onSendLocation({ ...baseData, locationIds: targeting.selectedLocations, includeRoles: targeting.selectedRoles.length > 0 ? targeting.selectedRoles : undefined });
         break;
-
       case "all":
         onSendBroadcast(baseData);
         break;
-
       case "class":
         if (selectedClasses.length === 0) {
-          toast({
-            title: "No classes selected",
-            description: "Please select at least one class to notify parents.",
-            variant: "destructive",
-          });
+          toast({ title: "No classes selected", description: "Please select at least one class to notify parents.", variant: "destructive" });
           return;
         }
         onSendClass({ ...baseData, classIds: selectedClasses });
@@ -954,44 +807,34 @@ function NotificationComposeDialog({
     }
   };
 
-  // Get roles from staff positions (dynamic from database)
-  const roles = staffPositions.map(p => p.title.toLowerCase());
-
   return (
     <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
-      <form onSubmit={(e) => {
-        e.preventDefault();
-        handleSubmit(true); // Send now
-      }}>
+      <form onSubmit={(e) => { e.preventDefault(); handleSubmit(true); }}>
         <DialogHeader>
           <DialogTitle>{isEditMode ? "Edit Draft Notification" : "Compose Notification"}</DialogTitle>
           <DialogDescription>
-            {isEditMode 
-              ? "Edit your draft notification and send when ready" 
+            {isEditMode
+              ? "Edit your draft notification and send when ready"
               : "Send targeted notifications to specific individuals, roles, or locations"}
           </DialogDescription>
         </DialogHeader>
-        
+
         <div className="grid gap-6 py-4">
-          {/* Basic Information */}
           <div className="grid gap-4">
             <div className="grid gap-2">
               <Label htmlFor="subject">Subject</Label>
               <Input
                 id="subject"
-                name="subject"
                 placeholder="Important announcement..."
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
                 required
               />
             </div>
-
             <div className="grid gap-2">
               <Label htmlFor="content">Message</Label>
               <Textarea
                 id="content"
-                name="content"
                 placeholder="Enter your message here..."
                 rows={4}
                 value={content}
@@ -999,319 +842,13 @@ function NotificationComposeDialog({
                 required
               />
             </div>
-
-            <div className="grid grid-cols-3 gap-4">
-              <div className="grid gap-2">
-                <Label htmlFor="type">Delivery Method</Label>
-                <Select value={type} onValueChange={(v) => setType(v as "email" | "in_app" | "both")}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="in_app">In-App Only</SelectItem>
-                    <SelectItem value="email">Email Only</SelectItem>
-                    <SelectItem value="sms">SMS Only</SelectItem>
-                    <SelectItem value="both">Email + In-App</SelectItem>
-                    <SelectItem value="all">All (Email + SMS + In-App)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="grid gap-2">
-                <Label htmlFor="priority">Priority</Label>
-                <Select value={priority} onValueChange={(v) => setPriority(v as "low" | "normal" | "high" | "urgent")}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="low">Low</SelectItem>
-                    <SelectItem value="normal">Normal</SelectItem>
-                    <SelectItem value="high">High</SelectItem>
-                    <SelectItem value="urgent">Urgent</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="grid gap-2">
-                <Label htmlFor="scheduledFor">Schedule For (Optional)</Label>
-                <Input
-                  id="scheduledFor"
-                  name="scheduledFor"
-                  type="datetime-local"
-                />
-              </div>
+            <div className="grid gap-2">
+              <Label>Schedule For (Optional)</Label>
+              <Input type="datetime-local" style={{ fontSize: "16px" }} />
             </div>
           </div>
 
-          {/* Target Selection */}
-          <div className="grid gap-4">
-            <Label>Target Recipients</Label>
-            <Tabs value={targetType} onValueChange={handleTargetTypeChange}>
-              <TabsList className="grid w-full grid-cols-5">
-                <TabsTrigger value="individual">Individual</TabsTrigger>
-                <TabsTrigger value="role">By Role</TabsTrigger>
-                <TabsTrigger value="location">By Location</TabsTrigger>
-                <TabsTrigger value="class">By Class</TabsTrigger>
-                <TabsTrigger value="all">Everyone</TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="individual" className="space-y-4">
-                <div className="grid gap-2">
-                  <Label>Select Recipients</Label>
-                  <UserLookup
-                    value={selectedUsers}
-                    onChange={setSelectedUsers}
-                    placeholder="Search for users by name or email..."
-                    multiSelect={true}
-                    modalTitle="Select Notification Recipients"
-                  />
-                  {selectedUsers.length > 0 && (
-                    <p className="text-sm text-muted-foreground">
-                      {selectedUsers.length} recipient{selectedUsers.length !== 1 ? 's' : ''} selected
-                    </p>
-                  )}
-                  {selectedUsers.length === 0 && (
-                    <p className="text-sm text-muted-foreground">
-                      Search and select specific users to notify
-                    </p>
-                  )}
-                  {(type === 'sms' || type === 'all') && selectedUsers.length > 0 && (() => {
-                    const missingPhone = selectedUsers.filter(u => !u.phone);
-                    if (missingPhone.length === 0) return null;
-                    return (
-                      <Alert variant="destructive" className="mt-2">
-                        <AlertCircle className="h-4 w-4" />
-                        <AlertDescription>
-                          <strong>Missing phone numbers:</strong> The following selected recipients have no phone number on file and will not receive SMS messages:{' '}
-                          {missingPhone.map(u => u.name || u.email).join(', ')}.
-                        </AlertDescription>
-                      </Alert>
-                    );
-                  })()}
-                </div>
-              </TabsContent>
-
-              <TabsContent value="role" className="space-y-4">
-                {(type === 'sms' || type === 'all') && (
-                  <Alert className="border-amber-200 bg-amber-50 text-amber-800">
-                    <AlertCircle className="h-4 w-4 text-amber-600" />
-                    <AlertDescription>
-                      Recipients without a valid phone number on file will be skipped when sending SMS.
-                    </AlertDescription>
-                  </Alert>
-                )}
-                <div className="grid gap-2">
-                  <Label>Select Roles</Label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {roles.map((role) => (
-                      <div key={role} className="flex items-center space-x-2">
-                        <Checkbox
-                          id={`role-${role}`}
-                          checked={selectedRoles.includes(role)}
-                          onCheckedChange={(checked) => {
-                            if (checked) {
-                              setSelectedRoles([...selectedRoles, role]);
-                            } else {
-                              setSelectedRoles(selectedRoles.filter(r => r !== role));
-                            }
-                          }}
-                        />
-                        <Label htmlFor={`role-${role}`} className="capitalize">
-                          {role}
-                        </Label>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="grid gap-2">
-                  <Label>Filter by Locations (Optional)</Label>
-                  <div className="grid grid-cols-1 gap-2">
-                    {locations.map((location) => (
-                      <div key={location.id} className="flex items-center space-x-2">
-                        <Checkbox
-                          id={`role-location-${location.id}`}
-                          checked={selectedLocations.includes(location.id)}
-                          onCheckedChange={(checked) => {
-                            if (checked) {
-                              setSelectedLocations([...selectedLocations, location.id]);
-                            } else {
-                              setSelectedLocations(selectedLocations.filter(l => l !== location.id));
-                            }
-                          }}
-                        />
-                        <Label htmlFor={`role-location-${location.id}`}>
-                          {location.name} ({location.code})
-                        </Label>
-                      </div>
-                    ))}
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    Leave blank to notify selected roles at all locations
-                  </p>
-                </div>
-              </TabsContent>
-
-              <TabsContent value="location" className="space-y-4">
-                {(type === 'sms' || type === 'all') && (
-                  <Alert className="border-amber-200 bg-amber-50 text-amber-800">
-                    <AlertCircle className="h-4 w-4 text-amber-600" />
-                    <AlertDescription>
-                      Recipients without a valid phone number on file will be skipped when sending SMS.
-                    </AlertDescription>
-                  </Alert>
-                )}
-                <div className="grid gap-2">
-                  <Label>Select Locations</Label>
-                  {locations.length === 0 ? (
-                    <div className="p-4 bg-muted rounded-lg border border-dashed">
-                      <div className="flex items-center space-x-2 text-muted-foreground">
-                        <MapPin className="h-5 w-5" />
-                        <div>
-                          <p className="font-medium">No locations configured</p>
-                          <p className="text-sm">
-                            Add locations in School Settings to enable location-based notifications.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 gap-2">
-                      {locations.map((location) => (
-                        <div key={location.id} className="flex items-center space-x-2">
-                          <Checkbox
-                            id={`location-${location.id}`}
-                            checked={selectedLocations.includes(location.id)}
-                            onCheckedChange={(checked) => {
-                              if (checked) {
-                                setSelectedLocations([...selectedLocations, location.id]);
-                              } else {
-                                setSelectedLocations(selectedLocations.filter(l => l !== location.id));
-                              }
-                            }}
-                          />
-                          <Label htmlFor={`location-${location.id}`}>
-                            {location.name} ({location.code})
-                          </Label>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <div className="grid gap-2">
-                  <Label>Filter by Roles (Optional)</Label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {roles.map((role) => (
-                      <div key={role} className="flex items-center space-x-2">
-                        <Checkbox
-                          id={`location-role-${role}`}
-                          checked={selectedRoles.includes(role)}
-                          onCheckedChange={(checked) => {
-                            if (checked) {
-                              setSelectedRoles([...selectedRoles, role]);
-                            } else {
-                              setSelectedRoles(selectedRoles.filter(r => r !== role));
-                            }
-                          }}
-                        />
-                        <Label htmlFor={`location-role-${role}`} className="capitalize">
-                          {role}
-                        </Label>
-                      </div>
-                    ))}
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    Leave blank to notify everyone at selected locations
-                  </p>
-                </div>
-              </TabsContent>
-
-              <TabsContent value="class" className="space-y-4">
-                {(type === 'sms' || type === 'all') && (
-                  <Alert className="border-amber-200 bg-amber-50 text-amber-800">
-                    <AlertCircle className="h-4 w-4 text-amber-600" />
-                    <AlertDescription>
-                      Recipients without a valid phone number on file will be skipped when sending SMS.
-                    </AlertDescription>
-                  </Alert>
-                )}
-                <div className="grid gap-2">
-                  <Label>Select Classes</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Notify parents of students enrolled in selected classes
-                  </p>
-                  {classes.length === 0 ? (
-                    <div className="p-4 bg-muted rounded-lg border border-dashed">
-                      <div className="flex items-center space-x-2 text-muted-foreground">
-                        <Building2 className="h-5 w-5" />
-                        <div>
-                          <p className="font-medium">No classes available</p>
-                          <p className="text-sm">
-                            Create classes in Class Management to enable class-based notifications.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto border rounded-md p-2">
-                      {classes.map((cls) => (
-                        <div key={cls.id} className="flex items-center space-x-2">
-                          <Checkbox
-                            id={`class-${cls.id}`}
-                            checked={selectedClasses.includes(cls.id)}
-                            onCheckedChange={(checked) => {
-                              if (checked) {
-                                setSelectedClasses([...selectedClasses, cls.id]);
-                              } else {
-                                setSelectedClasses(selectedClasses.filter(c => c !== cls.id));
-                              }
-                            }}
-                          />
-                          <Label htmlFor={`class-${cls.id}`} className="flex-1">
-                            <span className="font-medium">{cls.title}</span>
-                            {formatClassSchedule(cls.schedule) && (
-                              <span className="text-sm text-muted-foreground ml-2">
-                                ({formatClassSchedule(cls.schedule)})
-                              </span>
-                            )}
-                          </Label>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {selectedClasses.length > 0 && (
-                    <p className="text-sm text-muted-foreground">
-                      {selectedClasses.length} class{selectedClasses.length !== 1 ? 'es' : ''} selected
-                    </p>
-                  )}
-                </div>
-              </TabsContent>
-
-              <TabsContent value="all" className="space-y-4">
-                {(type === 'sms' || type === 'all') && (
-                  <Alert className="border-amber-200 bg-amber-50 text-amber-800">
-                    <AlertCircle className="h-4 w-4 text-amber-600" />
-                    <AlertDescription>
-                      Recipients without a valid phone number on file will be skipped when sending SMS.
-                    </AlertDescription>
-                  </Alert>
-                )}
-                <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg">
-                  <div className="flex items-center space-x-2">
-                    <AlertCircle className="h-5 w-5 text-orange-600" />
-                    <div>
-                      <h4 className="font-medium text-orange-800">Broadcast to Everyone</h4>
-                      <p className="text-sm text-orange-700">
-                        This will send the notification to all staff and students across all locations.
-                        Use this feature carefully for important announcements only.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </TabsContent>
-            </Tabs>
-          </div>
+          <NotificationTargetingPanel value={targeting} onChange={setTargeting} />
         </div>
 
         <DialogFooter className="flex justify-between">
