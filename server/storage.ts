@@ -815,6 +815,9 @@ export interface IStorage {
 
   // Schedule Builder - Block History
   getBlockHistory(blockId: number): Promise<WeekPlanBlockHistory[]>;
+
+  // Retention Report
+  getEnrollmentFamiliesByPeriod(schoolId: number, startDate: string, endDate: string): Promise<{ parentEmail: string; parentId: number; childName: string; className: string }[]>;
 }
 
 export class MemStorage implements IStorage {
@@ -5035,6 +5038,9 @@ export class MemStorage implements IStorage {
   // Payment Reminder Log methods
   async createPaymentReminderLog(log: InsertPaymentReminderLog): Promise<PaymentReminderLog> { throw new Error('Not implemented'); }
   async getPaymentReminderLogsBySchool(schoolId: number, limit: number = 100): Promise<PaymentReminderLog[]> { return []; }
+
+  // Retention Report
+  async getEnrollmentFamiliesByPeriod(_schoolId: number, _startDate: string, _endDate: string): Promise<{ parentEmail: string; parentId: number; childName: string; className: string }[]> { return []; }
 }
 
 import { DatabaseStorage } from "./dbStorage";
@@ -8050,6 +8056,11 @@ import { DatabaseStorage } from "./dbStorage";
       }
       async getBlockHistory(blockId: number): Promise<WeekPlanBlockHistory[]> {
         return this.dbStorage.getBlockHistory(blockId);
+      }
+
+      // Retention Report
+      async getEnrollmentFamiliesByPeriod(schoolId: number, startDate: string, endDate: string): Promise<{ parentEmail: string; parentId: number; childName: string; className: string }[]> {
+        return this.dbStorage.getEnrollmentFamiliesByPeriod(schoolId, startDate, endDate);
       }
 
       // Clear all data from storage (for testing)

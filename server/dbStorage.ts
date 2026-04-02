@@ -1,4 +1,4 @@
-import { eq, and, desc, asc, like, ilike, or, sql, lt, gt, gte, lte, isNull, inArray } from 'drizzle-orm';
+import { eq, and, desc, asc, like, ilike, or, sql, lt, gt, gte, lte, isNull, inArray, not } from 'drizzle-orm';
 import { getDb } from './db';
 import { IStorage } from './storage';
 import {
@@ -5593,5 +5593,27 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(weekPlanBlockHistory)
       .where(eq(weekPlanBlockHistory.blockId, blockId))
       .orderBy(desc(weekPlanBlockHistory.changedAt));
+  }
+
+  // Retention Report
+  async getEnrollmentFamiliesByPeriod(schoolId: number, startDate: string, endDate: string): Promise<{ parentEmail: string; parentId: number; childName: string; className: string }[]> {
+    const db = await getDb();
+    const rows = await db
+      .select({
+        parentEmail: programEnrollments.parentEmail,
+        parentId: programEnrollments.parentId,
+        childName: programEnrollments.childName,
+        className: programEnrollments.className,
+      })
+      .from(programEnrollments)
+      .where(
+        and(
+          eq(programEnrollments.schoolId, schoolId),
+          sql`${programEnrollments.programStartDate} >= ${startDate}`,
+          sql`${programEnrollments.programStartDate} <= ${endDate}`,
+          not(inArray(programEnrollments.status, ['cancelled', 'withdrawn', 'failed']))
+        )
+      );
+    return rows;
   }
 }
