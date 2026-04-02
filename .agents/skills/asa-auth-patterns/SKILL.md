@@ -93,11 +93,16 @@ users.activeRoleId  → ID from user_roles table for current selection
 ```
 
 ### Checking Permissions (Backend)
-Always check BOTH sources:
+Route handlers should use `req.user.allRoles` (populated by `supabaseAuth` from the `user_roles` table) rather than calling `storage.getUserRolesByUserId()` directly. This avoids an extra DB round-trip on every request.
+
 ```typescript
-const userRoles = await storage.getUserRolesByUserId(userId);
+// PREFERRED: use allRoles already populated by supabaseAuth
+const roleStrings: string[] = req.user.allRoles ?? [];
 ```
-This returns all roles from the `user_roles` table. For legacy users who only have `users.role`, the middleware also checks that field.
+
+`req.user.allRoles` is already school-filtered — it includes roles scoped to the user's current/active school and global roles (null schoolId, e.g. superAdmin). For single-school users this is identical to querying `user_roles` directly; for multi-school users it correctly scopes permissions to the active school context.
+
+Only fall back to `storage.getUserRolesByUserId()` when `allRoles` is unexpectedly empty (e.g. middleware order issue or legacy user with no `user_roles` entries), and log a `console.warn` in that case.
 
 ### Role Verification Middleware
 - `requireEducatorRole` — checks if user has any educator-type role (educator, mentor, teacher, instructor, schoolAdmin, admin, superAdmin)

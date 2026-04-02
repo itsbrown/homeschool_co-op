@@ -2519,6 +2519,23 @@ async function runMigrations() {
   } catch (lexileTypeError: any) {
     console.log('Migration note (non-blocking):', lexileTypeError.message);
   }
+
+  // Add functional index on LOWER(email) for case-insensitive email lookups.
+  // getUserByEmail (called on every token-authenticated request) queries with LOWER(),
+  // but the existing users_email_unique constraint is on the raw column — without this
+  // index, that path does a sequential scan as the users table grows.
+  // This index is a separate, compatible addition (does not replace users_email_unique).
+  // Schema migrations are applied here via idempotent SQL only; db:push is blocked for
+  // this project due to a drizzle-kit functional index parsing bug.
+  console.log('Running migration: Adding functional index on LOWER(email) for users table...');
+  try {
+    await db.execute(sql`
+      CREATE UNIQUE INDEX IF NOT EXISTS users_email_lower_idx ON users (LOWER(email));
+    `);
+    console.log('✅ Migration completed: functional index users_email_lower_idx created');
+  } catch (emailIndexError: any) {
+    console.log('Migration note (non-blocking):', emailIndexError.message);
+  }
 }
 
 // Initialize database tables

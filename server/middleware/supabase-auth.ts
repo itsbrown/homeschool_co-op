@@ -40,26 +40,32 @@ export const supabaseAuth = async (
   try {
     const authHeader = req.headers.authorization;
     
-    console.log('🔐 supabaseAuth middleware - Path:', req.path);
-    console.log('🔐 supabaseAuth middleware - Authorization header:', authHeader ? 'PRESENT' : 'MISSING');
-    console.log('🔐 supabaseAuth middleware - Session:', (req as any).session?.userId ? 'PRESENT' : 'MISSING');
-    console.log('🔐 supabaseAuth middleware - Session data:', JSON.stringify({
-      userId: (req as any).session?.userId,
-      userRole: (req as any).session?.userRole,
-      activeRole: (req as any).session?.activeRole
-    }));
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔐 supabaseAuth middleware - Path:', req.path);
+      console.log('🔐 supabaseAuth middleware - Authorization header:', authHeader ? 'PRESENT' : 'MISSING');
+      console.log('🔐 supabaseAuth middleware - Session:', (req as any).session?.userId ? 'PRESENT' : 'MISSING');
+      console.log('🔐 supabaseAuth middleware - Session data:', JSON.stringify({
+        userId: (req as any).session?.userId,
+        userRole: (req as any).session?.userRole,
+        activeRole: (req as any).session?.activeRole
+      }));
+    }
     
     // Check for session-based authentication first (for tests and legacy support)
     // Fall back to storage lookup if userRole is missing
     if ((req as any).session?.userId) {
-      console.log('✅ Session with userId detected:', (req as any).session.userId);
+      if (process.env.NODE_ENV === 'development') {
+        console.log('✅ Session with userId detected:', (req as any).session.userId);
+      }
       
       // Try to get user from storage
       try {
         const user = await storage.getUser((req as any).session.userId);
         
         if (user) {
-          console.log('✅ Session user found in storage:', user.email, 'role:', user.role);
+          if (process.env.NODE_ENV === 'development') {
+            console.log('✅ Session user found in storage:', user.email, 'role:', user.role);
+          }
           
           // Set up auth context to match Supabase structure with full user data
           // Use numeric database ID directly (no string conversion)
@@ -112,7 +118,9 @@ export const supabaseAuth = async (
           
           return next();
         } else {
-          console.log('⚠️ Session user ID', (req as any).session.userId, 'not found in storage, continuing to token check');
+          if (process.env.NODE_ENV === 'development') {
+            console.log('⚠️ Session user ID', (req as any).session.userId, 'not found in storage, continuing to token check');
+          }
         }
       } catch (error) {
         console.error('Error loading session user:', error);
@@ -121,19 +129,25 @@ export const supabaseAuth = async (
     }
     
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      console.log('❌ supabaseAuth - Rejecting: Missing or invalid authorization header and no valid session');
+      if (process.env.NODE_ENV === 'development') {
+        console.log('❌ supabaseAuth - Rejecting: Missing or invalid authorization header and no valid session');
+      }
       return res.status(401).json({ error: 'Missing or invalid authorization header' });
     }
 
     const token = authHeader.substring(7);
-    console.log('🔐 supabaseAuth - Token extracted, length:', token.length);
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔐 supabaseAuth - Token extracted, length:', token.length);
+    }
 
     const { data: { user }, error } = await supabase.auth.getUser(token);
 
     if (error || !user) {
       // Handle deleted/stale user tokens more gracefully
       if (error && (error as any).code === 'user_not_found') {
-        console.log('🔄 Stale token: User was deleted from Supabase, token still cached in browser');
+        if (process.env.NODE_ENV === 'development') {
+          console.log('🔄 Stale token: User was deleted from Supabase, token still cached in browser');
+        }
       } else {
         console.error('Supabase auth error:', error);
       }
@@ -145,7 +159,7 @@ export const supabaseAuth = async (
     const hasAppMetadata = user.app_metadata && (user.app_metadata.role || user.app_metadata.school_id);
     const metadataSource = hasAppMetadata && PHASE_2_APP_METADATA_ENABLED ? 'app_metadata' : 'user_metadata';
     
-    if (hasAppMetadata && PHASE_2_APP_METADATA_ENABLED) {
+    if (hasAppMetadata && PHASE_2_APP_METADATA_ENABLED && process.env.NODE_ENV === 'development') {
       console.log(`✅ Phase 2: Using app_metadata for ${user.email} (secure, immutable)`);
     }
 
@@ -194,7 +208,9 @@ export const supabaseAuth = async (
               if (!alreadySynced) {
                 // Existing user with user_metadata - auto-sync from database
                 if (missingSchoolId || missingRole) {
-                  console.log(`⚠️ Auto-fixing missing user_metadata for ${user.email}`);
+                  if (process.env.NODE_ENV === 'development') {
+                    console.log(`⚠️ Auto-fixing missing user_metadata for ${user.email}`);
+                  }
                 }
                 
                 // Update Supabase user metadata to match database (source of truth)
@@ -210,9 +226,11 @@ export const supabaseAuth = async (
                 if (updateError) {
                   console.error(`❌ Failed to update user_metadata for ${user.email}:`, updateError.message);
                 } else {
-                  console.log(`✅ user_metadata synced for ${user.email}: school_id=${dbUser.schoolId}, role=${dbUser.role}`);
-                  if (schoolIdMismatch || roleMismatch) {
-                    console.log(`   🔒 Corrected mismatch - user should log out and back in to refresh token`);
+                  if (process.env.NODE_ENV === 'development') {
+                    console.log(`✅ user_metadata synced for ${user.email}: school_id=${dbUser.schoolId}, role=${dbUser.role}`);
+                    if (schoolIdMismatch || roleMismatch) {
+                      console.log(`   🔒 Corrected mismatch - user should log out and back in to refresh token`);
+                    }
                   }
                   // Mark this user as synced to avoid repeated updates
                   metadataSyncedUsers.add(userKey);
@@ -248,8 +266,10 @@ export const supabaseAuth = async (
     // This prevents orphaned accounts without school association
     // Users who try to login via OAuth without an existing account will see a friendly message
     if (dbUserId === null && user.email) {
-      console.log(`🚫 BLOCKED: Unregistered user attempted OAuth login: ${user.email}`);
-      console.log(`   User must register with their school first before using Google login`);
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`🚫 BLOCKED: Unregistered user attempted OAuth login: ${user.email}`);
+        console.log(`   User must register with their school first before using Google login`);
+      }
       return res.status(403).json({ 
         error: 'REGISTRATION_REQUIRED',
         message: 'You need to register with your school before you can log in. Please contact your school administrator for a registration link.',
@@ -319,13 +339,17 @@ export const supabaseAuth = async (
       allRoles = userRolesData
         .filter((r: any) => r.schoolId === null || r.schoolId === effectiveSchoolId)
         .map((r: any) => r.role);
-      console.log(`📋 supabaseAuth - allRoles for school ${effectiveSchoolId}:`, allRoles);
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`📋 supabaseAuth - allRoles for school ${effectiveSchoolId}:`, allRoles);
+      }
 
       // If user has superAdmin in their roles, set effectiveRole to superAdmin
       // (unless they have explicitly switched to a different active role)
       if (!dbUserData?.activeRole && allRoles.some(r => r.toLowerCase() === 'superadmin')) {
         effectiveRole = 'superAdmin';
-        console.log('🔑 supabaseAuth - User has superAdmin role in user_roles table');
+        if (process.env.NODE_ENV === 'development') {
+          console.log('🔑 supabaseAuth - User has superAdmin role in user_roles table');
+        }
       }
     } catch (rolesErr) {
       console.error('Error loading allRoles for token user:', rolesErr);
@@ -383,38 +407,57 @@ export const requireEducatorRole = async (
   next: NextFunction
 ) => {
   try {
-    console.log('[EducatorDashboard] Checking educator role access for user:', req.user?.email);
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[EducatorDashboard] Checking educator role access for user:', req.user?.email);
+    }
     
     if (!req.user?.id) {
-      console.log('[EducatorDashboard] No user ID found in request');
       return res.status(401).json({ error: 'Authentication required' });
     }
     
-    // Get all user roles
-    const userRoles = await storage.getUserRolesByUserId(req.user.id);
-    console.log('[EducatorDashboard] User roles:', userRoles.map(r => r.role));
-    
-    // Define educator-type roles (case-insensitive matching)
+    // Define educator-type roles (case-insensitive matching).
+    // Must stay identical to the previous set — only the data source changes.
     const educatorRolePatterns = [
       'educator', 'mentor', 'teacher', 'instructor', 'tutor', 'facilitator',
       'schoolAdmin', 'school_admin', 'admin', 'superAdmin'
     ];
+
+    // Prefer req.user.allRoles populated by supabaseAuth from the user_roles table.
+    // allRoles is already school-filtered (includes the user's current school +
+    // global null-schoolId roles). For single-school users this is identical to the
+    // previous DB query; for multi-school users it is more correct — it denies
+    // educator access at a school where the user only holds a parent role.
+    let roleStrings: string[] = req.user.allRoles ?? [];
+
+    if (roleStrings.length === 0) {
+      // Edge case: middleware order wrong, or legacy user with no user_roles entries.
+      // Fall back to a DB fetch so the endpoint stays functional.
+      console.warn('[EducatorDashboard] req.user.allRoles is empty — falling back to DB fetch for user:', req.user.id);
+      try {
+        const userRoles = await storage.getUserRolesByUserId(req.user.id);
+        roleStrings = userRoles.map(r => r.role);
+      } catch (fallbackErr) {
+        console.error('[EducatorDashboard] DB fallback failed:', fallbackErr);
+      }
+    }
+
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[EducatorDashboard] User roles:', roleStrings);
+    }
     
-    const hasEducatorRole = userRoles.some(r => 
+    const hasEducatorRole = roleStrings.some(role => 
       educatorRolePatterns.some(pattern => 
-        r.role.toLowerCase().includes(pattern.toLowerCase())
+        role.toLowerCase().includes(pattern.toLowerCase())
       )
     );
     
     if (!hasEducatorRole) {
-      console.log('[EducatorDashboard] User does not have educator role, access denied');
       return res.status(403).json({ 
         error: 'Access denied. Educator role required.',
         code: 'EDUCATOR_ROLE_REQUIRED'
       });
     }
     
-    console.log('[EducatorDashboard] Educator role verified for:', req.user.email);
     next();
   } catch (error) {
     console.error('[EducatorDashboard] Error checking educator role:', error);

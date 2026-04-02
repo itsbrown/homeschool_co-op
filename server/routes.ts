@@ -2169,7 +2169,10 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
   // Mount enrollment routers at /api/admin/enrollments with Supabase auth
   // These are separate from the Auth0-based admin router at /api/admin
   app.use("/api/admin/enrollments", supabaseAuth, adminEnrollmentsRouter); // Admin enrollment CRUD + comp (Supabase auth)
-  app.use("/api/admin/enrollments", supabaseAuth, requireRole(['admin', 'schoolAdmin', 'superAdmin']), adminEnrollmentPaymentRouter); // Admin enrollment payment management (Supabase auth)
+  // supabaseAuth is NOT repeated here. Express runs both mounts for /api/admin/enrollments requests
+  // in sequence; the first mount already populates req.user and req.auth for supabaseAuth-based auth.
+  // requireRole reads from req.auth (set above) before delegating to adminEnrollmentPaymentRouter.
+  app.use("/api/admin/enrollments", requireRole(['admin', 'schoolAdmin', 'superAdmin']), adminEnrollmentPaymentRouter); // Admin enrollment payment management
   app.use("/api/admin", adminRouter);
   app.use("/api/admin-classes", adminClassesRouter); // Add duplicate route for backwards compatibility
   app.use("/api/admin/sessions", adminSessionsRouter); // Session management
