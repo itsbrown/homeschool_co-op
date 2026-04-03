@@ -191,11 +191,11 @@ export default function DocumentManagementPage() {
     title: '',
     description: '',
     category: 'other',
-    isPublished: true,
-    visibleToAll: true
+    isPublished: false,
+    visibleToAll: false
   });
 
-  const [sendNotification, setSendNotification] = useState(true);
+  const [sendNotification, setSendNotification] = useState(false);
   const [notificationTargetType, setNotificationTargetType] = useState<NotificationTargetType>('all_parents');
   const [selectedClasses, setSelectedClasses] = useState<number[]>([]);
   const [selectedUsers, setSelectedUsers] = useState<UserResult[]>([]);
@@ -364,10 +364,10 @@ export default function DocumentManagementPage() {
       title: '',
       description: '',
       category: 'other',
-      isPublished: true,
-      visibleToAll: true
+      isPublished: false,
+      visibleToAll: false
     });
-    setSendNotification(true);
+    setSendNotification(false);
     setNotificationTargetType('all_parents');
     setSelectedClasses([]);
     setSelectedUsers([]);
@@ -687,7 +687,12 @@ export default function DocumentManagementPage() {
                 <Switch
                   id="isPublished"
                   checked={uploadForm.isPublished}
-                  onCheckedChange={(checked) => setUploadForm(prev => ({ ...prev, isPublished: checked }))}
+                  onCheckedChange={(checked) => {
+                    setUploadForm(prev => ({ ...prev, isPublished: checked }));
+                    if (!checked) {
+                      setSendNotification(false);
+                    }
+                  }}
                   data-testid="switch-publish"
                 />
               </div>

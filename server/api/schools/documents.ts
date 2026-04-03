@@ -4,7 +4,7 @@ import fs from 'fs';
 import { storage } from '../../storage';
 import { UploadedFile } from 'express-fileupload';
 import { supabaseAuth } from '../../middleware/supabase-auth';
-import { fileUploadService } from '../../services/fileUploadService';
+import { fileUploadService, DOCUMENT_ALLOWED_MIME_TYPES } from '../../services/fileUploadService';
 import { ObjectStorageService } from '../../replit_integrations/object_storage';
 
 const router = express.Router();
@@ -148,6 +148,17 @@ async function resolveDocumentNotificationRecipients(
   return recipients.filter(id => id && id > 0);
 }
 
+// Helper function to sanitize filenames — strips characters outside a-z A-Z 0-9 . - _
+// Both the basename and the extension are sanitized so no unsafe characters survive.
+function sanitizeFilename(filename: string): string {
+  const lastDot = filename.lastIndexOf('.');
+  const ext = lastDot > 0 ? filename.slice(lastDot) : '';
+  const base = lastDot > 0 ? filename.slice(0, lastDot) : filename;
+  const sanitizedBase = base.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const sanitizedExt = ext.replace(/[^a-zA-Z0-9._-]/g, '_');
+  return sanitizedBase + sanitizedExt;
+}
+
 // Helper function to send document notification
 async function sendDocumentNotification(
   document: any, 
@@ -156,6 +167,15 @@ async function sendDocumentNotification(
   schoolId: number
 ) {
   try {
+    // Resolve recipients first — bail early if there are none
+    const recipients = await resolveDocumentNotificationRecipients(targeting, schoolId);
+    console.log(`📧 Document notification: ${recipients.length} recipients to process`);
+
+    if (recipients.length === 0) {
+      console.log('⚠️ No recipients resolved — skipping notification record creation');
+      return null;
+    }
+
     const notificationSubject = `New Document: ${document.title}`;
     const notificationContent = `A new document "${document.title}" has been published${document.description ? `: ${document.description}` : ''}. You can view it in your documents section.`;
 
@@ -201,10 +221,6 @@ async function sendDocumentNotification(
     // Create the notification
     const notification = await storage.createNotification(notificationData);
     console.log(`✅ Created document notification ID ${notification.id} for document: ${document.title}`);
-
-    // Resolve recipients
-    const recipients = await resolveDocumentNotificationRecipients(targeting, schoolId);
-    console.log(`📧 Document notification: ${recipients.length} recipients to process`);
 
     // Create recipient records for in-app notifications
     for (const recipientId of recipients) {
@@ -272,17 +288,8 @@ router.post('/upload', supabaseAuth, async (req: any, res) => {
 
     const documentFile = req.files.document as UploadedFile;
 
-    // Validate file type (allow PDF, Word, images)
-    const allowedMimeTypes = [
-      'application/pdf',
-      'application/msword',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'image/png',
-      'image/jpeg',
-      'image/gif'
-    ];
-
-    if (!allowedMimeTypes.includes(documentFile.mimetype)) {
+    // Validate file type using shared constant
+    if (!DOCUMENT_ALLOWED_MIME_TYPES.includes(documentFile.mimetype)) {
       return res.status(400).json({
         success: false,
         message: 'Invalid file type. Allowed types: PDF, Word documents, and images.'
@@ -297,12 +304,15 @@ router.post('/upload', supabaseAuth, async (req: any, res) => {
       });
     }
 
+    // Sanitize filename before storage
+    const sanitizedFileName = sanitizeFilename(documentFile.name);
+
     // Upload file to object storage using fileUploadService
     let uploadResult;
     try {
       uploadResult = await fileUploadService.uploadBuffer(documentFile.data, {
         category: 'documents',
-        originalFilename: documentFile.name,
+        originalFilename: sanitizedFileName,
         mimeType: documentFile.mimetype,
         userId: uploadedBy,
         schoolId: schoolId,
@@ -323,24 +333,43 @@ router.post('/upload', supabaseAuth, async (req: any, res) => {
     // Use the object storage path as the file URL
     const fileUrl = uploadResult.objectPath;
 
-    // Create document record in database
-    const document = await storage.createSchoolDocument({
-      schoolId,
-      uploadedBy,
-      title,
-      description: description || null,
-      category: category || 'other',
-      fileName: documentFile.name,
-      filePath: fileUrl,
-      fileSize: documentFile.size,
-      mimeType: documentFile.mimetype,
-      isPublished: isPublished !== 'false',
-      visibleToAll: visibleToAll !== 'false'
-    });
+    // Parse booleans explicitly — missing/empty values default to false (draft)
+    const parsedIsPublished = isPublished === 'true' || isPublished === true;
+    const parsedVisibleToAll = visibleToAll === 'true' || visibleToAll === true;
+
+    // Create document record in database; clean up orphaned file on failure
+    let document;
+    try {
+      document = await storage.createSchoolDocument({
+        schoolId,
+        uploadedBy,
+        title,
+        description: description || null,
+        category: category || 'other',
+        fileName: sanitizedFileName,
+        filePath: fileUrl,
+        fileSize: documentFile.size,
+        mimeType: documentFile.mimetype,
+        isPublished: parsedIsPublished,
+        visibleToAll: parsedVisibleToAll,
+      });
+    } catch (dbError: any) {
+      console.error('❌ DB insert failed after file upload — cleaning up orphaned file:', fileUrl, dbError);
+      const cleaned = await fileUploadService.deleteObject(fileUrl);
+      if (cleaned) {
+        console.log('🗑️ Orphaned file cleaned up successfully:', fileUrl);
+      } else {
+        console.error('⚠️ Orphaned file cleanup FAILED — manual removal may be required:', fileUrl);
+      }
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to save document record'
+      });
+    }
 
     // Send notification if document is published and targeting is provided
     let notificationSent = false;
-    if (isPublished !== 'false' && notificationTargeting) {
+    if (parsedIsPublished && notificationTargeting) {
       try {
         const targeting = typeof notificationTargeting === 'string' 
           ? JSON.parse(notificationTargeting) 
@@ -395,18 +424,20 @@ router.get('/:id/download', supabaseAuth, async (req: any, res) => {
     // SECURITY: Verify user has access to this document
     const user = await storage.getUser(userId);
     
-    // Derive schoolId from enrollments if user.schoolId is null
-    let effectiveSchoolId = user?.schoolId;
-    if (!effectiveSchoolId && user) {
+    // Determine effective school access: prefer user.schoolId, then check enrollments
+    // In multi-school scenarios, check if any enrollment matches the document's schoolId
+    let hasSchoolAccess = user?.schoolId === document.schoolId;
+    if (!hasSchoolAccess && user) {
       const enrollments = await storage.getProgramEnrollmentsByParent(user.id);
-      if (enrollments.length > 0) {
-        effectiveSchoolId = enrollments[0].schoolId;
-        console.log(`📄 Download: Derived schoolId ${effectiveSchoolId} from user's enrollments`);
+      const matchingEnrollment = enrollments.find(e => e.schoolId === document.schoolId);
+      if (matchingEnrollment) {
+        hasSchoolAccess = true;
+        console.log(`📄 Download: Access granted via enrollment for schoolId ${document.schoolId}`);
       }
     }
     
-    if (!user || effectiveSchoolId !== document.schoolId) {
-      console.log(`🚨 SECURITY: User ${userId} attempted to download document ${documentId} from school ${document.schoolId} but belongs to school ${effectiveSchoolId}`);
+    if (!user || !hasSchoolAccess) {
+      console.log(`🚨 SECURITY: User ${userId} attempted to download document ${documentId} from school ${document.schoolId} but has no matching school access`);
       return res.status(403).json({ 
         success: false, 
         message: 'Access denied: You do not have permission to download this document' 
@@ -590,9 +621,12 @@ router.post('/:id/notify', supabaseAuth, async (req: any, res) => {
     const notification = await sendDocumentNotification(document, targeting, userId, document.schoolId);
     
     if (!notification) {
-      return res.status(500).json({ 
-        success: false, 
-        message: 'Failed to create notification' 
+      // Could be zero recipients (not an error) or an internal failure
+      // Return 200 no-op so the caller is not misled by a 500
+      return res.json({ 
+        success: true, 
+        message: 'No recipients matched the targeting criteria — notification not sent',
+        notificationId: null
       });
     }
 
@@ -647,21 +681,30 @@ router.delete('/:id', supabaseAuth, async (req: any, res) => {
     const isObjectStoragePath = document.filePath.startsWith('/objects/');
     
     if (isObjectStoragePath) {
-      // Delete from object storage
+      // Delete from object storage — abort DB deletion if storage deletion fails
       try {
         const objectStorageService = new ObjectStorageService();
         await objectStorageService.deleteObject(document.filePath);
         console.log(`🗑️ Deleted document from object storage: ${document.filePath}`);
       } catch (deleteError: any) {
-        // Log but don't fail - the database record still needs to be removed
-        console.error(`⚠️ Failed to delete from object storage: ${document.filePath}`, deleteError);
+        console.error(`❌ Failed to delete from object storage: ${document.filePath}`, deleteError);
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to delete document file from storage. Database record preserved.'
+        });
       }
     } else {
-      // Legacy: delete from local filesystem
+      // Legacy: delete from local filesystem — file may already be missing, log and continue
       const filePath = path.join(process.cwd(), document.filePath);
       if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
-        console.log(`🗑️ Deleted document from filesystem: ${filePath}`);
+        try {
+          fs.unlinkSync(filePath);
+          console.log(`🗑️ Deleted document from filesystem: ${filePath}`);
+        } catch (fsError: any) {
+          console.error(`⚠️ Failed to delete legacy file (continuing): ${filePath}`, fsError);
+        }
+      } else {
+        console.log(`⚠️ Legacy file not found, skipping filesystem deletion: ${filePath}`);
       }
     }
 

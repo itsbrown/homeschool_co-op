@@ -12,6 +12,17 @@ export interface UploadCategoryConfig {
   description?: string;
 }
 
+// Shared allowed mime types for school documents — kept here as the single source of truth
+// and re-exported so the documents API route can import this instead of maintaining its own list.
+export const DOCUMENT_ALLOWED_MIME_TYPES = [
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+];
+
 export const uploadCategories: Record<string, UploadCategoryConfig> = {
   signatures: {
     maxSizeBytes: 2 * 1024 * 1024,
@@ -29,14 +40,7 @@ export const uploadCategories: Record<string, UploadCategoryConfig> = {
   },
   documents: {
     maxSizeBytes: 25 * 1024 * 1024,
-    allowedTypes: [
-      "application/pdf",
-      "application/msword",
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      "image/png",
-      "image/jpeg",
-      "image/gif"
-    ],
+    allowedTypes: DOCUMENT_ALLOWED_MIME_TYPES,
     folder: "documents",
     public: false,
     description: "School documents, waivers, policies",
