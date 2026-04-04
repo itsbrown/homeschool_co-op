@@ -31,6 +31,7 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
+import { systemRoles } from '@shared/schema';
 
 interface Location {
   id: number;
@@ -39,11 +40,19 @@ interface Location {
   isActive: boolean;
 }
 
+interface StaffPosition {
+  id: number;
+  title: string;
+  description?: string | null;
+  isDefault: boolean;
+  schoolId?: number | null;
+}
+
 const createUserSchema = z.object({
   firstName: z.string().min(2, 'First name must be at least 2 characters'),
   lastName: z.string().min(2, 'Last name must be at least 2 characters'),
   email: z.string().email('Please enter a valid email address'),
-  role: z.enum(['parent', 'educator', 'staff', 'director', 'schoolAdmin']),
+  role: z.string().min(1, 'Please select a role'),
   phone: z.string().optional(),
   locationId: z.string().optional(),
   password: z.string().optional(),
@@ -73,6 +82,24 @@ export default function CreateUserDialog({ open, onClose, editUser }: CreateUser
     queryKey: ['/api/locations'],
     enabled: open,
   });
+
+  const { data: staffPositions = [], isLoading: isLoadingPositions } = useQuery<StaffPosition[]>({
+    queryKey: ['/api/school-admin/staff-positions'],
+    enabled: open,
+  });
+
+  const roleLabelMap: Record<string, string> = {
+    student: 'Student',
+    parent: 'Parent',
+    learner: 'Learner',
+    educator: 'Educator',
+    mentor: 'Mentor',
+    teacher: 'Teacher',
+    schoolAdmin: 'School Admin',
+    director: 'Director of Education',
+    admin: 'Admin',
+    superAdmin: 'Super Admin',
+  };
 
   const activeLocations = locations.filter(loc => loc.isActive);
 
@@ -228,18 +255,23 @@ export default function CreateUserDialog({ open, onClose, editUser }: CreateUser
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Role</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
+                    <Select onValueChange={field.onChange} value={field.value} disabled={isLoadingPositions}>
                       <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select a role" />
+                        <SelectTrigger style={{ fontSize: '16px' }}>
+                          <SelectValue placeholder={isLoadingPositions ? 'Loading roles...' : 'Select a role'} />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="parent">Parent</SelectItem>
-                        <SelectItem value="educator">Educator</SelectItem>
-                        <SelectItem value="staff">Staff</SelectItem>
-                        <SelectItem value="director">Director of Education</SelectItem>
-                        <SelectItem value="schoolAdmin">School Admin</SelectItem>
+                        {systemRoles.map((role) => (
+                          <SelectItem key={role} value={role}>
+                            {roleLabelMap[role] ?? role}
+                          </SelectItem>
+                        ))}
+                        {staffPositions.map((pos) => (
+                          <SelectItem key={`pos-${pos.id}`} value={pos.title}>
+                            {pos.title}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                     <FormMessage />
