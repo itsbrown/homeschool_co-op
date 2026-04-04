@@ -1446,6 +1446,20 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(schoolDocuments.createdAt));
   }
 
+  async getSchoolDocumentByFileName(schoolId: number, fileName: string): Promise<SchoolDocument | undefined> {
+    const db = await getDb();
+    const [document] = await db
+      .select()
+      .from(schoolDocuments)
+      .where(
+        and(
+          eq(schoolDocuments.schoolId, schoolId),
+          eq(schoolDocuments.fileName, fileName)
+        )
+      );
+    return document;
+  }
+
   async createSchoolDocument(documentData: InsertSchoolDocument): Promise<SchoolDocument> {
     const db = await getDb();
     const [newDocument] = await db

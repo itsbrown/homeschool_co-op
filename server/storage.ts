@@ -317,6 +317,7 @@ export interface IStorage {
   getSchoolDocumentById(id: number): Promise<SchoolDocument | undefined>;
   getSchoolDocumentsBySchoolId(schoolId: number): Promise<SchoolDocument[]>;
   getPublishedSchoolDocuments(schoolId: number): Promise<SchoolDocument[]>;
+  getSchoolDocumentByFileName(schoolId: number, fileName: string): Promise<SchoolDocument | undefined>;
   createSchoolDocument(document: InsertSchoolDocument): Promise<SchoolDocument>;
   updateSchoolDocument(id: number, document: Partial<InsertSchoolDocument>): Promise<SchoolDocument | undefined>;
   deleteSchoolDocument(id: number): Promise<void>;
@@ -5041,6 +5042,9 @@ export class MemStorage implements IStorage {
 
   // Retention Report
   async getEnrollmentFamiliesByPeriod(_schoolId: number, _startDate: string, _endDate: string): Promise<{ parentEmail: string; parentId: number; childName: string; className: string }[]> { return []; }
+
+  // School Documents (stubs - real implementation in DatabaseStorage)
+  async getSchoolDocumentByFileName(_schoolId: number, _fileName: string): Promise<SchoolDocument | undefined> { return undefined; }
 }
 
 import { DatabaseStorage } from "./dbStorage";
@@ -7261,6 +7265,10 @@ import { DatabaseStorage } from "./dbStorage";
 
       async getPublishedSchoolDocuments(schoolId: number): Promise<SchoolDocument[]> {
         return this.dbStorage.getPublishedSchoolDocuments(schoolId);
+      }
+
+      async getSchoolDocumentByFileName(schoolId: number, fileName: string): Promise<SchoolDocument | undefined> {
+        return this.dbStorage.getSchoolDocumentByFileName(schoolId, fileName);
       }
 
       async createSchoolDocument(document: InsertSchoolDocument): Promise<SchoolDocument> {

@@ -288,6 +288,15 @@ router.post('/upload', supabaseAuth, async (req: any, res) => {
 
     const documentFile = req.files.document as UploadedFile;
 
+    // Check for duplicate filename in this school
+    const existingDocWithName = await storage.getSchoolDocumentByFileName(schoolId, documentFile.name);
+    if (existingDocWithName) {
+      return res.status(409).json({
+        success: false,
+        message: `A document named "${documentFile.name}" already exists for this school. Please rename the file before uploading.`
+      });
+    }
+
     // Validate file type using shared constant
     if (!DOCUMENT_ALLOWED_MIME_TYPES.includes(documentFile.mimetype)) {
       return res.status(400).json({
@@ -554,6 +563,9 @@ router.patch('/:id', supabaseAuth, async (req: any, res) => {
       });
     }
 
+    // Detect draft-to-published transition before updating
+    const isDraftToPublished = isPublished === true && existingDoc.isPublished === false;
+
     const updateData: any = {};
     if (title !== undefined) updateData.title = title;
     if (description !== undefined) updateData.description = description;
@@ -562,6 +574,19 @@ router.patch('/:id', supabaseAuth, async (req: any, res) => {
     if (visibleToAll !== undefined) updateData.visibleToAll = visibleToAll;
 
     const document = await storage.updateSchoolDocument(documentId, updateData);
+
+    // Send notification when document transitions from draft to published
+    if (isDraftToPublished && document) {
+      try {
+        // Use existing targeting settings from the document if available, otherwise default to all_parents
+        const targeting = { targetType: 'all_parents' };
+        await sendDocumentNotification(document, targeting, userId, existingDoc.schoolId);
+        console.log(`📧 Sent publish notification for document ${documentId} (draft→published)`);
+      } catch (notifyError) {
+        // Log but don't fail the update if notification fails
+        console.error('Error sending publish notification:', notifyError);
+      }
+    }
 
     res.json({ 
       success: true, 
