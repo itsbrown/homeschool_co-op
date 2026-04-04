@@ -322,6 +322,11 @@ export interface IStorage {
   updateSchoolDocument(id: number, document: Partial<InsertSchoolDocument>): Promise<SchoolDocument | undefined>;
   deleteSchoolDocument(id: number): Promise<void>;
 
+  // Document Views (download tracking) methods
+  createDocumentView(data: { documentId: number; userId: number }): Promise<any>;
+  getDocumentViews(documentId: number): Promise<any[]>;
+  getDocumentViewCount(documentId: number): Promise<number>;
+
   // Payment Receipts methods
   getPaymentReceiptById(id: number): Promise<PaymentReceipt | undefined>;
   getPaymentReceiptByNumber(receiptNumber: string): Promise<PaymentReceipt | undefined>;
@@ -7281,6 +7286,19 @@ import { DatabaseStorage } from "./dbStorage";
 
       async deleteSchoolDocument(id: number): Promise<void> {
         return this.dbStorage.deleteSchoolDocument(id);
+      }
+
+      // Document Views (download tracking) methods
+      async createDocumentView(data: { documentId: number; userId: number }): Promise<any> {
+        return (this.dbStorage as any).createDocumentView(data);
+      }
+
+      async getDocumentViews(documentId: number): Promise<any[]> {
+        return (this.dbStorage as any).getDocumentViews(documentId);
+      }
+
+      async getDocumentViewCount(documentId: number): Promise<number> {
+        return (this.dbStorage as any).getDocumentViewCount(documentId);
       }
 
       // Database initialization methods

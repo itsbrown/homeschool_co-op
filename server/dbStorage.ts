@@ -4,6 +4,7 @@ import { IStorage } from './storage';
 import {
   User, InsertUser, users,
   UserRole, userRoles,
+  DocumentView, InsertDocumentView, documentViews,
   Class, InsertClass, classes,
   KnowledgeBase, InsertKnowledgeBase, knowledgeBases,
   Curriculum, InsertCurriculum, curricula,
@@ -1434,13 +1435,19 @@ export class DatabaseStorage implements IStorage {
 
   async getPublishedSchoolDocuments(schoolId: number): Promise<SchoolDocument[]> {
     const db = await getDb();
+    const now = new Date();
     return await db
       .select()
       .from(schoolDocuments)
       .where(
         and(
           eq(schoolDocuments.schoolId, schoolId),
-          eq(schoolDocuments.isPublished, true)
+          eq(schoolDocuments.isPublished, true),
+          eq(schoolDocuments.isArchived, false),
+          or(
+            isNull(schoolDocuments.expiresAt),
+            gt(schoolDocuments.expiresAt, now)
+          )
         )
       )
       .orderBy(desc(schoolDocuments.createdAt));
@@ -1489,6 +1496,43 @@ export class DatabaseStorage implements IStorage {
   async deleteSchoolDocument(id: number): Promise<void> {
     const db = await getDb();
     await db.delete(schoolDocuments).where(eq(schoolDocuments.id, id));
+  }
+
+  // Document Views (download tracking) methods
+  async createDocumentView(data: InsertDocumentView): Promise<DocumentView> {
+    const db = await getDb();
+    const [view] = await db
+      .insert(documentViews)
+      .values({ ...data, downloadedAt: new Date() })
+      .returning();
+    return view;
+  }
+
+  async getDocumentViews(documentId: number): Promise<(DocumentView & { userName: string; userEmail: string })[]> {
+    const db = await getDb();
+    const rows = await db
+      .select({
+        id: documentViews.id,
+        documentId: documentViews.documentId,
+        userId: documentViews.userId,
+        downloadedAt: documentViews.downloadedAt,
+        userName: users.name,
+        userEmail: users.email,
+      })
+      .from(documentViews)
+      .leftJoin(users, eq(documentViews.userId, users.id))
+      .where(eq(documentViews.documentId, documentId))
+      .orderBy(desc(documentViews.downloadedAt));
+    return rows as (DocumentView & { userName: string; userEmail: string })[];
+  }
+
+  async getDocumentViewCount(documentId: number): Promise<number> {
+    const db = await getDb();
+    const [{ count }] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(documentViews)
+      .where(eq(documentViews.documentId, documentId));
+    return count;
   }
 
   // Payment Receipts methods

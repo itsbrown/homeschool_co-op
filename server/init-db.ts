@@ -2536,6 +2536,41 @@ async function runMigrations() {
   } catch (emailIndexError: any) {
     console.log('Migration note (non-blocking):', emailIndexError.message);
   }
+
+  // Add document lifecycle columns: expires_at and is_archived to school_documents
+  console.log('Running migration: Adding lifecycle columns to school_documents table...');
+  try {
+    await db.execute(sql`
+      ALTER TABLE school_documents
+      ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS is_archived BOOLEAN NOT NULL DEFAULT false;
+    `);
+    console.log('✅ Migration completed: expires_at and is_archived columns added to school_documents');
+  } catch (docLifecycleError: any) {
+    console.log('Migration note (non-blocking):', docLifecycleError.message);
+  }
+
+  // Create document_views table for download tracking
+  console.log('Running migration: Creating document_views table...');
+  try {
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS document_views (
+        id SERIAL PRIMARY KEY,
+        document_id INTEGER NOT NULL REFERENCES school_documents(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        downloaded_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_document_views_document_id ON document_views(document_id);
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_document_views_user_id ON document_views(user_id);
+    `);
+    console.log('✅ Migration completed: document_views table created');
+  } catch (docViewsError: any) {
+    console.log('Migration note (non-blocking):', docViewsError.message);
+  }
 }
 
 // Initialize database tables

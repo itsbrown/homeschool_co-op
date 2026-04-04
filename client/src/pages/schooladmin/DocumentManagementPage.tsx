@@ -14,6 +14,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Skeleton } from '@/components/ui/skeleton';
 import { 
   Upload, 
   FileText, 
@@ -26,7 +28,11 @@ import {
   Image,
   File as FileIcon,
   Bell,
-  Users
+  Users,
+  Archive,
+  ArchiveRestore,
+  Calendar,
+  Clock
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import AppShell from '@/components/layout/AppShell';
@@ -46,8 +52,19 @@ interface SchoolDocument {
   mimeType: string;
   isPublished: boolean;
   visibleToAll: boolean;
+  expiresAt: string | null;
+  isArchived: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+interface DocumentViewEntry {
+  id: number;
+  documentId: number;
+  userId: number;
+  downloadedAt: string;
+  userName: string;
+  userEmail: string;
 }
 
 interface SchoolData {
@@ -192,7 +209,8 @@ export default function DocumentManagementPage() {
     description: '',
     category: 'other',
     isPublished: false,
-    visibleToAll: false
+    visibleToAll: false,
+    expiresAt: '',
   });
 
   const [sendNotification, setSendNotification] = useState(false);
@@ -209,6 +227,9 @@ export default function DocumentManagementPage() {
   const [notifySelectedUsers, setNotifySelectedUsers] = useState<UserResult[]>([]);
   const [isSendingNotification, setIsSendingNotification] = useState(false);
 
+  const [downloadsSheetDocId, setDownloadsSheetDocId] = useState<number | null>(null);
+  const [downloadsSheetTitle, setDownloadsSheetTitle] = useState('');
+
   const { data: schoolData } = useQuery<SchoolData>({
     queryKey: ['/api/school-admin/my-school'],
     enabled: !!user?.email,
@@ -217,6 +238,11 @@ export default function DocumentManagementPage() {
   const { data: documentsData, isLoading } = useQuery<{ success: boolean; documents: SchoolDocument[] }>({
     queryKey: ['/api/schools/documents'],
     enabled: !!user?.email,
+  });
+
+  const { data: viewsData, isLoading: isLoadingViews } = useQuery<{ success: boolean; views: DocumentViewEntry[] }>({
+    queryKey: ['/api/schools/documents', downloadsSheetDocId, 'views'],
+    enabled: downloadsSheetDocId !== null,
   });
 
   const documents = documentsData?.documents || [];
@@ -251,6 +277,9 @@ export default function DocumentManagementPage() {
       formData.append('category', uploadForm.category);
       formData.append('isPublished', uploadForm.isPublished.toString());
       formData.append('visibleToAll', uploadForm.visibleToAll.toString());
+      if (uploadForm.expiresAt) {
+        formData.append('expiresAt', uploadForm.expiresAt);
+      }
 
       const notificationData = buildNotificationTargetData();
       if (notificationData) {
@@ -332,6 +361,31 @@ export default function DocumentManagementPage() {
     },
   });
 
+  const archiveMutation = useMutation({
+    mutationFn: async ({ id, isArchived }: { id: number; isArchived: boolean }) => {
+      const response = await apiRequest('PATCH', `/api/schools/documents/${id}`, { isArchived });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to update document');
+      }
+      return response.json();
+    },
+    onSuccess: (_data, variables) => {
+      toast({
+        title: "Success",
+        description: variables.isArchived ? "Document archived" : "Document restored",
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/schools/documents'] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update document",
+        variant: "destructive",
+      });
+    },
+  });
+
   const notifyMutation = useMutation({
     mutationFn: async ({ documentId, targeting }: { documentId: number; targeting: any }) => {
       const response = await apiRequest('POST', `/api/schools/documents/${documentId}/notify`, { targeting });
@@ -365,7 +419,8 @@ export default function DocumentManagementPage() {
       description: '',
       category: 'other',
       isPublished: false,
-      visibleToAll: false
+      visibleToAll: false,
+      expiresAt: '',
     });
     setSendNotification(false);
     setNotificationTargetType('all_parents');
@@ -528,80 +583,125 @@ export default function DocumentManagementPage() {
           </Card>
         ) : (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {documents.map((doc) => (
-              <Card key={doc.id} data-testid={`card-document-${doc.id}`}>
-                <CardHeader className="pb-3">
-                  <div className="flex items-start gap-3">
-                    {getFileIcon(doc.mimeType)}
-                    <div className="flex-1 min-w-0">
-                      <CardTitle className="text-base truncate">{doc.title}</CardTitle>
-                      <CardDescription className="text-xs mt-1">
-                        {formatFileSize(doc.fileSize)} • {format(new Date(doc.createdAt), 'MMM d, yyyy')}
-                      </CardDescription>
+            {documents.map((doc) => {
+              const isExpired = doc.expiresAt && new Date(doc.expiresAt) < new Date();
+              return (
+                <Card key={doc.id} data-testid={`card-document-${doc.id}`} className={doc.isArchived ? 'opacity-70' : ''}>
+                  <CardHeader className="pb-3">
+                    <div className="flex items-start gap-3">
+                      {getFileIcon(doc.mimeType)}
+                      <div className="flex-1 min-w-0">
+                        <CardTitle className="text-base truncate">{doc.title}</CardTitle>
+                        <CardDescription className="text-xs mt-1">
+                          {formatFileSize(doc.fileSize)} • {format(new Date(doc.createdAt), 'MMM d, yyyy')}
+                        </CardDescription>
+                      </div>
                     </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center gap-2 mb-3">
-                    <Badge variant="outline">{categoryLabels[doc.category] || doc.category}</Badge>
-                    <Badge variant={doc.isPublished ? 'default' : 'secondary'}>
-                      {doc.isPublished ? 'Published' : 'Draft'}
-                    </Badge>
-                  </div>
-                  {doc.description && (
-                    <p className="text-sm text-muted-foreground mb-3 line-clamp-2">
-                      {doc.description}
-                    </p>
-                  )}
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleDownload(doc)}
-                      data-testid={`button-download-${doc.id}`}
-                    >
-                      <Download className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => openNotifyDialog(doc)}
-                      data-testid={`button-notify-${doc.id}`}
-                      title="Send notification"
-                    >
-                      <Bell className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => togglePublishMutation.mutate({ 
-                        id: doc.id, 
-                        isPublished: !doc.isPublished 
-                      })}
-                      data-testid={`button-toggle-publish-${doc.id}`}
-                    >
-                      {doc.isPublished ? (
-                        <EyeOff className="h-4 w-4" />
-                      ) : (
-                        <Eye className="h-4 w-4" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex items-center gap-2 mb-3 flex-wrap">
+                      <Badge variant="outline">{categoryLabels[doc.category] || doc.category}</Badge>
+                      <Badge variant={doc.isPublished ? 'default' : 'secondary'}>
+                        {doc.isPublished ? 'Published' : 'Draft'}
+                      </Badge>
+                      {doc.isArchived && (
+                        <Badge variant="secondary" className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
+                          Archived
+                        </Badge>
                       )}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setDocumentToDelete(doc);
-                        setDeleteConfirmOpen(true);
-                      }}
-                      className="text-destructive hover:text-destructive"
-                      data-testid={`button-delete-${doc.id}`}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                      {isExpired && !doc.isArchived && (
+                        <Badge variant="secondary" className="bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">
+                          Expired
+                        </Badge>
+                      )}
+                      {doc.expiresAt && !isExpired && (
+                        <Badge variant="outline" className="text-xs gap-1">
+                          <Clock className="h-3 w-3" />
+                          Expires {format(new Date(doc.expiresAt), 'MMM d, yyyy')}
+                        </Badge>
+                      )}
+                    </div>
+                    {doc.description && (
+                      <p className="text-sm text-muted-foreground mb-3 line-clamp-2">
+                        {doc.description}
+                      </p>
+                    )}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleDownload(doc)}
+                        data-testid={`button-download-${doc.id}`}
+                      >
+                        <Download className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setDownloadsSheetDocId(doc.id);
+                          setDownloadsSheetTitle(doc.title);
+                        }}
+                        data-testid={`button-downloads-${doc.id}`}
+                        title="View download history"
+                        className="gap-1"
+                      >
+                        <Users className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => openNotifyDialog(doc)}
+                        data-testid={`button-notify-${doc.id}`}
+                        title="Send notification"
+                      >
+                        <Bell className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => togglePublishMutation.mutate({ 
+                          id: doc.id, 
+                          isPublished: !doc.isPublished 
+                        })}
+                        data-testid={`button-toggle-publish-${doc.id}`}
+                      >
+                        {doc.isPublished ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => archiveMutation.mutate({ id: doc.id, isArchived: !doc.isArchived })}
+                        data-testid={`button-archive-${doc.id}`}
+                        title={doc.isArchived ? 'Restore document' : 'Archive document'}
+                      >
+                        {doc.isArchived ? (
+                          <ArchiveRestore className="h-4 w-4" />
+                        ) : (
+                          <Archive className="h-4 w-4" />
+                        )}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setDocumentToDelete(doc);
+                          setDeleteConfirmOpen(true);
+                        }}
+                        className="text-destructive hover:text-destructive"
+                        data-testid={`button-delete-${doc.id}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         )}
 
@@ -695,6 +795,23 @@ export default function DocumentManagementPage() {
                   }}
                   data-testid="switch-publish"
                 />
+              </div>
+              <div>
+                <Label htmlFor="expiresAt" className="flex items-center gap-1">
+                  <Calendar className="h-3.5 w-3.5" />
+                  Expiry date (optional)
+                </Label>
+                <Input
+                  id="expiresAt"
+                  type="date"
+                  value={uploadForm.expiresAt}
+                  onChange={(e) => setUploadForm(prev => ({ ...prev, expiresAt: e.target.value }))}
+                  data-testid="input-expires-at"
+                  style={{ fontSize: '16px' }}
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  If set, this document will automatically be hidden from parents after this date.
+                </p>
               </div>
 
               {uploadForm.isPublished && (
@@ -843,6 +960,64 @@ export default function DocumentManagementPage() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* Download History Sheet */}
+        <Sheet open={downloadsSheetDocId !== null} onOpenChange={(open) => {
+          if (!open) setDownloadsSheetDocId(null);
+        }}>
+          <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+            <SheetHeader>
+              <SheetTitle className="flex items-center gap-2">
+                <Users className="h-5 w-5" />
+                Download History
+              </SheetTitle>
+              <SheetDescription>
+                {downloadsSheetTitle && (
+                  <>Downloads for "<strong>{downloadsSheetTitle}</strong>"</>
+                )}
+              </SheetDescription>
+            </SheetHeader>
+            <div className="mt-6 space-y-3">
+              {isLoadingViews ? (
+                <div className="space-y-3">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="flex items-center gap-3 p-3 rounded-lg border">
+                      <Skeleton className="h-8 w-8 rounded-full" />
+                      <div className="flex-1 space-y-1">
+                        <Skeleton className="h-4 w-32" />
+                        <Skeleton className="h-3 w-48" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : !viewsData?.views || viewsData.views.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Download className="h-10 w-10 mx-auto mb-3 opacity-40" />
+                  <p className="text-sm">No downloads recorded yet.</p>
+                </div>
+              ) : (
+                <>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    {viewsData.views.length} download{viewsData.views.length !== 1 ? 's' : ''} total
+                  </p>
+                  {viewsData.views.map((view) => (
+                    <div key={view.id} className="flex items-center gap-3 p-3 rounded-lg border bg-muted/30">
+                      <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                        <Users className="h-4 w-4 text-primary" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{view.userName || 'Unknown user'}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {format(new Date(view.downloadedAt), 'MMM d, yyyy • h:mm a')}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
+            </div>
+          </SheetContent>
+        </Sheet>
       </div>
     </AppShell>
   );

@@ -249,7 +249,7 @@ async function sendDocumentNotification(
 // Upload a new document
 router.post('/upload', supabaseAuth, async (req: any, res) => {
   try {
-    const { title, description, category, isPublished, visibleToAll, notificationTargeting } = req.body;
+    const { title, description, category, isPublished, visibleToAll, notificationTargeting, expiresAt } = req.body;
     const uploadedBy = req.user?.id;
 
     if (!title) {
@@ -361,6 +361,7 @@ router.post('/upload', supabaseAuth, async (req: any, res) => {
         mimeType: documentFile.mimetype,
         isPublished: parsedIsPublished,
         visibleToAll: parsedVisibleToAll,
+        ...(expiresAt ? { expiresAt: new Date(expiresAt) } : {})
       });
     } catch (dbError: any) {
       console.error('❌ DB insert failed after file upload — cleaning up orphaned file:', fileUrl, dbError);
@@ -468,6 +469,14 @@ router.get('/:id/download', supabaseAuth, async (req: any, res) => {
         // Use the downloadObject method to stream the file to the response
         await objectStorageService.downloadObject(objectFile, res, 0); // 0 cache TTL for downloads
         console.log(`📥 Downloaded document from object storage: ${document.filePath}`);
+
+        // Record download event (fire and forget - don't block response)
+        try {
+          await storage.createDocumentView({ documentId: documentId, userId: userId });
+        } catch (trackError) {
+          console.warn('Failed to record download event:', trackError);
+        }
+
         return; // Response already sent by downloadObject
       } catch (downloadError: any) {
         console.error(`❌ Failed to download from object storage: ${document.filePath}`, downloadError);
@@ -521,6 +530,15 @@ router.get('/:id/download', supabaseAuth, async (req: any, res) => {
           });
         }
       });
+
+      fileStream.on('close', async () => {
+        // Record download event after stream completes
+        try {
+          await storage.createDocumentView({ documentId: documentId, userId: userId });
+        } catch (trackError) {
+          console.warn('Failed to record download event:', trackError);
+        }
+      });
     }
   } catch (error) {
     console.error('Error downloading document:', error);
@@ -531,11 +549,40 @@ router.get('/:id/download', supabaseAuth, async (req: any, res) => {
   }
 });
 
+// Get download history for a document (admin only)
+router.get('/:id/views', supabaseAuth, async (req: any, res) => {
+  try {
+    const documentId = parseInt(req.params.id);
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'User not authenticated' });
+    }
+
+    const document = await storage.getSchoolDocumentById(documentId);
+    if (!document) {
+      return res.status(404).json({ success: false, message: 'Document not found' });
+    }
+
+    // SECURITY: Verify admin belongs to the same school
+    const user = await storage.getUser(userId);
+    if (!user || user.schoolId !== document.schoolId) {
+      return res.status(403).json({ success: false, message: 'Access denied' });
+    }
+
+    const views = await storage.getDocumentViews(documentId);
+    res.json({ success: true, views });
+  } catch (error) {
+    console.error('Error fetching document views:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch document views' });
+  }
+});
+
 // Update document metadata
 router.patch('/:id', supabaseAuth, async (req: any, res) => {
   try {
     const documentId = parseInt(req.params.id);
-    const { title, description, category, isPublished, visibleToAll } = req.body;
+    const { title, description, category, isPublished, visibleToAll, expiresAt, isArchived } = req.body;
     const userId = req.user?.id;
 
     if (!userId) {
@@ -572,6 +619,11 @@ router.patch('/:id', supabaseAuth, async (req: any, res) => {
     if (category !== undefined) updateData.category = category;
     if (isPublished !== undefined) updateData.isPublished = isPublished;
     if (visibleToAll !== undefined) updateData.visibleToAll = visibleToAll;
+    if (isArchived !== undefined) updateData.isArchived = isArchived;
+    if (expiresAt !== undefined) {
+      // Accept null to clear, or a date string (YYYY-MM-DD or ISO)
+      updateData.expiresAt = expiresAt === null ? null : new Date(expiresAt);
+    }
 
     const document = await storage.updateSchoolDocument(documentId, updateData);
 

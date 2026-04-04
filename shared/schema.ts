@@ -1292,6 +1292,8 @@ export const schoolDocuments = pgTable("school_documents", {
   mimeType: text("mime_type").notNull(),
   isPublished: boolean("is_published").default(true).notNull(),
   visibleToAll: boolean("visible_to_all").default(true).notNull(),
+  expiresAt: timestamp("expires_at"),
+  isArchived: boolean("is_archived").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -1308,15 +1310,31 @@ export const insertSchoolDocumentSchema = createInsertSchema(schoolDocuments)
     mimeType: z.string().min(1),
     isPublished: z.boolean().default(true),
     visibleToAll: z.boolean().default(true),
+    expiresAt: z.union([z.string(), z.date()]).nullable().optional(),
+    isArchived: z.boolean().default(false),
   });
 export type InsertSchoolDocument = z.infer<typeof insertSchoolDocumentSchema>;
 export type SchoolDocument = typeof schoolDocuments.$inferSelect;
 
 // Define school document relations
-export const schoolDocumentsRelations = relations(schoolDocuments, ({ one }) => ({
+export const schoolDocumentsRelations = relations(schoolDocuments, ({ one, many }) => ({
   school: one(schools, { fields: [schoolDocuments.schoolId], references: [schools.id] }),
-  uploader: one(users, { fields: [schoolDocuments.uploadedBy], references: [users.id] })
+  uploader: one(users, { fields: [schoolDocuments.uploadedBy], references: [users.id] }),
+  views: many(documentViews),
 }));
+
+// Document Views (download tracking) table
+export const documentViews = pgTable("document_views", {
+  id: serial("id").primaryKey(),
+  documentId: integer("document_id").notNull().references(() => schoolDocuments.id, { onDelete: 'cascade' }),
+  userId: integer("user_id").notNull().references(() => users.id),
+  downloadedAt: timestamp("downloaded_at").defaultNow().notNull(),
+});
+
+export const insertDocumentViewSchema = createInsertSchema(documentViews)
+  .omit({ id: true, downloadedAt: true });
+export type InsertDocumentView = z.infer<typeof insertDocumentViewSchema>;
+export type DocumentView = typeof documentViews.$inferSelect;
 
 // Payment Receipts table - automatically generated when payments are made
 export const paymentReceipts = pgTable("payment_receipts", {
