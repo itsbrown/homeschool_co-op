@@ -168,53 +168,62 @@ export const supabaseAuth = async (
     // CRITICAL: We need to fetch dbUser FIRST to set req.user.id to the database integer ID
     let dbUserId: number | null = null;
     let dbUserData: any = null;
+    let dbLookupFailed = false;
     if (user.email) {
+      // Perform the DB user lookup; track failures separately from not-found
+      let dbUser: any = null;
       try {
-        const dbUser = await storage.getUserByEmail(user.email);
-        
-        if (dbUser) {
-          // Store database user data for req.user
-          dbUserId = dbUser.id;
-          dbUserData = dbUser;
-          
-          // For Phase 2 users (app_metadata), check if database matches app_metadata
-          // For existing users (user_metadata), auto-sync from database
-          const currentSchoolId = user.app_metadata?.school_id || user.user_metadata?.school_id;
-          const currentRole = user.app_metadata?.role || user.user_metadata?.role;
-          const dbSchoolId = dbUser.schoolId;
-          const dbRole = dbUser.role;
+        dbUser = await storage.getUserByEmail(user.email);
+      } catch (lookupError) {
+        console.error('Error during DB user lookup:', lookupError);
+        dbLookupFailed = true;
+      }
 
-          const schoolIdMismatch = currentSchoolId !== undefined && currentSchoolId !== dbSchoolId;
-          const roleMismatch = currentRole !== undefined && currentRole !== dbRole;
-          const missingSchoolId = !currentSchoolId && dbSchoolId;
-          const missingRole = !currentRole && dbRole;
+      // Proceed with metadata sync only when the lookup succeeded
+      if (!dbLookupFailed && dbUser) {
+        // Store database user data for req.user
+        dbUserId = dbUser.id;
+        dbUserData = dbUser;
 
-          // 🚨 SECURITY ALERT: Log potential tampering attempts (only once per user per server session)
-          const userKey = `${user.email}-${currentSchoolId}-${currentRole}`;
-          const alreadySynced = metadataSyncedUsers.has(userKey);
-          
-          if ((schoolIdMismatch || roleMismatch) && !alreadySynced) {
-            console.warn(`🚨 SECURITY: Metadata mismatch detected for ${user.email} (source: ${metadataSource})`);
-            console.warn(`   Current school_id: ${currentSchoolId} vs DB: ${dbSchoolId}`);
-            console.warn(`   Current role: ${currentRole} vs DB: ${dbRole}`);
-            console.warn(`   This could indicate tampering or outdated token. Auto-correcting...`);
-          }
+        // For Phase 2 users (app_metadata), check if database matches app_metadata
+        // For existing users (user_metadata), auto-sync from database
+        const currentSchoolId = user.app_metadata?.school_id || user.user_metadata?.school_id;
+        const currentRole = user.app_metadata?.role || user.user_metadata?.role;
+        const dbSchoolId = dbUser.schoolId;
+        const dbRole = dbUser.role;
 
-          // Auto-fix for user_metadata users (Phase 1)
-          // Phase 2 users with app_metadata should already be correct, but log if not
-          if (missingSchoolId || missingRole || schoolIdMismatch || roleMismatch) {
-            if (!hasAppMetadata) {
-              // Only update Supabase if we haven't already synced this user
-              if (!alreadySynced) {
-                // Existing user with user_metadata - auto-sync from database
-                if (missingSchoolId || missingRole) {
-                  if (process.env.NODE_ENV === 'development') {
-                    console.log(`⚠️ Auto-fixing missing user_metadata for ${user.email}`);
-                  }
+        const schoolIdMismatch = currentSchoolId !== undefined && currentSchoolId !== dbSchoolId;
+        const roleMismatch = currentRole !== undefined && currentRole !== dbRole;
+        const missingSchoolId = !currentSchoolId && dbSchoolId;
+        const missingRole = !currentRole && dbRole;
+
+        // 🚨 SECURITY ALERT: Log potential tampering attempts (only once per user per server session)
+        const userKey = `${user.email}-${currentSchoolId}-${currentRole}`;
+        const alreadySynced = metadataSyncedUsers.has(userKey);
+
+        if ((schoolIdMismatch || roleMismatch) && !alreadySynced) {
+          console.warn(`🚨 SECURITY: Metadata mismatch detected for ${user.email} (source: ${metadataSource})`);
+          console.warn(`   Current school_id: ${currentSchoolId} vs DB: ${dbSchoolId}`);
+          console.warn(`   Current role: ${currentRole} vs DB: ${dbRole}`);
+          console.warn(`   This could indicate tampering or outdated token. Auto-correcting...`);
+        }
+
+        // Auto-fix for user_metadata users (Phase 1)
+        // Phase 2 users with app_metadata should already be correct, but log if not
+        if (missingSchoolId || missingRole || schoolIdMismatch || roleMismatch) {
+          if (!hasAppMetadata) {
+            // Only update Supabase if we haven't already synced this user
+            if (!alreadySynced) {
+              // Existing user with user_metadata - auto-sync from database
+              if (missingSchoolId || missingRole) {
+                if (process.env.NODE_ENV === 'development') {
+                  console.log(`⚠️ Auto-fixing missing user_metadata for ${user.email}`);
                 }
-                
-                // Update Supabase user metadata to match database (source of truth)
-                const { data, error: updateError } = await supabase.auth.admin.updateUserById(user.id, {
+              }
+
+              // Update Supabase user metadata to match database (source of truth)
+              try {
+                const { error: updateError } = await supabase.auth.admin.updateUserById(user.id, {
                   user_metadata: {
                     ...user.user_metadata,
                     school_id: dbUser.schoolId,
@@ -222,7 +231,7 @@ export const supabaseAuth = async (
                     name: dbUser.name
                   }
                 });
-                
+
                 if (updateError) {
                   console.error(`❌ Failed to update user_metadata for ${user.email}:`, updateError.message);
                 } else {
@@ -235,55 +244,85 @@ export const supabaseAuth = async (
                   // Mark this user as synced to avoid repeated updates
                   metadataSyncedUsers.add(userKey);
                 }
-              }
-            } else {
-              // Phase 2 user with app_metadata mismatch - this shouldn't happen
-              if (!alreadySynced) {
-                console.error(`⚠️ Phase 2 user ${user.email} has app_metadata mismatch with database!`);
-                console.error(`   app_metadata should be admin-only and match database. Investigate!`);
-                metadataSyncedUsers.add(userKey);
+              } catch (syncError) {
+                console.error('Error during metadata sync:', syncError);
               }
             }
-            
-            // Apply corrections to current request immediately (use database as source of truth)
-            if (req.auth?.payload) {
-              req.auth.payload.school_id = dbUser.schoolId;
-              req.auth.payload.role = dbUser.role;
-              req.auth.payload.name = dbUser.name;
+          } else {
+            // Phase 2 user with app_metadata mismatch - this shouldn't happen
+            if (!alreadySynced) {
+              console.error(`⚠️ Phase 2 user ${user.email} has app_metadata mismatch with database!`);
+              console.error(`   app_metadata should be admin-only and match database. Investigate!`);
+              metadataSyncedUsers.add(userKey);
             }
           }
+
+          // Apply corrections to current request immediately (use database as source of truth)
+          if (req.auth?.payload) {
+            req.auth.payload.school_id = dbUser.schoolId;
+            req.auth.payload.role = dbUser.role;
+            req.auth.payload.name = dbUser.name;
+          }
         }
-      } catch (syncError) {
-        console.error('Error during metadata sync:', syncError);
       }
     }
 
     // Set req.user with database integer ID (not Supabase UUID)
     // This is CRITICAL for multi-role API endpoints that query by user ID
     // Also populate role, schoolId, permissions, and name from dbUser
-    
-    // REGISTRATION REQUIRED: Users must register through proper channels before using OAuth login
-    // This prevents orphaned accounts without school association
-    // Users who try to login via OAuth without an existing account will see a friendly message
-    if (dbUserId === null && user.email) {
-      if (process.env.NODE_ENV === 'development') {
-        console.log(`🚫 BLOCKED: Unregistered user attempted OAuth login: ${user.email}`);
-        console.log(`   User must register with their school first before using Google login`);
-      }
-      return res.status(403).json({ 
-        error: 'REGISTRATION_REQUIRED',
-        message: 'You need to register with your school before you can log in. Please contact your school administrator for a registration link.',
-        email: user.email
-      });
-    }
-    
-    // ENFORCE: All authenticated users MUST have a database record
+
     if (dbUserId === null) {
-      console.error(`❌ User ${user.email} authenticated via Supabase but not found in database`);
-      return res.status(403).json({ 
-        error: 'REGISTRATION_REQUIRED',
-        message: 'You need to register with your school before you can log in. Please contact your school administrator for a registration link.'
-      });
+      if (dbLookupFailed) {
+        // DB threw an error (infrastructure outage) — do NOT treat as "not registered"
+        const appRole = user.app_metadata?.role;
+        const appSchoolId = user.app_metadata?.school_id;
+        const hasValidAppMetadata = hasAppMetadata && PHASE_2_APP_METADATA_ENABLED && appRole && appSchoolId;
+
+        if (hasValidAppMetadata) {
+          // Phase 2 user with valid app_metadata — allow through with degraded DB mode.
+          // dbUserId stays null (DB is unavailable); a separate degradedDbMode flag
+          // is surfaced on req.user so downstream middleware can distinguish this
+          // from an unauthenticated user.
+          console.warn(`⚠️ DB unavailable for ${user.email} — falling back to app_metadata (role=${appRole}, school_id=${appSchoolId})`);
+          // Build a minimal dbUserData from app_metadata so downstream code works
+          dbUserData = {
+            id: null,
+            role: appRole,
+            schoolId: appSchoolId,
+            name: user.user_metadata?.name || user.email,
+            activeRole: null,
+            activeRoleId: null,
+            permissions: [],
+            degradedDbMode: true
+          };
+          // allRoles is initialized from dbUserData.role after this block
+        } else {
+          // DB is down and we have no fallback metadata — return 503
+          console.error(`❌ DB unavailable for ${user.email} and no app_metadata fallback — returning 503`);
+          return res.status(503).json({
+            error: 'SERVICE_UNAVAILABLE',
+            message: 'The service is temporarily unavailable. Please try again shortly.'
+          });
+        }
+      } else {
+        // DB is available and user genuinely not found — require registration
+        if (user.email) {
+          if (process.env.NODE_ENV === 'development') {
+            console.log(`🚫 BLOCKED: Unregistered user attempted OAuth login: ${user.email}`);
+            console.log(`   User must register with their school first before using Google login`);
+          }
+          return res.status(403).json({ 
+            error: 'REGISTRATION_REQUIRED',
+            message: 'You need to register with your school before you can log in. Please contact your school administrator for a registration link.',
+            email: user.email
+          });
+        }
+        console.error(`❌ User ${user.email} authenticated via Supabase but not found in database`);
+        return res.status(403).json({ 
+          error: 'REGISTRATION_REQUIRED',
+          message: 'You need to register with your school before you can log in. Please contact your school administrator for a registration link.'
+        });
+      }
     }
     
     // 🔒 SECURITY: req.auth.payload MUST use database values exclusively
@@ -297,66 +336,73 @@ export const supabaseAuth = async (
     let effectiveRole = dbUserData?.activeRole ?? dbUserData?.role ?? 'parent';
 
     // Fetch all roles for this user via storage (additive permissions)
-    let allRoles: string[] = [];
-    try {
-      const userRolesData = await storage.getUserRolesByUserId(dbUserId);
+    // Pre-seeded from app_metadata in DB-down degraded fallback path
+    let allRoles: string[] = (dbLookupFailed && dbUserId === null && dbUserData?.role)
+      ? [dbUserData.role]
+      : [];
 
-      // Resolve effective school using the same chain as /current-role endpoint:
-      // Priority 1: activeRoleId lookup in user_roles (authoritative after role switches)
-      // Priority 2: role-string match in user_roles (backward compatibility)
-      // Priority 3: users.schoolId fallback (may be stale)
-      // NOTE: If activeRoleId lookup succeeds (entry found), its schoolId is authoritative
-      //       even if null — we do NOT fall through to stale users.schoolId in that case.
-      let effectiveSchoolId: number | null | undefined;
-      const activeRoleIdVal = dbUserData?.activeRoleId;
+    if (!dbLookupFailed) {
+      try {
+        const userRolesData = await storage.getUserRolesByUserId(dbUserId);
 
-      if (activeRoleIdVal) {
-        const activeRoleEntry = userRolesData.find((r: any) => r.id === activeRoleIdVal);
-        if (activeRoleEntry) {
-          // Entry found: its schoolId is authoritative (null means global role)
-          effectiveSchoolId = activeRoleEntry.schoolId ?? null;
-        }
-      }
+        // Resolve effective school using the same chain as /current-role endpoint:
+        // Priority 1: activeRoleId lookup in user_roles (authoritative after role switches)
+        // Priority 2: role-string match in user_roles (backward compatibility)
+        // Priority 3: users.schoolId fallback (may be stale)
+        // NOTE: If activeRoleId lookup succeeds (entry found), its schoolId is authoritative
+        //       even if null — we do NOT fall through to stale users.schoolId in that case.
+        let effectiveSchoolId: number | null | undefined;
+        const activeRoleIdVal = dbUserData?.activeRoleId;
 
-      if (effectiveSchoolId === undefined) {
-        // Fallback: role-string match for backward compat when activeRoleId not set
-        const effectiveRoleForLookup = dbUserData?.activeRole ?? dbUserData?.role;
-        if (effectiveRoleForLookup) {
-          const roleStringEntry = userRolesData.find((r: any) => r.role === effectiveRoleForLookup);
-          if (roleStringEntry) {
-            effectiveSchoolId = roleStringEntry.schoolId ?? null;
+        if (activeRoleIdVal) {
+          const activeRoleEntry = userRolesData.find((r: any) => r.id === activeRoleIdVal);
+          if (activeRoleEntry) {
+            // Entry found: its schoolId is authoritative (null means global role)
+            effectiveSchoolId = activeRoleEntry.schoolId ?? null;
           }
         }
-      }
 
-      if (effectiveSchoolId === undefined) {
-        // Final fallback: users.schoolId (may be stale but better than nothing)
-        effectiveSchoolId = dbUserData?.schoolId ?? null;
-      }
-
-      // Include roles scoped to this user's effective school; exclude roles scoped to other schools.
-      // Roles with null schoolId are global/platform roles (e.g., superAdmin) and are always included.
-      allRoles = userRolesData
-        .filter((r: any) => r.schoolId === null || r.schoolId === effectiveSchoolId)
-        .map((r: any) => r.role);
-      if (process.env.NODE_ENV === 'development') {
-        console.log(`📋 supabaseAuth - allRoles for school ${effectiveSchoolId}:`, allRoles);
-      }
-
-      // If user has superAdmin in their roles, set effectiveRole to superAdmin
-      // (unless they have explicitly switched to a different active role)
-      if (!dbUserData?.activeRole && allRoles.some(r => r.toLowerCase() === 'superadmin')) {
-        effectiveRole = 'superAdmin';
-        if (process.env.NODE_ENV === 'development') {
-          console.log('🔑 supabaseAuth - User has superAdmin role in user_roles table');
+        if (effectiveSchoolId === undefined) {
+          // Fallback: role-string match for backward compat when activeRoleId not set
+          const effectiveRoleForLookup = dbUserData?.activeRole ?? dbUserData?.role;
+          if (effectiveRoleForLookup) {
+            const roleStringEntry = userRolesData.find((r: any) => r.role === effectiveRoleForLookup);
+            if (roleStringEntry) {
+              effectiveSchoolId = roleStringEntry.schoolId ?? null;
+            }
+          }
         }
+
+        if (effectiveSchoolId === undefined) {
+          // Final fallback: users.schoolId (may be stale but better than nothing)
+          effectiveSchoolId = dbUserData?.schoolId ?? null;
+        }
+
+        // Include roles scoped to this user's effective school; exclude roles scoped to other schools.
+        // Roles with null schoolId are global/platform roles (e.g., superAdmin) and are always included.
+        allRoles = userRolesData
+          .filter((r: any) => r.schoolId === null || r.schoolId === effectiveSchoolId)
+          .map((r: any) => r.role);
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`📋 supabaseAuth - allRoles for school ${effectiveSchoolId}:`, allRoles);
+        }
+
+        // If user has superAdmin in their roles, set effectiveRole to superAdmin
+        // (unless they have explicitly switched to a different active role)
+        if (!dbUserData?.activeRole && allRoles.some(r => r.toLowerCase() === 'superadmin')) {
+          effectiveRole = 'superAdmin';
+          if (process.env.NODE_ENV === 'development') {
+            console.log('🔑 supabaseAuth - User has superAdmin role in user_roles table');
+          }
+        }
+      } catch (rolesErr) {
+        console.error('Error loading allRoles for token user:', rolesErr);
       }
-    } catch (rolesErr) {
-      console.error('Error loading allRoles for token user:', rolesErr);
     }
 
     req.user = {
-      id: dbUserId, // Always a database integer ID (enforced by check above)
+      // dbUserId is a database integer ID when DB is available, null in degraded DB mode
+      id: dbUserId,
       email: user.email!,
       sub: user.id,
       role: dbUserData?.role,
@@ -364,6 +410,8 @@ export const supabaseAuth = async (
       permissions: dbUserData?.permissions,
       name: dbUserData?.name,
       allRoles,
+      // degradedDbMode is true when DB was unavailable and auth falls back to app_metadata
+      degradedDbMode: dbLookupFailed && dbUserId === null,
     };
 
     if (process.env.NODE_ENV === 'development') {
@@ -411,7 +459,7 @@ export const requireEducatorRole = async (
       console.log('[EducatorDashboard] Checking educator role access for user:', req.user?.email);
     }
     
-    if (!req.user?.id) {
+    if (!req.user?.id && !req.user?.degradedDbMode) {
       return res.status(401).json({ error: 'Authentication required' });
     }
     
@@ -429,9 +477,10 @@ export const requireEducatorRole = async (
     // educator access at a school where the user only holds a parent role.
     let roleStrings: string[] = req.user.allRoles ?? [];
 
-    if (roleStrings.length === 0) {
+    if (roleStrings.length === 0 && req.user.id && !req.user.degradedDbMode) {
       // Edge case: middleware order wrong, or legacy user with no user_roles entries.
       // Fall back to a DB fetch so the endpoint stays functional.
+      // Skip in degraded DB mode (DB unavailable) to avoid passing null ID.
       console.warn('[EducatorDashboard] req.user.allRoles is empty — falling back to DB fetch for user:', req.user.id);
       try {
         const userRoles = await storage.getUserRolesByUserId(req.user.id);
@@ -476,7 +525,7 @@ export const requireSchoolContext = async (
   next: NextFunction
 ) => {
   try {
-    if (!req.user?.id) {
+    if (!req.user?.id && !req.user?.degradedDbMode) {
       return res.status(401).json({ error: 'Authentication required' });
     }
     

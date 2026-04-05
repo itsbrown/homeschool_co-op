@@ -6,8 +6,11 @@ import { buildPostgresUrl } from './lib/database-url';
 // Lazy database connection variables
 let dbInstance: any = null;
 let client: any = null;
-let connectionTested = false;
 let connectionWorking = false;
+
+// Cooldown tracking: retry connection at most once every 30 seconds
+let lastConnectionAttempt: number = 0;
+const CONNECTION_RETRY_COOLDOWN_MS = 30_000;
 
 // Function to initialize database connection
 function initializeDatabase() {
@@ -43,32 +46,41 @@ function initializeDatabase() {
 }
 
 // Function to get database instance with connection testing
+// Retries at most once every CONNECTION_RETRY_COOLDOWN_MS if previously failed
 export async function getDb() {
-  if (!connectionTested) {
-    connectionTested = true;
-    
-    try {
-      const db = initializeDatabase();
-      if (db) {
-        // Test the connection with a simple query
-        await client`SELECT 1`;
-        connectionWorking = true;
-        console.log("✅ Database connection test successful");
-        return db;
-      }
-    } catch (error) {
-      console.log("❌ Database connection test failed:", error instanceof Error ? error.message : 'Unknown error');
-      connectionWorking = false;
-      dbInstance = null;
-      client = null;
-    }
-  }
-
+  // If connection is already working, return immediately
   if (connectionWorking && dbInstance) {
     return dbInstance;
-  } else {
+  }
+
+  const now = Date.now();
+  const timeSinceLastAttempt = now - lastConnectionAttempt;
+
+  // If we are still within the cooldown window, don't retry
+  if (lastConnectionAttempt > 0 && timeSinceLastAttempt < CONNECTION_RETRY_COOLDOWN_MS) {
     throw new Error("Database connection not available");
   }
+
+  // Attempt (or re-attempt) connection
+  lastConnectionAttempt = now;
+  
+  try {
+    const db = initializeDatabase();
+    if (db) {
+      // Test the connection with a simple query
+      await client`SELECT 1`;
+      connectionWorking = true;
+      console.log("✅ Database connection test successful");
+      return db;
+    }
+  } catch (error) {
+    console.log("❌ Database connection test failed:", error instanceof Error ? error.message : 'Unknown error');
+    connectionWorking = false;
+    dbInstance = null;
+    client = null;
+  }
+
+  throw new Error("Database connection not available");
 }
 
 // Export a proxy that throws error when database is not available
