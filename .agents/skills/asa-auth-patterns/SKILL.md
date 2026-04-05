@@ -192,6 +192,36 @@ if (!isAssigned) {
 - Always invalidate relevant TanStack Query caches after role switches
 - Always handle 401 token expiration gracefully — `apiRequest` retries once after refresh
 
+### Shell Wrappers Must Branch on `activeRole`, Never `hasRole`
+
+Shell wrappers in `App.tsx` that select which sidebar to render **must** branch on `activeRole` (the role the user is currently acting as), **never** on `hasRole(...)` (which checks role membership, not the currently active role).
+
+**Why:** `hasRole('parent')` returns `true` for any user who holds the parent role — even if their active role is `schoolAdmin`. This causes multi-role users to always get wrapped in `ParentAppShell`, which sets `hasShell = true` in `LayoutShellContext`, and causes `SchoolAdminLayout` to skip rendering `UnifiedSchoolAdminSidebar`.
+
+**Wrong (role membership check — broken for multi-role users):**
+```typescript
+function SchoolAdminShellWrapper({ children }: { children: React.ReactNode }) {
+  const { hasRole } = useRole();
+  if (hasRole('parent')) {           // BUG: true even when actively acting as schoolAdmin
+    return <ParentAppShell>{children}</ParentAppShell>;
+  }
+  return <>{children}</>;
+}
+```
+
+**Correct (active role check):**
+```typescript
+function SchoolAdminShellWrapper({ children }: { children: React.ReactNode }) {
+  const { activeRole } = useRole();
+  if (activeRole === 'parent') {     // Only wraps when user is currently acting as parent
+    return <ParentAppShell>{children}</ParentAppShell>;
+  }
+  return <>{children}</>;
+}
+```
+
+Apply the same rule to every shell wrapper (`EducatorShellWrapper`, etc.): always compare against `activeRole`, not `hasRole(...)`.
+
 ### Don't
 - Don't use `req.userId` in route handlers — it is never set by any middleware. Use `req.user?.id` (the integer DB ID set by `supabaseAuth`) instead
 - Don't use `requireAdmin` from `auth0-auth.ts` for school admin routes — it allows `'school-admin'` (hyphen) which does NOT match the DB role `'schoolAdmin'` (camelCase). Use `requireRole(['schoolAdmin', 'admin', 'superAdmin'])` directly

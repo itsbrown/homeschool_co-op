@@ -228,16 +228,16 @@ const NotificationManagementPage = lazy(() => import("@/pages/NotificationManage
 const EnrollmentsAdminPage = lazy(() => import("./pages/schools/EnrollmentsAdminPage"));
 
 function EducatorShellWrapper({ children }: { children: React.ReactNode }) {
-  const { hasRole } = useRole();
-  if (hasRole('parent')) {
+  const { activeRole } = useRole();
+  if (activeRole === 'parent') {
     return <ParentAppShell>{children}</ParentAppShell>;
   }
   return <EducatorAppShell>{children}</EducatorAppShell>;
 }
 
 function SchoolAdminShellWrapper({ children }: { children: React.ReactNode }) {
-  const { hasRole } = useRole();
-  if (hasRole('parent')) {
+  const { activeRole } = useRole();
+  if (activeRole === 'parent') {
     return <ParentAppShell>{children}</ParentAppShell>;
   }
   return <>{children}</>;
@@ -563,7 +563,7 @@ function Router() {
       <Route path="/parent/assessments" component={MyAssessmentsPage} />
       <Route path="/parent/weekly-schedule" component={WeeklySchedulePage} />
 
-      {/* Educator routes - use ParentAppShell for multi-role users (parent + educator), EducatorAppShell for pure educators */}
+      {/* Educator routes - use ParentAppShell when activeRole is 'parent', EducatorAppShell otherwise */}
       <Route path="/educator" component={() => <EducatorShellWrapper><EducatorDashboardPage /></EducatorShellWrapper>} />
       <Route path="/educator/dashboard" component={() => <EducatorShellWrapper><EducatorDashboardPage /></EducatorShellWrapper>} />
       <Route path="/educator/my-classes" component={() => <EducatorShellWrapper><MyClassesPage /></EducatorShellWrapper>} />
