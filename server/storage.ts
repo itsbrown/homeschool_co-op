@@ -210,6 +210,7 @@ export interface IStorage {
   
   // Announcement methods (school-scoped notifications)
   getAnnouncementsBySchool(schoolId: number): Promise<Notification[]>;
+  getSentNotificationsBySchool(schoolId: number): Promise<Notification[]>;
   getPinnedAnnouncementsBySchool(schoolId: number): Promise<Notification[]>;
   getActiveAnnouncementsForUser(userId: number, schoolId: number): Promise<Notification[]>;
   
@@ -6947,6 +6948,10 @@ import { DatabaseStorage } from "./dbStorage";
       // Announcement methods (school-scoped notifications)
       async getAnnouncementsBySchool(schoolId: number): Promise<Notification[]> {
         return this.dbStorage.getAnnouncementsBySchool(schoolId);
+      }
+
+      async getSentNotificationsBySchool(schoolId: number): Promise<Notification[]> {
+        return this.dbStorage.getSentNotificationsBySchool(schoolId);
       }
 
       async getPinnedAnnouncementsBySchool(schoolId: number): Promise<Notification[]> {

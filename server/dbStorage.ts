@@ -2831,6 +2831,56 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(notifications.createdAt));
   }
 
+  async getSentNotificationsBySchool(schoolId: number): Promise<Notification[]> {
+    const db = await getDb();
+    // Primary arm: notifications properly tagged with schoolId and status=sent
+    const schoolNotifications = await db
+      .select()
+      .from(notifications)
+      .where(
+        and(
+          eq(notifications.schoolId, schoolId),
+          eq(notifications.status, 'sent')
+        )
+      );
+
+    // Legacy arm: notifications with schoolId=null but sent by an admin-role user of this school
+    // Restrict to admin-type roles only to avoid pulling unrelated notifications
+    const adminRoleNames = ['admin', 'schoolAdmin', 'school_admin', 'superAdmin', 'director'];
+    const allSchoolRoles = await db
+      .select()
+      .from(userRoles)
+      .where(eq(userRoles.schoolId, schoolId));
+    const adminUserIds = allSchoolRoles
+      .filter(r => adminRoleNames.some(name => r.role?.toLowerCase() === name.toLowerCase()))
+      .map(r => r.userId);
+
+    let legacyNotifications: Notification[] = [];
+    if (adminUserIds.length > 0) {
+      legacyNotifications = await db
+        .select()
+        .from(notifications)
+        .where(
+          and(
+            isNull(notifications.schoolId),
+            eq(notifications.status, 'sent'),
+            inArray(notifications.senderId, adminUserIds)
+          )
+        );
+    }
+
+    // Merge, deduplicate by id, sort by createdAt descending
+    const merged = [...schoolNotifications, ...legacyNotifications];
+    const seen = new Set<number>();
+    const unique = merged.filter(n => {
+      if (seen.has(n.id)) return false;
+      seen.add(n.id);
+      return true;
+    });
+    unique.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return unique;
+  }
+
   async getPinnedAnnouncementsBySchool(schoolId: number): Promise<Notification[]> {
     const db = await getDb();
     return await db

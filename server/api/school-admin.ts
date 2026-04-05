@@ -7148,15 +7148,14 @@ router.post('/credits/create', async (req, res) => {
 router.get('/notifications/tracking', supabaseAuth, requireSchoolContext, async (req: any, res) => {
   try {
     const userId = req.user?.id;
-    const schoolId = req.schoolContext?.schoolId;
+    const schoolId = req.schoolId ? Number(req.schoolId) : null;
     
     if (!userId || !schoolId) {
       return res.status(401).json({ error: 'Not authenticated or no school context' });
     }
 
-    // Get all notifications for this school (sent ones only)
-    const notifications = await storage.getAnnouncementsBySchool(schoolId);
-    const sentNotifications = notifications.filter(n => n.status === 'sent');
+    // Get all sent notifications for this school (including legacy ones)
+    const sentNotifications = await storage.getSentNotificationsBySchool(schoolId);
 
     // Get tracking stats for each notification
     const trackingData = await Promise.all(
@@ -7219,7 +7218,7 @@ router.get('/notifications/tracking', supabaseAuth, requireSchoolContext, async 
 router.get('/notifications/:id/recipients', supabaseAuth, requireSchoolContext, async (req: any, res) => {
   try {
     const userId = req.user?.id;
-    const schoolId = req.schoolContext?.schoolId;
+    const schoolId = req.schoolId ? Number(req.schoolId) : null;
     const notificationId = parseInt(req.params.id);
     
     if (!userId || !schoolId) {
@@ -7232,8 +7231,25 @@ router.get('/notifications/:id/recipients', supabaseAuth, requireSchoolContext, 
 
     // Verify the notification belongs to this school
     const notification = await storage.getNotificationById(notificationId);
-    if (!notification || notification.schoolId !== schoolId) {
+    if (!notification) {
       return res.status(404).json({ error: 'Notification not found' });
+    }
+
+    if (notification.schoolId !== null && notification.schoolId !== schoolId) {
+      // Notification is scoped to a different school — deny access
+      return res.status(404).json({ error: 'Notification not found' });
+    }
+
+    if (notification.schoolId === null) {
+      // Legacy notification: verify sender is an admin-role user for this school
+      const adminRoleNames = ['admin', 'schoolAdmin', 'school_admin', 'superAdmin', 'director'];
+      const allSchoolRoles = await storage.getUserRolesByUserId(notification.senderId);
+      const senderIsSchoolAdmin = allSchoolRoles.some(
+        r => r.schoolId === schoolId && adminRoleNames.some(name => r.role?.toLowerCase() === name.toLowerCase())
+      );
+      if (!senderIsSchoolAdmin) {
+        return res.status(404).json({ error: 'Notification not found' });
+      }
     }
 
     // Get all recipients

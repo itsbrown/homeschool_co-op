@@ -6,6 +6,7 @@ import { sendSMS, isTwilioConfigured, getTwilioClient } from '../services/twilio
 import * as brevo from '@getbrevo/brevo';
 import { supabaseAuth } from '../middleware/supabase-auth';
 import { requireRole } from '../middleware/auth0-auth';
+import { requireSchoolContext } from '../middleware/require-school-context';
 
 const router = express.Router();
 
@@ -150,10 +151,19 @@ router.get("/", async (req, res) => {
   }
 });
 
-router.post("/send-individual", async (req, res) => {
+router.post("/send-individual", supabaseAuth, requireRole(['admin', 'superAdmin', 'schoolAdmin', 'director']), requireSchoolContext, async (req: any, res) => {
   try {
     const { userIds, subject, content, type = "both", priority = "normal", scheduledFor } = req.body;
-    const senderId = req.body.senderId || 1;
+    const senderId = req.user?.id;
+    const schoolId = req.schoolId ? Number(req.schoolId) : null;
+
+    if (!senderId) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
+
+    if (!schoolId) {
+      return res.status(400).json({ message: "School context required" });
+    }
 
     if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
       return res.status(400).json({ message: "User IDs are required" });
@@ -161,6 +171,8 @@ router.post("/send-individual", async (req, res) => {
 
     const notificationData = {
       senderId,
+      schoolId,
+      isAnnouncement: true,
       type,
       priority,
       subject,
@@ -181,10 +193,19 @@ router.post("/send-individual", async (req, res) => {
   }
 });
 
-router.post("/send-by-role", async (req, res) => {
+router.post("/send-by-role", supabaseAuth, requireRole(['admin', 'superAdmin', 'schoolAdmin', 'director']), requireSchoolContext, async (req: any, res) => {
   try {
     const { roles, locationIds, subject, content, type = "both", priority = "normal", scheduledFor } = req.body;
-    const senderId = req.body.senderId || 1;
+    const senderId = req.user?.id;
+    const schoolId = req.schoolId ? Number(req.schoolId) : null;
+
+    if (!senderId) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
+
+    if (!schoolId) {
+      return res.status(400).json({ message: "School context required" });
+    }
 
     if (!roles || !Array.isArray(roles) || roles.length === 0) {
       return res.status(400).json({ message: "Roles are required" });
@@ -192,6 +213,8 @@ router.post("/send-by-role", async (req, res) => {
 
     const notificationData = {
       senderId,
+      schoolId,
+      isAnnouncement: true,
       type,
       priority,
       subject,
@@ -211,10 +234,19 @@ router.post("/send-by-role", async (req, res) => {
   }
 });
 
-router.post("/send-by-location", async (req, res) => {
+router.post("/send-by-location", supabaseAuth, requireRole(['admin', 'superAdmin', 'schoolAdmin', 'director']), requireSchoolContext, async (req: any, res) => {
   try {
     const { locationIds, includeRoles, subject, content, type = "both", priority = "normal", scheduledFor } = req.body;
-    const senderId = req.body.senderId || 1;
+    const senderId = req.user?.id;
+    const schoolId = req.schoolId ? Number(req.schoolId) : null;
+
+    if (!senderId) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
+
+    if (!schoolId) {
+      return res.status(400).json({ message: "School context required" });
+    }
 
     if (!locationIds || !Array.isArray(locationIds) || locationIds.length === 0) {
       return res.status(400).json({ message: "Location IDs are required" });
@@ -222,6 +254,8 @@ router.post("/send-by-location", async (req, res) => {
 
     const notificationData = {
       senderId,
+      schoolId,
+      isAnnouncement: true,
       type,
       priority,
       subject,
@@ -241,13 +275,24 @@ router.post("/send-by-location", async (req, res) => {
   }
 });
 
-router.post("/send-all", async (req, res) => {
+router.post("/send-all", supabaseAuth, requireRole(['admin', 'superAdmin', 'schoolAdmin', 'director']), requireSchoolContext, async (req: any, res) => {
   try {
     const { subject, content, type = "both", priority = "normal", scheduledFor } = req.body;
-    const senderId = req.body.senderId || 1;
+    const senderId = req.user?.id;
+    const schoolId = req.schoolId ? Number(req.schoolId) : null;
+
+    if (!senderId) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
+
+    if (!schoolId) {
+      return res.status(400).json({ message: "School context required" });
+    }
 
     const notificationData = {
       senderId,
+      schoolId,
+      isAnnouncement: true,
       type,
       priority,
       subject,
@@ -268,10 +313,19 @@ router.post("/send-all", async (req, res) => {
 });
 
 // Send notification to parents of students enrolled in specific classes
-router.post("/send-by-class", async (req, res) => {
+router.post("/send-by-class", supabaseAuth, requireRole(['admin', 'superAdmin', 'schoolAdmin', 'director']), requireSchoolContext, async (req: any, res) => {
   try {
     const { classIds, subject, content, type = "in_app", priority = "normal", scheduledFor } = req.body;
-    const senderId = req.body.senderId || 1;
+    const senderId = req.user?.id;
+    const schoolId = req.schoolId ? Number(req.schoolId) : null;
+
+    if (!senderId) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
+
+    if (!schoolId) {
+      return res.status(400).json({ message: "School context required" });
+    }
 
     if (!classIds || !Array.isArray(classIds) || classIds.length === 0) {
       return res.status(400).json({ message: "Class IDs are required" });
@@ -311,6 +365,8 @@ router.post("/send-by-class", async (req, res) => {
     // Use "individual" targetType to work with existing pipeline
     const notificationData = {
       senderId,
+      schoolId: schoolId ?? null,
+      isAnnouncement: true,
       type,
       priority,
       subject,
