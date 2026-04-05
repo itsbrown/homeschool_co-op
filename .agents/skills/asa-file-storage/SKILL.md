@@ -156,6 +156,51 @@ await apiRequest('POST', '/api/unified-uploads/upload', formData);
 ```
 - `apiRequest` auto-detects `FormData` and omits `Content-Type` header (see `asa-frontend-conventions`)
 
+## School Documents & Parent Targeting
+
+School admins upload documents to `school_documents`. Each document has two visibility paths that control which parents can see it.
+
+### Document Visibility Model
+
+| Field | Meaning |
+|-------|---------|
+| `isPublished` | Document is visible to anyone with access (must be `true`) |
+| `isArchived` | Soft-delete flag — archived docs are excluded from all listings |
+| `visibleToAll` | If `true`, visible to every parent in the school without extra targeting |
+
+**Targeted (per-parent) visibility** is resolved through the `notifications` and `notification_recipients` tables:
+- When a document is published with specific recipients, `sendDocumentNotification()` in `server/api/schools/documents.ts` creates a `notification` record with `targetData: { documentId: <id>, ... }`
+- For each recipient, a `notification_recipients` row is created linking the notification to that parent's `userId`
+- The `documentId` key inside `notifications.target_data` (JSONB) is the authoritative link — no title matching is used
+
+### Admin Endpoint: Parent Document List
+`GET /api/schools/parents/:parentId/documents` (in `server/api/schools.ts`)
+
+- Auth: `supabaseAuth` + `requireRole(['schoolAdmin', 'admin', 'superAdmin'])`
+- School context is derived from `req.auth.schoolId` (set by middleware) — never accepted from the client
+- Verifies the parent belongs to the admin's school before querying
+- Resolves **two visibility paths** and merges them:
+  1. **`visibleToAll`** — direct flag on `school_documents`
+  2. **Notification-targeted** — raw SQL on `notification_recipients` / `notifications` extracts `CAST(n.target_data->>'documentId' AS INTEGER)` for the given `parentId`
+- Returns only published (`isPublished = true`), non-archived (`isArchived = false`) documents
+- Safe metadata fields only — `filePath` and other storage internals are never exposed in the response
+
+### Document Download Flow
+`GET /api/schools/documents/:id/download` (router: `server/api/schools/documents.ts`, mounted at `/api/schools/documents` via `server/api/schools.ts`)
+
+1. Authenticates user (`supabaseAuth`) and verifies school membership (or enrollment-based access for multi-school parents)
+2. Checks `document.filePath` for `/objects/` prefix to distinguish object storage vs. legacy local paths
+3. **Object storage** (new uploads): streams file directly via `ObjectStorageService.downloadObject()` with `Content-Disposition: attachment` — no presigned URL is generated; the backend proxies the byte stream to the client
+4. **Legacy** (old uploads): reads from local filesystem at `process.cwd() + filePath`
+5. Records a download event via `storage.createDocumentView()` (fire-and-forget, does not block response)
+
+Note: this endpoint streams from object storage rather than returning a presigned URL — the presigned URL pattern is used for uploads (via `fileUploadService.getUploadUrl()`), not for document downloads.
+
+### Key Files
+- `server/api/schools.ts` — `GET /api/schools/parents/:parentId/documents` endpoint
+- `server/api/schools/documents.ts` — upload, `sendDocumentNotification`, download, published listing
+- `client/src/pages/schools/ParentProfilePage.tsx` — admin UI that displays the Documents tab for a parent profile
+
 ## Common Pitfalls
 
 - **File too large rejected** → didn't check category's `maxSizeBytes` before upload → validate client-side before requesting presigned URL
@@ -168,6 +213,7 @@ await apiRequest('POST', '/api/unified-uploads/upload', formData);
 - **PDF read as garbled text** → tried to read PDF with `fs.readFileSync(path, 'utf-8')` → PDFs are binary, must use `pdf-parse` to extract text
 - **KB file content empty** → assumed all files are in Object Storage or all are local → KB files exist in 3 formats (data URIs, `/uploads/`, Object Storage) — handle all three
 - **CSV mapping shows garbled RTF content** → user uploaded an RTF file (saved from Mac TextEdit) instead of a real CSV → validate file content before parsing: check for `{\rtf1` header (RTF), `PK` header (DOCX/XLSX), or `\xd0\xcf` (DOC) and show a clear error like "This file is in RTF format, not CSV. Please re-export as a .csv file."
+- **Parent document list returns too many or too few documents** → check both `visibleToAll` flag and notification-targeted lookup — both paths must be queried and merged; relying on only one path will produce incorrect results
 
 ## Best Practices
 

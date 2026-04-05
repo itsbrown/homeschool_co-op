@@ -132,6 +132,78 @@ prorateReason → explanation
 ```
 Calculator: `server/lib/prorate-calculator.ts` — see `asa-payment-patterns` for details.
 
+## QR Clock-In & Teacher Attendance
+
+School admins generate a one-time QR code for a session; the educator scans it on `QrScanPage` to clock in and start the session.
+
+### Token Generation
+- **Endpoint**: `POST /api/school-admin/sessions/:sessionId/generate-qr`
+- Auth: `supabaseAuth` — caller must have `schoolAdmin` or `superAdmin` role with a `schoolId`
+- Generates a 32-byte hex token stored in `class_sessions.qrToken` and `class_sessions.qrTokenExpiresAt`
+- Expiry is set to 15 minutes after the session's scheduled end time
+- File: `server/api/school-admin.ts`
+
+### QR Scan Page Flow (`client/src/pages/QrScanPage.tsx`)
+1. Page mounts at `/qr-scan/:token` (unauthenticated route)
+2. Queries `GET /api/public/session-by-qr/:token` to load session metadata (`SessionInfo`)
+3. If educator is not logged in, shows a login prompt with a `returnTo` redirect
+4. Once authenticated, the educator clicks "Clock In & Start Session"
+5. Calls `POST /api/educator/sessions/:sessionId/teacher-checkin` with `{ qrToken, latitude?, longitude? }`
+6. On success, session status transitions to `in_progress`, `actualStartTime` is recorded, and the `AttendanceTracker` component becomes active
+
+### Teacher Check-In Endpoint (`POST /api/educator/sessions/:id/teacher-checkin`)
+- Located in `server/api/educator.ts`
+- Validates that `qrToken` matches `class_sessions.qrToken` for the given session
+- Validates token is not expired (`qrTokenExpiresAt`)
+- Only the `educatorId` or `substituteEducatorId` on the session may clock in
+- Session must be in `scheduled` status — already `in_progress` or `completed` sessions are rejected
+- **Geofence check**: if school has `latitude`, `longitude`, and `geofenceRadiusMeters` configured, the Haversine distance from the educator's reported coordinates is compared against `geofenceRadiusMeters` (default `150` meters). Result stored in `checkInLocationVerified` (true/false/null)
+- **One-time token consumption**: after successful check-in, `qrToken` and `qrTokenExpiresAt` are set to `null` so the token cannot be reused
+- Updates recorded on `class_sessions`: `status = 'in_progress'`, `actualStartTime`, `checkInLatitude`, `checkInLongitude`, `checkInLocationVerified`
+- Creates an audit log entry with action type `teacher_qr_clockin`
+
+### `class_sessions` Schema Fields (QR & Check-In)
+```
+qrToken              → text — one-time token, cleared after use
+qrTokenExpiresAt     → timestamp — when the token expires
+actualStartTime      → timestamp — when educator clicked clock-in
+checkInLatitude      → double precision — educator GPS latitude at check-in
+checkInLongitude     → double precision — educator GPS longitude at check-in
+checkInLocationVerified → boolean — whether location was within geofence radius
+```
+
+### Key Files
+- `server/api/school-admin.ts` — QR token generation endpoint
+- `server/api/educator.ts` — teacher check-in endpoint and `qr-checkin` endpoint
+- `client/src/pages/QrScanPage.tsx` — educator-facing QR scan and clock-in UI
+- `client/src/components/educator/AttendanceTracker.tsx` — attendance roster shown after clock-in
+- `shared/schema.ts` — `classSessions` table with QR and check-in fields
+
+## Active Enrollment Status Rule for Educator Views
+
+When building any educator-facing student list (e.g., "My Students"), always filter `program_enrollments` to statuses that represent an active relationship.
+
+### Rule
+```typescript
+const activeEnrollmentStatuses = ['enrolled', 'pending_admin_approval'];
+```
+- **Include**: `enrolled`, `pending_admin_approval`
+- **Exclude**: `completed`, `cancelled`, `withdrawn`, `failed`, `pending_payment`
+- `completed`, `cancelled`, and `withdrawn` mean the student is **no longer active** in the class
+- `pending_payment` and `failed` mean the enrollment has not been confirmed
+
+### Implementation Reference
+`server/api/educator.ts` — the `my-students` endpoint filters `allProgramEnrollments` with:
+```typescript
+const activeEnrollmentStatuses = ['enrolled', 'pending_admin_approval'];
+const allEnrollments = allProgramEnrollments.filter((enrollment: any) =>
+  enrollment.classType === 'marketplace' &&
+  enrollment.marketplaceClassId &&
+  assignedClassIds.includes(enrollment.marketplaceClassId) &&
+  activeEnrollmentStatuses.includes(enrollment.status)
+);
+```
+
 ## Common Pitfalls
 
 - **Wrong enrollment table** → used `school_class_enrollments` for a payment-tracked enrollment → use `program_enrollments` (it has financial fields)
@@ -140,6 +212,7 @@ Calculator: `server/lib/prorate-calculator.ts` — see `asa-payment-patterns` fo
 - **Missing variant context** → enrollment created without `variantId` when class has multiple variants → always capture variant selection from cart
 - **Orphaned scheduled payments** → enrollment deleted but `scheduled_payments` remain → filter orphaned records from admin views (see `asa-database-patterns`)
 - **Using `classData?.price` instead of `enrollment.totalCost` for balance updates** → `enrollment.programId` is not a reliable class ID (legacy field, not always populated), so `storage.getClassById(enrollment.programId)` often returns `null`, making `totalCost = 0` → `remainingBalance = 0` (wrong, understates balance). Always use `enrollment.totalCost` directly — it is the authoritative financial field set at enrollment creation.
+- **Educator student list shows graduated/cancelled students** → enrollment query missing status filter → always restrict to `status IN ('enrolled', 'pending_admin_approval')`; never include `completed`, `cancelled`, or `withdrawn`
 
 ## Best Practices
 
