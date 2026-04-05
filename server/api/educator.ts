@@ -300,10 +300,12 @@ router.get('/my-students', async (req, res) => {
     const allChildren = await storage.getAllChildren();
     const allProgramEnrollments = await storage.getAllEnrollments();
     
+    const activeEnrollmentStatuses = ['enrolled', 'pending_admin_approval'];
     const allEnrollments = allProgramEnrollments.filter((enrollment: any) =>
       enrollment.classType === 'marketplace' &&
       enrollment.marketplaceClassId &&
-      assignedClassIds.includes(enrollment.marketplaceClassId)
+      assignedClassIds.includes(enrollment.marketplaceClassId) &&
+      activeEnrollmentStatuses.includes(enrollment.status)
     );
 
     const studentsWithClasses = allEnrollments.map((enrollment: any) => {
