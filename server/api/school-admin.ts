@@ -7421,7 +7421,7 @@ router.get('/attendance/sessions', supabaseAuth, async (req: any, res) => {
   }
 });
 
-// GET /api/school-admin/attendance/records - Get student attendance records
+// GET /api/school-admin/attendance/records - Get student attendance records (and teacher clock-in rows)
 router.get('/attendance/records', supabaseAuth, async (req: any, res) => {
   try {
     const userId = req.user?.id;
@@ -7481,8 +7481,9 @@ router.get('/attendance/records', supabaseAuth, async (req: any, res) => {
       .where(and(...conditions))
       .orderBy(sql`${classSessions.scheduledDate} DESC`);
 
-    const records = results.map((row: any) => ({
+    const studentRecords = results.map((row: any) => ({
       id: row.id,
+      role: 'student',
       status: row.status,
       checkInTime: row.checkInTime,
       checkOutTime: row.checkOutTime,
@@ -7495,7 +7496,37 @@ router.get('/attendance/records', supabaseAuth, async (req: any, res) => {
       educatorName: [row.educatorFirstName, row.educatorLastName].filter(Boolean).join(' ') || 'Unknown',
     }));
 
-    res.json(records);
+    // Include teacher clock-in rows alongside student records, labeled with role: 'teacher'
+    // Skip if childId or status filter is active (teacher rows have no childId)
+    let teacherRows: any[] = [];
+    if (!childId && !status) {
+      const clockInRecords = await storage.getTeacherClockInRecords({
+        schoolId: adminRole.schoolId,
+        startDate: startDate as string | undefined,
+        endDate: endDate as string | undefined,
+        classId: classId ? Number(classId) : undefined,
+      });
+      teacherRows = clockInRecords.map(row => ({
+        id: `teacher-session-${row.sessionId}`,
+        role: 'teacher',
+        status: 'present',
+        checkInTime: row.actualStartTime,
+        checkOutTime: row.actualEndTime,
+        tardyMinutes: null,
+        notes: 'Teacher clock-in (QR)',
+        locationVerified: row.checkInLocationVerified,
+        childName: row.educatorName,
+        className: row.className,
+        sessionDate: row.scheduledDate,
+        educatorName: row.educatorName,
+      }));
+    }
+
+    const allRecords = [...studentRecords, ...teacherRows].sort((a, b) => {
+      return (b.sessionDate || '').localeCompare(a.sessionDate || '');
+    });
+
+    res.json(allRecords);
   } catch (error) {
     console.error('[Attendance] Error fetching records:', error);
     res.status(500).json({ error: 'Failed to fetch attendance records' });

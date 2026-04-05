@@ -292,7 +292,7 @@ function ActiveSessionContent({ sessionId }: { sessionId: number }) {
       {(isInProgress || isCompleted) && (
         <AttendanceTracker 
           sessionId={sessionId} 
-          isSessionActive={isInProgress}
+          isSessionActive={true}
           schoolId={session.schoolId}
         />
       )}

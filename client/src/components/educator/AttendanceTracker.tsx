@@ -369,8 +369,13 @@ export function AttendanceTracker({ sessionId, isSessionActive, schoolId }: Atte
                       {student.firstName} {student.lastName}
                     </div>
                     {student.gradeLevel && (
-                      <div className="text-sm text-muted-foreground">
+                      <div className="text-xs text-muted-foreground">
                         {student.gradeLevel}
+                      </div>
+                    )}
+                    {student.checkInTime && (
+                      <div className="text-xs text-muted-foreground">
+                        Marked {new Date(student.checkInTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </div>
                     )}
                   </div>

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useLocation } from 'wouter';
+import { Link, useLocation } from 'wouter';
 import StaffGuideHighlight from '@/components/StaffGuideHighlight';
 import { 
   Clock, 
@@ -13,7 +13,8 @@ import {
   TrendingUp,
   ArrowLeft,
   BookOpen,
-  UserCheck
+  UserCheck,
+  ClipboardList
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -386,11 +387,21 @@ function MyHoursContent() {
                               </p>
                             )}
                           </div>
-                          <Badge className={getStatusColor(session.status)}>
-                            {session.status === 'completed' && <CheckCircle2 className="h-3 w-3 mr-1" />}
-                            {session.status === 'cancelled' && <XCircle className="h-3 w-3 mr-1" />}
-                            {session.status.replace('_', ' ')}
-                          </Badge>
+                          <div className="flex items-center gap-2">
+                            {(session.status === 'completed' || session.status === 'in_progress') && (
+                              <Link href={`/educator/sessions/${session.id}/attendance`}>
+                                <Button variant="outline" size="sm" className="gap-1 text-xs h-7">
+                                  <ClipboardList className="h-3 w-3" />
+                                  Attendance
+                                </Button>
+                              </Link>
+                            )}
+                            <Badge className={getStatusColor(session.status)}>
+                              {session.status === 'completed' && <CheckCircle2 className="h-3 w-3 mr-1" />}
+                              {session.status === 'cancelled' && <XCircle className="h-3 w-3 mr-1" />}
+                              {session.status.replace('_', ' ')}
+                            </Badge>
+                          </div>
                         </div>
                       </div>
                     ))}

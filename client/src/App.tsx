@@ -141,6 +141,7 @@ const StartSessionPage = lazy(() => import('./pages/educator/StartSession'));
 const EducatorAssessmentsPage = lazy(() => import('./pages/educator/EducatorAssessmentsPage'));
 const EducatorWeeklySchedulePage = lazy(() => import('./pages/educator/EducatorWeeklySchedulePage'));
 const StaffGuidePage = lazy(() => import('./pages/educator/StaffGuidePage'));
+const QrScanPage = lazy(() => import('./pages/QrScanPage'));
 
 const CallbackPage = () => {
   const { isAuthenticated } = useAuth();
@@ -329,7 +330,7 @@ function Router() {
   // Handle redirects in useEffect to avoid state updates during render
   useEffect(() => {
     // Redirect to login if not authenticated (except for public routes)
-    if (!isAuthenticated && !isLoading && !['/login', '/auth-callback', '/register', '/emergency-logout', '/auth/logout', '/forgot-password', '/reset-password'].includes(location) && !location.startsWith('/accept-invitation') && !location.startsWith('/school-registration') && !location.startsWith('/accept-educator-invitation') && !location.startsWith('/register/') && !location.startsWith('/school/') && !location.startsWith('/forms/')) {
+    if (!isAuthenticated && !isLoading && !['/login', '/auth-callback', '/register', '/emergency-logout', '/auth/logout', '/forgot-password', '/reset-password'].includes(location) && !location.startsWith('/accept-invitation') && !location.startsWith('/school-registration') && !location.startsWith('/accept-educator-invitation') && !location.startsWith('/register/') && !location.startsWith('/school/') && !location.startsWith('/forms/') && !location.startsWith('/qr/')) {
       console.log(`🔒 Redirecting unauthenticated user from ${location} to login`);
       setLocation('/login?returnTo=' + encodeURIComponent(location));
     }
@@ -442,6 +443,7 @@ function Router() {
       <Route path="/auth/callback" component={AuthCallback} />
       <Route path="/accept-invitation" component={AcceptInvitationPage} />
       <Route path="/accept-educator-invitation" component={AcceptEducatorInvitationPage} />
+      <Route path="/qr/:token" component={QrScanPage} />
       <Route path="/forgot-password" component={ForgotPasswordPage} />
       <Route path="/reset-password" component={ResetPasswordPage} />
       <Route path="/login" component={SupabaseLogin} />
@@ -566,6 +568,7 @@ function Router() {
       <Route path="/educator/dashboard" component={() => <EducatorShellWrapper><EducatorDashboardPage /></EducatorShellWrapper>} />
       <Route path="/educator/my-classes" component={() => <EducatorShellWrapper><MyClassesPage /></EducatorShellWrapper>} />
       <Route path="/educator/session/:id" component={() => <EducatorShellWrapper><ActiveSessionPage /></EducatorShellWrapper>} />
+      <Route path="/educator/sessions/:id/attendance" component={() => <EducatorShellWrapper><ActiveSessionPage /></EducatorShellWrapper>} />
       <Route path="/educator/weekly-calendar" component={() => <EducatorShellWrapper><WeeklyCalendarPage /></EducatorShellWrapper>} />
       <Route path="/educator/my-hours" component={() => <EducatorShellWrapper><MyHoursPage /></EducatorShellWrapper>} />
       <Route path="/educator/attendance" component={() => <EducatorShellWrapper><AttendanceManagementPage /></EducatorShellWrapper>} />

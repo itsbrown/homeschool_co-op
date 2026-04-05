@@ -3535,6 +3535,52 @@ export class DatabaseStorage implements IStorage {
     return session;
   }
 
+  async getSessionByQrToken(token: string): Promise<ClassSession | undefined> {
+    const db = await getDb();
+    const [session] = await db.select().from(classSessions).where(eq(classSessions.qrToken, token));
+    return session;
+  }
+
+  async getTeacherClockInRecords(params: { schoolId: number; startDate?: string; endDate?: string; classId?: number }): Promise<Array<{ sessionId: number; scheduledDate: string; actualStartTime: string | null; actualEndTime: string | null; checkInLocationVerified: boolean | null; className: string; educatorName: string }>> {
+    const db = await getDb();
+    const { schoolId, startDate, endDate, classId } = params;
+    const conditions: any[] = [
+      eq(classSessions.schoolId, schoolId),
+      sql`${classSessions.actualStartTime} IS NOT NULL`,
+      sql`${classSessions.notes} LIKE '%[teacher-clockin]%'`,
+    ];
+    if (startDate) conditions.push(sql`${classSessions.scheduledDate} >= ${startDate}`);
+    if (endDate) conditions.push(sql`${classSessions.scheduledDate} <= ${endDate}`);
+    if (classId) conditions.push(eq(classSessions.classId, classId));
+
+    const results = await db
+      .select({
+        sessionId: classSessions.id,
+        scheduledDate: classSessions.scheduledDate,
+        actualStartTime: classSessions.actualStartTime,
+        actualEndTime: classSessions.actualEndTime,
+        checkInLocationVerified: classSessions.checkInLocationVerified,
+        classTitle: classes.title,
+        educatorFirstName: users.firstName,
+        educatorLastName: users.lastName,
+      })
+      .from(classSessions)
+      .leftJoin(classes, eq(classSessions.classId, classes.id))
+      .leftJoin(users, eq(classSessions.educatorId, users.id))
+      .where(and(...conditions))
+      .orderBy(sql`${classSessions.scheduledDate} DESC`);
+
+    return results.map((row: any) => ({
+      sessionId: row.sessionId,
+      scheduledDate: row.scheduledDate,
+      actualStartTime: row.actualStartTime ?? null,
+      actualEndTime: row.actualEndTime ?? null,
+      checkInLocationVerified: row.checkInLocationVerified ?? null,
+      className: row.classTitle ?? 'Unknown Class',
+      educatorName: [row.educatorFirstName, row.educatorLastName].filter(Boolean).join(' ') || 'Unknown',
+    }));
+  }
+
   async getClassSessionsByClassId(classId: number): Promise<ClassSession[]> {
     const db = await getDb();
     return db.select().from(classSessions).where(eq(classSessions.classId, classId));

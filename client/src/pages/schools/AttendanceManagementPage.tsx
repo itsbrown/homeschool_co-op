@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, Search, Download, Calendar, Users, Clock, AlertTriangle, QrCode, ChevronDown, ChevronUp, BarChart3 } from "lucide-react";
+import { Loader2, Search, Download, Calendar, Users, Clock, AlertTriangle, QrCode, ChevronDown, ChevronUp, BarChart3, Copy, Printer } from "lucide-react";
+import QRCode from "qrcode";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -85,7 +86,7 @@ export default function AttendanceManagementPage() {
     endDate: '',
   });
   const [qrDialogOpen, setQrDialogOpen] = useState(false);
-  const [qrData, setQrData] = useState<{ qrToken: string; sessionId: number; expiresAt: string } | null>(null);
+  const [qrData, setQrData] = useState<{ qrToken: string; sessionId: number; expiresAt: string; qrImageUrl?: string; className?: string; scheduledDate?: string } | null>(null);
   const [generatingQr, setGeneratingQr] = useState<number | null>(null);
 
   const buildQueryParams = (filters: Record<string, string>) => {
@@ -137,18 +138,34 @@ export default function AttendanceManagementPage() {
     select: (data: any) => data?.items ?? [],
   });
 
-  const handleGenerateQr = async (sessionId: number) => {
+  const handleGenerateQr = async (sessionId: number, sessionMeta?: { className?: string; scheduledDate?: string }) => {
     setGeneratingQr(sessionId);
     try {
       const res = await apiRequest('POST', `/api/school-admin/sessions/${sessionId}/generate-qr`);
       const data = await res.json();
-      setQrData({ qrToken: data.qrToken, sessionId, expiresAt: data.expiresAt });
+      const qrUrl = `${window.location.origin}/qr/${data.qrToken}`;
+      const qrImageUrl = await QRCode.toDataURL(qrUrl, { width: 256, margin: 2 });
+      setQrData({ qrToken: data.qrToken, sessionId, expiresAt: data.expiresAt, qrImageUrl, ...sessionMeta });
       setQrDialogOpen(true);
     } catch (err: any) {
       toast({ title: "Error", description: err.message || "Failed to generate QR code", variant: "destructive" });
     } finally {
       setGeneratingQr(null);
     }
+  };
+
+  const handleCopyQrUrl = (token: string) => {
+    const url = `${window.location.origin}/qr/${token}`;
+    navigator.clipboard.writeText(url).then(() => {
+      toast({ title: "Copied", description: "QR link copied to clipboard" });
+    });
+  };
+
+  const handleDownloadQr = (qrImageUrl: string, sessionId: number) => {
+    const a = document.createElement('a');
+    a.href = qrImageUrl;
+    a.download = `session-${sessionId}-qr.png`;
+    a.click();
   };
 
   const handleExportCsv = async () => {
@@ -445,7 +462,7 @@ export default function AttendanceManagementPage() {
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  onClick={() => handleGenerateQr(session.id)}
+                                  onClick={() => handleGenerateQr(session.id, { className: session.className, scheduledDate: session.scheduledDate })}
                                   disabled={generatingQr === session.id}
                                 >
                                   {generatingQr === session.id ? (
@@ -538,7 +555,8 @@ export default function AttendanceManagementPage() {
                       <TableHeader>
                         <TableRow>
                           <TableHead>Date</TableHead>
-                          <TableHead>Student</TableHead>
+                          <TableHead>Name</TableHead>
+                          <TableHead>Role</TableHead>
                           <TableHead>Class</TableHead>
                           <TableHead>Status</TableHead>
                           <TableHead>Check-In</TableHead>
@@ -550,9 +568,16 @@ export default function AttendanceManagementPage() {
                       </TableHeader>
                       <TableBody>
                         {records.map((record: any) => (
-                          <TableRow key={record.id}>
+                          <TableRow key={record.id} className={record.role === 'teacher' ? 'bg-blue-50/40' : ''}>
                             <TableCell>{formatDate(record.sessionDate)}</TableCell>
                             <TableCell className="font-medium">{record.childName || '—'}</TableCell>
+                            <TableCell>
+                              {record.role === 'teacher' ? (
+                                <Badge variant="outline" className="bg-blue-100 text-blue-700 border-blue-200 text-xs">Teacher</Badge>
+                              ) : (
+                                <Badge variant="outline" className="bg-gray-100 text-gray-600 border-gray-200 text-xs">Student</Badge>
+                              )}
+                            </TableCell>
                             <TableCell>{record.className || '—'}</TableCell>
                             <TableCell><StatusBadge status={record.status} /></TableCell>
                             <TableCell>{formatTime(record.checkInTime)}</TableCell>
@@ -585,20 +610,65 @@ export default function AttendanceManagementPage() {
               <QrCode className="h-5 w-5" />
               Session QR Code
             </DialogTitle>
+            {qrData && (qrData.className || qrData.scheduledDate) && (
+              <div className="text-sm text-muted-foreground text-left pt-1">
+                {qrData.className && <span className="font-medium text-foreground">{qrData.className}</span>}
+                {qrData.className && qrData.scheduledDate && <span> — </span>}
+                {qrData.scheduledDate && <span>{formatDate(qrData.scheduledDate)}</span>}
+              </div>
+            )}
           </DialogHeader>
           {qrData && (
             <div className="space-y-4 text-center">
-              <div className="bg-white p-6 rounded-lg border-2 border-dashed">
-                <div className="font-mono text-lg font-bold break-all">{qrData.qrToken}</div>
-                <p className="text-sm text-muted-foreground mt-2">
-                  Share this code with the educator to check in
+              <div className="bg-white p-4 rounded-lg border flex flex-col items-center gap-3" id="qr-printable">
+                {qrData.qrImageUrl ? (
+                  <img
+                    src={qrData.qrImageUrl}
+                    alt="Session QR Code"
+                    className="w-48 h-48"
+                  />
+                ) : (
+                  <div className="w-48 h-48 flex items-center justify-center bg-gray-50 rounded">
+                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Educator scans this code to clock in and take attendance
                 </p>
+              </div>
+              <div className="flex flex-wrap gap-2 justify-center">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleCopyQrUrl(qrData.qrToken)}
+                >
+                  <Copy className="h-3.5 w-3.5 mr-1" />
+                  Copy Link
+                </Button>
+                {qrData.qrImageUrl && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleDownloadQr(qrData.qrImageUrl!, qrData.sessionId)}
+                  >
+                    <Download className="h-3.5 w-3.5 mr-1" />
+                    Download
+                  </Button>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => window.print()}
+                >
+                  <Printer className="h-3.5 w-3.5 mr-1" />
+                  Print
+                </Button>
               </div>
               <p className="text-xs text-muted-foreground">
                 Expires: {new Date(qrData.expiresAt).toLocaleString()}
               </p>
               <p className="text-xs text-muted-foreground">
-                This is a one-time use token. Generate a new one if needed.
+                One-time use — generate a new code if needed.
               </p>
             </div>
           )}

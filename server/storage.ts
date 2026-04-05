@@ -549,6 +549,8 @@ export interface IStorage {
 
   // Class Session methods (Phase 1a)
   getClassSessionById(id: number): Promise<ClassSession | undefined>;
+  getSessionByQrToken(token: string): Promise<ClassSession | undefined>;
+  getTeacherClockInRecords(params: { schoolId: number; startDate?: string; endDate?: string; classId?: number }): Promise<Array<{ sessionId: number; scheduledDate: string; actualStartTime: string | null; actualEndTime: string | null; checkInLocationVerified: boolean | null; className: string; educatorName: string }>>;
   getClassSessionsByClassId(classId: number): Promise<ClassSession[]>;
   getClassSessionsByEducatorId(educatorId: number): Promise<ClassSession[]>;
   getClassSessionsBySchoolId(schoolId: number): Promise<ClassSession[]>;
@@ -4367,6 +4369,36 @@ export class MemStorage implements IStorage {
     return this.classSessionsStore.get(id);
   }
 
+  async getSessionByQrToken(token: string): Promise<ClassSession | undefined> {
+    return Array.from(this.classSessionsStore.values()).find(s => s.qrToken === token);
+  }
+
+  async getTeacherClockInRecords(params: { schoolId: number; startDate?: string; endDate?: string; classId?: number }): Promise<Array<{ sessionId: number; scheduledDate: string; actualStartTime: string | null; actualEndTime: string | null; checkInLocationVerified: boolean | null; className: string; educatorName: string }>> {
+    const { schoolId, startDate, endDate, classId } = params;
+    return Array.from(this.classSessionsStore.values())
+      .filter(s =>
+        s.schoolId === schoolId &&
+        s.actualStartTime != null &&
+        s.notes?.includes('[teacher-clockin]') &&
+        (!classId || s.classId === classId) &&
+        (!startDate || s.scheduledDate >= startDate) &&
+        (!endDate || s.scheduledDate <= endDate)
+      )
+      .map(s => {
+        const cls = this.classesStore.get(s.classId);
+        const educator = s.educatorId ? this.usersStore.get(s.educatorId) : undefined;
+        return {
+          sessionId: s.id,
+          scheduledDate: s.scheduledDate,
+          actualStartTime: s.actualStartTime ?? null,
+          actualEndTime: s.actualEndTime ?? null,
+          checkInLocationVerified: s.checkInLocationVerified ?? null,
+          className: (cls as any)?.title ?? 'Unknown Class',
+          educatorName: educator ? `${educator.firstName} ${educator.lastName}` : 'Unknown',
+        };
+      });
+  }
+
   async getClassSessionsByClassId(classId: number): Promise<ClassSession[]> {
     return Array.from(this.classSessionsStore.values())
       .filter(s => s.classId === classId);
@@ -7342,6 +7374,14 @@ import { DatabaseStorage } from "./dbStorage";
       // Class Session methods (Phase 1a)
       async getClassSessionById(id: number): Promise<ClassSession | undefined> {
         return this.dbStorage.getClassSessionById(id);
+      }
+
+      async getSessionByQrToken(token: string): Promise<ClassSession | undefined> {
+        return this.dbStorage.getSessionByQrToken(token);
+      }
+
+      async getTeacherClockInRecords(params: { schoolId: number; startDate?: string; endDate?: string; classId?: number }): Promise<Array<{ sessionId: number; scheduledDate: string; actualStartTime: string | null; actualEndTime: string | null; checkInLocationVerified: boolean | null; className: string; educatorName: string }>> {
+        return this.dbStorage.getTeacherClockInRecords(params);
       }
 
       async getClassSessionsByClassId(classId: number): Promise<ClassSession[]> {

@@ -3188,6 +3188,113 @@ router.get('/notifications/history', async (req, res) => {
 
 // ==================== END NOTIFICATION ENDPOINTS ====================
 
+// ==================== QR CODE TEACHER CLOCK-IN ====================
+
+// POST /api/educator/sessions/:id/teacher-checkin
+// Teacher scans QR code and the scan page submits here to clock in and start the session.
+// Records the session start time and transitions status to 'in_progress'.
+// The QR token is consumed (cleared) to prevent reuse.
+router.post('/sessions/:id/teacher-checkin', async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: 'Authentication required' });
+
+    const sessionId = parseInt(req.params.id);
+    if (isNaN(sessionId)) return res.status(400).json({ error: 'Invalid session ID' });
+
+    const schema = z.object({
+      qrToken: z.string(),
+      latitude: z.number().optional(),
+      longitude: z.number().optional(),
+    });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid request body', details: parsed.error.errors });
+    }
+    const { qrToken, latitude, longitude } = parsed.data;
+
+    const session = await storage.getClassSessionById(sessionId);
+    if (!session) return res.status(404).json({ error: 'Session not found' });
+
+    // Verify the qrToken matches this session
+    if (!session.qrToken || session.qrToken !== qrToken) {
+      return res.status(400).json({ error: 'Invalid QR token for this session' });
+    }
+
+    // Check expiry
+    if (session.qrTokenExpiresAt && new Date(session.qrTokenExpiresAt) < new Date()) {
+      return res.status(400).json({ error: 'QR code has expired' });
+    }
+
+    // Only the assigned educator or substitute may clock in
+    if (session.educatorId !== userId && session.substituteEducatorId !== userId) {
+      return res.status(403).json({ error: 'You are not the assigned educator for this session' });
+    }
+
+    // Only sessions in 'scheduled' status can be clocked in
+    if (session.status !== 'scheduled') {
+      return res.status(400).json({ error: `Session is already ${session.status}` });
+    }
+
+    // Optional geolocation check
+    let locationVerified: boolean | null = null;
+    const school = await storage.getSchool(session.schoolId);
+    if (school && school.latitude != null && school.longitude != null && latitude != null && longitude != null) {
+      const R = 6371e3;
+      const dLat = (school.latitude - latitude) * Math.PI / 180;
+      const dLon = (school.longitude - longitude) * Math.PI / 180;
+      const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+        Math.cos(latitude * Math.PI / 180) * Math.cos(school.latitude * Math.PI / 180) *
+        Math.sin(dLon/2) * Math.sin(dLon/2);
+      const dist = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)) * R;
+      const radius = school.geofenceRadiusMeters ?? 150;
+      locationVerified = dist <= radius;
+    }
+
+    const now = new Date();
+
+    // Update session: start it and clear the QR token so it can't be reused
+    const updatedSession = await storage.updateClassSession(sessionId, {
+      status: 'in_progress',
+      actualStartTime: now,
+      qrToken: null,
+      qrTokenExpiresAt: null,
+      checkInLatitude: latitude ?? null,
+      checkInLongitude: longitude ?? null,
+      checkInLocationVerified: locationVerified,
+      notes: session.notes ? `${session.notes}\n[teacher-clockin]` : '[teacher-clockin]',
+    });
+
+    // Audit log
+    try {
+      await storage.createAuditLog({
+        actionType: 'teacher_qr_clockin',
+        severity: 'info',
+        actorId: userId,
+        actorRole: 'educator',
+        actorEmail: req.user?.email,
+        targetType: 'class_session',
+        targetId: String(sessionId),
+        schoolId: session.schoolId,
+        metadata: {
+          context: 'Teacher clocked in via QR code',
+          classId: session.classId,
+          scheduledDate: session.scheduledDate,
+          locationVerified,
+        },
+      } as InsertAuditLog);
+    } catch (auditError) {
+      console.error('[TeacherCheckin] Audit log failed:', auditError);
+    }
+
+    console.log(`[TeacherCheckin] Teacher ${userId} clocked in to session ${sessionId}`);
+    return res.json({ ...updatedSession, locationVerified });
+  } catch (error) {
+    console.error('[TeacherCheckin] Error processing teacher check-in:', error);
+    return res.status(500).json({ error: 'Failed to process teacher check-in' });
+  }
+});
+
 // ==================== QR CODE CHECK-IN ====================
 
 function haversineDistanceMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {

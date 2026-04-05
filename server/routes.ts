@@ -3779,6 +3779,47 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
   
   app.use("/api/admin/role-invitations", roleInvitationsRouter);
 
+  // ============================================
+  // PUBLIC QR SESSION ENDPOINT (no auth required)
+  // ============================================
+
+  // Resolve a QR token to basic session/class info for the teacher scan page
+  app.get("/api/public/session-by-qr/:token", async (req, res) => {
+    try {
+      const { token } = req.params;
+      if (!token) {
+        return res.status(400).json({ error: 'Token is required' });
+      }
+
+      const session = await storage.getSessionByQrToken(token);
+      if (!session) {
+        return res.status(404).json({ error: 'Invalid or expired QR code' });
+      }
+
+      if (session.qrTokenExpiresAt && new Date(session.qrTokenExpiresAt) < new Date()) {
+        return res.status(400).json({ error: 'QR code has expired' });
+      }
+
+      // Look up class and educator names — expose only minimal info (no PII)
+      const cls = await storage.getClassById(session.classId);
+      const educator = session.educatorId ? await storage.getUser(session.educatorId) : null;
+
+      return res.json({
+        sessionId: session.id,
+        className: cls?.title ?? 'Unknown Class',
+        scheduledDate: session.scheduledDate,
+        startTime: session.scheduledStartTime,
+        endTime: session.scheduledEndTime,
+        status: session.status,
+        educatorName: educator ? `${educator.firstName} ${educator.lastName}` : null,
+        expiresAt: session.qrTokenExpiresAt,
+      });
+    } catch (error) {
+      console.error('[PublicQR] Error fetching session by QR token:', error);
+      return res.status(500).json({ error: 'Failed to retrieve session information' });
+    }
+  });
+
   // School Applications route
   const schoolApplicationsRouter = await import("./api/school-applications");
   app.use("/api/school-applications", schoolApplicationsRouter.default);
