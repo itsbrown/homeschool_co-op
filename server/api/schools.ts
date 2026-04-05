@@ -1,10 +1,13 @@
 import express from "express";
 import { db, getDb } from "../db";
-import { schools, children } from "@shared/schema";
+import { schools, children, schoolDocuments } from "@shared/schema";
 import { insertSchoolSchema } from "@shared/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, or, inArray } from "drizzle-orm";
 import uploadLogoRouter from './schools/upload-logo';
 import documentsRouter from './schools/documents';
+import { supabaseAuth } from "../middleware/supabase-auth";
+import { requireRole } from "../middleware/auth0-auth";
+import { storage } from "../storage";
 
 const router = express.Router();
 
@@ -198,6 +201,94 @@ router.get("/knowledge-bases", async (req, res) => {
   } catch (error: any) {
     console.error("Error fetching knowledge bases:", error);
     res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+// Get all published documents visible to a specific parent (admin endpoint)
+router.get('/parents/:parentId/documents', supabaseAuth, requireRole(['schoolAdmin', 'admin', 'superAdmin']), async (req: any, res) => {
+  try {
+    const adminUserId = req.user?.id;
+    if (!adminUserId) {
+      return res.status(401).json({ success: false, message: 'User not authenticated' });
+    }
+
+    // SECURITY: Use req.auth.schoolId as the authoritative school context (set by supabaseAuth middleware)
+    const schoolId = req.auth?.schoolId;
+    if (!schoolId) {
+      return res.status(400).json({ success: false, message: 'Admin is not associated with a school' });
+    }
+
+    const parentId = parseInt(req.params.parentId);
+    if (isNaN(parentId)) {
+      return res.status(400).json({ success: false, message: 'Invalid parent ID' });
+    }
+
+    // Verify the parent belongs to the same school
+    const parentUser = await storage.getUser(parentId);
+    if (!parentUser || parentUser.schoolId !== schoolId) {
+      return res.status(403).json({ success: false, message: 'Parent does not belong to this school' });
+    }
+
+    const database = await getDb();
+
+    // Find document IDs targeted to this parent via notification_recipients.
+    // sendDocumentNotification stores documentId in targetData for all targeting types.
+    // Use raw SQL to extract documentId from the JSONB targetData column — this is the
+    // authoritative document-level linkage; no title matching is used.
+    const targetedDocRows = await database.execute(sql`
+      SELECT DISTINCT CAST(n.target_data->>'documentId' AS INTEGER) AS document_id
+      FROM notification_recipients nr
+      JOIN notifications n ON n.id = nr.notification_id
+      WHERE nr.recipient_id = ${parentId}
+        AND n.target_data->>'documentId' IS NOT NULL
+        AND CAST(n.target_data->>'documentId' AS INTEGER) > 0
+    `);
+
+    const targetedDocumentIds: number[] = (targetedDocRows.rows as any[])
+      .map(r => Number(r.document_id))
+      .filter(id => !isNaN(id) && id > 0);
+
+    // Safe metadata fields only — never expose filePath or other storage internals
+    const safeFields = {
+      id: schoolDocuments.id,
+      title: schoolDocuments.title,
+      category: schoolDocuments.category,
+      fileName: schoolDocuments.fileName,
+      fileSize: schoolDocuments.fileSize,
+      createdAt: schoolDocuments.createdAt,
+    };
+
+    // Return published, non-archived docs that are visibleToAll OR targeted to this parent
+    let documents;
+    if (targetedDocumentIds.length > 0) {
+      documents = await database
+        .select(safeFields)
+        .from(schoolDocuments)
+        .where(and(
+          eq(schoolDocuments.schoolId, schoolId),
+          eq(schoolDocuments.isPublished, true),
+          eq(schoolDocuments.isArchived, false),
+          or(
+            eq(schoolDocuments.visibleToAll, true),
+            inArray(schoolDocuments.id, targetedDocumentIds)
+          )
+        ));
+    } else {
+      documents = await database
+        .select(safeFields)
+        .from(schoolDocuments)
+        .where(and(
+          eq(schoolDocuments.schoolId, schoolId),
+          eq(schoolDocuments.isPublished, true),
+          eq(schoolDocuments.isArchived, false),
+          eq(schoolDocuments.visibleToAll, true)
+        ));
+    }
+
+    res.json({ success: true, documents });
+  } catch (error) {
+    console.error('Error fetching parent documents:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch documents' });
   }
 });
 

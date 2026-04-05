@@ -191,27 +191,28 @@ async function sendDocumentNotification(
     switch (targeting.targetType) {
       case 'all_parents':
         notificationData.targetType = 'all_parents';
-        notificationData.targetData = { schoolId };
+        notificationData.targetData = { schoolId, documentId: document.id };
         break;
       case 'class_specific':
         notificationData.targetType = 'class_specific';
-        notificationData.targetData = { classIds: targeting.classIds, schoolId };
+        notificationData.targetData = { classIds: targeting.classIds, schoolId, documentId: document.id };
         break;
       case 'individual':
         notificationData.targetType = 'individual';
-        notificationData.targetData = { userIds: targeting.userIds };
+        notificationData.targetData = { userIds: targeting.userIds, documentId: document.id };
         break;
       case 'role':
         notificationData.targetType = 'role';
         notificationData.targetData = { 
           roles: targeting.roles, 
           locationIds: targeting.locationIds,
-          schoolId 
+          schoolId,
+          documentId: document.id,
         };
         break;
       case 'location':
         notificationData.targetType = 'location';
-        notificationData.targetData = { locationIds: targeting.locationIds, schoolId };
+        notificationData.targetData = { locationIds: targeting.locationIds, schoolId, documentId: document.id };
         break;
       default:
         console.log('Unknown targeting type, skipping notification');

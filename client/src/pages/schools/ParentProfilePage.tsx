@@ -62,7 +62,9 @@ import {
   Copy,
   Loader2,
   XCircle,
-  Gift
+  Gift,
+  Download,
+  FileText
 } from 'lucide-react';
 import { Link } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
@@ -523,6 +525,126 @@ function SchoolAdminChildForm({ parentEmail, childToEdit, onSuccess, onCancel }:
         </Button>
       </div>
     </form>
+  );
+}
+
+function ParentDocumentsTab({ parentId }: { parentId: string }) {
+  const { toast } = useToast();
+
+  const { data, isLoading } = useQuery<{ success: boolean; documents: Array<{
+    id: number;
+    title: string;
+    category: string;
+    fileSize: number;
+    createdAt: string;
+    fileName: string;
+  }> }>({
+    queryKey: ['/api/schools/parents', parentId, 'documents'],
+    enabled: !!parentId,
+  });
+
+  const documents = data?.documents ?? [];
+
+  function formatFileSize(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  function formatDate(dateStr: string): string {
+    return new Date(dateStr).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  }
+
+  const categoryColors: Record<string, string> = {
+    policy: 'bg-blue-100 text-blue-800',
+    form: 'bg-green-100 text-green-800',
+    handbook: 'bg-purple-100 text-purple-800',
+    announcement: 'bg-orange-100 text-orange-800',
+    other: 'bg-gray-100 text-gray-800',
+  };
+
+  async function handleDownload(docId: number) {
+    try {
+      const response = await apiRequest('GET', `/api/schools/documents/${docId}/download`);
+      if (!response.ok) {
+        toast({ title: 'Download failed', description: 'Could not download the document.', variant: 'destructive' });
+        return;
+      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      window.open(url, '_blank', 'noopener,noreferrer');
+      window.URL.revokeObjectURL(url);
+    } catch {
+      toast({ title: 'Download failed', description: 'Could not download the document.', variant: 'destructive' });
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Documents</CardTitle>
+        <CardDescription>Published documents visible to this parent</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="space-y-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="flex items-center justify-between p-3 border rounded-lg animate-pulse">
+                <div className="flex items-center gap-3 flex-1">
+                  <div className="h-8 w-8 bg-gray-200 rounded" />
+                  <div className="space-y-1 flex-1">
+                    <div className="h-4 bg-gray-200 rounded w-48" />
+                    <div className="h-3 bg-gray-100 rounded w-32" />
+                  </div>
+                </div>
+                <div className="h-8 w-24 bg-gray-200 rounded" />
+              </div>
+            ))}
+          </div>
+        ) : documents.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <FileText className="h-12 w-12 text-muted-foreground mb-4" />
+            <h3 className="text-lg font-medium text-muted-foreground">No documents available</h3>
+            <p className="text-sm text-muted-foreground mt-1">
+              No published documents are currently visible to this parent.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {documents.map((doc) => (
+              <div key={doc.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors">
+                <div className="flex items-center gap-3 min-w-0">
+                  <FileText className="h-8 w-8 text-muted-foreground shrink-0" />
+                  <div className="min-w-0">
+                    <p className="font-medium truncate">{doc.title}</p>
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                      <Badge className={`text-xs ${categoryColors[doc.category] ?? categoryColors.other}`}>
+                        {doc.category.charAt(0).toUpperCase() + doc.category.slice(1)}
+                      </Badge>
+                      <span className="text-xs text-muted-foreground">{formatFileSize(doc.fileSize)}</span>
+                      <span className="text-xs text-muted-foreground">{formatDate(doc.createdAt)}</span>
+                    </div>
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="ml-4 shrink-0"
+                  onClick={() => handleDownload(doc.id)}
+                >
+                  <Download className="h-4 w-4 mr-1" />
+                  Download
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -1620,13 +1742,14 @@ export default function ParentProfilePage() {
 
         {/* Detailed Information */}
         <Tabs defaultValue="children" className="w-full">
-          <TabsList className="grid w-full grid-cols-6">
+          <TabsList className="grid w-full grid-cols-7">
             <TabsTrigger value="children">Children</TabsTrigger>
             <TabsTrigger value="enrollments">Enrollments</TabsTrigger>
             <TabsTrigger value="memberships">Memberships</TabsTrigger>
             <TabsTrigger value="payments">Payments</TabsTrigger>
             <TabsTrigger value="credits">Credits</TabsTrigger>
             <TabsTrigger value="emergency">Emergency</TabsTrigger>
+            <TabsTrigger value="documents">Documents</TabsTrigger>
           </TabsList>
 
           <TabsContent value="children">
@@ -2840,6 +2963,10 @@ export default function ParentProfilePage() {
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="documents">
+            <ParentDocumentsTab parentId={parentId!} />
           </TabsContent>
         </Tabs>
 
