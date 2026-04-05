@@ -5,6 +5,15 @@ description: Database schema conventions, data relationships, storage patterns, 
 
 # ASA Database Patterns
 
+## Core Rules
+
+- **Never query DB directly from routes**: All data access goes through the `IStorage` interface in `server/storage.ts`
+- **Financial amounts in cents**: Always store as integers (cents), convert on display — `(amountCents / 100).toFixed(2)`
+- **Use `effective_balance`, not `remainingBalance`**: `remainingBalance` is unreliable (set to `0` for deposits and comped accounts) — use the PostgreSQL generated column `effective_balance`
+- **`getDb()` is one-shot**: `connectionTested` is set on first call — a startup DB timeout causes all subsequent calls to throw for the lifetime of the process; never assume permanent failure from a single startup error
+- **Distinguish DB errors from not-found**: A throw from `getDb()` means the DB is unreachable; `null`/`undefined` means not found — handle these two cases separately in any access-control path
+- **Postgres `date` columns require `YYYY-MM-DD` strings**: Never pass JavaScript `Date` objects — the driver throws `ERR_INVALID_ARG_TYPE`
+
 ## Schema Conventions
 
 - **Column naming**: snake_case in PostgreSQL, camelCase in Drizzle schema (e.g., `parent_id` in DB → `parentId` in code)
@@ -19,14 +28,8 @@ description: Database schema conventions, data relationships, storage patterns, 
 ```
 children.parentId → users.id (parent)
 children.parentEmail → quick lookup field (denormalized)
-children.emergencyContact → legacy free-text field
-
-users.phone → parent phone number
-users.emergencyContactFirstName/LastName/Phone/Relationship → inline emergency contact on user
-
 emergency_contacts.userId → users.id → separate emergency contacts table (supports multiple)
 ```
-
 **Emergency contact priority**: User table fields first → `emergency_contacts` table fallback → `children.emergencyContact` legacy fallback.
 
 ### Enrollments
@@ -39,11 +42,7 @@ program_enrollments → marketplace class enrollments (classType = 'marketplace'
 school_class_enrollments → school-managed class enrollments
   .classId → school_classes.id
 ```
-
-**Enrollment financial fields** (all in cents): `totalCost`, `totalPaid`, `remainingBalance`, `compAmountCents`, `effectiveBalance`. Note: `remainingBalance` is a stored convenience field that is **unreliable** — it is set to `0` (not NULL) for `deposit_only`/`stripe_managed` enrollments after a deposit and for comped accounts, causing false positives in financial reports. Use `effective_balance` (a PostgreSQL generated column) instead — see "Derived Financial Fields" below.
-
-### Multi-Guardian System
-Multiple guardians can be linked to child accounts with shared access. Check guardian relationships when resolving parent data.
+**Enrollment financial fields** (all in cents): `totalCost`, `totalPaid`, `remainingBalance`, `compAmountCents`, `effectiveBalance`. Note: `remainingBalance` is **unreliable** — use `effective_balance` (PostgreSQL generated column) instead.
 
 ## Storage Interface Pattern
 
@@ -56,248 +55,97 @@ Multiple guardians can be linked to child accounts with shared access. Check gua
 2. Implement in the storage class (database-backed with memory fallback)
 3. Use the method in route handlers via `storage.methodName()`
 
-### Common Storage Methods
-```typescript
-storage.getUser(id)                          // Get user by integer ID
-storage.getUserByEmail(email)                // Get user by email
-storage.getAllChildren()                     // All children records
-storage.getAllEnrollments()                  // All program enrollments
-storage.getEmergencyContactsByUserId(userId) // Emergency contacts for a parent
-storage.getClassById(classId)               // Single class by ID
-```
-
 ## Date & Schedule Patterns
 
 ### Date Storage Types
-| Field | Type | Format | Example |
-|-------|------|--------|---------|
-| `birthdate` | `date` | YYYY-MM-DD | `2018-05-15` |
-| `startDate`, `endDate` (classes) | `date` or `timestamp` | varies | `2026-01-05` |
-| `scheduledDate` (sessions) | `text` | YYYY-MM-DD | `2026-02-17` |
-| `scheduledStartTime`, `scheduledEndTime` | `text` | HH:MM | `09:00` |
-| `createdAt`, `updatedAt` | `timestamp` | ISO 8601 | auto-generated |
+| Field | Type | Format |
+|-------|------|--------|
+| `birthdate` | `date` | YYYY-MM-DD |
+| `startDate`, `endDate` (classes) | `date` or `timestamp` | varies |
+| `scheduledDate` (sessions) | `text` | YYYY-MM-DD |
+| `scheduledStartTime`, `scheduledEndTime` | `text` | HH:MM |
 
-### Date Display
-Use `formatDate()` from `@/lib/utils`:
-- Handles ISO date strings (YYYY-MM-DD) by parsing directly without timezone adjustment
-- Returns MM/DD/YYYY format
-- Handles edge cases for other date formats with timezone offset correction
+### Date Display & Parsing
+- Use `formatDate()` from `@/lib/utils` for display — handles ISO strings without timezone shift
+- For Postgres `date` columns: **always pass `YYYY-MM-DD` strings, never JavaScript `Date` objects** — passing a `Date` object causes `ERR_INVALID_ARG_TYPE` from the Postgres driver
+- Parse external date input (CSV/forms) with regex: extract year/month/day components, reassemble as string — never use `new Date(userInput)` as intermediate step. See `parseDateToYMD()` in `server/api/csv-upload.ts`
+- For age calculations: use millisecond math with 365.25 divisor, not year subtraction
+- Always normalize dates to midnight (`setHours(0,0,0,0)`) before day-based comparisons
 
 ### Schedule Format (Classes)
-Classes use a JSON `schedule` field with a **variants** structure:
 ```json
-{
-  "variants": [{
-    "name": "Morning Session",
-    "startTime": "09:00",
-    "endTime": "12:00",
-    "days": ["Monday", "Wednesday", "Friday"]
-  }]
-}
+{ "variants": [{ "name": "Morning", "startTime": "09:00", "endTime": "12:00", "days": ["Monday"] }] }
 ```
-Use `formatClassSchedule()` from `@/lib/utils` to display — it parses JSON and formats as human-readable text.
-
-### iOS/Safari Date Handling
-- Date inputs must use `style={{ fontSize: '16px' }}` to prevent Safari auto-zoom
-- Use CSS `@supports (-webkit-touch-callout: none)` for iOS-specific adjustments
-- Stripe payments need `return_url` redirects for iOS compatibility
-
-### Age Calculation
-```typescript
-Math.floor((Date.now() - new Date(birthdate).getTime()) / (365.25 * 24 * 60 * 60 * 1000))
-```
+Use `formatClassSchedule()` from `@/lib/utils` to display.
 
 ### Proration Date Math
-Located in `server/lib/prorate-calculator.ts`:
-- Normalizes all dates to midnight (start) or end-of-day (end)
-- `totalDays = ceil((endDate - startDate) / oneDay)`
-- `daysRemaining = ceil((endDate - enrollmentDate) / oneDay)`
-- `proratedPrice = round(originalPrice * daysRemaining / totalDays)`
-- Returns full price if enrollment ≤ start date, zero if enrollment ≥ end date
-
-### QR Token Expiration
-Session QR tokens expire at **session end time + 15 minutes**. Atomic database updates with WHERE conditions enforce one-time use.
+Located in `server/lib/prorate-calculator.ts` — `totalDays = ceil((endDate - startDate) / oneDay)`, `daysRemaining = ceil((endDate - enrollmentDate) / oneDay)`, `proratedPrice = round(originalPrice * daysRemaining / totalDays)`.
 
 ## Migration Rules
 
-- **Never write raw SQL migrations** — use `npm run db:push`
-- If data-loss warning appears, use `npm run db:push --force`
+- **Never write raw SQL migrations** — use `npm run db:push` (see exception below)
 - Never change primary key column types
 - Schema file: `shared/schema.ts`
 
 ### ⚠️ Project-Specific Exception: db:push Is Blocked in This Environment
 
-`npm run db:push` and `npm run db:push --force` both crash in this project due to a drizzle-kit bug:
-- `init-db.ts` created a functional unique index on `user_roles`: `COALESCE(school_id, 0)` as the third index column
-- When drizzle-kit reads database indexes, it cannot parse functional expressions — it returns `null` for the expression field, causing a Zod validation crash before any push occurs
-- This was confirmed in the development environment; `DATABASE_URL` also points to an unreachable Supabase host, requiring the `PGHOST`/`PGUSER`/`PGPASSWORD`/`PGDATABASE` env vars to be used instead (see `server/lib/database-url.ts`)
-
-**Established workaround**: Add idempotent `ALTER TABLE` statements to `server/init-db.ts`. Every schema change in this project must follow this pattern:
+`npm run db:push` crashes due to a drizzle-kit bug (functional unique index on `user_roles` uses `COALESCE` expression that drizzle-kit cannot parse). **Established workaround**: Add idempotent `ALTER TABLE` statements to `server/init-db.ts`:
 ```sql
--- Adding a new column (idempotent):
 ALTER TABLE my_table ADD COLUMN IF NOT EXISTS my_column TEXT;
-
--- Dropping a NOT NULL constraint (idempotent — PostgreSQL no-ops if already nullable):
 ALTER TABLE my_table ALTER COLUMN my_column DROP NOT NULL;
-
--- Converting a column type (wrap in DO $$ BEGIN ... END $$ for safety):
-DO $$ BEGIN
-  IF EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_name = 'my_table' AND column_name = 'my_col' AND data_type = 'text'
-  ) THEN
-    ALTER TABLE my_table ALTER COLUMN my_col TYPE INTEGER USING my_col::INTEGER;
-  END IF;
-END $$;
 ```
-Place all such statements inside the relevant migration try-catch block in `server/init-db.ts`, following the existing patterns throughout the file. The app runs these on startup — they are safe to re-run on every restart.
+Place inside the relevant migration try-catch block in `server/init-db.ts`. The app runs these on startup — safe to re-run on every restart.
 
 ## Derived Financial Fields
 
 ### ⚠️ Why `remainingBalance` Is Unreliable
-The `remainingBalance` column on `program_enrollments` is a stored convenience field with **two known failure modes**:
-1. Set to `0` (not NULL) for `deposit_only`/`stripe_managed` enrollments after a deposit payment — `COALESCE(remaining_balance, ...)` returns `0` even though the true balance is hundreds of dollars
-2. Set to `0` for comped accounts — does not account for `comp_amount_cents`, so a fully-comped enrollment appears to owe its full `total_cost`
-
-**Never use `remainingBalance` for financial report aggregations.**
+Set to `0` (not NULL) for `deposit_only`/`stripe_managed` enrollments after a deposit and for comped accounts — `COALESCE` won't help. **Never use `remainingBalance` for financial report aggregations.**
 
 ### The `effective_balance` Generated Column (Gold Standard)
 `program_enrollments.effective_balance` is a PostgreSQL `GENERATED ALWAYS AS STORED` column:
 ```sql
 effective_balance = total_cost - total_paid - COALESCE(comp_amount_cents, 0)
 ```
-- Computed and stored automatically by the database for every row (existing and future)
-- Always correct — no write-path changes needed, no stale values possible
-- Added via `server/init-db.ts` (idempotent on every startup)
+Use in SQL queries (`WHERE effective_balance > 0`) and in TypeScript: `enrollment.totalCost - enrollment.totalPaid - (enrollment.compAmountCents ?? 0)`.
 
-**Use `effective_balance` in all SQL financial queries:**
-```sql
--- Outstanding balance total
-SELECT COALESCE(SUM(effective_balance), 0)
-FROM program_enrollments
-WHERE school_id = $1
-  AND status NOT IN ('cancelled', 'waitlist', 'withdrawn', 'failed', 'completed')
-  AND effective_balance > 0
-```
+### Financial Report Aggregations
+Query `program_enrollments` directly — **not `scheduled_payments`** — for outstanding balance totals. Many enrollments have remaining balances but no `scheduled_payments` records (legacy enrollments, comped plans).
 
-**In Drizzle ORM** (use raw `sql` — the column is not in the Drizzle schema since it's managed by init-db.ts):
-```typescript
-const result = await db
-  .select({
-    totalOutstanding: sql<number>`COALESCE(SUM(effective_balance), 0)::integer`,
-  })
-  .from(programEnrollments)
-  .where(
-    and(
-      eq(programEnrollments.schoolId, schoolId),
-      not(inArray(programEnrollments.status, ['cancelled', 'waitlist', 'withdrawn', 'failed', 'completed'])),
-      sql`effective_balance > 0`
-    )
-  );
-```
-
-**In TypeScript** (when looping over Drizzle-typed enrollment rows, `effective_balance` is not in the type — use explicit formula):
-```typescript
-const amount = enrollment.totalCost - enrollment.totalPaid - (enrollment.compAmountCents ?? 0);
-```
-
-**Gold-standard pattern** (used in `parent-profile.ts`): Compute dynamically:
-```typescript
-const actualRemainingBalance = CurrencyUtils.calculateBalance(totalCost, totalPaid + compAmount);
-```
-
-### Financial Report Aggregations — Always Use `program_enrollments`
-
-For outstanding balance totals, active payment plan counts, or any financial summary, query `program_enrollments` directly — **not `scheduled_payments`**. The `scheduled_payments` table is a subset: many enrollments have remaining balances but no scheduled_payment records (legacy enrollments pre-scheduling feature, comped enrollments, plans not yet scheduled).
-
-The authoritative fields are `totalCost`, `totalPaid`, `compAmountCents`, and `effective_balance` on `program_enrollments`.
-
-### Auto-Heal at Read Time
-
-When a report endpoint already fetches enrollment records, it can self-correct stale `scheduled_payments` in the same pass — no separate reconciliation job needed.
-
-```typescript
-const validBalances = enrichedBalances.filter(b => {
-  const isFullyPaid = b.enrollmentRemainingBalance !== undefined && b.enrollmentRemainingBalance <= 0;
-  if (isFullyPaid) {
-    storage.updateScheduledPaymentStatus(b.id, 'cancelled').catch(() => {}); // fire-and-forget
-    return false;
-  }
-  return true;
-});
-```
-
-Rules: check `!== undefined` before comparing (undefined means lookup failed, not that balance is zero); use `.catch(() => {})` so the background write never throws in a read endpoint; filter stale records out of the response immediately so the UI is accurate before the DB write completes. Pattern used in `server/api/financial-reports.ts` outstanding balances endpoint.
+**Auto-heal at read time**: When a report endpoint fetches enrollment records, it can cancel stale `scheduled_payments` in the same pass using fire-and-forget: `storage.updateScheduledPaymentStatus(id, 'cancelled').catch(() => {})`. Pattern used in `server/api/financial-reports.ts`.
 
 ## Common Pitfalls
 
-- **`remainingBalance` is unreliable for aggregations**: It is `0` (not NULL) for `deposit_only`/`stripe_managed` enrollments after a deposit, and `0` for comped accounts — `COALESCE` won't help. Use `effective_balance` in SQL or `totalCost - totalPaid - (compAmountCents ?? 0)` in TypeScript. See "Derived Financial Fields" above.
-- **Outstanding balance undercount in reports**: Querying `SUM(scheduled_payments.amount WHERE status='pending')` misses families with no scheduled_payment records — always use `effective_balance FROM program_enrollments` for financial aggregations.
+- **`remainingBalance` is unreliable for aggregations**: `0` (not NULL) for deposits and comped accounts — `COALESCE` won't help. Use `effective_balance` in SQL or `totalCost - totalPaid - (compAmountCents ?? 0)` in TypeScript.
+- **Outstanding balance undercount**: `SUM(scheduled_payments.amount WHERE status='pending')` misses families with no scheduled_payment records — always use `effective_balance FROM program_enrollments`.
 - **Express route ordering**: Specific named routes (e.g., `/classes/assignments`) BEFORE parameterized routes (e.g., `/classes/:id`)
 - **Orphaned data**: `scheduled_payments` with deleted `program_enrollments` must be filtered out of admin views
 - **Auth ID mapping**: Use `authData.dbUserId` (integer) NOT `authData.userId` (Supabase UUID) when querying database tables
-- **TanStack Query**: Use the default fetcher (no custom `queryFn`), use `apiRequest` for mutations, always invalidate cache by queryKey after mutations
+- **`getDb()` one-shot connection test**: `connectionTested` is set to `true` on the first call — if the DB times out at startup, every subsequent `getDb()` call throws for the lifetime of the process with no retry. Never assume a permanent DB failure from a single startup error; check server logs and consider process restart to recover.
 
 ## Best Practices
 
-### Schema & Data Integrity
-- Always define nullable fields explicitly with `.default(null)` in insert schemas to avoid insertion errors
-- Use `.notNull()` for required fields — don't rely on application-level validation alone
-- Keep denormalized fields (like `parentEmail` on enrollments) updated when the source changes
-- Add unique constraints for natural keys (e.g., enrollment + date + installment number)
-- Never add columns without defaults to tables with existing data — use `.default()` or make nullable
-
-### Storage & Query Patterns
+### Do
 - Always go through the `IStorage` interface — never import `db` directly in route handlers
-- When adding a new query, check if a similar storage method already exists before creating a new one
 - Use `Promise.all()` for independent lookups (e.g., fetching parent + emergency contacts in parallel)
-- Avoid `getAllX()` methods in hot paths — use filtered queries when possible (e.g., `getEnrollmentsByChildId` instead of filtering `getAllEnrollments()`)
+- Avoid `getAllX()` methods in hot paths — use filtered queries (e.g., `getEnrollmentsByChildId` instead of filtering `getAllEnrollments()`)
 - Always handle the "not found" case — return `undefined` from storage, check it in the route
-
-### Date Handling
 - Store dates as `date` type (YYYY-MM-DD) for calendar/schedule dates, `timestamp` for event times
-- Use `formatDate()` from `@/lib/utils` for display — it handles timezone edge cases
-- Never construct dates with `new Date('YYYY-MM-DD')` without accounting for timezone offset — use the direct parsing pattern in `formatDate()`
-- For age calculations, use millisecond math with 365.25 divisor, not year subtraction
-- Always normalize dates to midnight (`setHours(0,0,0,0)`) before day-based comparisons
+- Always define nullable fields explicitly with `.default(null)` in insert schemas
+- Add unique constraints for natural keys (e.g., enrollment + date + installment number)
+- Distinguish a thrown DB exception from a `null` return — a throw means the DB is unreachable; `null`/`undefined` means not found. Handle these two cases separately in any access-control or lookup path.
 
-### CRITICAL: Postgres `date` Columns Require YYYY-MM-DD Strings
-When inserting into Postgres `date` columns (e.g., `startDate`, `endDate` on `classes`), **always pass plain `YYYY-MM-DD` strings — never JavaScript `Date` objects**.
-
-**What goes wrong**: Passing a `Date` object to a Drizzle `date()` column causes the Postgres driver to throw `ERR_INVALID_ARG_TYPE`. If the error is caught silently (e.g., by a try/catch that falls back to in-memory storage), the data appears to save but disappears on page refresh because it never reached the database.
-
-**Safe pattern for parsing external date input** (CSV files, form submissions, API requests):
-```typescript
-function parseDateToYMD(dateStr: string | undefined | null): string | null {
-  if (!dateStr || !dateStr.trim()) return null;
-  const s = dateStr.trim();
-  const isoMatch = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
-  if (isoMatch) return `${isoMatch[1]}-${isoMatch[2].padStart(2,'0')}-${isoMatch[3].padStart(2,'0')}`;
-  const usMatch = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
-  if (usMatch) return `${usMatch[3]}-${usMatch[1].padStart(2,'0')}-${usMatch[2].padStart(2,'0')}`;
-  return null;
-}
-```
-
-**Key rules**:
-- Parse date strings with regex to extract year/month/day components
-- Reassemble as a `YYYY-MM-DD` string directly
-- Never use `new Date(userInput)` as an intermediate step — timezone offsets shift the date, and the object type breaks the driver
-- Support both `MM/DD/YYYY` (US format from CSV/forms) and `YYYY-MM-DD` (ISO) inputs
-- For date arithmetic (e.g., "add 3 months"), operate on the string components numerically — see `addMonthsYMD()` in `server/api/csv-upload.ts`
-
-**Where this pattern is established**: `server/api/csv-upload.ts` (CSV date parsing), `server/api/school-admin.ts` (class creation passes date strings directly from `req.body`).
-
-### Migration Safety
-- Always run `npm run db:push` to sync schema — never write raw SQL migrations
-- Test schema changes on development before pushing to production
-- Never rename columns — add the new column, migrate data, then remove the old one
-- Never change column types on primary keys or foreign keys
-- When adding a required column to an existing table, provide a `.default()` value
+### Don't
+- Don't use `new Date(userInput)` when inserting into Postgres `date` columns — pass `YYYY-MM-DD` strings directly
+- Don't use `remainingBalance` for financial aggregations — use `effective_balance` or the TypeScript formula
+- Don't query `scheduled_payments` for outstanding balance totals — use `program_enrollments`
+- Don't add columns without defaults to tables with existing data — use `.default()` or make nullable
+- Don't rename columns — add new, migrate data, remove old
+- Don't assume a thrown DB exception means the user/record doesn't exist — a throw means the DB is unreachable; only a `null` return means not found. Return `503` for DB errors, not `403`/`404`.
 
 ## Key Files
 - `shared/schema.ts` — all Drizzle table definitions, insert schemas, and inferred types
 - `server/storage.ts` — `IStorage` interface and all storage method implementations
+- `server/db.ts` — `getDb()` lazy loader with one-shot connection test (`connectionTested` flag)
 - `server/init-db.ts` — idempotent `ALTER TABLE` migrations run on startup (replaces `db:push`)
 - `server/lib/database-url.ts` — resolves correct DB connection string (bypasses Supabase host)
 - `server/lib/prorate-calculator.ts` — proration date math

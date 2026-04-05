@@ -5,6 +5,14 @@ description: Authentication, authorization, multi-role system, API request patte
 
 # ASA Authentication & Authorization
 
+## Core Rules
+
+- **Use DB integer ID for all queries**: `req.user.id` and `authData.dbUserId` are the integer DB IDs — never use `authData.userId` (Supabase UUID) for database lookups
+- **DB is the source of truth**: Role and school_id come from the database, not from Supabase `user_metadata` or `app_metadata`
+- **Never use bare `fetch()`**: Always use `apiRequest` or the default TanStack Query fetcher — they attach auth headers, role headers, and handle token refresh automatically
+- **403 REGISTRATION_REQUIRED is ambiguous**: This code fires both for unregistered users AND for DB connectivity failures — do not treat it as an exclusive signal that the user is unregistered
+- **Distinguish DB errors from not-found**: A thrown DB exception means the DB is unreachable; a `null` return means user not found — return `503` for DB errors, `403` only for confirmed not-found
+
 ## Supabase Auth Flow
 
 Supabase handles all authentication (login, signup, password reset, OAuth/Google). The backend middleware maps Supabase identity to the application's database user.
@@ -31,7 +39,7 @@ Request → supabaseAuth middleware → route handler
 5. Database is **always** the source of truth for role and school_id (not Supabase metadata)
 
 ### Unregistered User Protection
-Users must register through proper channels (school registration link) before using OAuth login. Unregistered users get a `403 REGISTRATION_REQUIRED` response.
+Users must register through proper channels (school registration link) before using OAuth login. Unregistered users get a `403 REGISTRATION_REQUIRED` response. **This 403 also fires incorrectly when the DB lookup throws** (e.g. DB timeout at startup) — `dbUserId` remains `null` in both the "user not found" and "DB unreachable" cases. A `403 REGISTRATION_REQUIRED` is therefore not an exclusive signal that the user is unregistered; it can also indicate a database connectivity failure.
 
 ## API Request Patterns (Frontend)
 
@@ -154,7 +162,7 @@ if (!isAssigned) {
 - Phase 2 uses `app_metadata` (admin-only, immutable by users) with auto-sync from database
 - Middleware auto-corrects metadata mismatches on every request
 
-## Common Auth Debugging
+## Common Pitfalls
 
 | Symptom | Likely Cause | Fix |
 |---------|-------------|-----|
@@ -163,6 +171,7 @@ if (!isAssigned) {
 | 401 error | Token expired, refresh failed | Check Supabase session, user may need to re-login |
 | 403 error | Role doesn't have permission | Check `user_roles` table for correct role at correct school |
 | 403 `REGISTRATION_REQUIRED` | Unregistered user tried OAuth | User needs school registration link first |
+| 403 `REGISTRATION_REQUIRED` (DB unavailable) | `getDb()` threw during `getUserByEmail` — DB timeout, not a missing user | Check DB connectivity; distinguish from unregistered-user case by checking server logs for DB errors |
 | 403 on school admin routes even with correct role | `requireAdmin` used — allows `'school-admin'` (hyphen) not `'schoolAdmin'` (camelCase) | Replace `requireAdmin` with `requireRole(['schoolAdmin', 'admin', 'superAdmin'])` |
 | 400 "Missing context" on write endpoints | `req.userId` used — never set by any middleware | Replace `req.userId` with `req.user?.id` |
 | "User not found" | Used Supabase UUID instead of DB integer ID | Use `authData.dbUserId` not `authData.userId` |
@@ -194,6 +203,7 @@ if (!isAssigned) {
 - Don't forget to include `X-Active-Role` header — `apiRequest` does this automatically, bare `fetch()` does not
 - Don't use bare `fetch()` for file uploads to authenticated endpoints — use `apiRequest('POST', url, formData)` which handles `FormData`, auth token, and role header automatically
 - Don't redirect to login on every 401 — allow one token refresh retry first
+- Don't treat a thrown DB exception (`dbLookupFailed`) the same as a `null` return (user not found) — use separate flags and return `503` for DB errors, `403` only for a confirmed not-found user
 
 ### Multi-Tenant Security Checklist
 - Backend routes validate `schoolId` from auth context before returning data
