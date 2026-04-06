@@ -393,6 +393,101 @@ router.post("/send-by-class", supabaseAuth, requireRole(['admin', 'superAdmin', 
   }
 });
 
+// Preview recipient count for combined multi-source notification (no side-effects)
+router.post("/preview-recipients", supabaseAuth, requireRole(['admin', 'superAdmin', 'schoolAdmin', 'director']), requireSchoolContext, async (req: any, res) => {
+  try {
+    const { userIds, roles, locationIds, classIds, includeAll } = req.body;
+    const senderId = req.user?.id;
+    if (!senderId) return res.status(401).json({ message: "Authentication required" });
+
+    const recipientIds = await resolveCombinedRecipients({
+      includeAll,
+      userIds: userIds || [],
+      roles: roles || [],
+      locationIds: locationIds || [],
+      classIds: classIds || [],
+    });
+
+    res.json({ recipientCount: recipientIds.length });
+  } catch (error) {
+    console.error("Error previewing recipients:", error);
+    res.status(500).json({ message: "Failed to preview recipients" });
+  }
+});
+
+// Send combined multi-source notification
+router.post("/send-combined", supabaseAuth, requireRole(['admin', 'superAdmin', 'schoolAdmin', 'director']), requireSchoolContext, async (req: any, res) => {
+  try {
+    const { userIds, roles, locationIds, classIds, includeAll, subject, content, type = "both", priority = "normal", scheduledFor } = req.body;
+    const senderId = req.user?.id;
+    const schoolId = req.schoolId ? Number(req.schoolId) : null;
+
+    if (!senderId) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
+
+    if (!schoolId) {
+      return res.status(400).json({ message: "School context required" });
+    }
+
+    console.log('[Notifications] send-combined — includeAll:', includeAll, 'userIds:', userIds?.length, 'roles:', roles?.length, 'locationIds:', locationIds?.length, 'classIds:', classIds?.length);
+
+    const deduplicatedIds = await resolveCombinedRecipients({
+      includeAll,
+      userIds: userIds || [],
+      roles: roles || [],
+      locationIds: locationIds || [],
+      classIds: classIds || [],
+    });
+
+    if (deduplicatedIds.length === 0) {
+      return res.status(400).json({ message: "No recipients found for the selected targeting criteria" });
+    }
+
+    console.log('[Notifications] send-combined resolved', deduplicatedIds.length, 'unique recipients');
+
+    // Store as "all" targetType when broadcasting, else as "individual" with combined targetData
+    const notificationData = includeAll
+      ? {
+          senderId,
+          schoolId,
+          isAnnouncement: true,
+          type,
+          priority,
+          subject,
+          content,
+          targetType: "all" as const,
+          targetData: {},
+          scheduledFor: scheduledFor ? new Date(scheduledFor) : null,
+        }
+      : {
+          senderId,
+          schoolId,
+          isAnnouncement: true,
+          type,
+          priority,
+          subject,
+          content,
+          targetType: "individual" as const,
+          targetData: {
+            userIds: deduplicatedIds,
+            roles: roles || [],
+            locationIds: locationIds || [],
+            classIds: classIds || [],
+          },
+          scheduledFor: scheduledFor ? new Date(scheduledFor) : null,
+        };
+
+    const notification = await storage.createNotification(notificationData);
+    await processNotification(notification);
+
+    res.status(201).json({ ...notification, recipientCount: deduplicatedIds.length });
+  } catch (error) {
+    console.error("Error sending combined notification:", error);
+    res.status(500).json({ message: "Failed to send notification" });
+  }
+});
+
 router.get("/:id/stats", async (req, res) => {
   try {
     const id = parseInt(req.params.id);
@@ -532,56 +627,135 @@ async function processNotification(notification: any): Promise<void> {
   }
 }
 
+// --- Shared recipient resolution sub-functions ---
+
+async function resolveUserIds(userIds: number[]): Promise<number[]> {
+  return userIds.filter(id => id && id > 0);
+}
+
+async function resolveRoleRecipients(roles: string[], locationIds?: number[]): Promise<number[]> {
+  const allUsers = await storage.getAllUsers();
+  let roleUsers = allUsers.filter(u => roles.includes(u.role));
+  if (locationIds && locationIds.length > 0) {
+    const locationUserIds: number[] = [];
+    for (const locationId of locationIds) {
+      const userLocations = await storage.getUserLocationsByLocationId(locationId);
+      locationUserIds.push(...userLocations.map((ul: any) => ul.userId));
+    }
+    roleUsers = roleUsers.filter(u => locationUserIds.includes(u.id));
+  }
+  return roleUsers.map(u => u.id);
+}
+
+async function resolveLocationRecipients(locationIds: number[], roles?: string[]): Promise<number[]> {
+  const locationUserIds: number[] = [];
+  for (const locationId of locationIds) {
+    const userLocations = await storage.getUserLocationsByLocationId(locationId);
+    locationUserIds.push(...userLocations.map((ul: any) => ul.userId));
+  }
+  let locationUsers = await storage.getAllUsers();
+  locationUsers = locationUsers.filter(u => locationUserIds.includes(u.id));
+  if (roles && roles.length > 0) {
+    locationUsers = locationUsers.filter(u => roles.includes(u.role));
+  }
+  return locationUsers.map(u => u.id);
+}
+
+async function resolveClassRecipients(classIds: number[]): Promise<number[]> {
+  const parentUserIds = new Set<number>();
+  for (const classId of classIds) {
+    const enrollments = await storage.getEnrollmentsByClassId(classId);
+    const activeEnrollments = enrollments.filter((e: any) =>
+      e.status === 'enrolled' || e.status === 'active' || e.status === 'confirmed'
+    );
+    for (const enrollment of activeEnrollments) {
+      if (enrollment.childId) {
+        const child = await storage.getChildById(enrollment.childId);
+        if (child?.parentEmail) {
+          const parentUser = await storage.getUserByEmail(child.parentEmail);
+          if (parentUser) parentUserIds.add(parentUser.id);
+        }
+      }
+    }
+  }
+  return Array.from(parentUserIds);
+}
+
+/**
+ * Resolve combined multi-source recipients and deduplicate.
+ * Accepts the same shape as the send-combined request body.
+ */
+async function resolveCombinedRecipients(params: {
+  includeAll?: boolean;
+  userIds?: number[];
+  roles?: string[];
+  locationIds?: number[];
+  classIds?: number[];
+}): Promise<number[]> {
+  const { includeAll, userIds = [], roles = [], locationIds = [], classIds = [] } = params;
+
+  if (includeAll) {
+    const allUsers = await storage.getAllUsers();
+    return [...new Set(allUsers.map(u => u.id))].filter(id => id && id > 0);
+  }
+
+  const recipientSet = new Set<number>();
+
+  if (userIds.length > 0) {
+    const ids = await resolveUserIds(userIds);
+    ids.forEach(id => recipientSet.add(id));
+  }
+  if (roles.length > 0) {
+    const ids = await resolveRoleRecipients(roles);
+    ids.forEach(id => recipientSet.add(id));
+  }
+  if (locationIds.length > 0) {
+    const ids = await resolveLocationRecipients(locationIds);
+    ids.forEach(id => recipientSet.add(id));
+  }
+  if (classIds.length > 0) {
+    const ids = await resolveClassRecipients(classIds);
+    ids.forEach(id => recipientSet.add(id));
+  }
+
+  return [...new Set(recipientSet)].filter(id => id && id > 0);
+}
+
+// --- End shared resolution functions ---
+
 async function resolveNotificationRecipients(notification: any): Promise<number[]> {
-  let recipients: number[] = [];
-  
   switch (notification.targetType) {
     case "individual":
-      recipients = notification.targetData.userIds || [];
-      break;
-      
+      return resolveUserIds(notification.targetData.userIds || []);
+
     case "role":
-      const allUsers = await storage.getAllUsers();
-      let roleUsers = allUsers.filter(u => 
-        notification.targetData.roles?.includes(u.role)
+      return resolveRoleRecipients(
+        notification.targetData.roles || [],
+        notification.targetData.locationIds
       );
-      
-      if (notification.targetData.locationIds && notification.targetData.locationIds.length > 0) {
-        const locationUserIds: number[] = [];
-        for (const locationId of notification.targetData.locationIds) {
-          const userLocations = await storage.getUserLocationsByLocationId(locationId);
-          locationUserIds.push(...userLocations.map(ul => ul.userId));
-        }
-        roleUsers = roleUsers.filter(u => locationUserIds.includes(u.id));
-      }
-      
-      recipients = roleUsers.map(u => u.id);
-      break;
-      
+
     case "location":
-      const locationUserIds: number[] = [];
-      for (const locationId of notification.targetData.locationIds || []) {
-        const userLocations = await storage.getUserLocationsByLocationId(locationId);
-        locationUserIds.push(...userLocations.map(ul => ul.userId));
-      }
-      
-      let locationUsers = await storage.getAllUsers();
-      locationUsers = locationUsers.filter(u => locationUserIds.includes(u.id));
-      
-      if (notification.targetData.roles && notification.targetData.roles.length > 0) {
-        locationUsers = locationUsers.filter(u => notification.targetData.roles.includes(u.role));
-      }
-      
-      recipients = locationUsers.map(u => u.id);
-      break;
-      
-    case "all":
+      return resolveLocationRecipients(
+        notification.targetData.locationIds || [],
+        notification.targetData.roles
+      );
+
+    case "all": {
       const users = await storage.getAllUsers();
-      recipients = users.map(u => u.id);
-      break;
+      return [...new Set(users.map(u => u.id))].filter(id => id && id > 0);
+    }
+
+    case "combined":
+      return resolveCombinedRecipients({
+        userIds: notification.targetData.userIds,
+        roles: notification.targetData.roles,
+        locationIds: notification.targetData.locationIds,
+        classIds: notification.targetData.classIds,
+      });
+
+    default:
+      return [];
   }
-  
-  return [...new Set(recipients)].filter(id => id && id > 0);
 }
 
 async function sendNotificationEmails(notification: any, recipientIds: number[]): Promise<void> {

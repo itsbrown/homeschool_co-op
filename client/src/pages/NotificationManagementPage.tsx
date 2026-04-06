@@ -28,7 +28,7 @@ import {
   Eye,
   RefreshCw
 } from "lucide-react";
-import { NotificationTargetingPanel, defaultTargetingState, type TargetingState, type TargetType } from "@/components/NotificationTargetingPanel";
+import { NotificationTargetingPanel, defaultTargetingState, type TargetingState } from "@/components/NotificationTargetingPanel";
 
 interface Notification {
   id: number;
@@ -97,118 +97,10 @@ export default function NotificationManagementPage() {
     },
   });
 
-  // Send individual notification mutation
-  const sendIndividualMutation = useMutation({
+  // Send combined (multi-source) notification mutation
+  const sendCombinedMutation = useMutation({
     mutationFn: async (data: any) => {
-      const response = await apiRequest("POST", "/api/notifications/send-individual", data);
-      if (!response.ok) {
-        const error = await response.text();
-        throw new Error(error);
-      }
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications?view=sent"] });
-      setIsComposeDialogOpen(false);
-      toast({
-        title: "Success",
-        description: "Notification sent successfully",
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to send notification",
-        variant: "destructive",
-      });
-    },
-  });
-
-  // Send role-based notification mutation
-  const sendRoleMutation = useMutation({
-    mutationFn: async (data: any) => {
-      const response = await apiRequest("POST", "/api/notifications/send-by-role", data);
-      if (!response.ok) {
-        const error = await response.text();
-        throw new Error(error);
-      }
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications?view=sent"] });
-      setIsComposeDialogOpen(false);
-      toast({
-        title: "Success",
-        description: "Notification sent successfully",
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to send notification",
-        variant: "destructive",
-      });
-    },
-  });
-
-  // Send location-based notification mutation
-  const sendLocationMutation = useMutation({
-    mutationFn: async (data: any) => {
-      const response = await apiRequest("POST", "/api/notifications/send-by-location", data);
-      if (!response.ok) {
-        const error = await response.text();
-        throw new Error(error);
-      }
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications?view=sent"] });
-      setIsComposeDialogOpen(false);
-      toast({
-        title: "Success",
-        description: "Notification sent successfully",
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to send notification",
-        variant: "destructive",
-      });
-    },
-  });
-
-  // Send broadcast notification mutation
-  const sendBroadcastMutation = useMutation({
-    mutationFn: async (data: any) => {
-      const response = await apiRequest("POST", "/api/notifications/send-all", data);
-      if (!response.ok) {
-        const error = await response.text();
-        throw new Error(error);
-      }
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications?view=sent"] });
-      setIsComposeDialogOpen(false);
-      toast({
-        title: "Success",
-        description: "Notification sent successfully",
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to send notification",
-        variant: "destructive",
-      });
-    },
-  });
-
-  // Send class-specific notification mutation
-  const sendClassMutation = useMutation({
-    mutationFn: async (data: any) => {
-      const response = await apiRequest("POST", "/api/notifications/send-by-class", data);
+      const response = await apiRequest("POST", "/api/notifications/send-combined", data);
       if (!response.ok) {
         const error = await response.text();
         throw new Error(error);
@@ -216,11 +108,12 @@ export default function NotificationManagementPage() {
       return response.json();
     },
     onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
       queryClient.invalidateQueries({ queryKey: ["/api/notifications?view=sent"] });
       setIsComposeDialogOpen(false);
       toast({
         title: "Success",
-        description: `Notification sent to ${data.recipientCount || 0} parents`,
+        description: `Notification sent to ${data.recipientCount ?? 0} recipient${(data.recipientCount ?? 0) !== 1 ? "s" : ""}`,
       });
     },
     onError: (error: any) => {
@@ -386,19 +279,11 @@ export default function NotificationManagementPage() {
           </DialogTrigger>
           <NotificationComposeDialog
             editingNotification={editingNotification}
-            onSendIndividual={sendIndividualMutation.mutate}
-            onSendRole={sendRoleMutation.mutate}
-            onSendLocation={sendLocationMutation.mutate}
-            onSendBroadcast={sendBroadcastMutation.mutate}
-            onSendClass={sendClassMutation.mutate}
+            onSendCombined={sendCombinedMutation.mutate}
             onUpdateDraft={(data) => editingNotification && updateDraftMutation.mutate({ id: editingNotification.id, data })}
             onDeleteDraft={() => editingNotification && deleteDraftMutation.mutate(editingNotification.id)}
             isLoading={
-              sendIndividualMutation.isPending ||
-              sendRoleMutation.isPending ||
-              sendLocationMutation.isPending ||
-              sendBroadcastMutation.isPending ||
-              sendClassMutation.isPending ||
+              sendCombinedMutation.isPending ||
               updateDraftMutation.isPending ||
               deleteDraftMutation.isPending
             }
@@ -681,21 +566,13 @@ export default function NotificationManagementPage() {
 // Notification Compose Dialog Component
 function NotificationComposeDialog({
   editingNotification,
-  onSendIndividual,
-  onSendRole,
-  onSendLocation,
-  onSendBroadcast,
-  onSendClass,
+  onSendCombined,
   onUpdateDraft,
   onDeleteDraft,
   isLoading,
 }: {
   editingNotification: Notification | null;
-  onSendIndividual: (data: any) => void;
-  onSendRole: (data: any) => void;
-  onSendLocation: (data: any) => void;
-  onSendBroadcast: (data: any) => void;
-  onSendClass: (data: any) => void;
+  onSendCombined: (data: any) => void;
   onUpdateDraft: (data: any) => void;
   onDeleteDraft: () => void;
   isLoading: boolean;
@@ -712,8 +589,9 @@ function NotificationComposeDialog({
       locationIds?: number[];
       classIds?: number[];
     } | null;
+    const isAll = editingNotification.targetType === "all";
     return {
-      targetType: (editingNotification.targetType as TargetType) || "individual",
+      includeAll: isAll,
       selectedUsers: (targetData?.userIds || []).map(id => ({ id, email: `User #${id}`, displayName: `User #${id}` })),
       selectedRoles: targetData?.roles || [],
       selectedLocations: targetData?.locationIds || [],
@@ -726,6 +604,8 @@ function NotificationComposeDialog({
   const [targeting, setTargeting] = useState<TargetingState>(buildInitialTargeting);
   const [subject, setSubject] = useState(editingNotification?.subject || "");
   const [content, setContent] = useState(editingNotification?.content || "");
+  const [previewCount, setPreviewCount] = useState<number | null>(null);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
 
   // Sync state when editingNotification changes
   useEffect(() => {
@@ -734,77 +614,82 @@ function NotificationComposeDialog({
     setContent(editingNotification?.content || "");
   }, [editingNotification]);
 
-  const buildTargetData = () => {
-    const { targetType, selectedUsers, selectedRoles, selectedLocations, selectedClasses } = targeting;
-    switch (targetType) {
-      case "individual":
-        return { userIds: selectedUsers.map(u => u.id) };
-      case "role":
-        return { roles: selectedRoles, locationIds: selectedLocations.length > 0 ? selectedLocations : undefined };
-      case "location":
-        return { locationIds: selectedLocations, roles: selectedRoles.length > 0 ? selectedRoles : undefined };
-      case "class":
-        return { classIds: selectedClasses };
-      case "all":
-      default:
-        return {};
+  // Debounced recipient count preview
+  useEffect(() => {
+    const { includeAll, selectedUsers, selectedRoles, selectedLocations, selectedClasses } = targeting;
+    const hasSelection = includeAll || selectedUsers.length > 0 || selectedRoles.length > 0 || selectedLocations.length > 0 || selectedClasses.length > 0;
+    if (!hasSelection) {
+      setPreviewCount(null);
+      return;
     }
-  };
+    const timer = setTimeout(async () => {
+      setIsPreviewLoading(true);
+      try {
+        const response = await apiRequest("POST", "/api/notifications/preview-recipients", {
+          includeAll,
+          userIds: selectedUsers.map(u => u.id),
+          roles: selectedRoles,
+          locationIds: selectedLocations,
+          classIds: selectedClasses,
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setPreviewCount(data.recipientCount ?? null);
+        }
+      } catch {
+        setPreviewCount(null);
+      } finally {
+        setIsPreviewLoading(false);
+      }
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [targeting]);
 
-  const handleSubmit = (sendNow: boolean = false) => {
-    const { targetType, selectedUsers, selectedClasses, deliveryType, priority: prio } = targeting;
-    const baseData = {
-      senderId: 1,
+  const buildCombinedPayload = () => {
+    const { includeAll, selectedUsers, selectedRoles, selectedLocations, selectedClasses, deliveryType, priority: prio } = targeting;
+    return {
       subject,
       content,
       type: deliveryType,
       priority: prio,
-      targetType,
+      includeAll,
+      userIds: selectedUsers.map(u => u.id),
+      roles: selectedRoles,
+      locationIds: selectedLocations,
+      classIds: selectedClasses,
     };
+  };
 
-    if (isEditMode) {
-      const targetData = buildTargetData();
-      if (sendNow) {
-        if (targetType === "individual" && selectedUsers.length === 0) {
-          toast({ title: "No recipients selected", description: "Please select at least one user.", variant: "destructive" });
-          return;
-        }
-        if (targetType === "class" && selectedClasses.length === 0) {
-          toast({ title: "No classes selected", description: "Please select at least one class.", variant: "destructive" });
-          return;
-        }
-      }
-      onUpdateDraft({ ...baseData, targetData, sendNow });
+  const handleSubmit = (sendNow: boolean = false) => {
+    const { includeAll, selectedUsers, selectedRoles, selectedLocations, selectedClasses } = targeting;
+
+    if (isEditMode && !sendNow) {
+      // Save Draft: preserve stored targetType semantics, update text/delivery fields only
+      onUpdateDraft({
+        subject,
+        content,
+        type: targeting.deliveryType,
+        priority: targeting.priority,
+        sendNow: false,
+      });
       return;
     }
 
-    switch (targetType) {
-      case "individual": {
-        const userIds = selectedUsers.map(u => u.id);
-        if (userIds.length === 0) {
-          toast({ title: "No recipients selected", description: "Please select at least one user.", variant: "destructive" });
-          return;
-        }
-        onSendIndividual({ ...baseData, userIds });
-        break;
-      }
-      case "role":
-        onSendRole({ ...baseData, roles: targeting.selectedRoles, locationIds: targeting.selectedLocations.length > 0 ? targeting.selectedLocations : undefined });
-        break;
-      case "location":
-        onSendLocation({ ...baseData, locationIds: targeting.selectedLocations, includeRoles: targeting.selectedRoles.length > 0 ? targeting.selectedRoles : undefined });
-        break;
-      case "all":
-        onSendBroadcast(baseData);
-        break;
-      case "class":
-        if (selectedClasses.length === 0) {
-          toast({ title: "No classes selected", description: "Please select at least one class to notify parents.", variant: "destructive" });
-          return;
-        }
-        onSendClass({ ...baseData, classIds: selectedClasses });
-        break;
+    // Validate at least one targeting source is selected when sending
+    if (!includeAll && selectedUsers.length === 0 && selectedRoles.length === 0 && selectedLocations.length === 0 && selectedClasses.length === 0) {
+      toast({ title: "No recipients selected", description: "Please select at least one targeting group or choose Everyone.", variant: "destructive" });
+      return;
     }
+
+    const payload = buildCombinedPayload();
+
+    if (isEditMode && sendNow) {
+      // Send Now for drafts: use the combined endpoint for correct multi-source resolution
+      onSendCombined(payload);
+      return;
+    }
+
+    onSendCombined(payload);
   };
 
   return (
@@ -849,6 +734,20 @@ function NotificationComposeDialog({
           </div>
 
           <NotificationTargetingPanel value={targeting} onChange={setTargeting} />
+
+          {/* Recipient count preview */}
+          {(previewCount !== null || isPreviewLoading) && (
+            <div className="flex items-center gap-2 p-3 rounded-md bg-muted text-sm">
+              <Users className="h-4 w-4 text-muted-foreground" />
+              {isPreviewLoading ? (
+                <span className="text-muted-foreground">Calculating recipients...</span>
+              ) : (
+                <span>
+                  <span className="font-medium">{previewCount}</span> unique recipient{previewCount !== 1 ? "s" : ""} will receive this notification
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
         <DialogFooter className="flex justify-between">

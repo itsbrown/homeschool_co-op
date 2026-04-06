@@ -498,56 +498,30 @@ function SendSurveyDialog({ form, onClose }: { form: CustomForm; onClose: () => 
     `Please take a moment to fill out our survey: "${form.title}"\n\n${surveyUrl}`
   );
 
-  type NotifyBase = { senderId: number; subject: string; content: string; type: string; priority: string };
-  type NotifyPayload =
-    | (NotifyBase & { userIds: number[] })
-    | (NotifyBase & { roles: string[]; locationIds?: number[] })
-    | (NotifyBase & { locationIds: number[]; includeRoles?: string[] })
-    | (NotifyBase & { classIds: number[] })
-    | NotifyBase;
-
   const sendMutation = useMutation({
     mutationFn: async () => {
-      const { targetType, selectedUsers, selectedRoles, selectedLocations, selectedClasses, deliveryType, priority } = targeting;
+      const { includeAll, selectedUsers, selectedRoles, selectedLocations, selectedClasses, deliveryType, priority } = targeting;
       const subject = form.title;
       const content = message;
-      const baseData: NotifyBase = { senderId: 1, subject, content, type: deliveryType, priority };
 
-      let endpoint: string;
-      let body: NotifyPayload;
-
-      switch (targetType) {
-        case 'individual': {
-          const userIds = selectedUsers.map(u => u.id);
-          if (userIds.length === 0) throw new Error('Please select at least one recipient.');
-          endpoint = '/api/notifications/send-individual';
-          body = { ...baseData, userIds };
-          break;
-        }
-        case 'role':
-          if (selectedRoles.length === 0) throw new Error('Please select at least one role.');
-          endpoint = '/api/notifications/send-by-role';
-          body = { ...baseData, roles: selectedRoles, locationIds: selectedLocations.length > 0 ? selectedLocations : undefined };
-          break;
-        case 'location':
-          if (selectedLocations.length === 0) throw new Error('Please select at least one location.');
-          endpoint = '/api/notifications/send-by-location';
-          body = { ...baseData, locationIds: selectedLocations, includeRoles: selectedRoles.length > 0 ? selectedRoles : undefined };
-          break;
-        case 'class':
-          if (selectedClasses.length === 0) throw new Error('Please select at least one class.');
-          endpoint = '/api/notifications/send-by-class';
-          body = { ...baseData, classIds: selectedClasses };
-          break;
-        case 'all':
-          endpoint = '/api/notifications/send-all';
-          body = { ...baseData };
-          break;
-        default:
-          throw new Error('Invalid target type.');
+      if (!includeAll && selectedUsers.length === 0 && selectedRoles.length === 0 && selectedLocations.length === 0 && selectedClasses.length === 0) {
+        throw new Error('Please select at least one recipient group or choose Everyone.');
       }
 
-      const response = await apiRequest('POST', endpoint, body);
+      const body = {
+        senderId: 1,
+        subject,
+        content,
+        type: deliveryType,
+        priority,
+        includeAll,
+        userIds: selectedUsers.map(u => u.id),
+        roles: selectedRoles,
+        locationIds: selectedLocations,
+        classIds: selectedClasses,
+      };
+
+      const response = await apiRequest('POST', '/api/notifications/send-combined', body);
       if (!response.ok) {
         const errText = await response.text();
         throw new Error(errText || 'Failed to send survey');
