@@ -225,7 +225,7 @@ router.patch('/:enrollmentId/payment-plan', async (req: any, res) => {
         enrollmentId: enrollment.id,
         parentId: parentUser.id,
         parentEmail: enrollment.parentEmail,
-        amount,
+        amount: amount ?? 0,
         scheduledDate: paymentDate,
         status: 'pending',
         schoolId: enrollment.schoolId,
@@ -237,6 +237,7 @@ router.patch('/:enrollmentId/payment-plan', async (req: any, res) => {
         processedAt: null,
         failureReason: null,
         retryCount: 0,
+        chargedBy: null,
         reminderCount: 0,
         lastReminderSentAt: null,
         metadata: {
@@ -597,6 +598,7 @@ router.post('/:enrollmentId/reallocate-payment', async (req: any, res) => {
           await storage.createPaymentAllocation({
             paymentHistoryId,
             enrollmentId: enrollmentId,
+            membershipEnrollmentId: null,
             allocatedAmountCents: -amount,
             allocationType: 'reallocation_out',
             sourceAllocationId: null,
@@ -608,6 +610,7 @@ router.post('/:enrollmentId/reallocate-payment', async (req: any, res) => {
           await storage.createPaymentAllocation({
             paymentHistoryId,
             enrollmentId: targetEnrollmentId,
+            membershipEnrollmentId: null,
             allocatedAmountCents: amount,
             allocationType: 'reallocation_in',
             sourceAllocationId: null,
@@ -683,6 +686,7 @@ router.post('/:enrollmentId/reallocate-payment', async (req: any, res) => {
           await storage.createPaymentAllocation({
             paymentHistoryId,
             enrollmentId: enrollmentId,
+            membershipEnrollmentId: null,
             allocatedAmountCents: -amount,
             allocationType: 'reallocation_out',
             sourceAllocationId: null,
@@ -1321,7 +1325,7 @@ router.get('/diagnose/:parentEmail', async (req: any, res) => {
     }
 
     // Get enrollments
-    const enrollments = await storage.getProgramEnrollmentsByParentEmail(parentEmail);
+    const enrollments = await storage.getProgramEnrollmentsByParent(parent.id);
     
     // Get all scheduled payments for each enrollment
     const enrollmentData = await Promise.all(enrollments.map(async (enrollment) => {

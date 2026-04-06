@@ -1,4 +1,4 @@
-import { eq, and, desc, asc, like, ilike, or, sql, lt, gt, gte, lte, isNull, inArray, not } from 'drizzle-orm';
+import { eq, and, desc, asc, like, ilike, or, sql, lt, gt, gte, lte, isNull, inArray, not, Column } from 'drizzle-orm';
 import { getDb } from './db';
 import { IStorage } from './storage';
 import {
@@ -134,7 +134,7 @@ export class DatabaseStorage implements IStorage {
           ilike(users.firstName, pattern),
           ilike(users.lastName, pattern),
           ilike(users.email, pattern),
-        )
+        )!
       );
     }
 
@@ -426,7 +426,7 @@ export class DatabaseStorage implements IStorage {
     }
     
     // Fetch full user records for those IDs (already filtered for isActive in query above)
-    const userIds = userIdRows.map(r => r.userId);
+    const userIds: number[] = userIdRows.map((r: { userId: number }) => r.userId);
     return await db
       .select()
       .from(users)
@@ -637,7 +637,7 @@ export class DatabaseStorage implements IStorage {
 
     // Apply sorting
     if (options.sortBy) {
-      const sortColumn = classes[options.sortBy as keyof typeof classes] || classes.createdAt;
+      const sortColumn = (classes[options.sortBy as keyof typeof classes] || classes.createdAt) as Column;
       query = query.orderBy(
         options.sortOrder === 'asc' 
           ? asc(sortColumn) 
