@@ -115,18 +115,18 @@ const testUsers = {
 
 // Helper functions for school boundary validation
 function extractSchoolId(req: any): number | null {
-  const schoolIdFromToken = req.auth?.payload?.school_id;
-  if (!schoolIdFromToken) {
+  const schoolId = req.user?.schoolId;
+  if (schoolId == null) {
     return null;
   }
-  const schoolId = parseInt(schoolIdFromToken, 10);
-  return isNaN(schoolId) ? null : schoolId;
+  const parsed = typeof schoolId === 'number' ? schoolId : parseInt(schoolId, 10);
+  return isNaN(parsed) ? null : parsed;
 }
 
 function requireSchoolContext(req: any, res: any): number | null {
   const schoolId = extractSchoolId(req);
   if (schoolId === null) {
-    res.status(400).json({ message: "School ID not found or invalid in user metadata" });
+    res.status(400).json({ message: "School ID not found in user context" });
     return null;
   }
   return schoolId;
@@ -2992,10 +2992,10 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       console.log('👶 School admin child creation endpoint hit');
       console.log('📝 Request body:', JSON.stringify(req.body, null, 2));
 
-      // Extract school_id from authenticated user's token metadata
-      const schoolId = req.auth?.payload?.school_id;
-      if (!schoolId) {
-        return res.status(400).json({ message: "School ID not found in user metadata" });
+      // Extract school_id from authenticated user's DB record (req.user.schoolId set by auth middleware)
+      const schoolId = req.user?.schoolId;
+      if (schoolId == null) {
+        return res.status(400).json({ message: "School ID not found in user context" });
       }
 
       const {
@@ -3830,36 +3830,29 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     console.log('📝 Request body:', JSON.stringify(req.body, null, 2));
 
     try {
-      // SECURITY: Derive schoolId from authenticated admin's JWT token, not from client
-      const schoolIdFromToken = req.auth?.payload?.school_id;
-      if (!schoolIdFromToken) {
-        console.error('❌ No school ID found in JWT token');
+      // SECURITY: Derive schoolId from authenticated admin's DB record (set by auth middleware), not from client
+      const schoolId = req.user?.schoolId;
+      if (schoolId == null) {
+        console.error('❌ No school ID found in user context (DB record)');
         return res.status(400).json({ 
           success: false,
-          message: "School ID not found in user credentials. Please ensure you're logged in as a school administrator." 
-        });
-      }
-      const schoolId = Number(schoolIdFromToken);
-      if (isNaN(schoolId)) {
-        console.error('❌ Invalid school ID in JWT token:', schoolIdFromToken);
-        return res.status(400).json({ 
-          success: false,
-          message: "Invalid school ID in user credentials." 
+          message: "School ID not found in user context. Please ensure you're logged in as a school administrator." 
         });
       }
 
-      console.log('🔐 Authenticated school ID from JWT:', schoolId);
+      console.log('🔐 Authenticated school ID from DB:', schoolId);
 
       // SECURITY: Verify user has schoolAdmin role (only admins can register students)
-      const userRole = req.auth?.payload?.role;
-      if (userRole !== 'schoolAdmin' && userRole !== 'superAdmin') {
-        console.error('❌ Unauthorized role attempting student registration. Role:', userRole);
+      // Use req.user.allRoles (DB-populated by auth middleware) — never JWT payload
+      const userRoles: string[] = req.user?.allRoles ?? [];
+      if (!userRoles.includes('schoolAdmin') && !userRoles.includes('superAdmin')) {
+        console.error('❌ Unauthorized role attempting student registration. Roles:', userRoles);
         return res.status(403).json({
           success: false,
           message: "Access denied: Only school administrators can register students."
         });
       }
-      console.log('✅ Role authorization passed:', userRole);
+      console.log('✅ Role authorization passed:', userRoles);
 
       const {
         firstName,
