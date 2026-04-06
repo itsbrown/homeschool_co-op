@@ -2571,6 +2571,34 @@ async function runMigrations() {
   } catch (docViewsError: any) {
     console.log('Migration note (non-blocking):', docViewsError.message);
   }
+
+  // One-time data correction: Amelia Marek enrollment #389
+  // The admin "Mark as Enrolled" action incorrectly set totalPaid = totalCost for a
+  // credit-only checkout where only $73.50 was applied. Correct to accurate values.
+  // Also corrects Olivia Marek enrollment #390 paymentStatus from 'completed' → 'partial_payment'.
+  // Safe to re-run: uses WHERE clauses that match only the incorrect state.
+  try {
+    await db.execute(sql`
+      UPDATE program_enrollments
+      SET
+        total_paid       = 7350,
+        remaining_balance = 82650,
+        payment_status   = 'partial_payment'
+      WHERE id = 389
+        AND total_paid = 90000
+        AND remaining_balance = 0
+    `);
+    await db.execute(sql`
+      UPDATE program_enrollments
+      SET payment_status = 'partial_payment'
+      WHERE id = 390
+        AND payment_status = 'completed'
+        AND remaining_balance > 0
+    `);
+    console.log('✅ Data correction applied: Marek enrollment #389/#390 payment fields verified/corrected');
+  } catch (marekCorrectionError: any) {
+    console.log('Data correction note (non-blocking):', marekCorrectionError.message);
+  }
 }
 
 // Initialize database tables

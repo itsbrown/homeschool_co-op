@@ -225,6 +225,8 @@ export default function EnrollmentsAdminPage() {
   const [prorateEnrollment, setProrateEnrollment] = useState<Enrollment | null>(null);
   const [proratePercent, setProratePercent] = useState("");
   const [prorateReason, setProrateReason] = useState("");
+  const [markEnrolledDialogOpen, setMarkEnrolledDialogOpen] = useState(false);
+  const [markEnrolledTarget, setMarkEnrolledTarget] = useState<Enrollment | null>(null);
 
   // Fetch all enrollments for the school
   const { data: enrollments = [], isLoading, refetch } = useQuery<Enrollment[]>({
@@ -564,36 +566,62 @@ export default function EnrollmentsAdminPage() {
     }
   };
 
-  const handleMarkAsEnrolled = async (enrollment: Enrollment) => {
+  const handleMarkAsEnrolledClick = (enrollment: Enrollment) => {
+    setMarkEnrolledTarget(enrollment);
+    setMarkEnrolledDialogOpen(true);
+  };
+
+  const handleMarkAsEnrolledConfirm = async () => {
+    const enrollment = markEnrolledTarget;
+    if (!enrollment) return;
+    setMarkEnrolledDialogOpen(false);
+
     try {
-      const response = await apiRequest(
-        "PUT",
-        `/api/program-enrollments/${enrollment.id}`,
-        { 
-          status: 'enrolled',
-          totalPaid: enrollment.totalCost,
-          remainingBalance: 0,
-          paymentStatus: 'completed'
+      if (enrollment.status === 'pending_admin_approval') {
+        // Use the dedicated approve endpoint — preserves payment fields set during checkout
+        const response = await apiRequest(
+          "POST",
+          `/api/stripe/approve-enrollment/${enrollment.id}`,
+          { action: 'approve' }
+        );
+        if (!response.ok) {
+          const err = await response.json();
+          throw new Error(err.error || "Failed to approve enrollment");
         }
-      );
-      
-      if (!response.ok) {
-        throw new Error("Failed to update enrollment status");
+      } else {
+        // pending_payment path: admin manually marks as fully paid without going through Stripe.
+        // Records the enrollment as fully paid (totalPaid=totalCost, remainingBalance=0).
+        // Admin has confirmed this in the dialog above before reaching this code.
+        const response = await apiRequest(
+          "PUT",
+          `/api/program-enrollments/${enrollment.id}`,
+          {
+            status: 'enrolled',
+            totalPaid: enrollment.totalCost,
+            remainingBalance: 0,
+            paymentStatus: 'completed'
+          }
+        );
+        if (!response.ok) {
+          throw new Error("Failed to update enrollment status");
+        }
       }
-      
+
       toast({
         title: "Enrollment Activated",
         description: `${enrollment.childName} is now enrolled in ${enrollment.className}.`,
       });
-      
+
       refetch();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to mark as enrolled:", error);
       toast({
         title: "Error",
-        description: "Failed to update enrollment status. Please try again.",
+        description: error.message || "Failed to update enrollment status. Please try again.",
         variant: "destructive",
       });
+    } finally {
+      setMarkEnrolledTarget(null);
     }
   };
 
@@ -869,14 +897,14 @@ export default function EnrollmentsAdminPage() {
                                       <Edit className="h-4 w-4 mr-2" />
                                       Edit Payment Plan
                                     </DropdownMenuItem>
-                                    {(enrollment.paymentStatus === 'pending_payment' || enrollment.paymentStatus === 'pending') && (
-                                      <DropdownMenuItem onClick={() => handleMarkAsEnrolled(enrollment)}>
+                                    {(enrollment.paymentStatus === 'pending_payment' || enrollment.paymentStatus === 'pending') && enrollment.status !== 'pending_admin_approval' && (
+                                      <DropdownMenuItem onClick={() => handleMarkAsEnrolledClick(enrollment)}>
                                         <CheckCircle2 className="h-4 w-4 mr-2" />
                                         Mark as Enrolled
                                       </DropdownMenuItem>
                                     )}
                                     {enrollment.status === 'pending_admin_approval' && (
-                                      <DropdownMenuItem onClick={() => handleMarkAsEnrolled(enrollment)}>
+                                      <DropdownMenuItem onClick={() => handleMarkAsEnrolledClick(enrollment)}>
                                         <CheckCircle2 className="h-4 w-4 mr-2" />
                                         Approve Enrollment
                                       </DropdownMenuItem>
@@ -1473,6 +1501,71 @@ export default function EnrollmentsAdminPage() {
                     Apply Pro-Rate
                   </>
                 )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Confirm Mark as Enrolled / Approve Enrollment Dialog */}
+        <Dialog open={markEnrolledDialogOpen} onOpenChange={(open) => {
+          if (!open) { setMarkEnrolledDialogOpen(false); setMarkEnrolledTarget(null); }
+        }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-amber-500" />
+                {markEnrolledTarget?.status === 'pending_admin_approval' ? 'Approve Enrollment' : 'Mark as Enrolled'}
+              </DialogTitle>
+              <DialogDescription>
+                {markEnrolledTarget?.status === 'pending_admin_approval' ? (
+                  <>
+                    Approve <strong>{markEnrolledTarget?.childName}</strong> for{' '}
+                    <strong>{markEnrolledTarget?.className}</strong>?
+                    {markEnrolledTarget && markEnrolledTarget.totalPaid > 0 && (
+                      <span className="block mt-2 text-sm">
+                        Credits applied: <strong className="text-green-700">{formatCurrency(markEnrolledTarget.totalPaid)}</strong>.
+                        Remaining balance: <strong className="text-orange-700">{formatCurrency(markEnrolledTarget.remainingBalance)}</strong>.
+                        The student will be enrolled and their payment record preserved.
+                      </span>
+                    )}
+                    {markEnrolledTarget && markEnrolledTarget.totalPaid === 0 && (
+                      <span className="block mt-2 text-sm text-amber-700">
+                        No payment has been collected. The enrollment will be approved with a full outstanding balance of{' '}
+                        <strong>{formatCurrency(markEnrolledTarget.totalCost)}</strong>.
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    Manually mark <strong>{markEnrolledTarget?.childName}</strong> as enrolled in{' '}
+                    <strong>{markEnrolledTarget?.className}</strong>?
+                    <span className="block mt-2 text-sm text-amber-700">
+                      <AlertTriangle className="inline h-3 w-3 mr-1" />
+                      This will record the enrollment as <strong>fully paid</strong> ({formatCurrency(markEnrolledTarget?.totalCost ?? 0)}) with{' '}
+                      <strong>no money collected</strong>. Only use this if you have received payment outside the system.
+                      {markEnrolledTarget && markEnrolledTarget.totalPaid > 0 && (
+                        <span className="block mt-1">
+                          Credits already applied: <strong>{formatCurrency(markEnrolledTarget.totalPaid)}</strong>. These will be overridden.
+                        </span>
+                      )}
+                    </span>
+                  </>
+                )}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => { setMarkEnrolledDialogOpen(false); setMarkEnrolledTarget(null); }}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleMarkAsEnrolledConfirm}
+                variant={markEnrolledTarget?.status === 'pending_admin_approval' ? 'default' : 'destructive'}
+              >
+                <CheckCircle2 className="h-4 w-4 mr-2" />
+                {markEnrolledTarget?.status === 'pending_admin_approval' ? 'Approve' : 'Confirm'}
               </Button>
             </DialogFooter>
           </DialogContent>

@@ -1406,12 +1406,16 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
             cost: discountedEnrollmentCost // In credit-only, credits applied = cost covered
           });
           
+          // Compute accurate remaining balance: credits may cover only the discounted portion
+          // while totalCost stores the undiscounted class price.
+          const newRemainingBalance = Math.max(0, enrollmentCost - creditsForThisEnrollment);
+          const newPaymentStatus = newRemainingBalance <= 0 ? 'completed' : 'partial_payment';
+
           await storage.updateProgramEnrollment(enrollmentId, {
             status: 'pending_admin_approval',
-            paymentStatus: 'completed', // Paid via credits
-            totalPaid: creditsForThisEnrollment, // Record only this enrollment's portion
-            // In credit-only checkout, credits fully cover the order, so remainingBalance is always 0
-            remainingBalance: 0,
+            paymentStatus: newPaymentStatus,
+            totalPaid: creditsForThisEnrollment,
+            remainingBalance: newRemainingBalance,
             metadata: {
               creditOnlyCheckout: true,
               creditsAppliedToThisEnrollment: creditsForThisEnrollment,
@@ -1422,7 +1426,7 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
               checkoutDate: new Date().toISOString()
             }
           });
-          console.log(`✅ Enrollment ${enrollmentId} updated: credits applied ${creditsForThisEnrollment}, status pending_admin_approval`);
+          console.log(`✅ Enrollment ${enrollmentId} updated: credits applied ${creditsForThisEnrollment}, remainingBalance ${newRemainingBalance}, status pending_admin_approval`);
         }
         
         // Create payment history record for credit-only checkout using saveStripePayment
