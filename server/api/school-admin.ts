@@ -4161,12 +4161,12 @@ router.post("/user-locations", supabaseAuth, requireSchoolContext, async (req: a
 // ========================
 
 // Get all discounts for a school
-router.get('/discounts', async (req, res) => {
+router.get('/discounts', supabaseAuth, requireSchoolContext, async (req: any, res) => {
   try {
     console.log('💰 Fetching discounts for school admin');
     
-    // Get all discounts from database
-    const discounts = await storage.getAllDiscounts();
+    const schoolId = req.schoolId;
+    const discounts = await storage.getDiscountsBySchoolId(Number(schoolId));
     
     res.json({
       success: true,
@@ -4182,7 +4182,7 @@ router.get('/discounts', async (req, res) => {
 });
 
 // Get a specific discount by ID
-router.get('/discounts/:id', async (req, res) => {
+router.get('/discounts/:id', supabaseAuth, requireSchoolContext, async (req: any, res) => {
   try {
     const discountId = parseInt(req.params.id);
     
@@ -4199,6 +4199,14 @@ router.get('/discounts/:id', async (req, res) => {
       return res.status(404).json({
         success: false,
         error: 'Discount not found'
+      });
+    }
+    
+    // Enforce school ownership
+    if (discount.schoolId !== req.schoolId) {
+      return res.status(403).json({
+        success: false,
+        error: 'You can only view discounts for your own school'
       });
     }
     
@@ -4257,6 +4265,7 @@ router.post('/discounts', supabaseAuth, requireSchoolContext, async (req: any, r
       newStudentsOnly,
       siblingDiscount,
       appliesToMembership,
+      allowedMemberIds,
       usageLimit,
       usageLimitPerUser,
       validFrom,
@@ -4293,6 +4302,25 @@ router.post('/discounts', supabaseAuth, requireSchoolContext, async (req: any, r
     const minOrderAmountInCents = minOrderAmount ? Math.round(minOrderAmount * 100) : null;
     const maxDiscountAmountInCents = maxDiscountAmount ? Math.round(maxDiscountAmount * 100) : null;
     
+    // Validate allowedMemberIds format if provided
+    const memberIdRegex = /^ASA-\d{4}-[A-Z0-9]{6}$/i;
+    if (allowedMemberIds !== undefined && allowedMemberIds !== null) {
+      if (!Array.isArray(allowedMemberIds)) {
+        return res.status(400).json({
+          success: false,
+          error: 'allowedMemberIds must be an array of member ID strings'
+        });
+      }
+      for (const memberId of allowedMemberIds) {
+        if (!memberIdRegex.test(String(memberId).trim())) {
+          return res.status(400).json({
+            success: false,
+            error: `Invalid member ID format: "${memberId}". Must match ASA-YYYY-XXXXXX (e.g., ASA-2025-X7K9M2)`
+          });
+        }
+      }
+    }
+    
     // Get school ID from database-driven middleware
     const schoolId = req.schoolId;
     
@@ -4324,6 +4352,7 @@ router.post('/discounts', supabaseAuth, requireSchoolContext, async (req: any, r
       newStudentsOnly: newStudentsOnly || false,
       siblingDiscount: siblingDiscount || false,
       appliesToMembership: appliesToMembership || false,
+      allowedMemberIds: (allowedMemberIds && Array.isArray(allowedMemberIds) && allowedMemberIds.length > 0) ? allowedMemberIds.map((id: string) => id.trim().toUpperCase()) : null,
       usageLimit: usageLimit || null,
       usageLimitPerUser: usageLimitPerUser || null,
       validFrom: parseDiscountDate(validFrom),
@@ -4424,6 +4453,7 @@ router.put('/discounts/:id', supabaseAuth, async (req: any, res) => {
       newStudentsOnly,
       siblingDiscount,
       appliesToMembership,
+      allowedMemberIds,
       usageLimit,
       usageLimitPerUser,
       validFrom,
@@ -4478,6 +4508,29 @@ router.put('/discounts/:id', supabaseAuth, async (req: any, res) => {
     if (newStudentsOnly !== undefined) updates.newStudentsOnly = newStudentsOnly;
     if (siblingDiscount !== undefined) updates.siblingDiscount = siblingDiscount;
     if (appliesToMembership !== undefined) updates.appliesToMembership = appliesToMembership;
+    if (allowedMemberIds !== undefined) {
+      // Validate each member ID format
+      if (allowedMemberIds !== null && !Array.isArray(allowedMemberIds)) {
+        return res.status(400).json({
+          success: false,
+          error: 'allowedMemberIds must be an array of member ID strings'
+        });
+      }
+      const memberIdRegex = /^ASA-\d{4}-[A-Z0-9]{6}$/i;
+      if (Array.isArray(allowedMemberIds)) {
+        for (const memberId of allowedMemberIds) {
+          if (!memberIdRegex.test(String(memberId).trim())) {
+            return res.status(400).json({
+              success: false,
+              error: `Invalid member ID format: "${memberId}". Must match ASA-YYYY-XXXXXX (e.g., ASA-2025-X7K9M2)`
+            });
+          }
+        }
+        updates.allowedMemberIds = allowedMemberIds.length > 0 ? allowedMemberIds.map((id: string) => id.trim().toUpperCase()) : null;
+      } else {
+        updates.allowedMemberIds = null;
+      }
+    }
     if (usageLimit !== undefined) updates.usageLimit = usageLimit;
     if (usageLimitPerUser !== undefined) updates.usageLimitPerUser = usageLimitPerUser;
     if (validFrom !== undefined) updates.validFrom = parseDiscountDate(validFrom);
@@ -4592,6 +4645,7 @@ router.post('/discounts/:id/duplicate', async (req, res) => {
       newStudentsOnly: originalDiscount.newStudentsOnly,
       siblingDiscount: originalDiscount.siblingDiscount,
       appliesToMembership: originalDiscount.appliesToMembership,
+      allowedMemberIds: originalDiscount.allowedMemberIds ?? null,
       usageLimit: originalDiscount.usageLimit,
       usageLimitPerUser: originalDiscount.usageLimitPerUser,
       validFrom: originalDiscount.validFrom,
@@ -4715,7 +4769,7 @@ router.post('/discounts/:id/apply', async (req, res) => {
 });
 
 // Get discount applications/usage history
-router.get('/discounts/:id/applications', async (req, res) => {
+router.get('/discounts/:id/applications', supabaseAuth, requireSchoolContext, async (req: any, res) => {
   try {
     const discountId = parseInt(req.params.id);
     
@@ -4724,6 +4778,15 @@ router.get('/discounts/:id/applications', async (req, res) => {
         success: false,
         error: 'Invalid discount ID'
       });
+    }
+    
+    // Verify discount belongs to the authenticated school before returning its applications
+    const discount = await storage.getDiscountById(discountId);
+    if (!discount) {
+      return res.status(404).json({ success: false, error: 'Discount not found' });
+    }
+    if (discount.schoolId !== req.schoolId) {
+      return res.status(403).json({ success: false, error: 'You can only view applications for your own school\'s discounts' });
     }
     
     const discountApplications = await storage.getDiscountApplicationsByDiscountId(discountId);

@@ -2572,6 +2572,14 @@ async function runMigrations() {
     console.log('Migration note (non-blocking):', docViewsError.message);
   }
 
+  // Add allowed_member_ids column to discounts table for member ID-targeted discounts
+  console.log('Running migration: Adding allowed_member_ids column to discounts table...');
+  await db.execute(sql`
+    ALTER TABLE discounts 
+    ADD COLUMN IF NOT EXISTS allowed_member_ids TEXT[];
+  `);
+  console.log('✅ Migration completed: allowed_member_ids column added to discounts table');
+
   // One-time data correction: Amelia Marek enrollment #389
   // The admin "Mark as Enrolled" action incorrectly set totalPaid = totalCost for a
   // credit-only checkout where only $73.50 was applied. Correct to accurate values.

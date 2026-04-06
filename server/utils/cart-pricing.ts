@@ -88,6 +88,28 @@ function checkRoleEligibility(
   }
 }
 
+/**
+ * Check if a user's member ID is in the discount's allowed member ID list.
+ * Returns true if allowedMemberIds is null/empty (no restriction) or if the
+ * user's memberId matches one of the allowed IDs (case-insensitive, trimmed).
+ * The user's memberId is fetched server-side from the DB — never trust client-supplied IDs.
+ */
+function checkMemberIdEligibility(
+  userMemberId: string | null | undefined,
+  allowedMemberIds: string[] | null | undefined
+): boolean {
+  if (!allowedMemberIds || allowedMemberIds.length === 0) {
+    return true;
+  }
+
+  if (!userMemberId) {
+    return false;
+  }
+
+  const normalizedUserId = userMemberId.trim().toLowerCase();
+  return allowedMemberIds.some(id => id.trim().toLowerCase() === normalizedUserId);
+}
+
 export interface SchoolIdResult {
   schoolId: number | null;
   error?: 'EMPTY_CART' | 'NO_CLASS_ID' | 'CLASS_NOT_FOUND' | 'NO_SCHOOL_ID' | 'MIXED_SCHOOLS' | 'LOOKUP_ERROR';
@@ -462,6 +484,8 @@ export async function calculateCartPricing(
   const siblingDiscountRate = siblingDiscountSetting ? siblingDiscountSetting.value / 100 : 0;
 
   const userRolesList = await getUserRoles(userId);
+  const userRecord = await storage.getUser(userId);
+  const userMemberId = userRecord?.memberId ?? null;
 
   const childrenWithClasses = items.reduce((acc, item) => {
     acc[item.childId] = (acc[item.childId] || 0) + 1;
@@ -655,6 +679,11 @@ export async function calculateCartPricing(
         continue;
       }
 
+      if (!checkMemberIdEligibility(userMemberId, discount.allowedMemberIds)) {
+        console.log(`🚫 Skipping discount ${discount.name} (ID: ${discount.id}) - member ID not in allowed list`);
+        continue;
+      }
+
       const itemsForDiscount = itemPrices.map((ip, idx) => ({
         classId: ip.classId,
         price: ip.price
@@ -745,7 +774,7 @@ export async function calculateCartPricing(
         });
       }
 
-      if (canApplyPromo && checkRoleEligibility(userRolesList, promoDiscount.requiredRoles, promoDiscount.roleMatchLogic)) {
+      if (canApplyPromo && checkRoleEligibility(userRolesList, promoDiscount.requiredRoles, promoDiscount.roleMatchLogic) && checkMemberIdEligibility(userMemberId, promoDiscount.allowedMemberIds)) {
         const itemsForDiscount = itemPrices.map(ip => ({
           classId: ip.classId,
           price: ip.price

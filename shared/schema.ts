@@ -2029,6 +2029,9 @@ export const discounts = pgTable("discounts", {
   requiredRoles: text("required_roles").array(), // Roles required for discount (e.g., ["parent", "educator"])
   roleMatchLogic: text("role_match_logic", { enum: ["and", "or"] }).default("or"), // "and" = user must have ALL roles, "or" = user must have ANY role
   
+  // Member ID-targeted discount eligibility
+  allowedMemberIds: text("allowed_member_ids").array(), // Specific member IDs that can use this discount (e.g., ["ASA-2025-X7K9M2"])
+  
   // Bundle discount rules (optional)
   bundleRule: jsonb("bundle_rule").$type<{
     type: 'nth_item_free' | 'buy_x_get_y_free' | 'buy_x_get_y_percent_off';
@@ -2115,6 +2118,8 @@ export const bundleRuleSchema = z.object({
 export type BundleRule = z.infer<typeof bundleRuleSchema>;
 
 // Discount schemas for validation
+const memberIdRegex = /^ASA-\d{4}-[A-Z0-9]{6}$/i;
+
 export const insertDiscountSchema = createInsertSchema(discounts)
   .omit({ id: true, createdAt: true, updatedAt: true, currentUsageCount: true })
   .extend({
@@ -2125,6 +2130,10 @@ export const insertDiscountSchema = createInsertSchema(discounts)
     value: z.number().transform(value => Math.round(value * 100)),
     // Bundle rule validation
     bundleRule: bundleRuleSchema.optional(),
+    // Validate each member ID matches the expected format
+    allowedMemberIds: z.array(
+      z.string().regex(memberIdRegex, 'Member ID must match format ASA-YYYY-XXXXXX (e.g., ASA-2025-X7K9M2)')
+    ).optional().nullable(),
   });
 
 export const insertDiscountApplicationSchema = createInsertSchema(discountApplications)

@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { toast } from '@/hooks/use-toast';
-import { Loader2, Plus, Edit, Trash2, Percent, DollarSign, Users, Calendar, Eye, Target, Copy } from 'lucide-react';
+import { Loader2, Plus, Edit, Trash2, Percent, DollarSign, Users, Calendar, Eye, Target, Copy, X } from 'lucide-react';
 import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
 
 interface Discount {
@@ -34,6 +34,7 @@ interface Discount {
   appliesToMembership: boolean;
   requiredRoles: string[] | null;
   roleMatchLogic: 'and' | 'or' | null;
+  allowedMemberIds: string[] | null;
   usageLimit: number | null;
   usageLimitPerUser: number | null;
   currentUsageCount: number;
@@ -64,6 +65,7 @@ interface DiscountFormData {
   appliesToMembership: boolean;
   requiredRoles: string[];
   roleMatchLogic: 'and' | 'or';
+  allowedMemberIds: string[];
   usageLimit: number | null;
   usageLimitPerUser: number | null;
   validFrom: string;
@@ -120,6 +122,7 @@ export default function DiscountsPage() {
     appliesToMembership: false,
     requiredRoles: [],
     roleMatchLogic: 'or',
+    allowedMemberIds: [],
     usageLimit: null,
     usageLimitPerUser: null,
     validFrom: '',
@@ -390,6 +393,7 @@ export default function DiscountsPage() {
       appliesToMembership: discount.appliesToMembership || false,
       requiredRoles: discount.requiredRoles || [],
       roleMatchLogic: discount.roleMatchLogic || 'or',
+      allowedMemberIds: discount.allowedMemberIds || [],
       usageLimit: discount.usageLimit,
       usageLimitPerUser: discount.usageLimitPerUser,
       validFrom: discount.validFrom ? discount.validFrom.split('T')[0] : '',
@@ -575,11 +579,16 @@ export default function DiscountsPage() {
                     <TableRow key={discount.id}>
                       <TableCell>
                         <div>
-                          <div className="font-medium flex items-center gap-2">
+                          <div className="font-medium flex items-center gap-2 flex-wrap">
                             {discount.name}
                             {discount.appliesToMembership && (
                               <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
                                 Membership
+                              </Badge>
+                            )}
+                            {discount.allowedMemberIds && discount.allowedMemberIds.length > 0 && (
+                              <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200">
+                                {discount.allowedMemberIds.length} Member ID{discount.allowedMemberIds.length !== 1 ? 's' : ''}
                               </Badge>
                             )}
                           </div>
@@ -718,6 +727,8 @@ export default function DiscountsPage() {
 }
 
 // Separate component for the discount form dialog
+const MEMBER_ID_REGEX = /^ASA-\d{4}-[A-Z0-9]{6}$/i;
+
 function DiscountFormDialog({
   title,
   description,
@@ -743,6 +754,9 @@ function DiscountFormDialog({
   isLoading: boolean;
   onCancel: () => void;
 }) {
+  const [memberIdInput, setMemberIdInput] = useState('');
+  const [memberIdError, setMemberIdError] = useState('');
+
   const handleCategoryToggle = (category: string) => {
     if (selectedCategories.includes(category)) {
       setSelectedCategories(selectedCategories.filter(c => c !== category));
@@ -756,6 +770,33 @@ function DiscountFormDialog({
       setSelectedGradeLevels(selectedGradeLevels.filter(g => g !== grade));
     } else {
       setSelectedGradeLevels([...selectedGradeLevels, grade]);
+    }
+  };
+
+  const handleAddMemberId = () => {
+    const id = memberIdInput.trim().toUpperCase();
+    if (!id) return;
+    if (!MEMBER_ID_REGEX.test(id)) {
+      setMemberIdError('Member ID must match format ASA-YYYY-XXXXXX (e.g., ASA-2025-X7K9M2)');
+      return;
+    }
+    if (formData.allowedMemberIds.includes(id)) {
+      setMemberIdError('This member ID has already been added');
+      return;
+    }
+    setFormData({ ...formData, allowedMemberIds: [...formData.allowedMemberIds, id] });
+    setMemberIdInput('');
+    setMemberIdError('');
+  };
+
+  const handleRemoveMemberId = (id: string) => {
+    setFormData({ ...formData, allowedMemberIds: formData.allowedMemberIds.filter(m => m !== id) });
+  };
+
+  const handleMemberIdKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleAddMemberId();
     }
   };
 
@@ -939,6 +980,67 @@ function DiscountFormDialog({
             <p className="text-sm text-muted-foreground mt-1">
               Leave empty to apply to all grade levels
             </p>
+          </div>
+
+          {/* Member ID Targeted Eligibility */}
+          <div className="p-4 border rounded-lg bg-amber-50/50 dark:bg-amber-950/20 space-y-4">
+            <div>
+              <Label className="text-base font-medium flex items-center gap-2">
+                <Target className="h-4 w-4" />
+                Eligible Members (by Member ID)
+              </Label>
+              <p className="text-sm text-muted-foreground mt-1">
+                Restrict this discount to specific members by their Member ID. Leave empty to allow all members. Format: ASA-YYYY-XXXXXX (e.g., ASA-2025-X7K9M2).
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <Input
+                  value={memberIdInput}
+                  onChange={(e) => {
+                    setMemberIdInput(e.target.value);
+                    if (memberIdError) setMemberIdError('');
+                  }}
+                  onKeyDown={handleMemberIdKeyDown}
+                  placeholder="ASA-2025-X7K9M2"
+                  className="font-mono"
+                  data-testid="input-member-id"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleAddMemberId}
+                  data-testid="button-add-member-id"
+                >
+                  Add
+                </Button>
+              </div>
+              {memberIdError && (
+                <p className="text-sm text-destructive" data-testid="text-member-id-error">{memberIdError}</p>
+              )}
+              {formData.allowedMemberIds.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2" data-testid="list-allowed-member-ids">
+                  {formData.allowedMemberIds.map((id) => (
+                    <Badge key={id} variant="secondary" className="font-mono flex items-center gap-1 pr-1">
+                      {id}
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveMemberId(id)}
+                        className="ml-1 hover:text-destructive focus:outline-none"
+                        aria-label={`Remove ${id}`}
+                        data-testid={`button-remove-member-id-${id}`}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+              )}
+              {formData.allowedMemberIds.length === 0 && (
+                <p className="text-sm text-muted-foreground">No member IDs added — discount is available to all members</p>
+              )}
+            </div>
           </div>
 
           {/* Role-Based Eligibility */}

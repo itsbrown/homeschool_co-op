@@ -61,6 +61,27 @@ function checkRoleEligibility(
   }
 }
 
+// Helper function to check if user's member ID is in the discount's allowed list
+function checkMemberIdEligibility(
+  userMemberId: string | null | undefined,
+  allowedMemberIds: string[] | null | undefined
+): { eligible: boolean; reason?: string } {
+  if (!allowedMemberIds || allowedMemberIds.length === 0) {
+    return { eligible: true };
+  }
+
+  if (!userMemberId) {
+    return { eligible: false, reason: 'This discount is restricted to specific members and you do not have a member ID on file' };
+  }
+
+  const normalizedUserId = userMemberId.trim().toLowerCase();
+  const isEligible = allowedMemberIds.some(id => id.trim().toLowerCase() === normalizedUserId);
+  if (!isEligible) {
+    return { eligible: false, reason: 'This discount is not available for your membership ID' };
+  }
+  return { eligible: true };
+}
+
 // Apply authentication middleware to all discount endpoints
 router.use(supabaseAuth);
 
@@ -171,6 +192,28 @@ router.post('/validate', requireSchoolContext, async (req: any, res) => {
             requiredRoles: discount.requiredRoles,
             roleMatchLogic: discount.roleMatchLogic,
           },
+        });
+      }
+    }
+
+    // Check member ID eligibility
+    if (discount.allowedMemberIds && discount.allowedMemberIds.length > 0) {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Authentication required to validate this discount',
+          valid: false,
+        });
+      }
+
+      const userRecord = await storage.getUser(userId);
+      const memberIdCheck = checkMemberIdEligibility(userRecord?.memberId, discount.allowedMemberIds);
+      if (!memberIdCheck.eligible) {
+        return res.status(400).json({
+          success: false,
+          error: memberIdCheck.reason || 'This discount is not available for your membership ID',
+          valid: false,
         });
       }
     }
