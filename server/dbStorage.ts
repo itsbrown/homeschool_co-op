@@ -2250,6 +2250,30 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(scheduledPayments).orderBy(asc(scheduledPayments.scheduledDate));
   }
 
+  async getScheduledPaymentsBySchoolId(schoolId: number): Promise<ScheduledPayment[]> {
+    const db = await getDb();
+    return await db
+      .select()
+      .from(scheduledPayments)
+      .where(eq(scheduledPayments.schoolId, schoolId))
+      .orderBy(asc(scheduledPayments.scheduledDate));
+  }
+
+  async getUpcomingAutoPayScheduledPayments(windowStart: Date, windowEnd: Date): Promise<ScheduledPayment[]> {
+    const db = await getDb();
+    return await db
+      .select()
+      .from(scheduledPayments)
+      .where(
+        and(
+          eq(scheduledPayments.status, 'pending'),
+          gte(scheduledPayments.scheduledDate, windowStart),
+          lte(scheduledPayments.scheduledDate, windowEnd)
+        )
+      )
+      .orderBy(asc(scheduledPayments.scheduledDate));
+  }
+
   async getDueScheduledPayments(asOfDate: Date, maxStaleDays: number): Promise<ScheduledPayment[]> {
     const db = await getDb();
     const cutoffDate = new Date(asOfDate.getTime() - maxStaleDays * 86400000);

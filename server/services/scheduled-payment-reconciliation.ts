@@ -78,6 +78,7 @@ export async function reconcileEnrollmentScheduledPayments(
         await storage.updateScheduledPayment(sp.id, {
           status: 'completed',
           processedAt: new Date(),
+          completionSource: 'reconciliation',
         });
       }
       details.push({
@@ -108,8 +109,7 @@ export async function reconcileSchoolScheduledPayments(
   schoolId: number,
   dryRun: boolean = false
 ): Promise<BulkReconciliationSummary> {
-  const allScheduledPayments = await storage.getAllScheduledPayments();
-  const schoolPayments = allScheduledPayments.filter((sp: any) => sp.schoolId === schoolId);
+  const schoolPayments = await storage.getScheduledPaymentsBySchoolId(schoolId);
   
   const enrollmentIds = [...new Set(schoolPayments.map((sp: any) => sp.enrollmentId))];
   
@@ -174,8 +174,7 @@ export async function cleanupScheduledPayments(
 ): Promise<CleanupResult> {
   console.log(`🧹 Starting scheduled payment cleanup for school ${schoolId} (dryRun: ${dryRun})`);
   
-  const allScheduledPayments = await storage.getAllScheduledPayments();
-  const schoolPayments = allScheduledPayments.filter((sp: any) => sp.schoolId === schoolId);
+  const schoolPayments = await storage.getScheduledPaymentsBySchoolId(schoolId);
   
   const details: CleanupResult['details'] = [];
   let duplicatesRemoved = 0;
@@ -226,7 +225,7 @@ export async function cleanupScheduledPayments(
         sp.status !== 'cancelled' && 
         !(sp.metadata as Record<string, any> | null)?.generatedForMissingBalance
       )
-    : (await storage.getAllScheduledPayments()).filter((sp: any) => sp.schoolId === schoolId);
+    : await storage.getScheduledPaymentsBySchoolId(schoolId);
   
   // Group remaining payments by enrollment
   const paymentsByEnrollment = new Map<number, typeof refreshedPayments>();

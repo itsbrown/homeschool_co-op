@@ -320,6 +320,7 @@ export async function processPayment(
                 await storage.updateScheduledPayment(sp.id, {
                   status: 'completed',
                   processedAt: new Date(),
+                  completionSource: 'manual_sync',
                 });
                 paymentsMarked++;
               } else {

@@ -667,6 +667,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
             await storage.updateScheduledPayment(spId, {
               status: 'completed',
               processedAt: new Date(),
+              completionSource: 'stripe_checkout',
             });
             console.log(`✅ Combined webhook: Marked scheduled payment ${spId} as completed`);
             
@@ -786,11 +787,16 @@ export const webhookHandler = async (req: Request, res: Response) => {
           }
           
           // Update the scheduled payment status to completed (matches schema enum)
+          // completionSource determination: use Stripe metadata 'autoPayInitiated=true' flag.
+          // This is written when the PaymentIntent is created by the auto-pay scheduler (before charge),
+          // so it is always present and deterministic — no race with chargedBy (which is written after).
+          const completionSrc = paymentIntent.metadata.autoPayInitiated === 'true' ? 'stripe_autopay' : 'stripe_checkout';
           await storage.updateScheduledPayment(parseInt(scheduledPaymentId), {
             status: 'completed',
             processedAt: new Date(),
+            completionSource: completionSrc,
           });
-          console.log(`✅ Marked scheduled payment ${scheduledPaymentId} as completed`);
+          console.log(`✅ Marked scheduled payment ${scheduledPaymentId} as completed (source: ${completionSrc})`);
           
           // CONSUME CREDITS if any were applied to this payment
           const creditsAppliedCents = parseInt(paymentIntent.metadata.creditsAppliedCents || '0');

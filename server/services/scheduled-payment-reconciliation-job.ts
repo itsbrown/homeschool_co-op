@@ -120,9 +120,16 @@ async function runDailyReconciliation(): Promise<void> {
 }
 
 /**
- * Start the daily reconciliation job
+ * Start the daily reconciliation job.
+ * Requires AUTO_PAY_SINGLE_INSTANCE=true to prevent double-runs in autoscaled deployments.
+ * Only start on Reserved VM or Scheduled Deployments.
  */
 export function startReconciliationJob(): void {
+  if (process.env.AUTO_PAY_SINGLE_INSTANCE !== 'true') {
+    console.error('CRITICAL: [ReconciliationJob] blocked — requires AUTO_PAY_SINGLE_INSTANCE=true (Reserved VM only). Reconciliation job will NOT start.');
+    return;
+  }
+
   if (reconciliationInterval) {
     console.log('[ReconciliationJob] Job already running');
     return;

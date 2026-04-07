@@ -2596,6 +2596,16 @@ async function runMigrations() {
   `);
   console.log('✅ email_log table ensured');
 
+  // Add completion_source column to scheduled_payments table
+  // Tracks how a payment was completed: 'stripe_autopay', 'stripe_checkout', 'manual_sync', 'reconciliation', 'recovery'
+  // AUTO_PAY_SINGLE_INSTANCE guard: required env var for both scheduler jobs (documented below)
+  console.log('Running migration: Adding completion_source column to scheduled_payments table...');
+  await db.execute(sql`
+    ALTER TABLE scheduled_payments 
+    ADD COLUMN IF NOT EXISTS completion_source TEXT;
+  `);
+  console.log('✅ Migration completed: completion_source column added to scheduled_payments table');
+
   // One-time data correction: Amelia Marek enrollment #389
   // The admin "Mark as Enrolled" action incorrectly set totalPaid = totalCost for a
   // credit-only checkout where only $73.50 was applied. Correct to accurate values.

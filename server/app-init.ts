@@ -378,6 +378,17 @@ export async function initializeApp(app: Express, httpServer: Server): Promise<v
   // Background schedulers — Reserved VM keeps the process alive between runs
   console.log(`🔧 Starting background services (${currentEnv})...`);
 
+  // Deployment safety: PAYMENT_PROCESSOR_ENABLED controls unified payment processing.
+  // Without it, webhook idempotency relies solely on the stripe_payment_history DB lookup.
+  if (process.env.PAYMENT_PROCESSOR_ENABLED !== 'true') {
+    console.warn('WARN: PAYMENT_PROCESSOR_ENABLED is not set to "true". Webhook idempotency protection is reduced (relying solely on stripe_payment_history DB lookup). Set PAYMENT_PROCESSOR_ENABLED=true on Reserved VM deployments.');
+  }
+
+  // Deployment safety note: startAutoPayJob() and startReconciliationJob() require
+  // AUTO_PAY_SINGLE_INSTANCE=true to start. Both jobs will emit a CRITICAL log and
+  // refuse to start if this env var is missing — preventing double-charges in
+  // autoscaled deployments. Set AUTO_PAY_SINGLE_INSTANCE=true only on Reserved VM.
+
   const { backupService } = await import('./services/backupService.js');
   const { MembershipStatusService } = await import('./services/membership-status-service.js');
   const { startEnrollmentReminderScheduler } = await import('./services/enrollmentReminderScheduler.js');

@@ -839,6 +839,14 @@ export const scheduledPayments = pgTable("scheduled_payments", {
   reminderCount: integer("reminder_count").default(0).notNull(),
   lastReminderSentAt: timestamp("last_reminder_sent_at"),
   
+  // Audit: how this payment was completed
+  // 'stripe_autopay'   — charged by the auto-pay scheduler
+  // 'stripe_checkout'  — paid via Stripe Checkout session (parent-initiated)
+  // 'manual_sync'      — marked complete by PaymentProcessorService (admin manual sync)
+  // 'reconciliation'   — marked complete by the reconciliation service
+  // 'recovery'         — confirmed succeeded by the crash-recovery path
+  completionSource: text("completion_source"),
+
   // Metadata
   metadata: jsonb("metadata").default({}).notNull(),
   
@@ -857,6 +865,7 @@ export const insertScheduledPaymentSchema = createInsertSchema(scheduledPayments
     failureReason: z.string().nullable().default(null),
     retryCount: z.number().default(0),
     chargedBy: z.string().nullable().default(null),
+    completionSource: z.string().nullable().default(null),
     reminderCount: z.number().default(0),
     lastReminderSentAt: z.date().nullable().default(null),
     metadata: z.record(z.any()).default({}),

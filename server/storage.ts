@@ -409,6 +409,8 @@ export interface IStorage {
   getScheduledPaymentsByParentEmail(parentEmail: string): Promise<any[]>;
   getScheduledPaymentsByEnrollmentId(enrollmentId: number): Promise<any[]>;
   getAllScheduledPayments(): Promise<any[]>;
+  getScheduledPaymentsBySchoolId(schoolId: number): Promise<any[]>;
+  getUpcomingAutoPayScheduledPayments(windowStart: Date, windowEnd: Date): Promise<any[]>;
   getDueScheduledPayments(asOfDate: Date, maxStaleDays: number): Promise<any[]>;
   getStuckProcessingPayments(olderThanMinutes: number): Promise<any[]>;
   updateScheduledPayment(id: number, payment: Partial<InsertScheduledPayment>): Promise<any | undefined>;
@@ -3771,19 +3773,23 @@ export class MemStorage implements IStorage {
   }
 
   async updateScheduledPaymentStatus(id: number, status: 'pending' | 'paid' | 'overdue' | 'cancelled'): Promise<ScheduledPayment | undefined> {
+    return this.updateScheduledPayment(id, { status } as any);
+  }
+
+  async updateScheduledPayment(id: number, fields: Partial<InsertScheduledPayment>): Promise<ScheduledPayment | undefined> {
     const payment = this.scheduledPaymentsStore.get(id);
     if (!payment) return undefined;
 
     const updatedPayment: ScheduledPayment = {
       ...payment,
-      status,
+      ...fields,
       updatedAt: new Date()
-    };
+    } as ScheduledPayment;
     this.scheduledPaymentsStore.set(id, updatedPayment);
     
     // Save to file for persistence
     await this.saveScheduledPaymentsToFile();
-    console.log(`💾 Saved scheduled payment ${id} status update to file`);
+    console.log(`💾 Saved scheduled payment ${id} update to file`);
     
     return updatedPayment;
   }
@@ -3804,6 +3810,20 @@ export class MemStorage implements IStorage {
     console.log(`💾 Saved scheduled payment ${id} reminder count update to file`);
     
     return updatedPayment;
+  }
+
+  async getScheduledPaymentsBySchoolId(schoolId: number): Promise<ScheduledPayment[]> {
+    return Array.from(this.scheduledPaymentsStore.values()).filter(
+      (p) => p.schoolId === schoolId
+    );
+  }
+
+  async getUpcomingAutoPayScheduledPayments(windowStart: Date, windowEnd: Date): Promise<ScheduledPayment[]> {
+    return Array.from(this.scheduledPaymentsStore.values()).filter((p) => {
+      if (p.status !== 'pending') return false;
+      const d = new Date(p.scheduledDate);
+      return d >= windowStart && d <= windowEnd;
+    });
   }
 
   async deleteScheduledPayment(id: number): Promise<void> {
@@ -6614,16 +6634,17 @@ import { DatabaseStorage } from "./dbStorage";
           if (this.dbStorage && typeof this.dbStorage.updateScheduledPayment === 'function') {
             return await this.dbStorage.updateScheduledPayment(id, payment);
           } else {
-            // Fallback: use memStorage status update if status is provided
-            if (payment.status) {
-              return await this.memStorage.updateScheduledPaymentStatus(id, payment.status as any);
-            }
-            console.warn('updateScheduledPayment fallback: DB unavailable and no status in payload');
-            return undefined;
+            // Fallback: use MemStorage full-field update
+            return await this.memStorage.updateScheduledPayment(id, payment);
           }
         } catch (error) {
           console.error('Failed to update scheduled payment:', error);
-          return undefined;
+          // On DB error, fall back to memStorage
+          try {
+            return await this.memStorage.updateScheduledPayment(id, payment);
+          } catch {
+            return undefined;
+          }
         }
       }
 
@@ -7189,6 +7210,31 @@ import { DatabaseStorage } from "./dbStorage";
         } catch (error) {
           console.error('❌ Error fetching scheduled payments from database:', error);
           return await this.memStorage.getAllScheduledPayments();
+        }
+      }
+
+      async getScheduledPaymentsBySchoolId(schoolId: number): Promise<any[]> {
+        try {
+          if (this.dbStorage && typeof this.dbStorage.getScheduledPaymentsBySchoolId === 'function') {
+            return await this.dbStorage.getScheduledPaymentsBySchoolId(schoolId);
+          }
+          const all = await this.memStorage.getAllScheduledPayments();
+          return all.filter((p: any) => p.schoolId === schoolId);
+        } catch (error) {
+          console.error('❌ Error in getScheduledPaymentsBySchoolId:', error);
+          return [];
+        }
+      }
+
+      async getUpcomingAutoPayScheduledPayments(windowStart: Date, windowEnd: Date): Promise<any[]> {
+        try {
+          if (this.dbStorage && typeof this.dbStorage.getUpcomingAutoPayScheduledPayments === 'function') {
+            return await this.dbStorage.getUpcomingAutoPayScheduledPayments(windowStart, windowEnd);
+          }
+          return await this.memStorage.getUpcomingAutoPayScheduledPayments(windowStart, windowEnd);
+        } catch (error) {
+          console.error('❌ Error in getUpcomingAutoPayScheduledPayments:', error);
+          return [];
         }
       }
 
