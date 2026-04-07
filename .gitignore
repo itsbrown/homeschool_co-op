@@ -6,4 +6,4 @@ vite.config.ts.*
 *.tar.gz
 
 # Backup files (may contain sensitive data)
-data/backups/
+data/backups/data/scheduled-payments.json

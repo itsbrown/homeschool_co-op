@@ -1,0 +1,143 @@
+[
+  {
+    "id": 1,
+    "title": "American History: The Revolutionary War",
+    "description": "Knowledge base containing 1 uploaded files",
+    "subject": "History",
+    "difficulty": "All Levels",
+    "authorId": 2,
+    "price": 0,
+    "files": [
+      {
+        "url": "/uploads/knowledge-bases/ecc1d5e6-8a59-44ab-ad04-7b5c0ea670a8/1749507875055_test-document.txt",
+        "type": "txt",
+        "name": "1749507875055_test-document.txt"
+      }
+    ],
+    "metadata": {
+      "tags": [
+        "uploaded",
+        "documents"
+      ],
+      "objectives": [
+        "Access uploaded content"
+      ]
+    },
+    "isPublic": true,
+    "downloadCount": 0,
+    "purchasedBy": [],
+    "createdAt": "2025-06-09T23:12:09.404Z",
+    "updatedAt": "2025-06-09T23:12:09.404Z"
+  },
+  {
+    "id": 2,
+    "title": "Antoinette Brown Blackwell Collection",
+    "description": "Historical collection featuring the first ordained female minister in the United States and women's rights advocate",
+    "subject": "History",
+    "difficulty": "High School",
+    "authorId": 2,
+    "price": 0,
+    "files": [
+      {
+        "url": "/attached_assets/antoinette_brown_blackwell.json",
+        "type": "json",
+        "name": "antoinette_brown_blackwell.json"
+      }
+    ],
+    "metadata": {
+      "tags": [
+        "women's rights",
+        "history",
+        "biography",
+        "pioneering women"
+      ],
+      "objectives": [
+        "Learn about women's suffrage",
+        "Understand religious leadership",
+        "Explore 19th century social movements"
+      ]
+    },
+    "isPublic": true,
+    "downloadCount": 0,
+    "purchasedBy": [],
+    "createdAt": "2025-06-09T23:12:09.405Z",
+    "updatedAt": "2025-06-09T23:12:09.405Z"
+  },
+  {
+    "id": 3,
+    "title": "American Seekers Academy Platform",
+    "description": "Comprehensive development documentation and architecture for the ASA learning management system",
+    "subject": "Technology",
+    "difficulty": "Advanced",
+    "authorId": 2,
+    "price": 0,
+    "files": [
+      {
+        "url": "/attached_assets/ASA_Platform_Features_and_Roles.md",
+        "type": "md",
+        "name": "Platform Features and Roles"
+      },
+      {
+        "url": "/attached_assets/ASA_Platform_System_Architecture.md",
+        "type": "md",
+        "name": "System Architecture"
+      }
+    ],
+    "metadata": {
+      "tags": [
+        "education technology",
+        "platform development",
+        "system architecture"
+      ],
+      "objectives": [
+        "Understand platform design",
+        "Learn system architecture",
+        "Explore educational technology"
+      ]
+    },
+    "isPublic": true,
+    "downloadCount": 0,
+    "purchasedBy": [],
+    "createdAt": "2025-06-09T23:12:09.405Z",
+    "updatedAt": "2025-06-09T23:12:09.405Z"
+  },
+  {
+    "id": 4,
+    "title": "Learning AI Development Resources",
+    "description": "Collection of AI integration strategies and implementation guides for educational platforms",
+    "subject": "Computer Science",
+    "difficulty": "Advanced",
+    "authorId": 2,
+    "price": 0,
+    "files": [
+      {
+        "url": "/attached_assets/Learning app AI.txt",
+        "type": "txt",
+        "name": "AI Learning Application Guide"
+      },
+      {
+        "url": "/attached_assets/ASA_Platform_NLP_Recommendation.markdown",
+        "type": "md",
+        "name": "NLP Recommendation System"
+      }
+    ],
+    "metadata": {
+      "tags": [
+        "artificial intelligence",
+        "educational technology",
+        "NLP",
+        "machine learning"
+      ],
+      "objectives": [
+        "Implement AI in education",
+        "Understand NLP applications",
+        "Design recommendation systems"
+      ]
+    },
+    "isPublic": true,
+    "downloadCount": 0,
+    "purchasedBy": [],
+    "createdAt": "2025-06-09T23:12:09.405Z",
+    "updatedAt": "2025-06-09T23:12:09.405Z"
+  }
+]

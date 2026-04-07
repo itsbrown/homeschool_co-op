@@ -1,0 +1,26 @@
+[
+  {
+    "firstName": "Child1",
+    "lastName": "Test",
+    "birthdate": "2010-01-01",
+    "gradeLevel": "5th",
+    "parentId": 1,
+    "parentEmail": "parent_bXy9jQDu@example.com",
+    "schoolId": 1,
+    "id": 1,
+    "createdAt": "2025-11-16T16:56:36.514Z",
+    "updatedAt": "2025-11-16T16:56:36.514Z"
+  },
+  {
+    "firstName": "Child2",
+    "lastName": "Test",
+    "birthdate": "2010-01-01",
+    "gradeLevel": "5th",
+    "parentId": 1,
+    "parentEmail": "parent_hHGqo8dR@example.com",
+    "schoolId": 1,
+    "id": 2,
+    "createdAt": "2025-11-16T16:56:36.515Z",
+    "updatedAt": "2025-11-16T16:56:36.515Z"
+  }
+]

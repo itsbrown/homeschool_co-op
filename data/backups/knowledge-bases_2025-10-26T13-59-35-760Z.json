@@ -1,0 +1,242 @@
+[
+  {
+    "id": 1,
+    "title": "American History: The Revolutionary War",
+    "description": "Knowledge base containing 1 uploaded files",
+    "subject": "History",
+    "difficulty": "All Levels",
+    "authorId": 2,
+    "price": 0,
+    "files": [
+      {
+        "url": "/uploads/knowledge-bases/ecc1d5e6-8a59-44ab-ad04-7b5c0ea670a8/1749507875055_test-document.txt",
+        "type": "txt",
+        "name": "1749507875055_test-document.txt"
+      }
+    ],
+    "metadata": {
+      "tags": [
+        "uploaded",
+        "documents"
+      ],
+      "objectives": [
+        "Access uploaded content"
+      ]
+    },
+    "isPublic": true,
+    "downloadCount": 0,
+    "purchasedBy": [],
+    "createdAt": "2025-06-09T23:12:09.404Z",
+    "updatedAt": "2025-06-09T23:12:09.404Z"
+  },
+  {
+    "id": 2,
+    "title": "Antoinette Brown Blackwell Collection",
+    "description": "Historical collection featuring the first ordained female minister in the United States and women's rights advocate",
+    "subject": "History",
+    "difficulty": "High School",
+    "authorId": 2,
+    "price": 0,
+    "files": [
+      {
+        "url": "/attached_assets/antoinette_brown_blackwell.json",
+        "type": "json",
+        "name": "antoinette_brown_blackwell.json"
+      }
+    ],
+    "metadata": {
+      "tags": [
+        "women's rights",
+        "history",
+        "biography",
+        "pioneering women"
+      ],
+      "objectives": [
+        "Learn about women's suffrage",
+        "Understand religious leadership",
+        "Explore 19th century social movements"
+      ]
+    },
+    "isPublic": true,
+    "downloadCount": 0,
+    "purchasedBy": [],
+    "createdAt": "2025-06-09T23:12:09.405Z",
+    "updatedAt": "2025-06-09T23:12:09.405Z"
+  },
+  {
+    "id": 3,
+    "title": "American Seekers Academy Platform",
+    "description": "Comprehensive development documentation and architecture for the ASA learning management system",
+    "subject": "Technology",
+    "difficulty": "Advanced",
+    "authorId": 2,
+    "price": 0,
+    "files": [
+      {
+        "url": "/attached_assets/ASA_Platform_Features_and_Roles.md",
+        "type": "md",
+        "name": "Platform Features and Roles"
+      },
+      {
+        "url": "/attached_assets/ASA_Platform_System_Architecture.md",
+        "type": "md",
+        "name": "System Architecture"
+      }
+    ],
+    "metadata": {
+      "tags": [
+        "education technology",
+        "platform development",
+        "system architecture"
+      ],
+      "objectives": [
+        "Understand platform design",
+        "Learn system architecture",
+        "Explore educational technology"
+      ]
+    },
+    "isPublic": true,
+    "downloadCount": 0,
+    "purchasedBy": [],
+    "createdAt": "2025-06-09T23:12:09.405Z",
+    "updatedAt": "2025-06-09T23:12:09.405Z"
+  },
+  {
+    "id": 4,
+    "title": "Learning AI Development Resources",
+    "description": "Collection of AI integration strategies and implementation guides for educational platforms",
+    "subject": "Computer Science",
+    "difficulty": "Advanced",
+    "authorId": 2,
+    "price": 0,
+    "files": [
+      {
+        "url": "/attached_assets/Learning app AI.txt",
+        "type": "txt",
+        "name": "AI Learning Application Guide"
+      },
+      {
+        "url": "/attached_assets/ASA_Platform_NLP_Recommendation.markdown",
+        "type": "md",
+        "name": "NLP Recommendation System"
+      }
+    ],
+    "metadata": {
+      "tags": [
+        "artificial intelligence",
+        "educational technology",
+        "NLP",
+        "machine learning"
+      ],
+      "objectives": [
+        "Implement AI in education",
+        "Understand NLP applications",
+        "Design recommendation systems"
+      ]
+    },
+    "isPublic": true,
+    "downloadCount": 0,
+    "purchasedBy": [],
+    "createdAt": "2025-06-09T23:12:09.405Z",
+    "updatedAt": "2025-06-09T23:12:09.405Z"
+  },
+  {
+    "title": "American Seekers Academy",
+    "description": "American Seekers Academy (ASA) offers a 10-week drop-off homeschool co-op rooted in the Classical education model, blending curated curricula from trusted sources with proprietary materials to foster academic excellence in the Liberal Arts. Welcoming families of all faiths, ASA emphasizes the connection between capitalism and liberty, includes historical references to God, and teaches American and international holidays, while avoiding religious doctrine. Experienced mentors inspire students, adapt lessons, and collaborate with parents to create a vibrant, structured environment that nurtures a lifelong love of learning.",
+    "subject": "Other",
+    "difficulty": "All Levels",
+    "price": 0,
+    "files": [
+      {
+        "url": "/uploads/ASA OVERVIEW.pdf",
+        "type": "pdf",
+        "name": "ASA OVERVIEW.pdf"
+      },
+      {
+        "url": "/uploads/MACARONIS CLASS DESCRIPTION (1).pdf",
+        "type": "pdf",
+        "name": "MACARONIS CLASS DESCRIPTION (1).pdf"
+      },
+      {
+        "url": "/uploads/PATRIOTS CLASS DESCRIPTION (1).pdf",
+        "type": "pdf",
+        "name": "PATRIOTS CLASS DESCRIPTION (1).pdf"
+      },
+      {
+        "url": "/uploads/PIONEERS CLASS DESCRIPTION (1).pdf",
+        "type": "pdf",
+        "name": "PIONEERS CLASS DESCRIPTION (1).pdf"
+      },
+      {
+        "url": "/uploads/SEEKERS CLASS DESCRIPTION (1).pdf",
+        "type": "pdf",
+        "name": "SEEKERS CLASS DESCRIPTION (1).pdf"
+      },
+      {
+        "url": "/uploads/TYCOONS CLASS DESCRIPTION (1).pdf",
+        "type": "pdf",
+        "name": "TYCOONS CLASS DESCRIPTION (1).pdf"
+      },
+      {
+        "url": "/uploads/YANKEE DOODLE CLASS DESCRIPTION (1).pdf",
+        "type": "pdf",
+        "name": "YANKEE DOODLE CLASS DESCRIPTION (1).pdf"
+      }
+    ],
+    "metadata": {
+      "tags": [
+        "ASA",
+        "American Seekers Academy"
+      ],
+      "objectives": [
+        "Educational content"
+      ]
+    },
+    "isPublic": false,
+    "authorId": "ac3f50b8-0e07-401f-80b8-96af1de10106",
+    "id": 5,
+    "createdAt": "2025-06-09T23:54:08.216Z",
+    "updatedAt": "2025-06-09T23:54:08.216Z",
+    "downloadCount": 0,
+    "purchasedBy": []
+  },
+  {
+    "id": 6,
+    "title": "American Seekers Academy Base Information",
+    "description": "American Seekers Academy base information including class descriptions, member agreements, mentor agreements, pedagogy;",
+    "subject": "Other",
+    "difficulty": "All Levels",
+    "price": 0,
+    "files": [
+      {
+        "url": "/uploads/1753117835108_ASA_COPY___TAGLINES.pdf",
+        "type": "pdf",
+        "name": "ASA COPY + TAGLINES.pdf",
+        "size": 197653,
+        "uploadedAt": "2025-07-21T17:10:35.115Z"
+      },
+      {
+        "url": "/uploads/1753117835115_ASA_OVERVIEW.pdf",
+        "type": "pdf",
+        "name": "ASA OVERVIEW.pdf",
+        "size": 48912,
+        "uploadedAt": "2025-07-21T17:10:35.116Z"
+      }
+    ],
+    "metadata": {
+      "tags": [
+        "ASA",
+        "FAQ"
+      ],
+      "objectives": [
+        "Educational content"
+      ]
+    },
+    "isPublic": false,
+    "authorId": "c6a64363-c341-4236-9a2a-9bfcef79c127",
+    "downloadCount": 0,
+    "purchasedBy": [],
+    "createdAt": "2025-07-21T17:10:35.413Z",
+    "updatedAt": "2025-07-21T17:10:35.413Z"
+  }
+]

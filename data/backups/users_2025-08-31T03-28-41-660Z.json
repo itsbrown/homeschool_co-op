@@ -1,0 +1,53 @@
+[
+  {
+    "id": 1,
+    "email": "coreycreates@gmail.com",
+    "role": "school_admin",
+    "supabaseId": "05052776-9b5e-4330-867d-d489273eaf70",
+    "firstName": "Corey",
+    "lastName": "Brown",
+    "createdAt": "2025-01-13T06:08:43.000Z",
+    "updatedAt": "2025-01-13T06:08:43.000Z"
+  },
+  {
+    "id": 5,
+    "email": "corey@americanseekersacademy.com",
+    "role": "superAdmin",
+    "schoolId": 1,
+    "firstName": "Corey",
+    "lastName": "Brown",
+    "createdAt": "2025-08-26T22:00:00.000Z",
+    "updatedAt": "2025-08-26T22:00:00.000Z"
+  },
+  {
+    "id": 6,
+    "email": "jocimarie@gmail.com",
+    "role": "educator",
+    "schoolId": 1,
+    "firstName": "Jocelyn",
+    "lastName": "Brown",
+    "password": "$2b$10$udR0fB0p/INI.Guu55pL.eSa9ZmwRbX5TIhYgYqkQCUCA0uBdCd2S",
+    "createdAt": "2025-08-26T22:15:00.000Z",
+    "updatedAt": "2025-08-26T22:15:00.000Z"
+  },
+  {
+    "id": 7,
+    "email": "corey.e.brown2025@gmail.com",
+    "role": "educator",
+    "schoolId": 1,
+    "firstName": "Corey",
+    "lastName": "Brown",
+    "createdAt": "2025-08-26T22:15:00.000Z",
+    "updatedAt": "2025-08-26T22:15:00.000Z"
+  },
+  {
+    "id": 8,
+    "email": "kpdinvestors@gmail.com",
+    "role": "parent",
+    "schoolId": 1,
+    "firstName": "Parent",
+    "lastName": "Puccia",
+    "createdAt": "2025-08-30T22:54:00.000Z",
+    "updatedAt": "2025-08-30T22:54:00.000Z"
+  }
+]

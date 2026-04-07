@@ -1,0 +1,138 @@
+[
+  {
+    "id": 1,
+    "email": "coreycreates@gmail.com",
+    "role": "school_admin",
+    "supabaseId": "05052776-9b5e-4330-867d-d489273eaf70",
+    "firstName": "Corey",
+    "lastName": "Brown",
+    "createdAt": "2025-01-13T06:08:43.000Z",
+    "updatedAt": "2025-01-13T06:08:43.000Z"
+  },
+  {
+    "id": 2,
+    "email": "educator.test@americanseekersacademy.com",
+    "name": "Sarah Johnson",
+    "username": "educator_test",
+    "firstName": "Sarah",
+    "lastName": "Johnson",
+    "role": "educator",
+    "subscription": "educator",
+    "createdAt": "2025-08-04T12:00:00.000Z",
+    "avatar": null,
+    "password": "$2a$10$EixZxQVkjyOptZj8GHGEc.3HEcUi8h7eAFcmNyMSZGEpj2pjHAAIC"
+  },
+  {
+    "id": 3,
+    "email": "tester@tester123.com",
+    "role": "parent",
+    "supabaseId": "9b12f7f2-cd82-40fd-b8aa-a5e0806847de",
+    "firstName": "Test",
+    "lastName": "Parent",
+    "schoolId": 1,
+    "createdAt": "2025-08-21T21:09:00.000Z",
+    "updatedAt": "2025-08-21T21:09:00.000Z"
+  },
+  {
+    "id": 4,
+    "email": "tester@testing321.com",
+    "role": "parent",
+    "supabaseId": "eb282754-68ae-4c43-8651-0d3073fd030a",
+    "firstName": "Test",
+    "lastName": "Parent",
+    "schoolId": 1,
+    "createdAt": "2025-08-22T11:15:00.000Z",
+    "updatedAt": "2025-08-22T11:15:00.000Z"
+  },
+  {
+    "id": 5,
+    "email": "corey@americanseekersacademy.com",
+    "role": "superAdmin",
+    "schoolId": 1,
+    "firstName": "Corey",
+    "lastName": "Brown",
+    "createdAt": "2025-08-26T22:00:00.000Z",
+    "updatedAt": "2025-08-26T22:00:00.000Z"
+  },
+  {
+    "id": 6,
+    "email": "jocimarie@gmail.com",
+    "role": "educator",
+    "schoolId": 1,
+    "firstName": "Jocelyn",
+    "lastName": "Brown",
+    "password": "$2b$10$udR0fB0p/INI.Guu55pL.eSa9ZmwRbX5TIhYgYqkQCUCA0uBdCd2S",
+    "createdAt": "2025-08-26T22:15:00.000Z",
+    "updatedAt": "2025-08-26T22:15:00.000Z"
+  },
+  {
+    "id": 7,
+    "email": "corey.e.brown2025@gmail.com",
+    "role": "educator",
+    "schoolId": 1,
+    "firstName": "Corey",
+    "lastName": "Brown",
+    "createdAt": "2025-08-26T22:15:00.000Z",
+    "updatedAt": "2025-08-26T22:15:00.000Z"
+  },
+  {
+    "id": 8,
+    "email": "test-staff@example.com",
+    "role": "educator",
+    "schoolId": 1,
+    "firstName": "Test",
+    "lastName": "Staff",
+    "createdAt": "2025-08-26T22:15:00.000Z",
+    "updatedAt": "2025-08-26T22:15:00.000Z"
+  },
+  {
+    "id": 9,
+    "email": "test-invite@example.com",
+    "role": "educator",
+    "schoolId": 1,
+    "firstName": "Test",
+    "lastName": "User",
+    "createdAt": "2025-08-26T22:15:00.000Z",
+    "updatedAt": "2025-08-26T22:15:00.000Z"
+  },
+  {
+    "id": 10,
+    "email": "test-staff-token@example.com",
+    "role": "educator",
+    "schoolId": 1,
+    "firstName": "Token",
+    "lastName": "Test",
+    "createdAt": "2025-08-26T22:15:00.000Z",
+    "updatedAt": "2025-08-26T22:15:00.000Z"
+  },
+  {
+    "id": 11,
+    "email": "test-token-validation@example.com",
+    "role": "school_admin",
+    "schoolId": 1,
+    "firstName": "Validation",
+    "lastName": "Test",
+    "createdAt": "2025-08-26T22:15:00.000Z",
+    "updatedAt": "2025-08-26T22:15:00.000Z"
+  },
+  {
+    "id": 12,
+    "email": "token-fix-test@example.com",
+    "role": "educator",
+    "schoolId": 1,
+    "firstName": "TokenFix",
+    "lastName": "Test",
+    "createdAt": "2025-08-26T22:15:00.000Z",
+    "updatedAt": "2025-08-26T22:15:00.000Z"
+  },
+  {
+    "id": 13,
+    "email": "test-auto-account@example.com",
+    "role": "educator",
+    "schoolId": 1,
+    "firstName": "Auto",
+    "lastName": "Test",
+    "createdAt": "2025-08-26T22:15:00.000Z",
+    "updatedAt": "2025-08-26T22:15:00.000Z"
+  }
+]
