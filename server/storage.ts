@@ -81,6 +81,7 @@ export interface IStorage {
   getAllActivities(): Promise<Activity[]>;
   getAllPayments(): Promise<Payment[]>;
   getAllEnrollments(): Promise<ProgramEnrollment[]>;
+  getEnrollmentsBySchoolId(schoolId: number): Promise<ProgramEnrollment[]>;
 
   // User methods
   getUser(id: number): Promise<User | undefined>;
@@ -391,6 +392,7 @@ export interface IStorage {
 
   // Stripe Payment History methods
   saveStripePayment(payment: InsertStripePaymentHistory): Promise<StripePaymentHistory>;
+  getStripePaymentHistoryById(id: number): Promise<StripePaymentHistory | undefined>;
   getStripePaymentHistoryByUserId(userId: number): Promise<StripePaymentHistory[]>;
   getStripePaymentsBySubscription(subscriptionId: string): Promise<StripePaymentHistory[]>;
   getStripePaymentByIntentId(paymentIntentId: string): Promise<StripePaymentHistory | undefined>;
@@ -2223,6 +2225,11 @@ export class MemStorage implements IStorage {
       .filter(e => e.parentEmail === parentEmail);
   }
 
+  async getEnrollmentsBySchoolId(schoolId: number): Promise<ProgramEnrollment[]> {
+    return Array.from(this.programEnrollmentsStore.values())
+      .filter(e => e.schoolId === schoolId);
+  }
+
   async getEnrollmentByChildAndClass(childId: number, classId: number): Promise<ProgramEnrollment | undefined> {
     return Array.from(this.programEnrollmentsStore.values())
       .find(e => e.childId === childId && (e.classId === classId || e.programId === classId || e.marketplaceClassId === classId));
@@ -3571,6 +3578,12 @@ export class MemStorage implements IStorage {
   }
 
   // Stripe Payment History methods implementation
+  async getStripePaymentHistoryById(id: number): Promise<StripePaymentHistory | undefined> {
+    const db = await getDb();
+    const result = await db.select().from(stripePaymentHistory).where(eq(stripePaymentHistory.id, id)).limit(1);
+    return result[0];
+  }
+
   async saveStripePayment(payment: InsertStripePaymentHistory): Promise<StripePaymentHistory> {
     const db = await getDb();
     
@@ -5253,6 +5266,14 @@ import { DatabaseStorage } from "./dbStorage";
 
     async getAllEnrollments(): Promise<ProgramEnrollment[]> {
       return this.dbStorage.getAllEnrollments();
+    }
+
+    async getEnrollmentsBySchoolId(schoolId: number): Promise<ProgramEnrollment[]> {
+      return this.dbStorage.getEnrollmentsBySchoolId(schoolId);
+    }
+
+    async getStripePaymentHistoryById(id: number): Promise<StripePaymentHistory | undefined> {
+      return this.dbStorage.getStripePaymentHistoryById(id);
     }
 
     async getUser(id: number): Promise<User | undefined> {

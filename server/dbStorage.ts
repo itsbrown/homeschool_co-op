@@ -1040,6 +1040,28 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  async getEnrollmentsBySchoolId(schoolId: number): Promise<ProgramEnrollment[]> {
+    try {
+      const db = await getDb();
+      const result = await db.select().from(programEnrollments).where(eq(programEnrollments.schoolId, schoolId));
+      return result;
+    } catch (error) {
+      console.error("Error fetching enrollments by school ID from database:", error);
+      return [];
+    }
+  }
+
+  async getStripePaymentHistoryById(id: number): Promise<StripePaymentHistory | undefined> {
+    try {
+      const db = await getDb();
+      const result = await db.select().from(stripePaymentHistory).where(eq(stripePaymentHistory.id, id)).limit(1);
+      return result[0];
+    } catch (error) {
+      console.error("Error fetching stripe payment history by ID from database:", error);
+      return undefined;
+    }
+  }
+
   // Program methods
   async getProgram(id: number): Promise<Program | undefined> {
     const db = await getDb();

@@ -4,6 +4,167 @@ import { sendWaitlistPromotedEmail } from '../lib/email-service';
 
 const router = Router();
 
+// GET double-payment audit - must be registered before /:id to avoid route-shadowing
+router.get('/double-payment-audit', async (req: any, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    const userRoles = await storage.getUserRolesByUserId(userId);
+    const legacyUser = await storage.getUser(userId);
+    const hasAdminRole = userRoles.some(r => r.role === 'admin' || r.role === 'superAdmin') ||
+      legacyUser?.role === 'admin' || legacyUser?.role === 'superAdmin';
+    const hasSchoolAdminRole = userRoles.some(r => r.role === 'schoolAdmin') ||
+      legacyUser?.role === 'schoolAdmin';
+
+    if (!hasAdminRole && !hasSchoolAdminRole) {
+      return res.status(403).json({ message: 'Only school administrators can run this audit' });
+    }
+
+    const matchingRole =
+      userRoles.find(r => (r.role === 'schoolAdmin' || r.role === 'admin' || r.role === 'superAdmin') && r.schoolId) ||
+      userRoles.find(r => r.role === 'schoolAdmin' || r.role === 'admin' || r.role === 'superAdmin');
+    const effectiveSchoolId = matchingRole?.schoolId || legacyUser?.schoolId;
+    if (!effectiveSchoolId) {
+      return res.status(403).json({ message: 'No school context found for this administrator' });
+    }
+
+    console.log(`Double-payment audit run by user ${userId} for school ${effectiveSchoolId}`);
+
+    const emailFilter = typeof req.query.email === 'string' ? req.query.email.trim() : null;
+
+    let enrollments;
+    if (emailFilter) {
+      const allForEmail = await storage.getEnrollmentsByParentEmail(emailFilter);
+      enrollments = allForEmail.filter(e => e.schoolId === effectiveSchoolId);
+    } else {
+      enrollments = await storage.getEnrollmentsBySchoolId(effectiveSchoolId);
+    }
+
+    type AllocationNote = 'stripe_succeeded' | 'stripe_not_succeeded' | 'no_payment_record' | 'unlinked_credit';
+
+    interface FlaggedPayment {
+      allocationId: number;
+      allocatedAmountCents: number;
+      allocationType: string;
+      allocationNote: AllocationNote;
+    }
+
+    interface FlaggedEnrollment {
+      enrollmentId: number;
+      childName: string | null;
+      totalPaid: number;
+      stripeTotal: number;
+      unmatchedAllocationsCents: number;
+      discrepancyCents: number;
+      flaggedPayments: FlaggedPayment[];
+    }
+
+    const flagged: FlaggedEnrollment[] = [];
+
+    for (const enrollment of enrollments) {
+      const [allocations, scheduledPayments] = await Promise.all([
+        storage.getPaymentAllocationsByEnrollmentId(enrollment.id),
+        storage.getScheduledPaymentsByEnrollmentId(enrollment.id),
+      ]);
+
+      let stripeTotal = 0;
+      let unmatchedAllocationsCents = 0;
+      const flaggedPayments: FlaggedPayment[] = [];
+      let hasNoPaymentRecord = false;
+      let hasUnsuccessfulScheduledPayment = false;
+
+      for (const allocation of allocations) {
+        const paymentHistoryId = allocation.paymentHistoryId ?? null;
+
+        if (paymentHistoryId === null) {
+          unmatchedAllocationsCents += allocation.allocatedAmountCents;
+          flaggedPayments.push({
+            allocationId: allocation.id,
+            allocatedAmountCents: allocation.allocatedAmountCents,
+            allocationType: allocation.allocationType,
+            allocationNote: 'unlinked_credit',
+          });
+        } else {
+          const record = await storage.getStripePaymentHistoryById(paymentHistoryId);
+          if (!record) {
+            unmatchedAllocationsCents += allocation.allocatedAmountCents;
+            hasNoPaymentRecord = true;
+            flaggedPayments.push({
+              allocationId: allocation.id,
+              allocatedAmountCents: allocation.allocatedAmountCents,
+              allocationType: allocation.allocationType,
+              allocationNote: 'no_payment_record',
+            });
+          } else if (record.status !== 'succeeded') {
+            unmatchedAllocationsCents += allocation.allocatedAmountCents;
+            flaggedPayments.push({
+              allocationId: allocation.id,
+              allocatedAmountCents: allocation.allocatedAmountCents,
+              allocationType: allocation.allocationType,
+              allocationNote: 'stripe_not_succeeded',
+            });
+          } else {
+            stripeTotal += allocation.allocatedAmountCents;
+            flaggedPayments.push({
+              allocationId: allocation.id,
+              allocatedAmountCents: allocation.allocatedAmountCents,
+              allocationType: allocation.allocationType,
+              allocationNote: 'stripe_succeeded',
+            });
+          }
+        }
+      }
+
+      // Check ALL completed scheduled payments for missing or non-succeeded stripe records
+      for (const sp of scheduledPayments) {
+        if (sp.status === 'completed') {
+          let spRecord: { id: number; status: string } | undefined = undefined;
+          if (sp.stripePaymentIntentId) {
+            spRecord = await storage.getStripePaymentByIntentId(sp.stripePaymentIntentId);
+          }
+          if (!spRecord || spRecord.status !== 'succeeded') {
+            const note: AllocationNote = !spRecord ? 'no_payment_record' : 'stripe_not_succeeded';
+            flaggedPayments.push({
+              allocationId: sp.id,
+              allocatedAmountCents: sp.amount ?? 0,
+              allocationType: 'scheduled_payment',
+              allocationNote: note,
+            });
+            if (!spRecord) {
+              hasNoPaymentRecord = true;
+            }
+            hasUnsuccessfulScheduledPayment = true;
+          }
+        }
+      }
+
+      const totalPaid = enrollment.totalPaid ?? 0;
+      const discrepancyCents = totalPaid - (stripeTotal + unmatchedAllocationsCents);
+      const hasTrueGap = discrepancyCents !== 0;
+
+      if (hasTrueGap || hasNoPaymentRecord || hasUnsuccessfulScheduledPayment) {
+        flagged.push({
+          enrollmentId: enrollment.id,
+          childName: enrollment.childName ?? null,
+          totalPaid,
+          stripeTotal,
+          unmatchedAllocationsCents,
+          discrepancyCents,
+          flaggedPayments,
+        });
+      }
+    }
+
+    return res.json(flagged);
+  } catch (error) {
+    console.error('Error running double-payment audit:', error);
+    return res.status(500).json({ message: 'Failed to run double-payment audit' });
+  }
+});
+
 // GET enrollment details by ID
 router.get('/:id', async (req, res) => {
   try {
