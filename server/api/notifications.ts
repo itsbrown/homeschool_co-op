@@ -4,6 +4,7 @@ import { insertNotificationSchema } from "@shared/schema";
 import { storage } from '../storage';
 import { sendSMS, isTwilioConfigured, getTwilioClient } from '../services/twilio';
 import * as brevo from '@getbrevo/brevo';
+import { getBrevoApiInstance, logEmailAttempt } from '../lib/email-service';
 import { supabaseAuth } from '../middleware/supabase-auth';
 import { requireRole } from '../middleware/auth0-auth';
 import { requireSchoolContext } from '../middleware/require-school-context';
@@ -184,7 +185,8 @@ router.post("/send-individual", supabaseAuth, requireRole(['admin', 'superAdmin'
 
     const notification = await storage.createNotification(notificationData);
     
-    await processNotification(notification);
+    processNotification(notification)
+      .catch(err => console.error('[Email fire-and-forget] processNotification (individual) failed:', err));
 
     res.status(201).json(notification);
   } catch (error) {
@@ -225,7 +227,8 @@ router.post("/send-by-role", supabaseAuth, requireRole(['admin', 'superAdmin', '
     };
 
     const notification = await storage.createNotification(notificationData);
-    await processNotification(notification);
+    processNotification(notification)
+      .catch(err => console.error('[Email fire-and-forget] processNotification (role-based) failed:', err));
 
     res.status(201).json(notification);
   } catch (error) {
@@ -266,7 +269,8 @@ router.post("/send-by-location", supabaseAuth, requireRole(['admin', 'superAdmin
     };
 
     const notification = await storage.createNotification(notificationData);
-    await processNotification(notification);
+    processNotification(notification)
+      .catch(err => console.error('[Email fire-and-forget] processNotification (location-based) failed:', err));
 
     res.status(201).json(notification);
   } catch (error) {
@@ -303,7 +307,8 @@ router.post("/send-all", supabaseAuth, requireRole(['admin', 'superAdmin', 'scho
     };
 
     const notification = await storage.createNotification(notificationData);
-    await processNotification(notification);
+    processNotification(notification)
+      .catch(err => console.error('[Email fire-and-forget] processNotification (broadcast) failed:', err));
 
     res.status(201).json(notification);
   } catch (error) {
@@ -378,8 +383,9 @@ router.post("/send-by-class", supabaseAuth, requireRole(['admin', 'superAdmin', 
 
     const notification = await storage.createNotification(notificationData);
     
-    // Use existing processNotification pipeline
-    await processNotification(notification);
+    // Use existing processNotification pipeline (fire-and-forget)
+    processNotification(notification)
+      .catch(err => console.error('[Email fire-and-forget] processNotification (class) failed:', err));
 
     console.log('[Notifications] Class notification created with', userIdsArray.length, 'recipients');
 
@@ -479,7 +485,8 @@ router.post("/send-combined", supabaseAuth, requireRole(['admin', 'superAdmin', 
         };
 
     const notification = await storage.createNotification(notificationData);
-    await processNotification(notification);
+    processNotification(notification)
+      .catch(err => console.error('[Email fire-and-forget] processNotification (combined) failed:', err));
 
     res.status(201).json({ ...notification, recipientCount: deduplicatedIds.length });
   } catch (error) {
@@ -761,14 +768,17 @@ async function resolveNotificationRecipients(notification: any): Promise<number[
 async function sendNotificationEmails(notification: any, recipientIds: number[]): Promise<void> {
   console.log(`📧 Sending notification emails for: ${notification.subject} to ${recipientIds.length} recipients`);
   
-  const brevoApiKey = process.env.BREVO_API_KEY;
-  if (!brevoApiKey) {
+  const brevoApiInstance = getBrevoApiInstance();
+  if (!brevoApiInstance) {
     console.log('⚠️ Brevo API key not configured, skipping email delivery');
+    for (const recipientId of recipientIds) {
+      const user = await storage.getUser(recipientId);
+      if (user?.email) {
+        await logEmailAttempt({ recipientEmail: user.email, type: 'notification', subject: notification.subject, status: 'failed', error: 'Brevo not configured' });
+      }
+    }
     return;
   }
-  
-  const brevoApiInstance = new brevo.TransactionalEmailsApi();
-  brevoApiInstance.setApiKey(brevo.TransactionalEmailsApiApiKeys.apiKey, brevoApiKey);
   
   for (const recipientId of recipientIds) {
     const user = await storage.getUser(recipientId);
@@ -804,7 +814,13 @@ async function sendNotificationEmails(notification: any, recipientIds: number[])
       };
       sendSmtpEmail.to = [{ email: user.email, name: user.name || user.email }];
       
-      await brevoApiInstance.sendTransacEmail(sendSmtpEmail);
+      await Promise.race([
+        brevoApiInstance.sendTransacEmail(sendSmtpEmail),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error(`timeout:notification:${user.email}`)), 10000)
+        ),
+      ]);
+      await logEmailAttempt({ recipientEmail: user.email, type: 'notification', subject: notification.subject, status: 'sent' });
       
       const recipients = await storage.getNotificationRecipientsByNotificationId(notification.id);
       const recipientRecord = recipients.find(
@@ -818,8 +834,19 @@ async function sendNotificationEmails(notification: any, recipientIds: number[])
       }
       
       console.log(`✅ Email sent to ${user.email} for notification: ${notification.subject}`);
-    } catch (error) {
-      console.error(`❌ Failed to send email to user ${recipientId}:`, error);
+    } catch (error: any) {
+      const isTimeout = error?.message?.startsWith('timeout:');
+      const isIpBlocked = error?.body?.code === 'unauthorized' || error?.statusCode === 401;
+      if (isTimeout) {
+        console.error(`[Email timeout] notification email to ${user.email} timed out after 10s`);
+        await logEmailAttempt({ recipientEmail: user.email, type: 'notification', subject: notification.subject, status: 'timeout', error: 'Timed out after 10s' });
+      } else if (isIpBlocked) {
+        console.error(`[Email blocked] Brevo rejected notification email to ${user.email}: IP not whitelisted`);
+        await logEmailAttempt({ recipientEmail: user.email, type: 'notification', subject: notification.subject, status: 'failed', error: 'Brevo IP not whitelisted' });
+      } else {
+        console.error(`❌ Failed to send email to user ${recipientId}:`, error);
+        await logEmailAttempt({ recipientEmail: user.email, type: 'notification', subject: notification.subject, status: 'failed', error: error.message || String(error) });
+      }
       
       const recipients = await storage.getNotificationRecipientsByNotificationId(notification.id);
       const recipientRecord = recipients.find(
@@ -1094,9 +1121,10 @@ router.put("/:id", async (req, res) => {
       return res.status(500).json({ message: "Failed to update notification" });
     }
 
-    // If sending the draft, process it to deliver to recipients
+    // If sending the draft, process it to deliver to recipients (fire-and-forget)
     if (sendNow) {
-      await processNotification(updatedNotification);
+      processNotification(updatedNotification)
+        .catch(err => console.error('[Email fire-and-forget] processNotification (sendNow) failed:', err));
     }
 
     res.json(updatedNotification);
@@ -1200,8 +1228,9 @@ router.post("/:id/resend", async (req, res) => {
       expiresAt: null,
     });
 
-    // Process the notification to deliver to recipients
-    await processNotification(newNotification);
+    // Process the notification to deliver to recipients (fire-and-forget)
+    processNotification(newNotification)
+      .catch(err => console.error('[Email fire-and-forget] processNotification (resend) failed:', err));
 
     res.json({ 
       message: "Notification resent successfully",

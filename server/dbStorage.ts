@@ -69,7 +69,8 @@ import {
   WeekPlan, InsertWeekPlan, weekPlans,
   WeekPlanBlock, InsertWeekPlanBlock, weekPlanBlocks,
   WeekPlanBlockHistory, InsertWeekPlanBlockHistory, weekPlanBlockHistory,
-  StripePaymentHistory, InsertStripePaymentHistory, stripePaymentHistory
+  StripePaymentHistory, InsertStripePaymentHistory, stripePaymentHistory,
+  EmailLog, InsertEmailLog, emailLog
 } from '../shared/schema';
 
 /**
@@ -5427,6 +5428,21 @@ export class DatabaseStorage implements IStorage {
       .from(paymentReminderLogs)
       .where(eq(paymentReminderLogs.schoolId, schoolId))
       .orderBy(desc(paymentReminderLogs.sentAt))
+      .limit(limit);
+  }
+
+  async createEmailLog(data: InsertEmailLog): Promise<EmailLog> {
+    const db = await getDb();
+    const [created] = await db.insert(emailLog).values(data).returning();
+    return created;
+  }
+
+  async getEmailLogs(limit: number = 200): Promise<EmailLog[]> {
+    const db = await getDb();
+    return await db
+      .select()
+      .from(emailLog)
+      .orderBy(desc(emailLog.sentAt))
       .limit(limit);
   }
 

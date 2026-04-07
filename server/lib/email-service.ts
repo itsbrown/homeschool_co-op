@@ -1,8 +1,13 @@
 
 import * as brevo from '@getbrevo/brevo';
 import type { Payment } from '@shared/schema';
+import { getDb } from '../db';
+import { emailLog } from '@shared/schema';
 
-// Initialize Brevo API instance
+const EMAIL_TIMEOUT_MS = 10_000;
+
+// Single shared Brevo API instance — the only place where Brevo is initialized.
+// All other files must import getBrevoApiInstance() from this module.
 let apiInstance: brevo.TransactionalEmailsApi | null = null;
 if (process.env.BREVO_API_KEY) {
   apiInstance = new brevo.TransactionalEmailsApi();
@@ -10,6 +15,43 @@ if (process.env.BREVO_API_KEY) {
   console.log('✅ Brevo initialized for email service');
 } else {
   console.warn('⚠️ BREVO_API_KEY not found - email service will not be available');
+}
+
+/** Returns the shared Brevo API instance for use by other modules. */
+export function getBrevoApiInstance(): brevo.TransactionalEmailsApi | null {
+  return apiInstance;
+}
+
+/** Wraps a promise with a 10-second timeout. Rejects with a timeout error if exceeded. */
+function withTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`timeout:${label}`)), EMAIL_TIMEOUT_MS)
+    ),
+  ]);
+}
+
+/** Logs every email send attempt to the email_log table. Fire-and-forget safe. */
+export async function logEmailAttempt(data: {
+  recipientEmail: string;
+  type: string;
+  subject?: string | null;
+  status: 'sent' | 'failed' | 'timeout';
+  error?: string | null;
+}): Promise<void> {
+  try {
+    const db = await getDb();
+    await db.insert(emailLog).values({
+      recipientEmail: data.recipientEmail,
+      type: data.type,
+      subject: data.subject ?? null,
+      status: data.status,
+      error: data.error ?? null,
+    });
+  } catch (err) {
+    console.error('[email_log] Failed to write email log entry:', err);
+  }
 }
 
 interface PaymentConfirmationData {
@@ -31,6 +73,7 @@ export async function sendPaymentConfirmationEmail(data: PaymentConfirmationData
   try {
     if (!apiInstance) {
       console.log('📧 Brevo not configured, skipping payment confirmation email send');
+      await logEmailAttempt({ recipientEmail: data.parentEmail, type: 'payment_confirmation', subject: 'Payment Confirmation - American Seekers Academy', status: 'failed', error: 'Brevo not configured' });
       return true; // Return true to indicate graceful handling
     }
 
@@ -183,23 +226,24 @@ If you have any questions about this payment, please contact us at support@ameri
     sendSmtpEmail.htmlContent = htmlContent;
     sendSmtpEmail.textContent = textContent;
 
-    // Send email via Brevo
-    if (!apiInstance) {
-      console.log('📧 Brevo not configured, skipping payment confirmation email send');
-      return false;
-    }
-
-    const result = await apiInstance.sendTransacEmail(sendSmtpEmail);
+    const result = await withTimeout(apiInstance.sendTransacEmail(sendSmtpEmail), `payment_confirmation:${parentEmail}`);
     
     console.log('✅ Payment confirmation email sent successfully via Brevo to:', parentEmail);
     console.log('📧 Brevo Message ID:', result.body.messageId);
+    await logEmailAttempt({ recipientEmail: parentEmail, type: 'payment_confirmation', subject: 'Payment Confirmation - American Seekers Academy', status: 'sent' });
     return true;
   } catch (error: any) {
-    // Handle specific Brevo authorization errors gracefully
-    if (error.body?.code === 'unauthorized' || error.statusCode === 401) {
-      console.log('📧 Brevo authorization issue (IP not whitelisted), skipping email - payment still successful');
+    const isTimeout = error?.message?.startsWith('timeout:');
+    const isIpBlocked = error?.body?.code === 'unauthorized' || error?.statusCode === 401;
+    if (isTimeout) {
+      console.error(`[Email timeout] payment_confirmation email to ${parentEmail} timed out after 10s`);
+      await logEmailAttempt({ recipientEmail: parentEmail, type: 'payment_confirmation', subject: 'Payment Confirmation - American Seekers Academy', status: 'timeout', error: 'Timed out after 10s' });
+    } else if (isIpBlocked) {
+      console.error(`[Email blocked] Brevo rejected payment_confirmation email to ${parentEmail}: IP not whitelisted`);
+      await logEmailAttempt({ recipientEmail: parentEmail, type: 'payment_confirmation', subject: 'Payment Confirmation - American Seekers Academy', status: 'failed', error: 'Brevo IP not whitelisted' });
     } else {
       console.error('❌ Failed to send payment confirmation email via Brevo:', error.message || error);
+      await logEmailAttempt({ recipientEmail: parentEmail, type: 'payment_confirmation', subject: 'Payment Confirmation - American Seekers Academy', status: 'failed', error: error.message || String(error) });
     }
     return true; // Return true to indicate payment success despite email failure
   }
@@ -391,6 +435,7 @@ export async function sendPaymentReceipt(data: {
   try {
     if (!apiInstance) {
       console.log('📧 Brevo not configured, skipping payment receipt email send');
+      await logEmailAttempt({ recipientEmail: data.parentEmail, type: 'payment_receipt', subject: 'Payment Receipt', status: 'failed', error: 'Brevo not configured' });
       return false;
     }
 
@@ -425,17 +470,24 @@ export async function sendPaymentReceipt(data: {
       NOTES: data.notes || ''
     };
 
-    const result = await apiInstance.sendTransacEmail(sendSmtpEmail);
+    const result = await withTimeout(apiInstance.sendTransacEmail(sendSmtpEmail), `payment_receipt:${data.parentEmail}`);
     
     console.log('✅ Payment receipt email sent successfully to:', data.parentEmail);
     console.log('📧 Brevo Message ID:', result.body.messageId);
+    await logEmailAttempt({ recipientEmail: data.parentEmail, type: 'payment_receipt', subject: 'Payment Receipt', status: 'sent' });
     return true;
   } catch (error: any) {
-    // Handle specific Brevo authorization errors gracefully
-    if (error.body?.code === 'unauthorized' || error.statusCode === 401) {
-      console.log('📧 Brevo authorization issue (IP not whitelisted), skipping receipt email - payment still successful');
+    const isTimeout = error?.message?.startsWith('timeout:');
+    const isIpBlocked = error?.body?.code === 'unauthorized' || error?.statusCode === 401;
+    if (isTimeout) {
+      console.error(`[Email timeout] payment_receipt email to ${data.parentEmail} timed out after 10s`);
+      await logEmailAttempt({ recipientEmail: data.parentEmail, type: 'payment_receipt', subject: 'Payment Receipt', status: 'timeout', error: 'Timed out after 10s' });
+    } else if (isIpBlocked) {
+      console.error(`[Email blocked] Brevo rejected payment_receipt email to ${data.parentEmail}: IP not whitelisted`);
+      await logEmailAttempt({ recipientEmail: data.parentEmail, type: 'payment_receipt', subject: 'Payment Receipt', status: 'failed', error: 'Brevo IP not whitelisted' });
     } else {
       console.error('❌ Failed to send payment receipt email:', error.message || error);
+      await logEmailAttempt({ recipientEmail: data.parentEmail, type: 'payment_receipt', subject: 'Payment Receipt', status: 'failed', error: error.message || String(error) });
     }
     return true; // Return true to indicate payment success despite email failure
   }
@@ -447,41 +499,46 @@ export async function sendEmail(
   toName: string,
   subject: string,
   htmlContent: string,
-  textContent?: string
+  textContent?: string,
+  emailType: string = 'generic'
 ): Promise<boolean> {
+  if (!apiInstance) {
+    console.log('📧 Brevo not configured, skipping email send');
+    await logEmailAttempt({ recipientEmail: to, type: emailType, subject, status: 'failed', error: 'Brevo not configured' });
+    return false;
+  }
+
+  const sendSmtpEmail = new brevo.SendSmtpEmail();
+  sendSmtpEmail.to = [{ email: to, name: toName }];
+  sendSmtpEmail.sender = { 
+    email: process.env.BREVO_SENDER_EMAIL || 'support@americanseekersacademy.com', 
+    name: 'American Seekers Academy' 
+  };
+  sendSmtpEmail.subject = subject;
+  sendSmtpEmail.htmlContent = htmlContent;
+  if (textContent) {
+    sendSmtpEmail.textContent = textContent;
+  }
+
   try {
-    const sendSmtpEmail = new brevo.SendSmtpEmail();
-    sendSmtpEmail.to = [{ email: to, name: toName }];
-    sendSmtpEmail.sender = { 
-      email: process.env.BREVO_SENDER_EMAIL || 'support@americanseekersacademy.com', 
-      name: 'American Seekers Academy' 
-    };
-    sendSmtpEmail.subject = subject;
-    sendSmtpEmail.htmlContent = htmlContent;
-    if (textContent) {
-      sendSmtpEmail.textContent = textContent;
-    }
-
-    if (!apiInstance) {
-      console.log('📧 Brevo not configured, skipping email send');
-      return false;
-    }
-
-    const result = await apiInstance.sendTransacEmail(sendSmtpEmail);
-    
+    const result = await withTimeout(apiInstance.sendTransacEmail(sendSmtpEmail), `${emailType}:${to}`);
     console.log('✅ Email sent successfully via Brevo to:', to);
     console.log('📧 Brevo Message ID:', result.body.messageId);
+    await logEmailAttempt({ recipientEmail: to, type: emailType, subject, status: 'sent' });
     return true;
-  } catch (error) {
-    console.error('❌ Failed to send email via Brevo:', error);
-    if (error && typeof error === 'object') {
-      console.error('Error details:', JSON.stringify(error, null, 2));
-      if ('response' in error) {
-        console.error('API response:', error.response);
-      }
-      if ('body' in error) {
-        console.error('Error body:', error.body);
-      }
+  } catch (error: any) {
+    const isTimeout = error?.message?.startsWith('timeout:');
+    const isIpBlocked = error?.body?.code === 'unauthorized' || error?.statusCode === 401;
+
+    if (isTimeout) {
+      console.error(`[Email timeout] ${emailType} email to ${to} timed out after 10s`);
+      await logEmailAttempt({ recipientEmail: to, type: emailType, subject, status: 'timeout', error: 'Timed out after 10s' });
+    } else if (isIpBlocked) {
+      console.error(`[Email blocked] Brevo rejected ${emailType} email to ${to}: IP not whitelisted`);
+      await logEmailAttempt({ recipientEmail: to, type: emailType, subject, status: 'failed', error: 'Brevo IP not whitelisted' });
+    } else {
+      console.error('❌ Failed to send email via Brevo:', error.message || error);
+      await logEmailAttempt({ recipientEmail: to, type: emailType, subject, status: 'failed', error: error.message || String(error) });
     }
     return false;
   }
@@ -498,11 +555,6 @@ interface AccountInviteData {
 
 export async function sendAccountInviteEmail(data: AccountInviteData): Promise<boolean> {
   try {
-    if (!apiInstance) {
-      console.log('📧 Brevo not configured, skipping account invite email');
-      return false;
-    }
-
     const { email, firstName, lastName, role, temporaryPassword } = data;
     const loginUrl = `${process.env.APP_URL || 'https://accounts.americanseekersacademy.com'}/login`;
 
@@ -560,7 +612,7 @@ Login at: ${loginUrl}
 If you have any questions or need assistance, please contact us at support@americanseekersacademy.com
     `;
 
-    return await sendEmail(email, `${firstName} ${lastName}`, `Welcome to ASA Platform - Your ${role} Account is Ready!`, htmlContent, textContent);
+    return await sendEmail(email, `${firstName} ${lastName}`, `Welcome to ASA Platform - Your ${role} Account is Ready!`, htmlContent, textContent, 'account_invite');
   } catch (error) {
     console.error('❌ Error sending account invite email:', error);
     return false;
@@ -576,11 +628,6 @@ interface PasswordResetData {
 
 export async function sendPasswordResetEmail(data: PasswordResetData): Promise<boolean> {
   try {
-    if (!apiInstance) {
-      console.log('📧 Brevo not configured, skipping password reset email');
-      return false;
-    }
-
     const { email, firstName, resetToken } = data;
     const resetUrl = `${process.env.APP_URL || 'https://accounts.americanseekersacademy.com'}/reset-password?token=${resetToken}`;
 
@@ -636,7 +683,7 @@ If you didn't request this password reset, please ignore this email. Your accoun
 If you have any questions or need assistance, please contact us at support@americanseekersacademy.com
     `;
 
-    return await sendEmail(email, firstName, 'Password Reset Request - ASA Platform', htmlContent, textContent);
+    return await sendEmail(email, firstName, 'Password Reset Request - ASA Platform', htmlContent, textContent, 'password_reset');
   } catch (error) {
     console.error('❌ Error sending password reset email:', error);
     return false;
@@ -654,11 +701,6 @@ export async function sendStaffInvitationEmail(
   message?: string
 ): Promise<boolean> {
   try {
-    if (!apiInstance) {
-      console.log('📧 Brevo not configured, skipping staff invitation email');
-      return false;
-    }
-
     const inviteUrl = `${process.env.APP_URL || 'https://accounts.americanseekersacademy.com'}/accept-educator-invitation?token=${token}`;
 
     const htmlContent = `
@@ -715,7 +757,7 @@ We look forward to having you join our team!
 If you have any questions or need assistance, please contact us at support@americanseekersacademy.com
     `;
 
-    return await sendEmail(email, `${firstName} ${lastName}`, `Staff Invitation - Join ${department} at American Seekers Academy`, htmlContent, textContent);
+    return await sendEmail(email, `${firstName} ${lastName}`, `Staff Invitation - Join ${department} at American Seekers Academy`, htmlContent, textContent, 'staff_invitation');
   } catch (error) {
     console.error('❌ Error sending staff invitation email:', error);
     return false;
@@ -735,6 +777,7 @@ export async function sendWaitlistJoinedEmail(data: WaitlistJoinedData): Promise
   try {
     if (!apiInstance) {
       console.log('📧 Brevo not configured, skipping waitlist joined email send');
+      await logEmailAttempt({ recipientEmail: data.parentEmail, type: 'waitlist_joined', subject: `You're on the Waitlist for ${data.className}`, status: 'failed', error: 'Brevo not configured' });
       return true;
     }
 
@@ -802,7 +845,7 @@ We process waitlist positions on a first-come, first-served basis. We'll keep yo
 If you have any questions, please contact us at support@americanseekersacademy.com
     `;
 
-    return await sendEmail(parentEmail, parentName, `Waitlist Confirmation - ${className}`, htmlContent, textContent);
+    return await sendEmail(parentEmail, parentName, `Waitlist Confirmation - ${className}`, htmlContent, textContent, 'waitlist_joined');
   } catch (error) {
     console.error('❌ Error sending waitlist joined email:', error);
     return false;
@@ -822,6 +865,7 @@ export async function sendWaitlistPromotedEmail(data: WaitlistPromotedData): Pro
   try {
     if (!apiInstance) {
       console.log('📧 Brevo not configured, skipping waitlist promoted email send');
+      await logEmailAttempt({ recipientEmail: data.parentEmail, type: 'waitlist_promoted', subject: `Great news! ${data.childName} has been promoted from the waitlist`, status: 'failed', error: 'Brevo not configured' });
       return true;
     }
 
@@ -898,7 +942,7 @@ Complete payment at: ${process.env.APP_URL || 'https://accounts.americanseekersa
 If you have any questions, please contact us at support@americanseekersacademy.com
     `;
 
-    return await sendEmail(parentEmail, parentName, `Spot Available - ${className}`, htmlContent, textContent);
+    return await sendEmail(parentEmail, parentName, `Spot Available - ${className}`, htmlContent, textContent, 'waitlist_promoted');
   } catch (error) {
     console.error('❌ Error sending waitlist promoted email:', error);
     return false;
@@ -921,6 +965,7 @@ export async function sendNewStudentNotificationEmail(data: NewStudentNotificati
   try {
     if (!apiInstance) {
       console.log('📧 Brevo not configured, skipping new student notification email send');
+      await logEmailAttempt({ recipientEmail: data.adminEmail, type: 'new_student_notification', subject: 'New Student Enrolled', status: 'failed', error: 'Brevo not configured' });
       return true;
     }
 
@@ -1007,7 +1052,7 @@ You can view and manage this student's information in your school admin dashboar
 ${process.env.APP_URL || 'https://accounts.americanseekersacademy.com'}/schools/students
     `;
 
-    return await sendEmail(adminEmail, adminName, `New Student Registration - ${studentFirstName} ${studentLastName}`, htmlContent, textContent);
+    return await sendEmail(adminEmail, adminName, `New Student Registration - ${studentFirstName} ${studentLastName}`, htmlContent, textContent, 'new_student_notification');
   } catch (error) {
     console.error('❌ Error sending new student notification email:', error);
     return false;
@@ -1027,6 +1072,7 @@ export async function sendWelcomeEmail(data: WelcomeEmailData): Promise<boolean>
   try {
     if (!apiInstance) {
       console.log('📧 Brevo not configured, skipping welcome email send');
+      await logEmailAttempt({ recipientEmail: data.email, type: 'welcome', subject: `Welcome to ${data.schoolName || 'American Seekers Academy'}!`, status: 'failed', error: 'Brevo not configured' });
       return true; // Return true to indicate graceful handling
     }
 
@@ -1136,21 +1182,24 @@ Thank you for choosing ${displaySchoolName}!
     sendSmtpEmail.htmlContent = htmlContent;
     sendSmtpEmail.textContent = textContent;
 
-    if (!apiInstance) {
-      console.log('📧 Brevo not configured, skipping welcome email send');
-      return false;
-    }
-
-    const result = await apiInstance.sendTransacEmail(sendSmtpEmail);
+    const result = await withTimeout(apiInstance.sendTransacEmail(sendSmtpEmail), `welcome:${email}`);
     
     console.log('✅ Welcome email sent successfully via Brevo to:', email);
     console.log('📧 Brevo Message ID:', result.body.messageId);
+    await logEmailAttempt({ recipientEmail: email, type: 'welcome', subject: `Welcome to ${data.schoolName || 'American Seekers Academy'}!`, status: 'sent' });
     return true;
   } catch (error: any) {
-    if (error.body?.code === 'unauthorized' || error.statusCode === 401) {
-      console.log('📧 Brevo authorization issue (IP not whitelisted), skipping welcome email - registration still successful');
+    const isTimeout = error?.message?.startsWith('timeout:');
+    const isIpBlocked = error?.body?.code === 'unauthorized' || error?.statusCode === 401;
+    if (isTimeout) {
+      console.error(`[Email timeout] welcome email to ${email} timed out after 10s`);
+      await logEmailAttempt({ recipientEmail: email, type: 'welcome', subject: null, status: 'timeout', error: 'Timed out after 10s' });
+    } else if (isIpBlocked) {
+      console.error(`[Email blocked] Brevo rejected welcome email to ${email}: IP not whitelisted`);
+      await logEmailAttempt({ recipientEmail: email, type: 'welcome', subject: null, status: 'failed', error: 'Brevo IP not whitelisted' });
     } else {
       console.error('❌ Failed to send welcome email via Brevo:', error.message || error);
+      await logEmailAttempt({ recipientEmail: email, type: 'welcome', subject: null, status: 'failed', error: error.message || String(error) });
     }
     return true; // Return true to indicate registration success despite email failure
   }
@@ -1178,6 +1227,7 @@ export async function sendScheduledPaymentReminder(data: ScheduledPaymentReminde
   try {
     if (!apiInstance) {
       console.log('📧 Brevo not configured, skipping payment reminder email');
+      await logEmailAttempt({ recipientEmail: data.parentEmail, type: 'payment_reminder', subject: 'Payment Reminder - American Seekers Academy', status: 'failed', error: 'Brevo not configured' });
       return true;
     }
 
@@ -1341,13 +1391,25 @@ Thank you for choosing ${schoolName}!
     sendSmtpEmail.htmlContent = htmlContent;
     sendSmtpEmail.textContent = textContent;
 
-    const result = await apiInstance.sendTransacEmail(sendSmtpEmail);
+    const result = await withTimeout(apiInstance.sendTransacEmail(sendSmtpEmail), `payment_reminder:${parentEmail}`);
     
     console.log('✅ Payment reminder email sent successfully to:', parentEmail);
     console.log('📧 Brevo Message ID:', result.body.messageId);
+    await logEmailAttempt({ recipientEmail: parentEmail, type: 'payment_reminder', subject: subjectLine, status: 'sent' });
     return true;
   } catch (error: any) {
-    console.error('❌ Failed to send payment reminder email:', error.message || error);
+    const isTimeout = error?.message?.startsWith('timeout:');
+    const isIpBlocked = error?.body?.code === 'unauthorized' || error?.statusCode === 401;
+    if (isTimeout) {
+      console.error(`[Email timeout] payment_reminder email to ${parentEmail} timed out after 10s`);
+      await logEmailAttempt({ recipientEmail: parentEmail, type: 'payment_reminder', subject: subjectLine, status: 'timeout', error: 'Timed out after 10s' });
+    } else if (isIpBlocked) {
+      console.error(`[Email blocked] Brevo rejected payment_reminder email to ${parentEmail}: IP not whitelisted`);
+      await logEmailAttempt({ recipientEmail: parentEmail, type: 'payment_reminder', subject: subjectLine, status: 'failed', error: 'Brevo IP not whitelisted' });
+    } else {
+      console.error('❌ Failed to send payment reminder email:', error.message || error);
+      await logEmailAttempt({ recipientEmail: parentEmail, type: 'payment_reminder', subject: subjectLine, status: 'failed', error: error.message || String(error) });
+    }
     return false;
   }
 }
@@ -1377,6 +1439,7 @@ export async function sendConsolidatedPaymentReminder(data: ConsolidatedPaymentR
   try {
     if (!apiInstance) {
       console.log('📧 Brevo not configured, skipping consolidated payment reminder email');
+      await logEmailAttempt({ recipientEmail: data.parentEmail, type: 'consolidated_payment_reminder', subject: 'Payment Reminder - American Seekers Academy', status: 'failed', error: 'Brevo not configured' });
       return true;
     }
 
@@ -1533,13 +1596,25 @@ Thank you for choosing ${schoolName}!
     sendSmtpEmail.htmlContent = htmlContent;
     sendSmtpEmail.textContent = textContent;
 
-    const result = await apiInstance.sendTransacEmail(sendSmtpEmail);
+    const result = await withTimeout(apiInstance.sendTransacEmail(sendSmtpEmail), `consolidated_payment_reminder:${parentEmail}`);
     
     console.log('✅ Consolidated payment reminder sent successfully to:', parentEmail);
     console.log('📧 Brevo Message ID:', result.body.messageId);
+    await logEmailAttempt({ recipientEmail: parentEmail, type: 'consolidated_payment_reminder', subject: subjectLine, status: 'sent' });
     return true;
   } catch (error: any) {
-    console.error('❌ Failed to send consolidated payment reminder:', error.message || error);
+    const isTimeout = error?.message?.startsWith('timeout:');
+    const isIpBlocked = error?.body?.code === 'unauthorized' || error?.statusCode === 401;
+    if (isTimeout) {
+      console.error(`[Email timeout] consolidated_payment_reminder email to ${parentEmail} timed out after 10s`);
+      await logEmailAttempt({ recipientEmail: parentEmail, type: 'consolidated_payment_reminder', subject: subjectLine, status: 'timeout', error: 'Timed out after 10s' });
+    } else if (isIpBlocked) {
+      console.error(`[Email blocked] Brevo rejected consolidated_payment_reminder email to ${parentEmail}: IP not whitelisted`);
+      await logEmailAttempt({ recipientEmail: parentEmail, type: 'consolidated_payment_reminder', subject: subjectLine, status: 'failed', error: 'Brevo IP not whitelisted' });
+    } else {
+      console.error('❌ Failed to send consolidated payment reminder:', error.message || error);
+      await logEmailAttempt({ recipientEmail: parentEmail, type: 'consolidated_payment_reminder', subject: subjectLine, status: 'failed', error: error.message || String(error) });
+    }
     return false;
   }
 }
@@ -1561,6 +1636,7 @@ export async function sendOverduePaymentNotice(data: OverduePaymentNoticeData): 
   try {
     if (!apiInstance) {
       console.log('📧 Brevo not configured, skipping overdue payment notice');
+      await logEmailAttempt({ recipientEmail: data.parentEmail, type: 'overdue_payment_notice', subject: 'Overdue Payment Notice - American Seekers Academy', status: 'failed', error: 'Brevo not configured' });
       return true;
     }
 
@@ -1708,13 +1784,24 @@ ${schoolName} Team
     sendSmtpEmail.htmlContent = htmlContent;
     sendSmtpEmail.textContent = textContent;
 
-    const result = await apiInstance.sendTransacEmail(sendSmtpEmail);
+    const result = await withTimeout(apiInstance.sendTransacEmail(sendSmtpEmail), `overdue_payment_notice:${parentEmail}`);
     
     console.log('✅ Overdue payment notice sent successfully to:', parentEmail);
     console.log('📧 Brevo Message ID:', result.body.messageId);
+    await logEmailAttempt({ recipientEmail: parentEmail, type: 'overdue_payment_notice', subject: subjectLine, status: 'sent' });
     return true;
   } catch (error: any) {
-    console.error('❌ Failed to send overdue payment notice:', error.message || error);
+    const isTimeout = error?.message?.startsWith('timeout:');
+    if (isTimeout) {
+      console.error(`[Email timeout] overdue_payment_notice email to ${parentEmail} timed out after 10s`);
+      await logEmailAttempt({ recipientEmail: parentEmail, type: 'overdue_payment_notice', subject: subjectLine, status: 'timeout', error: 'Timed out after 10s' });
+    } else if (error?.body?.code === 'unauthorized' || error?.statusCode === 401) {
+      console.error(`[Email blocked] Brevo rejected overdue_payment_notice email to ${parentEmail}: IP not whitelisted`);
+      await logEmailAttempt({ recipientEmail: parentEmail, type: 'overdue_payment_notice', subject: subjectLine, status: 'failed', error: 'Brevo IP not whitelisted' });
+    } else {
+      console.error('❌ Failed to send overdue payment notice:', error.message || error);
+      await logEmailAttempt({ recipientEmail: parentEmail, type: 'overdue_payment_notice', subject: subjectLine, status: 'failed', error: error.message || String(error) });
+    }
     return false;
   }
 }

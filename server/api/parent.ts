@@ -312,7 +312,7 @@ router.post('/children', supabaseAuth, async (req: any, res) => {
           // Send email notifications to each admin
           for (const admin of schoolAdmins) {
             try {
-              const emailSent = await sendNewStudentNotificationEmail({
+              sendNewStudentNotificationEmail({
                 adminEmail: admin.email,
                 adminName: admin.name || `${admin.firstName} ${admin.lastName}`,
                 schoolName: schoolName,
@@ -322,16 +322,11 @@ router.post('/children', supabaseAuth, async (req: any, res) => {
                 parentEmail: userEmail,
                 parentPhone: parentPhone || parent.phone,
                 registrationDate: new Date()
-              });
-              
-              if (emailSent) {
-                console.log(`✅ Sent email notification to admin: ${admin.email}`);
-              } else {
-                console.log(`⚠️ Email notification failed for admin: ${admin.email}`);
-              }
+              }).catch(err => console.error(`[Email fire-and-forget] sendNewStudentNotificationEmail to ${admin.email} failed:`, err));
+              console.log(`✅ Email notification dispatched to admin: ${admin.email}`);
             } catch (notificationError) {
               const error = notificationError as Error;
-              console.error(`❌ Failed to notify admin ${admin.email}:`, error.message);
+              console.error(`❌ Failed to dispatch email to admin ${admin.email}:`, error.message);
               // Continue notifying other admins even if one fails
             }
           }

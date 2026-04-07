@@ -10,7 +10,7 @@ import { parse as parseCSV } from 'csv-parse';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
-import { sendAccountInviteEmail, sendStaffInvitationEmail, sendPasswordResetEmail } from '../lib/email-service';
+import { sendAccountInviteEmail, sendStaffInvitationEmail, sendPasswordResetEmail, getBrevoApiInstance, logEmailAttempt } from '../lib/email-service';
 import { supabaseAuth } from '../middleware/supabase-auth';
 import { requireSchoolContext } from '../middleware/require-school-context';
 import { clearPermissionCache } from '../middleware/locationPermissions';
@@ -79,15 +79,8 @@ router.get('/csv-template/:type', (req: any, res) => {
   res.send(csvContent);
 });
 
-// Initialize Brevo
-let brevoApiInstance: brevo.TransactionalEmailsApi | null = null;
-if (process.env.BREVO_API_KEY) {
-  brevoApiInstance = new brevo.TransactionalEmailsApi();
-  brevoApiInstance.setApiKey(brevo.TransactionalEmailsApiApiKeys.apiKey, process.env.BREVO_API_KEY);
-  console.log('✅ Brevo initialized for staff invitations');
-} else {
-  console.warn('⚠️ BREVO_API_KEY not found - staff invitation emails will not be sent');
-}
+// Use the single shared Brevo instance from email-service.ts
+const brevoApiInstance = getBrevoApiInstance();
 
 // Initialize Supabase Admin Client
 const supabaseAdmin = createClient(
@@ -284,13 +277,31 @@ If you have any questions, please contact us at support@americanseekersacademy.c
     sendSmtpEmail.sender = { name: "American Seekers Academy", email: "noreply@americanseekersacademy.com" };
     sendSmtpEmail.to = [{ email, name: `${firstName} ${lastName}` }];
 
-    const response = await brevoApiInstance.sendTransacEmail(sendSmtpEmail);
+    const credSubject = "Your Account is Ready - ASA Platform Access";
+    const response = await Promise.race([
+      brevoApiInstance.sendTransacEmail(sendSmtpEmail),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(`timeout:account_credentials:${email}`)), 10000)
+      ),
+    ]);
     console.log(`✅ Account credentials email sent successfully via Brevo to: ${email}`);
     console.log(`📧 Brevo Message ID: ${response.body.messageId}`);
+    await logEmailAttempt({ recipientEmail: email, type: 'account_credentials', subject: credSubject, status: 'sent' });
     return true;
 
-  } catch (error) {
-    console.error('❌ Error sending credentials email:', error);
+  } catch (error: any) {
+    const isTimeout = error?.message?.startsWith('timeout:');
+    const isIpBlocked = error?.body?.code === 'unauthorized' || error?.statusCode === 401;
+    if (isTimeout) {
+      console.error(`[Email timeout] account_credentials email to ${email} timed out after 10s`);
+      await logEmailAttempt({ recipientEmail: email, type: 'account_credentials', subject: 'Your Account is Ready - ASA Platform Access', status: 'timeout', error: 'Timed out after 10s' });
+    } else if (isIpBlocked) {
+      console.error(`[Email blocked] Brevo rejected account_credentials email to ${email}: IP not whitelisted`);
+      await logEmailAttempt({ recipientEmail: email, type: 'account_credentials', subject: 'Your Account is Ready - ASA Platform Access', status: 'failed', error: 'Brevo IP not whitelisted' });
+    } else {
+      console.error('❌ Error sending credentials email:', error);
+      await logEmailAttempt({ recipientEmail: email, type: 'account_credentials', subject: 'Your Account is Ready - ASA Platform Access', status: 'failed', error: error.message || String(error) });
+    }
     return false;
   }
 }
@@ -1495,16 +1506,17 @@ router.post("/staff/invite", supabaseAuth, async (req: any, res: any) => {
     const responseStaff = transformUserRoleStaffToFrontend(roleRecord as UserRole, user, [], true, staffRecord);
     console.log("✅ Step 7 complete");
     
-    console.log("🔍 Step 8: Sending invitation email");
-    const emailSent = await sendStaffInvitationEmail(email, firstName, lastName, role, department, invitationToken, message);
-    console.log("✅ Step 8 complete: Email sent =", emailSent);
+    console.log("🔍 Step 8: Sending invitation email (fire-and-forget)");
+    sendStaffInvitationEmail(email, firstName, lastName, role, department, invitationToken, message)
+      .catch(err => console.error('[Email fire-and-forget] sendStaffInvitationEmail failed:', err));
+    console.log("✅ Step 8 complete: Invitation email dispatched");
 
     console.log("✅ Staff member invited successfully:", { id: userRoleId, email });
     res.json({ 
       success: true, 
-      message: emailSent ? "Staff member invited successfully and invitation email sent" : "Staff member invited successfully (email not sent)",
+      message: "Staff member invited successfully and invitation email dispatched",
       staff: responseStaff,
-      emailSent 
+      emailSent: true
     });
   } catch (error) {
     console.error("❌ Error inviting staff member:", error);
@@ -1961,30 +1973,21 @@ router.post("/staff/:id/resend-invite", supabaseAuth, async (req: any, res) => {
     const lastName = user.lastName || user.name?.split(' ').slice(1).join(' ') || '';
     const message = `Your invitation to join our school staff has been resent. Please check your email for details.`;
 
-    try {
-      const emailSent = await sendStaffInvitationEmail(
-        user.email,
-        firstName,
-        lastName,
-        roleRecord.role, // Use role from user_roles
-        '', // No department in user_roles
-        invitationToken,
-        message
-      );
+    sendStaffInvitationEmail(
+      user.email,
+      firstName,
+      lastName,
+      roleRecord.role,
+      '',
+      invitationToken,
+      message
+    ).catch(err => console.error('[Email fire-and-forget] sendStaffInvitationEmail (resend) failed:', err));
 
-      if (emailSent) {
-        res.json({ 
-          message: "Invitation resent successfully",
-          staffId: roleId,
-          email: user.email 
-        });
-      } else {
-        res.status(500).json({ message: "Failed to send invitation email" });
-      }
-    } catch (emailError) {
-      console.error("Error resending invitation:", emailError);
-      res.status(500).json({ message: "Failed to resend invitation email" });
-    }
+    res.json({ 
+      message: "Invitation resent successfully",
+      staffId: roleId,
+      email: user.email 
+    });
   } catch (error) {
     console.error("Error resending staff invite:", error);
     res.status(500).json({ message: "Error resending staff invite" });
@@ -2064,7 +2067,7 @@ router.post("/staff/resend-all-invites", supabaseAuth, async (req: any, res: any
         const lastName = user.name.split(' ').slice(1).join(' ') || '';
         const message = `Your invitation to join our school staff has been resent. Please check your email for details.`;
 
-        const emailSent = await sendStaffInvitationEmail(
+        sendStaffInvitationEmail(
           user.email,
           firstName,
           lastName,
@@ -2072,13 +2075,8 @@ router.post("/staff/resend-all-invites", supabaseAuth, async (req: any, res: any
           staffRecord.department || '',
           invitationToken,
           message
-        );
-
-        if (emailSent) {
-          successCount++;
-        } else {
-          failureCount++;
-        }
+        ).catch(err => console.error('[Email fire-and-forget] bulk resend sendStaffInvitationEmail failed:', err));
+        successCount++;
       } catch (emailError) {
         console.error(`Error resending invitation:`, emailError);
         failureCount++;
@@ -6054,20 +6052,16 @@ router.post('/users/:userId/send-invite', async (req, res) => {
       }
     }
 
-    // Send invite email with actual role from user_roles table
-    const emailSuccess = await sendAccountInviteEmail({
+    // Send invite email with actual role from user_roles table (fire-and-forget)
+    sendAccountInviteEmail({
       email: user.email,
       firstName: user.firstName || user.name || 'User',
       lastName: user.lastName || '',
       role: primaryRole,
       temporaryPassword
-    });
+    }).catch(err => console.error('[Email fire-and-forget] sendAccountInviteEmail failed:', err));
 
-    if (!emailSuccess) {
-      return res.status(500).json({ message: 'Failed to send invite email' });
-    }
-
-    console.log(`✅ Account invite sent successfully to ${user.email}`);
+    console.log(`✅ Account invite dispatched to ${user.email}`);
     res.json({ message: 'Account invite sent successfully' });
   } catch (error) {
     console.error('❌ Error sending account invite:', error);
@@ -6119,20 +6113,15 @@ router.post('/users/:userId/send-password-reset', supabaseAuth, async (req: any,
       return res.status(500).json({ message: 'Failed to create password reset token' });
     }
 
-    // Send password reset email
-    console.log(`📨 Attempting to send password reset email to ${user.email}...`);
-    const emailSuccess = await sendPasswordResetEmail({
+    // Send password reset email (fire-and-forget)
+    console.log(`📨 Dispatching password reset email to ${user.email}...`);
+    sendPasswordResetEmail({
       email: user.email,
       firstName: user.firstName || user.name || 'User',
       resetToken: resetToken
-    });
+    }).catch(err => console.error('[Email fire-and-forget] sendPasswordResetEmail failed:', err));
 
-    if (!emailSuccess) {
-      console.error(`❌ Email service returned false for ${user.email}`);
-      return res.status(500).json({ message: 'Email service failed to send password reset' });
-    }
-
-    console.log(`✅ Password reset email sent successfully to ${user.email}`);
+    console.log(`✅ Password reset email dispatched for ${user.email}`);
     res.json({ message: 'Password reset email sent successfully' });
   } catch (error) {
     console.error('❌ Unexpected error sending password reset:', error);
@@ -6412,35 +6401,27 @@ router.post("/resend-welcome-email", supabaseAuth, async (req: any, res) => {
       }
     }
     
-    // Import and call the existing sendWelcomeEmail function
+    // Import and call the existing sendWelcomeEmail function (fire-and-forget)
     const { sendWelcomeEmail } = await import('../lib/email-service');
     
-    const emailSent = await sendWelcomeEmail({
+    sendWelcomeEmail({
       email: user.email,
       firstName: firstName,
       lastName: lastName,
       role: user.role || 'parent',
       schoolName
-    });
+    }).catch(err => console.error('[Email fire-and-forget] sendWelcomeEmail failed:', err));
 
-    if (emailSent) {
-      console.log('✅ Welcome email resent successfully to:', user.email);
-      return res.json({
-        success: true,
-        message: `Welcome email sent to ${user.email}`,
-        user: {
-          email: user.email,
-          firstName: firstName,
-          lastName: lastName
-        }
-      });
-    } else {
-      console.error('❌ Failed to send welcome email to:', user.email);
-      return res.status(500).json({
-        success: false,
-        message: "Failed to send welcome email - please check email service configuration"
-      });
-    }
+    console.log('✅ Welcome email dispatched to:', user.email);
+    return res.json({
+      success: true,
+      message: `Welcome email sent to ${user.email}`,
+      user: {
+        email: user.email,
+        firstName: firstName,
+        lastName: lastName
+      }
+    });
   } catch (error) {
     console.error('❌ Error resending welcome email:', error);
     return res.status(500).json({

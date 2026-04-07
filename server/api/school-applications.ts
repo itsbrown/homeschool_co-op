@@ -4,18 +4,12 @@ import { z } from "zod";
 import * as brevo from '@getbrevo/brevo';
 import { supabaseStorage } from "../supabase-storage";
 import { storage } from "../storage";
+import { getBrevoApiInstance, logEmailAttempt } from "../lib/email-service";
 
 const router = Router();
 
-// Initialize Brevo
-let brevoApiInstance: brevo.TransactionalEmailsApi | null = null;
-if (process.env.BREVO_API_KEY) {
-  brevoApiInstance = new brevo.TransactionalEmailsApi();
-  brevoApiInstance.setApiKey(brevo.TransactionalEmailsApiApiKeys.apiKey, process.env.BREVO_API_KEY);
-  console.log('✅ Brevo initialized for school applications');
-} else {
-  console.warn('⚠️ BREVO_API_KEY not found - school application emails will not be sent');
-}
+// Use the single shared Brevo instance from email-service.ts
+const brevoApiInstance = getBrevoApiInstance();
 
 // School application schema
 const schoolApplicationSchema = z.object({
@@ -70,6 +64,7 @@ async function sendApplicationConfirmationEmail(email: string, schoolName: strin
   try {
     if (!brevoApiInstance) {
       console.log('📧 Brevo not configured, skipping application confirmation email');
+      await logEmailAttempt({ recipientEmail: email, type: 'application_confirmation', subject: `School Application Received - ${schoolName}`, status: 'failed', error: 'Brevo not configured' });
       return false;
     }
 
@@ -110,14 +105,32 @@ async function sendApplicationConfirmationEmail(email: string, schoolName: strin
     const sendSmtpEmail = new brevo.SendSmtpEmail();
     sendSmtpEmail.to = [{ email: email }];
     sendSmtpEmail.sender = { email: 'contact@americanseekersacademy.com', name: 'ASA Platform' };
-    sendSmtpEmail.subject = `School Application Received - ${schoolName}`;
+    const subject = `School Application Received - ${schoolName}`;
+    sendSmtpEmail.subject = subject;
     sendSmtpEmail.htmlContent = htmlContent;
 
-    const result = await brevoApiInstance.sendTransacEmail(sendSmtpEmail);
+    const result = await Promise.race([
+      brevoApiInstance.sendTransacEmail(sendSmtpEmail),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(`timeout:application_confirmation:${email}`)), 10000)
+      ),
+    ]);
     console.log(`✅ Application confirmation email sent to ${email}`);
+    await logEmailAttempt({ recipientEmail: email, type: 'application_confirmation', subject, status: 'sent' });
     return true;
-  } catch (error) {
-    console.error('❌ Error sending application confirmation email:', error);
+  } catch (error: any) {
+    const isTimeout = error?.message?.startsWith('timeout:');
+    const isIpBlocked = error?.body?.code === 'unauthorized' || error?.statusCode === 401;
+    if (isTimeout) {
+      console.error(`[Email timeout] application_confirmation email to ${email} timed out after 10s`);
+      await logEmailAttempt({ recipientEmail: email, type: 'application_confirmation', subject: `School Application Received - ${schoolName}`, status: 'timeout', error: 'Timed out after 10s' });
+    } else if (isIpBlocked) {
+      console.error(`[Email blocked] Brevo rejected application_confirmation email to ${email}: IP not whitelisted`);
+      await logEmailAttempt({ recipientEmail: email, type: 'application_confirmation', subject: `School Application Received - ${schoolName}`, status: 'failed', error: 'Brevo IP not whitelisted' });
+    } else {
+      console.error('❌ Error sending application confirmation email:', error);
+      await logEmailAttempt({ recipientEmail: email, type: 'application_confirmation', subject: `School Application Received - ${schoolName}`, status: 'failed', error: error.message || String(error) });
+    }
     return false;
   }
 }
@@ -127,6 +140,7 @@ async function sendApplicationDecisionEmail(email: string, schoolName: string, a
   try {
     if (!brevoApiInstance) {
       console.log('📧 Brevo not configured, skipping decision email');
+      await logEmailAttempt({ recipientEmail: email, type: 'application_decision', subject: `School Application ${approved ? 'Approved' : 'Declined'} - ${schoolName}`, status: 'failed', error: 'Brevo not configured' });
       return false;
     }
 
@@ -168,14 +182,32 @@ async function sendApplicationDecisionEmail(email: string, schoolName: string, a
     const sendSmtpEmail = new brevo.SendSmtpEmail();
     sendSmtpEmail.to = [{ email: email }];
     sendSmtpEmail.sender = { email: 'contact@americanseekersacademy.com', name: 'ASA Platform' };
-    sendSmtpEmail.subject = `School Application ${status} - ${schoolName}`;
+    const decisionSubject = `School Application ${status} - ${schoolName}`;
+    sendSmtpEmail.subject = decisionSubject;
     sendSmtpEmail.htmlContent = htmlContent;
 
-    const result = await brevoApiInstance.sendTransacEmail(sendSmtpEmail);
+    const result = await Promise.race([
+      brevoApiInstance.sendTransacEmail(sendSmtpEmail),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(`timeout:application_decision:${email}`)), 10000)
+      ),
+    ]);
     console.log(`✅ Application decision email sent to ${email}`);
+    await logEmailAttempt({ recipientEmail: email, type: 'application_decision', subject: decisionSubject, status: 'sent' });
     return true;
-  } catch (error) {
-    console.error('❌ Error sending application decision email:', error);
+  } catch (error: any) {
+    const isTimeout = error?.message?.startsWith('timeout:');
+    const isIpBlocked = error?.body?.code === 'unauthorized' || error?.statusCode === 401;
+    if (isTimeout) {
+      console.error(`[Email timeout] application_decision email to ${email} timed out after 10s`);
+      await logEmailAttempt({ recipientEmail: email, type: 'application_decision', subject: `School Application - ${schoolName}`, status: 'timeout', error: 'Timed out after 10s' });
+    } else if (isIpBlocked) {
+      console.error(`[Email blocked] Brevo rejected application_decision email to ${email}: IP not whitelisted`);
+      await logEmailAttempt({ recipientEmail: email, type: 'application_decision', subject: `School Application - ${schoolName}`, status: 'failed', error: 'Brevo IP not whitelisted' });
+    } else {
+      console.error('❌ Error sending application decision email:', error);
+      await logEmailAttempt({ recipientEmail: email, type: 'application_decision', subject: `School Application - ${schoolName}`, status: 'failed', error: error.message || String(error) });
+    }
     return false;
   }
 }

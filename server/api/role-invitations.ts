@@ -4,6 +4,7 @@ import * as brevo from '@getbrevo/brevo';
 import { storage } from "../storage";
 import { systemRoles } from "@shared/schema";
 import type { SystemRole } from "@shared/schema";
+import { getBrevoApiInstance, logEmailAttempt } from "../lib/email-service";
 
 const router = Router();
 
@@ -22,15 +23,8 @@ function mapInvitationToDTO(invitation: any) {
   };
 }
 
-// Initialize Brevo
-let brevoApiInstance: brevo.TransactionalEmailsApi | null = null;
-if (process.env.BREVO_API_KEY) {
-  brevoApiInstance = new brevo.TransactionalEmailsApi();
-  brevoApiInstance.setApiKey(brevo.TransactionalEmailsApiApiKeys.apiKey, process.env.BREVO_API_KEY);
-  console.log('✅ Brevo initialized for role invitations');
-} else {
-  console.warn('⚠️ BREVO_API_KEY not found - role invitation emails will not be sent');
-}
+// Use the single shared Brevo instance from email-service.ts
+const brevoApiInstance = getBrevoApiInstance();
 
 // Generate a random token for invitations
 function generateInvitationToken(): string {
@@ -42,6 +36,7 @@ async function sendRoleInvitationEmail(email: string, role: string, token: strin
   try {
     if (!brevoApiInstance) {
       console.log('📧 Brevo not configured, skipping role invitation email send');
+      await logEmailAttempt({ recipientEmail: email, type: 'role_invitation', subject: `Role invitation for ${role}`, status: 'failed', error: 'Brevo not configured' });
       return false;
     }
 
@@ -90,17 +85,35 @@ This invitation will expire in 7 days. If you have any questions, please contact
     const sendSmtpEmail = new brevo.SendSmtpEmail();
     sendSmtpEmail.to = [{ email: email }];
     sendSmtpEmail.sender = { email: 'contact@americanseekersacademy.com', name: 'ASA Platform' };
-    sendSmtpEmail.subject = `You've been invited to join ASA Platform as ${role}`;
+    const subject = `You've been invited to join ASA Platform as ${role}`;
+    sendSmtpEmail.subject = subject;
     sendSmtpEmail.htmlContent = htmlContent;
     sendSmtpEmail.textContent = textContent;
 
-    const result = await brevoApiInstance.sendTransacEmail(sendSmtpEmail);
+    const result = await Promise.race([
+      brevoApiInstance.sendTransacEmail(sendSmtpEmail),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(`timeout:role_invitation:${email}`)), 10000)
+      ),
+    ]);
 
     console.log(`✅ Role invitation email sent successfully to ${email} for role ${role}`);
     console.log('📧 Brevo Message ID:', result.body.messageId);
+    await logEmailAttempt({ recipientEmail: email, type: 'role_invitation', subject, status: 'sent' });
     return true;
-  } catch (error) {
-    console.error('❌ Error sending role invitation email:', error);
+  } catch (error: any) {
+    const isTimeout = error?.message?.startsWith('timeout:');
+    const isIpBlocked = error?.body?.code === 'unauthorized' || error?.statusCode === 401;
+    if (isTimeout) {
+      console.error(`[Email timeout] role_invitation email to ${email} timed out after 10s`);
+      await logEmailAttempt({ recipientEmail: email, type: 'role_invitation', subject: `Role invitation for ${role}`, status: 'timeout', error: 'Timed out after 10s' });
+    } else if (isIpBlocked) {
+      console.error(`[Email blocked] Brevo rejected role_invitation email to ${email}: IP not whitelisted`);
+      await logEmailAttempt({ recipientEmail: email, type: 'role_invitation', subject: `Role invitation for ${role}`, status: 'failed', error: 'Brevo IP not whitelisted' });
+    } else {
+      console.error('❌ Error sending role invitation email:', error);
+      await logEmailAttempt({ recipientEmail: email, type: 'role_invitation', subject: `Role invitation for ${role}`, status: 'failed', error: error.message || String(error) });
+    }
     return false;
   }
 }
@@ -159,17 +172,13 @@ router.post("/", async (req, res) => {
 
     const invitation = await storage.createRoleInvitation(invitationData);
 
-    // Send real email invitation
-    const emailSent = await sendRoleInvitationEmail(email, role, token);
-    
-    if (!emailSent) {
-      // If email fails, we still keep the invitation but note the issue
-      console.warn(`⚠️ Email delivery failed for invitation to ${email}, but invitation was created`);
-    }
+    // Send real email invitation (fire-and-forget)
+    sendRoleInvitationEmail(email, role, token)
+      .catch(err => console.error('[Email fire-and-forget] sendRoleInvitationEmail failed:', err));
 
     const invitationDTO = mapInvitationToDTO(invitation);
     res.status(201).json({
-      message: emailSent ? "Invitation sent successfully" : "Invitation created but email delivery failed",
+      message: "Invitation sent successfully",
       invitation: {
         id: invitationDTO.id,
         email: invitationDTO.email,
@@ -177,7 +186,7 @@ router.post("/", async (req, res) => {
         createdAt: invitationDTO.createdAt,
         expiresAt: invitationDTO.expiresAt
       },
-      emailSent
+      emailSent: true
     });
   } catch (error) {
     console.error("Error sending role invitation:", error);

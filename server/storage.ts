@@ -67,7 +67,8 @@ import {
   skeletonBlocks, type SkeletonBlock, type InsertSkeletonBlock,
   weekPlans, type WeekPlan, type InsertWeekPlan,
   weekPlanBlocks, type WeekPlanBlock, type InsertWeekPlanBlock,
-  weekPlanBlockHistory, type WeekPlanBlockHistory, type InsertWeekPlanBlockHistory
+  weekPlanBlockHistory, type WeekPlanBlockHistory, type InsertWeekPlanBlockHistory,
+  emailLog, type EmailLog, type InsertEmailLog
 } from "@shared/schema";
 import { eq, inArray, or, ilike, and, sql } from 'drizzle-orm';
 import { getDb } from './db';
@@ -829,6 +830,10 @@ export interface IStorage {
 
   // Retention Report
   getEnrollmentFamiliesByPeriod(schoolId: number, startDate: string, endDate: string): Promise<{ parentEmail: string; parentId: number; childName: string; className: string }[]>;
+
+  // Email Log
+  createEmailLog(data: InsertEmailLog): Promise<EmailLog>;
+  getEmailLogs(limit: number): Promise<EmailLog[]>;
 }
 
 export class MemStorage implements IStorage {
@@ -5096,6 +5101,10 @@ export class MemStorage implements IStorage {
 
   // School Documents (stubs - real implementation in DatabaseStorage)
   async getSchoolDocumentByFileName(_schoolId: number, _fileName: string): Promise<SchoolDocument | undefined> { return undefined; }
+
+  // Email Log (stubs - real implementation in DatabaseStorage)
+  async createEmailLog(_data: InsertEmailLog): Promise<EmailLog> { throw new Error('Not implemented'); }
+  async getEmailLogs(_limit: number): Promise<EmailLog[]> { return []; }
 }
 
 import { DatabaseStorage } from "./dbStorage";
@@ -8153,6 +8162,14 @@ import { DatabaseStorage } from "./dbStorage";
       // Retention Report
       async getEnrollmentFamiliesByPeriod(schoolId: number, startDate: string, endDate: string): Promise<{ parentEmail: string; parentId: number; childName: string; className: string }[]> {
         return this.dbStorage.getEnrollmentFamiliesByPeriod(schoolId, startDate, endDate);
+      }
+
+      // Email Log
+      async createEmailLog(data: InsertEmailLog): Promise<EmailLog> {
+        return this.dbStorage.createEmailLog(data);
+      }
+      async getEmailLogs(limit: number = 200): Promise<EmailLog[]> {
+        return this.dbStorage.getEmailLogs(limit);
       }
 
       // Clear all data from storage (for testing)

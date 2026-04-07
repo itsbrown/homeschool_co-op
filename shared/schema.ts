@@ -3479,3 +3479,23 @@ export const childGuardiansRelations = relations(childGuardians, ({ one }) => ({
   guardian: one(users, { fields: [childGuardians.guardianUserId], references: [users.id] }),
   addedByUser: one(users, { fields: [childGuardians.addedBy], references: [users.id] }),
 }));
+
+// Email Log table - tracks every email send attempt (success or failure)
+export const emailLog = pgTable("email_log", {
+  id: serial("id").primaryKey(),
+  recipientEmail: text("recipient_email").notNull(),
+  type: text("type").notNull(),
+  subject: text("subject"),
+  status: text("status", { enum: ["sent", "failed", "timeout"] }).notNull(),
+  error: text("error"),
+  sentAt: timestamp("sent_at").defaultNow().notNull(),
+});
+
+export const insertEmailLogSchema = createInsertSchema(emailLog)
+  .omit({ id: true, sentAt: true })
+  .extend({
+    subject: z.string().nullable().default(null),
+    error: z.string().nullable().default(null),
+  });
+export type InsertEmailLog = z.infer<typeof insertEmailLogSchema>;
+export type EmailLog = typeof emailLog.$inferSelect;

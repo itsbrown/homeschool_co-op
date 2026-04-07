@@ -2017,6 +2017,17 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
   app.get('/api/superadmin/schools/:schoolId/features', jwtCheck, requireRole(['superAdmin']), getSchoolFeatures);
   app.put('/api/superadmin/schools/:schoolId/features', jwtCheck, requireRole(['superAdmin']), updateSchoolFeatures);
 
+  // SuperAdmin: email log viewer
+  app.get('/api/admin/email-log', jwtCheck, requireRole(['superAdmin']), async (_req: any, res: any) => {
+    try {
+      const logs = await storage.getEmailLogs(200);
+      res.json(logs);
+    } catch (err: any) {
+      console.error('[email-log] Failed to query email_log:', err);
+      res.status(500).json({ message: 'Failed to fetch email logs', error: err.message });
+    }
+  });
+
   // Locations API is handled by the locations router with proper authentication
   // See: app.use("/api/locations", supabaseAuth, locationsRouter);
 
@@ -3451,16 +3462,16 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
 
           if (accountResult.success) {
             accountCreated = true;
-            // Send account credentials email
+            // Send account credentials email (fire-and-forget)
             if (accountResult.temporaryPassword) {
-              await sendAccountCredentialsEmail(
+              sendAccountCredentialsEmail(
                 invitationDTO.email,
                 firstName,
                 lastName,
                 accountResult.temporaryPassword,
                 invitationDTO.role
-              );
-              console.log(`✅ Account created and credentials sent to: ${invitationDTO.email}`);
+              ).catch(err => console.error('[Email fire-and-forget] sendAccountCredentialsEmail failed:', err));
+              console.log(`✅ Account created and credentials email dispatched to: ${invitationDTO.email}`);
             }
           } else if (!accountResult.userExists && !accountResult.error?.includes('already registered')) {
             console.error(`❌ Failed to create account for ${invitationDTO.email}:`, accountResult.error);

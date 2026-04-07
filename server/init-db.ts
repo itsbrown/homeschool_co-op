@@ -2580,6 +2580,22 @@ async function runMigrations() {
   `);
   console.log('✅ Migration completed: allowed_member_ids column added to discounts table');
 
+  // Create email_log table if it doesn't exist
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS email_log (
+      id SERIAL PRIMARY KEY,
+      recipient TEXT NOT NULL,
+      subject TEXT NOT NULL,
+      template_name TEXT NOT NULL,
+      status TEXT NOT NULL,
+      error_type TEXT,
+      error_message TEXT,
+      school_id INTEGER,
+      sent_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+    )
+  `);
+  console.log('✅ email_log table ensured');
+
   // One-time data correction: Amelia Marek enrollment #389
   // The admin "Mark as Enrolled" action incorrectly set totalPaid = totalCost for a
   // credit-only checkout where only $73.50 was applied. Correct to accurate values.
