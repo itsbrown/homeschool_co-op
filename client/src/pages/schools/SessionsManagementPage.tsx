@@ -130,7 +130,11 @@ export default function SessionsManagementPage() {
   });
 
   const createMutation = useMutation({
-    mutationFn: (data: any) => apiRequest("POST", "/api/admin/sessions", data),
+    mutationFn: async (data: any) => {
+      const res = await apiRequest("POST", "/api/admin/sessions", data);
+      if (!res.ok) { const body = await res.clone().json().catch(() => ({})); throw new Error(body.message || "Request failed"); }
+      return res;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/sessions"] });
       toast({ title: "Session created" });
@@ -142,7 +146,11 @@ export default function SessionsManagementPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: any }) => apiRequest("PATCH", `/api/admin/sessions/${id}`, data),
+    mutationFn: async ({ id, data }: { id: number; data: any }) => {
+      const res = await apiRequest("PATCH", `/api/admin/sessions/${id}`, data);
+      if (!res.ok) { const body = await res.clone().json().catch(() => ({})); throw new Error(body.message || "Request failed"); }
+      return res;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/sessions"] });
       toast({ title: "Session updated" });
@@ -154,7 +162,11 @@ export default function SessionsManagementPage() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => apiRequest("DELETE", `/api/admin/sessions/${id}`),
+    mutationFn: async (id: number) => {
+      const res = await apiRequest("DELETE", `/api/admin/sessions/${id}`);
+      if (!res.ok) { const body = await res.clone().json().catch(() => ({})); throw new Error(body.message || "Request failed"); }
+      return res;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/sessions"] });
       toast({ title: "Session deleted" });

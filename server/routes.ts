@@ -2184,9 +2184,9 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
   // in sequence; the first mount already populates req.user and req.auth for supabaseAuth-based auth.
   // requireRole reads from req.auth (set above) before delegating to adminEnrollmentPaymentRouter.
   app.use("/api/admin/enrollments", requireRole(['admin', 'schoolAdmin', 'superAdmin']), adminEnrollmentPaymentRouter); // Admin enrollment payment management
+  app.use("/api/admin/sessions", adminSessionsRouter); // Session management — must be before /api/admin
   app.use("/api/admin", adminRouter);
   app.use("/api/admin-classes", adminClassesRouter); // Add duplicate route for backwards compatibility
-  app.use("/api/admin/sessions", adminSessionsRouter); // Session management
   app.use("/api/session-enrollments", sessionEnrollmentsRouter); // Session-based enrollment
   app.use("/api/admin-users", adminUsersRouter); // Admin user management
   app.use("/api/activities", activitiesRouter);
