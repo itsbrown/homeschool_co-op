@@ -898,6 +898,9 @@ export const refunds = pgTable("refunds", {
   // Stripe integration
   stripeRefundId: text("stripe_refund_id").unique(),
   
+  // Refund source: 'stripe' for automated Stripe refunds, 'manual' for admin-recorded manual refunds
+  source: text("source").default("stripe"),
+
   // Processing details
   processedBy: integer("processed_by").references(() => users.id), // Admin who processed
   processedAt: timestamp("processed_at"),
@@ -916,6 +919,7 @@ export const insertRefundSchema = createInsertSchema(refunds)
     enrollmentId: z.number().nullable().default(null),
     description: z.string().nullable().default(null),
     stripeRefundId: z.string().nullable().default(null),
+    source: z.string().nullable().default('stripe'),
     processedBy: z.number().nullable().default(null),
     processedAt: z.date().nullable().default(null),
     failureReason: z.string().nullable().default(null),

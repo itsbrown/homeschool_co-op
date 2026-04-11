@@ -44,6 +44,7 @@ interface RefundRecord {
   reason: string | null;
   status: string;
   stripeRefundId: string | null;
+  source: string | null;
   processedBy: number | null;
   adminComment: string | null;
   metadata: Record<string, any>;
@@ -343,11 +344,14 @@ export default function RefundHistoryPage() {
                       <TableHead className="text-right">Amount</TableHead>
                       <TableHead>Reason</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead>Reference</TableHead>
                       <TableHead>Processed By</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredRefunds.map((refund) => (
+                    {filteredRefunds.map((refund) => {
+                      const isManual = refund.source === 'manual' || (!refund.stripeRefundId && refund.metadata?.source === 'manual');
+                      return (
                       <TableRow key={refund.id}>
                         <TableCell className="whitespace-nowrap">
                           {format(new Date(refund.createdAt), 'MMM d, yyyy')}
@@ -369,11 +373,21 @@ export default function RefundHistoryPage() {
                           {refund.reason || '-'}
                         </TableCell>
                         <TableCell>{getStatusBadge(refund.status)}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {isManual ? (
+                            <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-xs">
+                              Manual
+                            </Badge>
+                          ) : refund.stripeRefundId ? (
+                            <span className="font-mono">{refund.stripeRefundId.slice(0, 16)}…</span>
+                          ) : '-'}
+                        </TableCell>
                         <TableCell>
                           {refund.processedByUser?.name || refund.processedByUser?.email || 'System'}
                         </TableCell>
                       </TableRow>
-                    ))}
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>

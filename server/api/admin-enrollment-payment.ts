@@ -3,6 +3,7 @@ import Stripe from 'stripe';
 import { storage } from '../storage';
 import { recalculatePaymentSchedule, validateFrequencyChange, type PaymentFrequency } from '../lib/payment-calculator';
 import { getStripeClient } from '../config/stripe';
+import { CurrencyUtils } from '../../shared/currency-utils';
 
 const router = express.Router();
 
@@ -419,8 +420,8 @@ router.get('/:enrollmentId/payment-plan', async (req: any, res) => {
  * Requires school admin role - auth middleware applied at router registration
  * 
  * Body: { 
- *   targetType: 'enrollment' | 'credit' | 'refund',
- *   amount: number (in cents),
+ *   targetType: 'enrollment' | 'credit' | 'refund' | 'manual_refund',
+ *   amount: number (in dollars — converted to cents by this endpoint),
  *   targetEnrollmentId?: number (required if targetType is 'enrollment'),
  *   adminComment: string (required - justification for reallocation)
  * }
@@ -450,13 +451,16 @@ router.post('/:enrollmentId/reallocate-payment', async (req: any, res) => {
       return res.status(403).json({ error: 'Only school administrators can reallocate payments' });
     }
 
+    // Convert dollars → cents (frontend sends dollar values)
+    const amountCents = CurrencyUtils.toStorage(amount);
+
     // Validate input
-    if (!targetType || !['enrollment', 'credit', 'refund'].includes(targetType)) {
-      return res.status(400).json({ error: 'Invalid target type. Must be: enrollment, credit, or refund' });
+    if (!targetType || !['enrollment', 'credit', 'refund', 'manual_refund'].includes(targetType)) {
+      return res.status(400).json({ error: 'Invalid target type. Must be: enrollment, credit, refund, or manual_refund' });
     }
 
     if (!amount || typeof amount !== 'number' || amount <= 0) {
-      return res.status(400).json({ error: 'Amount must be a positive number (in cents)' });
+      return res.status(400).json({ error: 'Amount must be a positive number (in dollars)' });
     }
 
     if (!adminComment || adminComment.trim().length === 0) {
@@ -482,11 +486,11 @@ router.post('/:enrollmentId/reallocate-payment', async (req: any, res) => {
 
     // Validate amount doesn't exceed totalPaid
     const sourceTotalPaid = sourceEnrollment.totalPaid || 0;
-    if (amount > sourceTotalPaid) {
+    if (amountCents > sourceTotalPaid) {
       return res.status(400).json({ 
         error: 'Amount exceeds total paid',
         details: {
-          requested: amount,
+          requested: amountCents,
           available: sourceTotalPaid,
           availableFormatted: `$${(sourceTotalPaid / 100).toFixed(2)}`
         }
@@ -500,16 +504,20 @@ router.post('/:enrollmentId/reallocate-payment', async (req: any, res) => {
       adminId: user.id,
       action: 'payment_reallocation',
       targetType,
-      amount,
-      amountFormatted: `$${(amount / 100).toFixed(2)}`,
+      amount: amountCents,
+      amountFormatted: `$${(amountCents / 100).toFixed(2)}`,
       targetEnrollmentId: targetEnrollmentId || null,
       comment: adminComment
     };
 
-    console.log(`💸 Admin ${userEmail} reallocating $${(amount / 100).toFixed(2)} from enrollment ${enrollmentId}`);
+    console.log(`💸 Admin ${userEmail} reallocating $${(amountCents / 100).toFixed(2)} from enrollment ${enrollmentId}`);
     console.log(`   Target: ${targetType}${targetEnrollmentId ? ` (enrollment ${targetEnrollmentId})` : ''}`);
 
-    let result: any = { success: true, targetType, amount };
+    let result: any = { success: true, targetType, amount: amountCents };
+
+    // Helper: recalculate remaining balance using effective_balance formula
+    const calcBalance = (totalCost: number, newTotalPaid: number, compAmountCents: number | null | undefined) =>
+      Math.max(0, totalCost - newTotalPaid - (compAmountCents ?? 0));
 
     // Handle each target type
     if (targetType === 'enrollment') {
@@ -534,22 +542,22 @@ router.post('/:enrollmentId/reallocate-payment', async (req: any, res) => {
 
       // Check if transfer would cause overpayment
       const targetTotalPaid = targetEnrollment.totalPaid || 0;
-      const targetNewTotalPaid = targetTotalPaid + amount;
+      const targetNewTotalPaid = targetTotalPaid + amountCents;
       if (targetNewTotalPaid > targetEnrollment.totalCost) {
         return res.status(400).json({ 
           error: 'Transfer would result in overpayment on target enrollment',
           details: {
             targetCurrentPaid: targetTotalPaid,
             targetTotalCost: targetEnrollment.totalCost,
-            transferAmount: amount,
+            transferAmount: amountCents,
             wouldExceedBy: targetNewTotalPaid - targetEnrollment.totalCost
           }
         });
       }
 
       // Update source enrollment
-      const sourceNewTotalPaid = sourceTotalPaid - amount;
-      const sourceNewBalance = Math.max(0, sourceEnrollment.totalCost - sourceNewTotalPaid);
+      const sourceNewTotalPaid = sourceTotalPaid - amountCents;
+      const sourceNewBalance = calcBalance(sourceEnrollment.totalCost, sourceNewTotalPaid, sourceEnrollment.compAmountCents);
       const sourceMetadata = (sourceEnrollment.metadata && typeof sourceEnrollment.metadata === 'object') 
         ? sourceEnrollment.metadata as Record<string, any> 
         : {};
@@ -567,7 +575,7 @@ router.post('/:enrollmentId/reallocate-payment', async (req: any, res) => {
       });
 
       // Update target enrollment
-      const targetNewBalance = Math.max(0, targetEnrollment.totalCost - targetNewTotalPaid);
+      const targetNewBalance = calcBalance(targetEnrollment.totalCost, targetNewTotalPaid, targetEnrollment.compAmountCents);
       const targetMetadata = (targetEnrollment.metadata && typeof targetEnrollment.metadata === 'object') 
         ? targetEnrollment.metadata as Record<string, any> 
         : {};
@@ -584,7 +592,7 @@ router.post('/:enrollmentId/reallocate-payment', async (req: any, res) => {
         }
       });
 
-      console.log(`✅ Transferred $${(amount / 100).toFixed(2)} from enrollment ${enrollmentId} to ${targetEnrollmentId}`);
+      console.log(`✅ Transferred $${(amountCents / 100).toFixed(2)} from enrollment ${enrollmentId} to ${targetEnrollmentId}`);
       
       // Create payment allocations for reallocation (source of truth)
       // Requires existing allocations to maintain ledger integrity
@@ -599,7 +607,7 @@ router.post('/:enrollmentId/reallocate-payment', async (req: any, res) => {
             paymentHistoryId,
             enrollmentId: enrollmentId,
             membershipEnrollmentId: null,
-            allocatedAmountCents: -amount,
+            allocatedAmountCents: -amountCents,
             allocationType: 'reallocation_out',
             sourceAllocationId: null,
             adminComment,
@@ -611,7 +619,7 @@ router.post('/:enrollmentId/reallocate-payment', async (req: any, res) => {
             paymentHistoryId,
             enrollmentId: targetEnrollmentId,
             membershipEnrollmentId: null,
-            allocatedAmountCents: amount,
+            allocatedAmountCents: amountCents,
             allocationType: 'reallocation_in',
             sourceAllocationId: null,
             adminComment,
@@ -647,7 +655,7 @@ router.post('/:enrollmentId/reallocate-payment', async (req: any, res) => {
         userId: parentUser.id,
         schoolId: sourceEnrollment.schoolId,
         creditType: 'manual',
-        creditAmountCents: amount,
+        creditAmountCents: amountCents,
         status: 'approved',
         approvedBy: user.id,
         title: `Payment Reallocation Credit`,
@@ -657,8 +665,8 @@ router.post('/:enrollmentId/reallocate-payment', async (req: any, res) => {
       });
 
       // Update source enrollment
-      const sourceNewTotalPaid = sourceTotalPaid - amount;
-      const sourceNewBalance = Math.max(0, sourceEnrollment.totalCost - sourceNewTotalPaid);
+      const sourceNewTotalPaid = sourceTotalPaid - amountCents;
+      const sourceNewBalance = calcBalance(sourceEnrollment.totalCost, sourceNewTotalPaid, sourceEnrollment.compAmountCents);
       const sourceMetadata = (sourceEnrollment.metadata && typeof sourceEnrollment.metadata === 'object') 
         ? sourceEnrollment.metadata as Record<string, any> 
         : {};
@@ -675,7 +683,7 @@ router.post('/:enrollmentId/reallocate-payment', async (req: any, res) => {
         }
       });
 
-      console.log(`✅ Created $${(amount / 100).toFixed(2)} credit for parent ${parentUser.email}`);
+      console.log(`✅ Created $${(amountCents / 100).toFixed(2)} credit for parent ${parentUser.email}`);
       
       // Create payment allocation for credit conversion (source of truth)
       try {
@@ -687,7 +695,7 @@ router.post('/:enrollmentId/reallocate-payment', async (req: any, res) => {
             paymentHistoryId,
             enrollmentId: enrollmentId,
             membershipEnrollmentId: null,
-            allocatedAmountCents: -amount,
+            allocatedAmountCents: -amountCents,
             allocationType: 'reallocation_out',
             sourceAllocationId: null,
             adminComment: `Converted to credit: ${adminComment}`,
@@ -741,7 +749,7 @@ router.post('/:enrollmentId/reallocate-payment', async (req: any, res) => {
       try {
         stripeRefund = await stripe.refunds.create({
           payment_intent: latestPayment.stripePaymentIntentId,
-          amount: amount,
+          amount: amountCents,
           reason: 'requested_by_customer',
           metadata: {
             refundedBy: userEmail,
@@ -753,9 +761,22 @@ router.post('/:enrollmentId/reallocate-payment', async (req: any, res) => {
         console.log(`💳 Stripe refund created: ${stripeRefund.id}`);
       } catch (stripeError: any) {
         console.error('Stripe refund error:', stripeError);
+
+        // Provide a human-readable explanation for common Stripe errors
+        let friendlyMessage = 'Stripe refund failed. You can use "Manual Refund" to record the refund in the system and handle the money transfer externally.';
+        const rawMessage: string = stripeError.message || '';
+        if (/test.*live|live.*test|mode/i.test(rawMessage)) {
+          friendlyMessage = 'This payment cannot be automatically refunded — it was processed in a different Stripe environment (test vs. live). Use "Manual Refund" to record the refund and handle the money transfer externally.';
+        } else if (/already.*refund|refund.*already/i.test(rawMessage)) {
+          friendlyMessage = 'This payment has already been fully refunded in Stripe.';
+        } else if (/no such.*payment|payment_intent.*not.*found/i.test(rawMessage)) {
+          friendlyMessage = 'The original Stripe payment could not be found. Use "Manual Refund" to record the refund and handle the money transfer externally.';
+        }
+
         return res.status(400).json({ 
-          error: 'Stripe refund failed',
-          details: stripeError.message || 'Unknown Stripe error'
+          error: friendlyMessage,
+          details: rawMessage,
+          suggestManualRefund: true
         });
       }
 
@@ -764,11 +785,12 @@ router.post('/:enrollmentId/reallocate-payment', async (req: any, res) => {
         schoolId: sourceEnrollment.schoolId,
         enrollmentId: enrollmentId,
         paymentId: latestPayment.id,
-        amount: amount,
+        amount: amountCents,
         reason: `Payment reallocation: ${adminComment}`,
         description: `Payment reallocation from enrollment ${enrollmentId}`,
         status: 'completed',
         stripeRefundId: stripeRefund.id,
+        source: 'stripe',
         processedBy: user.id,
         processedAt: new Date(),
         failureReason: null,
@@ -779,8 +801,8 @@ router.post('/:enrollmentId/reallocate-payment', async (req: any, res) => {
       });
 
       // Update source enrollment
-      const sourceNewTotalPaid = sourceTotalPaid - amount;
-      const sourceNewBalance = Math.max(0, sourceEnrollment.totalCost - sourceNewTotalPaid);
+      const sourceNewTotalPaid = sourceTotalPaid - amountCents;
+      const sourceNewBalance = calcBalance(sourceEnrollment.totalCost, sourceNewTotalPaid, sourceEnrollment.compAmountCents);
       const refundSourceMetadata = (sourceEnrollment.metadata && typeof sourceEnrollment.metadata === 'object') 
         ? sourceEnrollment.metadata as Record<string, any> 
         : {};
@@ -797,28 +819,132 @@ router.post('/:enrollmentId/reallocate-payment', async (req: any, res) => {
         }
       });
 
-      console.log(`✅ Refunded $${(amount / 100).toFixed(2)} to ${sourceEnrollment.parentEmail}`);
+      // Create negative payment allocation for audit trail
+      try {
+        const existingAllocations = await storage.getPaymentAllocationsByEnrollmentId(enrollmentId);
+        if (existingAllocations.length > 0) {
+          const paymentHistoryId = existingAllocations[0].paymentHistoryId;
+          await storage.createPaymentAllocation({
+            paymentHistoryId,
+            enrollmentId: enrollmentId,
+            membershipEnrollmentId: null,
+            allocatedAmountCents: -amountCents,
+            allocationType: 'refund',
+            sourceAllocationId: null,
+            adminComment,
+            metadata: { stripeRefundId: stripeRefund.id, adminEmail: userEmail }
+          });
+        }
+      } catch (allocationError) {
+        console.error('⚠️ Error creating refund allocation (non-blocking):', allocationError);
+      }
+
+      console.log(`✅ Refunded $${(amountCents / 100).toFixed(2)} to ${sourceEnrollment.parentEmail}`);
       result.refund = {
         stripeRefundId: stripeRefund.id,
-        amount: amount,
+        amount: amountCents,
         status: stripeRefund.status
+      };
+
+    } else if (targetType === 'manual_refund') {
+      // Manual refund - record in system without Stripe, handle money externally
+      const paymentHistory = await storage.getPaymentsByParentEmail(sourceEnrollment.parentEmail);
+      const enrollmentPayments = paymentHistory.filter((p: any) => {
+        const enrollmentIds = p.enrollmentIds || [];
+        return enrollmentIds.includes(enrollmentId) && p.status === 'completed';
+      });
+
+      // Use any linked payment for the record, or the first payment for the parent
+      const linkedPayment = enrollmentPayments.length > 0 ? enrollmentPayments[0] : paymentHistory[0];
+      if (!linkedPayment) {
+        return res.status(400).json({
+          error: 'No payment records found for this enrollment',
+          hint: 'A payment record is required to create a refund entry'
+        });
+      }
+
+      // Create manual refund record (no Stripe ID)
+      await storage.createRefund({
+        schoolId: sourceEnrollment.schoolId,
+        enrollmentId: enrollmentId,
+        paymentId: linkedPayment.id,
+        amount: amountCents,
+        reason: `Manual refund: ${adminComment}`,
+        description: `Manual refund from enrollment ${enrollmentId} — money handled externally`,
+        status: 'completed',
+        stripeRefundId: null,
+        source: 'manual',
+        processedBy: user.id,
+        processedAt: new Date(),
+        failureReason: null,
+        metadata: {
+          reallocationAudit: auditEntry,
+          parentEmail: sourceEnrollment.parentEmail
+        }
+      });
+
+      // Update source enrollment
+      const sourceNewTotalPaid = sourceTotalPaid - amountCents;
+      const sourceNewBalance = calcBalance(sourceEnrollment.totalCost, sourceNewTotalPaid, sourceEnrollment.compAmountCents);
+      const manualRefundSourceMetadata = (sourceEnrollment.metadata && typeof sourceEnrollment.metadata === 'object')
+        ? sourceEnrollment.metadata as Record<string, any>
+        : {};
+      await storage.updateProgramEnrollment(enrollmentId, {
+        totalPaid: sourceNewTotalPaid,
+        remainingBalance: sourceNewBalance,
+        paymentStatus: sourceNewBalance === 0 ? 'completed' : (sourceNewTotalPaid > 0 ? 'partial_payment' : 'pending'),
+        metadata: {
+          ...manualRefundSourceMetadata,
+          paymentReallocationHistory: [
+            ...(Array.isArray(manualRefundSourceMetadata.paymentReallocationHistory) ? manualRefundSourceMetadata.paymentReallocationHistory : []),
+            { ...auditEntry, manualRefund: true }
+          ]
+        }
+      });
+
+      // Create negative payment allocation for audit trail
+      try {
+        const existingAllocations = await storage.getPaymentAllocationsByEnrollmentId(enrollmentId);
+        if (existingAllocations.length > 0) {
+          const paymentHistoryId = existingAllocations[0].paymentHistoryId;
+          await storage.createPaymentAllocation({
+            paymentHistoryId,
+            enrollmentId: enrollmentId,
+            membershipEnrollmentId: null,
+            allocatedAmountCents: -amountCents,
+            allocationType: 'refund',
+            sourceAllocationId: null,
+            adminComment: `Manual refund: ${adminComment}`,
+            metadata: { source: 'manual', adminEmail: userEmail }
+          });
+        }
+      } catch (allocationError) {
+        console.error('⚠️ Error creating manual refund allocation (non-blocking):', allocationError);
+      }
+
+      console.log(`✅ Manual refund recorded: $${(amountCents / 100).toFixed(2)} for ${sourceEnrollment.parentEmail}`);
+      result.refund = {
+        stripeRefundId: null,
+        amount: amountCents,
+        status: 'completed',
+        manual: true
       };
     }
 
-    // Cancel any pending scheduled payments for the source enrollment if fully reallocated
-    const sourceNewTotalPaid = sourceTotalPaid - amount;
+    // Cancel any pending and overdue scheduled payments for the source enrollment if fully reallocated
+    const sourceNewTotalPaid = sourceTotalPaid - amountCents;
     if (sourceNewTotalPaid === 0) {
       try {
         const scheduledPayments = await storage.getScheduledPaymentsByEnrollmentId(enrollmentId);
-        const pendingPayments = scheduledPayments.filter(p => p.status === 'pending');
+        const paymentsToCancel = scheduledPayments.filter(p => p.status === 'pending' || p.status === 'overdue');
         
-        for (const payment of pendingPayments) {
+        for (const payment of paymentsToCancel) {
           await storage.updateScheduledPaymentStatus(payment.id, 'cancelled');
-          console.log(`🗑️ Cancelled scheduled payment ${payment.id} for enrollment ${enrollmentId}`);
+          console.log(`🗑️ Cancelled scheduled payment ${payment.id} (${payment.status}) for enrollment ${enrollmentId}`);
         }
 
-        if (pendingPayments.length > 0) {
-          result.cancelledScheduledPayments = pendingPayments.length;
+        if (paymentsToCancel.length > 0) {
+          result.cancelledScheduledPayments = paymentsToCancel.length;
         }
       } catch (scheduleError) {
         console.error('Error cancelling scheduled payments:', scheduleError);

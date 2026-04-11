@@ -664,7 +664,7 @@ export default function ParentProfilePage() {
   const [selectedEnrollment, setSelectedEnrollment] = useState<any>(null);
   const [unenrollDialogOpen, setUnenrollDialogOpen] = useState(false);
   const [reallocateDialogOpen, setReallocateDialogOpen] = useState(false);
-  const [reallocateType, setReallocateType] = useState<'enrollment' | 'credit' | 'refund'>('credit');
+  const [reallocateType, setReallocateType] = useState<'enrollment' | 'credit' | 'refund' | 'manual_refund'>('credit');
   const [reallocateAmount, setReallocateAmount] = useState('');
   const [reallocateTargetEnrollmentId, setReallocateTargetEnrollmentId] = useState('');
   const [reallocateComment, setReallocateComment] = useState('');
@@ -1144,20 +1144,23 @@ export default function ParentProfilePage() {
   const reallocatePaymentMutation = useMutation({
     mutationFn: async ({ enrollmentId, targetType, amount, targetEnrollmentId, adminComment }: {
       enrollmentId: number;
-      targetType: 'enrollment' | 'credit' | 'refund';
+      targetType: 'enrollment' | 'credit' | 'refund' | 'manual_refund';
       amount: number;
       targetEnrollmentId?: number;
       adminComment: string;
     }) => {
       const response = await apiRequest("POST", `/api/admin/enrollments/${enrollmentId}/reallocate-payment`, {
         targetType,
-        amount: Math.round(amount * 100), // Convert to cents
+        amount, // dollars — backend converts to cents
         targetEnrollmentId: targetEnrollmentId || undefined,
         adminComment
       });
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to reallocate payment');
+        const message: string = errorData.error || 'Failed to reallocate payment';
+        const suggestManualRefund: boolean = errorData.suggestManualRefund || false;
+        const details: string = errorData.details || '';
+        throw Object.assign(new Error(message), { suggestManualRefund, details });
       }
       return response.json();
     },
@@ -1169,6 +1172,8 @@ export default function ParentProfilePage() {
         description = `$${(data.amount / 100).toFixed(2)} added as account credit`;
       } else if (data.targetType === 'refund') {
         description = `$${(data.amount / 100).toFixed(2)} refunded to original payment method`;
+      } else if (data.targetType === 'manual_refund') {
+        description = `$${(data.amount / 100).toFixed(2)} recorded as manual refund — please handle the money transfer externally`;
       }
       toast({
         title: "Payment Reallocated",
@@ -1181,9 +1186,12 @@ export default function ParentProfilePage() {
       resetReallocateForm();
     },
     onError: (error: any) => {
+      const description = error.suggestManualRefund
+        ? `${error.message} Use "Manual Refund" to record this without Stripe.`
+        : (error.message || "Failed to reallocate payment");
       toast({
         title: "Error",
-        description: error.message || "Failed to reallocate payment",
+        description,
         variant: "destructive",
       });
     },
@@ -2261,7 +2269,7 @@ export default function ParentProfilePage() {
 
                   <div>
                     <label className="text-sm font-medium block mb-2">Reallocation Type</label>
-                    <Select value={reallocateType} onValueChange={(v: 'enrollment' | 'credit' | 'refund') => setReallocateType(v)}>
+                    <Select value={reallocateType} onValueChange={(v: 'enrollment' | 'credit' | 'refund' | 'manual_refund') => setReallocateType(v)}>
                       <SelectTrigger data-testid="select-reallocate-type">
                         <SelectValue />
                       </SelectTrigger>
@@ -2269,8 +2277,12 @@ export default function ParentProfilePage() {
                         <SelectItem value="credit">Add as Account Credit</SelectItem>
                         <SelectItem value="enrollment">Transfer to Another Enrollment</SelectItem>
                         <SelectItem value="refund">Refund to Original Payment Method</SelectItem>
+                        <SelectItem value="manual_refund">Manual Refund (No Stripe)</SelectItem>
                       </SelectContent>
                     </Select>
+                    {reallocateType === 'manual_refund' && (
+                      <p className="text-xs text-amber-600 mt-1">Records the refund in the system only. Handle the actual money transfer externally.</p>
+                    )}
                   </div>
 
                   {reallocateType === 'enrollment' && (

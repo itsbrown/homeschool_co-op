@@ -3684,6 +3684,7 @@ export class MemStorage implements IStorage {
       enrollmentId: refund.enrollmentId || null,
       description: refund.description || null,
       stripeRefundId: refund.stripeRefundId || null,
+      source: refund.source || 'stripe',
       processedBy: refund.processedBy || null,
       processedAt: refund.processedAt || null,
       failureReason: refund.failureReason || null,

@@ -2606,6 +2606,14 @@ async function runMigrations() {
   `);
   console.log('✅ Migration completed: completion_source column added to scheduled_payments table');
 
+  // Add source column to refunds table to distinguish manual vs Stripe refunds
+  console.log('Running migration: Adding source column to refunds table...');
+  await db.execute(sql`
+    ALTER TABLE refunds 
+    ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'stripe';
+  `);
+  console.log('✅ Migration completed: source column added to refunds table');
+
   // One-time data correction: Amelia Marek enrollment #389
   // The admin "Mark as Enrolled" action incorrectly set totalPaid = totalCost for a
   // credit-only checkout where only $73.50 was applied. Correct to accurate values.
