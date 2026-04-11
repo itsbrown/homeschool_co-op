@@ -12,3 +12,15 @@ id = "yPwZtfEb6fcinvOkr2YJ3"
 uri = "file://docs/PRD.md"
 type = "text"
 title = "ASA Learning Platform — Product Requirements Document"
+
+[[outputs]]
+id = "zOOL5--6ELQFwQmwMt0aT"
+uri = "file://.local/qa-package/qa-test-cases.csv"
+type = "table"
+title = "QA Test Cases (50 test cases)"
+
+[[outputs]]
+id = "RmdBjm3XsynuBDD0jdJrg"
+uri = "file://.local/qa-package/qa-reference.md"
+type = "text"
+title = "QA Reference Guide"
