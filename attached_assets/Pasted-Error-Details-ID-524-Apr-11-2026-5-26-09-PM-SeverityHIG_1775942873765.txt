@@ -1,0 +1,95 @@
+Error Details
+ID: 524 | Apr 11, 2026, 5:26:09 PM
+
+SeverityHIGH
+Type
+frontend
+
+Route
+/api/schools/documents/upload
+
+Method
+N/A
+
+User
+Anonymous
+
+School ID
+N/A
+
+Message
+{"success":false,"message":"Failed to upload document"}
+
+Metadata
+{
+  "online": true,
+  "userId": 8,
+  "network": {
+    "rtt": 50,
+    "downlink": 10,
+    "saveData": false,
+    "effectiveType": "4g"
+  },
+  "language": "en-US",
+  "referrer": "https://accounts.google.com/",
+  "schoolId": null,
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
+  "activeRole": null,
+  "hasSession": true,
+  "statusCode": 500,
+  "breadcrumbs": [
+    {
+      "route": "/",
+      "title": "American Seekers Academy - Adaptive Learning Platform",
+      "timestamp": "2026-04-11T21:10:30.883Z",
+      "timeOnPage": 503
+    },
+    {
+      "route": "/",
+      "title": "American Seekers Academy - Adaptive Learning Platform",
+      "timestamp": "2026-04-11T21:10:31.386Z",
+      "timeOnPage": 158086
+    }
+  ],
+  "formContext": null,
+  "memoryUsage": {
+    "usedJSHeapSize": 57,
+    "totalJSHeapSize": 65
+  },
+  "originalUrl": "/api/schools/documents/upload",
+  "pageLoadTime": 3555,
+  "sessionStart": "2026-04-02T21:41:25.384Z",
+  "correlationId": "3ce92c23-e75d-48ef-8744-1123085c319f",
+  "recentActions": [
+    {
+      "type": "click",
+      "target": "button.inline-flex",
+      "secondsAgo": 24
+    },
+    {
+      "type": "click",
+      "target": "[data-testid=\"input-file-upload\"]",
+      "secondsAgo": 22
+    },
+    {
+      "type": "input",
+      "target": "[data-testid=\"input-file-upload\"]",
+      "secondsAgo": 16
+    },
+    {
+      "type": "click",
+      "target": "[data-testid=\"switch-visible-to-all\"]",
+      "secondsAgo": 2
+    },
+    {
+      "type": "click",
+      "target": "[data-testid=\"button-confirm-upload\"]",
+      "secondsAgo": 1
+    }
+  ],
+  "userEmailHint": "con***",
+  "viewportWidth": 2280,
+  "viewportHeight": 1316,
+  "sessionErrorCount": 4,
+  "timeOnCurrentPage": 937562
+}
