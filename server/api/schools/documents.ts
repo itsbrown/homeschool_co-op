@@ -268,16 +268,13 @@ router.post('/upload', supabaseAuth, async (req: any, res) => {
     }
 
     // SECURITY: Derive schoolId from authenticated user - do not accept from client
-    const user = await storage.getUser(uploadedBy);
-    if (!user || !user.schoolId) {
+    const schoolId = req.user?.schoolId;
+    if (!schoolId) {
       return res.status(400).json({ 
         success: false, 
-        message: 'User is not associated with a school' 
+        message: 'User is not associated with a school.' 
       });
     }
-
-    // Always use server-derived schoolId from authenticated user
-    const schoolId = user.schoolId;
 
     // Check for uploaded file
     if (!req.files || !req.files.document) {
@@ -290,7 +287,16 @@ router.post('/upload', supabaseAuth, async (req: any, res) => {
     const documentFile = req.files.document as UploadedFile;
 
     // Check for duplicate filename in this school
-    const existingDocWithName = await storage.getSchoolDocumentByFileName(schoolId, documentFile.name);
+    let existingDocWithName;
+    try {
+      existingDocWithName = await storage.getSchoolDocumentByFileName(schoolId, documentFile.name);
+    } catch (dbCheckError: any) {
+      console.error('❌ DB error during duplicate filename check:', dbCheckError.message, dbCheckError.stack);
+      return res.status(503).json({
+        success: false,
+        message: 'Service temporarily unavailable.'
+      });
+    }
     if (existingDocWithName) {
       return res.status(409).json({
         success: false,
@@ -401,8 +407,8 @@ router.post('/upload', supabaseAuth, async (req: any, res) => {
       document,
       notificationSent
     });
-  } catch (error) {
-    console.error('Error uploading document:', error);
+  } catch (error: any) {
+    console.error('Error uploading document:', error.message, error.stack);
     res.status(500).json({ 
       success: false, 
       message: 'Failed to upload document' 
