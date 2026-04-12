@@ -1,0 +1,56 @@
+#103 - Credit Ledger Integrity Checks
+
+What & Why
+The daily 3 AM reconciliation job audits scheduled payments vs Stripe but does not check the credit ledger. Three impossible states can silently accumulate:
+- Double-spent credits (usedAmountCents > creditAmountCents)
+- Status/amount mismatch on used credits
+- Completed scheduled payments that claim credits were applied but have no matching unified_credit_usage_logs entry
+
+This task adds a credit integrity scan to the existing reconciliation job so violations surface within 24 hours and trigger the existing high-severity admin email.
+
+Done looks like
+- Daily reconciliation job runs credit integrity scan after scheduled-payment sync
+- Three invariant violations are detected and logged as severity: 'high' to error_logs (triggers existing ErrorNotificationService admin email)
+- New admin endpoint POST /api/admin/credits/integrity-check returns a structured report on demand
+- Zero violations = silent (no log entries, no noise)
+- Final reconciliation summary log includes creditIntegrityViolations count
+
+Out of scope
+- Auto-fixing violations (human review only)
+- Auditing legacy volunteer_credits or credit_usage_logs tables
+- Real-time per-transaction checks (daily batch only)
+
+Tasks
+
+1. Credit integrity service (server/services/credit-integrity-check.ts)
+   - Export async function runCreditIntegrityCheck(schoolId?: number)
+   - Run three queries via IStorage only (no raw SQL)
+   - Return structured report: { violations: array, counts: { doubleSpend: number, statusMismatch: number, missingLog: number } }
+   - Log each violation type to console.error only when found (use existing error logging pattern)
+
+2. Wire into reconciliation job (server/services/scheduled-payment-reconciliation-job.ts)
+   - After reconcileAllScheduledPayments(), call runCreditIntegrityCheck()
+   - If violations > 0, createErrorLog with severity: 'high' and full report in metadata
+   - Add creditIntegrityViolations count to the final console summary log
+
+3. Admin API endpoint (server/api/credits.ts)
+   - POST /api/admin/credits/integrity-check
+   - Guard with requireRole(['admin', 'schoolAdmin', 'director', 'superAdmin']) using req.user?.id
+   - Call runCreditIntegrityCheck() and return the report as JSON
+   - Protected by existing admin patterns
+
+Architectural constraints (must follow 100%)
+- All DB access via IStorage only (no raw SQL in service or handlers)
+- Use existing error logging and ErrorNotificationService pattern
+- Silent on clean database (no logs when violations = 0)
+- Queries must be efficient (limit to schoolId when provided; use indexes on usedAmountCents, status, etc.)
+- Follow exact logging style of the existing reconciliation job
+
+Deployment risk management
+Task | Risk | Mitigation
+--- | --- | ---
+1 — Integrity service | Low | Pure read-only queries via IStorage; test with seeded violations
+2 — Integration into job | Medium | Run job manually in dev first; keep original scheduled-payment logic unchanged
+3 — Admin endpoint | Low | Standard admin role guard; no side effects
+
+Recommended order: Task 1 → Task 3 → Task 2. After deploy, manually trigger the endpoint and the job to verify alerts fire only on real violations.

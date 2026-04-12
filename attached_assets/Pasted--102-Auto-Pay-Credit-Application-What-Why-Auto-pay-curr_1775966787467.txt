@@ -1,0 +1,61 @@
+#102 - Auto-Pay Credit Application
+
+What & Why
+Auto-pay currently ignores available credits and always charges the full scheduled amount. Manual payments already apply credits correctly. Auto-pay must do the same: always reduce the card charge by available approved credits (FIFO, expiry-filtered) first, only charging the net remainder (respecting Stripe’s $0.50 minimum). Fully-covered installments should complete without touching the card.
+
+Done looks like
+- Auto-pay scheduler checks available credits before creating any Stripe charge
+- Partial credits → card charged only net remainder; credits consumed on webhook success (existing path)
+- Full credits → no Stripe charge at all; credits consumed immediately, scheduled payment marked completed with completionSource: 'credits_only', enrollments updated
+- $0.50 Stripe minimum always respected (credits capped so charge never drops below 50 cents)
+- 24-hour reminder (email + in-app) shows estimated net charge after credits
+- Parent upcoming-payments list shows credit preview + estimated net card charge for auto-pay installments
+- All credit consumption logged in unified_credit_usage_logs with scheduled payment as source
+- Zero double-spending: credits are reserved before charge and finalized only on success (or immediately on full-credit path)
+
+Out of scope
+- Changing credit earning/approval flow
+- Changing manual payment flow
+- Letting parents choose specific credits for auto-pay
+- Carrying surplus credits forward
+
+Tasks
+
+1. Scheduler: query & apply credits before charging (server/services/auto-pay-scheduler.ts)
+   - After effective-balance guard, call storage.getAvailableCredits(parentEmail)
+   - Compute creditsToApply = min(available, sp.amount) but never let chargeAmount < 50 cents
+   - If creditsToApply === sp.amount → zero-charge path (see Task 2)
+   - Otherwise create PaymentIntent with amount = chargeAmount and metadata: { creditsAppliedCents, originalAmountCents, userId, scheduledPaymentId }
+   - Pass credits to webhook (existing handler already handles consumption)
+
+2. Scheduler: fully-covered (zero-charge) path
+   - Skip Stripe entirely
+   - In a single transaction: consume credits via storage.useCredits, mark scheduled payment completed with completionSource: 'credits_only', update all linked enrollments (totalPaid + remainingBalance)
+   - Create a payment record in payments table (amount = 0, source = 'credits_only') for audit trail
+   - Log to unified_credit_usage_logs
+
+3. Reminder notification: show net charge after credits
+   - In sendScheduledPaymentReminder (and in-app equivalent): calculate available credits at reminder time
+   - Show "Estimated net charge: $X (after Y credits)" or "Fully covered by credits – no card charge"
+   - Update both email template and in-app notification content
+
+4. Parent UI: upcoming payments credit preview (server/api/scheduled-payments.ts + parent UI)
+   - In GET upcoming payments endpoint, for any autoPayEnabled installment, include estimatedNetCharge and creditsThatWillApply
+   - On parent-facing list, show subtle inline note: "X credits will apply → net charge: $Y"
+
+Architectural constraints (must follow)
+- All credit logic reuses existing getAvailableCredits / useCredits / reserve pattern
+- Zero-charge path must still create a payments table record for audit trail
+- All DB updates in a single transaction (use storage.transaction if available, or existing pattern)
+- Never modify totalPaid/remainingBalance directly outside admin correction flows
+- Use existing webhook path for partial-credit consumption (no webhook changes)
+- iOS-friendly UI (fontSize: 16px on any selects)
+
+Deployment risk management
+Task | Risk | Mitigation
+--- | --- | ---
+1–2 Scheduler credit logic | High | Deploy with feature flag (autoApplyCredits: false) initially; test with $0.50 floor edge cases
+3 Reminder | Medium | Test both email and in-app paths with full/partial credit scenarios
+4 Parent UI | Low | Pure read-only addition; use existing /api/credits/balance endpoint
+
+Validation after deploy: Create a test scheduled payment with known credits, run manual scheduler trigger, verify net charge, credit consumption log, and no double-spending.
