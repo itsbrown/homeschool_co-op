@@ -8,6 +8,7 @@
  */
 
 import { reconcileAllScheduledPayments } from './scheduled-payment-reconciliation';
+import { runCreditIntegrityCheck } from './credit-integrity-check';
 import { storage } from '../storage';
 
 // Configuration
@@ -52,11 +53,40 @@ async function runDailyReconciliation(): Promise<void> {
   
   try {
     const summary = await reconcileAllScheduledPayments(50, 100, false);
-    
+
+    // Run credit integrity check after scheduled-payment sync
+    let creditIntegrityViolations = 0;
+    try {
+      const integrityReport = await runCreditIntegrityCheck();
+      creditIntegrityViolations = integrityReport.violations.length;
+
+      if (creditIntegrityViolations > 0) {
+        await storage.createErrorLog({
+          errorType: 'payment',
+          message: `Credit ledger integrity check found ${creditIntegrityViolations} violation(s)`,
+          severity: 'high',
+          route: '/scheduled-job/reconciliation',
+          method: 'CRON',
+          userEmail: null,
+          schoolId: null,
+          stackTrace: null,
+          metadata: {
+            violations: integrityReport.violations,
+            counts: integrityReport.counts,
+            durationMs: Date.now() - startTime
+          },
+          notificationSent: false
+        });
+      }
+    } catch (integrityErr) {
+      console.error('[ReconciliationJob] Credit integrity check failed:', integrityErr);
+    }
+
     console.log('[ReconciliationJob] Daily reconciliation complete:', {
       enrollmentsProcessed: summary.totalEnrollmentsProcessed,
       paymentsMarkedCompleted: summary.totalPaymentsMarkedCompleted,
       errors: summary.errors.length,
+      creditIntegrityViolations,
       durationMs: Date.now() - startTime
     });
     

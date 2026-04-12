@@ -719,7 +719,14 @@ export interface IStorage {
   // Unified Credit Usage Log methods
   getUnifiedCreditUsageLogById(id: number): Promise<UnifiedCreditUsageLog | undefined>;
   getUnifiedCreditUsageLogsByCreditId(creditId: number): Promise<UnifiedCreditUsageLog[]>;
+  getUnifiedCreditUsageLogsByPaymentHistoryId(paymentHistoryId: number): Promise<UnifiedCreditUsageLog[]>;
   createUnifiedCreditUsageLog(log: InsertUnifiedCreditUsageLog): Promise<UnifiedCreditUsageLog>;
+
+  // Credit integrity check methods (used by reconciliation job)
+  getDoubleSpentCredits(schoolId?: number): Promise<Credit[]>;
+  getMismatchedStatusCredits(schoolId?: number): Promise<Credit[]>;
+  getCompletedScheduledPaymentsWithCreditSource(schoolId?: number): Promise<ScheduledPayment[]>;
+  getUnifiedCreditUsageLogsByScheduledPaymentId(scheduledPaymentId: number): Promise<UnifiedCreditUsageLog[]>;
 
   // ==================== PAYMENT ALLOCATIONS ====================
   // Source of truth for linking payments to enrollments
@@ -5140,6 +5147,13 @@ export class MemStorage implements IStorage {
   // Email Log (stubs - real implementation in DatabaseStorage)
   async createEmailLog(_data: InsertEmailLog): Promise<EmailLog> { throw new Error('Not implemented'); }
   async getEmailLogs(_limit: number): Promise<EmailLog[]> { return []; }
+
+  // Credit integrity check methods (stubs - real implementation in DatabaseStorage)
+  async getUnifiedCreditUsageLogsByPaymentHistoryId(_paymentHistoryId: number): Promise<UnifiedCreditUsageLog[]> { return []; }
+  async getDoubleSpentCredits(_schoolId?: number): Promise<Credit[]> { return []; }
+  async getMismatchedStatusCredits(_schoolId?: number): Promise<Credit[]> { return []; }
+  async getCompletedScheduledPaymentsWithCreditSource(_schoolId?: number): Promise<ScheduledPayment[]> { return []; }
+  async getUnifiedCreditUsageLogsByScheduledPaymentId(_scheduledPaymentId: number): Promise<UnifiedCreditUsageLog[]> { return []; }
 }
 
 import { DatabaseStorage } from "./dbStorage";
@@ -7872,8 +7886,28 @@ import { DatabaseStorage } from "./dbStorage";
         return this.dbStorage.getUnifiedCreditUsageLogsByCreditId(creditId);
       }
 
+      async getUnifiedCreditUsageLogsByPaymentHistoryId(paymentHistoryId: number): Promise<UnifiedCreditUsageLog[]> {
+        return this.dbStorage.getUnifiedCreditUsageLogsByPaymentHistoryId(paymentHistoryId);
+      }
+
       async createUnifiedCreditUsageLog(log: InsertUnifiedCreditUsageLog): Promise<UnifiedCreditUsageLog> {
         return this.dbStorage.createUnifiedCreditUsageLog(log);
+      }
+
+      async getDoubleSpentCredits(schoolId?: number): Promise<Credit[]> {
+        return this.dbStorage.getDoubleSpentCredits(schoolId);
+      }
+
+      async getMismatchedStatusCredits(schoolId?: number): Promise<Credit[]> {
+        return this.dbStorage.getMismatchedStatusCredits(schoolId);
+      }
+
+      async getCompletedScheduledPaymentsWithCreditSource(schoolId?: number): Promise<ScheduledPayment[]> {
+        return this.dbStorage.getCompletedScheduledPaymentsWithCreditSource(schoolId);
+      }
+
+      async getUnifiedCreditUsageLogsByScheduledPaymentId(scheduledPaymentId: number): Promise<UnifiedCreditUsageLog[]> {
+        return this.dbStorage.getUnifiedCreditUsageLogsByScheduledPaymentId(scheduledPaymentId);
       }
 
       // ==================== PAYMENT ALLOCATIONS ====================

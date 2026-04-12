@@ -2177,6 +2177,24 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
   // Register /api/admin/educators BEFORE /api/admin to ensure specific route matches first
   // (admin-educators uses Supabase auth, while admin uses Auth0 auth)
   app.use("/api/admin/educators", adminEducatorsRouter);
+
+  // Admin on-demand credit integrity check — scoped to exact path, role-guarded
+  app.post(
+    '/api/admin/credits/integrity-check',
+    supabaseAuth,
+    requireRole(['admin', 'schoolAdmin', 'director', 'superAdmin']),
+    async (_req: any, res: any) => {
+      try {
+        const { runCreditIntegrityCheck } = await import('./services/credit-integrity-check');
+        const report = await runCreditIntegrityCheck();
+        res.json(report);
+      } catch (error: any) {
+        console.error('[AdminRoute] Error running credit integrity check:', error);
+        res.status(500).json({ error: 'Failed to run credit integrity check' });
+      }
+    }
+  );
+
   // Mount enrollment routers at /api/admin/enrollments with Supabase auth
   // These are separate from the Auth0-based admin router at /api/admin
   app.use("/api/admin/enrollments", supabaseAuth, adminEnrollmentsRouter); // Admin enrollment CRUD + comp (Supabase auth)

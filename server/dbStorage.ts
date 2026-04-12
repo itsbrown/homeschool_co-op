@@ -4762,6 +4762,69 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(unifiedCreditUsageLogs.createdAt));
   }
 
+  async getUnifiedCreditUsageLogsByPaymentHistoryId(paymentHistoryId: number): Promise<UnifiedCreditUsageLog[]> {
+    const db = await getDb();
+    return db.select().from(unifiedCreditUsageLogs)
+      .where(eq(unifiedCreditUsageLogs.paymentHistoryId, paymentHistoryId))
+      .orderBy(desc(unifiedCreditUsageLogs.createdAt));
+  }
+
+  async getDoubleSpentCredits(schoolId?: number): Promise<Credit[]> {
+    const db = await getDb();
+    const conditions = [
+      sql`${credits.usedAmountCents} > ${credits.creditAmountCents}`,
+    ];
+    if (schoolId !== undefined) {
+      conditions.push(eq(credits.schoolId, schoolId));
+    }
+    return db.select().from(credits).where(and(...conditions));
+  }
+
+  async getMismatchedStatusCredits(schoolId?: number): Promise<Credit[]> {
+    const db = await getDb();
+    const schoolCondition = schoolId !== undefined ? eq(credits.schoolId, schoolId) : sql`1=1`;
+    return db.select().from(credits).where(
+      and(
+        schoolCondition,
+        or(
+          and(eq(credits.status, 'used'), sql`${credits.usedAmountCents} != ${credits.creditAmountCents}`),
+          and(eq(credits.status, 'partially_used'), or(lte(credits.usedAmountCents, 0), gte(credits.usedAmountCents, credits.creditAmountCents))),
+          and(eq(credits.status, 'approved'), gt(credits.usedAmountCents, 0))
+        )
+      )
+    );
+  }
+
+  async getCompletedScheduledPaymentsWithCreditSource(schoolId?: number): Promise<ScheduledPayment[]> {
+    const db = await getDb();
+    const conditions = [eq(scheduledPayments.status, 'completed')];
+    if (schoolId !== undefined) {
+      conditions.push(eq(scheduledPayments.schoolId, schoolId));
+    }
+    const allCompleted = await db.select().from(scheduledPayments)
+      .where(and(...conditions));
+    return allCompleted.filter(sp => {
+      if (sp.stripePaymentIntentId && sp.stripePaymentIntentId.startsWith('credit_')) {
+        return true;
+      }
+      const meta = sp.metadata;
+      if (meta !== null && typeof meta === 'object' && !Array.isArray(meta)) {
+        const reservation = (meta as Record<string, unknown>).pendingCreditsReservation;
+        if (typeof reservation === 'number' && reservation > 0) {
+          return true;
+        }
+      }
+      return false;
+    });
+  }
+
+  async getUnifiedCreditUsageLogsByScheduledPaymentId(scheduledPaymentId: number): Promise<UnifiedCreditUsageLog[]> {
+    const db = await getDb();
+    return db.select().from(unifiedCreditUsageLogs)
+      .where(like(unifiedCreditUsageLogs.description, `Scheduled payment ${scheduledPaymentId} -%`))
+      .orderBy(desc(unifiedCreditUsageLogs.createdAt));
+  }
+
   async createUnifiedCreditUsageLog(log: InsertUnifiedCreditUsageLog): Promise<UnifiedCreditUsageLog> {
     const db = await getDb();
     const [newLog] = await db.insert(unifiedCreditUsageLogs).values(log).returning();
