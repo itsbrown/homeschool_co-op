@@ -799,21 +799,38 @@ export const webhookHandler = async (req: Request, res: Response) => {
           console.log(`✅ Marked scheduled payment ${scheduledPaymentId} as completed (source: ${completionSrc})`);
           
           // CONSUME CREDITS if any were applied to this payment
+          // If a credit hold session exists (partial-credit auto-pay path), finalize the hold.
+          // This prevents double-consumption: the scheduler reserved credits via createCreditHolds;
+          // the webhook finalizes them here. If no hold session, fall back to direct useCredits
+          // (for backward compatibility with non-auto-pay credit payments).
           const creditsAppliedCents = parseInt(paymentIntent.metadata.creditsAppliedCents || '0');
           const userId = parseInt(paymentIntent.metadata.userId || '0');
+          const creditHoldSessionId = paymentIntent.metadata.creditHoldSessionId || '';
           
           if (creditsAppliedCents > 0 && userId > 0) {
             try {
-              console.log(`💰 Consuming ${creditsAppliedCents} cents of credits for user ${userId}`);
-              const { usedCredits, totalUsed } = await storage.useCredits(
-                userId,
-                creditsAppliedCents,
-                undefined, // paymentHistoryId will be linked later if needed
-                `Scheduled payment ${scheduledPaymentId} - ${paymentIntent.metadata.installmentNumber}/${paymentIntent.metadata.totalInstallments}`
-              );
-              console.log(`💰 ✅ Consumed ${totalUsed} cents across ${usedCredits.length} credit records`);
+              if (creditHoldSessionId) {
+                // Auto-pay partial-credit path: finalize the pre-existing hold
+                console.log(`💰 Finalizing credit hold ${creditHoldSessionId} for scheduled payment ${scheduledPaymentId}`);
+                const { totalFinalized } = await storage.finalizeCreditHolds(
+                  creditHoldSessionId,
+                  undefined,
+                  `Scheduled payment ${scheduledPaymentId} — installment ${paymentIntent.metadata.installmentNumber}/${paymentIntent.metadata.totalInstallments}`
+                );
+                console.log(`💰 ✅ Finalized ${totalFinalized} cents via hold ${creditHoldSessionId}`);
+              } else {
+                // Non-auto-pay path (e.g. checkout with credits): consume directly
+                console.log(`💰 Consuming ${creditsAppliedCents} cents of credits for user ${userId}`);
+                const { usedCredits, totalUsed } = await storage.useCredits(
+                  userId,
+                  creditsAppliedCents,
+                  undefined,
+                  `Scheduled payment ${scheduledPaymentId} — installment ${paymentIntent.metadata.installmentNumber}/${paymentIntent.metadata.totalInstallments}`
+                );
+                console.log(`💰 ✅ Consumed ${totalUsed} cents across ${usedCredits.length} credit records`);
+              }
             } catch (creditError) {
-              console.error(`❌ Failed to consume credits for scheduled payment ${scheduledPaymentId}:`, creditError);
+              console.error(`❌ Failed to consume/finalize credits for scheduled payment ${scheduledPaymentId}:`, creditError);
               // Don't fail the webhook - credits can be manually reconciled
             }
           }

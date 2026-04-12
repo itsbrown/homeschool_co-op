@@ -26,9 +26,6 @@ import { sendScheduledPaymentReminder } from '../lib/email-service';
 
 const MAX_RETRIES = 3;
 
-/**
- * Notify parent of a failed auto-pay attempt via in-app notification and email.
- */
 async function notifyAutoPayFailure(scheduledPayment: any, parent: any, errMessage: string): Promise<void> {
   try {
     const notification = await storage.createNotification({
@@ -81,9 +78,6 @@ async function notifyAutoPayFailure(scheduledPayment: any, parent: any, errMessa
   }
 }
 
-/**
- * Notify parent that their auto-pay will be retried.
- */
 async function notifyAutoPayRetry(scheduledPayment: any, parent: any, retryCount: number): Promise<void> {
   try {
     const notification = await storage.createNotification({
@@ -133,19 +127,14 @@ export async function recoverOneScheduledPayment(sp: any): Promise<'reset' | 'co
     const intent = await stripe.paymentIntents.retrieve(sp.stripePaymentIntentId);
 
     if (intent.status === 'succeeded') {
-      // Mark the scheduled payment completed with recovery source
       await storage.updateScheduledPayment(sp.id, {
         status: 'completed',
         processedAt: new Date(),
         completionSource: 'recovery',
       });
 
-      // Create stripe_payment_history + allocation records and update enrollment balance,
-      // using the same pattern as the payment_intent.succeeded webhook handler.
-      // This ensures the payment is fully recorded and enrollment state is immediately consistent.
       if (sp.enrollmentId && sp.parentId) {
         try {
-          // Idempotent: skip history record creation if it already exists for this intent
           const existingHistory = await storage.getStripePaymentByIntentId(intent.id);
           if (!existingHistory) {
             const stripeHistoryRecord = await storage.saveStripePayment({
@@ -178,9 +167,6 @@ export async function recoverOneScheduledPayment(sp: any): Promise<'reset' | 'co
             }]);
           }
 
-          // Update enrollment balance using the same webhook-pattern approach:
-          // add the payment amount to totalPaid and recompute remainingBalance.
-          // Recovery applies the Stripe charge amount (no credit context available).
           const enrollment = await storage.getProgramEnrollmentById(sp.enrollmentId);
           if (enrollment) {
             const newTotalPaid = (enrollment.totalPaid || 0) + sp.amount;
@@ -194,7 +180,6 @@ export async function recoverOneScheduledPayment(sp: any): Promise<'reset' | 'co
           }
         } catch (auditErr: any) {
           console.error(`[AutoPay] Recovery: could not complete audit records / enrollment update for payment ${sp.id}:`, auditErr.message);
-          // Non-fatal: scheduled payment is still marked completed; enrollment can be reconciled manually
         }
       }
 
@@ -225,21 +210,15 @@ export async function recoverOneScheduledPayment(sp: any): Promise<'reset' | 'co
       return 'left-alone';
     }
 
-    // Unknown status — safe to reset
     await storage.updateScheduledPayment(sp.id, { status: 'pending' });
     console.log(`[AutoPay] Recovery: reset payment ${sp.id} — unknown Stripe status: ${intent.status}`);
     return 'reset';
   } catch (err: any) {
     console.error(`[AutoPay] Recovery: error handling payment ${sp.id}:`, err.message);
-    // On Stripe API error, do not crash — leave the payment alone
     return 'left-alone';
   }
 }
 
-/**
- * Find payments stuck in 'processing' for more than 15 minutes and reconcile them.
- * Runs at the start of each scheduler cycle to fix crash survivors.
- */
 async function recoverStuckProcessingPayments(): Promise<void> {
   try {
     const stuckPayments = await storage.getStuckProcessingPayments(15);
@@ -272,6 +251,8 @@ async function sendPreChargeNotifications(): Promise<void> {
     if (upcomingPayments.length === 0) return;
     console.log(`[AutoPay] Pre-charge notifications: ${upcomingPayments.length} payment(s) due tomorrow`);
 
+    const autoApplyCredits = process.env.AUTO_APPLY_CREDITS === 'true';
+
     for (const sp of upcomingPayments) {
       try {
         const parent = sp.parentId ? await storage.getUser(sp.parentId) : null;
@@ -292,29 +273,72 @@ async function sendPreChargeNotifications(): Promise<void> {
         const className = enrollment?.className || 'your class';
         const amountDisplay = `$${(sp.amount / 100).toFixed(2)}`;
 
-        // In-app notification (senderId = parent.id per notifyAutoPayFailure convention)
-        const notification = await storage.createNotification({
-          senderId: parent.id,
-          schoolId: sp.schoolId,
-          type: 'in_app',
-          priority: 'normal',
-          subject: 'Auto-payment scheduled for tomorrow',
-          content: `Your ${amountDisplay} auto-payment for ${className} is scheduled for tomorrow. Make sure your payment method is up to date.`,
-          targetType: 'individual',
-          targetData: { userId: parent.id },
-          targetUserIds: [parent.id],
-          status: 'sending',
-          scheduledFor: null,
-          expiresAt: null,
-        });
+        // Estimate credit reduction for reminder (read-only, no reservation)
+        let estimatedCredits: number | undefined;
+        let estimatedNetCharge: number | undefined;
 
-        if (notification?.id) {
-          await storage.createNotificationRecipient({
-            notificationId: notification.id,
-            recipientId: parent.id,
-            deliveryType: 'in_app',
-            status: 'delivered',
+        if (autoApplyCredits) {
+          try {
+            const availableCredits = await storage.getAvailableCredits(parent.id);
+            const totalAvailable = availableCredits.reduce(
+              (sum: number, c: any) => sum + (c.creditAmountCents - (c.usedAmountCents || 0)), 0
+            );
+            if (totalAvailable > 0) {
+              const maxForPartial = sp.amount - 50;
+              if (totalAvailable >= sp.amount) {
+                estimatedCredits = sp.amount;
+                estimatedNetCharge = 0;
+              } else if (totalAvailable <= maxForPartial) {
+                estimatedCredits = totalAvailable;
+                estimatedNetCharge = sp.amount - totalAvailable;
+              } else if (maxForPartial > 0) {
+                estimatedCredits = maxForPartial;
+                estimatedNetCharge = 50;
+              }
+            }
+          } catch (creditErr: any) {
+            console.error(`[AutoPay] Could not fetch credits for reminder ${sp.id}:`, creditErr.message);
+          }
+        }
+
+        let inAppContent: string;
+        if (estimatedCredits !== undefined && estimatedNetCharge !== undefined) {
+          if (estimatedNetCharge === 0) {
+            inAppContent = `Your ${amountDisplay} auto-payment for ${className} is scheduled for tomorrow. Your credits will fully cover this payment — no card charge!`;
+          } else {
+            inAppContent = `Your ${amountDisplay} auto-payment for ${className} is scheduled for tomorrow. $${(estimatedCredits / 100).toFixed(2)} in credits will apply, so your estimated card charge is $${(estimatedNetCharge / 100).toFixed(2)}.`;
+          }
+        } else {
+          inAppContent = `Your ${amountDisplay} auto-payment for ${className} is scheduled for tomorrow. Make sure your payment method is up to date.`;
+        }
+
+        // In-app notification (senderId = parent.id per notifyAutoPayFailure convention)
+        try {
+          const notification = await storage.createNotification({
+            senderId: parent.id,
+            schoolId: sp.schoolId,
+            type: 'in_app',
+            priority: 'normal',
+            subject: 'Auto-payment scheduled for tomorrow',
+            content: inAppContent,
+            targetType: 'individual',
+            targetData: { userId: parent.id },
+            targetUserIds: [parent.id],
+            status: 'sending',
+            scheduledFor: null,
+            expiresAt: null,
           });
+
+          if (notification?.id) {
+            await storage.createNotificationRecipient({
+              notificationId: notification.id,
+              recipientId: parent.id,
+              deliveryType: 'in_app',
+              status: 'delivered',
+            });
+          }
+        } catch (notifErr: any) {
+          console.error(`[AutoPay] Failed to create pre-charge notification for payment ${sp.id}:`, notifErr.message);
         }
 
         // Email reminder
@@ -331,6 +355,8 @@ async function sendPreChargeNotifications(): Promise<void> {
             installmentNumber: sp.installmentNumber || 1,
             totalInstallments: sp.totalInstallments || 1,
             urgency: 'warning',
+            estimatedCredits,
+            estimatedNetCharge,
           });
         } catch (emailErr: any) {
           console.error(`[AutoPay] Pre-charge email failed for payment ${sp.id}:`, emailErr.message);
@@ -373,6 +399,12 @@ async function sendPreChargeNotifications(): Promise<void> {
  * Extracted so tests can invoke exactly one payment without touching other DB records.
  */
 export async function processOneScheduledPayment(sp: any): Promise<'charged' | 'skipped' | 'failed'> {
+  // Declare all mutable state at function top-level so every catch block can read/write safely.
+  let creditsToApply: number = 0;
+  let chargeAmount: number = sp.amount;
+  let holdSessionId: string = '';
+  let holdCreated: boolean = false;
+
   try {
     // Idempotency guard: only process payments in 'pending' state
     if (sp.status !== 'pending') {
@@ -388,11 +420,6 @@ export async function processOneScheduledPayment(sp: any): Promise<'charged' | '
     }
 
     if (!parent.autoPayEnabled) {
-      return 'skipped';
-    }
-
-    if (!parent.stripeDefaultPaymentMethodId || !parent.stripeCustomerId) {
-      console.log(`[AutoPay] Skipping payment ${sp.id} for user ${parent.id} — no saved payment method`);
       return 'skipped';
     }
 
@@ -435,15 +462,170 @@ export async function processOneScheduledPayment(sp: any): Promise<'charged' | '
       }
     }
 
-    // Idempotency: mark as processing before calling Stripe
+    // Credit calculation (feature-flagged: AUTO_APPLY_CREDITS=true, off by default)
+    if (process.env.AUTO_APPLY_CREDITS === 'true') {
+      try {
+        const availableCredits = await storage.getAvailableCredits(parent.id);
+        const totalAvailable = availableCredits.reduce(
+          (sum: number, c: any) => sum + (c.creditAmountCents - (c.usedAmountCents || 0)), 0
+        );
+
+        if (totalAvailable > 0) {
+          // Determine how many credits to apply, respecting the $0.50 Stripe minimum:
+          //   Full coverage (credits >= amount)        → zero-charge path
+          //   Partial + safe (credits <= amount - 50)  → reduce card charge
+          //   Would drop below $0.50 but not cover     → cap credits to leave $0.50
+          const maxForPartial = sp.amount - 50;
+
+          if (totalAvailable >= sp.amount) {
+            creditsToApply = sp.amount;
+            chargeAmount = 0;
+          } else if (totalAvailable <= maxForPartial) {
+            creditsToApply = totalAvailable;
+            chargeAmount = sp.amount - creditsToApply;
+          } else if (maxForPartial > 0) {
+            creditsToApply = maxForPartial;
+            chargeAmount = 50;
+          }
+
+          console.log(`[AutoPay] Credits for payment ${sp.id}: available=${totalAvailable}, applying=${creditsToApply}, chargeAmount=${chargeAmount}`);
+        }
+      } catch (creditErr: any) {
+        console.error(`[AutoPay] Could not fetch credits for payment ${sp.id} — charging full amount:`, creditErr.message);
+        creditsToApply = 0;
+        chargeAmount = sp.amount;
+      }
+    }
+
+    // Zero-charge path: credits fully cover the installment (no Stripe needed).
+    // Uses the same reserve/finalize pattern as the partial-credit path:
+    //   createCreditHolds → audit payment + enrollment update → finalizeCreditHolds
+    // On any failure after hold creation: releaseCreditHolds restores all credits.
+    // Note: Stripe card presence is NOT checked here — credits-only completion
+    // should succeed even if the parent has no saved payment method.
+    if (chargeAmount === 0 && creditsToApply > 0) {
+      console.log(`[AutoPay] ✅ Payment ${sp.id} fully covered by credits ($${(creditsToApply / 100).toFixed(2)}) — skipping Stripe`);
+
+      await storage.updateScheduledPaymentStatus(sp.id, 'processing' as any);
+
+      holdSessionId = `autopay_credits_${sp.id}_${Date.now()}`;
+      let zeroChargeHoldCreated = false;
+
+      try {
+        const { totalHeld } = await storage.createCreditHolds(
+          parent.id,
+          creditsToApply,
+          holdSessionId,
+          `Auto-pay zero-charge hold for scheduled payment ${sp.id}`,
+          60
+        );
+        if (totalHeld < creditsToApply) {
+          throw new Error(`Insufficient credits reserved: needed ${creditsToApply}, got ${totalHeld}`);
+        }
+        zeroChargeHoldCreated = true;
+
+        const enrollment = sp.enrollmentId
+          ? await storage.getProgramEnrollmentById(sp.enrollmentId)
+          : null;
+
+        // Single atomic transaction: finalize holds + audit payment + enrollment update + complete
+        await storage.completeCreditsOnlyPayment({
+          holdSessionId,
+          scheduledPaymentId: sp.id,
+          parentId: parent.id,
+          enrollmentId: sp.enrollmentId ?? null,
+          schoolId: sp.schoolId,
+          creditsApplied: creditsToApply,
+          originalAmount: sp.amount,
+          installmentNumber: sp.installmentNumber || 1,
+          totalInstallments: sp.totalInstallments || 1,
+          parentEmail: parent.email,
+          childName: enrollment?.childName ?? null,
+          className: enrollment?.className ?? null,
+        });
+
+        console.log(`[AutoPay] ✅ Credits-only payment ${sp.id} completed atomically`);
+        return 'charged';
+      } catch (creditsOnlyErr: any) {
+        console.error(`[AutoPay] ❌ Credits-only path failed for payment ${sp.id}:`, creditsOnlyErr.message);
+        if (zeroChargeHoldCreated) {
+          try {
+            await storage.releaseCreditHolds(holdSessionId);
+            console.log(`[AutoPay] Released zero-charge hold ${holdSessionId} after failure`);
+          } catch (releaseErr: any) {
+            console.error(`[AutoPay] Could not release zero-charge hold ${holdSessionId}:`, releaseErr.message);
+          }
+        }
+        try {
+          await storage.updateScheduledPaymentStatus(sp.id, 'pending' as any);
+        } catch (_) { /* best-effort */ }
+        return 'failed';
+      }
+    }
+
+    // Stripe card is required for any payment that reaches here (partial-credit or full charge)
+    if (!parent.stripeDefaultPaymentMethodId || !parent.stripeCustomerId) {
+      console.log(`[AutoPay] Skipping payment ${sp.id} for user ${parent.id} — no saved payment method`);
+      return 'skipped';
+    }
+
+    // Mark processing before any Stripe/credit operations so concurrent scheduler
+    // runs that query by 'pending' status cannot double-process this payment.
     await storage.updateScheduledPaymentStatus(sp.id, 'processing' as any);
-    console.log(`[AutoPay] Processing payment ${sp.id} for user ${parent.id} — $${(sp.amount / 100).toFixed(2)}`);
+
+    // Partial-credit path: reserve credits before charging Stripe.
+    // Reserve/finalize lifecycle:
+    //   createCreditHolds   → reserves credits, preventing concurrent spend
+    //   Stripe PaymentIntent confirmed with creditHoldSessionId in metadata
+    //   webhook.payment_intent.succeeded → finalizeCreditHolds(creditHoldSessionId)
+    //   On card decline or error          → scheduler calls releaseCreditHolds
+    //
+    // If hold creation reserves fewer credits than requested, use the actually held
+    // amount to compute a reduced card charge (never fall back to full amount;
+    // never drop below the Stripe $0.50 minimum).
+    if (creditsToApply > 0) {
+      holdSessionId = `autopay_${sp.id}_${Date.now()}`;
+      try {
+        const { totalHeld } = await storage.createCreditHolds(
+          parent.id,
+          creditsToApply,
+          holdSessionId,
+          `Auto-pay hold for scheduled payment ${sp.id}`,
+          60
+        );
+        if (totalHeld > 0) {
+          // Adjust credits/charge to reflect what was actually reserved
+          creditsToApply = totalHeld;
+          chargeAmount = sp.amount - totalHeld;
+          // Enforce Stripe $0.50 minimum: if reduced charge would be 1–49 cents, bump up credits
+          if (chargeAmount > 0 && chargeAmount < 50) {
+            const excess = 50 - chargeAmount;
+            creditsToApply = totalHeld - excess;
+            chargeAmount = 50;
+          }
+          holdCreated = true;
+          console.log(`[AutoPay] Held ${totalHeld} credits for payment ${sp.id} — charge=${chargeAmount} (session: ${holdSessionId})`);
+        } else {
+          console.warn(`[AutoPay] No credits reserved for payment ${sp.id} — charging full amount`);
+          await storage.releaseCreditHolds(holdSessionId).catch(() => { /* best-effort */ });
+          holdSessionId = '';
+          creditsToApply = 0;
+          chargeAmount = sp.amount;
+        }
+      } catch (holdErr: any) {
+        console.error(`[AutoPay] Could not create credit hold for payment ${sp.id} — charging full amount:`, holdErr.message);
+        holdSessionId = '';
+        creditsToApply = 0;
+        chargeAmount = sp.amount;
+      }
+    }
+    console.log(`[AutoPay] Processing payment ${sp.id} for user ${parent.id} — $${(chargeAmount / 100).toFixed(2)} (original: $${(sp.amount / 100).toFixed(2)}, credits: $${(creditsToApply / 100).toFixed(2)})`);
 
     const stripe = await getStripeClient();
 
     try {
       const intent = await stripe.paymentIntents.create({
-        amount: sp.amount,
+        amount: chargeAmount,
         currency: 'usd',
         customer: parent.stripeCustomerId,
         payment_method: parent.stripeDefaultPaymentMethodId,
@@ -457,28 +639,30 @@ export async function processOneScheduledPayment(sp: any): Promise<'charged' | '
           installmentNumber: String(sp.installmentNumber || ''),
           totalInstallments: String(sp.totalInstallments || ''),
           autoPayInitiated: 'true',
+          creditsAppliedCents: String(creditsToApply),
+          originalAmountCents: String(sp.amount),
+          userId: String(parent.id),
+          creditHoldSessionId: holdSessionId,
         },
       });
 
       if (intent.status === 'succeeded') {
-        // Stamp completionSource before webhook updates enrollment.
-        // The webhook handler (payment_intent.succeeded) will: mark completed, update enrollment, create history record.
-        // We pre-stamp completionSource='stripe_autopay' here so the audit trail is accurate.
+        // The webhook (payment_intent.succeeded) will mark completed, update enrollment,
+        // create history record, and call finalizeCreditHolds(creditHoldSessionId) when
+        // holdSessionId is non-empty, or useCredits(creditsAppliedCents) otherwise.
         console.log(`[AutoPay] ✅ Payment ${sp.id} charged successfully — webhook will update enrollment`);
         await storage.updateScheduledPayment(sp.id, {
           chargedBy: 'auto_pay',
-          completionSource: 'stripe_autopay',
+          completionSource: creditsToApply > 0 ? 'stripe_autopay_partial_credits' : 'stripe_autopay',
         });
         return 'charged';
       } else {
         throw new Error(`PaymentIntent requires action — status: ${intent.status}`);
       }
     } catch (stripeErr: any) {
-      // Determine if this is a synchronous card decline.
       // NOTE: Stripe does NOT fire the payment_intent.payment_failed webhook for
-      // synchronously-rejected off-session PaymentIntents (decline happens inline).
-      // Therefore the scheduler must apply retry logic itself — do NOT permanently
-      // fail on the first declined attempt.
+      // synchronously-rejected off-session PaymentIntents — the scheduler must apply
+      // retry logic itself.
       const isCardDecline =
         stripeErr?.type === 'StripeCardError' ||
         stripeErr?.code === 'card_declined' ||
@@ -489,6 +673,15 @@ export async function processOneScheduledPayment(sp: any): Promise<'charged' | '
         const exhausted = newRetryCount >= MAX_RETRIES;
 
         console.log(`[AutoPay] ⚠️ Payment ${sp.id} card declined (retry ${newRetryCount}/${MAX_RETRIES})${exhausted ? ' — permanently failing' : ' — will retry'}`);
+
+        if (holdCreated) {
+          try {
+            await storage.releaseCreditHolds(holdSessionId);
+            console.log(`[AutoPay] Released credit hold ${holdSessionId} after card decline`);
+          } catch (releaseErr: any) {
+            console.error(`[AutoPay] Could not release credit hold ${holdSessionId}:`, releaseErr.message);
+          }
+        }
 
         await storage.updateScheduledPayment(sp.id, {
           status: exhausted ? 'failed' : 'pending',
@@ -507,11 +700,29 @@ export async function processOneScheduledPayment(sp: any): Promise<'charged' | '
         return 'failed';
       }
 
-      // Non-card-decline error (network, Stripe API issue, etc.) — re-throw to outer catch
+      // Non-card-decline error — release hold and re-throw to outer catch
+      if (holdCreated) {
+        try {
+          await storage.releaseCreditHolds(holdSessionId);
+          console.log(`[AutoPay] Released credit hold ${holdSessionId} after Stripe error`);
+        } catch (releaseErr: any) {
+          console.error(`[AutoPay] Could not release credit hold ${holdSessionId}:`, releaseErr.message);
+        }
+      }
       throw stripeErr;
     }
   } catch (err: any) {
     console.error(`[AutoPay] ❌ Failed to charge payment ${sp.id}:`, err.message);
+
+    // holdCreated and holdSessionId are at function scope — always accessible here
+    if (holdCreated) {
+      try {
+        await storage.releaseCreditHolds(holdSessionId);
+        console.log(`[AutoPay] Released credit hold ${holdSessionId} in outer catch`);
+      } catch (releaseErr: any) {
+        console.error(`[AutoPay] Could not release credit hold ${holdSessionId}:`, releaseErr.message);
+      }
+    }
 
     try {
       await storage.updateScheduledPaymentStatus(sp.id, 'failed' as any);
@@ -528,9 +739,6 @@ export async function processOneScheduledPayment(sp: any): Promise<'charged' | '
   }
 }
 
-/**
- * Process all pending scheduled payments that are past due (within 14-day staleness window).
- */
 async function processAutoPayments(): Promise<void> {
   console.log('[AutoPay] Starting auto-pay processing run...');
 

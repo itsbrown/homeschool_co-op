@@ -1221,6 +1221,8 @@ interface ScheduledPaymentReminderData {
   installmentNumber: number;
   totalInstallments: number;
   urgency: 'low' | 'medium' | 'high' | 'critical';
+  estimatedCredits?: number;
+  estimatedNetCharge?: number;
 }
 
 export async function sendScheduledPaymentReminder(data: ScheduledPaymentReminderData): Promise<boolean> {
@@ -1242,7 +1244,9 @@ export async function sendScheduledPaymentReminder(data: ScheduledPaymentReminde
       paymentId,
       installmentNumber,
       totalInstallments,
-      urgency
+      urgency,
+      estimatedCredits,
+      estimatedNetCharge,
     } = data;
 
     const formatCurrency = (amt: number) => {
@@ -1316,6 +1320,15 @@ export async function sendScheduledPaymentReminder(data: ScheduledPaymentReminde
                   <td style="padding: 8px 0; color: #6B7280;">Amount Due:</td>
                   <td style="padding: 8px 0; text-align: right; font-weight: bold; font-size: 18px; color: #4F46E5;">${formatCurrency(amount)}</td>
                 </tr>
+                ${estimatedCredits && estimatedCredits > 0 ? `
+                <tr>
+                  <td style="padding: 8px 0; color: #059669;">Credits to Apply:</td>
+                  <td style="padding: 8px 0; text-align: right; color: #059669; font-weight: bold;">-${formatCurrency(estimatedCredits)}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 0; color: #374151; font-weight: bold;">Estimated Net Charge:</td>
+                  <td style="padding: 8px 0; text-align: right; font-weight: bold; font-size: 18px; color: ${estimatedNetCharge === 0 ? '#059669' : '#4F46E5'};">${estimatedNetCharge === 0 ? 'Fully covered by credits – no card charge' : formatCurrency(estimatedNetCharge ?? 0)}</td>
+                </tr>` : ''}
                 <tr>
                   <td style="padding: 8px 0; color: #6B7280;">Due Date:</td>
                   <td style="padding: 8px 0; text-align: right; font-weight: bold;">${formatDate(dueDate)}</td>
@@ -1368,7 +1381,9 @@ Hello,
 This is a friendly reminder that your payment for ${childName}'s enrollment in ${className} is coming up.
 
 Payment Details:
-- Amount Due: ${formatCurrency(amount)}
+- Amount Due: ${formatCurrency(amount)}${estimatedCredits && estimatedCredits > 0 ? `
+- Credits to Apply: -${formatCurrency(estimatedCredits)}
+- Estimated Net Charge: ${estimatedNetCharge === 0 ? 'Fully covered by credits – no card charge' : formatCurrency(estimatedNetCharge ?? 0)}` : ''}
 - Due Date: ${formatDate(dueDate)}
 - Child: ${childName}
 - Class: ${className}

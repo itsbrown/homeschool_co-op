@@ -24,7 +24,59 @@ router.get('/upcoming', supabaseAuth, async (req: any, res) => {
     console.log(`📊 Found ${pendingPayments.length} pending/processing scheduled payments for ${userEmail}`);
     console.log(`📋 Payment IDs returned: [${pendingPayments.map(p => `${p.id}(e:${p.enrollmentId})`).join(', ')}]`);
 
+    // Get parent user for credit lookup (needed for auto-pay credit preview)
+    const parentUser = await storage.getUserByEmail(userEmail);
+
+    // Get available credits once for the whole batch (for auto-pay preview)
+    // Only computed when auto-pay is enabled — otherwise no preview needed
+    let totalAvailableCredits = 0;
+    if (parentUser?.autoPayEnabled) {
+      try {
+        const availableCredits = await storage.getAvailableCredits(parentUser.id);
+        totalAvailableCredits = availableCredits.reduce(
+          (sum, c) => sum + (c.creditAmountCents - (c.usedAmountCents || 0)), 0
+        );
+      } catch (creditErr: any) {
+        console.error('[upcoming] Could not fetch credits for preview:', creditErr.message);
+      }
+    }
+
     // Get enrollment details for enrichment
+    // Sort payments by due date first so credit simulation is chronologically accurate
+    const sortedPending = [...pendingPayments].sort(
+      (a, b) => new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime()
+    );
+
+    // Simulate credit consumption across sorted installments to avoid over-promising
+    // remaining credits that were already "spent" on earlier installments
+    let simulatedCreditsRemaining = totalAvailableCredits;
+    const creditPreviewMap = new Map<number, { creditsThatWillApply: number; estimatedNetCharge: number }>();
+
+    if (parentUser?.autoPayEnabled && simulatedCreditsRemaining > 0) {
+      for (const payment of sortedPending) {
+        if (simulatedCreditsRemaining <= 0) break;
+        const maxPartial = payment.amount - 50;
+        let appliedHere = 0;
+        let netCharge = payment.amount;
+
+        if (simulatedCreditsRemaining >= payment.amount) {
+          appliedHere = payment.amount;
+          netCharge = 0;
+        } else if (simulatedCreditsRemaining <= maxPartial) {
+          appliedHere = simulatedCreditsRemaining;
+          netCharge = payment.amount - appliedHere;
+        } else if (maxPartial > 0) {
+          appliedHere = maxPartial;
+          netCharge = 50;
+        }
+
+        if (appliedHere > 0) {
+          creditPreviewMap.set(payment.id, { creditsThatWillApply: appliedHere, estimatedNetCharge: netCharge });
+          simulatedCreditsRemaining -= appliedHere;
+        }
+      }
+    }
+
     const enrichedPayments = await Promise.all(pendingPayments.map(async (payment) => {
       let enrollmentDetails = null;
       if (payment.enrollmentId) {
@@ -38,6 +90,8 @@ router.get('/upcoming', supabaseAuth, async (req: any, res) => {
       }
       
       const metadata = payment.metadata as any || {};
+      const creditPreview = creditPreviewMap.get(payment.id);
+
       return {
         id: payment.id,
         amount: payment.amount,
@@ -49,7 +103,11 @@ router.get('/upcoming', supabaseAuth, async (req: any, res) => {
         totalInstallments: payment.totalInstallments,
         enrollmentId: payment.enrollmentId,
         className: enrollmentDetails?.className || 'Class',
-        childName: enrollmentDetails?.childName || ''
+        childName: enrollmentDetails?.childName || '',
+        ...(creditPreview !== undefined && {
+          creditsThatWillApply: creditPreview.creditsThatWillApply,
+          estimatedNetCharge: creditPreview.estimatedNetCharge,
+        }),
       };
     }));
 

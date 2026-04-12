@@ -265,7 +265,7 @@ function SubscriptionSchedulesTab() {
                 <h4 className="font-medium mb-3">Payment Schedule</h4>
                 <div className="space-y-3">
                   {(payments as any[]).map((payment: any) => (
-                    <div key={payment.id} className="flex justify-between items-center text-sm p-3 bg-muted/50 rounded-lg" data-testid={`scheduled-payment-${payment.id}`}>
+                    <div key={payment.id} className="flex justify-between items-start text-sm p-3 bg-muted/50 rounded-lg" data-testid={`scheduled-payment-${payment.id}`}>
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
                           <span className="font-medium">
@@ -281,9 +281,23 @@ function SubscriptionSchedulesTab() {
                         <p className="text-muted-foreground text-xs">
                           Due: {formatDate(payment.dueDate)}
                         </p>
+                        {payment.creditsThatWillApply != null && payment.creditsThatWillApply > 0 && (
+                          <p className="text-xs text-emerald-700 font-medium">
+                            {formatCurrency(payment.creditsThatWillApply)} credits will apply
+                            {' → '}
+                            net charge: {payment.estimatedNetCharge === 0
+                              ? 'Fully covered'
+                              : formatCurrency(payment.estimatedNetCharge)}
+                          </p>
+                        )}
                       </div>
                       <div className="text-right">
                         <span className="font-semibold">{formatCurrency(payment.amount)}</span>
+                        {payment.estimatedNetCharge != null && payment.estimatedNetCharge !== payment.amount && (
+                          <p className="text-xs text-emerald-600 font-medium">
+                            {payment.estimatedNetCharge === 0 ? 'No card charge' : `${formatCurrency(payment.estimatedNetCharge)} card charge`}
+                          </p>
+                        )}
                       </div>
                     </div>
                   ))}

@@ -4620,6 +4620,112 @@ export class DatabaseStorage implements IStorage {
     return { restoredCount, totalRestored };
   }
 
+  async completeCreditsOnlyPayment(params: {
+    holdSessionId: string;
+    scheduledPaymentId: number;
+    parentId: number;
+    enrollmentId: number | null;
+    schoolId: number | null;
+    creditsApplied: number;
+    originalAmount: number;
+    installmentNumber: number;
+    totalInstallments: number;
+    parentEmail: string;
+    childName: string | null;
+    className: string | null;
+  }): Promise<void> {
+    const db = await getDb();
+    const {
+      holdSessionId, scheduledPaymentId, parentId, enrollmentId, schoolId,
+      creditsApplied, originalAmount, installmentNumber, totalInstallments,
+      parentEmail, childName, className,
+    } = params;
+
+    await db.transaction(async (tx) => {
+      const pendingHolds = await tx
+        .select()
+        .from(creditHolds)
+        .where(and(
+          eq(creditHolds.checkoutSessionId, holdSessionId),
+          eq(creditHolds.status, 'pending')
+        ));
+
+      for (const hold of pendingHolds) {
+        const [credit] = await tx.select().from(credits).where(eq(credits.id, hold.creditId));
+        if (!credit) continue;
+        const newUsed = credit.usedAmountCents + hold.amountCents;
+        const newStatus: CreditStatus = newUsed >= credit.creditAmountCents ? 'used' : 'partially_used';
+        await tx.update(credits)
+          .set({ usedAmountCents: newUsed, status: newStatus, updatedAt: new Date() })
+          .where(eq(credits.id, credit.id));
+        await tx.insert(unifiedCreditUsageLogs).values({
+          creditId: hold.creditId,
+          paymentHistoryId: null,
+          amountCents: hold.amountCents,
+          description: `Auto-pay installment ${installmentNumber}/${totalInstallments} — fully covered by credits`,
+        });
+        await tx.update(creditHolds)
+          .set({ status: 'finalized' as CreditHoldStatus, finalizedAt: new Date() })
+          .where(eq(creditHolds.id, hold.id));
+      }
+
+      await tx.insert(payments).values({
+        schoolId: schoolId ?? 1,
+        parentId,
+        parentEmail,
+        amount: 0,
+        currency: 'usd',
+        childName: childName ?? null,
+        className: className ?? null,
+        description: `Auto-pay installment ${installmentNumber} of ${totalInstallments} — fully covered by credits`,
+        status: 'completed',
+        stripePaymentIntentId: null,
+        stripeChargeId: null,
+        stripeRefundId: null,
+        paymentMethod: 'other',
+        enrollmentIds: enrollmentId ? [enrollmentId] : [],
+        originalPaymentId: null,
+        paymentDate: new Date(),
+        metadata: {
+          source: 'credits_only',
+          scheduledPaymentId,
+          creditsAppliedCents: creditsApplied,
+          originalAmountCents: originalAmount,
+          autoPayInitiated: true,
+        },
+      });
+
+      if (enrollmentId) {
+        const [enrollment] = await tx
+          .select()
+          .from(programEnrollments)
+          .where(eq(programEnrollments.id, enrollmentId));
+        if (enrollment) {
+          const newTotalPaid = (enrollment.totalPaid || 0) + creditsApplied;
+          const newBalance = Math.max(0, (enrollment.totalCost || 0) - newTotalPaid);
+          await tx.update(programEnrollments)
+            .set({
+              totalPaid: newTotalPaid,
+              remainingBalance: newBalance,
+              paymentStatus: newBalance <= 0 ? 'completed' : 'partial_payment',
+              updatedAt: new Date(),
+            })
+            .where(eq(programEnrollments.id, enrollmentId));
+        }
+      }
+
+      await tx.update(scheduledPayments)
+        .set({
+          status: 'completed',
+          processedAt: new Date(),
+          completionSource: 'credits_only',
+          chargedBy: 'auto_pay',
+          updatedAt: new Date(),
+        })
+        .where(eq(scheduledPayments.id, scheduledPaymentId));
+    });
+  }
+
   async expireCredits(): Promise<number> {
     const db = await getDb();
     const now = new Date();

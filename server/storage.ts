@@ -698,6 +698,20 @@ export interface IStorage {
   createCreditHolds(userId: number, amountCents: number, checkoutSessionId: string, description?: string, expiresInMinutes?: number): Promise<{ holds: CreditHold[]; totalHeld: number }>;
   finalizeCreditHolds(checkoutSessionId: string, paymentHistoryId?: number, description?: string): Promise<{ finalizedCount: number; totalFinalized: number; usageLogs: UnifiedCreditUsageLog[] }>;
   releaseCreditHolds(checkoutSessionId: string): Promise<{ releasedCount: number; totalReleased: number }>;
+  completeCreditsOnlyPayment(params: {
+    holdSessionId: string;
+    scheduledPaymentId: number;
+    parentId: number;
+    enrollmentId: number | null;
+    schoolId: number | null;
+    creditsApplied: number;
+    originalAmount: number;
+    installmentNumber: number;
+    totalInstallments: number;
+    parentEmail: string;
+    childName: string | null;
+    className: string | null;
+  }): Promise<void>;
   getActiveHoldsForUser(userId: number): Promise<CreditHold[]>;
   getTotalHeldCreditsForUser(userId: number): Promise<number>;
   expireStaleHolds(): Promise<number>;
@@ -7819,6 +7833,23 @@ import { DatabaseStorage } from "./dbStorage";
 
       async releaseCreditHolds(checkoutSessionId: string): Promise<{ releasedCount: number; totalReleased: number }> {
         return this.dbStorage.releaseCreditHolds(checkoutSessionId);
+      }
+
+      async completeCreditsOnlyPayment(params: {
+        holdSessionId: string;
+        scheduledPaymentId: number;
+        parentId: number;
+        enrollmentId: number | null;
+        schoolId: number | null;
+        creditsApplied: number;
+        originalAmount: number;
+        installmentNumber: number;
+        totalInstallments: number;
+        parentEmail: string;
+        childName: string | null;
+        className: string | null;
+      }): Promise<void> {
+        return this.dbStorage.completeCreditsOnlyPayment(params);
       }
 
       async getActiveHoldsForUser(userId: number): Promise<CreditHold[]> {
