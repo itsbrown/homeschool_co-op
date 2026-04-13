@@ -514,6 +514,9 @@ router.post('/setup-auto-pay-scenario', async (req: Request, res: Response) => {
       'retry-cap-exceeded',
       'staleness-cutoff',
       'stuck-processing-no-pi',
+      'credits-partial-cover',
+      'credits-full-cover',
+      'credits-floor-guard',
     ];
     if (!scenario || !validScenarios.includes(scenario)) {
       return res.status(400).json({ error: `Invalid scenario. Must be one of: ${validScenarios.join(', ')}` });
@@ -620,6 +623,74 @@ router.post('/setup-auto-pay-scenario', async (req: Request, res: Response) => {
       await storage.updateScheduledPayment(scheduledPayment.id, { retryCount: 3 });
     }
 
+    // For credit scenarios: seed an approved credit record for the parent
+    // credits-partial-cover: credit (2000¢) < installment (5000¢) → card charged net remainder (3000¢)
+    // credits-full-cover:   credit (5000¢) = installment (5000¢) → no Stripe charge at all
+    // credits-floor-guard:  credit would push charge below $0.50 → cap credits, charge exactly 50¢
+    let seededCreditId: number | null = null;
+
+    if (scenario === 'credits-partial-cover') {
+      const credit = await storage.createCredit({
+        userId: parent.id,
+        schoolId: school.id,
+        creditType: 'manual',
+        creditAmountCents: 2000,
+        status: 'approved',
+        approvedBy: admin.id,
+        title: `Test Partial Credit ${uid}`,
+        description: 'Seeded for credits-partial-cover integration test',
+        sourceType: 'manual_grant',
+        sourceId: null,
+        expiresAt: null,
+        rejectionReason: null,
+        notes: null,
+        metadata: null,
+      } as any);
+      seededCreditId = credit.id;
+    }
+
+    if (scenario === 'credits-full-cover') {
+      const credit = await storage.createCredit({
+        userId: parent.id,
+        schoolId: school.id,
+        creditType: 'manual',
+        creditAmountCents: 5000,
+        status: 'approved',
+        approvedBy: admin.id,
+        title: `Test Full Credit ${uid}`,
+        description: 'Seeded for credits-full-cover integration test',
+        sourceType: 'manual_grant',
+        sourceId: null,
+        expiresAt: null,
+        rejectionReason: null,
+        notes: null,
+        metadata: null,
+      } as any);
+      seededCreditId = credit.id;
+    }
+
+    if (scenario === 'credits-floor-guard') {
+      // Installment is 5000¢; credit is 4980¢ — naive application would leave 20¢ charge which is below $0.50.
+      // The floor guard must cap credits so charge stays at exactly 50¢ (credits applied: 4950¢).
+      const credit = await storage.createCredit({
+        userId: parent.id,
+        schoolId: school.id,
+        creditType: 'manual',
+        creditAmountCents: 4980,
+        status: 'approved',
+        approvedBy: admin.id,
+        title: `Test Floor Guard Credit ${uid}`,
+        description: 'Seeded for credits-floor-guard integration test',
+        sourceType: 'manual_grant',
+        sourceId: null,
+        expiresAt: null,
+        rejectionReason: null,
+        notes: null,
+        metadata: null,
+      } as any);
+      seededCreditId = credit.id;
+    }
+
     console.log(`✅ Auto-pay scenario seeded: ${scenario} (paymentId=${scheduledPayment.id}, parentId=${parent.id})`);
 
     return res.json({
@@ -628,6 +699,7 @@ router.post('/setup-auto-pay-scenario', async (req: Request, res: Response) => {
       scheduledPaymentId: scheduledPayment.id,
       parentId: parent.id,
       enrollmentId: enrollment.id,
+      ...(seededCreditId !== null && { creditId: seededCreditId }),
     });
   } catch (error) {
     console.error('[Test] Error seeding auto-pay scenario:', error);
@@ -734,6 +806,52 @@ router.get('/due-scheduled-payments', async (req: Request, res: Response) => {
     console.error('[Test] Error fetching due scheduled payments:', error);
     return res.status(500).json({
       error: 'Failed to fetch due scheduled payments',
+      details: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+/**
+ * GET /api/test/enrollment/:id
+ * Returns the current state of a program enrollment record.
+ * Used by G10 to assert enrollment balance after credits-only auto-pay completes.
+ */
+router.get('/enrollment/:id', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: 'Invalid id' });
+
+    const enrollment = await storage.getProgramEnrollmentById(id);
+    if (!enrollment) return res.status(404).json({ error: `Enrollment ${id} not found` });
+
+    return res.json({ success: true, enrollment });
+  } catch (error) {
+    console.error('[Test] Error fetching enrollment:', error);
+    return res.status(500).json({
+      error: 'Failed to fetch enrollment',
+      details: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+/**
+ * GET /api/test/credit/:id
+ * Returns the current state of a credit record.
+ * Used by G10 to assert usedAmountCents after credits-only auto-pay completes.
+ */
+router.get('/credit/:id', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: 'Invalid id' });
+
+    const credit = await storage.getCreditById(id);
+    if (!credit) return res.status(404).json({ error: `Credit ${id} not found` });
+
+    return res.json({ success: true, credit });
+  } catch (error) {
+    console.error('[Test] Error fetching credit:', error);
+    return res.status(500).json({
+      error: 'Failed to fetch credit',
       details: error instanceof Error ? error.message : String(error),
     });
   }
