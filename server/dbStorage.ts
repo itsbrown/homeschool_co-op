@@ -3063,20 +3063,29 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Discount methods
+  private normalizeDiscount(discount: Discount): Discount {
+    return {
+      ...discount,
+      allowedMemberIds: discount.allowedMemberIds ?? [],
+    };
+  }
+
   async getDiscountById(id: number): Promise<Discount | undefined> {
     const db = await getDb();
     const [discount] = await db.select().from(discounts).where(eq(discounts.id, id));
-    return discount;
+    return discount ? this.normalizeDiscount(discount) : undefined;
   }
 
   async getAllDiscounts(): Promise<Discount[]> {
     const db = await getDb();
-    return await db.select().from(discounts);
+    const rows = await db.select().from(discounts);
+    return rows.map(d => this.normalizeDiscount(d));
   }
 
   async getDiscountsBySchoolId(schoolId: number): Promise<Discount[]> {
     const db = await getDb();
-    return await db.select().from(discounts).where(eq(discounts.schoolId, schoolId));
+    const rows = await db.select().from(discounts).where(eq(discounts.schoolId, schoolId));
+    return rows.map(d => this.normalizeDiscount(d));
   }
 
   async createDiscount(discount: InsertDiscount): Promise<Discount> {
@@ -3086,7 +3095,7 @@ export class DatabaseStorage implements IStorage {
       createdAt: new Date(),
       updatedAt: new Date()
     }).returning();
-    return newDiscount;
+    return this.normalizeDiscount(newDiscount);
   }
 
   async updateDiscount(id: number, discount: Partial<InsertDiscount>): Promise<Discount | undefined> {
@@ -3099,7 +3108,7 @@ export class DatabaseStorage implements IStorage {
       })
       .where(eq(discounts.id, id))
       .returning();
-    return updatedDiscount;
+    return updatedDiscount ? this.normalizeDiscount(updatedDiscount) : undefined;
   }
 
   /**

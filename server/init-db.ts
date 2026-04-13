@@ -2573,12 +2573,16 @@ async function runMigrations() {
   }
 
   // Add allowed_member_ids column to discounts table for member ID-targeted discounts
-  console.log('Running migration: Adding allowed_member_ids column to discounts table...');
-  await db.execute(sql`
-    ALTER TABLE discounts 
-    ADD COLUMN IF NOT EXISTS allowed_member_ids TEXT[];
-  `);
-  console.log('✅ Migration completed: allowed_member_ids column added to discounts table');
+  try {
+    console.log('Running migration: Adding allowed_member_ids column to discounts table...');
+    await db.execute(sql`
+      ALTER TABLE discounts 
+      ADD COLUMN IF NOT EXISTS allowed_member_ids TEXT[];
+    `);
+    console.log('✅ Migration completed: allowed_member_ids column added to discounts table');
+  } catch (allowedMemberIdsError: any) {
+    console.log('Migration note (non-blocking):', allowedMemberIdsError.message);
+  }
 
   // Create email_log table if it doesn't exist
   await db.execute(sql`
