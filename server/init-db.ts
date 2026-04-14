@@ -6,8 +6,31 @@ import path from 'path';
 
 // Run database migrations
 async function runMigrations() {
+  let db: Awaited<ReturnType<typeof getDb>>;
   try {
-    const db = await getDb();
+    db = await getDb();
+  } catch (connectionError) {
+    const msg = connectionError instanceof Error ? connectionError.message : String(connectionError);
+    if (msg.includes('Database connection not available')) {
+      // May be within the connection retry cooldown window — wait and retry once
+      console.log('⏳ DB not available yet, waiting 32s for cooldown before retrying migrations...');
+      await new Promise(resolve => setTimeout(resolve, 32_000));
+      try {
+        db = await getDb();
+      } catch (retryError) {
+        const retryMsg = retryError instanceof Error ? retryError.message : String(retryError);
+        if (retryMsg.includes('Database connection not available')) {
+          console.log('⏭️ Skipping migrations - using file storage mode');
+          return;
+        }
+        throw retryError;
+      }
+    } else {
+      throw connectionError;
+    }
+  }
+
+  try {
     
     // Add waitlist_position column if it doesn't exist
     console.log('Running migration: Adding waitlist_position column...');
@@ -1590,13 +1613,6 @@ async function runMigrations() {
     
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    
-    // Skip migrations if database is not available (file storage mode)
-    if (errorMessage.includes('Database connection not available')) {
-      console.log('⏭️ Skipping migrations - using file storage mode');
-      return;
-    }
-    
     console.log('Migration note:', errorMessage);
     // Continue even if migration fails (column might already exist)
   }
