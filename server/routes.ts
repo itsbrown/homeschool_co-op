@@ -3240,9 +3240,10 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
   const billingRouter = (await import("./api/billing")).default;
   app.use("/api/billing", billingRouter);
 
-  // Register auto-pay routes
-  const autoPayRouter = (await import("./api/auto-pay")).default;
-  app.use("/api/user", autoPayRouter);
+  // Register auto-pay routes (user) and admin payment-methods routes
+  const autoPayModule = await import("./api/auto-pay");
+  app.use("/api/user", autoPayModule.default);
+  app.use("/api/admin/users", autoPayModule.adminPaymentMethodsRouter);
 
   // Register payment history routes
   const paymentHistoryRouter = (await import("./api/payment-history")).default;

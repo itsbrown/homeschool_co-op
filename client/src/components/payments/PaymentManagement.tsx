@@ -5,6 +5,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { stripePromise } from '@/config/stripe';
 import { Loader2 } from "lucide-react";
+import CardManagementPanel from "@/components/payments/CardManagementPanel";
 
 import {
   Card,
@@ -1875,6 +1876,24 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
         
         {/* Upcoming Payments Tab */}
         <TabsContent value="upcoming" className="space-y-4">
+          {/* Payment Methods Card */}
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-2">
+                <CreditCard className="h-5 w-5 text-muted-foreground" />
+                <CardTitle className="text-base">Payment Methods</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <CardManagementPanel
+                onCardsChanged={() => {
+                  queryClient.invalidateQueries({ queryKey: ['/api/user/payment-method'] });
+                  queryClient.invalidateQueries({ queryKey: ['/api/user/auto-pay-status'] });
+                }}
+              />
+            </CardContent>
+          </Card>
+
           {/* Auto Pay Card */}
           <Card className={autoPayEnabled ? "border-green-200 bg-green-50/30" : "border-muted"}>
             <CardHeader className="pb-3">
@@ -1908,14 +1927,14 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
               ) : (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <CreditCard className="h-4 w-4 shrink-0" />
-                  <span>No card on file. Complete a checkout to save your card for auto-pay.</span>
+                  <span>No default card set. Add a card above and set it as default to enable auto-pay.</span>
                 </div>
               )}
               {autoPayEnabled ? (
                 <p className="text-xs text-green-700">Upcoming installments will be charged automatically on their due date.</p>
               ) : (
                 <p className="text-xs text-muted-foreground">
-                  {cardOnFile ? "Toggle the switch above to enable automatic payments on due dates." : "A saved card is required to enable auto pay."}
+                  {cardOnFile ? "Toggle the switch above to enable automatic payments on due dates." : "A saved default card is required to enable auto pay."}
                 </p>
               )}
             </CardContent>

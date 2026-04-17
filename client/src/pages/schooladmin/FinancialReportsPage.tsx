@@ -10,6 +10,14 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import CardManagementPanel from '@/components/payments/CardManagementPanel';
+import {
   Table,
   TableBody,
   TableCell,
@@ -332,6 +340,8 @@ export default function FinancialReportsPage() {
     queryKey: ['/api/admin/financial-reports/reminder-history'],
     enabled: activeTab === 'reminders',
   });
+
+  const [manageCardsParent, setManageCardsParent] = useState<{ id: number; name: string } | null>(null);
 
   const [classDateFilter, setClassDateFilter] = useState<string>('all');
   const classBreakdownPreset = CLASS_PRESETS[classDateFilter];
@@ -944,11 +954,25 @@ export default function FinancialReportsPage() {
                                     <p className="text-sm text-muted-foreground">{group.parentPhone}</p>
                                   )}
                                 </div>
-                                <div className="flex items-center gap-4">
-                                  <div className="text-right">
+                                <div className="flex items-center gap-2">
+                                  <div className="text-right mr-2">
                                     <p className="font-semibold">{formatCurrency(group.totalAmount)}</p>
                                     <p className="text-sm text-muted-foreground">{group.balanceCount} payment{group.balanceCount > 1 ? 's' : ''}</p>
                                   </div>
+                                  {(() => {
+                                    const parentId = group.balances[0]?.parent?.id;
+                                    return parentId ? (
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => setManageCardsParent({ id: parentId, name: group.parentName })}
+                                        title="Manage saved cards for this parent"
+                                      >
+                                        <CreditCard className="h-4 w-4 mr-1" />
+                                        Cards
+                                      </Button>
+                                    ) : null;
+                                  })()}
                                   <Button
                                     variant="outline"
                                     size="sm"
@@ -1022,7 +1046,7 @@ export default function FinancialReportsPage() {
                               <TableHead>Class</TableHead>
                               <TableHead>Amount</TableHead>
                               <TableHead>Status</TableHead>
-                              <TableHead className="w-[80px]">Action</TableHead>
+                              <TableHead className="w-[120px]">Actions</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -1080,6 +1104,17 @@ export default function FinancialReportsPage() {
                                       ) : (
                                         <Send className="h-4 w-4" />
                                       )}
+                                    </Button>
+                                  )}
+                                  {balance.parent?.id && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => setManageCardsParent({ id: balance.parent!.id, name: balance.parent!.name })}
+                                      className="h-8 px-2"
+                                      title="Manage saved cards for this parent"
+                                    >
+                                      <CreditCard className="h-4 w-4" />
                                     </Button>
                                   )}
                                 </TableCell>
@@ -1614,6 +1649,27 @@ export default function FinancialReportsPage() {
           </>
         )}
       </div>
+
+      {/* Manage Cards Dialog (admin mode) */}
+      <Dialog
+        open={!!manageCardsParent}
+        onOpenChange={(open) => !open && setManageCardsParent(null)}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Payment Methods</DialogTitle>
+            <DialogDescription>
+              View and manage saved cards for this parent. You can add a new card or remove existing ones.
+            </DialogDescription>
+          </DialogHeader>
+          {manageCardsParent && (
+            <CardManagementPanel
+              targetUserId={manageCardsParent.id}
+              targetUserName={manageCardsParent.name}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </SchoolAdminLayout>
   );
 }
