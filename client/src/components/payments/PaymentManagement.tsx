@@ -48,6 +48,7 @@ import { Badge } from "@/components/ui/badge";
 import { AlertCircle, CreditCard, DollarSign, Calendar, Check, Clock, FileText, Search, ChevronDown, Award, Coins, Users, Zap } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 interface Payment {
@@ -1267,10 +1268,11 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
       toast({ title: enabled ? 'Auto Pay enabled' : 'Auto Pay disabled' });
     },
     onError: async (err: any) => {
-      let message = 'Could not update Auto Pay';
+      let message = 'No card on file — complete a checkout to save your card for auto-pay.';
       try {
         const body = await err.json?.();
         if (body?.error) message = body.error;
+        else if (body?.message) message = body.message;
       } catch {}
       toast({ title: 'Auto Pay update failed', description: message, variant: 'destructive' });
     },
@@ -1907,14 +1909,25 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
                     <Badge variant="secondary">Off</Badge>
                   )}
                 </div>
-                {cardOnFile && (
-                  <Switch
-                    checked={autoPayEnabled}
-                    onCheckedChange={(checked) => toggleAutoPayMutation.mutate(checked)}
-                    disabled={toggleAutoPayMutation.isPending}
-                    aria-label="Toggle Auto Pay"
-                  />
-                )}
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span>
+                        <Switch
+                          checked={autoPayEnabled}
+                          onCheckedChange={(checked) => toggleAutoPayMutation.mutate(checked)}
+                          disabled={!cardOnFile || toggleAutoPayMutation.isPending}
+                          aria-label="Toggle Auto Pay"
+                        />
+                      </span>
+                    </TooltipTrigger>
+                    {!cardOnFile && (
+                      <TooltipContent>
+                        <p>Add a card at checkout to enable auto-pay</p>
+                      </TooltipContent>
+                    )}
+                  </Tooltip>
+                </TooltipProvider>
               </div>
             </CardHeader>
             <CardContent className="pt-0 space-y-3">
@@ -1927,15 +1940,15 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
               ) : (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <CreditCard className="h-4 w-4 shrink-0" />
-                  <span>No default card set. Add a card above and set it as default to enable auto-pay.</span>
+                  <span>No default card set. Add a card above and set it as default.</span>
                 </div>
               )}
-              {autoPayEnabled ? (
-                <p className="text-xs text-green-700">Upcoming installments will be charged automatically on their due date.</p>
-              ) : (
-                <p className="text-xs text-muted-foreground">
-                  {cardOnFile ? "Toggle the switch above to enable automatic payments on due dates." : "A saved default card is required to enable auto pay."}
-                </p>
+              {cardOnFile && (
+                autoPayEnabled ? (
+                  <p className="text-xs text-green-700">Upcoming installments will be charged automatically on their due date.</p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">Toggle the switch above to enable automatic payments on due dates.</p>
+                )
               )}
             </CardContent>
           </Card>
