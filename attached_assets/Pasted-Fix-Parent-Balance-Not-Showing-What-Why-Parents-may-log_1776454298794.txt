@@ -1,0 +1,25 @@
+Fix Parent Balance Not Showing
+What & Why
+Parents may log in and see $0 owed even when the admin can clearly see they have an outstanding balance. The root cause is a mismatch between how the two views look up data: the admin profile page fetches by parentId, while the parent-facing /api/billing/summary endpoint fetches children by the parent's email address from their login token. If the stored email doesn't exactly match (e.g., case difference) or if the parent–child link is missing/broken, the billing summary returns $0.
+
+This was specifically reported for the user sarahannelove@gmail.com.
+
+Done looks like
+Sarah (and any other parent in this situation) sees their correct outstanding balance in the BalanceIndicator on the parent dashboard.
+The parent billing page shows the same total due that the admin sees.
+The /api/billing/summary endpoint performs a case-insensitive email lookup and also falls back to looking up children by userId (not just email) so the two views are consistent.
+If a parent has no children linked but does have direct enrollment or scheduled payment records, those are still surfaced.
+Out of scope
+Changing how the admin profile page works.
+Retroactively fixing payment or enrollment records.
+Tasks
+Diagnose the lookup mismatch — In getChildrenByParentEmail, add case-insensitive email matching (ILIKE or .toLowerCase()) and add a secondary lookup by userId when email lookup returns no results, so children are found regardless of email casing or storage format.
+
+Audit /api/billing/summary fallback — After the children lookup, if no children are found, the endpoint should also check for scheduled payments and enrollments directly linked to the parent's userId, rather than immediately returning $0. This ensures balances are visible even when the parent–child link is incomplete.
+
+Add consistency check — Add a lightweight server-side check (or log) that compares the /api/billing/summary result against the /api/parent-profile/:parentId result for the same user and logs a warning when they diverge by more than $0.01. This makes future regressions immediately visible in server logs.
+
+Relevant files
+server/api/billing.ts
+server/dbStorage.ts
+client/src/components/billing/BalanceIndicator.tsx
