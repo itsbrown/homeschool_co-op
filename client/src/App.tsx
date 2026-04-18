@@ -38,6 +38,7 @@ import SchoolCalendarPage from './pages/schools/CalendarPage';
 const SchoolAdminLogin = lazy(() => import("@/pages/SchoolAdminLogin"));
 const Dashboard = lazy(() => import("@/pages/Dashboard"));
 const PaymentsPage = lazy(() => import("@/pages/PaymentsPage"));
+const PaymentMethodsPage = lazy(() => import("@/pages/PaymentMethodsPage"));
 const SchedulePage = lazy(() => import("@/pages/SchedulePage"));
 const Curriculum = lazy(() => import("@/pages/Curriculum"));
 const CurriculumDetail = lazy(() => import("@/pages/CurriculumDetail"));
@@ -596,6 +597,7 @@ function Router() {
       <Route path="/calendar" component={CalendarPage} />
       <Route path="/schedule" component={SchedulePage} />
       <Route path="/payments" component={PaymentsPage} />
+      <Route path="/payment-methods" component={PaymentMethodsPage} />
       <Route path="/payment">
         <Redirect to="/cart/checkout" />
       </Route>

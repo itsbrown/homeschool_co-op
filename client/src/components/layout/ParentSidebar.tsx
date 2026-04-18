@@ -177,11 +177,13 @@ export default function ParentSidebar() {
     location.startsWith('/school-admin/assessments/') ||
     location === '/school-admin/attendance' ||
     location.startsWith('/school-admin/attendance/');
+  const isPaymentsRoute = location === '/payments' || location === '/payment-methods';
 
   const [expandedSections, setExpandedSections] = React.useState<{ [key: string]: boolean }>(() => ({
     'Educator': isEducatorRoute,
     'School Admin': isSchoolAdminRoute,
     'Academics': isAcademicsRoute,
+    'Payments': isPaymentsRoute,
   }));
   const [logoLoadFailed, setLogoLoadFailed] = React.useState(false);
   const [mobileLogoLoadFailed, setMobileLogoLoadFailed] = React.useState(false);
@@ -196,7 +198,10 @@ export default function ParentSidebar() {
     if (isAcademicsRoute) {
       setExpandedSections(prev => ({ ...prev, 'Academics': true }));
     }
-  }, [isEducatorRoute, isSchoolAdminRoute, isAcademicsRoute]);
+    if (isPaymentsRoute) {
+      setExpandedSections(prev => ({ ...prev, 'Payments': true }));
+    }
+  }, [isEducatorRoute, isSchoolAdminRoute, isAcademicsRoute, isPaymentsRoute]);
 
   const { data: permissionsData } = useQuery<{ userLocations: Array<{ permissions: { canManageClasses?: boolean } }> }>({
     queryKey: ['/api/school-admin/user-locations/my-permissions'],
@@ -290,7 +295,19 @@ export default function ParentSidebar() {
       href: "/payments",
       title: "Payments",
       icon: <DollarSign className="h-5 w-5" />,
-      description: "Manage billing and view payment history"
+      isSectionHeader: true,
+      subItems: [
+        {
+          href: "/payments",
+          title: "Payments",
+          icon: <DollarSign className="h-5 w-5" />,
+        },
+        {
+          href: "/payment-methods",
+          title: "Payment Methods",
+          icon: <CreditCard className="h-5 w-5" />,
+        },
+      ],
     },
     {
       href: "/parent/documents",
