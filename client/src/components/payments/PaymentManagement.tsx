@@ -1718,7 +1718,7 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
                             </TableCell>
                           </TableRow>
                         )}
-                        {payment.metadata?.creditsApplied && payment.metadata.creditsApplied > 0 && (
+                        {(payment.metadata?.creditsApplied ?? 0) > 0 && (
                           <TableRow className="bg-purple-50 hover:bg-purple-100" data-testid={`credits-row-${payment.id}`}>
                             <TableCell colSpan={6} className="py-2">
                               <Collapsible>
