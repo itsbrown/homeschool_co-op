@@ -78,6 +78,84 @@ async function notifyAutoPayFailure(scheduledPayment: any, parent: any, errMessa
   }
 }
 
+async function notifyAutoPayCreditsSuccess(scheduledPayment: any, parent: any, creditsApplied: number, enrollment: any): Promise<void> {
+  const amountDisplay = `$${(creditsApplied / 100).toFixed(2)}`;
+  const className = enrollment?.className || 'your class';
+
+  // schoolId must come from the enrollment for correct multi-tenant scoping;
+  // fall back to the scheduled payment's schoolId only if enrollment is absent.
+  const schoolId = enrollment?.schoolId ?? scheduledPayment.schoolId ?? null;
+  if (!schoolId) {
+    console.warn(`[AutoPay] Skipping credits-success notification for payment ${scheduledPayment.id} — no schoolId available`);
+    return;
+  }
+
+  // senderId must be a system/admin user — look up the school's admin.
+  let senderId: number | null = null;
+  try {
+    const school = await storage.getSchool(schoolId);
+    if (school?.adminId) {
+      senderId = school.adminId;
+    }
+  } catch (schoolErr: any) {
+    console.warn(`[AutoPay] Could not fetch school ${schoolId} for senderId:`, schoolErr.message);
+  }
+  if (!senderId) {
+    console.warn(`[AutoPay] Skipping credits-success notification for payment ${scheduledPayment.id} — could not resolve admin senderId`);
+    return;
+  }
+
+  try {
+    const notification = await storage.createNotification({
+      senderId,
+      schoolId,
+      type: 'both',
+      priority: 'normal',
+      subject: `Payment covered by credits — no card charged`,
+      content: `Your ${amountDisplay} payment for ${className} was covered by your credit balance — no card was charged.`,
+      targetType: 'individual',
+      targetData: { userId: parent.id },
+      targetUserIds: [parent.id],
+      status: 'sending',
+      scheduledFor: null,
+      expiresAt: null,
+    });
+
+    if (notification?.id) {
+      await storage.createNotificationRecipient({
+        notificationId: notification.id,
+        recipientId: parent.id,
+        deliveryType: 'in_app',
+        status: 'delivered',
+      });
+    }
+  } catch (notifErr: any) {
+    console.error('[AutoPay] Failed to create credits-success notification:', notifErr.message);
+  }
+
+  try {
+    const { sendEmail } = await import('../lib/email-service');
+    const childName = enrollment?.childName || 'Your child';
+    const htmlContent = `
+      <p>Hi ${parent.name || 'there'},</p>
+      <p>Your scheduled payment of <strong>${amountDisplay}</strong> for <strong>${className}</strong> (${childName}) was fully covered by your credit balance.</p>
+      <p><strong>No card was charged.</strong></p>
+      <p>You can view your payment history and credit balance in the Payments section of your account.</p>
+      <p>Thank you,<br/>American Seekers Academy</p>
+    `;
+    await sendEmail(
+      parent.email,
+      parent.name || 'Parent',
+      `Payment covered by credits — ${amountDisplay} for ${className}`,
+      htmlContent,
+      `Your ${amountDisplay} payment for ${className} was covered by your credit balance — no card was charged.`,
+      'autopay_credits_success'
+    );
+  } catch (emailErr: any) {
+    console.error('[AutoPay] Failed to send credits-success email:', emailErr.message);
+  }
+}
+
 async function notifyAutoPayRetry(scheduledPayment: any, parent: any, retryCount: number): Promise<void> {
   try {
     const notification = await storage.createNotification({
@@ -262,8 +340,6 @@ async function sendPreChargeNotifications(): Promise<void> {
     if (upcomingPayments.length === 0) return;
     console.log(`[AutoPay] Pre-charge notifications: ${upcomingPayments.length} payment(s) due tomorrow`);
 
-    const autoApplyCredits = process.env.AUTO_APPLY_CREDITS === 'true';
-
     for (const sp of upcomingPayments) {
       try {
         const parent = sp.parentId ? await storage.getUser(sp.parentId) : null;
@@ -288,7 +364,7 @@ async function sendPreChargeNotifications(): Promise<void> {
         let estimatedCredits: number | undefined;
         let estimatedNetCharge: number | undefined;
 
-        if (autoApplyCredits) {
+        {
           try {
             const availableCredits = await storage.getAvailableCredits(parent.id);
             const totalAvailable = availableCredits.reduce(
@@ -473,39 +549,37 @@ export async function processOneScheduledPayment(sp: any): Promise<'charged' | '
       }
     }
 
-    // Credit calculation (feature-flagged: AUTO_APPLY_CREDITS=true, off by default)
-    if (process.env.AUTO_APPLY_CREDITS === 'true') {
-      try {
-        const availableCredits = await storage.getAvailableCredits(parent.id);
-        const totalAvailable = availableCredits.reduce(
-          (sum: number, c: any) => sum + (c.creditAmountCents - (c.usedAmountCents || 0)), 0
-        );
+    // Credit calculation: apply available credits to reduce or eliminate the card charge.
+    try {
+      const availableCredits = await storage.getAvailableCredits(parent.id);
+      const totalAvailable = availableCredits.reduce(
+        (sum: number, c: any) => sum + (c.creditAmountCents - (c.usedAmountCents || 0)), 0
+      );
 
-        if (totalAvailable > 0) {
-          // Determine how many credits to apply, respecting the $0.50 Stripe minimum:
-          //   Full coverage (credits >= amount)        → zero-charge path
-          //   Partial + safe (credits <= amount - 50)  → reduce card charge
-          //   Would drop below $0.50 but not cover     → cap credits to leave $0.50
-          const maxForPartial = sp.amount - 50;
+      if (totalAvailable > 0) {
+        // Determine how many credits to apply, respecting the $0.50 Stripe minimum:
+        //   Full coverage (credits >= amount)        → zero-charge path
+        //   Partial + safe (credits <= amount - 50)  → reduce card charge
+        //   Would drop below $0.50 but not cover     → cap credits to leave $0.50
+        const maxForPartial = sp.amount - 50;
 
-          if (totalAvailable >= sp.amount) {
-            creditsToApply = sp.amount;
-            chargeAmount = 0;
-          } else if (totalAvailable <= maxForPartial) {
-            creditsToApply = totalAvailable;
-            chargeAmount = sp.amount - creditsToApply;
-          } else if (maxForPartial > 0) {
-            creditsToApply = maxForPartial;
-            chargeAmount = 50;
-          }
-
-          console.log(`[AutoPay] Credits for payment ${sp.id}: available=${totalAvailable}, applying=${creditsToApply}, chargeAmount=${chargeAmount}`);
+        if (totalAvailable >= sp.amount) {
+          creditsToApply = sp.amount;
+          chargeAmount = 0;
+        } else if (totalAvailable <= maxForPartial) {
+          creditsToApply = totalAvailable;
+          chargeAmount = sp.amount - creditsToApply;
+        } else if (maxForPartial > 0) {
+          creditsToApply = maxForPartial;
+          chargeAmount = 50;
         }
-      } catch (creditErr: any) {
-        console.error(`[AutoPay] Could not fetch credits for payment ${sp.id} — charging full amount:`, creditErr.message);
-        creditsToApply = 0;
-        chargeAmount = sp.amount;
+
+        console.log(`[AutoPay] Credits for payment ${sp.id}: available=${totalAvailable}, applying=${creditsToApply}, chargeAmount=${chargeAmount}`);
       }
+    } catch (creditErr: any) {
+      console.error(`[AutoPay] Could not fetch credits for payment ${sp.id} — charging full amount:`, creditErr.message);
+      creditsToApply = 0;
+      chargeAmount = sp.amount;
     }
 
     // Zero-charge path: credits fully cover the installment (no Stripe needed).
@@ -556,6 +630,13 @@ export async function processOneScheduledPayment(sp: any): Promise<'charged' | '
         });
 
         console.log(`[AutoPay] ✅ Credits-only payment ${sp.id} completed atomically`);
+
+        try {
+          await notifyAutoPayCreditsSuccess(sp, parent, creditsToApply, enrollment);
+        } catch (notifErr: any) {
+          console.error(`[AutoPay] Non-fatal: credits-success notification failed for payment ${sp.id}:`, notifErr.message);
+        }
+
         return 'charged';
       } catch (creditsOnlyErr: any) {
         console.error(`[AutoPay] ❌ Credits-only path failed for payment ${sp.id}:`, creditsOnlyErr.message);
@@ -801,7 +882,7 @@ export function startAutoPayJob(): void {
     return;
   }
 
-  console.log('💳 Starting auto-pay job...');
+  console.log('💳 Starting auto-pay job... Credit auto-application is ACTIVE (applied by default to all auto-pay installments).');
   recoverStuckProcessingPayments();
   sendPreChargeNotifications();
   processAutoPayments();
