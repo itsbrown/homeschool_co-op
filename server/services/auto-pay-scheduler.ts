@@ -214,6 +214,17 @@ export async function recoverOneScheduledPayment(sp: any): Promise<'reset' | 'co
     console.log(`[AutoPay] Recovery: reset payment ${sp.id} — unknown Stripe status: ${intent.status}`);
     return 'reset';
   } catch (err: any) {
+    // Stripe "No such payment_intent" means the PI was created under a different key
+    // (e.g. a previous test session). Treat it the same as Case A — reset to pending.
+    const isNotFound =
+      err?.type === 'StripeInvalidRequestError' ||
+      err?.code === 'resource_missing' ||
+      err?.message?.includes('No such payment_intent');
+    if (isNotFound) {
+      await storage.updateScheduledPayment(sp.id, { status: 'pending', stripePaymentIntentId: null } as any);
+      console.log(`[AutoPay] Recovery: reset payment ${sp.id} to pending — PI not found in Stripe (stale key)`);
+      return 'reset';
+    }
     console.error(`[AutoPay] Recovery: error handling payment ${sp.id}:`, err.message);
     return 'left-alone';
   }
