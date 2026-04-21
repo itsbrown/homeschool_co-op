@@ -572,10 +572,26 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
         .map(enrollment => (enrollment as any)._remainingBalanceCents || 0)
     );
 
+    // Build a school name map for all membership school IDs to avoid repeated DB calls
+    const membershipSchoolIds = [...new Set(membershipEnrollments.map(m => m.schoolId).filter(Boolean))] as number[];
+    const schoolNameMap = new Map<number, string>();
+    await Promise.all(
+      membershipSchoolIds.map(async (schoolId) => {
+        try {
+          const school = await storage.getSchool(schoolId);
+          if (school) {
+            schoolNameMap.set(schoolId, school.name);
+          }
+        } catch {
+          // Non-blocking — fallback handled below
+        }
+      })
+    );
+
     // Process membership enrollments with recalculated balances
     const processedMembershipEnrollments = membershipEnrollments.map(membership => {
-      // Get school info for membership display
-      const school = classes.find(c => c.schoolId === membership.schoolId) || { schoolId: membership.schoolId };
+      // Look up school name from the pre-fetched map
+      const schoolName = membership.schoolId ? (schoolNameMap.get(membership.schoolId) ?? `School ${membership.schoolId}`) : 'Unknown School';
       
       // Calculate actual membership payments made
       const membershipPayments = paymentHistory.filter(payment => 
@@ -589,7 +605,7 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
       return {
         id: membership.id,
         schoolId: membership.schoolId,
-        schoolName: (school as any).schoolName || 'Unknown School',
+        schoolName,
         membershipYear: membership.membershipYear,
         amount: CurrencyUtils.toDisplay(totalPaid),
         amountPaid: CurrencyUtils.toDisplay(membership.amountPaid || totalPaid),

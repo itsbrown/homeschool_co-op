@@ -2661,6 +2661,25 @@ async function runMigrations() {
   } catch (marekCorrectionError: any) {
     console.log('Data correction note (non-blocking):', marekCorrectionError.message);
   }
+
+  // Add unique constraint to prevent duplicate membership enrollments per parent/school/year
+  console.log('Running migration: Adding unique constraint to membership_enrollments...');
+  try {
+    await db.execute(sql`
+      ALTER TABLE membership_enrollments
+      ADD CONSTRAINT membership_enrollments_parent_school_year_unique
+      UNIQUE (parent_user_id, school_id, membership_year);
+    `);
+    console.log('✅ Migration completed: unique constraint added to membership_enrollments (parent_user_id, school_id, membership_year)');
+  } catch (membershipUniqueError: any) {
+    // 42710 = duplicate_object: constraint already exists — expected on re-runs, safe to ignore
+    if (membershipUniqueError?.code === '42710' || membershipUniqueError?.message?.includes('already exists')) {
+      console.log('✅ Migration completed: unique constraint on membership_enrollments already exists');
+    } else {
+      console.error('❌ Migration failed: could not add unique constraint to membership_enrollments:', membershipUniqueError);
+      throw membershipUniqueError;
+    }
+  }
 }
 
 // Initialize database tables

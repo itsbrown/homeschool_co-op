@@ -608,35 +608,63 @@ router.post('/confirm', async (req: any, res) => {
           
           console.log(`🎫 ✅ Generated Member ID ${newMemberId} for user ${parentUserId}`);
           
-          const startDate = new Date();
-          const expirationDate = new Date(startDate);
-          expirationDate.setFullYear(expirationDate.getFullYear() + 1);
+          // Before creating a new membership, check if a record already exists (e.g. auto-created during registration)
+          const existingMembershipForNewMember = await storage.getMembershipEnrollmentByParentAndSchoolAndYear(
+            parentUserId, membershipSchoolId, membershipYear
+          );
           
-          await storage.createMembershipEnrollment({
-            schoolId: membershipSchoolId,
-            parentUserId: parentUserId,
-            membershipYear: membershipYear,
-            membershipTier: 'basic',
-            amount: membershipAmount,
-            amountPaid: membershipAmount,
-            remainingBalance: 0,
-            totalAmount: membershipAmount,
-            balanceDue: 0,
-            status: 'enrolled',
-            stripeSubscriptionId: null,
-            stripeCustomerId: (paymentIntent.customer as string) || null,
-            startDate,
-            renewalDate: expirationDate,
-            dueDate: startDate,
-            endDate: expirationDate,
-            expirationDate,
-            gracePeriodEnd: null,
-            paymentMethod: 'other',
-            notes: `Stripe payment via cart checkout (${paymentIntent.id}) - confirmed via confirm endpoint${membershipDiscountName ? ` - Discount: ${membershipDiscountName}` : ''}`
-          });
-          
-          membershipCreated = true;
-          console.log(`🎫 ✅ Created membership enrollment for user ${parentUserId} in confirm endpoint`);
+          if (existingMembershipForNewMember) {
+            // Update the existing record (e.g. the pending_payment created at registration) rather than creating a duplicate
+            console.log(`🎫 Found existing membership ${existingMembershipForNewMember.id} (status: ${existingMembershipForNewMember.status}) for new member - updating to enrolled`);
+            
+            if (existingMembershipForNewMember.notes?.includes(paymentIntent.id)) {
+              console.log(`🎫 Membership ${existingMembershipForNewMember.id} already updated with payment ${paymentIntent.id} - skipping`);
+            } else {
+              await storage.updateMembershipEnrollment(existingMembershipForNewMember.id, {
+                status: 'enrolled',
+                amount: membershipAmount,
+                totalAmount: membershipAmount,
+                amountPaid: membershipAmount,
+                remainingBalance: 0,
+                balanceDue: 0,
+                paymentMethod: 'other',
+                stripeCustomerId: (paymentIntent.customer as string) || existingMembershipForNewMember.stripeCustomerId,
+                notes: `${existingMembershipForNewMember.notes || ''} | Updated via cart checkout (${paymentIntent.id})${membershipDiscountName ? ` - Discount: ${membershipDiscountName}` : ''}`
+              });
+              membershipCreated = true;
+              console.log(`🎫 ✅ Updated existing membership ${existingMembershipForNewMember.id} to enrolled for user ${parentUserId}`);
+            }
+          } else {
+            const startDate = new Date();
+            const expirationDate = new Date(startDate);
+            expirationDate.setFullYear(expirationDate.getFullYear() + 1);
+            
+            await storage.createMembershipEnrollment({
+              schoolId: membershipSchoolId,
+              parentUserId: parentUserId,
+              membershipYear: membershipYear,
+              membershipTier: 'basic',
+              amount: membershipAmount,
+              amountPaid: membershipAmount,
+              remainingBalance: 0,
+              totalAmount: membershipAmount,
+              balanceDue: 0,
+              status: 'enrolled',
+              stripeSubscriptionId: null,
+              stripeCustomerId: (paymentIntent.customer as string) || null,
+              startDate,
+              renewalDate: expirationDate,
+              dueDate: startDate,
+              endDate: expirationDate,
+              expirationDate,
+              gracePeriodEnd: null,
+              paymentMethod: 'other',
+              notes: `Stripe payment via cart checkout (${paymentIntent.id}) - confirmed via confirm endpoint${membershipDiscountName ? ` - Discount: ${membershipDiscountName}` : ''}`
+            });
+            
+            membershipCreated = true;
+            console.log(`🎫 ✅ Created membership enrollment for user ${parentUserId} in confirm endpoint`);
+          }
           
           // Track discount usage (mirrors webhook handler logic)
           if (membershipDiscountId && membershipDiscountAmount > 0 && membershipSchoolId) {
