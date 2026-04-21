@@ -337,9 +337,25 @@ router.post('/pay', supabaseAuth, async (req: any, res) => {
       });
     }
     
-    // Log if retrying a processing payment (user likely abandoned previous checkout)
+    // Race-condition guard: reuse existing PaymentIntent if one was already created for this payment
+    if (scheduledPayment.status === 'processing' && scheduledPayment.stripePaymentIntentId) {
+      // PI already created — retrieve and return the existing intent (no new charge)
+      console.log(`🔄 Payment ${paymentId} is already processing — reusing existing PaymentIntent ${scheduledPayment.stripePaymentIntentId}`);
+      const stripe = await getStripeClient();
+      const existingIntent = await stripe.paymentIntents.retrieve(scheduledPayment.stripePaymentIntentId);
+      return res.json({
+        success: true,
+        clientSecret: existingIntent.client_secret,
+        paymentIntentId: existingIntent.id,
+        chargeAmount: existingIntent.amount,
+        creditsApplied: (scheduledPayment.metadata as Record<string, any>)?.pendingCreditsReservation || 0,
+        reused: true
+      });
+    }
+
+    // Log if retrying a processing payment with no stored PI (legacy/edge case — proceed to create new PI)
     if (scheduledPayment.status === 'processing') {
-      console.log(`🔄 Retrying payment ${paymentId} that was previously in processing state`);
+      console.log(`🔄 Retrying payment ${paymentId} in processing state with no stored PI — creating new PaymentIntent`);
     }
 
     // SERVER-AUTHORITATIVE AMOUNT: Use the scheduled payment amount, not client-supplied
@@ -453,8 +469,11 @@ router.post('/pay', supabaseAuth, async (req: any, res) => {
 
     console.log('✅ Created payment intent for scheduled payment:', paymentIntent.id, 'with enrollmentIds:', enrollmentIds, 'chargeAmount:', chargeAmount);
 
-    // Stamp charged_by for audit trail
-    await storage.updateScheduledPayment(parseInt(paymentId), { chargedBy: 'parent_manual' });
+    // Immediately store the PI ID to prevent double-charge on concurrent retries
+    await storage.updateScheduledPayment(parseInt(paymentId), {
+      stripePaymentIntentId: paymentIntent.id,
+      chargedBy: 'parent_manual'
+    });
 
     res.json({
       success: true,
@@ -1348,6 +1367,32 @@ router.post('/pay-combined', supabaseAuth, async (req: any, res) => {
       });
     }
 
+    // Race-condition guard: reuse existing PaymentIntent if ALL payments in the group share one
+    const allProcessing = paymentsToProcess.every(p => p.status === 'processing');
+    if (allProcessing) {
+      const piIds = paymentsToProcess.map(p => p.stripePaymentIntentId).filter(Boolean) as string[];
+      const uniquePiIds = new Set(piIds);
+      if (piIds.length === paymentsToProcess.length && uniquePiIds.size === 1) {
+        // Every payment is processing and all share the same PI ID — reuse it, no new charge
+        const existingPiId = piIds[0];
+        console.log(`🔄 Combined payment group already processing — reusing existing PaymentIntent ${existingPiId}`);
+        const stripe = await getStripeClient();
+        const existingIntent = await stripe.paymentIntents.retrieve(existingPiId);
+        return res.json({
+          success: true,
+          clientSecret: existingIntent.client_secret,
+          paymentIntentId: existingIntent.id,
+          chargeAmount: existingIntent.amount,
+          combinedAmount: paymentsToProcess.reduce((sum, p) => sum + p.amount, 0),
+          creditsApplied: parseInt((existingIntent.metadata?.creditsAppliedCents) || '0'),
+          paymentCount: paymentsToProcess.length,
+          reused: true
+        });
+      }
+      // All processing but PI IDs are missing or inconsistent (legacy/edge case) — fall through to create new PI
+      console.log(`🔄 Combined payment group processing but PI state incomplete — creating new PaymentIntent`);
+    }
+
     const combinedAmount = paymentsToProcess.reduce((sum, p) => sum + p.amount, 0);
     console.log('💰 Server-authoritative combined amount:', combinedAmount);
 
@@ -1428,6 +1473,11 @@ router.post('/pay-combined', supabaseAuth, async (req: any, res) => {
 
     const paymentIntent = await stripe.paymentIntents.create(paymentIntentParams);
     console.log('✅ Created combined payment intent:', paymentIntent.id, 'for', paymentsToProcess.length, 'payments, chargeAmount:', chargeAmount);
+
+    // Immediately store the PI ID on every payment in the group to prevent double-charge on concurrent retries
+    await Promise.all(paymentsToProcess.map(p =>
+      storage.updateScheduledPayment(p.id, { stripePaymentIntentId: paymentIntent.id })
+    ));
 
     res.json({
       success: true,
