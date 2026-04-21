@@ -7,6 +7,9 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
+import { Separator } from "@/components/ui/separator";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Dialog,
   DialogContent,
@@ -14,7 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { CreditCard, Plus, Star, Trash2, Loader2, CheckCircle } from "lucide-react";
+import { CreditCard, Plus, Star, Trash2, Loader2, CheckCircle, Zap } from "lucide-react";
 
 interface SavedCard {
   id: string;
@@ -171,8 +174,34 @@ export default function CardManagementPanel({
     },
   });
 
+  const autoPayQueryKey = ['/api/user/auto-pay-status'];
+
+  const { data: autoPayStatusData, isLoading: isLoadingAutoPay } = useQuery<{ autoPayEnabled: boolean }>({
+    queryKey: autoPayQueryKey,
+    enabled: !isAdminMode,
+  });
+
+  const toggleAutoPayMutation = useMutation({
+    mutationFn: (enabled: boolean) => apiRequest('PATCH', '/api/user/auto-pay', { enabled }),
+    onSuccess: (_data, enabled) => {
+      queryClient.invalidateQueries({ queryKey: autoPayQueryKey });
+      toast({ title: enabled ? 'Auto Pay enabled' : 'Auto Pay disabled' });
+    },
+    onError: async (err: any) => {
+      let message = 'Unable to update auto-pay setting.';
+      try {
+        const body = await err.json?.();
+        if (body?.error) message = body.error;
+        else if (body?.message) message = body.message;
+      } catch {}
+      toast({ title: 'Auto Pay update failed', description: message, variant: 'destructive' });
+    },
+  });
+
   const cards = data?.paymentMethods ?? [];
   const isMutating = removeMutation.isPending || setDefaultMutation.isPending;
+  const defaultCard = cards.find((c) => c.isDefault) ?? null;
+  const autoPayEnabled = autoPayStatusData?.autoPayEnabled ?? false;
 
   return (
     <div className="space-y-3">
@@ -275,6 +304,62 @@ export default function CardManagementPanel({
         )}
         Add Card
       </Button>
+
+      {!isAdminMode && (
+        <>
+          <Separator className="my-1" />
+          <div className="space-y-3 pt-1">
+            <div className="flex items-center gap-2">
+              <Zap className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-medium">Auto Pay</span>
+              {autoPayEnabled ? (
+                <Badge className="bg-green-100 text-green-700 border-green-200 text-xs">Active</Badge>
+              ) : (
+                <Badge variant="secondary" className="text-xs">Off</Badge>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between gap-4">
+              <p className="text-xs text-muted-foreground leading-snug">
+                Automatically charge your default card on each installment's due date.
+              </p>
+              {isLoadingAutoPay ? (
+                <Skeleton className="h-5 w-9 rounded-full shrink-0" />
+              ) : (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="shrink-0">
+                        <Switch
+                          checked={autoPayEnabled}
+                          onCheckedChange={(checked) => toggleAutoPayMutation.mutate(checked)}
+                          disabled={(!defaultCard && !autoPayEnabled) || toggleAutoPayMutation.isPending}
+                          aria-label="Toggle Auto Pay"
+                        />
+                      </span>
+                    </TooltipTrigger>
+                    {!defaultCard && !autoPayEnabled && (
+                      <TooltipContent>
+                        <p>Set a default card above to enable auto-pay</p>
+                      </TooltipContent>
+                    )}
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+            </div>
+
+            {defaultCard && (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <CreditCard className="h-3.5 w-3.5 shrink-0" />
+                <span className="capitalize">{defaultCard.brand} ···· {defaultCard.last4}</span>
+                {defaultCard.expMonth && defaultCard.expYear && (
+                  <span>· Expires {defaultCard.expMonth}/{defaultCard.expYear}</span>
+                )}
+              </div>
+            )}
+          </div>
+        </>
+      )}
 
       <Dialog open={addCardOpen} onOpenChange={(open) => !open && handleAddCardClose()}>
         <DialogContent className="sm:max-w-md">

@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from "react";
+import { Link } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { stripePromise } from '@/config/stripe';
 import { Loader2 } from "lucide-react";
-import CardManagementPanel from "@/components/payments/CardManagementPanel";
 
 import {
   Card,
@@ -1251,34 +1251,11 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
     },
   });
   
-  // Auto-pay: fetch saved card on file
-  const { data: paymentMethodData } = useQuery<{ cardOnFile: { brand: string; last4: string; expMonth: number; expYear: number } | null }>({
-    queryKey: ['/api/user/payment-method'],
-  });
-
-  // Auto-pay: fetch toggle state
+  // Auto-pay: fetch toggle state for status strip in Upcoming tab
   const { data: autoPayStatusData } = useQuery<{ autoPayEnabled: boolean }>({
     queryKey: ['/api/user/auto-pay-status'],
   });
 
-  const toggleAutoPayMutation = useMutation({
-    mutationFn: (enabled: boolean) => apiRequest('PATCH', '/api/user/auto-pay', { enabled }),
-    onSuccess: (_data, enabled) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/user/auto-pay-status'] });
-      toast({ title: enabled ? 'Auto Pay enabled' : 'Auto Pay disabled' });
-    },
-    onError: async (err: any) => {
-      let message = 'No card on file — complete a checkout to save your card for auto-pay.';
-      try {
-        const body = await err.json?.();
-        if (body?.error) message = body.error;
-        else if (body?.message) message = body.message;
-      } catch {}
-      toast({ title: 'Auto Pay update failed', description: message, variant: 'destructive' });
-    },
-  });
-
-  const cardOnFile = paymentMethodData?.cardOnFile ?? null;
   const autoPayEnabled = autoPayStatusData?.autoPayEnabled ?? false;
 
   // Filter payments based on search and status
@@ -1878,80 +1855,28 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
         
         {/* Upcoming Payments Tab */}
         <TabsContent value="upcoming" className="space-y-4">
-          {/* Payment Methods Card */}
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex items-center gap-2">
-                <CreditCard className="h-5 w-5 text-muted-foreground" />
-                <CardTitle className="text-base">Payment Methods</CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <CardManagementPanel
-                onCardsChanged={() => {
-                  queryClient.invalidateQueries({ queryKey: ['/api/user/payment-method'] });
-                  queryClient.invalidateQueries({ queryKey: ['/api/user/auto-pay-status'] });
-                }}
-              />
-            </CardContent>
-          </Card>
-
-          {/* Auto Pay Card */}
-          <Card className={autoPayEnabled ? "border-green-200 bg-green-50/30" : "border-muted"}>
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Zap className={`h-5 w-5 ${autoPayEnabled ? "text-green-600" : "text-muted-foreground"}`} />
-                  <CardTitle className="text-base">Auto Pay</CardTitle>
-                  {autoPayEnabled ? (
-                    <Badge className="bg-green-100 text-green-700 border-green-200">Active</Badge>
-                  ) : (
-                    <Badge variant="secondary">Off</Badge>
-                  )}
-                </div>
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span>
-                        <Switch
-                          checked={autoPayEnabled}
-                          onCheckedChange={(checked) => toggleAutoPayMutation.mutate(checked)}
-                          disabled={!cardOnFile || toggleAutoPayMutation.isPending}
-                          aria-label="Toggle Auto Pay"
-                        />
-                      </span>
-                    </TooltipTrigger>
-                    {!cardOnFile && (
-                      <TooltipContent>
-                        <p>Add a card at checkout to enable auto-pay</p>
-                      </TooltipContent>
-                    )}
-                  </Tooltip>
-                </TooltipProvider>
-              </div>
-            </CardHeader>
-            <CardContent className="pt-0 space-y-3">
-              {cardOnFile ? (
-                <div className="flex items-center gap-3">
-                  <CreditCard className="h-4 w-4 text-muted-foreground shrink-0" />
-                  <span className="text-sm capitalize">{cardOnFile.brand} ending in {cardOnFile.last4}</span>
-                  <span className="text-sm text-muted-foreground">· Expires {cardOnFile.expMonth}/{cardOnFile.expYear}</span>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <CreditCard className="h-4 w-4 shrink-0" />
-                  <span>No default card set. Add a card above and set it as default.</span>
-                </div>
-              )}
-              {cardOnFile && (
-                autoPayEnabled ? (
-                  <p className="text-xs text-green-700">Upcoming installments will be charged automatically on their due date.</p>
-                ) : (
-                  <p className="text-xs text-muted-foreground">Toggle the switch above to enable automatic payments on due dates.</p>
-                )
-              )}
-            </CardContent>
-          </Card>
+          {/* Auto Pay status strip */}
+          {!autoPayStatusData ? (
+            <div className="h-9 rounded-md border border-border bg-muted/30 animate-pulse" />
+          ) : autoPayEnabled ? (
+            <div className="flex items-center gap-2 rounded-md border border-green-200 bg-green-50/50 px-3 py-2 text-sm">
+              <Zap className="h-4 w-4 text-green-600 shrink-0" />
+              <span className="text-green-800 font-medium">Auto Pay is active</span>
+              <span className="mx-1 text-green-600">·</span>
+              <Link href="/payment-methods" className="text-green-700 underline underline-offset-2 hover:text-green-900">
+                Manage in Payment Methods
+              </Link>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-sm">
+              <Zap className="h-4 w-4 text-muted-foreground shrink-0" />
+              <span className="text-muted-foreground">Payments are manual</span>
+              <span className="mx-1 text-muted-foreground">·</span>
+              <Link href="/payment-methods" className="text-primary underline underline-offset-2 hover:opacity-80">
+                Enable Auto Pay
+              </Link>
+            </div>
+          )}
 
           {isLoading || isLoadingDbScheduled || isLoadingGrouped ? (
             <div className="text-center py-8">

@@ -53,7 +53,7 @@ export default function PaymentMethodsPage() {
         <div>
           <h1 className="text-2xl font-bold">Payment Methods</h1>
           <p className="text-muted-foreground mt-1">
-            Manage your saved payment cards for tuition and program fees
+            Manage your saved cards and automatic payment preferences
           </p>
         </div>
         <CardManagementPanel />
