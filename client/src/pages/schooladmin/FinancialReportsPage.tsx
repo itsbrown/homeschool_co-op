@@ -51,7 +51,13 @@ import {
   Send,
   Zap,
   XCircle,
+  Search,
+  ChevronDown,
+  ChevronRight,
+  ShieldAlert,
 } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { format } from 'date-fns';
 import {
   AreaChart,
@@ -286,6 +292,35 @@ interface ChatMessage {
   content: string;
 }
 
+interface BalanceAuditEntry {
+  id: number;
+  parentEmail: string;
+  parentName: string | null;
+  childName: string;
+  className: string;
+  paymentPlan: string | null;
+  totalCost: number;
+  totalPaid: number;
+  compAmountCents: number | null;
+  remainingBalance: number;
+  effectiveBalance: number;
+  paymentStatus: string;
+  status: string;
+  flag: 'ok' | 'mismatch' | 'still_owes' | 'overpaid';
+}
+
+interface BalanceAuditSummary {
+  totalActive: number;
+  mismatchCount: number;
+  stillOwesCount: number;
+  overpaidCount: number;
+}
+
+interface BalanceAuditResponse {
+  enrollments: BalanceAuditEntry[];
+  summary: BalanceAuditSummary;
+}
+
 const STARTER_QUESTIONS = [
   'What is our current collection rate?',
   'Which families have the largest outstanding balances?',
@@ -357,6 +392,24 @@ export default function FinancialReportsPage() {
     queryKey: ['/api/admin/financial-reports/auto-pay-history', apStartDate, apEndDate, apStatus],
     enabled: activeTab === 'autopay',
   });
+
+  const [auditEmailSearch, setAuditEmailSearch] = useState('');
+  const [auditFlagFilter, setAuditFlagFilter] = useState<string>('all');
+  const [expandedAuditIds, setExpandedAuditIds] = useState<Set<number>>(new Set());
+
+  const { data: balanceAuditData, isLoading: balanceAuditLoading } = useQuery<BalanceAuditResponse>({
+    queryKey: ['/api/admin/financial-reports/balance-audit'],
+    enabled: activeTab === 'audit',
+  });
+
+  const toggleAuditIdExpand = (id: number) => {
+    setExpandedAuditIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
   const autoPayRecords = autoPayData?.records ?? [];
   const autoPaySummary = autoPayData?.summary ?? { totalChargedCents: 0, totalFailedCents: 0, chargedCount: 0, failedCount: 0, skippedCount: 0 };
   const autoPaySuccessRate = (autoPaySummary.chargedCount + autoPaySummary.failedCount) > 0
@@ -840,6 +893,10 @@ export default function FinancialReportsPage() {
                 <TabsTrigger value="autopay">
                   <Zap className="h-3.5 w-3.5 mr-1.5" />
                   Auto-Pay
+                </TabsTrigger>
+                <TabsTrigger value="audit">
+                  <ShieldAlert className="h-3.5 w-3.5 mr-1.5" />
+                  Balance Audit
                 </TabsTrigger>
               </TabsList>
 
@@ -1644,6 +1701,201 @@ export default function FinancialReportsPage() {
                     )}
                   </CardContent>
                 </Card>
+              </TabsContent>
+
+              <TabsContent value="audit" className="mt-4">
+                {balanceAuditLoading ? (
+                  <div className="space-y-4">
+                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                      {[1, 2, 3, 4].map(i => (
+                        <Card key={i}><CardHeader className="pb-2"><Skeleton className="h-4 w-24" /></CardHeader><CardContent><Skeleton className="h-8 w-16" /></CardContent></Card>
+                      ))}
+                    </div>
+                    <Card><CardContent className="pt-6"><Skeleton className="h-64 w-full" /></CardContent></Card>
+                  </div>
+                ) : (() => {
+                  const auditSummary = balanceAuditData?.summary;
+                  const allEnrollments = balanceAuditData?.enrollments ?? [];
+
+                  // Build a lookup: email → all enrollments for that family (for sibling expansion)
+                  const familyMap = allEnrollments.reduce<Record<string, BalanceAuditEntry[]>>((acc, e) => {
+                    if (!acc[e.parentEmail]) acc[e.parentEmail] = [];
+                    acc[e.parentEmail].push(e);
+                    return acc;
+                  }, {});
+
+                  // Filter at enrollment level — each row uses its own flag and email
+                  const filtered = allEnrollments.filter(e => {
+                    const emailMatch = auditEmailSearch
+                      ? e.parentEmail.toLowerCase().includes(auditEmailSearch.toLowerCase()) ||
+                        (e.parentName ?? '').toLowerCase().includes(auditEmailSearch.toLowerCase())
+                      : true;
+                    const flagMatch = auditFlagFilter === 'all' || e.flag === auditFlagFilter;
+                    return emailMatch && flagMatch;
+                  });
+
+                  const flagBadge = (flag: string) => {
+                    switch (flag) {
+                      case 'ok':
+                        return <Badge className="bg-green-100 text-green-800 border-green-300">OK</Badge>;
+                      case 'mismatch':
+                        return <Badge className="bg-yellow-100 text-yellow-800 border-yellow-300">Mismatch</Badge>;
+                      case 'still_owes':
+                        return <Badge className="bg-orange-100 text-orange-800 border-orange-300">Still Owes</Badge>;
+                      case 'overpaid':
+                        return <Badge className="bg-red-100 text-red-800 border-red-300">Overpaid</Badge>;
+                      default:
+                        return <Badge variant="outline">{flag}</Badge>;
+                    }
+                  };
+
+                  return (
+                    <div className="space-y-6">
+                      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                        <SummaryCard
+                          title="Active Enrollments"
+                          value={String(auditSummary?.totalActive ?? 0)}
+                          subtitle="Non-cancelled enrollments"
+                          icon={Users}
+                        />
+                        <SummaryCard
+                          title="Balance Mismatches"
+                          value={String(auditSummary?.mismatchCount ?? 0)}
+                          subtitle="remainingBalance=0 but effective>0"
+                          icon={AlertTriangle}
+                          trend={auditSummary?.mismatchCount ? 'down' : 'neutral'}
+                          trendValue={auditSummary?.mismatchCount ? 'Needs review' : 'All clear'}
+                        />
+                        <SummaryCard
+                          title="Still Owes (Completed)"
+                          value={String(auditSummary?.stillOwesCount ?? 0)}
+                          subtitle="Marked complete but balance remains"
+                          icon={Clock}
+                          trend={auditSummary?.stillOwesCount ? 'down' : 'neutral'}
+                          trendValue={auditSummary?.stillOwesCount ? 'Follow-up needed' : 'All clear'}
+                        />
+                        <SummaryCard
+                          title="Overpaid"
+                          value={String(auditSummary?.overpaidCount ?? 0)}
+                          subtitle="Effective balance is negative"
+                          icon={XCircle}
+                          trend={auditSummary?.overpaidCount ? 'down' : 'neutral'}
+                          trendValue={auditSummary?.overpaidCount ? 'May need refund' : 'All clear'}
+                        />
+                      </div>
+
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="flex items-center gap-2">
+                            <ShieldAlert className="h-5 w-5 text-orange-500" />
+                            Enrollment Balance Audit
+                          </CardTitle>
+                          <CardDescription>
+                            One row per enrollment. Effective balance is the authoritative figure; old remaining balance shown for comparison. Click a row to see all enrollments for that family.
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="flex flex-col sm:flex-row gap-3 mb-4">
+                            <div className="relative flex-1">
+                              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                              <Input
+                                placeholder="Search by email or name..."
+                                value={auditEmailSearch}
+                                onChange={e => setAuditEmailSearch(e.target.value)}
+                                className="pl-9"
+                              />
+                            </div>
+                            <Select value={auditFlagFilter} onValueChange={setAuditFlagFilter}>
+                              <SelectTrigger className="w-full sm:w-48">
+                                <SelectValue placeholder="Filter by flag" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="all">All Flags</SelectItem>
+                                <SelectItem value="ok">OK only</SelectItem>
+                                <SelectItem value="mismatch">Mismatches only</SelectItem>
+                                <SelectItem value="still_owes">Still Owes</SelectItem>
+                                <SelectItem value="overpaid">Overpaid</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          {filtered.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                              <CheckCircle2 className="h-10 w-10 mb-3 text-green-400" />
+                              <p className="font-medium">No enrollments match the current filter.</p>
+                            </div>
+                          ) : (
+                            <div className="rounded-md border overflow-x-auto">
+                              <Table>
+                                <TableHeader>
+                                  <TableRow>
+                                    <TableHead className="w-8" />
+                                    <TableHead>Family / Enrollment</TableHead>
+                                    <TableHead>Payment Plan</TableHead>
+                                    <TableHead className="text-right">Total Cost</TableHead>
+                                    <TableHead className="text-right">Total Paid</TableHead>
+                                    <TableHead className="text-right text-muted-foreground">Old Balance</TableHead>
+                                    <TableHead className="text-right font-semibold">Effective Balance</TableHead>
+                                    <TableHead>Status</TableHead>
+                                    <TableHead>Flag</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {filtered.map(enrollment => {
+                                    const siblings = familyMap[enrollment.parentEmail] ?? [];
+                                    const isExpanded = expandedAuditIds.has(enrollment.id);
+                                    const hasSiblings = siblings.length > 1;
+                                    return (
+                                      <TableRow
+                                        key={enrollment.id}
+                                        className={`cursor-pointer hover:bg-muted/50 ${isExpanded ? 'bg-muted/20' : ''}`}
+                                        onClick={() => toggleAuditIdExpand(enrollment.id)}
+                                      >
+                                        <TableCell>
+                                          {hasSiblings
+                                            ? (isExpanded
+                                              ? <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                                              : <ChevronRight className="h-4 w-4 text-muted-foreground" />)
+                                            : null}
+                                        </TableCell>
+                                        <TableCell>
+                                          <div className="font-medium text-sm">{enrollment.parentName || enrollment.parentEmail}</div>
+                                          <div className="text-xs text-muted-foreground">{enrollment.parentEmail}</div>
+                                          <div className="text-xs text-muted-foreground mt-0.5">{enrollment.childName} — {enrollment.className}</div>
+                                          {isExpanded && hasSiblings && (
+                                            <div className="mt-2 pl-2 border-l-2 border-muted-foreground/20 space-y-1">
+                                              {siblings.map(sib => (
+                                                <div key={sib.id} className="text-xs text-muted-foreground">
+                                                  {sib.childName} — {sib.className}
+                                                  {' · '}{formatCurrency(sib.effectiveBalance)} owed
+                                                  {' · '}{flagBadge(sib.flag)}
+                                                </div>
+                                              ))}
+                                            </div>
+                                          )}
+                                        </TableCell>
+                                        <TableCell className="text-sm">{enrollment.paymentPlan || <span className="text-muted-foreground">—</span>}</TableCell>
+                                        <TableCell className="text-right">{formatCurrency(enrollment.totalCost)}</TableCell>
+                                        <TableCell className="text-right">{formatCurrency(enrollment.totalPaid)}</TableCell>
+                                        <TableCell className="text-right text-muted-foreground text-sm">{formatCurrency(enrollment.remainingBalance)}</TableCell>
+                                        <TableCell className="text-right font-semibold">{formatCurrency(enrollment.effectiveBalance)}</TableCell>
+                                        <TableCell>
+                                          <div className="text-xs">{enrollment.status}</div>
+                                          <div className="text-xs text-muted-foreground">{enrollment.paymentStatus}</div>
+                                        </TableCell>
+                                        <TableCell>{flagBadge(enrollment.flag)}</TableCell>
+                                      </TableRow>
+                                    );
+                                  })}
+                                </TableBody>
+                              </Table>
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    </div>
+                  );
+                })()}
               </TabsContent>
             </Tabs>
           </>

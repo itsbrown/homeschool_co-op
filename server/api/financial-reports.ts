@@ -1651,4 +1651,83 @@ IMPORTANT:
   }
 });
 
+// Shared handler for balance-audit — extracted so it can be mounted at two paths
+async function balanceAuditHandler(req: any, res: any) {
+  try {
+    const result = await getSchoolAdminWithFeatureCheck(req, 'financialReports');
+    if (isError(result)) {
+      return res.status(result.status).json({ error: result.error });
+    }
+    const { schoolId } = result;
+
+    const db = await getDb();
+
+    // Fetch all active enrollments for the school, joined with parent user info.
+    // 'completed' is included intentionally so admins can catch enrollments marked done but still owed.
+    // Terminal statuses (cancelled, withdrawn, failed, waitlist) are excluded.
+    const rows = await db.execute(
+      sql`
+        SELECT
+          pe.id,
+          pe.parent_email      AS "parentEmail",
+          pe.payment_plan      AS "paymentPlan",
+          pe.total_cost        AS "totalCost",
+          pe.total_paid        AS "totalPaid",
+          pe.comp_amount_cents AS "compAmountCents",
+          pe.remaining_balance AS "remainingBalance",
+          pe.effective_balance AS "effectiveBalance",
+          pe.payment_status    AS "paymentStatus",
+          pe.status,
+          pe.child_name        AS "childName",
+          pe.class_name        AS "className",
+          u.name               AS "parentName",
+          CASE
+            WHEN pe.effective_balance < 0                                   THEN 'overpaid'
+            WHEN pe.status = 'completed' AND pe.effective_balance > 0      THEN 'still_owes'
+            WHEN pe.remaining_balance = 0 AND pe.effective_balance > 0     THEN 'mismatch'
+            ELSE 'ok'
+          END AS flag
+        FROM program_enrollments pe
+        LEFT JOIN users u ON pe.parent_id = u.id
+        WHERE pe.school_id = ${schoolId}
+          AND pe.status NOT IN ('cancelled', 'withdrawn', 'failed', 'waitlist')
+        ORDER BY
+          CASE
+            WHEN pe.effective_balance < 0                                   THEN 1
+            WHEN pe.status = 'completed' AND pe.effective_balance > 0      THEN 2
+            WHEN pe.remaining_balance = 0 AND pe.effective_balance > 0     THEN 3
+            ELSE 4
+          END,
+          pe.parent_email ASC,
+          pe.id ASC
+      `
+    );
+
+    const enrollments = rows.rows as any[];
+
+    const totalActive = enrollments.length;
+    const mismatchCount = enrollments.filter(e => e.flag === 'mismatch').length;
+    const stillOwesCount = enrollments.filter(e => e.flag === 'still_owes').length;
+    const overpaidCount = enrollments.filter(e => e.flag === 'overpaid').length;
+
+    return res.json({
+      enrollments,
+      summary: { totalActive, mismatchCount, stillOwesCount, overpaidCount },
+    });
+  } catch (error: any) {
+    console.error('Error fetching balance audit:', error);
+    return res.status(500).json({ error: 'Failed to fetch balance audit data' });
+  }
+}
+
+// Balance Audit mounted within the financial-reports router
+// Full path: GET /api/admin/financial-reports/balance-audit
+router.get('/balance-audit', balanceAuditHandler);
+
+// Alias router so the endpoint is also reachable at /api/admin/balance-audit
+// (mounted separately in app-init.ts)
+export const balanceAuditAliasRouter = express.Router();
+balanceAuditAliasRouter.get('/', balanceAuditHandler);
+
 export default router;
+
