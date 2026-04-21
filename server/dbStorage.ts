@@ -1755,8 +1755,21 @@ export class DatabaseStorage implements IStorage {
     const [parent] = await db.select().from(users).where(sql`LOWER(${users.email}) = LOWER(${parentEmail})`);
     if (!parent) return [];
     
-    // Then get children by parent ID
-    return await db.select().from(children).where(eq(children.parentId, parent.id));
+    // Get children by parent ID (primary lookup)
+    const byParentId = await db.select().from(children).where(eq(children.parentId, parent.id));
+    if (byParentId.length > 0) return byParentId;
+
+    // Fallback: look up children by parentEmail field in case parent-child link is broken
+    // This catches cases where the stored email differs from the auth token email but
+    // the children table still has the correct parentEmail recorded.
+    console.warn(`⚠️ No children found by parentId (${parent.id}) for ${parentEmail} — falling back to parentEmail field lookup`);
+    const byParentEmail = await db.select().from(children).where(
+      sql`LOWER(${children.parentEmail}) = LOWER(${parentEmail})`
+    );
+    if (byParentEmail.length > 0) {
+      console.warn(`⚠️ Found ${byParentEmail.length} children via parentEmail fallback for ${parentEmail}`);
+    }
+    return byParentEmail;
   }
 
   // Emergency Contact methods

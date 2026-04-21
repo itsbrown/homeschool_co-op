@@ -1,7 +1,7 @@
 import { pgTable, text, serial, integer, boolean, jsonb, timestamp, date, varchar, pgEnum, unique, doublePrecision } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 
 // Define the enum for user roles
 const roleEnum = pgEnum('role', ["student", "parent", "learner", "educator", "mentor", "teacher", "schoolAdmin", "director", "admin", "superAdmin"]);
@@ -613,6 +613,14 @@ export const programEnrollments = pgTable("program_enrollments", {
   compReason: text("comp_reason"),
   compBy: integer("comp_by").references(() => users.id),
   compAt: timestamp("comp_at"),
+
+  // Effective balance — generated column (DB source of truth for what is owed)
+  // Formula: total_cost - total_paid - COALESCE(comp_amount_cents, 0)
+  // Always use this for read/display; use remainingBalance only when recording payments.
+  effectiveBalance: integer("effective_balance").generatedAlwaysAs(
+    sql`total_cost - total_paid - COALESCE(comp_amount_cents, 0)`,
+    { mode: 'stored' }
+  ),
   
   // Session enrollment tracking
   sessionId: integer("session_id").references(() => sessions.id),
@@ -629,7 +637,7 @@ export const programEnrollments = pgTable("program_enrollments", {
 });
 
 export const insertProgramEnrollmentSchema = createInsertSchema(programEnrollments)
-  .omit({ id: true, createdAt: true, updatedAt: true })
+  .omit({ id: true, createdAt: true, updatedAt: true, effectiveBalance: true })
   .extend({
     classType: z.enum(["school_class", "marketplace"]).default("school_class"),
     programId: z.number().nullable().default(null),

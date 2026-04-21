@@ -527,8 +527,31 @@ router.get('/summary', async (req, res) => {
 
     console.log('🔍 Getting billing summary for:', userEmail);
 
-    // Get all children for this parent
-    const children = await storage.getChildrenByParentEmail(userEmail);
+    // Get all children for this parent — primary lookup by email
+    let children = await storage.getChildrenByParentEmail(userEmail);
+
+    // Supabase userId-based fallback: if email-based lookup found no children,
+    // look up the app user by their Supabase UID (user.id) and fetch children via parentId.
+    // This handles cases where the email stored in the DB differs from the auth token email.
+    if (!children || children.length === 0) {
+      console.warn(`⚠️ No children found by email for ${userEmail} — trying supabaseId fallback (uid: ${user.id})`);
+      try {
+        const db = await (await import('../db')).getDb();
+        const { users: usersTable, children: childrenTable } = await import('../../shared/schema');
+        const { eq: eqFn } = await import('drizzle-orm');
+        const [appUser] = await db.select().from(usersTable).where(eqFn(usersTable.supabaseId, user.id));
+        if (appUser) {
+          const fallbackChildren = await db.select().from(childrenTable).where(eqFn(childrenTable.parentId, appUser.id));
+          if (fallbackChildren.length > 0) {
+            console.warn(`⚠️ Found ${fallbackChildren.length} children via supabaseId fallback for uid ${user.id}`);
+            children = fallbackChildren;
+          }
+        }
+      } catch (fallbackErr) {
+        console.warn('⚠️ supabaseId children fallback failed:', fallbackErr);
+      }
+    }
+
     if (!children || children.length === 0) {
       console.log('📋 No children found for parent:', userEmail);
       return res.json({
@@ -564,13 +587,16 @@ router.get('/summary', async (req, res) => {
       const child = children.find(c => c.id === enrollment.childId);
       if (!child) continue;
 
-      // Calculate balance based on enrollment data
+      // Calculate balance using effectiveBalance — the DB-generated source of truth.
+      // effectiveBalance = total_cost - total_paid - COALESCE(comp_amount_cents, 0)
+      // For stripe_managed enrollments remainingBalance is 0, so we must not use it here.
       const totalAmount = enrollment.totalCost || classDetails.price || 0;
-      const totalPaid = enrollment.totalPaid || enrollment.amount || 0; // Use updated totalPaid field
-      // Use remainingBalance if available, otherwise calculate from totalCost - totalPaid
-      const balance = enrollment.remainingBalance !== undefined 
-        ? enrollment.remainingBalance 
-        : (totalAmount - totalPaid);
+      const totalPaid = enrollment.totalPaid || enrollment.amount || 0;
+      // Prefer the DB-computed effectiveBalance; fall back to application formula only if
+      // the generated column is unavailable (e.g. in-memory storage during testing).
+      const balance = enrollment.effectiveBalance != null
+        ? Math.max(0, enrollment.effectiveBalance)
+        : Math.max(0, totalAmount - totalPaid - (enrollment.compAmountCents || 0));
 
       // Always show all enrollments, but only add positive balances to total
       enrollmentDetails.push({
@@ -646,6 +672,31 @@ router.get('/summary', async (req, res) => {
       enrollmentCount: enrollmentDetails.length,
       parentEmail: userEmail
     });
+
+    // Divergence logging: compare parent-facing total vs. admin-facing enrollment data.
+    // The admin-side total is derived from effectiveBalance (same generated column formula),
+    // so any mismatch reveals a regression in how the parent-facing path computes balance.
+    // Warn when the two differ by more than $0.01 (1 cent).
+    try {
+      let adminSideTotal = 0;
+      for (const childId of childIds) {
+        const adminEnrollments = await storage.getEnrollmentsByChildId(childId);
+        for (const ae of adminEnrollments) {
+          if (ae.status === 'enrolled' || ae.status === 'pending_payment') {
+            // Use effectiveBalance from DB if available; fall back to formula for in-memory storage.
+            const adminEffective = ae.effectiveBalance != null
+              ? Math.max(0, ae.effectiveBalance)
+              : Math.max(0, (ae.totalCost || 0) - (ae.totalPaid || 0) - (ae.compAmountCents || 0));
+            adminSideTotal += adminEffective;
+          }
+        }
+      }
+      if (Math.abs(totalBalance - adminSideTotal) > 1) {
+        console.warn(`⚠️ BILLING DIVERGENCE for ${userEmail}: parent-facing enrollmentBalance=${totalBalance} cents, admin-side total=${adminSideTotal} cents (diff=${totalBalance - adminSideTotal})`);
+      }
+    } catch (divergenceErr) {
+      console.warn('⚠️ Could not run billing divergence check:', divergenceErr);
+    }
 
     res.json(summary);
   } catch (error) {
