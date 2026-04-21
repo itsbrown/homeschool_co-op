@@ -3255,24 +3255,33 @@ router.get('/enrollments', supabaseAuth, async (req: any, res) => {
     }
     
     // Format enrollments for admin display
-    const formattedEnrollments = enrollments.map((enrollment: any) => ({
-      id: enrollment.id,
-      className: enrollment.className || 'Unknown Class',
-      childName: enrollment.childName || 'Unknown Student',
-      paymentPlan: enrollment.paymentPlan || 'one_time',
-      paymentFrequency: enrollment.paymentFrequency || 'one_time',
-      totalCost: enrollment.totalCost || 0,
-      totalPaid: enrollment.totalPaid || 0,
-      remainingBalance: enrollment.remainingBalance || (enrollment.totalCost - (enrollment.totalPaid || 0)),
-      paymentStatus: enrollment.paymentStatus || enrollment.status || 'pending_payment',
-      status: enrollment.status || 'enrolled',
-      programStartDate: enrollment.programStartDate,
-      programEndDate: enrollment.programEndDate,
-      metadata: enrollment.metadata || {},
-      compPercentage: enrollment.compPercentage || null,
-      cancelledAt: enrollment.cancelledAt,
-      cancellationReason: enrollment.cancellationReason,
-    }));
+    const formattedEnrollments = enrollments.map((enrollment: any) => {
+      const totalCost = enrollment.totalCost || 0;
+      const totalPaid = enrollment.totalPaid || 0;
+      const compAmountCents = enrollment.compAmountCents ?? 0;
+      // Use the DB-generated effective_balance column; fall back to formula if absent
+      const effectiveBalance = enrollment.effectiveBalance ?? Math.max(0, totalCost - totalPaid - compAmountCents);
+      return {
+        id: enrollment.id,
+        className: enrollment.className || 'Unknown Class',
+        childName: enrollment.childName || 'Unknown Student',
+        paymentPlan: enrollment.paymentPlan || 'one_time',
+        paymentFrequency: enrollment.paymentFrequency || 'one_time',
+        totalCost,
+        totalPaid,
+        remainingBalance: effectiveBalance,
+        effectiveBalance,
+        paymentStatus: enrollment.paymentStatus || enrollment.status || 'pending_payment',
+        status: enrollment.status || 'enrolled',
+        programStartDate: enrollment.programStartDate,
+        programEndDate: enrollment.programEndDate,
+        metadata: enrollment.metadata || {},
+        compPercentage: enrollment.compPercentage || null,
+        compAmountCents: enrollment.compAmountCents || null,
+        cancelledAt: enrollment.cancelledAt,
+        cancellationReason: enrollment.cancellationReason,
+      };
+    });
     
     console.log(`📚 Found ${formattedEnrollments.length} enrollments`);
     res.json(formattedEnrollments);
@@ -3292,17 +3301,21 @@ router.get('/pending-enrollments', supabaseAuth, async (req: any, res) => {
     console.log('💰 Fetching enrollments with outstanding balances for school:', schoolId);
     const allEnrollments = await storage.getAllEnrollments();
     
-    // Filter enrollments by school and those with remaining balance
+    // Filter enrollments by school and those with effective balance > 0
     const enrollmentsWithBalance = allEnrollments.filter((e: any) => {
-      const balance = e.remainingBalance || (e.totalCost - (e.totalPaid || 0));
-      return e.schoolId === schoolId && balance > 0;
+      const totalCost = e.totalCost || 0;
+      const totalPaid = e.totalPaid || 0;
+      const compAmountCents = e.compAmountCents ?? 0;
+      const effectiveBalance = e.effectiveBalance ?? Math.max(0, totalCost - totalPaid - compAmountCents);
+      return e.schoolId === schoolId && effectiveBalance > 0;
     });
     
     // Format enrollments for manual payment selection
     const formattedEnrollments = enrollmentsWithBalance.map((enrollment: any) => {
       const totalCost = enrollment.totalCost || 0;
       const totalPaid = enrollment.totalPaid || 0;
-      const remainingBalance = enrollment.remainingBalance || (totalCost - totalPaid);
+      const compAmountCents = enrollment.compAmountCents ?? 0;
+      const remainingBalance = enrollment.effectiveBalance ?? Math.max(0, totalCost - totalPaid - compAmountCents);
       
       return {
         id: enrollment.id,
@@ -3314,12 +3327,12 @@ router.get('/pending-enrollments', supabaseAuth, async (req: any, res) => {
         totalCost,
         totalPaid,
         remainingBalance,
+        effectiveBalance: remainingBalance,
         paymentStatus: enrollment.paymentStatus || enrollment.status || 'pending_payment',
         status: enrollment.status || 'pending_payment',
         programStartDate: enrollment.programStartDate,
         programEndDate: enrollment.programEndDate,
         enrollmentDate: enrollment.enrollmentDate || enrollment.createdAt,
-        // Formatted display string for dropdown
         displayLabel: `${enrollment.childName} - ${enrollment.className} (Balance: $${(remainingBalance / 100).toFixed(2)})`
       };
     });
@@ -3597,8 +3610,9 @@ router.get("/metrics/financial", supabaseAuth, async (req: any, res) => {
       sum + (p.amount || 0), 0
     );
 
-    // Calculate outstanding balance (sum of remaining balances)
-    const getEffectiveBalance = (e: any) => e.remainingBalance || ((e.totalCost || 0) - (e.totalPaid || 0));
+    // Calculate outstanding balance using effective balance (includes comp deductions)
+    const getEffectiveBalance = (e: any) =>
+      e.effectiveBalance ?? Math.max(0, (e.totalCost || 0) - (e.totalPaid || 0) - (e.compAmountCents ?? 0));
     const outstandingBalance = schoolEnrollments.reduce((sum: number, e: any) => 
       sum + getEffectiveBalance(e), 0
     );

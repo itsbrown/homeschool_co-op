@@ -419,8 +419,11 @@ router.post('/:id/comp', async (req: any, res) => {
       });
     }
 
-    // For enrolled enrollments, verify there's a remaining balance to comp
-    const effectiveRemainingBalance = enrollment.remainingBalance || ((enrollment.totalCost || 0) - (enrollment.totalPaid || 0));
+    // For enrolled enrollments, verify there's a remaining balance to comp.
+    // Use effectiveBalance (generated column) or formula; never raw remainingBalance
+    // (it can be 0 for stripe-managed plans even when there is money still owed).
+    const effectiveRemainingBalance = enrollment.effectiveBalance ??
+      Math.max(0, (enrollment.totalCost || 0) - (enrollment.totalPaid || 0) - (enrollment.compAmountCents ?? 0));
     if (enrollment.status === 'enrolled' && effectiveRemainingBalance <= 0) {
       return res.status(400).json({ 
         message: 'This enrollment has no remaining balance to comp' 

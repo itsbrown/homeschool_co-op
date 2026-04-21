@@ -28,6 +28,8 @@ interface PendingEnrollment {
   totalCost: number;
   totalPaid: number;
   remainingBalance: number;
+  effectiveBalance?: number;
+  compAmountCents?: number | null;
   paymentStatus: string;
   status: string;
   programStartDate: string | null;
@@ -156,9 +158,13 @@ export default function ManualPaymentEntryPage() {
     createPaymentMutation.mutate(data);
   };
 
+  // Get the true amount owed: prefer effectiveBalance from server, fall back to formula
+  const getEffectiveBalance = (e: PendingEnrollment) =>
+    e.effectiveBalance ?? Math.max(0, (e.totalCost || 0) - (e.totalPaid || 0) - (e.compAmountCents ?? 0));
+
   // Calculate if payment exceeds balance
   const paymentAmount = form.watch('amount') || 0;
-  const exceedsBalance = selectedEnrollment ? paymentAmount > (selectedEnrollment.remainingBalance / 100) : false;
+  const exceedsBalance = selectedEnrollment ? paymentAmount > (getEffectiveBalance(selectedEnrollment) / 100) : false;
 
   return (
     <div className="space-y-6">
@@ -219,7 +225,7 @@ export default function ManualPaymentEntryPage() {
                                   <div className="flex flex-col">
                                     <span className="font-medium">{enrollment.childName} - {enrollment.className}</span>
                                     <span className="text-sm text-muted-foreground">
-                                      Balance: {formatCurrency(enrollment.remainingBalance)} | Parent: {enrollment.parentEmail}
+                                      Balance: {formatCurrency(getEffectiveBalance(enrollment))} | Parent: {enrollment.parentEmail}
                                     </span>
                                   </div>
                                 </SelectItem>
@@ -251,7 +257,7 @@ export default function ManualPaymentEntryPage() {
                             type="number"
                             step="0.01"
                             min="0.01"
-                            max={selectedEnrollment ? selectedEnrollment.remainingBalance / 100 : undefined}
+                            max={selectedEnrollment ? getEffectiveBalance(selectedEnrollment) / 100 : undefined}
                             {...field}
                             onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
                             placeholder="0.00"
@@ -259,7 +265,7 @@ export default function ManualPaymentEntryPage() {
                         </FormControl>
                         {selectedEnrollment && (
                           <FormDescription>
-                            Maximum: {formatCurrency(selectedEnrollment.remainingBalance)}
+                            Maximum: {formatCurrency(getEffectiveBalance(selectedEnrollment))}
                           </FormDescription>
                         )}
                         <FormMessage />
@@ -365,7 +371,7 @@ export default function ManualPaymentEntryPage() {
                     <AlertTitle>Payment Exceeds Balance</AlertTitle>
                     <AlertDescription>
                       The payment amount (${paymentAmount.toFixed(2)}) exceeds the remaining balance 
-                      ({formatCurrency(selectedEnrollment!.remainingBalance)}). Please adjust the amount.
+                      ({formatCurrency(getEffectiveBalance(selectedEnrollment!))}). Please adjust the amount.
                     </AlertDescription>
                   </Alert>
                 )}
@@ -427,8 +433,8 @@ export default function ManualPaymentEntryPage() {
                   <Separator />
                   <div className="flex justify-between items-center">
                     <span className="text-sm font-medium">Remaining Balance</span>
-                    <Badge variant={selectedEnrollment.remainingBalance > 0 ? "destructive" : "secondary"} className="text-base px-3">
-                      {formatCurrency(selectedEnrollment.remainingBalance)}
+                    <Badge variant={getEffectiveBalance(selectedEnrollment) > 0 ? "destructive" : "secondary"} className="text-base px-3">
+                      {formatCurrency(getEffectiveBalance(selectedEnrollment))}
                     </Badge>
                   </div>
                 </div>
@@ -444,7 +450,7 @@ export default function ManualPaymentEntryPage() {
                       <div className="flex justify-between">
                         <span className="text-sm text-muted-foreground">New Balance</span>
                         <span className="font-bold">
-                          {formatCurrency(selectedEnrollment.remainingBalance - (paymentAmount * 100))}
+                          {formatCurrency(getEffectiveBalance(selectedEnrollment) - (paymentAmount * 100))}
                         </span>
                       </div>
                     </div>

@@ -552,6 +552,7 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
         totalCost: CurrencyUtils.toDisplay(totalCost),
         totalPaid: CurrencyUtils.toDisplay(totalPaid),
         remainingBalance: CurrencyUtils.toDisplay(actualRemainingBalance),
+        effectiveBalance: CurrencyUtils.toDisplay(actualRemainingBalance),
         // Keep raw cents value for summary calculation
         _remainingBalanceCents: actualRemainingBalance,
         paymentPlan: enrollment.paymentPlan,

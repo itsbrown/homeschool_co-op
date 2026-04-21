@@ -636,6 +636,19 @@ export const programEnrollments = pgTable("program_enrollments", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+/**
+ * Compute effective balance for in-memory / non-DB contexts.
+ * Mirrors the DB-generated column: total_cost - total_paid - COALESCE(comp_amount_cents, 0)
+ * Use this as the formula fallback whenever effectiveBalance (the generated column) is absent.
+ */
+export function computeEffectiveBalance(
+  totalCost: number,
+  totalPaid: number,
+  compAmountCents?: number | null,
+): number {
+  return Math.max(0, totalCost - totalPaid - (compAmountCents ?? 0));
+}
+
 export const insertProgramEnrollmentSchema = createInsertSchema(programEnrollments)
   .omit({ id: true, createdAt: true, updatedAt: true, effectiveBalance: true })
   .extend({

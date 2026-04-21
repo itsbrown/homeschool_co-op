@@ -115,6 +115,7 @@ interface ParentProfile {
     totalCost: number;
     totalPaid?: number;
     remainingBalance: number;
+    effectiveBalance?: number;
     paymentPlan?: string;
     compPercentage?: number;
     compAmountCents?: number;
@@ -646,6 +647,14 @@ function ParentDocumentsTab({ parentId }: { parentId: string }) {
       </CardContent>
     </Card>
   );
+}
+
+/** Returns the effective balance owed for an enrollment in DOLLARS.
+ *  Data from /api/parent-profile/:id uses dollar-denominated fields except
+ *  compAmountCents which remains in cents. Prefers the server-computed
+ *  effectiveBalance; falls back to the gold-standard formula. */
+function enrollmentEffectiveBalance(e: { effectiveBalance?: number; totalCost: number; totalPaid?: number; compAmountCents?: number }): number {
+  return e.effectiveBalance ?? Math.max(0, e.totalCost - (e.totalPaid || 0) - ((e.compAmountCents || 0) / 100));
 }
 
 export default function ParentProfilePage() {
@@ -1944,7 +1953,7 @@ export default function ParentProfilePage() {
                       </TableHeader>
                       <TableBody>
                         {profile.enrollments.map((enrollment) => {
-                          const totalPaid = enrollment.totalCost - enrollment.remainingBalance;
+                          const totalPaid = enrollment.totalPaid || 0;
                           return (
                           <TableRow key={enrollment.id} data-testid={`enrollment-row-${enrollment.id}`}>
                             <TableCell className="font-medium">
@@ -1978,8 +1987,8 @@ export default function ParentProfilePage() {
                               </span>
                             </TableCell>
                             <TableCell>
-                              <span className={enrollment.remainingBalance > 0 ? 'text-orange-600 font-medium' : 'text-green-600'}>
-                                ${enrollment.remainingBalance.toFixed(2)}
+                              <span className={enrollmentEffectiveBalance(enrollment) > 0 ? 'text-orange-600 font-medium' : 'text-green-600'}>
+                                ${enrollmentEffectiveBalance(enrollment).toFixed(2)}
                               </span>
                             </TableCell>
                             <TableCell className="text-right">
@@ -2000,7 +2009,7 @@ export default function ParentProfilePage() {
                                   </Button>
                                 )}
                                 {/* Comp button - show for pending or enrolled enrollments with remaining balance and no existing comp */}
-                                {['pending_payment', 'enrolled', 'pending_admin_approval'].includes(enrollment.status) && !enrollment.compPercentage && enrollment.remainingBalance > 0 && (
+                                {['pending_payment', 'enrolled', 'pending_admin_approval'].includes(enrollment.status) && !enrollment.compPercentage && enrollmentEffectiveBalance(enrollment) > 0 && (
                                   <Button
                                     variant="outline"
                                     size="sm"
@@ -2072,9 +2081,9 @@ export default function ParentProfilePage() {
                   <AlertDialogTitle>Unenroll from Class</AlertDialogTitle>
                   <AlertDialogDescription>
                     Are you sure you want to unenroll {selectedEnrollment?.childName} from {selectedEnrollment?.className}?
-                    {selectedEnrollment && (selectedEnrollment.totalCost - selectedEnrollment.remainingBalance) > 0 && (
+                    {selectedEnrollment && (selectedEnrollment.totalPaid || 0) > 0 && (
                       <span className="block mt-2 text-amber-600 font-medium">
-                        Note: This enrollment has ${(selectedEnrollment.totalCost - selectedEnrollment.remainingBalance).toFixed(2)} in payments. 
+                        Note: This enrollment has ${(selectedEnrollment.totalPaid || 0).toFixed(2)} in payments. 
                         You may need to reallocate these funds first.
                       </span>
                     )}
@@ -2130,7 +2139,7 @@ export default function ParentProfilePage() {
                         Already Paid: <span className="font-medium">${(selectedEnrollment.totalPaid || 0).toFixed(2)}</span>
                       </p>
                       <p className="text-sm">
-                        Current Balance: <span className="font-medium text-red-600">${(selectedEnrollment.remainingBalance || selectedEnrollment.totalCost || 0).toFixed(2)}</span>
+                        Current Balance: <span className="font-medium text-red-600">${(enrollmentEffectiveBalance(selectedEnrollment) || selectedEnrollment.totalCost || 0).toFixed(2)}</span>
                       </p>
                     </div>
 
@@ -2163,7 +2172,7 @@ export default function ParentProfilePage() {
                       </div>
                       {selectedEnrollment && compPercentage && (
                         <p className="text-sm text-green-600 mt-2">
-                          Comp amount: ${(((selectedEnrollment.remainingBalance || selectedEnrollment.totalCost) * parseInt(compPercentage || '0')) / 100).toFixed(2)}
+                          Comp amount: ${(((enrollmentEffectiveBalance(selectedEnrollment) || selectedEnrollment.totalCost) * parseInt(compPercentage || '0')) / 100).toFixed(2)}
                           {parseInt(compPercentage || '0') === 100 && (
                             <span className="text-green-700 font-medium ml-2">
                               (Fully comped - will be enrolled immediately)
@@ -2252,7 +2261,7 @@ export default function ParentProfilePage() {
                         type="number"
                         step="0.01"
                         min="0.01"
-                        max={selectedEnrollment ? (selectedEnrollment.totalCost - selectedEnrollment.remainingBalance) : 0}
+                        max={selectedEnrollment ? (selectedEnrollment.totalCost - enrollmentEffectiveBalance(selectedEnrollment)) : 0}
                         value={reallocateAmount}
                         onChange={(e) => setReallocateAmount(e.target.value)}
                         className="w-full pl-8 p-2 border border-gray-300 rounded-md"
@@ -2262,7 +2271,7 @@ export default function ParentProfilePage() {
                     </div>
                     {selectedEnrollment && (
                       <p className="text-sm text-muted-foreground mt-1">
-                        Available: ${(selectedEnrollment.totalCost - selectedEnrollment.remainingBalance).toFixed(2)}
+                        Available: ${(selectedEnrollment.totalCost - enrollmentEffectiveBalance(selectedEnrollment)).toFixed(2)}
                       </p>
                     )}
                   </div>
@@ -2294,15 +2303,15 @@ export default function ParentProfilePage() {
                         </SelectTrigger>
                         <SelectContent>
                           {profile.enrollments
-                            .filter(e => e.id !== selectedEnrollment?.id && e.remainingBalance > 0)
+                            .filter(e => e.id !== selectedEnrollment?.id && enrollmentEffectiveBalance(e) > 0)
                             .map(e => (
                               <SelectItem key={e.id} value={String(e.id)}>
-                                {e.childName} - {e.className} (Balance: ${e.remainingBalance.toFixed(2)})
+                                {e.childName} - {e.className} (Balance: ${enrollmentEffectiveBalance(e).toFixed(2)})
                               </SelectItem>
                             ))}
                         </SelectContent>
                       </Select>
-                      {profile.enrollments.filter(e => e.id !== selectedEnrollment?.id && e.remainingBalance > 0).length === 0 && (
+                      {profile.enrollments.filter(e => e.id !== selectedEnrollment?.id && enrollmentEffectiveBalance(e) > 0).length === 0 && (
                         <p className="text-sm text-amber-600 mt-1">No other enrollments with remaining balance available.</p>
                       )}
                     </div>

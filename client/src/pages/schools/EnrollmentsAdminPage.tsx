@@ -56,6 +56,13 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { RefundDialog } from "@/components/payments/RefundDialog";
 import { cn } from "@/lib/utils";
 
+/** Returns the effective amount owed for an enrollment (in cents).
+ *  Prefers the server-computed effectiveBalance field; falls back to the
+ *  gold-standard formula: totalCost - totalPaid - compAmountCents. */
+function getEffectiveBalance(e: { effectiveBalance?: number; totalCost?: number; totalPaid?: number; compAmountCents?: number | null }): number {
+  return e.effectiveBalance ?? Math.max(0, (e.totalCost || 0) - (e.totalPaid || 0) - (e.compAmountCents ?? 0));
+}
+
 interface Enrollment {
   id: number;
   className: string;
@@ -65,6 +72,8 @@ interface Enrollment {
   totalCost: number;
   totalPaid: number;
   remainingBalance: number;
+  effectiveBalance?: number;
+  compAmountCents?: number | null;
   paymentStatus: string;
   status?: string;
   waitlistPosition?: number | null;
@@ -255,7 +264,7 @@ export default function EnrollmentsAdminPage() {
       e.status === 'pending_payment' || e.paymentStatus === 'pending' || e.paymentStatus === 'pending_payment'
     ).length;
     const totalRevenue = enrollments.reduce((sum, e) => sum + (e.totalPaid || 0), 0);
-    const totalOutstanding = enrollments.reduce((sum, e) => sum + (e.remainingBalance || 0), 0);
+    const totalOutstanding = enrollments.reduce((sum, e) => sum + getEffectiveBalance(e), 0);
     
     return {
       totalEnrolled,
@@ -909,13 +918,13 @@ export default function EnrollmentsAdminPage() {
                                         Approve Enrollment
                                       </DropdownMenuItem>
                                     )}
-                                    {['pending_payment', 'enrolled', 'pending_admin_approval'].includes(enrollment.status || '') && !enrollment.compPercentage && enrollment.remainingBalance > 0 && (
+                                    {['pending_payment', 'enrolled', 'pending_admin_approval'].includes(enrollment.status || '') && !enrollment.compPercentage && getEffectiveBalance(enrollment) > 0 && (
                                       <DropdownMenuItem onClick={() => handleCompClick(enrollment)}>
                                         <Gift className="h-4 w-4 mr-2" />
                                         Comp
                                       </DropdownMenuItem>
                                     )}
-                                    {['pending_payment', 'enrolled', 'pending_admin_approval'].includes(enrollment.status || '') && enrollment.remainingBalance > 0 && (
+                                    {['pending_payment', 'enrolled', 'pending_admin_approval'].includes(enrollment.status || '') && getEffectiveBalance(enrollment) > 0 && (
                                       <DropdownMenuItem onClick={() => handleProrateClick(enrollment)}>
                                         <Percent className="h-4 w-4 mr-2" />
                                         {enrollment.proratedFromCents ? 'Adjust Pro-Rate' : 'Pro-Rate'}
@@ -979,7 +988,7 @@ export default function EnrollmentsAdminPage() {
                           />
                           <div className="flex justify-between text-sm mt-1">
                             <span>{formatCurrency(enrollment.totalPaid)} paid</span>
-                            <span>{formatCurrency(enrollment.remainingBalance)} remaining</span>
+                            <span>{formatCurrency(getEffectiveBalance(enrollment))} remaining</span>
                           </div>
                           {enrollment.proratedFromCents && (
                             <div className="text-xs text-blue-600 flex items-center gap-1 mt-1" title={enrollment.prorateReason || ''}>
@@ -1016,7 +1025,7 @@ export default function EnrollmentsAdminPage() {
                                 <Edit className="h-4 w-4 mr-2" />
                                 Edit Plan
                               </Button>
-                              {['pending_payment', 'enrolled', 'pending_admin_approval'].includes(enrollment.status || '') && !enrollment.compPercentage && enrollment.remainingBalance > 0 && (
+                              {['pending_payment', 'enrolled', 'pending_admin_approval'].includes(enrollment.status || '') && !enrollment.compPercentage && getEffectiveBalance(enrollment) > 0 && (
                                 <Button
                                   variant="ghost"
                                   size="sm"
@@ -1026,7 +1035,7 @@ export default function EnrollmentsAdminPage() {
                                   <Gift className="h-4 w-4" />
                                 </Button>
                               )}
-                              {['pending_payment', 'enrolled', 'pending_admin_approval'].includes(enrollment.status || '') && enrollment.remainingBalance > 0 && (
+                              {['pending_payment', 'enrolled', 'pending_admin_approval'].includes(enrollment.status || '') && getEffectiveBalance(enrollment) > 0 && (
                                 <Button
                                   variant="ghost"
                                   size="sm"
@@ -1105,7 +1114,7 @@ export default function EnrollmentsAdminPage() {
                     </div>
                     <div className="flex justify-between">
                       <span>Remaining Balance:</span>
-                      <span className="font-medium">{formatCurrency(paymentPlanDetails.enrollment.remainingBalance)}</span>
+                      <span className="font-medium">{formatCurrency(getEffectiveBalance(paymentPlanDetails.enrollment))}</span>
                     </div>
                     <div className="flex justify-between">
                       <span>Program Dates:</span>
@@ -1320,7 +1329,7 @@ export default function EnrollmentsAdminPage() {
                   </div>
                   <div className="flex justify-between">
                     <span>Remaining:</span>
-                    <span className="font-medium text-orange-600">{formatCurrency(compEnrollment.remainingBalance)}</span>
+                    <span className="font-medium text-orange-600">{formatCurrency(getEffectiveBalance(compEnrollment))}</span>
                   </div>
                 </div>
 
@@ -1339,7 +1348,7 @@ export default function EnrollmentsAdminPage() {
                   </Select>
                   {compPercentage && (
                     <p className="text-sm text-muted-foreground">
-                      Comp amount: {formatCurrency(Math.round((compEnrollment.remainingBalance * parseInt(compPercentage)) / 100))}
+                      Comp amount: {formatCurrency(Math.round((getEffectiveBalance(compEnrollment) * parseInt(compPercentage)) / 100))}
                     </p>
                   )}
                 </div>
@@ -1436,7 +1445,7 @@ export default function EnrollmentsAdminPage() {
                   </div>
                   <div className="flex justify-between">
                     <span>Remaining:</span>
-                    <span className="font-medium text-orange-600">{formatCurrency(prorateEnrollment.remainingBalance)}</span>
+                    <span className="font-medium text-orange-600">{formatCurrency(getEffectiveBalance(prorateEnrollment))}</span>
                   </div>
                 </div>
 
@@ -1524,7 +1533,7 @@ export default function EnrollmentsAdminPage() {
                     {markEnrolledTarget && markEnrolledTarget.totalPaid > 0 && (
                       <span className="block mt-2 text-sm">
                         Credits applied: <strong className="text-green-700">{formatCurrency(markEnrolledTarget.totalPaid)}</strong>.
-                        Remaining balance: <strong className="text-orange-700">{formatCurrency(markEnrolledTarget.remainingBalance)}</strong>.
+                        Remaining balance: <strong className="text-orange-700">{formatCurrency(getEffectiveBalance(markEnrolledTarget))}</strong>.
                         The student will be enrolled and their payment record preserved.
                       </span>
                     )}

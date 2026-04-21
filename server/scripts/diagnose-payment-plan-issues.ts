@@ -128,9 +128,17 @@ async function diagnoseAllPaymentPlans() {
       }
     }
     
-    // CHECK 4: Enrollments with remaining balance but no pending scheduled payments
+    // Helper: compute effective balance for an enrollment object (cannot query DB column here)
+    const getEffectiveBalance = (e: any): number =>
+      (e.effectiveBalance != null)
+        ? e.effectiveBalance
+        : Math.max(0, (e.totalCost || 0) - (e.totalPaid || 0) - (e.compAmountCents ?? 0));
+
+    // CHECK 4: Enrollments with effective balance > 0 but no pending scheduled payments
+    // Uses effectiveBalance so stripe-managed enrollments (remainingBalance=0) are correctly detected.
     for (const enrollment of userEnrollments) {
-      if (enrollment.remainingBalance && enrollment.remainingBalance > 0) {
+      const enrollmentEffectiveBalance = getEffectiveBalance(enrollment);
+      if (enrollmentEffectiveBalance > 0) {
         const pendingPaymentsForEnrollment = userScheduledPayments.filter(
           sp => sp.enrollmentId === enrollment.id && sp.status === 'pending'
         );
@@ -142,14 +150,14 @@ async function diagnoseAllPaymentPlans() {
             userName: user.name || user.username,
             issueType: 'MISSING_SCHEDULED_PAYMENTS',
             severity: 'HIGH',
-            details: `Enrollment ID ${enrollment.id} (${enrollment.childName}) has $${(enrollment.remainingBalance/100).toFixed(2)} remaining but no pending scheduled payments`,
-            affectedAmount: enrollment.remainingBalance
+            details: `Enrollment ID ${enrollment.id} (${enrollment.childName}) has $${(enrollmentEffectiveBalance/100).toFixed(2)} remaining but no pending scheduled payments`,
+            affectedAmount: enrollmentEffectiveBalance
           });
         }
         
-        // CHECK 5: Scheduled payment total doesn't match remaining balance
+        // CHECK 5: Scheduled payment total doesn't match effective balance
         const totalScheduledPending = pendingPaymentsForEnrollment.reduce((sum, sp) => sum + (sp.amount || 0), 0);
-        const balanceDifference = Math.abs(totalScheduledPending - enrollment.remainingBalance);
+        const balanceDifference = Math.abs(totalScheduledPending - enrollmentEffectiveBalance);
         
         if (balanceDifference > 100 && pendingPaymentsForEnrollment.length > 0) { // More than $1 difference
           issues.push({
@@ -158,7 +166,7 @@ async function diagnoseAllPaymentPlans() {
             userName: user.name || user.username,
             issueType: 'BALANCE_MISMATCH',
             severity: 'MEDIUM',
-            details: `Enrollment ID ${enrollment.id}: Remaining balance ($${(enrollment.remainingBalance/100).toFixed(2)}) doesn't match scheduled payments total ($${(totalScheduledPending/100).toFixed(2)}). Difference: $${(balanceDifference/100).toFixed(2)}`,
+            details: `Enrollment ID ${enrollment.id}: Effective balance ($${(enrollmentEffectiveBalance/100).toFixed(2)}) doesn't match scheduled payments total ($${(totalScheduledPending/100).toFixed(2)}). Difference: $${(balanceDifference/100).toFixed(2)}`,
             affectedAmount: balanceDifference
           });
         }
@@ -183,7 +191,7 @@ async function diagnoseAllPaymentPlans() {
     // CHECK 7: User has payment plan enrollments but no Stripe customer ID
     const paymentPlanEnrollments = userEnrollments.filter(e => e.paymentStatus === 'payment_plan');
     if (paymentPlanEnrollments.length > 0 && !user.stripeCustomerId) {
-      const totalRemaining = paymentPlanEnrollments.reduce((sum, e) => sum + (e.remainingBalance || 0), 0);
+      const totalRemaining = paymentPlanEnrollments.reduce((sum, e) => sum + getEffectiveBalance(e), 0);
       issues.push({
         userId: user.id,
         userEmail: email,

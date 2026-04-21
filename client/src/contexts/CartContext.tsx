@@ -1395,24 +1395,29 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         // Find the latest enrollment and check if it has a balance due
         const latestEnrollment = sortedEnrollments[0];
-        const hasBalance = latestEnrollment.remainingBalance > 0 && 
+        // Prefer effectiveBalance from API (server-authoritative); fall back to formula.
+        // Never fall back to remainingBalance — it is 0 for stripe-managed/deposit-only plans.
+        const getEnrollmentBalance = (e: any): number =>
+          e.effectiveBalance ?? Math.max(0, (e.totalCost || 0) - (e.totalPaid || 0) - (e.compAmountCents ?? 0));
+
+        const hasBalance = getEnrollmentBalance(latestEnrollment) > 0 && 
                           latestEnrollment.paymentSystemVersion === 'v2_stripe';
         
         // Check if there's a fully paid enrollment (enrolled with no balance)
         const hasFullyPaidEnrollment = sortedEnrollments.some(e => 
-          (e.status === 'enrolled' && (e.remainingBalance === 0 || e.remainingBalance === null)) ||
-          (e.paymentStatus === 'completed' && (e.remainingBalance === 0 || e.remainingBalance === null))
+          (e.status === 'enrolled' && getEnrollmentBalance(e) === 0) ||
+          (e.paymentStatus === 'completed' && getEnrollmentBalance(e) === 0)
         );
 
         // Check if latest enrollment is fully paid
-        const latestIsPaid = (latestEnrollment.status === 'enrolled' && (latestEnrollment.remainingBalance === 0 || latestEnrollment.remainingBalance === null)) ||
-                           (latestEnrollment.paymentStatus === 'completed' && (latestEnrollment.remainingBalance === 0 || latestEnrollment.remainingBalance === null));
+        const latestIsPaid = (latestEnrollment.status === 'enrolled' && getEnrollmentBalance(latestEnrollment) === 0) ||
+                           (latestEnrollment.paymentStatus === 'completed' && getEnrollmentBalance(latestEnrollment) === 0);
 
         // Skip items where there's a fully paid enrollment OR latest enrollment is paid OR on waitlist
         const isWaitlisted = latestEnrollment.status === 'waitlist';
         const shouldSkip = hasFullyPaidEnrollment || latestIsPaid || isWaitlisted;
 
-        if (!isWaitlisted && !shouldSkip && (hasBalance || (latestEnrollment.status === 'pending_payment' && latestEnrollment.remainingBalance > 0))) {
+        if (!isWaitlisted && !shouldSkip && (hasBalance || (latestEnrollment.status === 'pending_payment' && getEnrollmentBalance(latestEnrollment) > 0))) {
           unpaidEnrollments.push(latestEnrollment);
         }
       }
@@ -1420,8 +1425,11 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Convert enrollments to cart items with enhanced status display
       const cartItems: CartItem[] = unpaidEnrollments.map((enrollment: any) => {
         // CRITICAL: All monetary values MUST be in cents per schema.ts
-        // If seeing incorrect calculations, check database data integrity
-        const remainingBalance = enrollment.remainingBalance || enrollment.totalCost || 0;
+        // Use effectiveBalance if present (server-authoritative); fall back to formula.
+        // Never fall back to remainingBalance — it is 0 for stripe-managed/deposit-only plans.
+        const remainingBalance = (enrollment.effectiveBalance ??
+          Math.max(0, (enrollment.totalCost || 0) - (enrollment.totalPaid || 0) - (enrollment.compAmountCents ?? 0))
+        ) || enrollment.totalCost || 0;
         const amountPaid = enrollment.amountPaid || 0;
         
         // Debug logging for troubleshooting cart calculation issues
@@ -1740,13 +1748,17 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (response.ok) {
           const enrollments = await response.json();
 
-          // Check for any successful enrollment (enrolled status with no remaining balance)
-          const hasSuccessfulEnrollment = enrollments.some((enrollment: any) => 
-            enrollment.classId === item.classId && 
-            enrollment.childId === item.childId &&
-            enrollment.status === 'enrolled' &&
-            enrollment.remainingBalance === 0
-          );
+          // Check for any successful enrollment (enrolled status with no effective balance owed).
+          // Use effectiveBalance (server-authoritative); formula fallback excludes comp from balance.
+          // Never rely on raw remainingBalance — it can be 0 for stripe-managed plans even when unpaid.
+          const hasSuccessfulEnrollment = enrollments.some((enrollment: any) => {
+            const balance = enrollment.effectiveBalance ??
+              Math.max(0, (enrollment.totalCost || 0) - (enrollment.totalPaid || 0) - (enrollment.compAmountCents ?? 0));
+            return enrollment.classId === item.classId &&
+              enrollment.childId === item.childId &&
+              enrollment.status === 'enrolled' &&
+              balance === 0;
+          });
 
           if (hasSuccessfulEnrollment) {
             console.log('🛒 User already successfully enrolled, not adding to cart');

@@ -394,7 +394,7 @@ router.get('/enrollments', supabaseAuth, async (req: any, res) => {
       const totalCost = enrollment.totalCost ?? 0;
       const compAmount = enrollment.compAmountCents ?? 0;
       const effectiveBalance = Math.max(0, totalCost - totalPaid - compAmount);
-      return { ...enrollment, remainingBalance: effectiveBalance };
+      return { ...enrollment, remainingBalance: effectiveBalance, effectiveBalance };
     });
 
     // Exclude terminal-status enrollments (denylist per asa-payment-patterns gold-standard).

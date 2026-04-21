@@ -184,7 +184,11 @@ class DataLayer {
         const enrollments = await storage.getEnrollmentsByChildId(childId);
         
         for (const enrollment of enrollments) {
-          const effectiveBalance = enrollment.remainingBalance || ((enrollment.totalCost || 0) - (enrollment.totalPaid || 0));
+          // Use full formula: totalCost - totalPaid - compAmountCents.
+          // Never use raw remainingBalance — it is intentionally 0 for stripe-managed enrollments.
+          const effectiveBalance = (enrollment.effectiveBalance != null)
+            ? enrollment.effectiveBalance
+            : Math.max(0, (enrollment.totalCost || 0) - (enrollment.totalPaid || 0) - (enrollment.compAmountCents ?? 0));
           if (enrollment.status === 'enrolled' && effectiveBalance > 0) {
             totalBalance += effectiveBalance;
             enrollmentCount++;

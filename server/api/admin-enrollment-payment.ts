@@ -383,9 +383,10 @@ router.get('/:enrollmentId/payment-plan', async (req: any, res) => {
       }
     }
 
-    // Calculate remaining balance dynamically to ensure accuracy
-    // This prevents display issues when stored remainingBalance is out of sync
-    const calculatedRemainingBalance = Math.max(0, (enrollment.totalCost || 0) - (enrollment.totalPaid || 0));
+    // Calculate effective balance: totalCost - totalPaid - compAmountCents
+    // Uses the DB-generated effective_balance column where available; falls back to formula.
+    // Never use raw remainingBalance — it is intentionally 0 for stripe-managed enrollments.
+    const calculatedRemainingBalance = enrollment.effectiveBalance ?? Math.max(0, (enrollment.totalCost || 0) - (enrollment.totalPaid || 0) - (enrollment.compAmountCents ?? 0));
 
     res.json({
       enrollment: {
@@ -395,6 +396,7 @@ router.get('/:enrollmentId/payment-plan', async (req: any, res) => {
         totalCost: enrollment.totalCost,
         totalPaid: enrollment.totalPaid || 0,
         remainingBalance: calculatedRemainingBalance,
+        effectiveBalance: calculatedRemainingBalance,
         currentFrequency: enrollment.paymentFrequency || 'one_time',
         paymentPlan: enrollment.paymentPlan,
         programStartDate: enrollment.programStartDate,
