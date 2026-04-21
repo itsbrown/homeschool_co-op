@@ -2295,7 +2295,7 @@ export class DatabaseStorage implements IStorage {
       .from(scheduledPayments)
       .where(
         and(
-          eq(scheduledPayments.status, 'pending'),
+          inArray(scheduledPayments.status, ['pending', 'overdue']),
           lte(scheduledPayments.scheduledDate, asOfDate),
           gte(scheduledPayments.scheduledDate, cutoffDate)
         )
@@ -4724,7 +4724,7 @@ export class DatabaseStorage implements IStorage {
           .where(eq(programEnrollments.id, enrollmentId));
         if (enrollment) {
           const newTotalPaid = (enrollment.totalPaid || 0) + creditsApplied;
-          const newBalance = Math.max(0, (enrollment.totalCost || 0) - newTotalPaid);
+          const newBalance = Math.max(0, (enrollment.totalCost || 0) - newTotalPaid - (enrollment.compAmountCents ?? 0));
           await tx.update(programEnrollments)
             .set({
               totalPaid: newTotalPaid,

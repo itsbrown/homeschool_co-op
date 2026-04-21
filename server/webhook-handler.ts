@@ -19,6 +19,8 @@ import {
   checkSchemaReady,
   type PaymentSource,
 } from './services/PaymentProcessorService';
+import { AUTOPAY_MAX_RETRIES } from './services/auto-pay-scheduler';
+import { handleScheduledPaymentFailed } from './services/auto-pay-webhook-helpers';
 
 // Stripe client will be lazily initialized within the webhook handler
 
@@ -679,7 +681,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
                 if (enrollment) {
                   const currentAmountPaid = enrollment.totalPaid || 0;
                   const newAmountPaid = currentAmountPaid + paymentAmount;
-                  const newBalance = Math.max(0, (enrollment.totalCost || 0) - newAmountPaid);
+                  const newBalance = Math.max(0, (enrollment.totalCost || 0) - newAmountPaid - (enrollment.compAmountCents ?? 0));
                   
                   await storage.updateProgramEnrollment(scheduledPayment.enrollmentId, {
                     totalPaid: newAmountPaid,
@@ -863,7 +865,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
                   ? originalAmount  // Use original full amount when credits were applied
                   : paymentIntent.amount;  // Use Stripe amount for non-credit payments
                 const newAmountPaid = currentAmountPaid + totalPaymentAmount;
-                const newBalance = Math.max(0, (enrollment.totalCost || 0) - newAmountPaid);
+                const newBalance = Math.max(0, (enrollment.totalCost || 0) - newAmountPaid - (enrollment.compAmountCents ?? 0));
                 
                 // Update program enrollment in database
                 const updatedEnrollment = await storage.updateProgramEnrollment(targetEnrollmentId, {
@@ -1130,37 +1132,15 @@ export const webhookHandler = async (req: Request, res: Response) => {
       console.log('❌ Payment failed:', failedPayment.id);
       
       // Handle scheduled payment failure — enforce retry cap, then reset or permanently fail
-      const AUTO_PAY_MAX_RETRIES = 3;
-
       if (failedPayment.metadata.paymentType === 'scheduled_payment') {
         const failedScheduledPaymentId = failedPayment.metadata.scheduledPaymentId;
         if (failedScheduledPaymentId) {
           try {
-            const existingPayments = await storage.getScheduledPaymentsByParentEmail(failedPayment.metadata.parentEmail);
-            const existingPayment = existingPayments.find(p => p.id === parseInt(failedScheduledPaymentId));
-            const existingMetadata = (existingPayment?.metadata as Record<string, any>) || {};
-
-            const newRetryCount = (existingPayment?.retryCount ?? 0) + 1;
-            const exhausted = newRetryCount >= AUTO_PAY_MAX_RETRIES;
-
-            await storage.updateScheduledPayment(parseInt(failedScheduledPaymentId), {
-              status: exhausted ? 'failed' : 'pending',
-              retryCount: newRetryCount,
-              failureReason: exhausted
-                ? `Exceeded ${AUTO_PAY_MAX_RETRIES} auto-pay attempts. Manual payment required.`
-                : (failedPayment.last_payment_error?.message || 'Payment failed'),
-              metadata: {
-                ...existingMetadata,
-                pendingCreditsReservation: 0,
-                lastFailedAt: new Date().toISOString(),
-              },
+            await handleScheduledPaymentFailed(parseInt(failedScheduledPaymentId), {
+              parentEmail: failedPayment.metadata.parentEmail,
+              creditHoldSessionId: failedPayment.metadata.creditHoldSessionId,
+              lastPaymentErrorMessage: failedPayment.last_payment_error?.message,
             });
-
-            if (exhausted) {
-              console.log(`🚫 Scheduled payment ${failedScheduledPaymentId} permanently failed after ${newRetryCount} attempts`);
-            } else {
-              console.log(`🔄 Reset scheduled payment ${failedScheduledPaymentId} to pending (attempt ${newRetryCount}/${AUTO_PAY_MAX_RETRIES})`);
-            }
           } catch (resetError) {
             console.error(`❌ Failed to update scheduled payment ${failedScheduledPaymentId} after failure:`, resetError);
           }
@@ -1175,6 +1155,17 @@ export const webhookHandler = async (req: Request, res: Response) => {
             const parentEmail = failedPayment.metadata.parentEmail;
             console.log(`🔓 Handling ${failedIds.length} failed combined payments — applying retry cap`);
 
+            // Release any credit hold created during the partial-credit combined auto-pay path
+            const combinedCreditHoldSessionId = failedPayment.metadata.creditHoldSessionId;
+            if (combinedCreditHoldSessionId) {
+              try {
+                await storage.releaseCreditHolds(combinedCreditHoldSessionId);
+                console.log(`🔓 Released credit hold ${combinedCreditHoldSessionId} after async combined payment failure`);
+              } catch (holdReleaseErr: any) {
+                console.error(`❌ Could not release combined credit hold ${combinedCreditHoldSessionId}:`, holdReleaseErr.message);
+              }
+            }
+
             const existingPayments = await storage.getScheduledPaymentsByParentEmail(parentEmail);
 
             for (const spId of failedIds) {
@@ -1182,12 +1173,12 @@ export const webhookHandler = async (req: Request, res: Response) => {
               if (existing && existing.status === 'processing') {
                 const existingMeta = (existing.metadata as Record<string, any>) || {};
                 const newRetryCount = (existing.retryCount ?? 0) + 1;
-                const exhausted = newRetryCount >= AUTO_PAY_MAX_RETRIES;
+                const exhausted = newRetryCount >= AUTOPAY_MAX_RETRIES;
                 await storage.updateScheduledPayment(spId, {
                   status: exhausted ? 'failed' : 'pending',
                   retryCount: newRetryCount,
                   failureReason: exhausted
-                    ? `Exceeded ${AUTO_PAY_MAX_RETRIES} auto-pay attempts. Manual payment required.`
+                    ? `Exceeded ${AUTOPAY_MAX_RETRIES} auto-pay attempts. Manual payment required.`
                     : (failedPayment.last_payment_error?.message || 'Combined payment failed'),
                   metadata: {
                     ...existingMeta,

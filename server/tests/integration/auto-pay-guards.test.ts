@@ -42,7 +42,7 @@ const HEADERS = {
   'Content-Type': 'application/json',
 };
 
-async function seedScenario(scenario: string): Promise<{ scheduledPaymentId: number; parentId: number; enrollmentId: number; creditId?: number }> {
+async function seedScenario(scenario: string): Promise<{ scheduledPaymentId: number; parentId: number; enrollmentId: number; creditId?: number; holdSessionId?: string }> {
   const res = await fetch(`${BASE_URL}/api/test/setup-auto-pay-scenario`, {
     method: 'POST',
     headers: HEADERS,
@@ -54,6 +54,19 @@ async function seedScenario(scenario: string): Promise<{ scheduledPaymentId: num
   }
   const data = await res.json() as any;
   if (!data.scheduledPaymentId) throw new Error(`[${scenario}] No scheduledPaymentId in response: ${JSON.stringify(data)}`);
+  return data;
+}
+
+async function simulateAsyncPaymentFailed(scheduledPaymentId: number): Promise<{ releasedCount: number; totalReleased: number; creditHoldSessionId: string | null }> {
+  const res = await fetch(`${BASE_URL}/api/test/simulate-async-payment-failed/${scheduledPaymentId}`, {
+    method: 'POST',
+    headers: HEADERS,
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`simulate-async-payment-failed/${scheduledPaymentId} failed (${res.status}): ${body}`);
+  }
+  const data = await res.json() as any;
   return data;
 }
 
@@ -177,9 +190,9 @@ describe('Auto-Pay Guard Conditions', () => {
     expect(status).toBe('cancelled');
   }, 30000);
 
-  it('G5: already-processing — idempotency guard skips non-pending payment, status unchanged', async () => {
+  it('G5: already-processing — idempotency guard skips non-pending/non-overdue payment, status unchanged', async () => {
     // Payment seeded with status='processing' (simulates scheduler crash mid-flight)
-    // Guard: sp.status !== 'pending' → return 'skipped' without touching status or calling Stripe
+    // Guard: sp.status !== 'pending' && sp.status !== 'overdue' → return 'skipped'
     const { scheduledPaymentId } = await seedScenario('already-processing');
     const result = await triggerGuard(scheduledPaymentId);
     const status = await getPaymentStatus(scheduledPaymentId);
@@ -274,6 +287,63 @@ describe('Auto-Pay Guard Conditions', () => {
     // Scheduler must reach Stripe — result is not 'skipped' (no pre-Stripe guard fired)
     expect(result).not.toBe('skipped');
     expect(payment.status).not.toBe('pending'); // confirms floor guard let the payment through to Stripe
+  }, 30000);
+
+  it('G12: credits-held-async-fail — credit hold released immediately when payment_intent.payment_failed fires', async () => {
+    // Bug 2 regression: credit holds were not released on async Stripe failures (bank timeout, 3DS expiry).
+    // Fix: webhook handler now reads creditHoldSessionId from PaymentIntent metadata and calls
+    // releaseCreditHolds(creditHoldSessionId) when present.
+    //
+    // This test seeds a credit hold in 'pending' state (simulating the scheduler reserving credits
+    // before calling Stripe), then simulates the payment_intent.payment_failed webhook path.
+    // Asserts: releasedCount > 0 and totalReleased > 0 — the hold was released, not left to TTL.
+    const { scheduledPaymentId, holdSessionId } = await seedScenario('credits-held-async-fail');
+
+    expect(holdSessionId).toBeTruthy(); // confirms hold was seeded
+
+    const result = await simulateAsyncPaymentFailed(scheduledPaymentId);
+
+    expect(result.creditHoldSessionId).toBe(holdSessionId);
+    expect(result.releasedCount).toBeGreaterThan(0); // at least one hold was released
+    expect(result.totalReleased).toBeGreaterThan(0); // non-zero amount was released
+
+    // Payment should be reset to pending for retry
+    const payment = await getPayment(scheduledPaymentId);
+    expect(payment.status).toBe('pending');
+  }, 30000);
+
+  it('G13: comped-credits-full-cover — enrollment paymentStatus reaches completed when comp discount is present', async () => {
+    // Bug 3 regression: balance formula ignored compAmountCents, causing paymentStatus to stay
+    // 'partial_payment' even when a comped enrollment was fully paid.
+    // Fix: newBalance = max(0, totalCost - newTotalPaid - (compAmountCents ?? 0)).
+    //
+    // Scenario: totalCost=10000¢, compAmountCents=2000¢, totalPaid=3000¢ before this installment.
+    // After credits-only payment of 5000¢: newTotalPaid=8000, newBalance=max(0,10000-8000-2000)=0.
+    // Expected: paymentStatus='completed' (not 'partial_payment', which is the pre-fix behavior).
+    //
+    // Uses simulate-credits-only-payment endpoint to bypass AUTO_APPLY_CREDITS feature flag,
+    // directly exercising the completeCreditsOnlyPayment storage transaction (the Bug 3 fix site).
+    const { scheduledPaymentId, enrollmentId } = await seedScenario('comped-credits-full-cover');
+
+    const res = await fetch(`${BASE_URL}/api/test/simulate-credits-only-payment/${scheduledPaymentId}`, {
+      method: 'POST',
+      headers: HEADERS,
+    });
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`simulate-credits-only-payment failed (${res.status}): ${body}`);
+    }
+    const data = await res.json() as any;
+
+    // The enrollment balance must reflect comp: 10000 - (3000+5000) - 2000 = 0
+    expect(data.remainingBalance).toBe(0);
+    expect(data.totalPaid).toBe(8000);
+    expect(data.paymentStatus).toBe('completed'); // not 'partial_payment' (the pre-fix behavior)
+
+    // Confirm via the enrollment endpoint too
+    const enrollment = await getEnrollment(enrollmentId);
+    expect(enrollment.remainingBalance).toBe(0);
+    expect(enrollment.paymentStatus).toBe('completed');
   }, 30000);
 });
 

@@ -24,7 +24,7 @@ import { storage } from '../storage';
 import { getStripeClient } from '../config/stripe';
 import { sendScheduledPaymentReminder } from '../lib/email-service';
 
-const MAX_RETRIES = 3;
+export const AUTOPAY_MAX_RETRIES = 3;
 
 async function notifyAutoPayFailure(scheduledPayment: any, parent: any, errMessage: string): Promise<void> {
   try {
@@ -170,7 +170,7 @@ export async function recoverOneScheduledPayment(sp: any): Promise<'reset' | 'co
           const enrollment = await storage.getProgramEnrollmentById(sp.enrollmentId);
           if (enrollment) {
             const newTotalPaid = (enrollment.totalPaid || 0) + sp.amount;
-            const newBalance = Math.max(0, (enrollment.totalCost || 0) - newTotalPaid);
+            const newBalance = Math.max(0, (enrollment.totalCost || 0) - newTotalPaid - (enrollment.compAmountCents ?? 0));
             await storage.updateProgramEnrollment(sp.enrollmentId, {
               totalPaid: newTotalPaid,
               remainingBalance: newBalance,
@@ -189,12 +189,12 @@ export async function recoverOneScheduledPayment(sp: any): Promise<'reset' | 'co
 
     if (intent.status === 'requires_payment_method' || intent.status === 'canceled') {
       const newRetryCount = (sp.retryCount ?? 0) + 1;
-      const exhausted = newRetryCount >= MAX_RETRIES;
+      const exhausted = newRetryCount >= AUTOPAY_MAX_RETRIES;
       await storage.updateScheduledPayment(sp.id, {
         status: exhausted ? 'failed' : 'pending',
         retryCount: newRetryCount,
         failureReason: exhausted
-          ? `Exceeded ${MAX_RETRIES} auto-pay attempts. Manual payment required.`
+          ? `Exceeded ${AUTOPAY_MAX_RETRIES} auto-pay attempts. Manual payment required.`
           : `Stripe payment ${intent.status}`,
       });
       if (exhausted) {
@@ -417,9 +417,9 @@ export async function processOneScheduledPayment(sp: any): Promise<'charged' | '
   let holdCreated: boolean = false;
 
   try {
-    // Idempotency guard: only process payments in 'pending' state
-    if (sp.status !== 'pending') {
-      console.log(`[AutoPay] Skipping payment ${sp.id} — status is '${sp.status}', not 'pending'`);
+    // Idempotency guard: only process payments in 'pending' or 'overdue' state
+    if (sp.status !== 'pending' && sp.status !== 'overdue') {
+      console.log(`[AutoPay] Skipping payment ${sp.id} — status is '${sp.status}', not 'pending' or 'overdue'`);
       return 'skipped';
     }
 
@@ -439,12 +439,12 @@ export async function processOneScheduledPayment(sp: any): Promise<'charged' | '
       return 'skipped';
     }
 
-    // Retry cap guard — permanently fail after MAX_RETRIES attempts
-    if ((sp.retryCount ?? 0) >= MAX_RETRIES) {
+    // Retry cap guard — permanently fail after AUTOPAY_MAX_RETRIES attempts
+    if ((sp.retryCount ?? 0) >= AUTOPAY_MAX_RETRIES) {
       console.log(`[AutoPay] Payment ${sp.id} exceeded max retries (${sp.retryCount}) — permanently failing`);
       await storage.updateScheduledPayment(sp.id, {
         status: 'failed',
-        failureReason: `Exceeded ${MAX_RETRIES} auto-pay attempts. Manual payment required.`,
+        failureReason: `Exceeded ${AUTOPAY_MAX_RETRIES} auto-pay attempts. Manual payment required.`,
       });
       await notifyAutoPayFailure(sp, parent, 'Exceeded maximum retry attempts');
       return 'failed';
@@ -681,9 +681,9 @@ export async function processOneScheduledPayment(sp: any): Promise<'charged' | '
 
       if (isCardDecline) {
         const newRetryCount = (sp.retryCount ?? 0) + 1;
-        const exhausted = newRetryCount >= MAX_RETRIES;
+        const exhausted = newRetryCount >= AUTOPAY_MAX_RETRIES;
 
-        console.log(`[AutoPay] ⚠️ Payment ${sp.id} card declined (retry ${newRetryCount}/${MAX_RETRIES})${exhausted ? ' — permanently failing' : ' — will retry'}`);
+        console.log(`[AutoPay] ⚠️ Payment ${sp.id} card declined (retry ${newRetryCount}/${AUTOPAY_MAX_RETRIES})${exhausted ? ' — permanently failing' : ' — will retry'}`);
 
         if (holdCreated) {
           try {
@@ -698,7 +698,7 @@ export async function processOneScheduledPayment(sp: any): Promise<'charged' | '
           status: exhausted ? 'failed' : 'pending',
           retryCount: newRetryCount,
           failureReason: exhausted
-            ? `Exceeded ${MAX_RETRIES} auto-pay attempts. Manual payment required.`
+            ? `Exceeded ${AUTOPAY_MAX_RETRIES} auto-pay attempts. Manual payment required.`
             : `Card declined: ${stripeErr.message}`,
         });
 

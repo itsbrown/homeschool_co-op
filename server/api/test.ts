@@ -3,6 +3,7 @@ import { TestDatabase } from '../tests/helpers/testDatabase';
 import { storage } from '../storage';
 import { nanoid } from 'nanoid';
 import { processOneScheduledPayment, recoverOneScheduledPayment } from '../services/auto-pay-scheduler';
+import { handleScheduledPaymentFailed } from '../services/auto-pay-webhook-helpers';
 
 const router = Router();
 
@@ -517,6 +518,8 @@ router.post('/setup-auto-pay-scenario', async (req: Request, res: Response) => {
       'credits-partial-cover',
       'credits-full-cover',
       'credits-floor-guard',
+      'credits-held-async-fail',
+      'comped-credits-full-cover',
     ];
     if (!scenario || !validScenarios.includes(scenario)) {
       return res.status(400).json({ error: `Invalid scenario. Must be one of: ${validScenarios.join(', ')}` });
@@ -539,7 +542,7 @@ router.post('/setup-auto-pay-scenario', async (req: Request, res: Response) => {
 
     // Determine parent config per scenario
     const isAutoPayEnabled = scenario !== 'autopay-disabled';
-    const hasSavedCard = scenario !== 'no-payment-method';
+    const hasSavedCard = scenario !== 'no-payment-method' && scenario !== 'credits-held-async-fail';
 
     const parent = await testDb.createTestUser({
       email: `ap_parent_${uid}@test.com`,
@@ -579,6 +582,7 @@ router.post('/setup-auto-pay-scenario', async (req: Request, res: Response) => {
     //     pending_payment|pending_admin_approval|enrolled|waitlist|cancelled|completed|withdrawn|failed
     //   remaining_balance is NOT NULL in DB (schema drift — Drizzle shows nullable but DB enforces NOT NULL)
     const isFullyPaid = scenario === 'enrollment-paid-in-full';
+    const isCompedScenario = scenario === 'comped-credits-full-cover';
     const enrollment = await storage.createProgramEnrollment({
       childId: child.id,
       classId: cls.id,
@@ -589,8 +593,10 @@ router.post('/setup-auto-pay-scenario', async (req: Request, res: Response) => {
       paymentPlan: 'biweekly',
       price: 10000,
       totalCost: 10000,
-      totalPaid: isFullyPaid ? 10000 : 5000,
-      remainingBalance: isFullyPaid ? 0 : 5000,
+      // comped scenario: 2000¢ comp, 3000¢ already paid, 5000¢ installment left
+      totalPaid: isFullyPaid ? 10000 : (isCompedScenario ? 3000 : 5000),
+      remainingBalance: isFullyPaid ? 0 : (isCompedScenario ? 5000 : 5000),
+      ...(isCompedScenario && { compAmountCents: 2000 }),
       childName: 'AutoPay TestChild',
       className: cls.title,
       paymentType: 'v2_stripe',
@@ -691,6 +697,62 @@ router.post('/setup-auto-pay-scenario', async (req: Request, res: Response) => {
       seededCreditId = credit.id;
     }
 
+    // credits-held-async-fail: seed a credit and create a credit hold to simulate
+    // an async payment failure where the hold should be released by the webhook handler.
+    let seededHoldSessionId: string | null = null;
+    if (scenario === 'credits-held-async-fail') {
+      const credit = await storage.createCredit({
+        userId: parent.id,
+        schoolId: school.id,
+        creditType: 'manual',
+        creditAmountCents: 2000,
+        status: 'approved',
+        approvedBy: admin.id,
+        title: `Test Async Fail Credit ${uid}`,
+        description: 'Seeded for credits-held-async-fail integration test',
+        sourceType: 'manual_grant',
+        sourceId: null,
+        expiresAt: null,
+        rejectionReason: null,
+        notes: null,
+        metadata: null,
+      } as any);
+      seededCreditId = credit.id;
+
+      // Create a credit hold to simulate the scheduler reserving credits before Stripe call
+      const holdSessionId = `hold_test_${uid}`;
+      await storage.createCreditHolds(parent.id, 2000, holdSessionId, 'Test hold for async-fail scenario', 60);
+      seededHoldSessionId = holdSessionId;
+
+      // Store holdSessionId in the scheduled payment metadata so the simulate endpoint can read it
+      await storage.updateScheduledPayment(scheduledPayment.id, {
+        metadata: { creditHoldSessionId: holdSessionId } as any,
+      });
+    }
+
+    // comped-credits-full-cover: seed a credit that fully covers the installment.
+    // The enrollment has compAmountCents=2000, so effective cost = 8000; totalPaid=3000 → 5000 left.
+    // After auto-pay, newTotalPaid=8000, newBalance=max(0,10000-8000-2000)=0 → paymentStatus='completed'.
+    if (scenario === 'comped-credits-full-cover') {
+      const credit = await storage.createCredit({
+        userId: parent.id,
+        schoolId: school.id,
+        creditType: 'manual',
+        creditAmountCents: 5000,
+        status: 'approved',
+        approvedBy: admin.id,
+        title: `Test Comped Full Credit ${uid}`,
+        description: 'Seeded for comped-credits-full-cover integration test',
+        sourceType: 'manual_grant',
+        sourceId: null,
+        expiresAt: null,
+        rejectionReason: null,
+        notes: null,
+        metadata: null,
+      } as any);
+      seededCreditId = credit.id;
+    }
+
     console.log(`✅ Auto-pay scenario seeded: ${scenario} (paymentId=${scheduledPayment.id}, parentId=${parent.id})`);
 
     return res.json({
@@ -700,6 +762,7 @@ router.post('/setup-auto-pay-scenario', async (req: Request, res: Response) => {
       parentId: parent.id,
       enrollmentId: enrollment.id,
       ...(seededCreditId !== null && { creditId: seededCreditId }),
+      ...(seededHoldSessionId !== null && { holdSessionId: seededHoldSessionId }),
     });
   } catch (error) {
     console.error('[Test] Error seeding auto-pay scenario:', error);
@@ -856,5 +919,101 @@ router.get('/credit/:id', async (req: Request, res: Response) => {
     });
   }
 });
+
+/**
+ * POST /api/test/simulate-credits-only-payment/:scheduledPaymentId
+ * Directly invokes the completeCreditsOnlyPayment storage path for a scheduled payment.
+ * Bypasses the AUTO_APPLY_CREDITS feature flag so Bug 3 can be tested regardless of env.
+ *
+ * This tests Bug 3: balance formula must include compAmountCents when computing newBalance
+ * and when determining whether paymentStatus should become 'completed'.
+ *
+ * Returns: { paymentStatus, remainingBalance, totalPaid }
+ */
+router.post('/simulate-credits-only-payment/:scheduledPaymentId', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.scheduledPaymentId);
+    if (isNaN(id)) return res.status(400).json({ error: 'Invalid scheduledPaymentId' });
+
+    const sp = await storage.getScheduledPaymentById(id);
+    if (!sp) return res.status(404).json({ error: `Scheduled payment ${id} not found` });
+
+    const enrollment = sp.enrollmentId ? await storage.getProgramEnrollmentById(sp.enrollmentId) : null;
+    if (!enrollment) return res.status(400).json({ error: 'No enrollment found for scheduled payment' });
+
+    const parent = sp.parentId ? await storage.getUser(sp.parentId) : null;
+    if (!parent) return res.status(400).json({ error: 'No parent found for scheduled payment' });
+
+    const holdSessionId = `test_credits_only_${id}_${Date.now()}`;
+
+    await storage.createCreditHolds(parent.id, sp.amount, holdSessionId, `Test credits-only hold for sp ${id}`, 60);
+
+    await storage.completeCreditsOnlyPayment({
+      holdSessionId,
+      scheduledPaymentId: sp.id,
+      parentId: parent.id,
+      enrollmentId: sp.enrollmentId,
+      schoolId: sp.schoolId,
+      creditsApplied: sp.amount,
+      originalAmount: sp.amount,
+      installmentNumber: sp.installmentNumber || 1,
+      totalInstallments: sp.totalInstallments || 1,
+      parentEmail: parent.email,
+      childName: enrollment.childName,
+      className: enrollment.className,
+    });
+
+    const updatedEnrollment = sp.enrollmentId ? await storage.getProgramEnrollmentById(sp.enrollmentId) : null;
+    return res.json({
+      success: true,
+      paymentStatus: updatedEnrollment?.paymentStatus,
+      remainingBalance: updatedEnrollment?.remainingBalance,
+      totalPaid: updatedEnrollment?.totalPaid,
+    });
+  } catch (error) {
+    console.error('[Test] Error simulating credits-only payment:', error);
+    return res.status(500).json({
+      error: 'Failed to simulate credits-only payment',
+      details: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+/**
+ * POST /api/test/simulate-async-payment-failed/:scheduledPaymentId
+ * Simulates the payment_intent.payment_failed webhook path for a payment that
+ * has a creditHoldSessionId in its metadata.
+ *
+ * This tests Bug 2: credit holds must be released immediately on async payment
+ * failure rather than waiting for the 60-minute TTL.
+ *
+ * Returns: { releasedCount, totalReleased }
+ */
+router.post('/simulate-async-payment-failed/:scheduledPaymentId', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.scheduledPaymentId);
+    if (isNaN(id)) return res.status(400).json({ error: 'Invalid scheduledPaymentId' });
+
+    const sp = await storage.getScheduledPaymentById(id);
+    if (!sp) return res.status(404).json({ error: `Scheduled payment ${id} not found` });
+
+    const meta = (sp.metadata as Record<string, any>) || {};
+
+    const result = await handleScheduledPaymentFailed(id, {
+      parentEmail: meta.parentEmail ?? sp.parentEmail ?? '',
+      creditHoldSessionId: meta.creditHoldSessionId,
+      lastPaymentErrorMessage: 'Async payment failure (test simulation)',
+    });
+
+    return res.json({ success: true, ...result });
+  } catch (error) {
+    console.error('[Test] Error simulating async payment failed:', error);
+    return res.status(500).json({
+      error: 'Failed to simulate async payment failed',
+      details: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
 
 export default router;
