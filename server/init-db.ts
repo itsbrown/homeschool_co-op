@@ -2662,6 +2662,33 @@ async function runMigrations() {
     console.log('Data correction note (non-blocking):', marekCorrectionError.message);
   }
 
+  // One-time cleanup: Cancel orphaned pending_payment memberships where an enrolled record
+  // already exists for the same (parent_user_id, school_id, membership_year).
+  // These were left behind by the pre-#134 checkout path that created a second enrolled
+  // record instead of updating the registration-created pending_payment.
+  console.log('Running cleanup: Cancelling orphaned pending_payment membership records...');
+  try {
+    const result = await db.execute(sql`
+      UPDATE membership_enrollments
+      SET status = 'cancelled', updated_at = NOW()
+      WHERE status = 'pending_payment'
+      AND (parent_user_id, school_id, membership_year) IN (
+        SELECT parent_user_id, school_id, membership_year
+        FROM membership_enrollments
+        WHERE status = 'enrolled'
+      )
+      RETURNING id, parent_user_id
+    `);
+    const cancelledCount = Array.isArray(result) ? result.length : 0;
+    if (cancelledCount > 0) {
+      console.log(`✅ Cleanup completed: Cancelled ${cancelledCount} orphaned pending_payment membership record(s)`);
+    } else {
+      console.log('✅ Cleanup completed: No orphaned pending_payment membership records found');
+    }
+  } catch (cleanupError) {
+    console.log('Cleanup note (non-blocking):', cleanupError instanceof Error ? cleanupError.message : String(cleanupError));
+  }
+
   // Add unique constraint to prevent duplicate membership enrollments per parent/school/year
   console.log('Running migration: Adding unique constraint to membership_enrollments...');
   try {

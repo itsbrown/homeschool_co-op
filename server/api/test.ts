@@ -1016,4 +1016,212 @@ router.post('/simulate-async-payment-failed/:scheduledPaymentId', async (req: Re
 });
 
 
+// ─── Membership Idempotency Test Endpoints ────────────────────────────────────
+
+/**
+ * POST /api/test/membership-idempotency/setup
+ * Seeds a clean parent + school with NO membership enrollment yet.
+ * Returns { parentId, schoolId, membershipYear, paymentIntentId }
+ */
+router.post('/membership-idempotency/setup', async (req: Request, res: Response) => {
+  try {
+    const uid = nanoid(8);
+    const testDb = new TestDatabase();
+
+    const admin = await testDb.createTestUser({
+      email: `mi_admin_${uid}@test.com`,
+      name: 'MI Test Admin',
+      role: 'schoolAdmin',
+    });
+    const school = await testDb.createTestSchool(admin.id, {
+      name: `MI School ${uid}`,
+      registrationCode: `MI${uid.toUpperCase()}`,
+    });
+    const parent = await testDb.createTestUser({
+      email: `mi_parent_${uid}@test.com`,
+      name: 'MI Test Parent',
+      role: 'parent',
+      schoolId: school.id,
+    });
+
+    const membershipYear = req.body.membershipYear ?? new Date().getFullYear();
+    const paymentIntentId = `pi_test_mi_${uid}`;
+
+    return res.json({
+      parentId: parent.id,
+      schoolId: school.id,
+      membershipYear,
+      membershipAmount: req.body.membershipAmount ?? 10000,
+      paymentIntentId,
+    });
+  } catch (error) {
+    console.error('[Test] membership-idempotency/setup error:', error);
+    return res.status(500).json({ error: String(error) });
+  }
+});
+
+/**
+ * POST /api/test/membership-idempotency/simulate-confirm
+ * Mirrors the confirm endpoint's !memberId / first-time-payer membership logic (post-#134).
+ * Body: { parentId, schoolId, membershipYear, membershipAmount, paymentIntentId }
+ * Returns { membershipId, action: 'created' | 'updated' | 'skipped' }
+ */
+router.post('/membership-idempotency/simulate-confirm', async (req: Request, res: Response) => {
+  try {
+    const { parentId, schoolId, membershipYear, membershipAmount, paymentIntentId } = req.body;
+    if (!parentId || !schoolId || !membershipYear || !paymentIntentId) {
+      return res.status(400).json({ error: 'parentId, schoolId, membershipYear, paymentIntentId required' });
+    }
+    const amount = membershipAmount ?? 10000;
+
+    const existing = await storage.getMembershipEnrollmentByParentAndSchoolAndYear(
+      parentId, schoolId, membershipYear
+    );
+
+    if (existing) {
+      // Idempotency: if this paymentIntent already recorded, skip
+      if (existing.notes?.includes(paymentIntentId)) {
+        return res.json({ membershipId: existing.id, action: 'skipped' });
+      }
+      // Update existing record to enrolled
+      const startDate = new Date();
+      const expirationDate = new Date(startDate);
+      expirationDate.setFullYear(expirationDate.getFullYear() + 1);
+      await storage.updateMembershipEnrollment(existing.id, {
+        status: 'enrolled',
+        amountPaid: amount,
+        remainingBalance: 0,
+        balanceDue: 0,
+        startDate,
+        renewalDate: expirationDate,
+        expirationDate,
+        notes: `${existing.notes || ''} | Updated via cart checkout (${paymentIntentId})`.trim(),
+      });
+      return res.json({ membershipId: existing.id, action: 'updated' });
+    }
+
+    // No existing record — create new enrolled membership
+    const startDate = new Date();
+    const expirationDate = new Date(startDate);
+    expirationDate.setFullYear(expirationDate.getFullYear() + 1);
+    const created = await storage.createMembershipEnrollment({
+      schoolId,
+      parentUserId: parentId,
+      membershipYear,
+      membershipTier: 'basic',
+      amount,
+      amountPaid: amount,
+      remainingBalance: 0,
+      totalAmount: amount,
+      balanceDue: 0,
+      status: 'enrolled',
+      stripeSubscriptionId: null,
+      stripeCustomerId: null,
+      startDate,
+      renewalDate: expirationDate,
+      dueDate: startDate,
+      endDate: expirationDate,
+      expirationDate,
+      gracePeriodEnd: null,
+      paymentMethod: 'other',
+      notes: `Stripe payment via cart checkout (${paymentIntentId}) - confirmed via confirm endpoint`,
+    });
+    return res.json({ membershipId: created.id, action: 'created' });
+  } catch (error) {
+    console.error('[Test] membership-idempotency/simulate-confirm error:', error);
+    return res.status(500).json({ error: String(error) });
+  }
+});
+
+/**
+ * POST /api/test/membership-idempotency/simulate-webhook
+ * Mirrors the handleDirectPaymentSuccess webhook membership logic.
+ * Body: { parentId, schoolId, membershipYear, membershipAmount, paymentIntentId }
+ * Returns { membershipId, action: 'created' | 'updated' | 'skipped' }
+ */
+router.post('/membership-idempotency/simulate-webhook', async (req: Request, res: Response) => {
+  try {
+    const { parentId, schoolId, membershipYear, membershipAmount, paymentIntentId } = req.body;
+    if (!parentId || !schoolId || !membershipYear || !paymentIntentId) {
+      return res.status(400).json({ error: 'parentId, schoolId, membershipYear, paymentIntentId required' });
+    }
+    const amount = membershipAmount ?? 10000;
+
+    const existing = await storage.getMembershipEnrollmentByParentAndSchoolAndYear(
+      parentId, schoolId, membershipYear
+    );
+
+    const startDate = new Date();
+    const expirationDate = new Date(startDate);
+    expirationDate.setFullYear(expirationDate.getFullYear() + 1);
+
+    if (existing) {
+      if (existing.status === 'enrolled') {
+        // Already enrolled — webhook idempotency: skip entirely
+        return res.json({ membershipId: existing.id, action: 'skipped' });
+      }
+      // pending_payment or other status — update to enrolled
+      await storage.updateMembershipEnrollment(existing.id, {
+        status: 'enrolled',
+        amountPaid: amount,
+        remainingBalance: 0,
+        balanceDue: 0,
+        startDate,
+        renewalDate: expirationDate,
+        expirationDate,
+        notes: `Stripe payment via cart checkout (${paymentIntentId})`,
+      });
+      return res.json({ membershipId: existing.id, action: 'updated' });
+    }
+
+    // No existing record — create new enrolled membership
+    const created = await storage.createMembershipEnrollment({
+      schoolId,
+      parentUserId: parentId,
+      membershipYear,
+      membershipTier: 'basic',
+      amount,
+      amountPaid: amount,
+      remainingBalance: 0,
+      totalAmount: amount,
+      balanceDue: 0,
+      status: 'enrolled',
+      stripeSubscriptionId: null,
+      stripeCustomerId: null,
+      startDate,
+      renewalDate: expirationDate,
+      dueDate: startDate,
+      endDate: expirationDate,
+      expirationDate,
+      gracePeriodEnd: null,
+      paymentMethod: 'other',
+      notes: `Stripe payment via cart checkout (${paymentIntentId})`,
+    });
+    return res.json({ membershipId: created.id, action: 'created' });
+  } catch (error) {
+    console.error('[Test] membership-idempotency/simulate-webhook error:', error);
+    return res.status(500).json({ error: String(error) });
+  }
+});
+
+/**
+ * GET /api/test/membership-idempotency/enrollment/:parentId/:schoolId/:year
+ * Returns the current membership enrollment record for audit assertions.
+ */
+router.get('/membership-idempotency/enrollment/:parentId/:schoolId/:year', async (req: Request, res: Response) => {
+  try {
+    const parentId = parseInt(req.params.parentId);
+    const schoolId = parseInt(req.params.schoolId);
+    const year = parseInt(req.params.year);
+    if (isNaN(parentId) || isNaN(schoolId) || isNaN(year)) {
+      return res.status(400).json({ error: 'parentId, schoolId, year must be integers' });
+    }
+    const enrollment = await storage.getMembershipEnrollmentByParentAndSchoolAndYear(parentId, schoolId, year);
+    return res.json(enrollment ?? null);
+  } catch (error) {
+    console.error('[Test] membership-idempotency/enrollment lookup error:', error);
+    return res.status(500).json({ error: String(error) });
+  }
+});
+
 export default router;
