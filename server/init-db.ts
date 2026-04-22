@@ -2600,21 +2600,7 @@ async function runMigrations() {
     console.log('Migration note (non-blocking):', allowedMemberIdsError.message);
   }
 
-  // Create email_log table if it doesn't exist
-  await db.execute(sql`
-    CREATE TABLE IF NOT EXISTS email_log (
-      id SERIAL PRIMARY KEY,
-      recipient TEXT NOT NULL,
-      subject TEXT NOT NULL,
-      template_name TEXT NOT NULL,
-      status TEXT NOT NULL,
-      error_type TEXT,
-      error_message TEXT,
-      school_id INTEGER,
-      sent_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-    )
-  `);
-  console.log('✅ email_log table ensured');
+  // email_log table is managed by Drizzle (shared/schema.ts) via `npm run db:push`.
 
   // Add completion_source column to scheduled_payments table
   // Tracks how a payment was completed: 'stripe_autopay', 'stripe_checkout', 'manual_sync', 'reconciliation', 'recovery'
