@@ -45,7 +45,8 @@ import {
   UserCheck,
   HelpCircle,
   LayoutGrid,
-  TrendingUp
+  TrendingUp,
+  BadgeCheck
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -117,6 +118,7 @@ const adminNavGroups: NavGroup[] = [
       { title: 'Financial Reports', href: '/school-admin/financial-reports', icon: BarChart3 },
       { title: 'Retention Report', href: '/school-admin/retention-report', icon: TrendingUp },
       { title: 'Manual Payments', href: '/schools/manual-payments', icon: CreditCard },
+      { title: 'Memberships', href: '/schools/memberships', icon: BadgeCheck },
       { title: 'Discounts', href: '/schools/discounts', icon: Target },
       { title: 'Credits', href: '/school-admin/credits', icon: Coins },
       { title: 'Fundraisers', href: '/school-admin/fundraisers', icon: Gift },
