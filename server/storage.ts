@@ -2164,9 +2164,19 @@ export class MemStorage implements IStorage {
     const enrollment = this.programEnrollmentsStore.get(id);
     if (!enrollment) return undefined;
 
+    // Strip generated columns / immutable fields so callers spreading a full
+    // enrollment row can't reintroduce them (mirrors DB-storage hardening).
+    const {
+      effectiveBalance: _ignoredEffectiveBalance,
+      id: _ignoredId,
+      createdAt: _ignoredCreatedAt,
+      ...safeUpdate
+    } = (updateData ?? {}) as Partial<InsertProgramEnrollment> &
+      Partial<Pick<ProgramEnrollment, 'effectiveBalance' | 'id' | 'createdAt'>>;
+
     const updatedEnrollment: ProgramEnrollment = {
       ...enrollment,
-      ...updateData,
+      ...safeUpdate,
       updatedAt: new Date()
     };
 
@@ -2494,7 +2504,15 @@ export class MemStorage implements IStorage {
       return null;
     }
 
-    const updatedEnrollment = { ...this.classEnrollments[index], ...updateData };
+    // Strip generated columns / immutable fields so callers spreading an
+    // existing enrollment row can't reintroduce them (mirrors DB hardening).
+    const {
+      effectiveBalance: _ignoredEffectiveBalance,
+      id: _ignoredId,
+      createdAt: _ignoredCreatedAt,
+      ...safeUpdate
+    } = (updateData ?? {}) as Record<string, unknown>;
+    const updatedEnrollment = { ...this.classEnrollments[index], ...safeUpdate };
     this.classEnrollments[index] = updatedEnrollment;
 
     console.log(`✅ ENROLLMENT UPDATED: ID ${updatedEnrollment.id}, Status: ${updatedEnrollment.status}`);

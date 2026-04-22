@@ -731,14 +731,15 @@ export class StripePaymentPlanService {
       const existingEnrollment = await this.storage.getProgramEnrollmentById(enrollmentId);
       if (existingEnrollment) {
         await this.storage.updateEnrollment(enrollmentId, {
-          ...existingEnrollment,
           stripeCustomerId: customerId,
           paymentSystemVersion: 'v2_stripe_simplified',
           paymentStatus: paymentPlan === 'full' ? 'pending' : 'partial_payment',
           migrationDate: new Date(),
           // Store payment plan info in metadata
           metadata: {
-            ...existingEnrollment.metadata,
+            ...(existingEnrollment.metadata && typeof existingEnrollment.metadata === 'object'
+              ? (existingEnrollment.metadata as Record<string, unknown>)
+              : {}),
             paymentPlan,
             initialPaymentIntentId: paymentIntentId,
             stripeCustomerId: customerId
@@ -776,7 +777,6 @@ export class StripePaymentPlanService {
         const newBalance = Math.max(0, (enrollment.totalCost || 0) - newPaidAmount);
 
         await this.storage.updateEnrollment(enrollmentId, {
-          ...enrollment,
           totalPaid: newPaidAmount,
           remainingBalance: newBalance,
           paymentStatus: newBalance === 0 ? 'completed' : 'partial_payment',

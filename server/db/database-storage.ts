@@ -487,10 +487,21 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateProgramEnrollment(id: number, updateData: Partial<InsertProgramEnrollment>): Promise<ProgramEnrollment | undefined> {
+    // Strip generated columns and immutable fields. Postgres rejects updates to
+    // generated columns (SQLSTATE 428C9), so callers that accidentally spread
+    // an existing enrollment row must not be allowed to break the UPDATE.
+    const {
+      effectiveBalance: _ignoredEffectiveBalance,
+      id: _ignoredId,
+      createdAt: _ignoredCreatedAt,
+      ...safeUpdate
+    } = (updateData ?? {}) as Partial<InsertProgramEnrollment> &
+      Partial<Pick<ProgramEnrollment, 'effectiveBalance' | 'id' | 'createdAt'>>;
+
     const [updatedEnrollment] = await db
       .update(programEnrollments)
       .set({
-        ...updateData,
+        ...safeUpdate,
         updatedAt: new Date()
       })
       .where(eq(programEnrollments.id, id))
