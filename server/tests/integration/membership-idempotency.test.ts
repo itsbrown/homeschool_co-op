@@ -105,6 +105,7 @@ describe('Membership Enrollment Idempotency', () => {
     const enrollment = await getEnrollment(scenario.parentId, scenario.schoolId, scenario.membershipYear);
     expect(enrollment).not.toBeNull();
     expect(enrollment.status).toBe('enrolled');
+    expect(enrollment.notes).toContain(scenario.paymentIntentId);
   });
 
   it('M2: webhook first → confirm skips → exactly one enrolled record', async () => {

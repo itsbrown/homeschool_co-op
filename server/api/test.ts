@@ -1027,21 +1027,33 @@ router.post('/membership-idempotency/setup', async (req: Request, res: Response)
   try {
     const uid = nanoid(8);
     const testDb = new TestDatabase();
+    const overrideSchoolId: number | undefined = req.body.schoolId;
 
-    const admin = await testDb.createTestUser({
-      email: `mi_admin_${uid}@test.com`,
-      name: 'MI Test Admin',
-      role: 'schoolAdmin',
-    });
-    const school = await testDb.createTestSchool(admin.id, {
-      name: `MI School ${uid}`,
-      registrationCode: `MI${uid.toUpperCase()}`,
-    });
+    let schoolId: number;
+    if (overrideSchoolId) {
+      const existing = await storage.getSchool(overrideSchoolId);
+      if (!existing) {
+        return res.status(400).json({ error: `schoolId ${overrideSchoolId} not found` });
+      }
+      schoolId = overrideSchoolId;
+    } else {
+      const admin = await testDb.createTestUser({
+        email: `mi_admin_${uid}@test.com`,
+        name: 'MI Test Admin',
+        role: 'schoolAdmin',
+      });
+      const school = await testDb.createTestSchool(admin.id, {
+        name: `MI School ${uid}`,
+        registrationCode: `MI${uid.toUpperCase()}`,
+      });
+      schoolId = school.id;
+    }
+
     const parent = await testDb.createTestUser({
       email: `mi_parent_${uid}@test.com`,
       name: 'MI Test Parent',
       role: 'parent',
-      schoolId: school.id,
+      schoolId,
     });
 
     const membershipYear = req.body.membershipYear ?? new Date().getFullYear();
@@ -1049,7 +1061,7 @@ router.post('/membership-idempotency/setup', async (req: Request, res: Response)
 
     return res.json({
       parentId: parent.id,
-      schoolId: school.id,
+      schoolId,
       membershipYear,
       membershipAmount: req.body.membershipAmount ?? 10000,
       paymentIntentId,
