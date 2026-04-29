@@ -4,6 +4,11 @@ module.exports = {
   rootDir: '.',
   moduleNameMapper: {
     '^@shared/(.*)$': '<rootDir>/shared/$1',
+    // server/lib/database-url.mjs uses bare ESM `export` syntax that ts-jest
+    // cannot compile under `module: 'commonjs'`. Redirect any `.mjs` import
+    // back to its CJS-friendly stub so the integration suite can load
+    // anything that touches the database SSL helpers.
+    '^(.*/)?database-url\\.mjs$': '<rootDir>/server/tests/helpers/databaseUrlStub.cjs',
   },
   setupFilesAfterEnv: ['<rootDir>/server/tests/setup.ts'],
   testMatch: [
@@ -27,7 +32,7 @@ module.exports = {
   ],
   coverageDirectory: 'coverage-integration',
   coverageReporters: ['text', 'lcov', 'html'],
-  moduleFileExtensions: ['ts', 'js', 'json'],
+  moduleFileExtensions: ['ts', 'js', 'cjs', 'mjs', 'json'],
   testTimeout: 30000,
   workerIdleMemoryLimit: '512MB',
   maxWorkers: 1,

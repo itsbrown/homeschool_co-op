@@ -1,12 +1,16 @@
+import fs from 'fs';
+import path from 'path';
 import request from 'supertest';
 import express from 'express';
 import session from 'express-session';
 import { TestDatabase } from '../../helpers/testDatabase';
 import { storage } from '../../../storage';
+import type { InsertProgramEnrollment } from '@shared/schema';
 import enrollmentsRouter from '../../../api/enrollments';
 import stripeRouter from '../../../api/stripe';
 import billingRouter from '../../../api/billing';
 import paymentHistoryRouter from '../../../api/payment-history';
+import cartRouter from '../../../api/cart';
 
 const app = express();
 
@@ -131,6 +135,7 @@ app.use('/api/enrollments', enrollmentsRouter);
 app.use('/api/stripe', stripeRouter);
 app.use('/api/billing', billingRouter);
 app.use('/api/payment-history', paymentHistoryRouter);
+app.use('/api/cart', cartRouter);
 
 describe('Integration: Financial & Enrollment Features (Phase 2)', () => {
   let testDb: TestDatabase;
@@ -1871,6 +1876,199 @@ describe('Integration: Financial & Enrollment Features (Phase 2)', () => {
           expect(response.body.error).not.toBe('UNAUTHORIZED_ENROLLMENT');
         }
       });
+    });
+  });
+
+  // Regression coverage for the $0-balance + free-enrollment auth bugs.
+  describe('Free Enrollment & Effective Balance Regressions', () => {
+    // CombinedStorage.createUser persists to data/users.json on the file
+    // fallback path; snapshot/restore both fixture files so the suite never
+    // leaks test users into the dev workflow's bootstrap data.
+    const usersFilePath = path.join(process.cwd(), 'data', 'users.json');
+    const childrenFilePath = path.join(process.cwd(), 'data', 'children.json');
+    let usersFileSnapshot: string | null = null;
+    let childrenFileSnapshot: string | null = null;
+
+    beforeAll(() => {
+      if (fs.existsSync(usersFilePath)) {
+        usersFileSnapshot = fs.readFileSync(usersFilePath, 'utf8');
+      }
+      if (fs.existsSync(childrenFilePath)) {
+        childrenFileSnapshot = fs.readFileSync(childrenFilePath, 'utf8');
+      }
+    });
+
+    afterAll(() => {
+      if (usersFileSnapshot !== null) {
+        fs.writeFileSync(usersFilePath, usersFileSnapshot);
+      }
+      if (childrenFileSnapshot !== null) {
+        fs.writeFileSync(childrenFilePath, childrenFileSnapshot);
+      }
+    });
+
+    // Stub the storage methods that always route to the DB layer (MemStorage
+    // doesn't back them) so the cart pricing flow returns deterministic data.
+    beforeEach(() => {
+      jest.spyOn(storage, 'getDiscountsBySchoolId').mockResolvedValue([]);
+      jest.spyOn(storage, 'getDiscountUsageCountByUser').mockResolvedValue(0);
+      jest.spyOn(storage, 'getAvailableCredits').mockResolvedValue([]);
+      jest.spyOn(storage, 'getMembershipEnrollmentsByParentId').mockResolvedValue([]);
+    });
+
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
+    it('returns 409 FREE_ENROLLMENT_NOT_AUTHORIZED when the server snapshot does not flag the cart as free', async () => {
+      // Enrollment still owes 10000 cents; the parent's $0 claim must be refused.
+      const admin = await testDb.createTestUser({
+        email: 'admin_free_reject@test.com',
+        username: 'adminfreereject',
+        name: 'Admin',
+        role: 'schoolAdmin',
+      });
+      const school = await testDb.createTestSchool(admin.id, {
+        name: 'Free Enrollment Reject Academy',
+      });
+      const parent = await testDb.createTestUser({
+        email: 'parent_free_reject@test.com',
+        username: 'parentfreereject',
+        name: 'Parent',
+        role: 'parent',
+        schoolId: school.id,
+      });
+      const child = await testDb.createTestChild(parent.id, {
+        firstName: 'Bobby',
+        lastName: 'Owes',
+        gradeLevel: '4th',
+        schoolId: school.id,
+      });
+      const classItem = await testDb.createTestClass(school.id, {
+        title: 'Real Cost Class',
+        price: 10000,
+        status: 'published',
+      });
+
+      const enrollment = await storage.createProgramEnrollment({
+        schoolId: school.id,
+        classType: 'school_class',
+        classId: classItem.id,
+        childId: child.id,
+        childName: `${child.firstName} ${child.lastName}`,
+        className: classItem.title,
+        parentId: parent.id,
+        parentEmail: parent.email,
+        totalCost: 10000,
+        totalPaid: 0,
+        remainingBalance: 0, // Stripe-managed plan: stored value is intentionally 0
+        compAmountCents: 0,
+        paymentStatus: 'pending',
+        status: 'pending_payment',
+      });
+
+      const response = await request(app)
+        .post('/api/stripe/request-free-enrollment')
+        .set('x-test-user-email', parent.email)
+        .send({
+          items: [{
+            id: `${classItem.id}-${child.id}`,
+            classId: classItem.id,
+            childId: child.id,
+            childName: `${child.firstName} ${child.lastName}`,
+            className: classItem.title,
+            classType: 'school_class',
+            enrollmentId: enrollment.id,
+            remainingBalance: 0, // The fishy "$0" the client claims to owe
+            schoolId: school.id,
+          }],
+          subtotal: 0,
+          discounts: [],
+          total: 0,
+          discountCode: 'FAKE_FREE',
+        });
+
+      expect(response.status).toBe(409);
+      expect(response.body.error).toBe('FREE_ENROLLMENT_NOT_AUTHORIZED');
+      expect(response.body.success).toBe(false);
+    });
+
+    it('uses effective_balance (not stored remaining_balance) when computing the cart snapshot payable amount', async () => {
+      // Stripe-managed plan stores remaining_balance=0; effective_balance=30000.
+      // The snapshot's payableAmount feeds the parent Payment Management total.
+      const admin = await testDb.createTestUser({
+        email: 'admin_eff_bal@test.com',
+        username: 'admineffbal',
+        name: 'Admin',
+        role: 'schoolAdmin',
+      });
+      const school = await testDb.createTestSchool(admin.id, {
+        name: 'Effective Balance Academy',
+      });
+      const parent = await testDb.createTestUser({
+        email: 'parent_eff_bal@test.com',
+        username: 'parentEffBal',
+        name: 'Parent',
+        role: 'parent',
+        schoolId: school.id,
+      });
+      const child = await testDb.createTestChild(parent.id, {
+        firstName: 'Cara',
+        lastName: 'Owes',
+        gradeLevel: '3rd',
+        schoolId: school.id,
+      });
+      const classItem = await testDb.createTestClass(school.id, {
+        title: 'Stripe-Managed Class',
+        price: 30000,
+        status: 'published',
+      });
+
+      // effectiveBalance is omitted from InsertProgramEnrollment (generated
+      // column in production); seed it explicitly so MemStorage mirrors the
+      // value the DB-generated column would have held.
+      const enrollmentInput: InsertProgramEnrollment & { effectiveBalance: number } = {
+        schoolId: school.id,
+        classType: 'school_class',
+        classId: classItem.id,
+        childId: child.id,
+        childName: `${child.firstName} ${child.lastName}`,
+        className: classItem.title,
+        parentId: parent.id,
+        parentEmail: parent.email,
+        totalCost: 30000,
+        totalPaid: 0,
+        remainingBalance: 0,
+        compAmountCents: 0,
+        effectiveBalance: 30000,
+        paymentStatus: 'partial_payment',
+        status: 'enrolled',
+      };
+      const enrollment = await storage.createProgramEnrollment(enrollmentInput);
+
+      const response = await request(app)
+        .post('/api/cart/snapshot')
+        .set('x-test-user-email', parent.email)
+        .send({
+          items: [{
+            id: `${classItem.id}-${child.id}`,
+            classId: classItem.id,
+            childId: child.id,
+            childName: `${child.firstName} ${child.lastName}`,
+            enrollmentId: enrollment.id,
+            // The client may submit 0 (the stale value); the server must
+            // overwrite it with the effective_balance before pricing.
+            remainingBalance: 0,
+          }],
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body.totals.payableAmount).toBe(30000);
+      expect(response.body.totals.itemsTotal).toBe(30000);
+      expect(response.body.totals.grandTotal).toBe(30000);
+      // Crucially the snapshot must NOT advertise this as a free enrollment.
+      expect(response.body.isFreeEnrollment).toBe(false);
+      expect(response.body.freeEnrollmentReason).toBeNull();
     });
   });
 });
