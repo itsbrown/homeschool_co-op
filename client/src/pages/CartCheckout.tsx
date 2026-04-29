@@ -21,6 +21,7 @@ import { formatClassSchedule } from '@/lib/utils';
 import { stripePromise } from '@/config/stripe';
 import type { Stripe } from '@stripe/stripe-js';
 import { trackBeginCheckout, trackAddPaymentInfo } from '@/lib/analytics';
+import { isFreeEnrollmentApproved as gateIsFreeEnrollmentApproved, cartLooksFreeButUnverified as gateCartLooksFreeButUnverified } from '@/utils/freeEnrollmentGate';
 
 function CheckoutForm({ selectedPaymentPlan, selectedPlanAmount, autoPayEnabled, hasPaymentMethod, togglingAutoPay, toggleAutoPay }: { selectedPaymentPlan: string; selectedPlanAmount: number; autoPayEnabled: boolean; hasPaymentMethod: boolean; togglingAutoPay: boolean; toggleAutoPay: (enabled: boolean) => void }) {
   const stripe = useStripe();
@@ -523,16 +524,18 @@ export default function CartCheckout() {
   // remaining_balance=0 of Stripe-managed plans (or other fallbacks) can collapse the
   // subtotal to 0 even when the parent genuinely owes money. Only the server cart
   // snapshot can authoritatively decide this.
-  const isFreeEnrollmentApproved =
-    actualPayableAmount === 0 && authoritativeData?.isFreeEnrollment === true;
+  const isFreeEnrollmentApproved = gateIsFreeEnrollmentApproved(
+    actualPayableAmount,
+    authoritativeData,
+  );
   // True when the local total looks free but the server snapshot disagrees (snapshot
   // is loaded but did not flag the cart as free) — used to show a recovery/refresh
   // card instead of silently submitting a free-enrollment request the server would
   // reject.
-  const cartLooksFreeButUnverified =
-    actualPayableAmount === 0 &&
-    !!authoritativeData &&
-    authoritativeData.isFreeEnrollment !== true;
+  const cartLooksFreeButUnverified = gateCartLooksFreeButUnverified(
+    actualPayableAmount,
+    authoritativeData,
+  );
 
   const prevCartItemsRef = useRef<string>('');
   

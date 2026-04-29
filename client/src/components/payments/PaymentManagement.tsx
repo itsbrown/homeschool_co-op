@@ -50,6 +50,10 @@ import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import {
+  getEnrollmentEffectiveBalance,
+  getMembershipOutstandingBalance,
+} from "@/utils/parentBalance";
 
 interface Payment {
   id: string;
@@ -1308,20 +1312,14 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
       );
 
       // Use effectiveBalance (DB-generated: total_cost - total_paid - COALESCE(comp_amount_cents, 0))
-      // with ?? fallback. Never read remainingBalance — it is intentionally 0 for Stripe-managed
-      // payment plans and would silently zero-out the displayed balance for the parent
-      // (see asa-payment-patterns "Parent Payments page shows $0" pitfall).
-      const getEffectiveBalance = (e: any) =>
-        e.effectiveBalance ?? Math.max(
-          0,
-          (e.totalCost ?? 0) - (e.totalPaid ?? 0) - (e.compAmountCents ?? 0)
-        );
-
+      // via the parentBalance helper. Never read remainingBalance — it is intentionally 0 for
+      // Stripe-managed payment plans and would silently zero-out the displayed balance for the
+      // parent (see asa-payment-patterns "Parent Payments page shows $0" pitfall).
       const latestEnrollment = sortedEnrollments[0];
-      const latestBalance = getEffectiveBalance(latestEnrollment);
+      const latestBalance = getEnrollmentEffectiveBalance(latestEnrollment);
       const hasBalance = latestBalance > 0;
       const hasFullyPaidEnrollment = sortedEnrollments.some((e: any) =>
-        e.status === 'enrolled' && getEffectiveBalance(e) === 0
+        e.status === 'enrolled' && getEnrollmentEffectiveBalance(e) === 0
       );
 
       if (hasBalance || (!hasFullyPaidEnrollment && latestEnrollment.status === 'pending_payment' && latestBalance > 0)) {
@@ -1354,28 +1352,22 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
       return acc;
     }, { paid: 0, succeeded: 0, pending: 0, failed: 0, refunded: 0, canceled: 0, total: 0, totalPaid: 0, totalPending: 0, totalOutstanding: 0, outstandingCount: 0, successfulCount: 0, scheduledPaymentsTotal: 0, scheduledPaymentsCount: 0 });
     
-    // Add outstanding balances from enrollments. Use effectiveBalance with ?? fallback —
-    // remainingBalance is intentionally 0 for Stripe-managed payment plans and would
-    // silently zero-out totals (see asa-payment-patterns).
+    // Add outstanding balances from enrollments using the parentBalance helper —
+    // it always reads effectiveBalance (DB-generated) and never falls back to
+    // remainingBalance (which is intentionally 0 for Stripe-managed payment plans
+    // and would silently zero-out totals — see asa-payment-patterns).
     stats.totalOutstanding = outstandingData.reduce((total: number, enrollment: any) => {
-      const balance = enrollment.effectiveBalance ?? Math.max(
-        0,
-        (enrollment.totalCost ?? 0) - (enrollment.totalPaid ?? 0) - (enrollment.compAmountCents ?? 0)
-      );
-      return total + Math.max(0, balance);
+      return total + Math.max(0, getEnrollmentEffectiveBalance(enrollment));
     }, 0);
     stats.outstandingCount = outstandingData.length;
 
     // Add membership fees to outstanding balance (denylist per asa-payment-patterns gold-standard).
     // 'grace_period' is intentionally included — fee is overdue but membership is still active.
-    // Use ?? not || for balance fallback — || treats a genuine $0 balance as falsy.
-    const activeMemberships = (membershipEnrollments || []).filter(
-      (m: any) => !['expired', 'suspended'].includes(m.status)
+    // Helper applies the same denylist + ?? balance fallback contract.
+    const membershipOutstanding = (membershipEnrollments || []).reduce(
+      (total: number, m: any) => total + getMembershipOutstandingBalance(m),
+      0,
     );
-    const membershipOutstanding = activeMemberships.reduce((total: number, m: any) => {
-      const balance = m.remainingBalance ?? Math.max(0, m.amount - (m.amountPaid ?? 0));
-      return total + Math.max(0, balance);
-    }, 0);
     stats.totalOutstanding += membershipOutstanding;
 
     // Add scheduled/upcoming payments from database (single source of truth)
