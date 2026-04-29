@@ -46,8 +46,8 @@ description: Workflow configuration, port binding, testing patterns, and deploym
 - **Force push**: `npm run db:push --force` if data-loss warning appears
 - **Debug queries**: Use the SQL execution tool, not raw `psql`
 - **Never run destructive SQL** (DROP, DELETE, UPDATE) without explicit user approval
-- **Connection string**: Always read from `process.env.DATABASE_URL` only. The `PGHOST` / `PGUSER` / `PGPASSWORD` / `PGDATABASE` / `PGPORT` fallback no longer exists.
-- **SSL config**: Replit dev uses Helium Postgres (no SSL); production uses managed SSL Postgres. Never hardcode `ssl: { rejectUnauthorized: false }` or `ssl: 'require'` on a new client — go through `getDbSslConfig()` / `getPostgresJsSslOption()` from `server/lib/database-url.ts`. See the `asa-database-patterns` skill for the copy-paste snippet.
+- **Connection string**: Resolve through `getNormalizedDatabaseUrl()` in `server/lib/database-url.ts` (it just normalizes `process.env.DATABASE_URL` so passwords with reserved characters parse cleanly). `DATABASE_URL` is the single source of truth in every environment — Replit injects it in dev (managed Helium) and the Reserved VM injects it in production. The legacy `PGHOST` / `PGUSER` / `PGPASSWORD` / `PGDATABASE` / `PGPORT` fallback and the `NEON_DATABASE_URL` dev fallback have been removed.
+- **SSL config**: Helium speaks plain TCP (no SSL); production uses managed SSL Postgres. Never hardcode `ssl: { rejectUnauthorized: false }` or `ssl: 'require'` on a new client — go through `getDbSslConfig()` / `getPostgresJsSslOption()` from `server/lib/database-url.ts`. See the `asa-database-patterns` skill for the copy-paste snippet.
 
 ## Testing Patterns
 

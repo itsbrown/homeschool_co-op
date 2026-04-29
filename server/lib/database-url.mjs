@@ -1,8 +1,10 @@
 /**
  * Hostname suffixes for managed Postgres providers that require TLS even when
- * the app is running in development. Reachable from a Replit dev container
- * over IPv4, so they double as a viable `NEON_DATABASE_URL` fallback for
- * integration tests when the configured `DATABASE_URL` is unreachable.
+ * the app is running in development. SSL is forced on for these hosts even
+ * when `NODE_ENV !== 'production'` so any cloud Postgres URL configured in
+ * dev (e.g. a one-off Supabase/Neon/RDS connection a developer points at
+ * locally) does not fail with `connection is insecure (try using
+ * sslmode=require)`.
  */
 const MANAGED_POSTGRES_SUFFIXES = [
   '.neon.tech',
@@ -114,8 +116,16 @@ export function normalizeDatabaseUrl(rawUrl) {
 }
 
 /**
- * Convenience wrapper: read `DATABASE_URL` from the environment and return a
- * normalized version. Returns `undefined` when the variable is not set.
+ * Convenience wrapper that returns the single Postgres connection URL the
+ * app should use, normalized for the WHATWG URL parser.
+ *
+ * `DATABASE_URL` is the single source of truth in every environment — the
+ * Reserved VM injects it in production and Replit injects it in dev when
+ * the project is linked to a managed Postgres database (Helium). There is
+ * no `PG*` fallback and no `NEON_DATABASE_URL` fallback.
+ *
+ * Returns `undefined` when `DATABASE_URL` is not set so callers can decide
+ * whether to throw or run in a no-DB mode.
  *
  * @returns {string | undefined}
  */

@@ -7,8 +7,8 @@
  * connection should consult `getDbSslConfig()` so we keep a single source
  * of truth for that decision. Both SSL helpers also accept an optional
  * connection string and will force SSL on for managed cloud Postgres hosts
- * (Neon, Supabase, RDS, etc.) regardless of `NODE_ENV`, so the dev
- * `NEON_DATABASE_URL` fallback in `server/db.ts` doesn't fail with
+ * (Neon, Supabase, RDS, etc.) regardless of `NODE_ENV`, so any one-off
+ * cloud-Postgres URL pointed at in dev doesn't fail with
  * `connection is insecure (try using sslmode=require)`.
  *
  * `normalizeDatabaseUrl()` ensures that a raw `DATABASE_URL` whose password

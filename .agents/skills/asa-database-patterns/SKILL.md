@@ -16,12 +16,15 @@ description: Database schema conventions, data relationships, storage patterns, 
 
 ## Database Connection
 
-- **`DATABASE_URL` is the single source of truth.** Read the connection string only from `process.env.DATABASE_URL`. The legacy `PGHOST` / `PGUSER` / `PGPASSWORD` / `PGDATABASE` / `PGPORT` fallback and the legacy Supabase-URL fallback have been removed — do not reintroduce them.
-- **SSL is conditional on `NODE_ENV`.** Replit dev uses Helium Postgres, which speaks plain TCP and rejects SSL handshakes (`The server does not support SSL connections`). Production uses a managed Postgres that requires SSL. **Never hardcode `ssl: { rejectUnauthorized: false }` or `ssl: 'require'`** on a new client — always go through the shared helper.
-- **Use the shared helper in `server/lib/database-url.ts`** for every new `pg` Pool or `postgres.js` client:
-  - `getDbSslConfig()` — for `pg` (`new Pool({ ssl })`).
-  - `getPostgresJsSslOption()` — for `postgres.js` (`postgres(url, { ssl })`).
-  Both return `{ rejectUnauthorized: false }` in production and `false` everywhere else.
+- **`DATABASE_URL` is the single source of truth in every environment.** Resolve it through `getNormalizedDatabaseUrl()` in `server/lib/database-url.ts` (or its `.mjs` sibling) so the password is properly URL-encoded for the WHATWG URL parser. There is **no `PG*` fallback** and **no `NEON_DATABASE_URL` fallback** — the legacy Neon dev DB has been retired and its dual-candidate / try-then-fallback logic in `server/db.ts` and `server/classes-db.ts` has been removed. Do not reintroduce a fallback URL list.
+  - Replit injects `DATABASE_URL` in dev when the project is linked to its managed Helium Postgres; the Reserved VM injects it in production.
+  - If `DATABASE_URL` ever points at the wrong DB in dev (e.g. a stale Supabase URL left over from an old link), fix it at the source by deleting the secret in the Secrets pane and re-adding it with the correct value, or by re-linking the database in the Database tool. Do **not** add a code-level fallback that papers over the wrong secret.
+- **SSL is conditional on `NODE_ENV`.** Helium speaks plain TCP and rejects SSL handshakes (`The server does not support SSL connections`). Production's managed Postgres requires SSL. **Never hardcode `ssl: { rejectUnauthorized: false }` or `ssl: 'require'`** on a new client — always go through the shared helper.
+- **Use the shared helpers in `server/lib/database-url.ts`** for every new `pg` Pool or `postgres.js` client:
+  - `getNormalizedDatabaseUrl()` — for the connection string.
+  - `getDbSslConfig(url?)` — for `pg` (`new Pool({ ssl })`).
+  - `getPostgresJsSslOption(url?)` — for `postgres.js` (`postgres(url, { ssl })`).
+  The SSL helpers return `{ rejectUnauthorized: false }` in production or for managed cloud Postgres hosts (Neon/Supabase/RDS/etc.), and `false` everywhere else.
 
 ### Snippet: opening a new connection
 
@@ -30,13 +33,15 @@ description: Database schema conventions, data relationships, storage patterns, 
 ```ts
 import postgres from 'postgres';
 import { drizzle } from 'drizzle-orm/postgres-js';
-import { getPostgresJsSslOption } from './lib/database-url';
+import { getNormalizedDatabaseUrl, getPostgresJsSslOption } from './lib/database-url';
 import * as schema from '../shared/schema';
 
-const client = postgres(process.env.DATABASE_URL!, {
+const url = getNormalizedDatabaseUrl();
+if (!url) throw new Error('DATABASE_URL is not set');
+const client = postgres(url, {
   prepare: false,
   max: 10,
-  ssl: getPostgresJsSslOption(),
+  ssl: getPostgresJsSslOption(url),
 });
 const db = drizzle(client, { schema });
 ```
@@ -45,11 +50,12 @@ const db = drizzle(client, { schema });
 
 ```ts
 import { Pool } from 'pg';
-import { getDbSslConfig } from './lib/database-url';
+import { getDbSslConfig, getNormalizedDatabaseUrl } from './lib/database-url';
 
+const url = getNormalizedDatabaseUrl();
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: getDbSslConfig(),
+  connectionString: url,
+  ssl: getDbSslConfig(url),
 });
 ```
 

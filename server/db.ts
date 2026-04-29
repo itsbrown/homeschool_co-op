@@ -4,7 +4,6 @@ import * as schema from '../shared/schema';
 import {
   getNormalizedDatabaseUrl,
   getPostgresJsSslOption,
-  normalizeDatabaseUrl,
 } from './lib/database-url';
 
 // Lazy database connection variables
@@ -17,33 +16,16 @@ let lastConnectionAttempt: number = 0;
 const CONNECTION_RETRY_COOLDOWN_MS = 30_000;
 
 /**
- * In dev / test we are commonly running in the Replit container, which has
- * no IPv6 egress. Some configured `DATABASE_URL` values (notably the direct
- * Supabase host `db.<project-ref>.supabase.co`) only resolve to AAAA
- * records, so the connection fails with `ENETUNREACH ...:5432` even though
- * the URL itself is well-formed. To keep the integration test seed
- * endpoints (`/api/test/setup-auto-pay-scenario` and friends) usable in
- * dev, we fall back to `NEON_DATABASE_URL` if that is also configured.
+ * Returns the single normalized `DATABASE_URL` to connect with, or `null`
+ * if it is not configured.
  *
- * The fallback is gated on `NODE_ENV !== 'production'` so production
- * behaviour is never silently changed.
+ * Both dev and prod now use a single Replit-managed Postgres
+ * (`DATABASE_URL` is populated by Replit). The legacy Neon dev DB has
+ * been retired and there is no fallback path.
  */
 function getCandidateConnectionStrings(): string[] {
-  const candidates: string[] = [];
   const primary = getNormalizedDatabaseUrl();
-  if (primary) candidates.push(primary);
-
-  if (process.env.NODE_ENV !== 'production') {
-    const fallbackRaw = process.env.NEON_DATABASE_URL;
-    if (fallbackRaw) {
-      const fallback = normalizeDatabaseUrl(fallbackRaw);
-      if (fallback && !candidates.includes(fallback)) {
-        candidates.push(fallback);
-      }
-    }
-  }
-
-  return candidates;
+  return primary ? [primary] : [];
 }
 
 function tryCreateClient(connectionString: string) {
@@ -79,50 +61,29 @@ export async function getDb() {
     throw new Error("Database connection not available");
   }
 
-  let lastError: unknown = null;
-  for (let i = 0; i < candidates.length; i++) {
-    const candidate = candidates[i];
-    const isFallback = i > 0;
-    let candidateClient: any = null;
-    try {
-      candidateClient = tryCreateClient(candidate);
-      // Test the connection with a simple query before adopting it.
-      await candidateClient`SELECT 1`;
-      client = candidateClient;
-      dbInstance = drizzle(client, { schema });
-      connectionWorking = true;
-      if (isFallback) {
-        console.log(
-          "✅ Database connection test successful (using NEON_DATABASE_URL fallback because DATABASE_URL was unreachable)",
-        );
-      } else {
-        console.log("Database connection to PostgreSQL created successfully");
-        console.log("✅ Database connection test successful");
-      }
-      return dbInstance;
-    } catch (error) {
-      lastError = error;
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      if (isFallback) {
-        console.log("❌ NEON_DATABASE_URL fallback also failed:", message);
-      } else if (candidates.length > 1) {
-        console.log(
-          "⚠️  Primary DATABASE_URL connection failed, trying NEON_DATABASE_URL fallback:",
-          message,
-        );
-      } else {
-        console.log("❌ Database connection test failed:", message);
-      }
-      if (candidateClient) {
-        try { await candidateClient.end({ timeout: 1 }); } catch { /* ignore */ }
-      }
+  const candidate = candidates[0];
+  let candidateClient: any = null;
+  try {
+    candidateClient = tryCreateClient(candidate);
+    // Test the connection with a simple query before adopting it.
+    await candidateClient`SELECT 1`;
+    client = candidateClient;
+    dbInstance = drizzle(client, { schema });
+    connectionWorking = true;
+    console.log("Database connection to PostgreSQL created successfully");
+    console.log("✅ Database connection test successful");
+    return dbInstance;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    console.log("❌ Database connection test failed:", message);
+    if (candidateClient) {
+      try { await candidateClient.end({ timeout: 1 }); } catch { /* ignore */ }
     }
+    connectionWorking = false;
+    dbInstance = null;
+    client = null;
+    throw new Error("Database connection not available");
   }
-
-  connectionWorking = false;
-  dbInstance = null;
-  client = null;
-  throw new Error("Database connection not available");
 }
 
 // Export a proxy that throws error when database is not available

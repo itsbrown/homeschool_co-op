@@ -1,28 +1,18 @@
 import { Pool } from 'pg';
 import { Class, InsertClass } from '../shared/schema';
-import { getDbSslConfig, getNormalizedDatabaseUrl, normalizeDatabaseUrl } from './lib/database-url';
+import { getDbSslConfig, getNormalizedDatabaseUrl } from './lib/database-url';
 
 /**
- * Database functions for managing classes
+ * Database functions for managing classes.
+ *
+ * Uses the same single Postgres connection that `server/db.ts` resolves —
+ * the Replit-managed dev DB (Helium) in dev/test, the production DB
+ * (`DATABASE_URL`) in production. SSL is conditional on `NODE_ENV` /
+ * managed-host detection via `getDbSslConfig()`.
  */
-// Create a proper database pool using DATABASE_URL as the single source of truth.
-// SSL is conditional on NODE_ENV (enabled in production, disabled in dev so
-// the local Helium database can connect). In dev/test we transparently fall
-// back to NEON_DATABASE_URL if the primary URL is unreachable, mirroring the
-// fallback in `server/db.ts` so all DB-backed code paths stay consistent.
-let pool: Pool;
+let pool: Pool | undefined;
 
-function resolveConnectionString(): string | undefined {
-  const primary = getNormalizedDatabaseUrl();
-  if (primary) return primary;
-  if (process.env.NODE_ENV !== 'production') {
-    const fallback = process.env.NEON_DATABASE_URL;
-    if (fallback) return normalizeDatabaseUrl(fallback);
-  }
-  return undefined;
-}
-
-const connectionString = resolveConnectionString();
+const connectionString = getNormalizedDatabaseUrl();
 
 if (connectionString) {
   pool = new Pool({
@@ -34,38 +24,8 @@ if (connectionString) {
   console.log('Classes DB: No database connection string available');
 }
 
-let poolReachabilityChecked = false;
-
-async function ensureReachablePool(): Promise<Pool | undefined> {
-  if (!pool) return undefined;
-  if (poolReachabilityChecked) return pool;
-  try {
-    await pool.query('SELECT 1');
-    poolReachabilityChecked = true;
-    return pool;
-  } catch (err) {
-    if (process.env.NODE_ENV === 'production') throw err;
-    const fallbackRaw = process.env.NEON_DATABASE_URL;
-    if (!fallbackRaw) throw err;
-    const fallback = normalizeDatabaseUrl(fallbackRaw);
-    if (!fallback) throw err;
-    const primary = getNormalizedDatabaseUrl();
-    if (fallback === primary) throw err;
-    console.log(
-      '⚠️  Classes DB: Primary connection unreachable, switching to NEON_DATABASE_URL fallback:',
-      err instanceof Error ? err.message : String(err),
-    );
-    try { await pool.end(); } catch { /* ignore */ }
-    pool = new Pool({ connectionString: fallback, ssl: getDbSslConfig(fallback) });
-    await pool.query('SELECT 1');
-    poolReachabilityChecked = true;
-    return pool;
-  }
-}
-
 async function getPool(): Promise<Pool | undefined> {
-  if (!pool) return undefined;
-  return (await ensureReachablePool()) ?? pool;
+  return pool;
 }
 
 export async function getClassById(id: number): Promise<Class | undefined> {
@@ -386,8 +346,6 @@ export async function incrementClassEnrollment(id: number): Promise<Class | unde
 // Function to create the classes table if it doesn't exist
 export async function createClassesTable(): Promise<void> {
   try {
-    // getPool() lazily verifies reachability and, in dev, transparently swaps
-    // to NEON_DATABASE_URL when DATABASE_URL is unreachable.
     const activePool = await getPool();
     if (!activePool || typeof activePool.query !== 'function') {
       console.log('Database pool not available, skipping table creation');
