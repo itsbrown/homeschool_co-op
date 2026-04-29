@@ -7,6 +7,7 @@ import { payments, scheduledPayments, programEnrollments, users, refunds, school
 import { eq, and, gte, lte, sql, desc, isNull, not, inArray } from 'drizzle-orm';
 import { generateCFOInsights, isAIAvailable } from '../services/cfoInsightsService';
 import { reconcileSchoolScheduledPayments, cleanupScheduledPayments, generateMissingScheduledPayments } from '../services/scheduled-payment-reconciliation';
+import { computeEffectiveBalance } from '@shared/schema';
 
 const AI_MODEL = 'claude-sonnet-4-20250514';
 
@@ -350,15 +351,26 @@ router.get('/outstanding-balances', async (req: any, res) => {
 
         let enrollmentRemainingBalance: number | undefined;
         try {
-          const enrollment = await storage.getProgramEnrollmentById(payment.enrollmentId);
+          const enrollment: any = await storage.getProgramEnrollmentById(payment.enrollmentId);
           if (enrollment) {
             enrollmentInfo = {
               id: enrollment.id,
               childName: enrollment.childName || null,
               className: enrollment.className || null,
             };
-            // Use fallback per db-patterns: remainingBalance may be null or stale
-            enrollmentRemainingBalance = enrollment.remainingBalance ?? (enrollment.totalCost - enrollment.totalPaid);
+            // Use the DB-generated effective_balance (with fallback formula).
+            // NEVER read enrollment.remainingBalance directly — it is intentionally
+            // stored as 0 for Stripe-managed payment plans, which would make
+            // outstanding scheduled payments incorrectly look fully paid here and
+            // get auto-cancelled by the filter below.
+            // (See asa-payment-patterns "Parent Payments page shows $0" pitfall.)
+            enrollmentRemainingBalance =
+              enrollment.effectiveBalance ??
+              computeEffectiveBalance(
+                enrollment.totalCost ?? 0,
+                enrollment.totalPaid ?? 0,
+                enrollment.compAmountCents ?? 0,
+              );
           }
         } catch (e) {}
 

@@ -2,6 +2,29 @@ import { Router } from 'express';
 import { supabaseAuth } from '../middleware/supabase-auth';
 import { storage } from '../storage';
 import { calculateCartPricing, validateCartTotal, calculateCartSnapshot, CartItem, deriveSchoolIdFromCart, SchoolIdResult } from '../utils/cart-pricing';
+import { computeEffectiveBalance } from '@shared/schema';
+
+/**
+ * For an existing-enrollment cart line, return the parent's true outstanding balance
+ * in cents, never reading the stored `remaining_balance` directly.
+ *
+ * Why: `remaining_balance` is intentionally written as 0 (NOT NULL) for Stripe-managed
+ * payment plans, so any read of it understates what families owe and silently zeros
+ * out cart totals / payment intents. Always prefer the DB-generated `effective_balance`
+ * column, falling back to the same formula if it's absent.
+ *
+ * (See asa-payment-patterns "Parent Payments page shows $0" pitfall.)
+ */
+function resolveEnrollmentEffectiveBalance(enrollment: any): number {
+  return (
+    enrollment?.effectiveBalance ??
+    computeEffectiveBalance(
+      enrollment?.totalCost ?? 0,
+      enrollment?.totalPaid ?? 0,
+      enrollment?.compAmountCents ?? 0,
+    )
+  );
+}
 
 const router = Router();
 
@@ -68,13 +91,15 @@ router.post('/snapshot', supabaseAuth, async (req: any, res) => {
       });
     }
 
-    // Server-side validation: verify remainingBalance for existing enrollments
+    // Server-side validation: refresh remainingBalance for existing enrollments
+    // from the DB-generated effective_balance (see resolveEnrollmentEffectiveBalance).
     for (const item of cartItems) {
       if (item.enrollmentId) {
-        const enrollment = await storage.getProgramEnrollmentById(item.enrollmentId);
+        const enrollment: any = await storage.getProgramEnrollmentById(item.enrollmentId);
         if (enrollment) {
-          item.remainingBalance = enrollment.remainingBalance ?? enrollment.totalCost ?? 0;
-          console.log(`✅ Validated enrollment ${item.enrollmentId} remainingBalance: ${item.remainingBalance}`);
+          const effectiveBalance = resolveEnrollmentEffectiveBalance(enrollment);
+          item.remainingBalance = effectiveBalance;
+          console.log(`✅ /cart/snapshot: enrollment ${item.enrollmentId} effectiveBalance=${effectiveBalance} (totalCost=${enrollment.totalCost}, totalPaid=${enrollment.totalPaid}, compAmountCents=${enrollment.compAmountCents}, storedRemainingBalance=${enrollment.remainingBalance})`);
         }
       }
     }
@@ -167,12 +192,13 @@ router.post('/calculate', supabaseAuth, async (req: any, res) => {
       });
     }
 
-    // Server-side validation: verify remainingBalance for existing enrollments
+    // Server-side validation: refresh remainingBalance for existing enrollments
+    // from the DB-generated effective_balance (see resolveEnrollmentEffectiveBalance).
     for (const item of cartItems) {
       if (item.enrollmentId) {
-        const enrollment = await storage.getProgramEnrollmentById(item.enrollmentId);
+        const enrollment: any = await storage.getProgramEnrollmentById(item.enrollmentId);
         if (enrollment) {
-          item.remainingBalance = enrollment.remainingBalance ?? enrollment.totalCost ?? 0;
+          item.remainingBalance = resolveEnrollmentEffectiveBalance(enrollment);
         }
       }
     }
@@ -265,12 +291,13 @@ router.post('/validate', supabaseAuth, async (req: any, res) => {
       });
     }
 
-    // Server-side validation: verify remainingBalance for existing enrollments
+    // Server-side validation: refresh remainingBalance for existing enrollments
+    // from the DB-generated effective_balance (see resolveEnrollmentEffectiveBalance).
     for (const item of cartItems) {
       if (item.enrollmentId) {
-        const enrollment = await storage.getProgramEnrollmentById(item.enrollmentId);
+        const enrollment: any = await storage.getProgramEnrollmentById(item.enrollmentId);
         if (enrollment) {
-          item.remainingBalance = enrollment.remainingBalance ?? enrollment.totalCost ?? 0;
+          item.remainingBalance = resolveEnrollmentEffectiveBalance(enrollment);
         }
       }
     }

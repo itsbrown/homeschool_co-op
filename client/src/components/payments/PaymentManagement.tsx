@@ -1307,13 +1307,24 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
         new Date(b.enrollmentDate).getTime() - new Date(a.enrollmentDate).getTime()
       );
 
+      // Use effectiveBalance (DB-generated: total_cost - total_paid - COALESCE(comp_amount_cents, 0))
+      // with ?? fallback. Never read remainingBalance — it is intentionally 0 for Stripe-managed
+      // payment plans and would silently zero-out the displayed balance for the parent
+      // (see asa-payment-patterns "Parent Payments page shows $0" pitfall).
+      const getEffectiveBalance = (e: any) =>
+        e.effectiveBalance ?? Math.max(
+          0,
+          (e.totalCost ?? 0) - (e.totalPaid ?? 0) - (e.compAmountCents ?? 0)
+        );
+
       const latestEnrollment = sortedEnrollments[0];
-      const hasBalance = latestEnrollment.remainingBalance > 0;
-      const hasFullyPaidEnrollment = sortedEnrollments.some((e: any) => 
-        e.status === 'enrolled' && e.remainingBalance === 0
+      const latestBalance = getEffectiveBalance(latestEnrollment);
+      const hasBalance = latestBalance > 0;
+      const hasFullyPaidEnrollment = sortedEnrollments.some((e: any) =>
+        e.status === 'enrolled' && getEffectiveBalance(e) === 0
       );
 
-      if (hasBalance || (!hasFullyPaidEnrollment && latestEnrollment.status === 'pending_payment' && latestEnrollment.remainingBalance > 0)) {
+      if (hasBalance || (!hasFullyPaidEnrollment && latestEnrollment.status === 'pending_payment' && latestBalance > 0)) {
         unpaidEnrollments.push(latestEnrollment);
       }
     }
@@ -1343,10 +1354,16 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
       return acc;
     }, { paid: 0, succeeded: 0, pending: 0, failed: 0, refunded: 0, canceled: 0, total: 0, totalPaid: 0, totalPending: 0, totalOutstanding: 0, outstandingCount: 0, successfulCount: 0, scheduledPaymentsTotal: 0, scheduledPaymentsCount: 0 });
     
-    // Add outstanding balances from enrollments
-    stats.totalOutstanding = outstandingData.reduce((total: number, enrollment: any) => 
-      total + (enrollment.remainingBalance || 0), 0
-    );
+    // Add outstanding balances from enrollments. Use effectiveBalance with ?? fallback —
+    // remainingBalance is intentionally 0 for Stripe-managed payment plans and would
+    // silently zero-out totals (see asa-payment-patterns).
+    stats.totalOutstanding = outstandingData.reduce((total: number, enrollment: any) => {
+      const balance = enrollment.effectiveBalance ?? Math.max(
+        0,
+        (enrollment.totalCost ?? 0) - (enrollment.totalPaid ?? 0) - (enrollment.compAmountCents ?? 0)
+      );
+      return total + Math.max(0, balance);
+    }, 0);
     stats.outstandingCount = outstandingData.length;
 
     // Add membership fees to outstanding balance (denylist per asa-payment-patterns gold-standard).
@@ -1370,7 +1387,7 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
     
     stats.scheduledPaymentsTotal = scheduledTotal;
     stats.scheduledPaymentsCount = pendingDbScheduled.length;
-    // Outstanding Balance is sourced purely from program_enrollments remainingBalance (per asa-payment-patterns).
+    // Outstanding Balance is sourced from program_enrollments.effectiveBalance (per asa-payment-patterns).
     // Scheduled payments are a subset of that balance — adding them here would double-count.
     
     return stats;

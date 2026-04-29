@@ -183,21 +183,43 @@ if (p.status === 'pending' || p.status === 'overdue') { ... }
 Overdue payments are the same debt as pending — just past their due date. Filtering only `pending` silently leaves overdue installments on the books, causing stale data in financial reports.
 
 ### Never Use `scheduled_payments` for Outstanding Balance Totals
-`scheduled_payments` is a subset of reality — many enrollments have remaining balances with **no scheduled_payment records at all** (pre-scheduling-era enrollments, comped enrollments without sync). Always aggregate from `program_enrollments` directly:
+`scheduled_payments` is a subset of reality — many enrollments have remaining balances with **no scheduled_payment records at all** (pre-scheduling-era enrollments, comped enrollments without sync). Always aggregate from `program_enrollments` directly using the `effective_balance` generated column.
+
+**Why `effective_balance`, not `remaining_balance`:** `remaining_balance` is intentionally stored as `0` (NOT NULL) for several legitimate Stripe-managed payment paths (Stripe-subscription-driven payment plans, full-payment confirmations, Stripe-synced memberships, etc. — see `server/api/enrollments.ts`, `server/services/stripeWebhookHandlers.ts`, `server/api/stripe.ts`). For those rows, `total_cost - total_paid` is the real amount still owed even though `remaining_balance = 0`. Because the value is `0` and not `NULL`, a plain `COALESCE(remaining_balance, …)` short-circuits before reaching the fallback expression and silently zero-outs the real balance — making the parent see `$0` owed while admins see the real balance.
+
+`effective_balance` is a DB-generated column defined in `shared/schema.ts` as `total_cost - total_paid - COALESCE(comp_amount_cents, 0)`. It is the canonical, authoritative source of truth for "what is still owed on this enrollment". Every parent-facing balance surface and admin family-detail view MUST agree on this field.
 
 **Wrong:**
 ```sql
+-- Bug 1: scheduled_payments is a subset of reality
 SELECT SUM(amount) FROM scheduled_payments WHERE status = 'pending' AND school_id = $1
+
+-- Bug 2: COALESCE(remaining_balance, …) silently returns 0 for Stripe-managed rows
+SELECT COALESCE(SUM(COALESCE(remaining_balance, total_cost - total_paid)), 0)
+FROM program_enrollments
+WHERE school_id = $1
+  AND COALESCE(remaining_balance, total_cost - total_paid) > 0
 ```
 
 **Correct:**
 ```sql
-SELECT COALESCE(SUM(COALESCE(remaining_balance, total_cost - total_paid)), 0)
+SELECT COALESCE(SUM(effective_balance), 0)
 FROM program_enrollments
 WHERE school_id = $1
   AND status NOT IN ('cancelled', 'waitlist', 'withdrawn', 'failed', 'completed')
-  AND COALESCE(remaining_balance, total_cost - total_paid) > 0
+  AND effective_balance > 0
 ```
+
+**Equivalent if `effective_balance` is unavailable (e.g. legacy migrations):**
+```sql
+SELECT COALESCE(SUM(GREATEST(total_cost - total_paid - COALESCE(comp_amount_cents, 0), 0)), 0)
+FROM program_enrollments
+WHERE school_id = $1
+  AND status NOT IN ('cancelled', 'waitlist', 'withdrawn', 'failed', 'completed')
+  AND (total_cost - total_paid - COALESCE(comp_amount_cents, 0)) > 0
+```
+
+**TypeScript display rule:** read `enrollment.effectiveBalance` and only fall back to `Math.max(0, totalCost - totalPaid - (compAmountCents ?? 0))` with a `??` (not `||`) check — `||` and `COALESCE(remaining_balance, …)` behave the same way and will silently zero-out Stripe-managed plans. Never display `remaining_balance` directly to a parent.
 
 ## Refund Processing
 
@@ -254,6 +276,7 @@ Previously, the cart display and payment processor used independent calculation 
 ## Common Pitfalls
 
 - **Financial report shows balance owed for a fully-paid family** → stale `scheduled_payments` records remain `pending` after enrollment balance reaches zero (sync is non-fatal and can silently fail) → use the auto-heal-at-read-time pattern from `asa-database-patterns`; always verify `effectiveBalance` using the `??` fallback before treating a record as outstanding
+- **Parent Payments page shows `$0` outstanding while admin family-detail shows real balance** → parent-facing aggregation summed `enrollment.remainingBalance` (or used `COALESCE(remaining_balance, …)`), but Stripe-managed payment-plan rows intentionally store `remaining_balance = 0` (NOT NULL), so the parent silently sees `$0` while the admin view (which reads `effective_balance`) sees the real amount → **always** use the canonical helper `computeEffectiveBalance(totalCost, totalPaid, compAmountCents)` exported from `shared/schema.ts` as the fallback: `enrollment.effectiveBalance ?? computeEffectiveBalance(enrollment.totalCost ?? 0, enrollment.totalPaid ?? 0, enrollment.compAmountCents ?? 0)` (or query the `effective_balance` generated column in SQL). Never read `remainingBalance` for an outstanding-balance display, a cart line's authoritative balance, or the input to a PaymentIntent amount. Audited surfaces that must use this fallback include: `/api/cart/snapshot|calculate|validate` (`server/api/cart.ts`), the payment-intent creation path in `server/api/stripe.ts`, scheduled-payment outstanding lookups in `server/api/financial-reports.ts`, and the parent-side outstanding aggregation in `client/src/components/payments/PaymentManagement.tsx`. The same anti-pattern (`x ?? totalCost` or `COALESCE(remaining_balance, …)`) is what to grep for when adding new surfaces
 - **Auto-pay double-charges a fully-paid enrollment** → scheduler processes any `pending` scheduled payment without checking enrollment balance first → always call `storage.getProgramEnrollmentById()` and verify `effectiveBalance <= 0` before the Stripe call; skip rather than charge on any lookup error (see `server/services/auto-pay-scheduler.ts`)
 - **Comp leaves overdue installments on the books** → cancellation logic filters only `status = 'pending'`, missing `overdue` records → always filter `p.status === 'pending' || p.status === 'overdue'` when cancelling or reducing scheduled payments after a comp
 - **Outstanding Balance card doesn't update after a credit-only payment** → payment success handler invalidated `/api/payment-history` and `/api/scheduled-payments` but missed `/api/parent/enrollments` → the Outstanding Balance card reads from the enrollment query; always include `["/api/parent/enrollments"]` in post-payment cache invalidation alongside the other payment query keys

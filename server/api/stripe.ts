@@ -8,7 +8,7 @@ import { getStripeClient, getStripePublishableKey } from '../config/stripe';
 import { calculateMembershipDiscount } from '../utils/membership';
 import { calculateCartPricing, CartItem, deriveSchoolIdFromCart, SchoolIdResult } from '../utils/cart-pricing';
 import { CurrencyUtils } from '@shared/currency-utils';
-import { isActiveMembership, VALID_PAID_MEMBERSHIP_STATUSES } from '@shared/schema';
+import { isActiveMembership, VALID_PAID_MEMBERSHIP_STATUSES, computeEffectiveBalance } from '@shared/schema';
 
 const router = Router();
 
@@ -465,21 +465,35 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
       // sibling discounts, free-after-threshold) on the server side
       // ================================================================
       
-      // Validate remainingBalance for existing enrollments (server-authoritative)
-      // This ensures we use fresh DB values, not potentially stale client data
+      // Validate remainingBalance for existing enrollments (server-authoritative).
+      // CRITICAL: This value drives what the parent gets charged. Always use the
+      // DB-generated effective_balance column (total_cost - total_paid - COALESCE(comp_amount_cents, 0)),
+      // NEVER the stored remaining_balance — that field is intentionally written as 0
+      // for Stripe-managed payment plans and would silently charge $0.
+      // (See asa-payment-patterns "Parent Payments page shows $0" pitfall.)
       for (const item of items) {
         if (item.enrollmentId) {
-          const enrollment = await storage.getProgramEnrollmentById(item.enrollmentId);
+          const enrollment: any = await storage.getProgramEnrollmentById(item.enrollmentId);
           if (enrollment) {
-            const dbRemainingBalance = enrollment.remainingBalance ?? enrollment.totalCost ?? 0;
+            const dbRemainingBalance =
+              enrollment.effectiveBalance ??
+              computeEffectiveBalance(
+                enrollment.totalCost ?? 0,
+                enrollment.totalPaid ?? 0,
+                enrollment.compAmountCents ?? 0,
+              );
             if (item.remainingBalance !== dbRemainingBalance) {
               console.log(`💰 Payment: Correcting stale remainingBalance for enrollment ${item.enrollmentId}:`, {
                 clientValue: item.remainingBalance,
-                dbValue: dbRemainingBalance
+                dbValue: dbRemainingBalance,
+                totalCost: enrollment.totalCost,
+                totalPaid: enrollment.totalPaid,
+                compAmountCents: enrollment.compAmountCents,
+                storedRemainingBalance: enrollment.remainingBalance,
               });
             }
             item.remainingBalance = dbRemainingBalance;
-            console.log(`✅ Payment: Validated enrollment ${item.enrollmentId} remainingBalance: ${item.remainingBalance}`);
+            console.log(`✅ Payment: Validated enrollment ${item.enrollmentId} effectiveBalance: ${item.remainingBalance}`);
           }
         }
       }
@@ -2340,9 +2354,10 @@ router.post('/request-free-enrollment', supabaseAuth, async (req: any, res) => {
     console.log('🆓 Processing free enrollment request (100% discount)');
     
     const userEmail = req.user.email;
-    const { items, subtotal, discounts, total, discountCode } = req.body;
+    const { items, subtotal, discounts, total, discountCode, promoCode } = req.body;
 
-    // Validate this is actually a free enrollment
+    // Validate this is actually a free enrollment (client-claimed total).
+    // The authoritative check is the server-side cart snapshot recalculation below.
     if (total !== 0) {
       return res.status(400).json({
         success: false,
@@ -2366,6 +2381,67 @@ router.post('/request-free-enrollment', supabaseAuth, async (req: any, res) => {
         success: false,
         message: 'Parent user not found',
         error: 'USER_NOT_FOUND'
+      });
+    }
+
+    // AUTHORITATIVE FREE-ENROLLMENT GATE.
+    // Re-derive the cart snapshot server-side and refuse the request unless the
+    // calculator has explicitly flagged it as a recognised free-enrollment scenario
+    // (full_credit / full_discount_code / full_automatic_discount / full_comp).
+    // Without this guard, any cart whose `total === 0` could trigger free enrollment
+    // — including carts whose subtotal collapsed to $0 because items were priced at
+    // the stale remaining_balance=0 of Stripe-managed plans (where the parent
+    // genuinely owes money). See asa-payment-patterns "Parent Payments page shows $0"
+    // pitfall.
+    try {
+      const { calculateCartSnapshot } = await import('../utils/cart-pricing');
+      const snapshotItems = items.map((it: any) => ({
+        id: String(it.id ?? `${it.classId}-${it.childId}`),
+        classId: it.classId,
+        childId: it.childId,
+        childName: it.childName,
+        variantId: it.variantId,
+        enrollmentId: it.enrollmentId,
+        remainingBalance: it.remainingBalance,
+      }));
+      const inferredSchoolId = parent.schoolId
+        || items.find((it: any) => typeof it.schoolId === 'number')?.schoolId
+        || 1;
+      const snapshot = await calculateCartSnapshot(
+        snapshotItems,
+        parent.id,
+        inferredSchoolId,
+        promoCode || discountCode || undefined,
+        undefined,
+        userEmail,
+      );
+      if (!snapshot.isFreeEnrollment) {
+        console.warn('🆓 Rejected free enrollment request — server snapshot does not flag it as free:', {
+          payableAmount: snapshot.totals.payableAmount,
+          grandTotal: snapshot.totals.grandTotal,
+          subtotal: snapshot.pricing.subtotal,
+          totalDiscountAmount: snapshot.pricing.discounts.totalDiscountAmount,
+          appliedCredits: snapshot.credits.applied,
+        });
+        return res.status(409).json({
+          success: false,
+          message:
+            "We couldn't verify that your cart qualifies for free enrollment. Your cart total may be out of date — please refresh your cart and try again.",
+          error: 'FREE_ENROLLMENT_NOT_AUTHORIZED',
+          serverPayableAmount: snapshot.totals.payableAmount,
+          serverGrandTotal: snapshot.totals.grandTotal,
+        });
+      }
+      console.log('🆓 Server snapshot confirms free enrollment:', {
+        reason: snapshot.freeEnrollmentReason,
+        grandTotal: snapshot.totals.grandTotal,
+      });
+    } catch (snapshotError: any) {
+      console.error('🆓 Free-enrollment snapshot recalculation failed:', snapshotError);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to verify free enrollment eligibility. Please try again.',
+        error: 'SNAPSHOT_RECALC_FAILED',
       });
     }
 

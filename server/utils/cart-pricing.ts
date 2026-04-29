@@ -910,6 +910,16 @@ export interface PaymentPlanOption {
   finalPaymentAmount?: number; // Last payment amount (may differ due to rounding)
 }
 
+// Reasons the server is willing to confirm an enrollment with $0 charge.
+// `null` means the cart is NOT a legitimate free enrollment, even if payableAmount === 0.
+// (e.g. items priced at the stale remaining_balance=0 on Stripe-managed plans — see
+//  asa-payment-patterns "Parent Payments page shows $0" pitfall.)
+export type FreeEnrollmentReason =
+  | 'full_credit'              // Available credits cover the entire grand total
+  | 'full_discount_code'       // A promo code reduces a positive subtotal to $0
+  | 'full_automatic_discount'  // Sibling/free-after-N/auto discount reduces subtotal to $0
+  | 'full_comp';               // Every enrolled item is fully comped on the enrollment record
+
 // Extended cart snapshot with membership and credits for checkout reconciliation
 export interface CartSnapshot {
   // Unique identifier for this snapshot (hash of inputs)
@@ -942,6 +952,13 @@ export interface CartSnapshot {
   };
   // Server-calculated payment plan options based on payableAmount
   paymentPlans: PaymentPlanOption[];
+  // Authoritative free-enrollment flag. The frontend MUST gate the
+  // "Free Enrollment / Request Free Enrollment" UI on this — never on
+  // payableAmount === 0 alone. The /api/stripe/request-free-enrollment
+  // endpoint also re-derives this server-side and rejects requests
+  // where it is false.
+  isFreeEnrollment: boolean;
+  freeEnrollmentReason: FreeEnrollmentReason | null;
 }
 
 // Generate a snapshot ID from cart inputs for cache/version comparison
@@ -1144,7 +1161,83 @@ export async function calculateCartSnapshot(
   // Calculate payment plans based on payable amount and class dates
   // This ensures the displayed payment schedule matches actual payment creation
   const paymentPlans = await calculatePaymentPlans(payableAmount, items);
-  
+
+  // Derive authoritative free-enrollment flag.
+  // payableAmount === 0 alone is NOT sufficient: items priced at remaining_balance=0
+  // on Stripe-managed plans (or other stale-balance scenarios) can collapse the
+  // subtotal to zero even when the parent genuinely owes money. Only set the flag
+  // when we can attribute the $0 to a recognised reason.
+  let isFreeEnrollment = false;
+  let freeEnrollmentReason: FreeEnrollmentReason | null = null;
+  if (payableAmount === 0 && membershipTotal === 0) {
+    // Reason 1: Available credits cover the entire grand total.
+    if (grandTotal > 0 && appliedCredits >= grandTotal) {
+      isFreeEnrollment = true;
+      freeEnrollmentReason = 'full_credit';
+    }
+    // Reason 2/3: Discounts wipe out a positive subtotal.
+    else if (
+      pricing.subtotal > 0 &&
+      pricing.discounts.totalDiscountAmount >= pricing.subtotal
+    ) {
+      const hasPromoDiscount = pricing.discounts.appliedDiscounts.some(
+        (d) => d.sourceType === 'promo'
+      );
+      isFreeEnrollment = true;
+      freeEnrollmentReason = hasPromoDiscount
+        ? 'full_discount_code'
+        : 'full_automatic_discount';
+    }
+    // Reason 4: Every cart item maps to an enrollment that is fully comped.
+    // (subtotal already 0 because each item.remainingBalance is 0 — verify the
+    // underlying enrollment record has compAmountCents covering the cost so we
+    // don't misclassify a stale Stripe-managed plan as "comped".)
+    else if (pricing.subtotal === 0 && items.length > 0) {
+      let allComped = true;
+      for (const item of items) {
+        if (!item.enrollmentId) {
+          allComped = false;
+          break;
+        }
+        try {
+          const enrollment: any = await storage.getProgramEnrollmentById(item.enrollmentId);
+          if (!enrollment) {
+            allComped = false;
+            break;
+          }
+          const totalCost = enrollment.totalCost ?? 0;
+          const compAmount = enrollment.compAmountCents ?? 0;
+          const totalPaid = enrollment.totalPaid ?? 0;
+          // Genuine full comp: positive original cost, comp amount > 0, and comp
+          // (combined with prior payments) covers the full cost.
+          if (totalCost <= 0 || compAmount <= 0 || totalCost - totalPaid - compAmount > 0) {
+            allComped = false;
+            break;
+          }
+        } catch (e) {
+          console.warn('🆓 Free-enrollment comp check failed for enrollment', item.enrollmentId, e);
+          allComped = false;
+          break;
+        }
+      }
+      if (allComped) {
+        isFreeEnrollment = true;
+        freeEnrollmentReason = 'full_comp';
+      }
+    }
+  }
+
+  console.log('🆓 Cart snapshot free-enrollment derivation:', {
+    payableAmount,
+    grandTotal,
+    membershipTotal,
+    appliedCredits,
+    subtotal: pricing.subtotal,
+    totalDiscountAmount: pricing.discounts.totalDiscountAmount,
+    isFreeEnrollment,
+    freeEnrollmentReason,
+  });
+
   return {
     snapshotId: generateSnapshotId(items, userId, schoolId, appliedPromoCode),
     generatedAt: Date.now(),
@@ -1170,6 +1263,8 @@ export async function calculateCartSnapshot(
       grandTotal,
       payableAmount
     },
-    paymentPlans
+    paymentPlans,
+    isFreeEnrollment,
+    freeEnrollmentReason,
   };
 }

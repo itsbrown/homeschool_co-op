@@ -256,6 +256,9 @@ export default function CartCheckout() {
   // Calculate the ACTUAL total payable amount (class total + membership)
   // This is used to determine if we should show the payment form or free enrollment flow
   const actualPayableAmount = cart.total + (cart.membership?.amount || 0);
+  // NOTE: isFreeEnrollmentApproved / cartLooksFreeButUnverified are derived AFTER
+  // authoritativeData is declared (search for "authoritative free-enrollment gate"
+  // below) — they live there because they depend on the snapshot state.
   
   // Debug cart data
   console.log('🛒 CartCheckout - cart data:', {
@@ -484,6 +487,12 @@ export default function CartCheckout() {
     finalPaymentAmount?: number;
   }
 
+  type FreeEnrollmentReason =
+    | 'full_credit'
+    | 'full_discount_code'
+    | 'full_automatic_discount'
+    | 'full_comp';
+
   type AuthoritativeDataType = {
     itemsTotal: number;
     membershipAmount: number;
@@ -498,10 +507,33 @@ export default function CartCheckout() {
     payableAmount: number;
     paymentPlans: PaymentPlanOption[];
     snapshotGeneratedAt?: number;
+    // Authoritative free-enrollment flag from server cart snapshot.
+    // The Free Enrollment / Request Free Enrollment UI MUST gate on this,
+    // never on payableAmount === 0 alone — items priced at the stale
+    // remaining_balance=0 of Stripe-managed plans can collapse the subtotal
+    // to 0 even when the parent genuinely owes money.
+    isFreeEnrollment: boolean;
+    freeEnrollmentReason: FreeEnrollmentReason | null;
   };
 
   const [authoritativeData, setAuthoritativeData] = useState<AuthoritativeDataType | null>(null);
-  
+
+  // Authoritative free-enrollment gate. The "Free Enrollment / Request Free Enrollment"
+  // UI must NEVER fire on actualPayableAmount === 0 alone — items priced at the stale
+  // remaining_balance=0 of Stripe-managed plans (or other fallbacks) can collapse the
+  // subtotal to 0 even when the parent genuinely owes money. Only the server cart
+  // snapshot can authoritatively decide this.
+  const isFreeEnrollmentApproved =
+    actualPayableAmount === 0 && authoritativeData?.isFreeEnrollment === true;
+  // True when the local total looks free but the server snapshot disagrees (snapshot
+  // is loaded but did not flag the cart as free) — used to show a recovery/refresh
+  // card instead of silently submitting a free-enrollment request the server would
+  // reject.
+  const cartLooksFreeButUnverified =
+    actualPayableAmount === 0 &&
+    !!authoritativeData &&
+    authoritativeData.isFreeEnrollment !== true;
+
   const prevCartItemsRef = useRef<string>('');
   
   useEffect(() => {
@@ -584,7 +616,10 @@ export default function CartCheckout() {
           appliedPromoCode: promoCode, // Store the promo code used for this snapshot
           payableAmount: snapshot.totals.payableAmount,
           paymentPlans: snapshot.paymentPlans || [],
-          snapshotGeneratedAt: snapshot.generatedAt
+          snapshotGeneratedAt: snapshot.generatedAt,
+          // Authoritative server-derived free-enrollment flag — see type comment.
+          isFreeEnrollment: snapshot.isFreeEnrollment === true,
+          freeEnrollmentReason: snapshot.freeEnrollmentReason ?? null,
         };
         
         // Store authoritative data in state for UI components
@@ -783,7 +818,11 @@ export default function CartCheckout() {
               appliedPromoCode: authoritativeData?.appliedPromoCode ?? (cart.appliedPromoCode?.code || null),
               // Preserve payable amount and payment plans from previous snapshot
               payableAmount: conflictData.authoritative.payableAmount ?? authoritativeData?.payableAmount ?? actualPayableAmount,
-              paymentPlans: conflictData.authoritative.paymentPlans ?? authoritativeData?.paymentPlans ?? []
+              paymentPlans: conflictData.authoritative.paymentPlans ?? authoritativeData?.paymentPlans ?? [],
+              // Preserve free-enrollment flag from previous snapshot — a 409 conflict
+              // doesn't re-derive it, so we conservatively fall back to the prior value.
+              isFreeEnrollment: conflictData.authoritative.isFreeEnrollment ?? authoritativeData?.isFreeEnrollment ?? false,
+              freeEnrollmentReason: conflictData.authoritative.freeEnrollmentReason ?? authoritativeData?.freeEnrollmentReason ?? null,
             });
             console.log('📝 Set authoritative data from 409:', {
               serverItemsTotal,
@@ -923,7 +962,22 @@ export default function CartCheckout() {
       });
       return;
     }
-    
+
+    // Defence-in-depth: refuse to submit a free-enrollment request unless the
+    // server cart snapshot has authoritatively flagged this cart as free.
+    // The server endpoint also re-derives this and rejects mismatches, but
+    // gating client-side avoids round-trip and keeps the UI honest if anyone
+    // else triggers this handler (e.g. via dev tools).
+    if (!isFreeEnrollmentApproved) {
+      toast({
+        title: "Cannot Submit Free Enrollment",
+        description:
+          "We couldn't confirm your cart qualifies for free enrollment. Please refresh your cart balance and try again.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setRequestingFreeEnrollment(true);
     
     try {
@@ -1646,9 +1700,48 @@ export default function CartCheckout() {
 
 
             {/* Payment Information or Free Enrollment */}
-            {/* Use actualPayableAmount (class total + membership) to determine if payment is needed */}
-            {actualPayableAmount === 0 ? (
-              // Free Enrollment UI - when 100% discount is applied and no membership fee
+            {/* Gate the Free Enrollment UI on the authoritative server flag (isFreeEnrollmentApproved),
+                NOT on actualPayableAmount === 0 alone. The latter can be true for a stale Stripe-managed
+                cart where the parent actually owes money — in that case we show a recovery card. */}
+            {cartLooksFreeButUnverified ? (
+              <Card data-testid="card-free-enrollment-unverified">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <AlertCircle className="h-5 w-5 text-amber-600" />
+                    We couldn't confirm a $0 total
+                  </CardTitle>
+                  <CardDescription>
+                    Your cart shows $0 due, but we couldn't verify this qualifies as a free enrollment.
+                    This usually happens when an enrollment's balance is out of date.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <Alert className="border-amber-200 bg-amber-50">
+                    <AlertCircle className="h-4 w-4 text-amber-600" />
+                    <AlertDescription className="text-amber-700">
+                      Please refresh your cart so we can recalculate the amount you owe.
+                      If the issue persists, contact your school administrator.
+                    </AlertDescription>
+                  </Alert>
+                  <Button
+                    onClick={() => {
+                      setAuthoritativeData(null);
+                      setClientSecret('');
+                      setHasCheckoutConflict(false);
+                      retryCountRef.current = 0;
+                      setRetryCount(0);
+                      refreshCart?.();
+                    }}
+                    className="w-full"
+                    data-testid="button-refresh-cart-balance"
+                  >
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Refresh Cart Balance
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : isFreeEnrollmentApproved ? (
+              // Free Enrollment UI — only when server snapshot has explicitly set isFreeEnrollment=true
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
