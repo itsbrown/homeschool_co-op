@@ -1,0 +1,189 @@
+> ## Documentation Index
+> Fetch the complete documentation index at: https://docs.replit.com/llms.txt
+> Use this file to discover all available pages before exploring further.
+
+# Database Upgrade
+
+> Learn about the automatic upgrade of your development database from Neon to Helium and what to expect during the process.
+
+Replit is upgrading development databases from [Neon](https://neon.tech) (a third-party serverless PostgreSQL provider) to **Helium**, Replit's own managed PostgreSQL infrastructure. This upgrade is automatic, runs once per app, and preserves all your data.
+
+<Note>
+  This upgrade only applies to **development databases**. Production databases
+  used by your deployed apps are not affected in most cases. However, if your
+  deployed app shares a development database with another app (common in older
+  forked or remixed apps), see [Fix a published app using a shared
+  database](/cloud-services/storage-and-databases/shared-database-migration)
+  for important steps.
+</Note>
+
+## What's changing
+
+The upgrade moves your development database from Neon's infrastructure to Helium, which runs directly on Replit's platform. Here's what that means for you:
+
+* **Lower latency**: Your database runs on Replit infrastructure alongside your app, reducing connection times
+* **More storage**: Your storage limit increases from 10 GB to 20 GB
+* **Same database engine**: Helium uses PostgreSQL 16, the same version as Neon — your queries, schemas, and data work the same way
+* **Seamless connection**: Your `DATABASE_URL` environment variable is automatically updated to point to Helium
+* **Neon connection saved**: Your previous Neon connection string is saved as `NEON_DATABASE_URL` in your Secrets for reference. The old Neon database is no longer used by your app after the upgrade and is scheduled for removal after a temporary grace period.
+
+For a full comparison between the legacy Neon database and the new Replit database — including differences in billing, restore capabilities, connection security, and remixing behavior — see [Legacy Development Database](/cloud-services/storage-and-databases/sql-database#legacy-development-database).
+
+## What to expect during the upgrade
+
+The upgrade runs automatically when you open your Replit App in the Workspace.
+
+1. A progress screen appears with the message **"Upgrading your database"**
+2. Your data is securely copied from Neon to Helium. No data is changed or lost during transfer.
+3. The duration depends on your database size — it can take anywhere from a few minutes to a few hours for large databases
+4. You can keep the tab open or close it and come back later
+5. When the upgrade completes, a confirmation dialog appears: **"We've upgraded your database!"**
+
+<Info>
+  If the upgrade encounters an issue, it is automatically skipped so you can
+  keep working. The upgrade will retry the next time you open your app.
+</Info>
+
+## What to do after the upgrade
+
+For most builders, no action is required. Your app continues to work as before.
+
+<Tip>
+  If your code connects to the database using the `DATABASE_URL` environment
+  variable, no changes are needed. The variable is automatically updated to
+  point to your new Helium database.
+</Tip>
+
+Review the following if any apply to your app:
+
+* **Hardcoded Neon connection strings**: If your code directly references a `neon.tech` connection string, update it to use the `DATABASE_URL` environment variable instead — `process.env.DATABASE_URL` in JavaScript or `os.environ['DATABASE_URL']` in Python. See [Connect your app to a SQL database](/getting-started/quickstarts/database-connection) for examples.
+
+* **Custom PostgreSQL roles**: If you created custom database roles on Neon, those roles and their permissions are migrated automatically. However, role passwords cannot be copied — you will need to reset passwords for any custom roles on the new Helium database.
+
+* **Individual PG environment variables**: The `PGHOST`, `PGPORT`, `PGUSER`, and `PGPASSWORD` environment variables are removed after the upgrade. Use the `DATABASE_URL` connection string instead, which contains all the information needed to connect.
+
+## Troubleshooting
+
+### SSL connection errors after the upgrade
+
+After the upgrade, you may see connection errors like `The server does not support SSL connections` or the socket disconnecting unexpectedly. This happens when your database connection code forces an SSL handshake. Neon required SSL for all connections, but Helium runs locally alongside your app and does not use SSL.
+
+To fix this, make the SSL setting in your database connection conditional on the environment. This ensures your app connects without SSL in development (Helium) and with SSL in production (where your production database may still require it).
+
+<CodeGroup>
+  ```js JavaScript theme={null}
+  // Before (breaks after upgrade)
+  const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false },
+  });
+
+  // After (works in both development and production)
+  const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl:
+      process.env.NODE_ENV === "production"
+        ? { rejectUnauthorized: false }
+        : false,
+  });
+  ```
+</CodeGroup>
+
+<Tip>
+  If you use an ORM like Drizzle, Prisma, or Sequelize, check its documentation
+  for how to configure SSL settings conditionally. The same principle applies —
+  disable SSL for the development database and enable it for production.
+</Tip>
+
+## Deployed app using a shared database
+
+Older apps that were forked or remixed on Replit may share a development database with the original app. Under the legacy Neon system, forking an app copied the original app's `DATABASE_URL`, which meant both apps and their published versions connected to the same database.
+
+After the database upgrade, the original app's Neon database is disabled. If your published app still uses that shared database URL, your published app may stop working or lose access to its data.
+
+<Warning>
+  The shared database will be shut down on **May 15, 2026**. Update your published
+  app before then to avoid permanent data loss.
+</Warning>
+
+### What to do next
+
+If your published app is affected, follow the dedicated step-by-step guide:
+
+* [Fix a published app using a shared database](/cloud-services/storage-and-databases/shared-database-migration)
+
+That guide covers:
+
+* How to confirm whether your published app is still using the old Neon connection
+* When to use **Publish** or **Republish** with **Create production database**
+* How to manually export and import data if your published app still depends on the old shared database
+* Important cautions about downtime, active writes, and custom PostgreSQL roles
+
+## Frequently asked questions
+
+<Accordion title="Is my data safe during the upgrade?">
+  Yes. Your data is copied from Neon to Helium — it is not moved or deleted
+  during the transfer. The original Neon database is preserved until the upgrade
+  completes successfully. No data is changed or lost.
+</Accordion>
+
+<Accordion title="Can I skip or delay the upgrade?">
+  The upgrade runs automatically when you open your Replit App. If it encounters
+  any issue, it is automatically skipped and you can continue working normally.
+  The upgrade will be retried the next time you open the app.
+</Accordion>
+
+<Accordion title="The upgrade failed. What should I do?">
+  If the upgrade fails, it is automatically skipped so you can keep using your
+  app with the existing Neon database. The system will retry the upgrade the
+  next time you open your app. If the issue persists across multiple attempts,
+  [contact support](https://replit.com/support) for assistance.
+</Accordion>
+
+<Accordion title="Why did my environment variables change?">
+  After the upgrade, `DATABASE_URL` points to your new Helium database instead
+  of Neon. Your previous Neon connection string is saved as `NEON_DATABASE_URL`
+  in your app's Secrets. If your code uses `DATABASE_URL` to connect, no changes
+  are needed — the variable is updated automatically.
+</Accordion>
+
+<Accordion title="What happened to PGHOST, PGPORT, PGUSER, and PGPASSWORD?">
+  These individual environment variables are removed after the upgrade. Helium
+  provides your connection details through the `DATABASE_URL` environment
+  variable, which contains all the information your app needs to connect. Update
+  any code that references these individual variables to use `DATABASE_URL`
+  instead.
+</Accordion>
+
+<Accordion title="Can I still access my old Neon database?">
+  Your previous Neon connection string is saved as `NEON_DATABASE_URL` in your
+  app's Secrets for reference. In most cases, the old Neon database is no longer
+  used after the upgrade and is scheduled for removal on **May 15, 2026**.
+
+  If your deployed app was using an older shared Neon database from a forked or
+  remixed app, that Neon database may still be temporarily available so you can
+  export data and move to your own production database. This access is temporary,
+  and the shared database will still be removed on **May 15, 2026**, so update your
+  published app as soon as possible.
+
+  If `NEON_DATABASE_URL` is not available in your Secrets and you need help
+  retrieving the old connection string, [contact
+  support](https://replit.com/support).
+</Accordion>
+
+<Accordion title="Does this affect my deployed or production app?">
+  In most cases, no — production databases are managed separately and are not
+  part of this upgrade. However, if your published app uses the development
+  database URL directly (instead of a separate production database), the upgrade
+  may affect your published app. This is most common in older apps that were forked
+  or remixed, where the fork shared the original app's database. See [Fix a
+  published app using a shared
+  database](/cloud-services/storage-and-databases/shared-database-migration) for
+  how to fix this.
+</Accordion>
+
+## Next steps
+
+* [Database](/cloud-services/storage-and-databases/sql-database): Learn about the Replit Database tool and how to manage your database
+* [Production Databases](/cloud-services/storage-and-databases/production-databases): Understand how production databases differ from development databases
+* [Connect your app to a SQL database](/getting-started/quickstarts/database-connection): Code examples for connecting to your database
