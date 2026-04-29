@@ -3354,6 +3354,283 @@ router.get('/pending-enrollments', supabaseAuth, async (req: any, res) => {
   }
 });
 
+/**
+ * Balance Audit – school-scoped version of diagnose-payment-plan-issues.ts.
+ * Surfaces enrollments whose cached `remaining_balance` diverges from the
+ * DB-generated `effective_balance`, plus related payment-plan integrity
+ * issues (missing scheduled payments, scheduled-payment totals that don't
+ * match the effective balance, stale past-due payments, etc).
+ *
+ * The intent is so admins don't have to remember to run the diagnostic
+ * script – they can see a badge/alert in the dashboard and click through
+ * to the affected enrollment.
+ */
+const BALANCE_AUDIT_THRESHOLD_CENTS = 100; // ignore <= $1 rounding noise
+
+type BalanceAuditSeverity = 'HIGH' | 'MEDIUM' | 'LOW';
+
+interface BalanceAuditIssue {
+  enrollmentId: number | null;
+  parentEmail: string | null;
+  parentName: string | null;
+  childName: string | null;
+  className: string | null;
+  issueType:
+    | 'BALANCE_MISMATCH'
+    | 'SCHEDULED_PAYMENT_MISMATCH'
+    | 'MISSING_SCHEDULED_PAYMENTS'
+    | 'STALE_PENDING_PAYMENTS'
+    | 'INVALID_PAYMENT_AMOUNT'
+    | 'ORPHANED_SCHEDULED_PAYMENT';
+  severity: BalanceAuditSeverity;
+  details: string;
+  affectedAmount: number;
+  cachedRemainingBalance?: number | null;
+  effectiveBalance?: number | null;
+  difference?: number | null;
+}
+
+function getEffectiveBalanceForRow(e: any): number {
+  const totalCost = e.totalCost || 0;
+  const totalPaid = e.totalPaid || 0;
+  const compAmountCents = e.compAmountCents ?? 0;
+  return e.effectiveBalance ?? Math.max(0, totalCost - totalPaid - compAmountCents);
+}
+
+async function computeBalanceAuditForSchool(schoolId: number): Promise<BalanceAuditIssue[]> {
+  const issues: BalanceAuditIssue[] = [];
+  const today = new Date();
+
+  const enrollments = (await storage.getEnrollmentsBySchoolId(schoolId)).filter(
+    (e: any) => e.status !== 'cancelled' && e.status !== 'withdrawn'
+  );
+  const scheduled = await storage.getScheduledPaymentsBySchoolId(schoolId);
+  const scheduledByEnrollment = new Map<number, any[]>();
+  for (const sp of scheduled) {
+    if (!sp.enrollmentId) continue;
+    const arr = scheduledByEnrollment.get(sp.enrollmentId) || [];
+    arr.push(sp);
+    scheduledByEnrollment.set(sp.enrollmentId, arr);
+  }
+
+  for (const enrollment of enrollments) {
+    const enrollmentId = enrollment.id;
+    const childName = enrollment.childName || null;
+    const className = enrollment.className || null;
+    const parentEmail = enrollment.parentEmail || null;
+    const parentName: string | null = (enrollment as any).parentName || null;
+    const enrollmentScheduled = scheduledByEnrollment.get(enrollmentId) || [];
+    const pending = enrollmentScheduled.filter((sp: any) => sp.status === 'pending');
+
+    const effectiveBalance = getEffectiveBalanceForRow(enrollment);
+    const cachedRemaining = enrollment.remainingBalance ?? null;
+
+    // CHECK 1: Cached remaining_balance diverges from generated effective_balance
+    if (cachedRemaining != null) {
+      const diff = Math.abs(cachedRemaining - effectiveBalance);
+      if (diff > BALANCE_AUDIT_THRESHOLD_CENTS) {
+        issues.push({
+          enrollmentId,
+          parentEmail,
+          parentName,
+          childName,
+          className,
+          issueType: 'BALANCE_MISMATCH',
+          severity: 'HIGH',
+          details:
+            `Cached remaining_balance ($${(cachedRemaining / 100).toFixed(2)}) ` +
+            `does not match effectiveBalance ($${(effectiveBalance / 100).toFixed(2)}). ` +
+            `Difference: $${(diff / 100).toFixed(2)}.`,
+          affectedAmount: diff,
+          cachedRemainingBalance: cachedRemaining,
+          effectiveBalance,
+          difference: diff,
+        });
+      }
+    }
+
+    // CHECK 2: Invalid (zero/negative) pending payment amounts
+    const invalidAmount = pending.filter(
+      (sp: any) => sp.amount == null || sp.amount <= 0
+    );
+    if (invalidAmount.length > 0) {
+      issues.push({
+        enrollmentId,
+        parentEmail,
+        parentName,
+        childName,
+        className,
+        issueType: 'INVALID_PAYMENT_AMOUNT',
+        severity: 'HIGH',
+        details: `${invalidAmount.length} pending scheduled payment(s) with zero or invalid amounts.`,
+        affectedAmount: 0,
+      });
+    }
+
+    // CHECK 3: Stale pending payments (past scheduled date, still pending)
+    const stale = pending.filter((sp: any) => {
+      if (!sp.scheduledDate) return false;
+      return new Date(sp.scheduledDate) < today;
+    });
+    if (stale.length > 0) {
+      const oldest = stale
+        .slice()
+        .sort(
+          (a: any, b: any) =>
+            new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime()
+        )[0];
+      const totalStale = stale.reduce((s: number, sp: any) => s + (sp.amount || 0), 0);
+      issues.push({
+        enrollmentId,
+        parentEmail,
+        parentName,
+        childName,
+        className,
+        issueType: 'STALE_PENDING_PAYMENTS',
+        severity: 'HIGH',
+        details:
+          `${stale.length} payment(s) past due but still pending. ` +
+          `Oldest: ${String(oldest.scheduledDate).split('T')[0]}.`,
+        affectedAmount: totalStale,
+      });
+    }
+
+    // Only inspect scheduled-payment integrity for enrollments that owe money.
+    if (effectiveBalance > 0) {
+      // CHECK 4: Payment plan with effective balance > 0 but no pending payments
+      const onPaymentPlan =
+        enrollment.paymentPlan === 'biweekly' ||
+        enrollment.paymentPlan === 'custom' ||
+        enrollment.paymentPlan === 'deposit_only' ||
+        (enrollment.paymentFrequency != null && enrollment.paymentFrequency !== 'one_time');
+      if (pending.length === 0 && onPaymentPlan) {
+        issues.push({
+          enrollmentId,
+          parentEmail,
+          parentName,
+          childName,
+          className,
+          issueType: 'MISSING_SCHEDULED_PAYMENTS',
+          severity: 'HIGH',
+          details:
+            `Enrollment has $${(effectiveBalance / 100).toFixed(2)} owed on a payment plan ` +
+            `but no pending scheduled payments.`,
+          affectedAmount: effectiveBalance,
+        });
+      }
+
+      // CHECK 5: Sum of pending scheduled payments doesn't match effective balance
+      if (pending.length > 0) {
+        const totalPending = pending.reduce(
+          (s: number, sp: any) => s + (sp.amount || 0),
+          0
+        );
+        const diff = Math.abs(totalPending - effectiveBalance);
+        if (diff > BALANCE_AUDIT_THRESHOLD_CENTS) {
+          issues.push({
+            enrollmentId,
+            parentEmail,
+            parentName,
+            childName,
+            className,
+            issueType: 'SCHEDULED_PAYMENT_MISMATCH',
+            severity: 'MEDIUM',
+            details:
+              `Pending scheduled payments total $${(totalPending / 100).toFixed(2)} ` +
+              `but effective balance is $${(effectiveBalance / 100).toFixed(2)}. ` +
+              `Difference: $${(diff / 100).toFixed(2)}.`,
+            affectedAmount: diff,
+          });
+        }
+      }
+    }
+  }
+
+  // CHECK 6: Scheduled payments referencing enrollments that don't exist for this school
+  const enrollmentIds = new Set(enrollments.map((e: any) => e.id));
+  for (const sp of scheduled) {
+    if (sp.enrollmentId && !enrollmentIds.has(sp.enrollmentId)) {
+      issues.push({
+        enrollmentId: sp.enrollmentId,
+        parentEmail: sp.parentEmail || null,
+        parentName: null,
+        childName: null,
+        className: null,
+        issueType: 'ORPHANED_SCHEDULED_PAYMENT',
+        severity: 'MEDIUM',
+        details:
+          `Scheduled payment ID ${sp.id} references enrollment ID ${sp.enrollmentId} ` +
+          `which no longer exists (or was cancelled) for this school.`,
+        affectedAmount: sp.amount || 0,
+      });
+    }
+  }
+
+  // Sort: severity first, then by affected amount descending
+  const severityOrder: Record<BalanceAuditSeverity, number> = {
+    HIGH: 0,
+    MEDIUM: 1,
+    LOW: 2,
+  };
+  issues.sort((a, b) => {
+    const sev = severityOrder[a.severity] - severityOrder[b.severity];
+    if (sev !== 0) return sev;
+    return (b.affectedAmount || 0) - (a.affectedAmount || 0);
+  });
+
+  return issues;
+}
+
+router.get('/balance-audit', supabaseAuth, async (req: any, res) => {
+  try {
+    const schoolId = await getSchoolIdFromRequest(req, res);
+    if (schoolId === null) return;
+
+    const issues = await computeBalanceAuditForSchool(schoolId);
+    const summary = {
+      totalIssues: issues.length,
+      high: issues.filter((i) => i.severity === 'HIGH').length,
+      medium: issues.filter((i) => i.severity === 'MEDIUM').length,
+      low: issues.filter((i) => i.severity === 'LOW').length,
+      totalAffectedAmount: issues.reduce((s, i) => s + (i.affectedAmount || 0), 0),
+      checkedAt: new Date().toISOString(),
+    };
+
+    console.log(
+      `🩺 Balance audit for school ${schoolId}: ${summary.totalIssues} issue(s) ` +
+      `(${summary.high} high, ${summary.medium} medium, ${summary.low} low)`
+    );
+
+    res.json({ success: true, summary, issues });
+  } catch (error) {
+    console.error('Error running balance audit:', error);
+    res.status(500).json({ success: false, message: 'Error running balance audit' });
+  }
+});
+
+router.get('/balance-audit/summary', supabaseAuth, async (req: any, res) => {
+  try {
+    const schoolId = await getSchoolIdFromRequest(req, res);
+    if (schoolId === null) return;
+
+    const issues = await computeBalanceAuditForSchool(schoolId);
+    res.json({
+      success: true,
+      summary: {
+        totalIssues: issues.length,
+        high: issues.filter((i) => i.severity === 'HIGH').length,
+        medium: issues.filter((i) => i.severity === 'MEDIUM').length,
+        low: issues.filter((i) => i.severity === 'LOW').length,
+        totalAffectedAmount: issues.reduce((s, i) => s + (i.affectedAmount || 0), 0),
+        checkedAt: new Date().toISOString(),
+      },
+    });
+  } catch (error) {
+    console.error('Error running balance audit summary:', error);
+    res.status(500).json({ success: false, message: 'Error running balance audit summary' });
+  }
+});
+
 // Get individual student endpoint
 router.get('/students/:id', supabaseAuth, async (req: any, res) => {
   try {

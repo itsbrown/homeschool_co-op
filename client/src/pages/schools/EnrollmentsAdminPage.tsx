@@ -102,6 +102,53 @@ interface Enrollment {
   };
 }
 
+type BalanceAuditSeverity = 'HIGH' | 'MEDIUM' | 'LOW';
+
+interface BalanceAuditIssue {
+  enrollmentId: number | null;
+  parentEmail: string | null;
+  parentName: string | null;
+  childName: string | null;
+  className: string | null;
+  issueType:
+    | 'BALANCE_MISMATCH'
+    | 'SCHEDULED_PAYMENT_MISMATCH'
+    | 'MISSING_SCHEDULED_PAYMENTS'
+    | 'STALE_PENDING_PAYMENTS'
+    | 'INVALID_PAYMENT_AMOUNT'
+    | 'ORPHANED_SCHEDULED_PAYMENT';
+  severity: BalanceAuditSeverity;
+  details: string;
+  affectedAmount: number;
+  cachedRemainingBalance?: number | null;
+  effectiveBalance?: number | null;
+  difference?: number | null;
+}
+
+interface BalanceAuditSummary {
+  totalIssues: number;
+  high: number;
+  medium: number;
+  low: number;
+  totalAffectedAmount: number;
+  checkedAt: string;
+}
+
+interface BalanceAuditResponse {
+  success: boolean;
+  summary: BalanceAuditSummary;
+  issues: BalanceAuditIssue[];
+}
+
+const ISSUE_TYPE_LABELS: Record<BalanceAuditIssue['issueType'], string> = {
+  BALANCE_MISMATCH: 'Cached balance mismatch',
+  SCHEDULED_PAYMENT_MISMATCH: 'Scheduled payments don\u2019t match balance',
+  MISSING_SCHEDULED_PAYMENTS: 'Missing scheduled payments',
+  STALE_PENDING_PAYMENTS: 'Past-due pending payment(s)',
+  INVALID_PAYMENT_AMOUNT: 'Invalid scheduled payment amount',
+  ORPHANED_SCHEDULED_PAYMENT: 'Orphaned scheduled payment',
+};
+
 interface PaymentPlanPreview {
   frequency: string;
   numberOfPayments: number;
@@ -236,11 +283,52 @@ export default function EnrollmentsAdminPage() {
   const [prorateReason, setProrateReason] = useState("");
   const [markEnrolledDialogOpen, setMarkEnrolledDialogOpen] = useState(false);
   const [markEnrolledTarget, setMarkEnrolledTarget] = useState<Enrollment | null>(null);
+  const [auditExpanded, setAuditExpanded] = useState(false);
 
   // Fetch all enrollments for the school
   const { data: enrollments = [], isLoading, refetch } = useQuery<Enrollment[]>({
     queryKey: ["/api/school-admin/enrollments"],
   });
+
+  // Fetch the balance audit (proactively surfaces enrollments whose cached
+  // remaining_balance diverges from effectiveBalance, plus related issues).
+  const {
+    data: auditData,
+    isLoading: auditLoading,
+    isFetching: auditFetching,
+    refetch: refetchAudit,
+  } = useQuery<BalanceAuditResponse>({
+    queryKey: ["/api/school-admin/balance-audit"],
+    refetchOnWindowFocus: false,
+    staleTime: 60_000,
+  });
+  const auditIssues = auditData?.issues || [];
+  const auditSummary = auditData?.summary;
+
+  const handleOpenAuditIssue = (issue: BalanceAuditIssue) => {
+    // Match the affected enrollment by id (preferred) or fall back to a
+    // search-filter so the admin sees just the affected row.
+    const target = enrollments.find((e) => e.id === issue.enrollmentId);
+    if (target) {
+      setSelectedEnrollment(target);
+      setEditDialogOpen(true);
+      return;
+    }
+    if (issue.childName) {
+      setSearchTerm(issue.childName);
+      setStatusFilter('all');
+      toast({
+        title: 'Filtered to affected enrollment',
+        description: `Showing results matching "${issue.childName}".`,
+      });
+    } else {
+      toast({
+        title: 'Enrollment not found',
+        description: 'The affected enrollment could not be located on this page.',
+        variant: 'destructive',
+      });
+    }
+  };
 
   // Fetch payment plan details for selected enrollment
   const { data: planDetails, isLoading: loadingPlanDetails } = useQuery<PaymentPlanDetails>({
@@ -754,6 +842,161 @@ export default function EnrollmentsAdminPage() {
             icon={DollarSign}
           />
         </div>
+
+        {/* Balance Audit Alert */}
+        {auditSummary && auditSummary.totalIssues > 0 && (
+          <Alert
+            variant={auditSummary.high > 0 ? 'destructive' : 'default'}
+            className={cn(
+              'border-2',
+              auditSummary.high === 0 && 'border-amber-300 bg-amber-50 text-amber-900'
+            )}
+            data-testid="alert-balance-audit"
+          >
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                <div className="space-y-1">
+                  <div className="font-semibold">
+                    {auditSummary.totalIssues} balance issue{auditSummary.totalIssues === 1 ? '' : 's'} found
+                  </div>
+                  <div className="text-sm">
+                    {auditSummary.high > 0 && (
+                      <Badge variant="destructive" className="mr-2" data-testid="badge-audit-high">
+                        {auditSummary.high} high
+                      </Badge>
+                    )}
+                    {auditSummary.medium > 0 && (
+                      <Badge variant="secondary" className="mr-2" data-testid="badge-audit-medium">
+                        {auditSummary.medium} medium
+                      </Badge>
+                    )}
+                    {auditSummary.low > 0 && (
+                      <Badge variant="outline" className="mr-2" data-testid="badge-audit-low">
+                        {auditSummary.low} low
+                      </Badge>
+                    )}
+                    <span className="text-xs opacity-80">
+                      {auditSummary.totalAffectedAmount > 0
+                        ? `${formatCurrency(auditSummary.totalAffectedAmount)} potentially affected`
+                        : ''}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => refetchAudit()}
+                    disabled={auditFetching}
+                    data-testid="button-audit-rerun"
+                  >
+                    {auditFetching ? (
+                      <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                    ) : (
+                      <RotateCcw className="h-3 w-3 mr-1" />
+                    )}
+                    Re-check
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={auditSummary.high > 0 ? 'secondary' : 'default'}
+                    onClick={() => setAuditExpanded((v) => !v)}
+                    data-testid="button-audit-toggle"
+                  >
+                    {auditExpanded ? 'Hide details' : 'View details'}
+                  </Button>
+                </div>
+              </div>
+              {auditExpanded && (
+                <div className="mt-4 space-y-2 max-h-80 overflow-y-auto" data-testid="list-audit-issues">
+                  {auditIssues.map((issue, idx) => (
+                    <div
+                      key={`${issue.enrollmentId ?? 'orphan'}-${issue.issueType}-${idx}`}
+                      className="flex items-start justify-between gap-3 rounded-md border bg-background/60 p-3"
+                      data-testid={`audit-issue-${idx}`}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Badge
+                            variant={
+                              issue.severity === 'HIGH'
+                                ? 'destructive'
+                                : issue.severity === 'MEDIUM'
+                                ? 'secondary'
+                                : 'outline'
+                            }
+                          >
+                            {issue.severity}
+                          </Badge>
+                          <span className="font-medium text-sm">
+                            {ISSUE_TYPE_LABELS[issue.issueType]}
+                          </span>
+                          {issue.affectedAmount > 0 && (
+                            <span className="text-xs text-muted-foreground">
+                              {formatCurrency(issue.affectedAmount)}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-sm mt-1 break-words">
+                          {issue.childName ? (
+                            <span className="font-medium">{issue.childName}</span>
+                          ) : null}
+                          {issue.className ? (
+                            <span className="text-muted-foreground"> · {issue.className}</span>
+                          ) : null}
+                          {issue.parentEmail ? (
+                            <span className="text-muted-foreground"> · {issue.parentEmail}</span>
+                          ) : null}
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-1">{issue.details}</div>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleOpenAuditIssue(issue)}
+                        data-testid={`button-audit-open-${idx}`}
+                      >
+                        <Eye className="h-3 w-3 mr-1" />
+                        Open
+                      </Button>
+                    </div>
+                  ))}
+                  {auditSummary.checkedAt && (
+                    <div className="text-xs text-muted-foreground pt-2">
+                      Last checked: {new Date(auditSummary.checkedAt).toLocaleString()}
+                    </div>
+                  )}
+                </div>
+              )}
+            </AlertDescription>
+          </Alert>
+        )}
+        {auditSummary && auditSummary.totalIssues === 0 && !auditLoading && (
+          <Alert
+            className="border-emerald-200 bg-emerald-50 text-emerald-900"
+            data-testid="alert-balance-audit-clean"
+          >
+            <CheckCircle2 className="h-4 w-4" />
+            <AlertDescription className="flex items-center justify-between gap-2">
+              <span>No balance issues detected.</span>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => refetchAudit()}
+                disabled={auditFetching}
+                data-testid="button-audit-rerun-clean"
+              >
+                {auditFetching ? (
+                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                ) : (
+                  <RotateCcw className="h-3 w-3 mr-1" />
+                )}
+                Re-check
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
 
         {/* Filters and Search */}
         <Card>
