@@ -97,6 +97,92 @@ interface PaymentManagementProps {
   defaultTab?: string; // Optional default tab to open
 }
 
+interface SavedCard {
+  id: string;
+  brand: string;
+  last4: string;
+  expMonth?: number;
+  expYear?: number;
+  isDefault: boolean;
+}
+
+function brandLabel(brand: string): string {
+  if (!brand) return 'Card';
+  return brand.charAt(0).toUpperCase() + brand.slice(1);
+}
+
+// Compact list of the parent's saved cards plus a "Use a different card" option.
+// Callers control selection via selectedPaymentMethodId / onChange ('new' = enter a new card).
+function SavedCardSelector({
+  paymentMethods,
+  selectedPaymentMethodId,
+  onChange,
+  disabled,
+}: {
+  paymentMethods: SavedCard[];
+  selectedPaymentMethodId: string;
+  onChange: (id: string) => void;
+  disabled?: boolean;
+}) {
+  if (paymentMethods.length === 0) return null;
+  return (
+    <div className="space-y-2" data-testid="saved-card-selector">
+      <h3 className="text-sm font-medium">Pay with</h3>
+      <div className="rounded-lg border border-border divide-y">
+        {paymentMethods.map((pm) => (
+          <label
+            key={pm.id}
+            className={`flex items-center gap-3 p-3 cursor-pointer ${
+              selectedPaymentMethodId === pm.id ? 'bg-muted' : ''
+            } ${disabled ? 'opacity-60 cursor-not-allowed' : ''}`}
+            data-testid={`saved-card-option-${pm.id}`}
+          >
+            <input
+              type="radio"
+              name="payment-method-choice"
+              value={pm.id}
+              checked={selectedPaymentMethodId === pm.id}
+              onChange={() => !disabled && onChange(pm.id)}
+              disabled={disabled}
+              className="h-4 w-4"
+            />
+            <CreditCard className="h-4 w-4 text-muted-foreground" />
+            <div className="flex-1 text-sm">
+              <span className="font-medium">{brandLabel(pm.brand)} •••• {pm.last4}</span>
+              {pm.expMonth && pm.expYear && (
+                <span className="ml-2 text-muted-foreground">
+                  exp {String(pm.expMonth).padStart(2, '0')}/{String(pm.expYear).slice(-2)}
+                </span>
+              )}
+            </div>
+            {pm.isDefault && (
+              <Badge variant="secondary" className="text-xs">Default</Badge>
+            )}
+          </label>
+        ))}
+        <label
+          className={`flex items-center gap-3 p-3 cursor-pointer ${
+            selectedPaymentMethodId === 'new' ? 'bg-muted' : ''
+          } ${disabled ? 'opacity-60 cursor-not-allowed' : ''}`}
+          data-testid="saved-card-option-new"
+        >
+          <input
+            type="radio"
+            name="payment-method-choice"
+            value="new"
+            checked={selectedPaymentMethodId === 'new'}
+            onChange={() => !disabled && onChange('new')}
+            disabled={disabled}
+            className="h-4 w-4"
+          />
+          <CreditCard className="h-4 w-4 text-muted-foreground" />
+          <span className="flex-1 text-sm">Use a different card</span>
+        </label>
+      </div>
+    </div>
+  );
+}
+
 // Stripe payment form for scheduled payments
 function ScheduledPaymentForm({ 
   onSuccess, 
@@ -261,25 +347,40 @@ function ScheduledPaymentDialog({
   const [applyCredits, setApplyCredits] = useState(false);
   const [loadingCredits, setLoadingCredits] = useState(false);
   const [creditPaymentComplete, setCreditPaymentComplete] = useState(false);
-  
+
+  // Saved-card / payment-method selection
+  const [paymentMethods, setPaymentMethods] = useState<SavedCard[]>([]);
+  const [loadingPaymentMethods, setLoadingPaymentMethods] = useState(false);
+  const [selectedPaymentMethodId, setSelectedPaymentMethodId] = useState<string>('new');
+  const [isPayingWithSavedCard, setIsPayingWithSavedCard] = useState(false);
+
   // Calculate credits to apply (capped at payment amount)
   const creditsToApply = applyCredits ? Math.min(availableCredits, payment.amount) : 0;
   const amountAfterCredits = Math.max(0, payment.amount - creditsToApply);
   const isFullyCoveredByCredits = amountAfterCredits === 0 && creditsToApply > 0;
+  const usingSavedCard = selectedPaymentMethodId !== 'new' && !isFullyCoveredByCredits;
 
-  // Fetch available credits when dialog opens
+  // Fetch available credits and saved cards when dialog opens
   useEffect(() => {
     if (isOpen) {
       fetchCredits();
+      fetchPaymentMethods();
     }
   }, [isOpen]);
 
-  // Create payment intent when dialog opens (only if not fully covered by credits)
+  // Create payment intent when dialog opens (only if not fully covered by credits AND user wants to enter a new card)
   useEffect(() => {
-    if (isOpen && !clientSecret && !isFullyCoveredByCredits && !loadingCredits) {
+    if (
+      isOpen &&
+      !clientSecret &&
+      !isFullyCoveredByCredits &&
+      !loadingCredits &&
+      !loadingPaymentMethods &&
+      selectedPaymentMethodId === 'new'
+    ) {
       createPaymentIntent();
     }
-  }, [isOpen, isFullyCoveredByCredits, loadingCredits, applyCredits]);
+  }, [isOpen, isFullyCoveredByCredits, loadingCredits, loadingPaymentMethods, applyCredits, selectedPaymentMethodId]);
 
   // Reset state when dialog closes
   useEffect(() => {
@@ -288,6 +389,9 @@ function ScheduledPaymentDialog({
       setError(null);
       setApplyCredits(false);
       setCreditPaymentComplete(false);
+      setPaymentMethods([]);
+      setSelectedPaymentMethodId('new');
+      setIsPayingWithSavedCard(false);
     }
   }, [isOpen]);
 
@@ -316,9 +420,33 @@ function ScheduledPaymentDialog({
     }
   };
 
+  const fetchPaymentMethods = async () => {
+    setLoadingPaymentMethods(true);
+    try {
+      const response = await apiRequest('GET', '/api/user/payment-methods');
+      if (response.ok) {
+        const data = await response.json();
+        const cards: SavedCard[] = data.paymentMethods || [];
+        setPaymentMethods(cards);
+        // Default to the user's default card if present, otherwise first card, otherwise 'new'
+        if (cards.length > 0) {
+          const defaultCard = cards.find((c) => c.isDefault) || cards[0];
+          setSelectedPaymentMethodId(defaultCard.id);
+        } else {
+          setSelectedPaymentMethodId('new');
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch saved cards:', err);
+      setPaymentMethods([]);
+    } finally {
+      setLoadingPaymentMethods(false);
+    }
+  };
+
   const createPaymentIntent = async () => {
-    // Don't create Stripe intent if fully covered by credits
-    if (isFullyCoveredByCredits) {
+    // Don't create Stripe intent if fully covered by credits or paying with a saved card
+    if (isFullyCoveredByCredits || selectedPaymentMethodId !== 'new') {
       return;
     }
     
@@ -359,6 +487,61 @@ function ScheduledPaymentDialog({
       });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // One-click pay with a saved card (off-session via backend)
+  const handleSavedCardPayment = async () => {
+    if (selectedPaymentMethodId === 'new') return;
+    setIsPayingWithSavedCard(true);
+    setError(null);
+
+    try {
+      const response = await apiRequest('POST', '/api/scheduled-payments/pay', {
+        paymentId: payment.id,
+        creditsToApply: creditsToApply,
+        paymentMethodId: selectedPaymentMethodId,
+      });
+
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Failed to charge saved card');
+      }
+
+      if (data.alreadyConfirmed && data.paymentIntentId) {
+        // Mark scheduled payment completed immediately on the server (idempotent)
+        try {
+          const confirmResponse = await apiRequest(
+            'POST',
+            `/api/scheduled-payments/${payment.id}/confirm`,
+            { paymentIntentId: data.paymentIntentId }
+          );
+          if (!confirmResponse.ok) {
+            const cd = await confirmResponse.json().catch(() => ({}));
+            console.warn('⚠️ Failed to confirm saved-card payment immediately:', cd?.error);
+          }
+        } catch (confirmErr) {
+          console.warn('⚠️ Error confirming saved-card payment:', confirmErr);
+          // Webhook will reconcile
+        }
+        handleSuccess();
+      } else if (data.clientSecret) {
+        // Fallback: PI created but needs additional confirmation (e.g., 3DS) — fall through to Elements flow
+        setClientSecret(data.clientSecret);
+        setSelectedPaymentMethodId('new');
+        setError('Additional verification needed. Please confirm using the card form below.');
+      } else {
+        throw new Error('Unexpected payment response');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to charge saved card');
+      toast({
+        title: 'Payment Failed',
+        description: err.message || 'Failed to charge saved card',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsPayingWithSavedCard(false);
     }
   };
   
@@ -420,10 +603,14 @@ function ScheduledPaymentDialog({
       title: "Payment Successful",
       description: "Your payment has been processed successfully.",
     });
-    // Invalidate queries to refresh data
+    // Invalidate queries to refresh data — Outstanding Balance card reads from
+    // /api/parent/enrollments, and credits balance from /api/parent/credits.
     queryClient.invalidateQueries({ queryKey: ['/api/payment-history'] });
     queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments'] });
     queryClient.invalidateQueries({ queryKey: ['scheduled-payments-upcoming'] });
+    queryClient.invalidateQueries({ queryKey: ['scheduled-payments-grouped'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/parent/credits'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/parent/enrollments'] });
     onSuccess();
     onClose();
   };
@@ -526,15 +713,30 @@ function ScheduledPaymentDialog({
             </div>
           )}
 
+          {/* Saved card selector — only when not fully covered by credits */}
+          {!isFullyCoveredByCredits && paymentMethods.length > 0 && (
+            <SavedCardSelector
+              paymentMethods={paymentMethods}
+              selectedPaymentMethodId={selectedPaymentMethodId}
+              onChange={(id) => {
+                setSelectedPaymentMethodId(id);
+                setError(null);
+                if (id !== 'new') {
+                  // Pay-with-saved-card path doesn't need a pre-created intent
+                  setClientSecret(null);
+                }
+              }}
+              disabled={isLoading || isPayingWithSavedCard}
+            />
+          )}
+
           {/* Payment Form or Credit-Only Payment */}
-          {isLoading || loadingCredits ? (
+          {loadingCredits || loadingPaymentMethods ? (
             <div className="flex flex-col items-center justify-center py-8">
               <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
-              <p className="text-muted-foreground">
-                {loadingCredits ? 'Loading credits...' : 'Initializing payment...'}
-              </p>
+              <p className="text-muted-foreground">Loading payment options...</p>
             </div>
-          ) : error ? (
+          ) : error && !usingSavedCard ? (
             <div className="text-center py-4">
               <AlertCircle className="h-8 w-8 text-destructive mx-auto mb-2" />
               <p className="text-destructive mb-4">{error}</p>
@@ -558,6 +760,50 @@ function ScheduledPaymentDialog({
                   Pay with Credits
                 </Button>
               </div>
+            </div>
+          ) : usingSavedCard ? (
+            <div className="space-y-3">
+              {error && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
+              <div className="flex gap-2 pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={onClose}
+                  disabled={isPayingWithSavedCard}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handleSavedCardPayment}
+                  disabled={isPayingWithSavedCard}
+                  className="flex-1"
+                  data-testid="pay-with-saved-card-button"
+                >
+                  {isPayingWithSavedCard ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      <Zap className="mr-2 h-4 w-4" />
+                      Pay {formatCurrency(amountAfterCredits)}
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          ) : isLoading ? (
+            <div className="flex flex-col items-center justify-center py-8">
+              <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
+              <p className="text-muted-foreground">Initializing payment...</p>
             </div>
           ) : clientSecret ? (
             <Elements 
@@ -728,22 +974,37 @@ function CombinedPaymentDialog({
   const [loadingCredits, setLoadingCredits] = useState(false);
   const [creditPaymentComplete, setCreditPaymentComplete] = useState(false);
 
+  // Saved-card / payment-method selection
+  const [paymentMethods, setPaymentMethods] = useState<SavedCard[]>([]);
+  const [loadingPaymentMethods, setLoadingPaymentMethods] = useState(false);
+  const [selectedPaymentMethodId, setSelectedPaymentMethodId] = useState<string>('new');
+  const [isPayingWithSavedCard, setIsPayingWithSavedCard] = useState(false);
+
   const totalAmount = payments.reduce((sum: number, p: any) => sum + p.amount, 0);
   const creditsToApply = applyCredits ? Math.min(availableCredits, totalAmount) : 0;
   const amountAfterCredits = Math.max(0, totalAmount - creditsToApply);
   const isFullyCoveredByCredits = amountAfterCredits === 0 && creditsToApply > 0;
+  const usingSavedCard = selectedPaymentMethodId !== 'new' && !isFullyCoveredByCredits;
 
   useEffect(() => {
     if (isOpen) {
       fetchCredits();
+      fetchPaymentMethods();
     }
   }, [isOpen]);
 
   useEffect(() => {
-    if (isOpen && !clientSecret && !isFullyCoveredByCredits && !loadingCredits) {
+    if (
+      isOpen &&
+      !clientSecret &&
+      !isFullyCoveredByCredits &&
+      !loadingCredits &&
+      !loadingPaymentMethods &&
+      selectedPaymentMethodId === 'new'
+    ) {
       createPaymentIntent();
     }
-  }, [isOpen, isFullyCoveredByCredits, loadingCredits, applyCredits]);
+  }, [isOpen, isFullyCoveredByCredits, loadingCredits, loadingPaymentMethods, applyCredits, selectedPaymentMethodId]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -751,6 +1012,9 @@ function CombinedPaymentDialog({
       setError(null);
       setApplyCredits(false);
       setCreditPaymentComplete(false);
+      setPaymentMethods([]);
+      setSelectedPaymentMethodId('new');
+      setIsPayingWithSavedCard(false);
     }
   }, [isOpen]);
 
@@ -779,8 +1043,31 @@ function CombinedPaymentDialog({
     }
   };
 
+  const fetchPaymentMethods = async () => {
+    setLoadingPaymentMethods(true);
+    try {
+      const response = await apiRequest('GET', '/api/user/payment-methods');
+      if (response.ok) {
+        const data = await response.json();
+        const cards: SavedCard[] = data.paymentMethods || [];
+        setPaymentMethods(cards);
+        if (cards.length > 0) {
+          const defaultCard = cards.find((c) => c.isDefault) || cards[0];
+          setSelectedPaymentMethodId(defaultCard.id);
+        } else {
+          setSelectedPaymentMethodId('new');
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch saved cards:', err);
+      setPaymentMethods([]);
+    } finally {
+      setLoadingPaymentMethods(false);
+    }
+  };
+
   const createPaymentIntent = async () => {
-    if (isFullyCoveredByCredits) {
+    if (isFullyCoveredByCredits || selectedPaymentMethodId !== 'new') {
       return;
     }
 
@@ -816,6 +1103,59 @@ function CombinedPaymentDialog({
       });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // One-click pay-all using a saved card (off-session via backend)
+  const handleSavedCardPayment = async () => {
+    if (selectedPaymentMethodId === 'new') return;
+    setIsPayingWithSavedCard(true);
+    setError(null);
+
+    try {
+      const scheduledPaymentIds = payments.map((p: any) => p.id);
+      const response = await apiRequest('POST', '/api/scheduled-payments/pay-combined', {
+        scheduledPaymentIds,
+        creditsToApply,
+        paymentMethodId: selectedPaymentMethodId,
+      });
+
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Failed to charge saved card');
+      }
+
+      if (data.alreadyConfirmed && data.paymentIntentId) {
+        try {
+          const confirmResponse = await apiRequest(
+            'POST',
+            '/api/scheduled-payments/confirm-combined',
+            { paymentIntentId: data.paymentIntentId }
+          );
+          if (!confirmResponse.ok) {
+            const cd = await confirmResponse.json().catch(() => ({}));
+            console.warn('⚠️ Failed to confirm saved-card combined payment immediately:', cd?.error);
+          }
+        } catch (confirmErr) {
+          console.warn('⚠️ Error confirming saved-card combined payment:', confirmErr);
+        }
+        handleSuccess(data.paymentIntentId);
+      } else if (data.clientSecret) {
+        setClientSecret(data.clientSecret);
+        setSelectedPaymentMethodId('new');
+        setError('Additional verification needed. Please confirm using the card form below.');
+      } else {
+        throw new Error('Unexpected payment response');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to charge saved card');
+      toast({
+        title: 'Payment Failed',
+        description: err.message || 'Failed to charge saved card',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsPayingWithSavedCard(false);
     }
   };
 
@@ -877,6 +1217,9 @@ function CombinedPaymentDialog({
     queryClient.invalidateQueries({ queryKey: ['scheduled-payments-upcoming'] });
     queryClient.invalidateQueries({ queryKey: ['scheduled-payments-grouped'] });
     queryClient.invalidateQueries({ queryKey: ['/api/parent/credits'] });
+    // Outstanding Balance card reads from /api/parent/enrollments — must invalidate
+    // for the family balance to update after a paid combined installment set.
+    queryClient.invalidateQueries({ queryKey: ['/api/parent/enrollments'] });
     onSuccess();
     onClose();
   };
@@ -973,14 +1316,28 @@ function CombinedPaymentDialog({
             </div>
           )}
 
-          {isLoading || loadingCredits ? (
+          {/* Saved card selector — only when not fully covered by credits */}
+          {!isFullyCoveredByCredits && paymentMethods.length > 0 && (
+            <SavedCardSelector
+              paymentMethods={paymentMethods}
+              selectedPaymentMethodId={selectedPaymentMethodId}
+              onChange={(id) => {
+                setSelectedPaymentMethodId(id);
+                setError(null);
+                if (id !== 'new') {
+                  setClientSecret(null);
+                }
+              }}
+              disabled={isLoading || isPayingWithSavedCard}
+            />
+          )}
+
+          {loadingCredits || loadingPaymentMethods ? (
             <div className="flex flex-col items-center justify-center py-8">
               <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
-              <p className="text-muted-foreground">
-                {loadingCredits ? 'Loading credits...' : 'Initializing payment...'}
-              </p>
+              <p className="text-muted-foreground">Loading payment options...</p>
             </div>
-          ) : error ? (
+          ) : error && !usingSavedCard ? (
             <div className="text-center py-4">
               <AlertCircle className="h-8 w-8 text-destructive mx-auto mb-2" />
               <p className="text-destructive mb-4">{error}</p>
@@ -1004,6 +1361,50 @@ function CombinedPaymentDialog({
                   Pay with Credits
                 </Button>
               </div>
+            </div>
+          ) : usingSavedCard ? (
+            <div className="space-y-3">
+              {error && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
+              <div className="flex gap-2 pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={onClose}
+                  disabled={isPayingWithSavedCard}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handleSavedCardPayment}
+                  disabled={isPayingWithSavedCard}
+                  className="flex-1"
+                  data-testid="pay-all-with-saved-card-button"
+                >
+                  {isPayingWithSavedCard ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      <Zap className="mr-2 h-4 w-4" />
+                      Pay {formatCurrency(amountAfterCredits)}
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          ) : isLoading ? (
+            <div className="flex flex-col items-center justify-center py-8">
+              <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
+              <p className="text-muted-foreground">Initializing payment...</p>
             </div>
           ) : clientSecret ? (
             <Elements

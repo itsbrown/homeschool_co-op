@@ -299,10 +299,10 @@ router.get('/upcoming-old', async (req, res) => {
 // Process a scheduled payment
 router.post('/pay', supabaseAuth, async (req: any, res) => {
   try {
-    const { paymentId, creditsToApply = 0 } = req.body;
+    const { paymentId, creditsToApply = 0, paymentMethodId } = req.body;
     const userEmail = req.user.email;
 
-    console.log('💳 Processing scheduled payment:', { paymentId, userEmail, creditsToApply });
+    console.log('💳 Processing scheduled payment:', { paymentId, userEmail, creditsToApply, paymentMethodId: paymentMethodId ? '[provided]' : null });
 
     if (!paymentId) {
       return res.status(400).json({
@@ -433,6 +433,35 @@ router.post('/pay', supabaseAuth, async (req: any, res) => {
 
     // Create Stripe payment intent with complete metadata
     const stripe = await getStripeClient();
+
+    // SAVED-CARD FLOW: if paymentMethodId provided, validate it belongs to this customer
+    let useSavedCard = false;
+    if (paymentMethodId) {
+      if (!stripeCustomerId) {
+        // Lazily create a customer record so we can attach the saved card flow
+        const newCustomer = await stripe.customers.create({
+          email: userEmail,
+          name: parentUser.name || undefined,
+          metadata: { userId: String(parentUser.id) },
+        });
+        stripeCustomerId = newCustomer.id;
+        await storage.updateUser(parentUser.id, { stripeCustomerId: stripeCustomerId });
+      }
+
+      try {
+        const pm = await stripe.paymentMethods.retrieve(paymentMethodId);
+        if (pm.customer !== stripeCustomerId) {
+          throw new Error('Payment method does not belong to this account');
+        }
+        useSavedCard = true;
+      } catch (pmErr: any) {
+        return res.status(400).json({
+          success: false,
+          error: pmErr.message || 'Invalid saved card. Please pick another payment method.'
+        });
+      }
+    }
+
     const paymentIntentParams: any = {
       amount: Math.round(chargeAmount), // Charge reduced amount after credits
       currency: 'usd',
@@ -452,28 +481,46 @@ router.post('/pay', supabaseAuth, async (req: any, res) => {
         // Credit tracking metadata - SERVER AUTHORITATIVE VALUES
         originalAmountCents: authoritativeAmount.toString(),
         creditsAppliedCents: validatedCreditsToApply.toString(),
-        userId: parentUser.id.toString()
+        userId: parentUser.id.toString(),
+        savedCardOneClick: useSavedCard ? 'true' : 'false',
       },
-      automatic_payment_methods: {
-        enabled: true
-      }
     };
-    
-    // CRITICAL: Reuse existing Stripe customer instead of creating guest
-    if (stripeCustomerId) {
+
+    if (useSavedCard) {
       paymentIntentParams.customer = stripeCustomerId;
-      console.log('👤 Using existing Stripe customer:', stripeCustomerId);
+      paymentIntentParams.payment_method = paymentMethodId;
+      paymentIntentParams.confirm = true;
+      paymentIntentParams.off_session = true;
+      console.log('👤 Charging saved card off-session for customer:', stripeCustomerId);
+    } else {
+      paymentIntentParams.automatic_payment_methods = { enabled: true };
+      // CRITICAL: Reuse existing Stripe customer instead of creating guest
+      if (stripeCustomerId) {
+        paymentIntentParams.customer = stripeCustomerId;
+        console.log('👤 Using existing Stripe customer:', stripeCustomerId);
+      }
     }
-    
+
     const paymentIntent = await stripe.paymentIntents.create(paymentIntentParams);
 
-    console.log('✅ Created payment intent for scheduled payment:', paymentIntent.id, 'with enrollmentIds:', enrollmentIds, 'chargeAmount:', chargeAmount);
+    console.log('✅ Created payment intent for scheduled payment:', paymentIntent.id, 'with enrollmentIds:', enrollmentIds, 'chargeAmount:', chargeAmount, 'status:', paymentIntent.status);
 
     // Immediately store the PI ID to prevent double-charge on concurrent retries
     await storage.updateScheduledPayment(parseInt(paymentId), {
       stripePaymentIntentId: paymentIntent.id,
-      chargedBy: 'parent_manual'
+      chargedBy: useSavedCard ? 'parent_manual_saved_card' : 'parent_manual'
     });
+
+    // For saved-card flow: PI is already confirmed; tell client to skip Stripe Elements
+    if (useSavedCard && paymentIntent.status === 'succeeded') {
+      return res.json({
+        success: true,
+        alreadyConfirmed: true,
+        paymentIntentId: paymentIntent.id,
+        chargeAmount,
+        creditsApplied: validatedCreditsToApply
+      });
+    }
 
     res.json({
       success: true,
@@ -483,9 +530,15 @@ router.post('/pay', supabaseAuth, async (req: any, res) => {
       creditsApplied: validatedCreditsToApply
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error processing scheduled payment:', error);
-    
+
+    // Detect synchronous Stripe card decline (off-session, saved-card flow)
+    const isCardDecline =
+      error?.type === 'StripeCardError' ||
+      error?.code === 'card_declined' ||
+      error?.code === 'authentication_required';
+
     // ROLLBACK: Reset scheduled payment status if Stripe intent creation failed
     try {
       const { paymentId } = req.body;
@@ -511,7 +564,15 @@ router.post('/pay', supabaseAuth, async (req: any, res) => {
     } catch (rollbackError) {
       console.error('❌ Failed to rollback scheduled payment status:', rollbackError);
     }
-    
+
+    if (isCardDecline) {
+      return res.status(400).json({
+        success: false,
+        error: error?.message || 'Saved card was declined. Please try a different payment method.',
+        cardDeclined: true,
+      });
+    }
+
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Failed to process scheduled payment'
@@ -1314,10 +1375,10 @@ router.get('/grouped', supabaseAuth, async (req: any, res) => {
 // Pay multiple scheduled payments in a single combined Stripe charge
 router.post('/pay-combined', supabaseAuth, async (req: any, res) => {
   try {
-    const { scheduledPaymentIds, creditsToApply = 0 } = req.body;
+    const { scheduledPaymentIds, creditsToApply = 0, paymentMethodId } = req.body;
     const userEmail = req.user.email;
 
-    console.log('💳 Processing combined payment:', { scheduledPaymentIds, userEmail, creditsToApply });
+    console.log('💳 Processing combined payment:', { scheduledPaymentIds, userEmail, creditsToApply, paymentMethodId: paymentMethodId ? '[provided]' : null });
 
     if (!scheduledPaymentIds || !Array.isArray(scheduledPaymentIds) || scheduledPaymentIds.length === 0) {
       return res.status(400).json({
@@ -1446,6 +1507,46 @@ router.post('/pay-combined', supabaseAuth, async (req: any, res) => {
     }
 
     const stripe = await getStripeClient();
+
+    // SAVED-CARD FLOW: validate payment method belongs to this customer
+    let useSavedCard = false;
+    if (paymentMethodId) {
+      if (!stripeCustomerId) {
+        const newCustomer = await stripe.customers.create({
+          email: userEmail,
+          name: parentUser.name || undefined,
+          metadata: { userId: String(parentUser.id) },
+        });
+        stripeCustomerId = newCustomer.id;
+        await storage.updateUser(parentUser.id, { stripeCustomerId: stripeCustomerId });
+      }
+
+      try {
+        const pm = await stripe.paymentMethods.retrieve(paymentMethodId);
+        if (pm.customer !== stripeCustomerId) {
+          throw new Error('Payment method does not belong to this account');
+        }
+        useSavedCard = true;
+      } catch (pmErr: any) {
+        // Roll back the processing flags before returning an error
+        for (const payment of paymentsToProcess) {
+          await storage.updateScheduledPayment(payment.id, {
+            status: 'pending',
+            metadata: {
+              ...((payment.metadata as Record<string, any>) || {}),
+              combinedPaymentGroup: undefined,
+              lastErrorAt: new Date().toISOString(),
+              errorReason: pmErr.message || 'Invalid saved card',
+            },
+          });
+        }
+        return res.status(400).json({
+          success: false,
+          error: pmErr.message || 'Invalid saved card. Please pick another payment method.',
+        });
+      }
+    }
+
     const paymentIntentParams: any = {
       amount: Math.round(chargeAmount),
       currency: 'usd',
@@ -1463,21 +1564,41 @@ router.post('/pay-combined', supabaseAuth, async (req: any, res) => {
         creditsAppliedCents: validatedCreditsToApply.toString(),
         userId: parentUser.id.toString(),
         perPaymentAmounts: JSON.stringify(perPaymentAmounts),
+        savedCardOneClick: useSavedCard ? 'true' : 'false',
       },
-      automatic_payment_methods: { enabled: true }
     };
 
-    if (stripeCustomerId) {
+    if (useSavedCard) {
       paymentIntentParams.customer = stripeCustomerId;
+      paymentIntentParams.payment_method = paymentMethodId;
+      paymentIntentParams.confirm = true;
+      paymentIntentParams.off_session = true;
+    } else {
+      paymentIntentParams.automatic_payment_methods = { enabled: true };
+      if (stripeCustomerId) {
+        paymentIntentParams.customer = stripeCustomerId;
+      }
     }
 
     const paymentIntent = await stripe.paymentIntents.create(paymentIntentParams);
-    console.log('✅ Created combined payment intent:', paymentIntent.id, 'for', paymentsToProcess.length, 'payments, chargeAmount:', chargeAmount);
+    console.log('✅ Created combined payment intent:', paymentIntent.id, 'for', paymentsToProcess.length, 'payments, chargeAmount:', chargeAmount, 'status:', paymentIntent.status);
 
     // Immediately store the PI ID on every payment in the group to prevent double-charge on concurrent retries
     await Promise.all(paymentsToProcess.map(p =>
       storage.updateScheduledPayment(p.id, { stripePaymentIntentId: paymentIntent.id })
     ));
+
+    if (useSavedCard && paymentIntent.status === 'succeeded') {
+      return res.json({
+        success: true,
+        alreadyConfirmed: true,
+        paymentIntentId: paymentIntent.id,
+        chargeAmount,
+        combinedAmount,
+        creditsApplied: validatedCreditsToApply,
+        paymentCount: paymentsToProcess.length,
+      });
+    }
 
     res.json({
       success: true,
@@ -1489,8 +1610,13 @@ router.post('/pay-combined', supabaseAuth, async (req: any, res) => {
       paymentCount: paymentsToProcess.length
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error processing combined payment:', error);
+
+    const isCardDecline =
+      error?.type === 'StripeCardError' ||
+      error?.code === 'card_declined' ||
+      error?.code === 'authentication_required';
 
     try {
       const { scheduledPaymentIds } = req.body;
@@ -1514,6 +1640,14 @@ router.post('/pay-combined', supabaseAuth, async (req: any, res) => {
       }
     } catch (rollbackError) {
       console.error('❌ Failed to rollback combined payment statuses:', rollbackError);
+    }
+
+    if (isCardDecline) {
+      return res.status(400).json({
+        success: false,
+        error: error?.message || 'Saved card was declined. Please try a different payment method.',
+        cardDeclined: true,
+      });
     }
 
     res.status(500).json({
