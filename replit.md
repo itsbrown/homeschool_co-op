@@ -22,7 +22,7 @@ The platform features a full-stack architecture designed for scalability, securi
 -   **Deployment Type**: **MUST be Reserved VM** (not Autoscale). This app runs persistent background schedulers (auto-pay, enrollment reminders, credit expiration, reconciliation), uses WebSocket, and has in-memory state — all incompatible with Autoscale/Cloud Run. When publishing, verify the Replit publish dialog shows "Reserved VM". The `.replit` `deploymentTarget = "vm"` enforces this.
 
 **Data Persistence:**
--   **Primary Database**: PostgreSQL (Neon-hosted).
+-   **Primary Database**: PostgreSQL. Replit dev uses the Replit-managed Helium database (plain TCP, no SSL); production uses a separate managed Postgres that requires SSL. Connection string is read exclusively from `DATABASE_URL`, and SSL is selected via `getDbSslConfig()` / `getPostgresJsSslOption()` in `server/lib/database-url.ts` based on `NODE_ENV`.
 -   **ORM**: Drizzle ORM for CRUD operations, with type-safe schema.
 -   **Supabase**: Exclusively for authentication.
 
@@ -74,7 +74,7 @@ The platform features a full-stack architecture designed for scalability, securi
 ## External Dependencies
 -   **Supabase**: Authentication.
 -   **Replit App Storage**: Object storage for file uploads.
--   **Neon PostgreSQL**: Primary database.
+-   **PostgreSQL**: Primary database (Replit-managed Helium in dev, managed SSL Postgres in production).
 -   **Stripe**: Payment processing.
 -   **Anthropic Claude API**: AI content generation and analysis.
 -   **Brevo SMTP**: Email service.

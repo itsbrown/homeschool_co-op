@@ -46,6 +46,8 @@ description: Workflow configuration, port binding, testing patterns, and deploym
 - **Force push**: `npm run db:push --force` if data-loss warning appears
 - **Debug queries**: Use the SQL execution tool, not raw `psql`
 - **Never run destructive SQL** (DROP, DELETE, UPDATE) without explicit user approval
+- **Connection string**: Always read from `process.env.DATABASE_URL` only. The `PGHOST` / `PGUSER` / `PGPASSWORD` / `PGDATABASE` / `PGPORT` fallback no longer exists.
+- **SSL config**: Replit dev uses Helium Postgres (no SSL); production uses managed SSL Postgres. Never hardcode `ssl: { rejectUnauthorized: false }` or `ssl: 'require'` on a new client — go through `getDbSslConfig()` / `getPostgresJsSslOption()` from `server/lib/database-url.ts`. See the `asa-database-patterns` skill for the copy-paste snippet.
 
 ## Testing Patterns
 
@@ -91,6 +93,7 @@ description: Workflow configuration, port binding, testing patterns, and deploym
 - **Default environment**: Use `shared` unless different values are needed for dev/production
 - **Frontend env vars**: Must be prefixed with `VITE_` to be accessible via `import.meta.env`
 - View current vars/secrets with the env var view tool
+- **`DATABASE_URL`** is the single source of truth for the DB connection. Replit dev points it at Helium Postgres (no SSL); production points it at the managed SSL Postgres. Never reintroduce `PGHOST` / `PGUSER` / `PGPASSWORD` / `PGDATABASE` / `PGPORT` fallbacks, and never hardcode SSL — see `getDbSslConfig()` / `getPostgresJsSslOption()` in `server/lib/database-url.ts`.
 
 ## Deployment (Publishing)
 
@@ -199,6 +202,7 @@ If it returns data → `NODE_ENV` is not set to `production` in the deployment e
 - **Tests fail with "element not found"** → test assumes empty database state → generate unique test data with `nanoid` instead
 - **Frontend env var undefined** → missing `VITE_` prefix → rename to `VITE_MY_VAR` and access via `import.meta.env.VITE_MY_VAR`
 - **Schema change not applied** → wrote raw SQL migration file → use `npm run db:push` (Drizzle handles it)
+- **`The server does not support SSL connections`** in dev → a `pg`/`postgres.js` client was opened with hardcoded `ssl: { rejectUnauthorized: false }` or `ssl: 'require'`. Replit dev uses Helium, which does not accept SSL handshakes. Replace the hardcoded option with `getDbSslConfig()` (for `pg`) or `getPostgresJsSslOption()` (for `postgres.js`) from `server/lib/database-url.ts` so SSL is enabled only when `NODE_ENV === 'production'`.
 - **Chunk load failures after deployment** → `index.html` cached by browser with stale chunk hashes → verify `Cache-Control: no-cache` middleware is present in `server/index.ts` inside the production `else` block, before `serveStatic(app)`. Symptom: "Failed to fetch dynamically imported module" or "text/html is not valid JavaScript" in error telemetry. Affects ALL frontend routes simultaneously — not just the one the user reported.
 - **Scheduler not running in production** → deployment type is Autoscale, not Reserved VM → change to Reserved VM in Replit deployment settings. Autoscale spins down between requests, killing all `setInterval`-based background jobs silently with no error or warning.
 

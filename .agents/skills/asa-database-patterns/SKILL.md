@@ -14,6 +14,47 @@ description: Database schema conventions, data relationships, storage patterns, 
 - **Distinguish DB errors from not-found**: A throw from `getDb()` means the DB is unreachable; `null`/`undefined` means not found — handle these two cases separately in any access-control path
 - **Postgres `date` columns require `YYYY-MM-DD` strings**: Never pass JavaScript `Date` objects — the driver throws `ERR_INVALID_ARG_TYPE`
 
+## Database Connection
+
+- **`DATABASE_URL` is the single source of truth.** Read the connection string only from `process.env.DATABASE_URL`. The legacy `PGHOST` / `PGUSER` / `PGPASSWORD` / `PGDATABASE` / `PGPORT` fallback and the legacy Supabase-URL fallback have been removed — do not reintroduce them.
+- **SSL is conditional on `NODE_ENV`.** Replit dev uses Helium Postgres, which speaks plain TCP and rejects SSL handshakes (`The server does not support SSL connections`). Production uses a managed Postgres that requires SSL. **Never hardcode `ssl: { rejectUnauthorized: false }` or `ssl: 'require'`** on a new client — always go through the shared helper.
+- **Use the shared helper in `server/lib/database-url.ts`** for every new `pg` Pool or `postgres.js` client:
+  - `getDbSslConfig()` — for `pg` (`new Pool({ ssl })`).
+  - `getPostgresJsSslOption()` — for `postgres.js` (`postgres(url, { ssl })`).
+  Both return `{ rejectUnauthorized: false }` in production and `false` everywhere else.
+
+### Snippet: opening a new connection
+
+`postgres.js` (preferred — used by `server/db.ts`):
+
+```ts
+import postgres from 'postgres';
+import { drizzle } from 'drizzle-orm/postgres-js';
+import { getPostgresJsSslOption } from './lib/database-url';
+import * as schema from '../shared/schema';
+
+const client = postgres(process.env.DATABASE_URL!, {
+  prepare: false,
+  max: 10,
+  ssl: getPostgresJsSslOption(),
+});
+const db = drizzle(client, { schema });
+```
+
+`pg` Pool (for one-off scripts or libraries that require `pg`):
+
+```ts
+import { Pool } from 'pg';
+import { getDbSslConfig } from './lib/database-url';
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: getDbSslConfig(),
+});
+```
+
+Plain `.mjs` scripts can import the same logic from `server/lib/database-url.mjs` without a TypeScript build step.
+
 ## Schema Conventions
 
 - **Column naming**: snake_case in PostgreSQL, camelCase in Drizzle schema (e.g., `parent_id` in DB → `parentId` in code)
@@ -147,7 +188,7 @@ Query `program_enrollments` directly — **not `scheduled_payments`** — for ou
 - `server/storage.ts` — `IStorage` interface and all storage method implementations
 - `server/db.ts` — `getDb()` lazy loader with one-shot connection test (`connectionTested` flag)
 - `server/init-db.ts` — idempotent `ALTER TABLE` migrations run on startup (replaces `db:push`)
-- `server/lib/database-url.ts` — resolves correct DB connection string (bypasses Supabase host)
+- `server/lib/database-url.ts` — `getDbSslConfig()` / `getPostgresJsSslOption()` helpers; SSL on in production, off in dev (Helium). Sibling `database-url.mjs` shares the same logic for plain ESM scripts.
 - `server/lib/prorate-calculator.ts` — proration date math
 - `server/api/csv-upload.ts` — `parseDateToYMD()` and `addMonthsYMD()` date string helpers
 - `server/api/financial-reports.ts` — outstanding balances report with auto-heal pattern
