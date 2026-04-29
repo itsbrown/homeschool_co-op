@@ -497,33 +497,22 @@ router.get('/payment-status/:paymentIntentId', async (req, res) => {
 });
 
 // Get billing summary for a parent
-router.get('/summary', async (req, res) => {
+router.get('/summary', supabaseAuth, async (req: any, res) => {
   try {
-    // Extract user email from Supabase token
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'Authorization header missing' });
-    }
-
-    const token = authHeader.split(' ')[1];
-    
-    // Verify the Supabase token
-    const supabase = createClient(
-      process.env.SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    );
-
-    const { data: { user }, error } = await supabase.auth.getUser(token);
-    
-    if (error || !user) {
-      console.log('❌ Supabase auth error:', error);
-      return res.status(401).json({ error: 'Invalid authentication token' });
-    }
-
-    const userEmail = user.email;
+    // supabaseAuth populates req.user with database-sourced identity (email,
+    // sub, role, schoolId). Sub is the Supabase UUID when available, falling
+    // back to the database ID for session-based auth (used in tests).
+    const userEmail = req.user?.email;
     if (!userEmail) {
       return res.status(401).json({ error: 'User email not found' });
     }
+
+    // Construct a minimal `user` object for downstream code that previously
+    // relied on Supabase's `user.id` (UUID) for the supabaseId fallback below.
+    const user = {
+      id: req.user.sub,
+      email: userEmail,
+    };
 
     console.log('🔍 Getting billing summary for:', userEmail);
 

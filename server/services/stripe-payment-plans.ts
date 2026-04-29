@@ -711,6 +711,37 @@ export class StripePaymentPlanService {
           }
         ];
 
+      case 'split':
+        // 50% now, 50% in 30 days (2 equal installments)
+        const calculatedFirstHalf = Math.round(totalAmount * 0.5);
+        const firstHalfAmount = Math.max(calculatedFirstHalf, STRIPE_MINIMUM_AMOUNT);
+        const secondHalfAmount = totalAmount - firstHalfAmount;
+
+        if (totalAmount < STRIPE_MINIMUM_AMOUNT * 2 || secondHalfAmount < STRIPE_MINIMUM_AMOUNT) {
+          console.warn(`⚠️ Split plan not viable for amount ${CurrencyUtils.toDisplay(totalAmount)} - using full payment instead`);
+          return [{
+            amount: totalAmount,
+            dueDate: now,
+            installmentNumber: 1,
+            description: 'Full Payment (amount below minimum for payment plans)'
+          }];
+        }
+
+        return [
+          {
+            amount: firstHalfAmount,
+            dueDate: now,
+            installmentNumber: 1,
+            description: 'First Payment (50%)'
+          },
+          {
+            amount: secondHalfAmount,
+            dueDate: add30Days(now),
+            installmentNumber: 2,
+            description: 'Second Payment (50%)'
+          }
+        ];
+
       default:
         throw new Error(`Unsupported payment plan: ${plan}`);
     }

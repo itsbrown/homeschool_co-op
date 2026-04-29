@@ -3,7 +3,7 @@ import path from 'path';
 import request from 'supertest';
 import express from 'express';
 import session from 'express-session';
-import { TestDatabase } from '../../helpers/testDatabase';
+import { TestDatabase, installFinancialIntegrationStubs } from '../../helpers/testDatabase';
 import { storage } from '../../../storage';
 import type { InsertProgramEnrollment } from '@shared/schema';
 import enrollmentsRouter from '../../../api/enrollments';
@@ -146,6 +146,37 @@ describe('Integration: Financial & Enrollment Features (Phase 2)', () => {
 
   afterEach(async () => {
     await testDb.cleanup();
+  });
+
+  // Stub the storage methods that always route to the DB layer (MemStorage
+  // doesn't back them) so cart/payment/billing flows can run end-to-end
+  // against the in-memory test harness. The helper installs its own
+  // beforeEach / afterEach hooks and tears every spy down between tests.
+  installFinancialIntegrationStubs();
+
+  // CombinedStorage.createUser persists to data/users.json on the file
+  // fallback path; snapshot/restore the affected fixture files so the suite
+  // never leaks test users / children / locations into the dev workflow's
+  // bootstrap data.
+  const dataFilesToSnapshot = [
+    path.join(process.cwd(), 'data', 'users.json'),
+    path.join(process.cwd(), 'data', 'children.json'),
+    path.join(process.cwd(), 'data', 'locations.json'),
+  ];
+  const dataFileSnapshots = new Map<string, string>();
+
+  beforeAll(() => {
+    for (const filePath of dataFilesToSnapshot) {
+      if (fs.existsSync(filePath)) {
+        dataFileSnapshots.set(filePath, fs.readFileSync(filePath, 'utf8'));
+      }
+    }
+  });
+
+  afterAll(() => {
+    for (const [filePath, contents] of dataFileSnapshots.entries()) {
+      fs.writeFileSync(filePath, contents);
+    }
   });
 
   describe('Payment & Billing System', () => {
@@ -516,7 +547,7 @@ describe('Integration: Financial & Enrollment Features (Phase 2)', () => {
 
         const response = await request(app)
           .get('/api/payment-history/history')
-          .set('Cookie', [`connect.sid=${encodeURIComponent('test-session')}`]);
+          .set('x-test-user-email', parent.email);
 
         expect(response.status).toBe(200);
       });
@@ -576,7 +607,7 @@ describe('Integration: Financial & Enrollment Features (Phase 2)', () => {
 
         const response = await request(app)
           .get('/api/stripe/subscription-schedules')
-          .set('Cookie', [`connect.sid=${encodeURIComponent('test-session')}`]);
+          .set('x-test-user-email', parent.email);
 
         expect(response.status).toBe(200);
         expect(response.body).toHaveProperty('success');
@@ -594,7 +625,7 @@ describe('Integration: Financial & Enrollment Features (Phase 2)', () => {
 
         const response = await request(app)
           .get('/api/stripe/subscriptions')
-          .set('Cookie', [`connect.sid=${encodeURIComponent('test-session')}`]);
+          .set('x-test-user-email', parent.email);
 
         expect(response.status).toBe(200);
         expect(response.body).toHaveProperty('success');
@@ -739,7 +770,7 @@ describe('Integration: Financial & Enrollment Features (Phase 2)', () => {
 
         const response = await request(app)
           .get('/api/billing/summary')
-          .set('Cookie', [`connect.sid=${encodeURIComponent('test-session')}`]);
+          .set('x-test-user-email', parent.email);
 
         expect(response.status).toBe(200);
       });
@@ -1756,6 +1787,17 @@ describe('Integration: Financial & Enrollment Features (Phase 2)', () => {
           schoolId: school.id
         });
 
+        // Parent2 must own the child referenced in the cart so the
+        // child-ownership check (UNAUTHORIZED_CHILDREN) passes and the
+        // request reaches the enrollment-ownership check
+        // (UNAUTHORIZED_ENROLLMENT) we're verifying here.
+        const child2 = await testDb.createTestChild(parent2.id, {
+          firstName: 'Child',
+          lastName: 'Two',
+          gradeLevel: '5th',
+          schoolId: school.id
+        });
+
         const classItem = await testDb.createTestClass(school.id, admin.id, {
           title: 'Test Class',
           price: 10000
@@ -1779,7 +1821,9 @@ describe('Integration: Financial & Enrollment Features (Phase 2)', () => {
           status: 'pending_payment'
         });
 
-        // Parent2 tries to create payment intent for parent1's enrollment
+        // Parent2 tries to create payment intent for parent1's enrollment.
+        // The cart references child2 (parent2's own child) so the
+        // child-ownership guard does not short-circuit the request.
         const response = await request(app)
           .post('/api/stripe/create-payment-intent')
           .set('x-test-user-email', parent2.email)
@@ -1788,8 +1832,8 @@ describe('Integration: Financial & Enrollment Features (Phase 2)', () => {
               enrollmentId: enrollment.id,
               classId: classItem.id,
               className: classItem.title,
-              childId: child1.id,
-              childName: `${child1.firstName} ${child1.lastName}`,
+              childId: child2.id,
+              childName: `${child2.firstName} ${child2.lastName}`,
               totalCost: 10000,
               classType: 'school_class'
             }],
@@ -1880,46 +1924,10 @@ describe('Integration: Financial & Enrollment Features (Phase 2)', () => {
   });
 
   // Regression coverage for the $0-balance + free-enrollment auth bugs.
+  // Storage stubs and the data-file snapshot are installed at the top-level
+  // describe via installFinancialIntegrationStubs() and the surrounding
+  // beforeAll/afterAll hooks.
   describe('Free Enrollment & Effective Balance Regressions', () => {
-    // CombinedStorage.createUser persists to data/users.json on the file
-    // fallback path; snapshot/restore both fixture files so the suite never
-    // leaks test users into the dev workflow's bootstrap data.
-    const usersFilePath = path.join(process.cwd(), 'data', 'users.json');
-    const childrenFilePath = path.join(process.cwd(), 'data', 'children.json');
-    let usersFileSnapshot: string | null = null;
-    let childrenFileSnapshot: string | null = null;
-
-    beforeAll(() => {
-      if (fs.existsSync(usersFilePath)) {
-        usersFileSnapshot = fs.readFileSync(usersFilePath, 'utf8');
-      }
-      if (fs.existsSync(childrenFilePath)) {
-        childrenFileSnapshot = fs.readFileSync(childrenFilePath, 'utf8');
-      }
-    });
-
-    afterAll(() => {
-      if (usersFileSnapshot !== null) {
-        fs.writeFileSync(usersFilePath, usersFileSnapshot);
-      }
-      if (childrenFileSnapshot !== null) {
-        fs.writeFileSync(childrenFilePath, childrenFileSnapshot);
-      }
-    });
-
-    // Stub the storage methods that always route to the DB layer (MemStorage
-    // doesn't back them) so the cart pricing flow returns deterministic data.
-    beforeEach(() => {
-      jest.spyOn(storage, 'getDiscountsBySchoolId').mockResolvedValue([]);
-      jest.spyOn(storage, 'getDiscountUsageCountByUser').mockResolvedValue(0);
-      jest.spyOn(storage, 'getAvailableCredits').mockResolvedValue([]);
-      jest.spyOn(storage, 'getMembershipEnrollmentsByParentId').mockResolvedValue([]);
-    });
-
-    afterEach(() => {
-      jest.restoreAllMocks();
-    });
-
     it('returns 409 FREE_ENROLLMENT_NOT_AUTHORIZED when the server snapshot does not flag the cart as free', async () => {
       // Enrollment still owes 10000 cents; the parent's $0 claim must be refused.
       const admin = await testDb.createTestUser({
