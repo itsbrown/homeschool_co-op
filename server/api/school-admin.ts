@@ -2850,18 +2850,14 @@ router.patch("/schools/:id", supabaseAuth, async (req: any, res) => {
 
     // Use raw SQL to bypass Supabase schema cache
     const postgres = (await import('postgres')).default;
-    const { PGHOST, PGUSER, PGPASSWORD, PGDATABASE, PGPORT } = process.env;
-    
-    if (!PGHOST || !PGUSER || !PGPASSWORD || !PGDATABASE) {
+    const { getPostgresJsSslOption } = await import('../lib/database-url');
+    const connectionString = process.env.DATABASE_URL;
+
+    if (!connectionString) {
       return res.status(500).json({ message: "Database configuration missing" });
     }
-    
-    const encodedUser = encodeURIComponent(PGUSER);
-    const encodedPassword = encodeURIComponent(PGPASSWORD);
-    const port = PGPORT || '5432';
-    const connectionString = `postgresql://${encodedUser}:${encodedPassword}@${PGHOST}:${port}/${PGDATABASE}?sslmode=require`;
-    
-    const sql = postgres(connectionString);
+
+    const sql = postgres(connectionString, { ssl: getPostgresJsSslOption() });
     
     try {
       // Build dynamic UPDATE query

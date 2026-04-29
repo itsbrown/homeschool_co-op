@@ -1,22 +1,16 @@
 import postgres from 'postgres';
+import { getPostgresJsSslOption } from '../lib/database-url';
 
 // Migration to update program_enrollments status constraint
 export async function updateEnrollmentStatusConstraint() {
-  // Get database URL from environment with URL encoding for special characters
-  const user = process.env.PGUSER || 'postgres';
-  const password = process.env.PGPASSWORD || '';
-  const host = process.env.PGHOST || 'localhost';
-  const database = process.env.PGDATABASE || 'postgres';
-  const port = parseInt(process.env.PGPORT || '5432');
-  
-  // URL encode the password to handle special characters
-  const encodedPassword = encodeURIComponent(password);
-  const connectionString = `postgresql://${user}:${encodedPassword}@${host}:${port}/${database}`;
-  
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) {
+    throw new Error('DATABASE_URL is not set');
+  }
+
   console.log('🔄 Running enrollment status constraint migration...');
-  console.log('Using constructed DATABASE_URL from PG variables with URL encoding');
-  
-  const sql = postgres(connectionString, { ssl: 'require', max: 1 });
+
+  const sql = postgres(connectionString, { ssl: getPostgresJsSslOption(), max: 1 });
 
   try {
     // Drop the old constraint if it exists

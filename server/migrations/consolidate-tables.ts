@@ -1,4 +1,5 @@
 import { Pool } from 'pg';
+import { getDbSslConfig } from '../lib/database-url';
 
 /**
  * Migration Script: Consolidate Programs and Classes Tables
@@ -11,13 +12,14 @@ import { Pool } from 'pg';
  */
 
 async function runMigration() {
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) {
+    throw new Error('DATABASE_URL is not set');
+  }
+
   const pool = new Pool({
-    host: process.env.PGHOST,
-    port: parseInt(process.env.PGPORT || '5432'),
-    user: process.env.PGUSER,
-    password: process.env.PGPASSWORD,
-    database: process.env.PGDATABASE,
-    ssl: { rejectUnauthorized: false }
+    connectionString,
+    ssl: getDbSslConfig(),
   });
 
   const client = await pool.connect();

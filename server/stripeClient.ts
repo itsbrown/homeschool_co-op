@@ -8,6 +8,7 @@
  */
 
 import Stripe from 'stripe';
+import { getDbSslConfig } from './lib/database-url';
 
 let connectionSettings: any;
 
@@ -95,6 +96,7 @@ export async function getStripeSync() {
       poolConfig: {
         connectionString: process.env.DATABASE_URL!,
         max: 2,
+        ssl: getDbSslConfig(),
       },
       stripeSecretKey: secretKey,
     });

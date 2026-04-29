@@ -1,23 +1,23 @@
-import { buildPostgresUrl } from './server/lib/database-url.ts';
+// Schema sync helper.
+// DATABASE_URL is now the single source of truth for the application's
+// Postgres connection. This script just confirms it is present and
+// invokes drizzle-kit. SSL behavior is encoded in DATABASE_URL itself
+// (or omitted entirely for the local Helium dev DB).
+const databaseUrl = process.env.DATABASE_URL;
 
-const encodedUrl = buildPostgresUrl();
-if (!encodedUrl) {
-  console.error('❌ Could not build DATABASE_URL');
+if (!databaseUrl) {
+  console.error('❌ DATABASE_URL is not set');
   process.exit(1);
 }
 
-console.log('✅ Generated properly encoded DATABASE_URL');
-console.log('🔄 Setting DATABASE_URL and running db:push...\n');
+console.log('✅ DATABASE_URL detected');
+console.log('🔄 Running db:push...\n');
 
-// Set the environment variable
-process.env.DATABASE_URL = encodedUrl;
-
-// Run db:push
 const { execSync } = await import('child_process');
 try {
-  execSync('npm run db:push -- --force', { 
+  execSync('npm run db:push -- --force', {
     stdio: 'inherit',
-    env: { ...process.env, DATABASE_URL: encodedUrl }
+    env: { ...process.env, DATABASE_URL: databaseUrl },
   });
   console.log('\n✅ Schema sync complete!');
 } catch (error) {

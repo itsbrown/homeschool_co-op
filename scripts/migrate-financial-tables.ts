@@ -4,22 +4,21 @@
  */
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
-import { buildPostgresUrl } from '../server/lib/database-url.js';
+import { getPostgresJsSslOption } from '../server/lib/database-url.js';
 
 async function migrate() {
   console.log('🔄 Starting financial tables migration...');
-  
-  // Get properly encoded connection string
-  const connectionString = buildPostgresUrl();
-  
+
+  const connectionString = process.env.DATABASE_URL;
+
   if (!connectionString) {
-    console.error('❌ Unable to build database URL. Check PG environment variables.');
+    console.error('❌ DATABASE_URL is not set');
     process.exit(1);
   }
-  
-  console.log('✅ Database URL constructed');
-  
-  const client = postgres(connectionString, { max: 1 });
+
+  console.log('✅ DATABASE_URL detected');
+
+  const client = postgres(connectionString, { max: 1, ssl: getPostgresJsSslOption() });
   const db = drizzle(client);
   
   try {

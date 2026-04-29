@@ -1,7 +1,7 @@
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import * as schema from '../shared/schema';
-import { buildPostgresUrl } from './lib/database-url';
+import { getPostgresJsSslOption } from './lib/database-url';
 
 // Lazy database connection variables
 let dbInstance: any = null;
@@ -14,28 +14,20 @@ const CONNECTION_RETRY_COOLDOWN_MS = 30_000;
 
 // Function to initialize database connection
 function initializeDatabase() {
-  // Construct connection string from individual PG variables if DATABASE_URL is invalid
-  let connectionString = process.env.DATABASE_URL;
-  
-  // Check if we have individual PG variables and DATABASE_URL looks like old Supabase
-  if (process.env.PGHOST && process.env.PGUSER && process.env.PGPASSWORD && process.env.PGDATABASE && 
-      (!connectionString || connectionString.includes('supabase.co'))) {
-    connectionString = buildPostgresUrl() || undefined;
-    console.log("Using constructed DATABASE_URL from PG variables with URL encoding");
-  }
-  
+  const connectionString = process.env.DATABASE_URL;
+
   if (!connectionString) {
     console.log("No database connection string available");
     return null;
   }
 
   try {
-    client = postgres(connectionString, { 
+    client = postgres(connectionString, {
       prepare: false,
       max: 10,
-      ssl: { rejectUnauthorized: false }
+      ssl: getPostgresJsSslOption(),
     });
-    
+
     console.log("Database connection to PostgreSQL created successfully");
     dbInstance = drizzle(client, { schema });
     return dbInstance;

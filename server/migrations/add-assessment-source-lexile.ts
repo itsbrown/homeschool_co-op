@@ -1,18 +1,15 @@
 import postgres from 'postgres';
+import { getPostgresJsSslOption } from '../lib/database-url';
 
 export async function addAssessmentSourceAndLexile() {
-  const user = process.env.PGUSER || 'postgres';
-  const password = process.env.PGPASSWORD || '';
-  const host = process.env.PGHOST || 'localhost';
-  const database = process.env.PGDATABASE || 'postgres';
-  const port = parseInt(process.env.PGPORT || '5432');
-  
-  const encodedPassword = encodeURIComponent(password);
-  const connectionString = `postgresql://${user}:${encodedPassword}@${host}:${port}/${database}`;
-  
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) {
+    throw new Error('DATABASE_URL is not set');
+  }
+
   console.log('Running migration: Adding source, lexile_score, session_id to student_assessments...');
-  
-  const sql = postgres(connectionString, { ssl: 'require', max: 1 });
+
+  const sql = postgres(connectionString, { ssl: getPostgresJsSslOption(), max: 1 });
 
   try {
     // Create enum type for assessment source

@@ -1,26 +1,21 @@
 import { Pool } from 'pg';
 import { Class, InsertClass } from '../shared/schema';
+import { getDbSslConfig } from './lib/database-url';
 
 /**
  * Database functions for managing classes
  */
-// Create a proper database pool using the correct DATABASE_URL
+// Create a proper database pool using DATABASE_URL as the single source of truth.
+// SSL is conditional on NODE_ENV (enabled in production, disabled in dev so
+// the local Helium database can connect).
 let pool: Pool;
 
-// Construct connection string from individual PG variables if DATABASE_URL is invalid
-let connectionString = process.env.DATABASE_URL;
-
-// Check if we have individual PG variables and DATABASE_URL looks like old Supabase
-if (process.env.PGHOST && process.env.PGUSER && process.env.PGPASSWORD && process.env.PGDATABASE && 
-    (!connectionString || connectionString.includes('supabase.co'))) {
-  connectionString = `postgresql://${process.env.PGUSER}:${process.env.PGPASSWORD}@${process.env.PGHOST}:${process.env.PGPORT || 5432}/${process.env.PGDATABASE}`;
-  console.log('Classes DB: Using constructed DATABASE_URL from PG variables');
-}
+const connectionString = process.env.DATABASE_URL;
 
 if (connectionString) {
   pool = new Pool({
-    connectionString: connectionString,
-    ssl: { rejectUnauthorized: false }
+    connectionString,
+    ssl: getDbSslConfig(),
   });
   console.log('Classes DB: Using PostgreSQL database');
 } else {

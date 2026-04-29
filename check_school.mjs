@@ -1,13 +1,13 @@
 import postgres from 'postgres';
+import { getPostgresJsSslOption } from './server/lib/database-url.mjs';
 
-const client = postgres({
-  host: process.env.PGHOST,
-  port: parseInt(process.env.PGPORT || '5432'),
-  database: process.env.PGDATABASE,
-  username: process.env.PGUSER,
-  password: process.env.PGPASSWORD,
-  ssl: 'require'
-});
+const connectionString = process.env.DATABASE_URL;
+if (!connectionString) {
+  console.error('❌ DATABASE_URL is not set');
+  process.exit(1);
+}
+
+const client = postgres(connectionString, { ssl: getPostgresJsSslOption() });
 
 try {
   console.log('🔍 Checking school data...\n');

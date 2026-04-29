@@ -1,4 +1,5 @@
 import { Pool } from 'pg';
+import { getDbSslConfig } from '../server/lib/database-url';
 
 const DATABASE_URL = process.env.DATABASE_URL;
 
@@ -7,7 +8,10 @@ if (!DATABASE_URL) {
   process.exit(1);
 }
 
-const pool = new Pool({ connectionString: DATABASE_URL });
+const pool = new Pool({
+  connectionString: DATABASE_URL,
+  ssl: getDbSslConfig(),
+});
 
 async function restoreCredits() {
   console.log('🔍 Analyzing credits for user_id = 10...\n');

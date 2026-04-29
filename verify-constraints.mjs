@@ -1,24 +1,16 @@
 import postgres from 'postgres';
-
-function buildPostgresUrl() {
-  const { PGHOST, PGUSER, PGPASSWORD, PGDATABASE, PGPORT } = process.env;
-  
-  if (!PGHOST || !PGUSER || !PGPASSWORD || !PGDATABASE) {
-    return null;
-  }
-  
-  const encodedUser = encodeURIComponent(PGUSER);
-  const encodedPassword = encodeURIComponent(PGPASSWORD);
-  const port = PGPORT || '5432';
-  
-  return `postgresql://${encodedUser}:${encodedPassword}@${PGHOST}:${port}/${PGDATABASE}?sslmode=require`;
-}
+import { getPostgresJsSslOption } from './server/lib/database-url.mjs';
 
 async function verifyConstraints() {
-  const connectionString = buildPostgresUrl();
-  const sql = postgres(connectionString, { 
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) {
+    console.error('❌ DATABASE_URL is not set');
+    process.exit(1);
+  }
+
+  const sql = postgres(connectionString, {
     prepare: false,
-    ssl: { rejectUnauthorized: false }
+    ssl: getPostgresJsSslOption(),
   });
   
   try {

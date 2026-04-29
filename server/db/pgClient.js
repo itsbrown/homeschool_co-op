@@ -1,15 +1,15 @@
+import pkg from 'pg';
+import { getDbSslConfig } from '../lib/database-url.mjs';
 
-const { Pool } = require('pg');
+const { Pool } = pkg;
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: {
-    rejectUnauthorized: false
-  }
+  ssl: getDbSslConfig(),
 });
 
-pool.on('error', (err, client) => {
+pool.on('error', (err) => {
   console.error('❌ Database pool error:', err.stack);
 });
 
-module.exports = pool;
+export default pool;

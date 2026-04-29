@@ -1,10 +1,10 @@
-const postgres = require('postgres');
+import postgres from 'postgres';
+import { getPostgresJsSslOption } from './lib/database-url.mjs';
 
 async function testConnection() {
   console.log('🔍 Testing database connection...');
   console.log('DATABASE_URL exists:', !!process.env.DATABASE_URL);
-  
-  // Show a safe portion of DATABASE_URL
+
   if (process.env.DATABASE_URL) {
     const url = process.env.DATABASE_URL;
     const protocol = url.split('://')[0];
@@ -19,17 +19,17 @@ async function testConnection() {
   }
 
   try {
-    const client = postgres(process.env.DATABASE_URL, { 
+    const client = postgres(process.env.DATABASE_URL, {
       prepare: false,
       max: 1,
-      ssl: { rejectUnauthorized: false }
+      ssl: getPostgresJsSslOption(),
     });
-    
+
     console.log('🔧 Attempting database connection...');
     const result = await client`SELECT 1 as test`;
     console.log('✅ Database connection successful!');
     console.log('Test query result:', result);
-    
+
     await client.end();
   } catch (error) {
     console.log('❌ Database connection failed:', error.message);
