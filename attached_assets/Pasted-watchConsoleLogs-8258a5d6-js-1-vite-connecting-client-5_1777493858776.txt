@@ -1,0 +1,254 @@
+watchConsoleLogs.8258a5d6.js:1 [vite] connecting...
+client:536 WebSocket connection to 'wss://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/?token=efeeZK7o6Xif' failed: 
+setupWebSocket @ client:536
+client:536 Uncaught (in promise) SyntaxError: Failed to construct 'WebSocket': The URL 'wss://localhost:undefined/?token=efeeZK7o6Xif' is invalid.
+    at setupWebSocket (client:536:19)
+    at fallback (client:509:16)
+    at WebSocket.<anonymous> (client:555:7)
+watchConsoleLogs.8258a5d6.js:1 🔄 RoleProvider rendering - activeRole: , canSwitchRoles: false, showRoleSelection: false, isSettingUpAccount: false, user: undefined
+watchConsoleLogs.8258a5d6.js:1 🔐 Router render - activeRole:  isAuthenticated: false showRoleSelection: false user: undefined location: /
+watchConsoleLogs.8258a5d6.js:1 Router effect - activeRole:  isAuthenticated: false
+watchConsoleLogs.8258a5d6.js:1 🛒 Loading cart from localStorage for user: guest
+watchConsoleLogs.8258a5d6.js:1 🔄 RoleContext useEffect triggered - user: null
+watchConsoleLogs.8258a5d6.js:1 🔄 No user - resetting state and clearing storage
+watchConsoleLogs.8258a5d6.js:1 🔍 Initializing authentication...
+filler.17f3ba95.js:9 checkSupportDomain domain: e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev
+filler.17f3ba95.js:9 checkSupportDomain domain: e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev
+filler.17f3ba95.js:9 checkSupportDomain domain: e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev
+watchConsoleLogs.8258a5d6.js:1 Auth state change: {event: 'TOKEN_REFRESHED', session: {…}}
+watchConsoleLogs.8258a5d6.js:1 🔍 SupabaseProvider user state updated: {email: 'jocimarie@gmail.com', authenticated: true, userId: '4f104b25-934f-44c1-ae92-cae31b0cc84e'}
+watchConsoleLogs.8258a5d6.js:1 ✅ Stored Supabase access token
+watchConsoleLogs.8258a5d6.js:1 🔄 RoleProvider rendering - activeRole: , canSwitchRoles: false, showRoleSelection: false, isSettingUpAccount: false, user: jocimarie@gmail.com
+watchConsoleLogs.8258a5d6.js:1 🔐 Router render - activeRole:  isAuthenticated: true showRoleSelection: false user: jocimarie@gmail.com location: /
+watchConsoleLogs.8258a5d6.js:1 🚀 DashboardRouter called!
+watchConsoleLogs.8258a5d6.js:1 🔍 DashboardRouter - showRoleSelection: false user email: jocimarie@gmail.com activeRole: 
+watchConsoleLogs.8258a5d6.js:1 🏠 Dashboard routing - activeRole: 
+watchConsoleLogs.8258a5d6.js:1 Router effect - activeRole:  isAuthenticated: true
+watchConsoleLogs.8258a5d6.js:1 🛒 Loading cart from localStorage for user: jocimarie@gmail.com
+watchConsoleLogs.8258a5d6.js:1 🔍 Fetching user roles from database...
+watchConsoleLogs.8258a5d6.js:1 🔄 RoleContext useEffect triggered - user: jocimarie@gmail.com
+watchConsoleLogs.8258a5d6.js:1 🔄 Waiting for roles data to load...
+filler.17f3ba95.js:9 checkSupportDomain domain: e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev
+watchConsoleLogs.8258a5d6.js:1 Supabase session check: {session: {…}, error: null}
+watchConsoleLogs.8258a5d6.js:1 ✅ Stored initial Supabase access token
+watchConsoleLogs.8258a5d6.js:1 🔍 Initial auth state: {hasSession: true, userEmail: 'jocimarie@gmail.com', userId: '4f104b25-934f-44c1-ae92-cae31b0cc84e'}
+watchConsoleLogs.8258a5d6.js:1 🔄 RoleProvider rendering - activeRole: , canSwitchRoles: false, showRoleSelection: false, isSettingUpAccount: false, user: jocimarie@gmail.com
+watchConsoleLogs.8258a5d6.js:1 🔐 Router render - activeRole:  isAuthenticated: true showRoleSelection: false user: jocimarie@gmail.com location: /
+watchConsoleLogs.8258a5d6.js:1 🚀 DashboardRouter called!
+watchConsoleLogs.8258a5d6.js:1 🔍 DashboardRouter - showRoleSelection: false user email: jocimarie@gmail.com activeRole: 
+watchConsoleLogs.8258a5d6.js:1 🏠 Dashboard routing - activeRole: 
+watchConsoleLogs.8258a5d6.js:1 🔄 RoleContext useEffect triggered - user: jocimarie@gmail.com
+watchConsoleLogs.8258a5d6.js:1 🔄 Waiting for roles data to load...
+filler.17f3ba95.js:9 checkSupportDomain domain: e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev
+watchConsoleLogs.8258a5d6.js:1 Auth state change: {event: 'INITIAL_SESSION', session: {…}}
+watchConsoleLogs.8258a5d6.js:1 🔍 SupabaseProvider user state updated: {email: 'jocimarie@gmail.com', authenticated: true, userId: '4f104b25-934f-44c1-ae92-cae31b0cc84e'}
+watchConsoleLogs.8258a5d6.js:1 ✅ Stored Supabase access token
+watchConsoleLogs.8258a5d6.js:1 🔄 RoleProvider rendering - activeRole: , canSwitchRoles: false, showRoleSelection: false, isSettingUpAccount: false, user: jocimarie@gmail.com
+watchConsoleLogs.8258a5d6.js:1 🔐 Router render - activeRole:  isAuthenticated: true showRoleSelection: false user: jocimarie@gmail.com location: /
+watchConsoleLogs.8258a5d6.js:1 🚀 DashboardRouter called!
+watchConsoleLogs.8258a5d6.js:1 🔍 DashboardRouter - showRoleSelection: false user email: jocimarie@gmail.com activeRole: 
+watchConsoleLogs.8258a5d6.js:1 🏠 Dashboard routing - activeRole: 
+watchConsoleLogs.8258a5d6.js:1 🔄 RoleContext useEffect triggered - user: jocimarie@gmail.com
+watchConsoleLogs.8258a5d6.js:1 🔄 Waiting for roles data to load...
+filler.17f3ba95.js:9 checkSupportDomain domain: e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev
+queryClient.ts:234  GET https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/api/notifications 403 (Forbidden)
+(anonymous) @ queryClient.ts:234
+fetchFn @ @tanstack_react-query.js?v=edc5df95:840
+run @ @tanstack_react-query.js?v=edc5df95:494
+start @ @tanstack_react-query.js?v=edc5df95:536
+fetch @ @tanstack_react-query.js?v=edc5df95:926
+executeFetch_fn @ @tanstack_react-query.js?v=edc5df95:2211
+setOptions @ @tanstack_react-query.js?v=edc5df95:1955
+(anonymous) @ @tanstack_react-query.js?v=edc5df95:3032
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=edc5df95:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=edc5df95:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=edc5df95:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=edc5df95:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=edc5df95:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=edc5df95:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=edc5df95:19447
+(anonymous) @ chunk-NFC5BX5N.js?v=edc5df95:19328
+workLoop @ chunk-NFC5BX5N.js?v=edc5df95:197
+flushWork @ chunk-NFC5BX5N.js?v=edc5df95:176
+performWorkUntilDeadline @ chunk-NFC5BX5N.js?v=edc5df95:384
+postMessage
+schedulePerformWorkUntilDeadline @ chunk-NFC5BX5N.js?v=edc5df95:407
+requestHostCallback @ chunk-NFC5BX5N.js?v=edc5df95:418
+unstable_scheduleCallback @ chunk-NFC5BX5N.js?v=edc5df95:330
+scheduleCallback$1 @ chunk-NFC5BX5N.js?v=edc5df95:19826
+ensureRootIsScheduled @ chunk-NFC5BX5N.js?v=edc5df95:18652
+scheduleUpdateOnFiber @ chunk-NFC5BX5N.js?v=edc5df95:18562
+dispatchSetState @ chunk-NFC5BX5N.js?v=edc5df95:12403
+(anonymous) @ SupabaseProvider.tsx:94
+(anonymous) @ @supabase_supabase-js.js?v=edc5df95:6406
+_notifyAllSubscribers @ @supabase_supabase-js.js?v=edc5df95:6404
+_callRefreshToken @ @supabase_supabase-js.js?v=edc5df95:6375
+await in _callRefreshToken
+_recoverAndRefresh @ @supabase_supabase-js.js?v=edc5df95:6337
+await in _recoverAndRefresh
+_initialize @ @supabase_supabase-js.js?v=edc5df95:5172
+await in _initialize
+(anonymous) @ @supabase_supabase-js.js?v=edc5df95:5126
+(anonymous) @ @supabase_supabase-js.js?v=edc5df95:5691
+(anonymous) @ @supabase_supabase-js.js?v=edc5df95:4975
+RoleContext.tsx:73  GET https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/api/user/roles 403 (Forbidden)
+(anonymous) @ RoleContext.tsx:73
+fetchFn @ @tanstack_react-query.js?v=edc5df95:840
+run @ @tanstack_react-query.js?v=edc5df95:494
+start @ @tanstack_react-query.js?v=edc5df95:536
+fetch @ @tanstack_react-query.js?v=edc5df95:926
+executeFetch_fn @ @tanstack_react-query.js?v=edc5df95:2211
+setOptions @ @tanstack_react-query.js?v=edc5df95:1955
+(anonymous) @ @tanstack_react-query.js?v=edc5df95:3032
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=edc5df95:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=edc5df95:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=edc5df95:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=edc5df95:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=edc5df95:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=edc5df95:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=edc5df95:19447
+(anonymous) @ chunk-NFC5BX5N.js?v=edc5df95:19328
+workLoop @ chunk-NFC5BX5N.js?v=edc5df95:197
+flushWork @ chunk-NFC5BX5N.js?v=edc5df95:176
+performWorkUntilDeadline @ chunk-NFC5BX5N.js?v=edc5df95:384
+postMessage
+schedulePerformWorkUntilDeadline @ chunk-NFC5BX5N.js?v=edc5df95:407
+requestHostCallback @ chunk-NFC5BX5N.js?v=edc5df95:418
+unstable_scheduleCallback @ chunk-NFC5BX5N.js?v=edc5df95:330
+scheduleCallback$1 @ chunk-NFC5BX5N.js?v=edc5df95:19826
+ensureRootIsScheduled @ chunk-NFC5BX5N.js?v=edc5df95:18652
+scheduleUpdateOnFiber @ chunk-NFC5BX5N.js?v=edc5df95:18562
+dispatchSetState @ chunk-NFC5BX5N.js?v=edc5df95:12403
+(anonymous) @ SupabaseProvider.tsx:94
+(anonymous) @ @supabase_supabase-js.js?v=edc5df95:6406
+_notifyAllSubscribers @ @supabase_supabase-js.js?v=edc5df95:6404
+_callRefreshToken @ @supabase_supabase-js.js?v=edc5df95:6375
+await in _callRefreshToken
+_recoverAndRefresh @ @supabase_supabase-js.js?v=edc5df95:6337
+await in _recoverAndRefresh
+_initialize @ @supabase_supabase-js.js?v=edc5df95:5172
+await in _initialize
+(anonymous) @ @supabase_supabase-js.js?v=edc5df95:5126
+(anonymous) @ @supabase_supabase-js.js?v=edc5df95:5691
+(anonymous) @ @supabase_supabase-js.js?v=edc5df95:4975
+filler.17f3ba95.js:9 checkSupportDomain domain: e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev
+filler.17f3ba95.js:9 checkSupportDomain domain: e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev
+filler.17f3ba95.js:9 checkSupportDomain domain: e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev
+filler.17f3ba95.js:9 checkSupportDomain domain: e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev
+filler.17f3ba95.js:9 checkSupportDomain domain: e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev
+filler.17f3ba95.js:9 checkSupportDomain domain: e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev
+filler.17f3ba95.js:9 checkSupportDomain domain: e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev
+filler.17f3ba95.js:9 checkSupportDomain domain: e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev
+filler.17f3ba95.js:9 checkSupportDomain domain: e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev
+filler.17f3ba95.js:9 checkSupportDomain domain: e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev
+filler.17f3ba95.js:9 checkSupportDomain domain: e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev
+filler.17f3ba95.js:9 checkSupportDomain domain: e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev
+filler.17f3ba95.js:9 checkSupportDomain domain: e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev
+filler.17f3ba95.js:9 checkSupportDomain domain: e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev
+filler.17f3ba95.js:9 checkSupportDomain domain: e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev
+watchConsoleLogs.8258a5d6.js:1 🔍 Fetching user roles from database...
+RoleContext.tsx:73  GET https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/api/user/roles 403 (Forbidden)
+(anonymous) @ RoleContext.tsx:73
+fetchFn @ @tanstack_react-query.js?v=edc5df95:840
+run @ @tanstack_react-query.js?v=edc5df95:494
+(anonymous) @ @tanstack_react-query.js?v=edc5df95:519
+Promise.then
+(anonymous) @ @tanstack_react-query.js?v=edc5df95:515
+Promise.catch
+run @ @tanstack_react-query.js?v=edc5df95:498
+start @ @tanstack_react-query.js?v=edc5df95:536
+fetch @ @tanstack_react-query.js?v=edc5df95:926
+executeFetch_fn @ @tanstack_react-query.js?v=edc5df95:2211
+setOptions @ @tanstack_react-query.js?v=edc5df95:1955
+(anonymous) @ @tanstack_react-query.js?v=edc5df95:3032
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=edc5df95:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=edc5df95:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=edc5df95:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=edc5df95:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=edc5df95:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=edc5df95:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=edc5df95:19447
+(anonymous) @ chunk-NFC5BX5N.js?v=edc5df95:19328
+workLoop @ chunk-NFC5BX5N.js?v=edc5df95:197
+flushWork @ chunk-NFC5BX5N.js?v=edc5df95:176
+performWorkUntilDeadline @ chunk-NFC5BX5N.js?v=edc5df95:384
+postMessage
+schedulePerformWorkUntilDeadline @ chunk-NFC5BX5N.js?v=edc5df95:407
+requestHostCallback @ chunk-NFC5BX5N.js?v=edc5df95:418
+unstable_scheduleCallback @ chunk-NFC5BX5N.js?v=edc5df95:330
+scheduleCallback$1 @ chunk-NFC5BX5N.js?v=edc5df95:19826
+ensureRootIsScheduled @ chunk-NFC5BX5N.js?v=edc5df95:18652
+scheduleUpdateOnFiber @ chunk-NFC5BX5N.js?v=edc5df95:18562
+dispatchSetState @ chunk-NFC5BX5N.js?v=edc5df95:12403
+(anonymous) @ SupabaseProvider.tsx:94
+(anonymous) @ @supabase_supabase-js.js?v=edc5df95:6406
+_notifyAllSubscribers @ @supabase_supabase-js.js?v=edc5df95:6404
+_callRefreshToken @ @supabase_supabase-js.js?v=edc5df95:6375
+await in _callRefreshToken
+_recoverAndRefresh @ @supabase_supabase-js.js?v=edc5df95:6337
+await in _recoverAndRefresh
+_initialize @ @supabase_supabase-js.js?v=edc5df95:5172
+await in _initialize
+(anonymous) @ @supabase_supabase-js.js?v=edc5df95:5126
+(anonymous) @ @supabase_supabase-js.js?v=edc5df95:5691
+(anonymous) @ @supabase_supabase-js.js?v=edc5df95:4975
+watchConsoleLogs.8258a5d6.js:1 🔍 Fetching user roles from database...
+RoleContext.tsx:73  GET https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/api/user/roles 403 (Forbidden)
+(anonymous) @ RoleContext.tsx:73
+fetchFn @ @tanstack_react-query.js?v=edc5df95:840
+run @ @tanstack_react-query.js?v=edc5df95:494
+(anonymous) @ @tanstack_react-query.js?v=edc5df95:519
+Promise.then
+(anonymous) @ @tanstack_react-query.js?v=edc5df95:515
+Promise.catch
+run @ @tanstack_react-query.js?v=edc5df95:498
+(anonymous) @ @tanstack_react-query.js?v=edc5df95:519
+Promise.then
+(anonymous) @ @tanstack_react-query.js?v=edc5df95:515
+Promise.catch
+run @ @tanstack_react-query.js?v=edc5df95:498
+start @ @tanstack_react-query.js?v=edc5df95:536
+fetch @ @tanstack_react-query.js?v=edc5df95:926
+executeFetch_fn @ @tanstack_react-query.js?v=edc5df95:2211
+setOptions @ @tanstack_react-query.js?v=edc5df95:1955
+(anonymous) @ @tanstack_react-query.js?v=edc5df95:3032
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=edc5df95:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=edc5df95:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=edc5df95:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=edc5df95:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=edc5df95:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=edc5df95:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=edc5df95:19447
+(anonymous) @ chunk-NFC5BX5N.js?v=edc5df95:19328
+workLoop @ chunk-NFC5BX5N.js?v=edc5df95:197
+flushWork @ chunk-NFC5BX5N.js?v=edc5df95:176
+performWorkUntilDeadline @ chunk-NFC5BX5N.js?v=edc5df95:384
+postMessage
+schedulePerformWorkUntilDeadline @ chunk-NFC5BX5N.js?v=edc5df95:407
+requestHostCallback @ chunk-NFC5BX5N.js?v=edc5df95:418
+unstable_scheduleCallback @ chunk-NFC5BX5N.js?v=edc5df95:330
+scheduleCallback$1 @ chunk-NFC5BX5N.js?v=edc5df95:19826
+ensureRootIsScheduled @ chunk-NFC5BX5N.js?v=edc5df95:18652
+scheduleUpdateOnFiber @ chunk-NFC5BX5N.js?v=edc5df95:18562
+dispatchSetState @ chunk-NFC5BX5N.js?v=edc5df95:12403
+(anonymous) @ SupabaseProvider.tsx:94
+(anonymous) @ @supabase_supabase-js.js?v=edc5df95:6406
+_notifyAllSubscribers @ @supabase_supabase-js.js?v=edc5df95:6404
+_callRefreshToken @ @supabase_supabase-js.js?v=edc5df95:6375
+await in _callRefreshToken
+_recoverAndRefresh @ @supabase_supabase-js.js?v=edc5df95:6337
+await in _recoverAndRefresh
+_initialize @ @supabase_supabase-js.js?v=edc5df95:5172
+await in _initialize
+(anonymous) @ @supabase_supabase-js.js?v=edc5df95:5126
+(anonymous) @ @supabase_supabase-js.js?v=edc5df95:5691
+(anonymous) @ @supabase_supabase-js.js?v=edc5df95:4975
+watchConsoleLogs.8258a5d6.js:1 🔄 RoleProvider rendering - activeRole: , canSwitchRoles: false, showRoleSelection: false, isSettingUpAccount: false, user: jocimarie@gmail.com
+watchConsoleLogs.8258a5d6.js:1 🔐 Router render - activeRole:  isAuthenticated: true showRoleSelection: false user: jocimarie@gmail.com location: /
+watchConsoleLogs.8258a5d6.js:1 🚀 DashboardRouter called!
+watchConsoleLogs.8258a5d6.js:1 🔍 DashboardRouter - showRoleSelection: false user email: jocimarie@gmail.com activeRole: 
+watchConsoleLogs.8258a5d6.js:1 🏠 Dashboard routing - activeRole: 
+watchConsoleLogs.8258a5d6.js:1 🔄 RoleContext useEffect triggered - user: jocimarie@gmail.com
+watchConsoleLogs.8258a5d6.js:1 🔄 Waiting for roles data to load...
+filler.17f3ba95.js:9 checkSupportDomain domain: e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev
+watchConsoleLogs.8258a5d6.js:1 🔄 RoleProvider rendering - activeRole: , canSwitchRoles: false, showRoleSelection: false, isSettingUpAccount: false, user: jocimarie@gmail.com

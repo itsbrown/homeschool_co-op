@@ -1,0 +1,28 @@
+Subject: Update: Your account balance is now displaying correctly
+
+Hi [Parent first name],
+
+We're writing to let you know about a recent fix that affects how your account balance appears in your parent portal.
+
+What happened
+Over the past few weeks, some families saw an "Outstanding Balance" of $0.00 on their Payments page even though there was actually a balance owed on one or more enrollments. Our admin team always saw the correct number on their side, so your account itself was never wrong — only the way your portal was displaying it.
+
+What we fixed
+We've corrected the calculation the parent portal uses to show your balance. Your Payments page now pulls from the same source of truth our admins use, so the number you see should match what's actually owed on your enrollments.
+
+If your account is already paid in full or has no balance owed
+Good news — there's nothing for you to do, and nothing has changed about your account. You'll continue to see $0.00 on your Payments page because that's genuinely your balance. We're sending this note to everyone who may have been affected, just so you're not caught off guard if a friend or fellow parent mentions it. Your enrollments, payment history, and any credits on file are all unchanged.
+
+If you do have a balance owed
+When you log back into your portal, your Outstanding Balance and unpaid enrollments count will now reflect your true balance. If you're on a scheduled payment plan, nothing about your plan or payment dates has changed — only the display. You don't need to take any immediate action; your scheduled payments will continue as planned. If you'd like to pay down your balance now that you can see it accurately, you can do that anytime from the Payments page.
+
+A note about the cart
+While we were in there, we also fixed a related issue where, in rare cases, the cart could mistakenly offer a "Request Free Enrollment" option for enrollments that weren't actually free. That option will now only appear when an enrollment is genuinely $0 (for example, fully covered by credits or a 100% discount).
+
+Questions?
+If your balance still looks off after logging back in, or if you have any questions at all, please reply to this email and we'll take a look right away.
+
+Thank you for your patience, and we're sorry for any confusion this caused.
+
+Warmly,
+The ASA Team
