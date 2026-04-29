@@ -1628,6 +1628,7 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
   // Auto-pay: fetch toggle state for status strip in Upcoming tab
   const { data: autoPayStatusData } = useQuery<{ autoPayEnabled: boolean }>({
     queryKey: ['/api/user/auto-pay-status'],
+    refetchOnWindowFocus: true,
   });
 
   const autoPayEnabled = autoPayStatusData?.autoPayEnabled ?? false;
