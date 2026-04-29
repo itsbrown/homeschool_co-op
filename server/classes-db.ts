@@ -1,34 +1,81 @@
 import { Pool } from 'pg';
 import { Class, InsertClass } from '../shared/schema';
-import { getDbSslConfig } from './lib/database-url';
+import { getDbSslConfig, getNormalizedDatabaseUrl, normalizeDatabaseUrl } from './lib/database-url';
 
 /**
  * Database functions for managing classes
  */
 // Create a proper database pool using DATABASE_URL as the single source of truth.
 // SSL is conditional on NODE_ENV (enabled in production, disabled in dev so
-// the local Helium database can connect).
+// the local Helium database can connect). In dev/test we transparently fall
+// back to NEON_DATABASE_URL if the primary URL is unreachable, mirroring the
+// fallback in `server/db.ts` so all DB-backed code paths stay consistent.
 let pool: Pool;
 
-const connectionString = process.env.DATABASE_URL;
+function resolveConnectionString(): string | undefined {
+  const primary = getNormalizedDatabaseUrl();
+  if (primary) return primary;
+  if (process.env.NODE_ENV !== 'production') {
+    const fallback = process.env.NEON_DATABASE_URL;
+    if (fallback) return normalizeDatabaseUrl(fallback);
+  }
+  return undefined;
+}
+
+const connectionString = resolveConnectionString();
 
 if (connectionString) {
   pool = new Pool({
     connectionString,
-    ssl: getDbSslConfig(),
+    ssl: getDbSslConfig(connectionString),
   });
   console.log('Classes DB: Using PostgreSQL database');
 } else {
   console.log('Classes DB: No database connection string available');
 }
 
+let poolReachabilityChecked = false;
+
+async function ensureReachablePool(): Promise<Pool | undefined> {
+  if (!pool) return undefined;
+  if (poolReachabilityChecked) return pool;
+  try {
+    await pool.query('SELECT 1');
+    poolReachabilityChecked = true;
+    return pool;
+  } catch (err) {
+    if (process.env.NODE_ENV === 'production') throw err;
+    const fallbackRaw = process.env.NEON_DATABASE_URL;
+    if (!fallbackRaw) throw err;
+    const fallback = normalizeDatabaseUrl(fallbackRaw);
+    if (!fallback) throw err;
+    const primary = getNormalizedDatabaseUrl();
+    if (fallback === primary) throw err;
+    console.log(
+      '⚠️  Classes DB: Primary connection unreachable, switching to NEON_DATABASE_URL fallback:',
+      err instanceof Error ? err.message : String(err),
+    );
+    try { await pool.end(); } catch { /* ignore */ }
+    pool = new Pool({ connectionString: fallback, ssl: getDbSslConfig(fallback) });
+    await pool.query('SELECT 1');
+    poolReachabilityChecked = true;
+    return pool;
+  }
+}
+
+async function getPool(): Promise<Pool | undefined> {
+  if (!pool) return undefined;
+  return (await ensureReachablePool()) ?? pool;
+}
+
 export async function getClassById(id: number): Promise<Class | undefined> {
   try {
-    if (!pool) {
+    const activePool = await getPool();
+    if (!activePool) {
       console.log('Database pool not available for getClassById');
       return undefined;
     }
-    const result = await pool.query(
+    const result = await activePool.query(
       'SELECT * FROM classes WHERE id = $1',
       [id]
     );
@@ -116,7 +163,9 @@ export async function getClasses(options: {
       }
     }
     
-    const result = await pool.query(query, queryParams);
+    const activePool = await getPool();
+    if (!activePool) return [];
+    const result = await activePool.query(query, queryParams);
     
     // Convert from snake_case to camelCase for JavaScript
     return result.rows.map((row) => {
@@ -166,7 +215,9 @@ export async function getClassesCount(options: {
       query += ' WHERE ' + conditions.join(' AND ');
     }
     
-    const result = await pool.query(query, queryParams);
+    const activePool = await getPool();
+    if (!activePool) return 0;
+    const result = await activePool.query(query, queryParams);
     return parseInt(result.rows[0].count);
   } catch (error) {
     console.error('Error getting classes count:', error);
@@ -198,7 +249,9 @@ export async function createClass(classData: InsertClass & { instructorId: numbe
       RETURNING *
     `;
     
-    const result = await pool.query(query, values);
+    const activePool = await getPool();
+    if (!activePool) throw new Error('Database pool not available');
+    const result = await activePool.query(query, values);
     
     // Convert from snake_case to camelCase for JavaScript
     const createdClass: any = {};
@@ -241,7 +294,9 @@ export async function updateClass(id: number, classData: Partial<InsertClass>): 
       RETURNING *
     `;
     
-    const result = await pool.query(query, values);
+    const activePool = await getPool();
+    if (!activePool) return undefined;
+    const result = await activePool.query(query, values);
     
     if (result.rows.length === 0) {
       return undefined;
@@ -263,7 +318,9 @@ export async function updateClass(id: number, classData: Partial<InsertClass>): 
 
 export async function deleteClass(id: number): Promise<boolean> {
   try {
-    const result = await pool.query(
+    const activePool = await getPool();
+    if (!activePool) return false;
+    const result = await activePool.query(
       'DELETE FROM classes WHERE id = $1 RETURNING id',
       [id]
     );
@@ -277,7 +334,9 @@ export async function deleteClass(id: number): Promise<boolean> {
 
 export async function getClassesByInstructor(instructorId: number): Promise<Class[]> {
   try {
-    const result = await pool.query(
+    const activePool = await getPool();
+    if (!activePool) return [];
+    const result = await activePool.query(
       'SELECT * FROM classes WHERE instructor_id = $1 ORDER BY created_at DESC',
       [instructorId]
     );
@@ -299,7 +358,9 @@ export async function getClassesByInstructor(instructorId: number): Promise<Clas
 
 export async function incrementClassEnrollment(id: number): Promise<Class | undefined> {
   try {
-    const result = await pool.query(
+    const activePool = await getPool();
+    if (!activePool) return undefined;
+    const result = await activePool.query(
       'UPDATE classes SET enrollment_count = enrollment_count + 1, updated_at = NOW() WHERE id = $1 RETURNING *',
       [id]
     );
@@ -325,12 +386,14 @@ export async function incrementClassEnrollment(id: number): Promise<Class | unde
 // Function to create the classes table if it doesn't exist
 export async function createClassesTable(): Promise<void> {
   try {
-    // Check if pool is available and has query method
-    if (!pool || typeof pool.query !== 'function') {
+    // getPool() lazily verifies reachability and, in dev, transparently swaps
+    // to NEON_DATABASE_URL when DATABASE_URL is unreachable.
+    const activePool = await getPool();
+    if (!activePool || typeof activePool.query !== 'function') {
       console.log('Database pool not available, skipping table creation');
       return;
     }
-    
+
     const query = `
       CREATE TABLE IF NOT EXISTS classes (
         id SERIAL PRIMARY KEY,
@@ -353,7 +416,7 @@ export async function createClassesTable(): Promise<void> {
       );
     `;
     
-    await pool.query(query);
+    await activePool.query(query);
     console.log('Classes table created or already exists');
   } catch (error) {
     console.error('Error creating classes table:', error);

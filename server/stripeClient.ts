@@ -8,7 +8,7 @@
  */
 
 import Stripe from 'stripe';
-import { getDbSslConfig } from './lib/database-url';
+import { getDbSslConfig, getNormalizedDatabaseUrl } from './lib/database-url';
 
 let connectionSettings: any;
 
@@ -92,11 +92,12 @@ export async function getStripeSync() {
     const { StripeSync } = await import('stripe-replit-sync');
     const secretKey = await getStripeSecretKey();
 
+    const stripeSyncConnectionString = getNormalizedDatabaseUrl()!;
     stripeSync = new StripeSync({
       poolConfig: {
-        connectionString: process.env.DATABASE_URL!,
+        connectionString: stripeSyncConnectionString,
         max: 2,
-        ssl: getDbSslConfig(),
+        ssl: getDbSslConfig(stripeSyncConnectionString),
       },
       stripeSecretKey: secretKey,
     });

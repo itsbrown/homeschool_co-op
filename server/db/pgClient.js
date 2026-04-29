@@ -1,11 +1,13 @@
 import pkg from 'pg';
-import { getDbSslConfig } from '../lib/database-url.mjs';
+import { getDbSslConfig, getNormalizedDatabaseUrl } from '../lib/database-url.mjs';
 
 const { Pool } = pkg;
 
+const _connectionString = getNormalizedDatabaseUrl();
+
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: getDbSslConfig(),
+  connectionString: _connectionString,
+  ssl: getDbSslConfig(_connectionString),
 });
 
 pool.on('error', (err) => {
