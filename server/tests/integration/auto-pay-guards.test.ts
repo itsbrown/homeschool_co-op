@@ -256,20 +256,39 @@ describe('Auto-Pay Guard Conditions', () => {
     // Installment: 5000¢, credits available: 5000¢ (exact match)
     // Expected: no Stripe call, status → 'completed', completionSource → 'credits_only',
     //           enrollment totalPaid increases, credit usedAmountCents = 5000
+    //
+    // Uses simulate-credits-only-payment endpoint to bypass the AUTO_APPLY_CREDITS feature flag,
+    // directly exercising completeCreditsOnlyPayment so this test runs reliably in any environment
+    // (the full scheduler path is gated behind AUTO_APPLY_CREDITS=true; G13 uses the same approach).
     const { scheduledPaymentId, enrollmentId, creditId } = await seedScenario('credits-full-cover');
 
     const enrollmentBefore = await getEnrollment(enrollmentId);
-    const result = await triggerGuard(scheduledPaymentId);
+
+    const res = await fetch(`${BASE_URL}/api/test/simulate-credits-only-payment/${scheduledPaymentId}`, {
+      method: 'POST',
+      headers: HEADERS,
+    });
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`simulate-credits-only-payment failed (${res.status}): ${body}`);
+    }
+    const data = (await res.json()) as {
+      success: boolean;
+      paymentStatus: string;
+      remainingBalance: number;
+      totalPaid: number;
+    };
+
     const payment = await getPayment(scheduledPaymentId);
     const enrollmentAfter = await getEnrollment(enrollmentId);
     const credit = await getCredit(creditId!);
 
-    expect(result).toBe('charged');
     expect(payment.status).toBe('completed');
     expect(payment.completionSource).toBe('credits_only');
 
     // Enrollment balance must reflect the installment being applied
     expect(enrollmentAfter.totalPaid).toBe((enrollmentBefore.totalPaid || 0) + 5000);
+    expect(data.totalPaid).toBe((enrollmentBefore.totalPaid || 0) + 5000);
 
     // Credit fully consumed — usedAmountCents = creditAmountCents = 5000
     expect(credit.usedAmountCents).toBe(5000);
