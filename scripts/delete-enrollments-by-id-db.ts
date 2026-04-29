@@ -1,21 +1,7 @@
 import pg from 'pg';
+import { getDbSslConfig } from '../server/lib/database-url';
 
 const { Pool } = pg;
-
-// Build properly URL-encoded connection string
-function buildDatabaseUrl(): string {
-  const { PGHOST, PGUSER, PGPASSWORD, PGDATABASE, PGPORT } = process.env;
-  
-  if (!PGHOST || !PGUSER || !PGPASSWORD || !PGDATABASE) {
-    throw new Error('Missing required database environment variables');
-  }
-  
-  const encodedUser = encodeURIComponent(PGUSER);
-  const encodedPassword = encodeURIComponent(PGPASSWORD);
-  const port = PGPORT || '5432';
-  
-  return `postgresql://${encodedUser}:${encodedPassword}@${PGHOST}:${port}/${PGDATABASE}`;
-}
 
 async function deleteEnrollmentsByIds() {
   // Get enrollment IDs from command line arguments
@@ -26,11 +12,16 @@ async function deleteEnrollmentsByIds() {
     console.log('Usage: npx tsx scripts/delete-enrollments-by-id-db.ts <id1> <id2> <id3>...');
     process.exit(1);
   }
-  
+
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) {
+    throw new Error('DATABASE_URL environment variable is required');
+  }
+
   // Create database connection
   const pool = new Pool({
-    connectionString: buildDatabaseUrl(),
-    ssl: { rejectUnauthorized: false }
+    connectionString,
+    ssl: getDbSslConfig(),
   });
 
   try {

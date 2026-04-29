@@ -1,21 +1,14 @@
 import postgres from 'postgres';
+import { getPostgresJsSslOption } from '../server/lib/database-url';
 
-// Build properly encoded connection string
-const { PGHOST, PGUSER, PGPASSWORD, PGDATABASE, PGPORT } = process.env;
-
-if (!PGHOST || !PGUSER || !PGPASSWORD || !PGDATABASE) {
-  console.error('❌ Missing required PG environment variables');
+const connectionString = process.env.DATABASE_URL;
+if (!connectionString) {
+  console.error('❌ DATABASE_URL environment variable is required');
   process.exit(1);
 }
 
-const encodedUser = encodeURIComponent(PGUSER);
-const encodedPassword = encodeURIComponent(PGPASSWORD);
-const port = PGPORT || '5432';
-
-const connectionString = `postgresql://${encodedUser}:${encodedPassword}@${PGHOST}:${port}/${PGDATABASE}?sslmode=require`;
-
-console.log('🔗 Connecting to production database...');
-const sql = postgres(connectionString);
+console.log('🔗 Connecting to database...');
+const sql = postgres(connectionString, { ssl: getPostgresJsSslOption() });
 
 async function syncSchema() {
   try {
