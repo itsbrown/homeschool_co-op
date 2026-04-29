@@ -204,7 +204,7 @@ export default function PaymentPlansPage() {
                           <div className="flex items-center gap-2">
                             <h3 className="font-medium">{payment.description || 'Payment'}</h3>
                             <Badge 
-                              variant={payment.status === 'succeeded' ? 'default' : 
+                              variant={payment.status === 'succeeded' || payment.status === 'paid' || payment.status === 'completed' ? 'default' : 
                                       payment.status === 'pending' ? 'secondary' : 'destructive'}
                             >
                               {payment.status}

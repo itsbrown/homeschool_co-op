@@ -781,7 +781,7 @@ export default function ParentProfilePage() {
       });
       queryClient.invalidateQueries({ queryKey: [`/api/parent-profile/${parentId}`] });
       // Also invalidate parent's upcoming payments view to keep data in sync
-      queryClient.invalidateQueries({ queryKey: ['scheduled-payments-upcoming'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments/upcoming'] });
       queryClient.invalidateQueries({ queryKey: ['/api/admin/financial-reports/outstanding-balances'] });
       setReschedulePaymentDialog({ open: false, payment: null });
       setRescheduleDate('');
@@ -813,7 +813,7 @@ export default function ParentProfilePage() {
       });
       queryClient.invalidateQueries({ queryKey: [`/api/parent-profile/${parentId}`] });
       // Also invalidate parent's upcoming payments view to remove stale data
-      queryClient.invalidateQueries({ queryKey: ['scheduled-payments-upcoming'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments/upcoming'] });
       queryClient.invalidateQueries({ queryKey: ['/api/admin/financial-reports/outstanding-balances'] });
       setDeletePaymentPlanDialog({ open: false, enrollmentId: null, enrollmentName: '', paymentCount: 0 });
     },
@@ -842,7 +842,7 @@ export default function ParentProfilePage() {
         description: "The scheduled payment has been removed successfully."
       });
       queryClient.invalidateQueries({ queryKey: [`/api/parent-profile/${parentId}`] });
-      queryClient.invalidateQueries({ queryKey: ['scheduled-payments-upcoming'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments/upcoming'] });
       queryClient.invalidateQueries({ queryKey: ['/api/admin/financial-reports/outstanding-balances'] });
       setDeleteScheduledPaymentDialog({ open: false, payment: null });
     },

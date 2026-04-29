@@ -60,7 +60,7 @@ interface Payment {
   date: string;
   amount: number;
   description: string;
-  status: 'paid' | 'succeeded' | 'pending' | 'failed' | 'refunded' | 'canceled';
+  status: 'paid' | 'succeeded' | 'completed' | 'pending' | 'failed' | 'refunded' | 'canceled';
   method: string;
   programName: string;
   childName: string;
@@ -105,6 +105,65 @@ interface SavedCard {
   expYear?: number;
   isDefault: boolean;
 }
+
+// Minimal API response shapes for typed `select` transforms below.
+interface PaymentHistoryResponse {
+  success: boolean;
+  payments: Payment[];
+}
+
+interface ParentEnrollmentsResponse {
+  enrollments?: unknown[];
+}
+
+interface ScheduledPaymentApi {
+  id: string | number;
+  amount: number;
+  dueDate: string;
+  status: string;
+  enrollment?: { childName?: string; className?: string };
+  description?: string;
+  enrollmentId?: string | number;
+  installmentNumber?: number;
+  totalInstallments?: number;
+  paymentPlan?: string;
+}
+
+interface ScheduledPaymentsUpcomingResponse {
+  success: boolean;
+  payments?: ScheduledPaymentApi[];
+}
+
+interface ScheduledPaymentsGroupedResponse {
+  success: boolean;
+  groups?: Array<Record<string, unknown>>;
+}
+
+interface StripePaymentHistoryResponse {
+  success: boolean;
+  payments?: Array<Record<string, unknown>>;
+}
+
+interface CreditsResponse {
+  totalAvailable?: number;
+  totalAvailableFormatted?: string;
+  credits?: Array<Record<string, unknown>>;
+}
+
+type UpcomingPaymentRow = {
+  id: string | number;
+  amount: number;
+  dueDate: Date;
+  status: string;
+  childName: string;
+  className: string;
+  description: string;
+  enrollmentId?: string | number;
+  installmentNumber?: number;
+  totalInstallments?: number;
+  paymentPlan?: string;
+  source: 'database';
+};
 
 function brandLabel(brand: string): string {
   if (!brand) return 'Card';
@@ -582,7 +641,7 @@ function ScheduledPaymentDialog({
       queryClient.invalidateQueries({ queryKey: ['/api/payment-history'] });
       queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments'] });
       queryClient.invalidateQueries({ queryKey: ['/api/parent/credits'] });
-      queryClient.invalidateQueries({ queryKey: ['scheduled-payments-upcoming'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments/upcoming'] });
       queryClient.invalidateQueries({ queryKey: ['/api/parent/enrollments'] });
       onSuccess();
       onClose();
@@ -607,8 +666,8 @@ function ScheduledPaymentDialog({
     // /api/parent/enrollments, and credits balance from /api/parent/credits.
     queryClient.invalidateQueries({ queryKey: ['/api/payment-history'] });
     queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments'] });
-    queryClient.invalidateQueries({ queryKey: ['scheduled-payments-upcoming'] });
-    queryClient.invalidateQueries({ queryKey: ['scheduled-payments-grouped'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments/upcoming'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments/grouped'] });
     queryClient.invalidateQueries({ queryKey: ['/api/parent/credits'] });
     queryClient.invalidateQueries({ queryKey: ['/api/parent/enrollments'] });
     onSuccess();
@@ -1190,8 +1249,8 @@ function CombinedPaymentDialog({
       queryClient.invalidateQueries({ queryKey: ['/api/payment-history'] });
       queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments'] });
       queryClient.invalidateQueries({ queryKey: ['/api/parent/credits'] });
-      queryClient.invalidateQueries({ queryKey: ['scheduled-payments-upcoming'] });
-      queryClient.invalidateQueries({ queryKey: ['scheduled-payments-grouped'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments/upcoming'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments/grouped'] });
       queryClient.invalidateQueries({ queryKey: ['/api/parent/enrollments'] });
       onSuccess();
       onClose();
@@ -1214,8 +1273,8 @@ function CombinedPaymentDialog({
     });
     queryClient.invalidateQueries({ queryKey: ['/api/payment-history'] });
     queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments'] });
-    queryClient.invalidateQueries({ queryKey: ['scheduled-payments-upcoming'] });
-    queryClient.invalidateQueries({ queryKey: ['scheduled-payments-grouped'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments/upcoming'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments/grouped'] });
     queryClient.invalidateQueries({ queryKey: ['/api/parent/credits'] });
     // Outstanding Balance card reads from /api/parent/enrollments — must invalidate
     // for the family balance to update after a paid combined installment set.
@@ -1462,7 +1521,7 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
       // Invalidate all payment-related queries to refresh data
       queryClient.invalidateQueries({ queryKey: ['/api/payment-history'] });
       queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments'] });
-      queryClient.invalidateQueries({ queryKey: ['scheduled-payments-upcoming'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments/upcoming'] });
       queryClient.invalidateQueries({ queryKey: ['/api/enrollments'] });
       queryClient.invalidateQueries({ queryKey: ['/api/parent/enrollments'] });
       queryClient.invalidateQueries({ queryKey: ['/api/parent/memberships'] });
@@ -1487,84 +1546,38 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
     }
   }, [toast]);
   
-  // Get payment data for the parent (and optionally filtered by child)
-  const { data: payments, isLoading, refetch } = useQuery({
-    queryKey: ["/api/payment-history", childId],
-    queryFn: async () => {
-      const token = localStorage.getItem('supabase_token');
-      if (!token) {
-        throw new Error('No authentication token');
-      }
-
-      const response = await fetch('/api/payment-history/history', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch payment history: ${response.status}`);
-      }
-
-      const data = await response.json();
-      return data.success ? data.payments : [];
-    },
+  // Get payment data for the parent. Multi-element queryKey makes the default
+  // fetcher request `/api/payment-history/history`; the leading prefix allows
+  // existing `['/api/payment-history']` invalidations to partial-match.
+  const { data: payments, isLoading, refetch } = useQuery<PaymentHistoryResponse, Error, Payment[]>({
+    queryKey: ["/api/payment-history", "history"],
+    select: (data) => (data?.success ? data.payments : []),
   });
 
-  // Get outstanding balances from enrollments using Supabase-authenticated endpoint
-  const { data: enrollments, isLoading: isLoadingEnrollments } = useQuery({
-    queryKey: ["/api/parent/enrollments", childId],
-    queryFn: async () => {
-      const token = localStorage.getItem('supabase_token');
-      if (!token) {
-        throw new Error('No authentication token');
-      }
-
-      const response = await fetch('/api/parent/enrollments', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch enrollments: ${response.status}`);
-      }
-
-      const data = await response.json();
-      // The parent endpoint returns { enrollments: [...] } format
-      return data.enrollments || data;
-    },
+  // Get outstanding balances from enrollments using Supabase-authenticated endpoint.
+  // The `childId` parameter was carried in the previous queryKey for cache
+  // differentiation only — the original queryFn ignored it and always fetched
+  // the unfiltered endpoint. Preserved as-is here.
+  const { data: enrollments, isLoading: isLoadingEnrollments } = useQuery<
+    ParentEnrollmentsResponse | unknown[],
+    Error,
+    unknown[]
+  >({
+    queryKey: ["/api/parent/enrollments"],
+    select: (data) =>
+      Array.isArray(data) ? data : (data?.enrollments ?? []),
   });
 
   // Get database-stored scheduled payments (single source of truth for upcoming payments)
-  const { data: dbScheduledPayments, isLoading: isLoadingDbScheduled, refetch: refetchDbScheduledPayments } = useQuery({
-    queryKey: ['scheduled-payments-upcoming'],
-    queryFn: async () => {
-      const token = localStorage.getItem('supabase_token');
-      if (!token) {
-        throw new Error('No authentication token');
-      }
-
-      const response = await fetch('/api/scheduled-payments/upcoming', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch scheduled payments: ${response.status}`);
-      }
-
-      const data = await response.json();
-      if (!data.success || !data.payments) {
-        return [];
-      }
-
-      // Transform database payments to match UI structure
-      return data.payments.map((payment: any) => ({
+  const { data: dbScheduledPayments, isLoading: isLoadingDbScheduled, refetch: refetchDbScheduledPayments } = useQuery<
+    ScheduledPaymentsUpcomingResponse,
+    Error,
+    UpcomingPaymentRow[]
+  >({
+    queryKey: ['/api/scheduled-payments/upcoming'],
+    select: (data) => {
+      if (!data?.success || !data.payments) return [];
+      return data.payments.map((payment) => ({
         id: payment.id,
         amount: payment.amount,
         dueDate: new Date(payment.dueDate),
@@ -1576,84 +1589,40 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
         installmentNumber: payment.installmentNumber,
         totalInstallments: payment.totalInstallments,
         paymentPlan: payment.paymentPlan,
-        source: 'database' as const
+        source: 'database' as const,
       }));
     },
   });
 
   // Get grouped scheduled payments for combined payment view
-  const { data: groupedPayments, isLoading: isLoadingGrouped, refetch: refetchGrouped } = useQuery({
-    queryKey: ['scheduled-payments-grouped'],
-    queryFn: async () => {
-      const token = localStorage.getItem('supabase_token');
-      if (!token) throw new Error('No authentication token');
-
-      const response = await fetch('/api/scheduled-payments/grouped', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) return [];
-      const data = await response.json();
-      return data.success ? data.groups : [];
-    },
+  const { data: groupedPayments, isLoading: isLoadingGrouped, refetch: refetchGrouped } = useQuery<
+    ScheduledPaymentsGroupedResponse,
+    Error,
+    Array<Record<string, unknown>>
+  >({
+    queryKey: ['/api/scheduled-payments/grouped'],
+    select: (data) => (data?.success ? data.groups ?? [] : []),
   });
 
   // Membership enrollments — used to include membership fee in Outstanding Balance total.
   // Uses default fetcher (no custom queryFn) per asa-frontend-conventions.
-  const { data: membershipEnrollments } = useQuery<any[]>({
+  const { data: membershipEnrollments } = useQuery<unknown[]>({
     queryKey: ['/api/parent/memberships'],
   });
 
   // Get Stripe payment history for user
-  const { data: stripePayments, isLoading: isLoadingStripePayments } = useQuery({
+  const { data: stripePayments, isLoading: isLoadingStripePayments } = useQuery<
+    StripePaymentHistoryResponse,
+    Error,
+    Array<Record<string, unknown>>
+  >({
     queryKey: ["/api/stripe/payment-history"],
-    queryFn: async () => {
-      const token = localStorage.getItem('supabase_token');
-      if (!token) {
-        throw new Error('No authentication token');
-      }
-
-      const response = await fetch('/api/stripe/payment-history', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch Stripe payment history: ${response.status}`);
-      }
-
-      const data = await response.json();
-      return data.success ? data.payments : [];
-    },
+    select: (data) => (data?.success ? data.payments ?? [] : []),
   });
 
   // Get credits data for the parent (using existing endpoint that matches ParentDashboard)
-  const { data: creditsData, isLoading: isLoadingCredits } = useQuery({
+  const { data: creditsData, isLoading: isLoadingCredits } = useQuery<CreditsResponse>({
     queryKey: ["/api/parent/credits"],
-    queryFn: async () => {
-      const token = localStorage.getItem('supabase_token');
-      if (!token) {
-        throw new Error('No authentication token');
-      }
-
-      const response = await fetch('/api/parent/credits', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch credits: ${response.status}`);
-      }
-
-      return await response.json();
-    },
   });
   
   // Auto-pay: fetch toggle state for status strip in Upcoming tab
@@ -1674,15 +1643,15 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
         (payment.programName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
         (payment.childName || '').toLowerCase().includes(searchQuery.toLowerCase());
       
-      // Filter by status - treat 'succeeded' and 'paid' as equivalent
+      // Filter by status - treat 'succeeded', 'paid', and 'completed' as equivalent
       let matchesStatus = filterStatus === 'all';
       if (!matchesStatus) {
         if (filterStatus === 'paid') {
-          // Show both 'paid' and 'succeeded' for the "Paid" filter
-          matchesStatus = payment.status === 'paid' || payment.status === 'succeeded';
+          // Show 'paid', 'succeeded', and 'completed' for the "Paid" filter
+          matchesStatus = payment.status === 'paid' || payment.status === 'succeeded' || payment.status === 'completed';
         } else if (filterStatus === 'succeeded') {
           // Also allow filtering by 'succeeded' specifically
-          matchesStatus = payment.status === 'succeeded' || payment.status === 'paid';
+          matchesStatus = payment.status === 'succeeded' || payment.status === 'paid' || payment.status === 'completed';
         } else {
           matchesStatus = payment.status === filterStatus;
         }
@@ -1696,7 +1665,7 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
   const outstandingBalances = React.useMemo(() => {
     if (!enrollments) return [];
     
-    const enrollmentGroups = enrollments.reduce((acc: any, enrollment: any) => {
+    const enrollmentGroups = enrollments.reduce<Record<string, any[]>>((acc, enrollment: any) => {
       const key = `${enrollment.classId}-${enrollment.childId}`;
       if (!acc[key]) {
         acc[key] = [];
@@ -1943,11 +1912,11 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
                     <div key={`recent-${payment.id}-${index}`} className="flex justify-between items-center p-4 border rounded-lg">
                       <div className="flex items-center gap-4">
                         <div className={`h-10 w-10 rounded-full flex items-center justify-center 
-                          ${payment.status === 'paid' || payment.status === 'succeeded' ? 'bg-green-100 text-green-700' : 
+                          ${payment.status === 'paid' || payment.status === 'succeeded' || payment.status === 'completed' ? 'bg-green-100 text-green-700' : 
                             payment.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
                             payment.status === 'refunded' ? 'bg-blue-100 text-blue-700' :
                             'bg-red-100 text-red-700'}`}>
-                          {payment.status === 'paid' || payment.status === 'succeeded' ? <Check className="h-5 w-5" /> : 
+                          {payment.status === 'paid' || payment.status === 'succeeded' || payment.status === 'completed' ? <Check className="h-5 w-5" /> : 
                            payment.status === 'pending' ? <Clock className="h-5 w-5" /> :
                            payment.status === 'refunded' ? <DollarSign className="h-5 w-5" /> :
                            <AlertCircle className="h-5 w-5" />}
@@ -2073,7 +2042,7 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
                                 </Button>
                               )}
                               
-                              {payment.status === 'paid' && payment.receiptUrl && (
+                              {(payment.status === 'paid' || payment.status === 'succeeded' || payment.status === 'completed') && payment.receiptUrl && (
                                 <Button size="sm" variant="outline" asChild>
                                   <a href={payment.receiptUrl} target="_blank" rel="noopener noreferrer">
                                     <FileText className="mr-2 h-4 w-4" />
@@ -2134,11 +2103,11 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
                               <Collapsible>
                                 <CollapsibleTrigger className="flex items-center gap-2 text-sm font-medium text-purple-700 hover:text-purple-800 cursor-pointer w-full">
                                   <ChevronDown className="h-4 w-4 transition-transform duration-200 [&[data-state=open]]:rotate-180" />
-                                  <span>Credits Applied: -{formatCurrency(payment.metadata.creditsApplied)}</span>
+                                  <span>Credits Applied: -{formatCurrency(payment.metadata?.creditsApplied ?? 0)}</span>
                                 </CollapsibleTrigger>
                                 <CollapsibleContent className="mt-2 ml-6">
                                   <div className="space-y-1 bg-purple-100 p-3 rounded-md">
-                                    {payment.metadata.creditAllocation ? (
+                                    {payment.metadata?.creditAllocation ? (
                                       <>
                                         {payment.metadata.creditAllocation.enrollmentCredits > 0 && (
                                           <div className="flex justify-between items-center text-sm text-purple-700">
@@ -2162,12 +2131,12 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
                                     ) : (
                                       <div className="flex justify-between items-center text-sm text-purple-700">
                                         <span>Credits Used</span>
-                                        <span className="font-medium">-{formatCurrency(payment.metadata.creditsApplied)}</span>
+                                        <span className="font-medium">-{formatCurrency(payment.metadata?.creditsApplied ?? 0)}</span>
                                       </div>
                                     )}
                                     <div className="flex justify-between items-center text-sm font-semibold border-t border-purple-200 pt-2 mt-2">
                                       <span>Total Credits Used</span>
-                                      <span className="text-purple-700">-{formatCurrency(payment.metadata.creditsApplied)}</span>
+                                      <span className="text-purple-700">-{formatCurrency(payment.metadata?.creditsApplied ?? 0)}</span>
                                     </div>
                                   </div>
                                 </CollapsibleContent>

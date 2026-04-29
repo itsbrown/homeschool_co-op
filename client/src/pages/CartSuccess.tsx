@@ -203,7 +203,7 @@ export default function CartSuccess() {
           queryClient.invalidateQueries({ queryKey: ['/api/enrollments'] });
           queryClient.invalidateQueries({ queryKey: ['billing-summary'] });
           queryClient.invalidateQueries({ queryKey: ['payment-history'] });
-          queryClient.invalidateQueries({ queryKey: ['scheduled-payments-upcoming'] });
+          queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments/upcoming'] });
           
           console.log('✅ Cart cleared and queries invalidated');
           
@@ -412,7 +412,7 @@ export default function CartSuccess() {
               // Force refresh data before navigation
               await queryClient.invalidateQueries({ queryKey: ['billing-summary'] });
               await queryClient.invalidateQueries({ queryKey: ['payment-history'] });
-              await queryClient.invalidateQueries({ queryKey: ['scheduled-payments-upcoming'] });
+              await queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments/upcoming'] });
               await queryClient.invalidateQueries({ queryKey: ['/api/my-credits'] });
               setTimeout(() => setLocation(isCreditOnly ? '/parent/programs/enrollments' : '/billing'), 100);
             }}

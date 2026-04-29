@@ -70,7 +70,7 @@ function SimplePaymentForm({ onSuccess, onError }: {
 interface PaymentHistoryItem {
   id: number;
   amount: number;
-  status: 'pending' | 'succeeded' | 'failed' | 'canceled';
+  status: 'pending' | 'succeeded' | 'paid' | 'completed' | 'failed' | 'canceled';
   createdAt: string;
   description: string | null;
   stripePaymentIntentId: string;
@@ -139,16 +139,13 @@ interface StripeSubscriptionSchedule {
 // Scheduled Payment Plans Tab - shows database-stored payment installments
 function SubscriptionSchedulesTab() {
   // Fetch database-stored scheduled payments (biweekly, deposit, split plans)
-  const { data: scheduledPayments = [], isLoading: scheduledLoading } = useQuery({
-    queryKey: ['scheduled-payments-upcoming'],
-    queryFn: async () => {
-      const response = await apiRequest('GET', '/api/scheduled-payments/upcoming');
-      if (!response.ok) {
-        throw new Error('Failed to fetch scheduled payments');
-      }
-      const data = await response.json();
-      return data.success ? data.payments : [];
-    },
+  const { data: scheduledPayments = [], isLoading: scheduledLoading } = useQuery<
+    { success: boolean; payments?: Array<Record<string, unknown>> },
+    Error,
+    Array<Record<string, unknown>>
+  >({
+    queryKey: ['/api/scheduled-payments/upcoming'],
+    select: (data) => (data?.success ? data.payments ?? [] : []),
   });
 
   // Also fetch Stripe subscription schedules for legacy data
@@ -442,7 +439,7 @@ function PaymentHistoryTab() {
                 <div className="flex items-center gap-2 flex-wrap">
                   <h3 className="font-medium">{payment.description || 'Payment'}</h3>
                   <Badge 
-                    variant={payment.status === 'succeeded' ? 'default' : 
+                    variant={payment.status === 'succeeded' || payment.status === 'paid' || payment.status === 'completed' ? 'default' : 
                             payment.status === 'pending' ? 'secondary' : 'destructive'}
                     data-testid={`badge-status-${payment.id}`}
                   >
@@ -568,32 +565,26 @@ function UpcomingPaymentsTab({
   
   const { isConnected } = useRealTimeUpdates();
 
-  const { data: groupedData, isLoading, refetch: refetchGrouped } = useQuery({
-    queryKey: ['scheduled-payments-grouped'],
+  const { data: groupedData, isLoading, refetch: refetchGrouped } = useQuery<
+    { success: boolean; groups?: Array<Record<string, unknown>> },
+    Error,
+    Array<Record<string, unknown>>
+  >({
+    queryKey: ['/api/scheduled-payments/grouped'],
     staleTime: 0,
     refetchInterval: 5000,
-    queryFn: async () => {
-      const response = await apiRequest('GET', '/api/scheduled-payments/grouped');
-      if (!response.ok) {
-        throw new Error('Failed to fetch grouped payments');
-      }
-      const data = await response.json();
-      return data.success ? data.groups : [];
-    },
+    select: (data) => (data?.success ? data.groups ?? [] : []),
   });
 
-  const { data: upcomingPayments, isLoading: upcomingLoading } = useQuery({
-    queryKey: ['scheduled-payments-upcoming'],
+  const { data: upcomingPayments, isLoading: upcomingLoading } = useQuery<
+    { success: boolean; payments?: Array<Record<string, unknown>> },
+    Error,
+    Array<Record<string, unknown>>
+  >({
+    queryKey: ['/api/scheduled-payments/upcoming'],
     staleTime: 0,
     refetchInterval: 5000,
-    queryFn: async () => {
-      const response = await apiRequest('GET', '/api/scheduled-payments/upcoming');
-      if (!response.ok) {
-        throw new Error('Failed to fetch scheduled payments');
-      }
-      const data = await response.json();
-      return data.success ? data.payments : [];
-    },
+    select: (data) => (data?.success ? data.payments ?? [] : []),
   });
 
   const formatCurrencyLocal = (amount: number) => {
@@ -755,8 +746,8 @@ function UpcomingPaymentsTab({
     setCombinedPaymentIds([]);
     setConfirmingGroup(null);
     
-    queryClient.invalidateQueries({ queryKey: ['scheduled-payments-grouped'] });
-    queryClient.invalidateQueries({ queryKey: ['scheduled-payments-upcoming'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments/grouped'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments/upcoming'] });
     queryClient.invalidateQueries({ queryKey: ['billing-summary'] });
     queryClient.invalidateQueries({ queryKey: ['/api/payment-history/history'] });
     
@@ -1364,7 +1355,7 @@ export default function BillingPage() {
       
       // Invalidate all payment-related queries to refresh data
       queryClient.invalidateQueries({ queryKey: ['/api/payment-history'] });
-      queryClient.invalidateQueries({ queryKey: ['scheduled-payments-upcoming'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments/upcoming'] });
       queryClient.invalidateQueries({ queryKey: ['billing-summary'] });
       queryClient.invalidateQueries({ queryKey: ['/api/enrollments'] });
       queryClient.invalidateQueries({ queryKey: ['/api/parent/memberships'] });
@@ -1981,7 +1972,7 @@ export default function BillingPage() {
                           queryClient.invalidateQueries({ queryKey: ['stripe-subscription-schedules'] });
                           queryClient.invalidateQueries({ queryKey: ['/api/billing/summary'] });
                           queryClient.invalidateQueries({ queryKey: ['/api/enrollments'] });
-                          queryClient.invalidateQueries({ queryKey: ['scheduled-payments-upcoming'] });
+                          queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments/upcoming'] });
                           
                           console.log('✅ Payment success handling complete');
                         }}
