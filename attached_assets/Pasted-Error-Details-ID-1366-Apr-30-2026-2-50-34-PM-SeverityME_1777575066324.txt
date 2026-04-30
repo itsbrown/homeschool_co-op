@@ -1,0 +1,96 @@
+Error Details
+ID: 1366 | Apr 30, 2026, 2:50:34 PM
+
+SeverityMEDIUM
+Type
+frontend
+
+Route
+/school-admin/financial-reports
+
+Method
+N/A
+
+User
+Anonymous
+
+School ID
+N/A
+
+Message
+Failed to send summary: 404: {"error":"No outstanding payments found for this parent"}
+
+Metadata
+{
+  "online": true,
+  "source": "toast",
+  "userId": 5,
+  "network": {
+    "rtt": 50,
+    "downlink": 10,
+    "saveData": false,
+    "effectiveType": "4g"
+  },
+  "language": "en-US",
+  "referrer": "https://accounts.google.com/",
+  "schoolId": null,
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",
+  "activeRole": null,
+  "hasSession": true,
+  "toastTitle": "Failed to send summary",
+  "breadcrumbs": [
+    {
+      "route": "/",
+      "title": "American Seekers Academy - Adaptive Learning Platform",
+      "timestamp": "2026-04-30T14:57:00.721Z",
+      "timeOnPage": 427
+    },
+    {
+      "route": "/",
+      "title": "American Seekers Academy - Adaptive Learning Platform",
+      "timestamp": "2026-04-30T14:57:01.148Z",
+      "timeOnPage": 13925384
+    }
+  ],
+  "formContext": null,
+  "memoryUsage": {
+    "usedJSHeapSize": 47,
+    "totalJSHeapSize": 56
+  },
+  "pageLoadTime": 3755,
+  "sessionStart": "2026-04-27T12:00:32.168Z",
+  "correlationId": "6c7159b6-d846-4a5a-9e71-1348b7173184",
+  "recentActions": [
+    {
+      "type": "click",
+      "target": "button#radix-:rsn:-trigger-balances",
+      "secondsAgo": 57
+    },
+    {
+      "type": "click",
+      "target": "div.rounded-lg",
+      "secondsAgo": 55
+    },
+    {
+      "type": "click",
+      "target": "button#radix-:rta:-trigger-balances",
+      "secondsAgo": 52
+    },
+    {
+      "type": "click",
+      "target": "button#group-by-parent",
+      "secondsAgo": 51
+    },
+    {
+      "type": "click",
+      "target": "button.inline-flex",
+      "secondsAgo": 2
+    }
+  ],
+  "userEmailHint": "con***",
+  "viewportWidth": 1710,
+  "viewportHeight": 987,
+  "toastDescription": "404: {\"error\":\"No outstanding payments found for this parent\"}",
+  "sessionErrorCount": 2,
+  "timeOnCurrentPage": 14012848
+}
