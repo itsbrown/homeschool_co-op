@@ -92,7 +92,10 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
       // state.
       if (response.status === 401) {
         console.warn('🔒 /api/user/roles returned 401 — triggering session recovery');
-        void handleExpiredSession();
+        // Initial-bootstrap path: skip the in-app toast and redirect right
+        // away. The dashboard hasn't rendered yet, so the login banner is
+        // the right surface for the message.
+        void handleExpiredSession({ suppressToast: true });
         throw new AuthExpiredError();
       }
 

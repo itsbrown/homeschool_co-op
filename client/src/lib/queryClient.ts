@@ -1,6 +1,7 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 import { supabase } from "@/components/SupabaseProvider";
 import { captureApiError, captureApi404 } from "@/lib/errorTracker";
+import { toast } from "@/hooks/use-toast";
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
@@ -46,16 +47,37 @@ let refreshPromise: Promise<string | null> | null = null;
 // Single-flight guard for the expired-session handler.
 let isHandlingExpiredSession = false;
 
+interface HandleExpiredSessionOptions {
+  /**
+   * Suppress the in-app "Session expired — signing you out…" toast.
+   *
+   * Set to `true` for callers that fire during initial app bootstrap
+   * (e.g. the role-loading query in `RoleContext`), where the dashboard
+   * UI hasn't rendered yet and there's no surface to show a toast on
+   * top of. Those callers rely on the login banner instead. Defaults to
+   * `false`, so any other 401 path (mid-session API calls) shows the
+   * toast and waits ~1.5s before redirecting.
+   */
+  suppressToast?: boolean;
+}
+
 /**
  * Centralized recovery for stale/expired Supabase sessions.
  *
  * Clears auth state, signs out (local scope), and redirects to
  * /login?session_expired=1&returnTo=<currentPath> so the login page can
  * show a friendly banner. Idempotent — only the first call redirects.
+ *
+ * For mid-session callers, also flashes a brief in-app toast before the
+ * redirect so the user gets a heads-up instead of an abrupt page reload.
+ * Pass `{ suppressToast: true }` from initial-bootstrap callers.
  */
-export async function handleExpiredSession(): Promise<void> {
+export async function handleExpiredSession(
+  options: HandleExpiredSessionOptions = {},
+): Promise<void> {
   if (isHandlingExpiredSession) return;
   isHandlingExpiredSession = true;
+  const { suppressToast = false } = options;
 
   try {
     // Skip the redirect if the user is already on a public/auth route.
@@ -133,7 +155,28 @@ export async function handleExpiredSession(): Promise<void> {
 
     if (!isOnPublicPath) {
       const returnTo = encodeURIComponent(currentPath + window.location.search);
-      window.location.href = `/login?session_expired=1&returnTo=${returnTo}`;
+      const redirectUrl = `/login?session_expired=1&returnTo=${returnTo}`;
+
+      // Mid-session callers get a brief toast first; initial-bootstrap callers
+      // (e.g. the role-loading query) opt out via { suppressToast: true } and
+      // redirect immediately, letting the login banner take over.
+      if (!suppressToast) {
+        try {
+          toast({
+            title: 'Session expired',
+            description: 'Signing you out…',
+          });
+        } catch (err) {
+          console.warn('Failed to show session-expired toast (non-fatal):', err);
+        }
+
+        // Give the toast ~1.5s to be seen before we hard-redirect.
+        setTimeout(() => {
+          window.location.href = redirectUrl;
+        }, 1500);
+      } else {
+        window.location.href = redirectUrl;
+      }
     } else {
       isHandlingExpiredSession = false;
     }

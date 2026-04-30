@@ -255,7 +255,11 @@ function DashboardRouter() {
   React.useEffect(() => {
     if (rolesError instanceof AuthExpiredError && !isLoadingRoles && !activeRole) {
       console.warn('🔒 DashboardRouter: auth expired during role load — recovering');
-      void handleExpiredSession();
+      // Same initial-bootstrap path as RoleContext — skip the toast and let
+      // the login banner deliver the message. (The single-flight guard in
+      // handleExpiredSession usually makes this a no-op anyway, since
+      // RoleContext already called it; we mirror the option for clarity.)
+      void handleExpiredSession({ suppressToast: true });
     }
   }, [rolesError, isLoadingRoles, activeRole]);
 
