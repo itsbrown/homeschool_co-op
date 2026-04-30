@@ -5,9 +5,11 @@ module.exports = {
   extensionsToTreatAsEsm: ['.ts'],
   moduleNameMapper: {
     '^(\\.{1,2}/.*)\\.js$': '$1',
+    '^@shared/(.*)$': '<rootDir>/shared/$1',
   },
   testMatch: [
     '<rootDir>/server/tests/minimal-test.test.ts',
+    '<rootDir>/server/tests/snapshot-trust-cache.test.ts',
   ],
   transform: {
     '^.+\\.tsx?$': ['ts-jest', {

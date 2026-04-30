@@ -6,9 +6,14 @@ import { supabaseAuth } from '../middleware/supabase-auth';
 import { requireSchoolContext } from '../middleware/require-school-context';
 import { getStripeClient, getStripePublishableKey } from '../config/stripe';
 import { calculateMembershipDiscount } from '../utils/membership';
-import { calculateCartPricing, CartItem, deriveSchoolIdFromCart, SchoolIdResult } from '../utils/cart-pricing';
+import { calculateCartPricing, CartItem, CartPricingResult, deriveSchoolIdFromCart, SchoolIdResult } from '../utils/cart-pricing';
 import { CurrencyUtils } from '@shared/currency-utils';
 import { isActiveMembership, VALID_PAID_MEMBERSHIP_STATUSES, computeEffectiveBalance } from '@shared/schema';
+import {
+  verifyTrustedSnapshot,
+  type CachedSnapshot,
+  type TrustRejectionReason,
+} from '../lib/snapshotTrustCache';
 
 const router = Router();
 
@@ -36,7 +41,7 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
     
     console.log('💳 Creating payment intent for authenticated user:', userEmail);
 
-    const { items, subtotal, discounts, total, parentEmail, paymentPlan = 'full', paymentFrequency = 'one_time', membership, promoCode, creditsToApply = 0, expectedSchedule } = req.body;
+    const { items, subtotal, discounts, total, parentEmail, paymentPlan = 'full', paymentFrequency = 'one_time', membership, promoCode, creditsToApply = 0, expectedSchedule, trustedSnapshotId, cartItemFingerprint } = req.body;
     
     // DETAILED REQUEST LOGGING for debugging production issues (PII redacted)
     const checkoutRequestId = `checkout_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
@@ -309,6 +314,15 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
       userEmail
     });
     
+    // Trust-path state — populated inside the `if (hasItems)` block when the
+    // client supplies a valid `trustedSnapshotId` issued by /api/cart/snapshot.
+    // When `useTrustedSnapshot` is true, the strict cart-vs-DB validation
+    // block further down is skipped (items pricing only — membership amount
+    // is always freshly recomputed regardless of trust path).
+    let useTrustedSnapshot = false;
+    let trustedSnapshot: CachedSnapshot | null = null;
+    let trustRejectionReason: TrustRejectionReason | null = null;
+
     // Fetch children for validation and later use (only if there are items)
     let children: any[] = [];
     if (hasItems) {
@@ -511,16 +525,105 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
       // Extract promo code - prefer explicitly passed promoCode, fallback to discounts structure
       const appliedPromoCode = promoCode || discounts?.appliedDiscounts?.find((d: any) => d.sourceType === 'promo')?.code || null;
       console.log('🎟️ Final appliedPromoCode for cart pricing:', appliedPromoCode);
-      
-      // Store cart pricing at handler level for later discount snapshot building
-      cartPricingResult = await calculateCartPricing(
-        cartItems,
-        parentForMembership?.id || 0,
-        effectiveSchoolIdForPayment || 0,
-        appliedPromoCode,
-        userEmail // Pass parent email for per-user discount usage limit validation
-      );
-      
+
+      // ================================================================
+      // SNAPSHOT TRUST PATH (item pricing only)
+      // ================================================================
+      // Switching the payment plan / frequency on /cart/checkout used to
+      // re-run calculateCartPricing here AND then re-run the strict
+      // cart-vs-DB validation block below, which could trip on tiny drift
+      // (existing-enrollment effective_balance refresh, credit holds,
+      // promo usage tick, rounding inside discount allocation) and
+      // spuriously block the parent with the "Prices Have Changed" screen.
+      //
+      // When the client passes a trustedSnapshotId issued by
+      // /api/cart/snapshot within the freshness window AND the cached
+      // fingerprint / credits / promo / sanity bounds all match, we:
+      //   - SKIP calculateCartPricing entirely
+      //   - SYNTHESIZE a cartPricingResult from the cached values so
+      //     downstream discount-snapshot building, usage tracking and
+      //     biweekly schedule sizing still work consistently
+      //   - SKIP the strict cart-vs-DB validation block
+      //
+      // Membership amount is NEVER taken from the trust cache — it's
+      // freshly computed from authoritativeMembershipFull above and stays
+      // authoritative. The trust path only short-circuits items pricing.
+      //
+      // On any check failure we fall through to the existing strict path
+      // (calculateCartPricing + UNIFIED STRICT VALIDATION) unchanged.
+      const trustResult = verifyTrustedSnapshot({
+        snapshotId: trustedSnapshotId || null,
+        userId: req.user.id,
+        cartItemFingerprint: cartItemFingerprint || null,
+        creditsToApply: creditsToApply || 0,
+        appliedPromoCode: appliedPromoCode || null,
+      });
+      if (trustResult.trusted) {
+        useTrustedSnapshot = true;
+        trustedSnapshot = trustResult.snapshot;
+        console.log('🔓 SNAPSHOT TRUST PATH (skipping calculateCartPricing)', {
+          snapshotId: trustedSnapshotId,
+          ageMs: trustResult.ageMs,
+          userId: req.user.id,
+          itemsTotal: trustResult.snapshot.itemsTotal,
+          plan: paymentPlan,
+          frequency: paymentFrequency,
+        });
+        // Synthesize a cartPricingResult shape from the cached snapshot so
+        // every downstream code path (discount snapshot building, applied
+        // discount usage tracking, biweekly schedule sizing) keeps
+        // working without further branching. itemPrices is left empty
+        // because no caller below this point reads it on the trust path.
+        const syntheticResult: CartPricingResult = {
+          subtotal: trustResult.snapshot.subtotal,
+          total: trustResult.snapshot.itemsTotal,
+          discounts: trustResult.snapshot.discounts || {
+            siblingDiscount: 0,
+            freeAfterThree: 0,
+            appliedDiscounts: [],
+            totalDiscountAmount: 0,
+            discountedChildIds: [],
+            freeItemIds: [],
+          },
+          schoolSettings: trustResult.snapshot.schoolSettings || {
+            freeAfterThresholdEnabled: false,
+            freeAfterThreshold: 0,
+            siblingDiscountRate: 0,
+          },
+          itemPrices: [],
+          // promoCodeValidation is intentionally omitted (optional in
+          // CartPricingResult). When the trust path engages we already
+          // verified the promo code matched the cached snapshot in
+          // verifyTrustedSnapshot, so the downstream
+          // "promoCodeValidation && !applied" guard is moot.
+        };
+        cartPricingResult = syntheticResult;
+      } else {
+        trustRejectionReason = trustResult.reason;
+        console.log('🔒 STRICT VALIDATION RAN', {
+          reason: trustResult.reason,
+          snapshotId: trustedSnapshotId || null,
+          userId: req.user.id,
+          ageMs: trustResult.ageMs,
+          plan: paymentPlan,
+          frequency: paymentFrequency,
+        });
+        // Store cart pricing at handler level for later discount snapshot building
+        cartPricingResult = await calculateCartPricing(
+          cartItems,
+          parentForMembership?.id || 0,
+          effectiveSchoolIdForPayment || 0,
+          appliedPromoCode,
+          userEmail // Pass parent email for per-user discount usage limit validation
+        );
+      }
+
+      // Defensive: both branches above set cartPricingResult, but TS can't
+      // narrow across the await in the else branch.
+      if (!cartPricingResult) {
+        throw new Error('cartPricingResult unexpectedly undefined after items pricing');
+      }
+
       console.log('🧮 Server-side cart pricing with discounts:', {
         subtotal: cartPricingResult.subtotal,
         discounts: cartPricingResult.discounts,
@@ -567,13 +670,35 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
     }
     
     // ================================================================
-    // UNIFIED STRICT VALIDATION - Runs for ALL checkout paths
-    // This ensures no checkout path can bypass validation
+    // SNAPSHOT TRUST PATH — `useTrustedSnapshot` was set inside the
+    // `if (hasItems)` block above (right before calculateCartPricing) when
+    // the client supplied a valid trustedSnapshotId. On the trust path
+    // `cartPricingResult` and `authoritativeItemTotal` were derived from
+    // the cached snapshot; membership amount is always freshly recomputed.
+    // The strict-validation block below is gated on `!useTrustedSnapshot`.
+    // ================================================================
+    if (useTrustedSnapshot && trustedSnapshot) {
+      // Trust path was already taken — `authoritativeItemTotal` was set
+      // from `trustedSnapshot.itemsTotal` above (== synthetic cartPricingResult.total).
+      console.log('🔓 SNAPSHOT TRUST PATH (post-items totals)', {
+        snapshotId: trustedSnapshotId,
+        userId: req.user.id,
+        authoritativeItemTotal,
+        authoritativeMembershipAmount,
+        plan: paymentPlan,
+        frequency: paymentFrequency,
+      });
+    }
+
+    // ================================================================
+    // UNIFIED STRICT VALIDATION - Runs for ALL non-trusted checkout paths
+    // This ensures no untrusted path can bypass validation
     // ================================================================
     const finalClientTotal = total + (membership?.amount || 0);
     const finalServerTotal = authoritativeItemTotal + authoritativeMembershipAmount;
     const finalDiscrepancy = finalClientTotal - finalServerTotal;
-    
+
+    if (!useTrustedSnapshot) {
     console.log('🔒 UNIFIED STRICT VALIDATION:', {
       finalClientTotal,
       finalServerTotal,
@@ -744,7 +869,12 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
             membershipYear: new Date().getFullYear(),
             grandTotal: finalServerTotal,
             discounts: cartPricingResult?.discounts || null,
-            schoolSettings: cartPricingResult?.schoolSettings || null
+            schoolSettings: cartPricingResult?.schoolSettings || null,
+            // Per-line-item authoritative pricing — surfaced so the
+            // "Prices Have Changed" blocking screen can render a precise
+            // per-class diff (client price vs server price) instead of just
+            // an aggregate before/after total.
+            itemPrices: cartPricingResult?.itemPrices || []
           }
         });
       }
@@ -756,6 +886,7 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
       match: finalClientTotal === finalServerTotal ? 'EXACT' : 'MINOR_ROUNDING',
       hasItems
     });
+    } // end of `if (!useTrustedSnapshot)` strict-validation block
 
     // Create detailed description for payment
     const uniqueChildren = hasItems ? [...new Set(items.map((item: any) => item.childName))] : [];

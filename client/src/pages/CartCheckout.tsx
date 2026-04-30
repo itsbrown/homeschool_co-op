@@ -22,6 +22,7 @@ import { stripePromise } from '@/config/stripe';
 import type { Stripe } from '@stripe/stripe-js';
 import { trackBeginCheckout, trackAddPaymentInfo } from '@/lib/analytics';
 import { isFreeEnrollmentApproved as gateIsFreeEnrollmentApproved, cartLooksFreeButUnverified as gateCartLooksFreeButUnverified } from '@/utils/freeEnrollmentGate';
+import { computeCartItemFingerprint } from '@shared/cartFingerprint';
 
 function CheckoutForm({ selectedPaymentPlan, selectedPlanAmount, autoPayEnabled, hasPaymentMethod, togglingAutoPay, toggleAutoPay }: { selectedPaymentPlan: string; selectedPlanAmount: number; autoPayEnabled: boolean; hasPaymentMethod: boolean; togglingAutoPay: boolean; toggleAutoPay: (enabled: boolean) => void }) {
   const stripe = useStripe();
@@ -192,6 +193,24 @@ export default function CartCheckout() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
   const [isPriceMismatchError, setIsPriceMismatchError] = useState(false);
+  // Captured at the moment the strict-validation 409 finally exhausts its
+  // retries, so we can render an old-vs-new totals diff (plus a per-line
+  // class-by-class breakdown) inside the blocking "Prices Have Changed"
+  // screen instead of just a one-liner.
+  const [priceMismatchDetails, setPriceMismatchDetails] = useState<{
+    previousTotal: number | null;
+    serverTotal: number | null;
+    delta: number | null;
+    lineDiffs: Array<{
+      classId: number | null;
+      variantId?: string | null;
+      className: string;
+      childName: string;
+      clientPrice: number; // cents
+      serverPrice: number; // cents — null when server has no pricing for this line
+      delta: number; // cents (server - client)
+    }>;
+  } | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [selectedPaymentPlan, setSelectedPaymentPlan] = useState<string>('full');
   const [paymentFrequency, setPaymentFrequency] = useState<'weekly' | 'biweekly' | 'monthly' | 'one_time'>('one_time');
@@ -449,9 +468,13 @@ export default function CartCheckout() {
     
     // Debounce payment intent recreation when payment plan changes
     const timeoutId = setTimeout(() => {
-      console.log('💳 Payment plan changed, recreating payment intent');
+      console.log('💳 Payment plan changed, recreating payment intent (snapshot trust path)');
       setClientSecret(''); // Clear to show loading state
-      createPaymentIntent();
+      // includeTrustSignal=true — switching plan/frequency is NOT a
+      // cart-content change, so the server can reuse the snapshot it
+      // already issued and skip the strict cart-vs-DB revalidation that
+      // was producing spurious 409 "Prices Have Changed" blocks.
+      createPaymentIntent(null, false, true);
     }, 300); // 300ms debounce to prevent rapid recreations
     
     return () => clearTimeout(timeoutId);
@@ -550,6 +573,11 @@ export default function CartCheckout() {
       setPromoError('');
       setClientSecret('');
       setHasCheckoutConflict(false);
+      // CRITICAL: Drop the trusted snapshotId on any cart-content change so
+      // the next /create-payment-intent call falls back to strict validation
+      // and re-issues a fresh snapshot. Failing to clear this would let the
+      // server honour a snapshot whose fingerprint no longer matches.
+      setSnapshotId(null);
       retryCountRef.current = 0;
       setRetryCount(0);
     }
@@ -645,7 +673,18 @@ export default function CartCheckout() {
 
   // Accept optional fresh auth data to avoid React state timing issues
   // When forceRefresh is true, always fetches new snapshot even if authoritativeData exists
-  const createPaymentIntent = async (freshAuthData?: AuthoritativeDataType | null, forceRefresh: boolean = false) => {
+  // When includeTrustSignal is true, passes trustedSnapshotId + cartItemFingerprint
+  // so the server can skip strict cart-vs-DB validation. ONLY enable this on
+  // payment-plan / payment-frequency change effects — the cart contents are
+  // unchanged on those toggles, so the snapshot the server already issued for
+  // this cart is still authoritative. NEVER enable on initial mount,
+  // cart-total change, credits-toggle, or 409-retry calls — those legitimately
+  // need the strict path.
+  const createPaymentIntent = async (
+    freshAuthData?: AuthoritativeDataType | null,
+    forceRefresh: boolean = false,
+    includeTrustSignal: boolean = false,
+  ) => {
     try {
       setLoading(true);
       
@@ -727,12 +766,35 @@ export default function CartCheckout() {
         membershipPayload: membershipPayload ? { amount: membershipPayload.amount } : null
       });
       
+      // Build the trust signal only when explicitly requested (i.e. on
+      // plan/frequency-toggle calls). Compute the fingerprint from the same
+      // tuples the server uses so the cache key matches.
+      const fingerprint = computeCartItemFingerprint(
+        cart.items.map((i: any) => ({
+          classId: i.classId,
+          childId: i.childId,
+          variantId: i.variantId,
+          enrollmentId: i.enrollmentId,
+        })),
+      );
+      const trustSignal = (includeTrustSignal && snapshotId)
+        ? { trustedSnapshotId: snapshotId, cartItemFingerprint: fingerprint }
+        : {};
+
+      // Use bare fetch (NOT apiRequest) here because the existing 409
+      // conflict-recovery flow relies on inspecting `response.status` and
+      // calling `response.json()` to read the server's authoritative
+      // values, then auto-retrying. apiRequest throws on non-OK statuses
+      // (including 409) which would skip the recovery flow entirely.
+      // We still attach the supabase token + activeRole header manually.
       const token = localStorage.getItem('supabase_token');
+      const activeRole = localStorage.getItem('activeRole');
       const response = await fetch('/api/stripe/create-payment-intent', {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+          ...(activeRole ? { 'X-Active-Role': activeRole } : {}),
         },
         credentials: 'include',
         body: JSON.stringify({
@@ -773,7 +835,11 @@ export default function CartCheckout() {
           promoCode: useAuthData ? currentAuthData.appliedPromoCode : (cart.appliedPromoCode?.code || null),
           // Volunteer credits to apply (in cents)
           creditsToApply: creditsToApply,
-        })
+          // Optional trust signal — only present on payment-plan / frequency
+          // toggles. The server verifies it against its in-memory snapshot
+          // cache and falls back to strict validation on any mismatch.
+          ...trustSignal,
+        }),
       });
 
       // Handle 409 Conflict - server returned authoritative values
@@ -847,15 +913,63 @@ export default function CartCheckout() {
           // This flag prevents the initialization useEffect from re-triggering createPaymentIntent
           console.log('🚫 Max retries exceeded - setting checkout conflict guard');
           setHasCheckoutConflict(true);
-          
-          const serverTotal = conflictData.authoritative?.grandTotal;
+
+          const serverTotal = conflictData.authoritative?.grandTotal ?? null;
+          // Capture the client's intended total (what was shown to the parent
+          // before the conflict surfaced) so the blocking screen can render
+          // a clear before/after diff. cart.total is items only — add the
+          // membership amount the client believed was due.
+          const previousTotal =
+            (typeof cart.total === 'number' ? cart.total : 0)
+            + (membershipPayload?.amount || 0);
+          const delta = (serverTotal !== null && previousTotal !== null)
+            ? (serverTotal - previousTotal)
+            : null;
+
+          // Build a per-line-item diff so the blocking screen can show
+          // exactly which class drifted, by how much, and for which child.
+          // The server returns `itemPrices: [{ classId, variantId?, price }]`
+          // — we join that against the client's cart items so the parent
+          // can see "Soccer for Maya: was $120, now $135 (+$15)" instead
+          // of just an opaque grand-total change.
+          const serverItemPrices: Array<{ classId: number; variantId?: string; price: number }> =
+            Array.isArray(conflictData.authoritative?.itemPrices)
+              ? conflictData.authoritative.itemPrices
+              : [];
+          const lineDiffs = cart.items.map((item) => {
+            const clientPrice = item.totalCost || item.price || 0;
+            const serverLine = serverItemPrices.find(
+              (sp) =>
+                sp.classId === item.classId &&
+                (sp.variantId ?? null) === (item.variantId ?? null),
+            );
+            const serverPrice = serverLine ? serverLine.price : clientPrice;
+            return {
+              classId: item.classId,
+              variantId: item.variantId ?? null,
+              className: item.className || `Class #${item.classId}`,
+              childName: item.childName || '',
+              clientPrice,
+              serverPrice,
+              delta: serverPrice - clientPrice,
+            };
+          });
+
+          setPriceMismatchDetails({
+            previousTotal,
+            serverTotal,
+            delta,
+            lineDiffs,
+          });
           setIsPriceMismatchError(true);
           setError(`Prices in your cart have been updated since you added them. The current total is ${serverTotal ? formatCurrency(serverTotal) : 'different'}.`);
-          toast({
-            title: "Prices Updated",
-            description: "Some prices have changed. Please refresh your cart to see the latest prices.",
-            variant: "destructive",
-          });
+          // NOTE: We deliberately do NOT raise a destructive toast here. The
+          // full-screen "Prices Have Changed" block below (driven by
+          // hasCheckoutConflict + isPriceMismatchError) is the user-facing
+          // surface. The toast was redundant AND, because use-toast routes
+          // destructive toasts through errorTracker into the admin inbox, it
+          // generated a false-positive admin alert every time a parent
+          // toggled their payment plan. Removing the toast fixes both.
           return;
         }
       }
@@ -1161,8 +1275,11 @@ export default function CartCheckout() {
     const handleRefreshCart = async () => {
       setError('');
       setIsPriceMismatchError(false);
+      setPriceMismatchDetails(null);
       setHasCheckoutConflict(false);
       setClientSecret('');
+      // Drop the trusted snapshot — refreshing the cart will produce a new one.
+      setSnapshotId(null);
       setLoading(true);
       retryCountRef.current = 0;
       setRetryCount(0);
@@ -1194,9 +1311,75 @@ export default function CartCheckout() {
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-center text-muted-foreground">{error}</p>
+              {isPriceMismatchError && priceMismatchDetails && priceMismatchDetails.previousTotal !== null && priceMismatchDetails.serverTotal !== null && (
+                <div className="rounded-md border bg-muted/40 p-3 text-sm" data-testid="price-mismatch-details">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Previous total</span>
+                    <span className="font-medium line-through">{formatCurrency(priceMismatchDetails.previousTotal)}</span>
+                  </div>
+                  <div className="flex items-center justify-between mt-1">
+                    <span className="text-muted-foreground">New total</span>
+                    <span className="font-semibold">{formatCurrency(priceMismatchDetails.serverTotal)}</span>
+                  </div>
+                  {priceMismatchDetails.delta !== null && priceMismatchDetails.delta !== 0 && (
+                    <div className="flex items-center justify-between mt-2 pt-2 border-t">
+                      <span className="text-muted-foreground">Difference</span>
+                      <span
+                        className={`font-medium ${priceMismatchDetails.delta > 0 ? 'text-amber-700' : 'text-emerald-700'}`}
+                        data-testid="price-mismatch-delta"
+                      >
+                        {priceMismatchDetails.delta > 0 ? '+' : ''}{formatCurrency(priceMismatchDetails.delta)}
+                      </span>
+                    </div>
+                  )}
+                  {priceMismatchDetails.lineDiffs.some((line) => line.delta !== 0) && (
+                    <div className="mt-3 pt-3 border-t">
+                      <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                        What changed
+                      </div>
+                      <ul className="space-y-2" data-testid="price-mismatch-line-diffs">
+                        {priceMismatchDetails.lineDiffs
+                          .filter((line) => line.delta !== 0)
+                          .map((line) => (
+                            <li
+                              key={`${line.classId}-${line.variantId ?? 'no-variant'}-${line.childName}`}
+                              className="flex items-start justify-between gap-3"
+                              data-testid={`price-mismatch-line-${line.classId}`}
+                            >
+                              <div className="min-w-0 flex-1">
+                                <div className="font-medium truncate">{line.className}</div>
+                                {line.childName && (
+                                  <div className="text-xs text-muted-foreground truncate">
+                                    for {line.childName}
+                                  </div>
+                                )}
+                              </div>
+                              <div className="text-right shrink-0">
+                                <div className="text-xs">
+                                  <span className="line-through text-muted-foreground">
+                                    {formatCurrency(line.clientPrice)}
+                                  </span>
+                                  <span className="mx-1 text-muted-foreground">→</span>
+                                  <span className="font-semibold">
+                                    {formatCurrency(line.serverPrice)}
+                                  </span>
+                                </div>
+                                <div
+                                  className={`text-xs font-medium ${line.delta > 0 ? 'text-amber-700' : 'text-emerald-700'}`}
+                                >
+                                  {line.delta > 0 ? '+' : ''}{formatCurrency(line.delta)}
+                                </div>
+                              </div>
+                            </li>
+                          ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
               {isPriceMismatchError && (
                 <p className="text-center text-sm text-muted-foreground">
-                  This can happen when class prices are updated or promotions change. 
+                  This can happen when class prices are updated or promotions change.
                   Refresh your cart to see the current prices and continue checkout.
                 </p>
               )}

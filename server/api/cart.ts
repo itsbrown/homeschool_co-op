@@ -3,6 +3,11 @@ import { supabaseAuth } from '../middleware/supabase-auth';
 import { storage } from '../storage';
 import { calculateCartPricing, validateCartTotal, calculateCartSnapshot, CartItem, deriveSchoolIdFromCart, SchoolIdResult } from '../utils/cart-pricing';
 import { computeEffectiveBalance } from '@shared/schema';
+import {
+  cacheSnapshot,
+  computeCartItemFingerprint,
+  type CachedSnapshot,
+} from '../lib/snapshotTrustCache';
 
 /**
  * For an existing-enrollment cart line, return the parent's true outstanding balance
@@ -123,6 +128,64 @@ router.post('/snapshot', supabaseAuth, async (req: any, res) => {
       availableCredits: snapshot.credits.available,
       derivedSchoolId: user.schoolId ? null : effectiveSchoolId
     });
+
+    // Cache the authoritative values so a subsequent /create-payment-intent
+    // call within the trust TTL can reuse them and skip the strict
+    // cart-vs-DB revalidation. This is the snapshot-trust path consumed by
+    // payment-plan / frequency toggles in CartCheckout.tsx.
+    try {
+      // Largest single per-line cost — drives the relative sanity bound.
+      // Use itemPrices (server-derived per-line authoritative price) and
+      // any client-supplied remainingBalance so existing-enrollment lines
+      // still register a real per-line ceiling.
+      const cartItemMaxLineCostCents = Math.max(
+        0,
+        ...snapshot.pricing.itemPrices.map((line: any) => line?.price ?? 0),
+        ...cartItems.map((line: any) => line?.remainingBalance ?? 0),
+      );
+      const fingerprint = computeCartItemFingerprint(
+        cartItems.map((i) => ({
+          classId: i.classId,
+          childId: i.childId,
+          variantId: i.variantId,
+          enrollmentId: i.enrollmentId,
+        })),
+      );
+      const cached: CachedSnapshot = {
+        userId: user.id,
+        itemsTotal: snapshot.totals.itemsTotal,
+        // pre-discount subtotal — needed by the synthetic cartPricingResult
+        // the trust path builds in /create-payment-intent
+        subtotal: snapshot.pricing.subtotal,
+        membershipAmount: snapshot.totals.membershipTotal,
+        discounts: snapshot.pricing.discounts,
+        // schoolSettings is needed by downstream discount-snapshot building
+        // and discount-usage tracking when the trust path skips
+        // calculateCartPricing.
+        schoolSettings: snapshot.pricing.schoolSettings ?? null,
+        creditsToApply: snapshot.credits.applied,
+        appliedPromoCode: appliedPromoCode || null,
+        isFreeEnrollment: snapshot.isFreeEnrollment,
+        freeEnrollmentReason: snapshot.freeEnrollmentReason,
+        cartItemFingerprint: fingerprint,
+        cartItemMaxLineCostCents,
+        issuedAt: Date.now(),
+      };
+      cacheSnapshot(snapshot.snapshotId, cached);
+      console.log('🧷 Snapshot cached for trust path:', {
+        snapshotId: snapshot.snapshotId,
+        userId: user.id,
+        itemsTotal: cached.itemsTotal,
+        membershipAmount: cached.membershipAmount,
+        creditsToApply: cached.creditsToApply,
+        appliedPromoCode: cached.appliedPromoCode,
+        cartItemMaxLineCostCents,
+        fingerprint,
+      });
+    } catch (cacheErr) {
+      // Non-fatal: trust path will simply miss and the strict path will run.
+      console.warn('⚠️ Failed to cache snapshot for trust path (non-fatal):', cacheErr);
+    }
 
     res.json(snapshot);
   } catch (error: any) {
