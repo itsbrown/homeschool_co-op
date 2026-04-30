@@ -43,6 +43,106 @@ interface ApiRequestOptions {
 let isRefreshing = false;
 let refreshPromise: Promise<string | null> | null = null;
 
+// Single-flight guard for the expired-session handler.
+let isHandlingExpiredSession = false;
+
+/**
+ * Centralized recovery for stale/expired Supabase sessions.
+ *
+ * Clears auth state, signs out (local scope), and redirects to
+ * /login?session_expired=1&returnTo=<currentPath> so the login page can
+ * show a friendly banner. Idempotent — only the first call redirects.
+ */
+export async function handleExpiredSession(): Promise<void> {
+  if (isHandlingExpiredSession) return;
+  isHandlingExpiredSession = true;
+
+  try {
+    // Skip the redirect if the user is already on a public/auth route.
+    const currentPath = window.location.pathname;
+    const publicPaths = [
+      '/login',
+      '/old-login',
+      '/embedded-login',
+      '/auth0-login',
+      '/auth/login',
+      '/auth/logout',
+      '/auth/callback',
+      '/auth-callback',
+      '/logout',
+      '/emergency-logout',
+      '/forgot-password',
+      '/reset-password',
+      '/register',
+    ];
+    const isOnPublicPath =
+      publicPaths.includes(currentPath) ||
+      currentPath.startsWith('/accept-invitation') ||
+      currentPath.startsWith('/accept-educator-invitation') ||
+      currentPath.startsWith('/school-registration') ||
+      currentPath.startsWith('/register/') ||
+      currentPath.startsWith('/school/') ||
+      currentPath.startsWith('/forms/') ||
+      currentPath.startsWith('/qr/');
+
+    console.log('🔒 Session expired — recovering');
+
+    // Clear auth-related localStorage (known keys + any sb-*/supabase/token keys).
+    localStorage.removeItem('supabase_token');
+    localStorage.removeItem('selectedRole');
+    localStorage.removeItem('userRole');
+    localStorage.removeItem('activeRole');
+    localStorage.removeItem('auth_redirect');
+    try {
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (
+          key &&
+          (key.startsWith('supabase') || key.startsWith('sb-') || key.startsWith('auth') || key.includes('token'))
+        ) {
+          keysToRemove.push(key);
+        }
+      }
+      keysToRemove.forEach((key) => localStorage.removeItem(key));
+    } catch {
+      // ignore
+    }
+
+    try {
+      queryClient.clear();
+    } catch {
+      // ignore
+    }
+
+    // Local-scope signOut: a global signOut needs a valid server-side token.
+    try {
+      await supabase.auth.signOut({ scope: 'local' });
+    } catch (err) {
+      console.warn('Supabase local signOut failed (non-fatal):', err);
+    }
+
+    try {
+      sessionStorage.setItem(
+        'session_expired_message',
+        'Your session expired. Please sign in again.',
+      );
+    } catch {
+      // ignore
+    }
+
+    if (!isOnPublicPath) {
+      const returnTo = encodeURIComponent(currentPath + window.location.search);
+      window.location.href = `/login?session_expired=1&returnTo=${returnTo}`;
+    } else {
+      isHandlingExpiredSession = false;
+    }
+  } catch (err) {
+    console.error('Error in handleExpiredSession:', err);
+    isHandlingExpiredSession = false;
+  }
+}
+
 async function refreshToken(): Promise<string | null> {
   // If already refreshing, wait for that to complete
   if (isRefreshing && refreshPromise) {
@@ -121,22 +221,24 @@ export async function apiRequest(
   // Handle auth errors with automatic token refresh
   if (response.status === 401 && _retryCount === 0) {
     console.log('🔒 API 401: Token expired, attempting refresh...');
-    
+
     const newToken = await refreshToken();
-    
+
     if (newToken) {
       console.log('✅ Retrying request with refreshed token');
-      // Retry the request with the new token (mark as retry to prevent infinite loop)
       return apiRequest(method, url, body, options, 1);
     } else {
-      console.log('❌ Token refresh failed - user needs to log in again');
-      localStorage.removeItem('supabase_token');
-      // Redirect to login page
-      if (!window.location.pathname.includes('/login')) {
-        window.location.href = '/login';
-      }
+      console.log('❌ Token refresh failed — recovering session');
+      void handleExpiredSession();
       return response;
     }
+  }
+
+  // Retried request still returned 401 — refreshed token was also rejected.
+  if (response.status === 401 && _retryCount > 0) {
+    console.log('❌ API 401 after retry — recovering session');
+    void handleExpiredSession();
+    return response;
   }
 
   if (response.status === 403) {
@@ -219,29 +321,44 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
-    const token = localStorage.getItem('supabase_token');
-    const activeRole = localStorage.getItem('activeRole');
-    
-    // Handle array query keys properly by joining them into a URL
-    // e.g., ['/api/staff', 5] becomes '/api/staff/5'
-    let url: string;
-    if (Array.isArray(queryKey) && queryKey.length > 1) {
-      url = queryKey.join('/');
-    } else {
-      url = queryKey[0] as string;
-    }
-    
-    const res = await fetch(url, {
-      credentials: "include",
-      cache: "no-store",
-      headers: {
-        ...(token && { Authorization: `Bearer ${token}` }),
-        ...(activeRole && { 'X-Active-Role': activeRole }),
-      },
-    });
+    const doFetch = async () => {
+      const token = localStorage.getItem('supabase_token');
+      const activeRole = localStorage.getItem('activeRole');
 
-    if (unauthorizedBehavior === "returnNull" && res.status === 401) {
-      return null;
+      // Handle array query keys properly by joining them into a URL
+      // e.g., ['/api/staff', 5] becomes '/api/staff/5'
+      let url: string;
+      if (Array.isArray(queryKey) && queryKey.length > 1) {
+        url = queryKey.join('/');
+      } else {
+        url = queryKey[0] as string;
+      }
+
+      return fetch(url, {
+        credentials: "include",
+        cache: "no-store",
+        headers: {
+          ...(token && { Authorization: `Bearer ${token}` }),
+          ...(activeRole && { 'X-Active-Role': activeRole }),
+        },
+      });
+    };
+
+    let res = await doFetch();
+
+    // On 401, try one silent token refresh; if still 401, trigger recovery.
+    if (res.status === 401) {
+      const newToken = await refreshToken();
+      if (newToken) {
+        res = await doFetch();
+      }
+
+      if (res.status === 401) {
+        void handleExpiredSession();
+        if (unauthorizedBehavior === "returnNull") {
+          return null;
+        }
+      }
     }
 
     await throwIfResNotOk(res);

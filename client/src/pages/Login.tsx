@@ -41,6 +41,7 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [registrationRequired, setRegistrationRequired] = useState<{message: string, email: string} | null>(null);
+  const [sessionExpiredMessage, setSessionExpiredMessage] = useState<string | null>(null);
   const setLocation = navigate; // Alias for clarity in the change
 
   useEffect(() => {
@@ -61,6 +62,25 @@ export default function Login() {
       window.history.replaceState({}, document.title, window.location.pathname);
       sessionStorage.removeItem('registration_required_message');
       sessionStorage.removeItem('registration_required_email');
+    }
+  }, []);
+
+  // Show a banner when redirected here by the session-expired recovery flow.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('session_expired') === '1') {
+      const message =
+        sessionStorage.getItem('session_expired_message') ||
+        'Your session expired. Please sign in again.';
+      setSessionExpiredMessage(message);
+
+      params.delete('session_expired');
+      const remainingQuery = params.toString();
+      const newUrl =
+        window.location.pathname + (remainingQuery ? `?${remainingQuery}` : '');
+      window.history.replaceState({}, document.title, newUrl);
+
+      sessionStorage.removeItem('session_expired_message');
     }
   }, []);
 
@@ -150,6 +170,16 @@ export default function Login() {
           </CardHeader>
 
           <CardContent className="space-y-6">
+            {/* Session Expired Message */}
+            {sessionExpiredMessage && (
+              <div
+                className="p-4 bg-amber-50 border border-amber-200 rounded-lg"
+                data-testid="session-expired-banner"
+              >
+                <p className="text-sm text-amber-800">{sessionExpiredMessage}</p>
+              </div>
+            )}
+
             {/* Registration Required Message */}
             {registrationRequired && (
               <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg" data-testid="registration-required-banner">

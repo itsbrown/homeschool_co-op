@@ -2,7 +2,16 @@ import React, { createContext, useContext, useState, useEffect, useRef } from "r
 import { useAuth } from "@/components/SupabaseProvider";
 import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { queryClient } from "@/lib/queryClient";
+import { queryClient, handleExpiredSession } from "@/lib/queryClient";
+
+// Marker error so downstream effects can distinguish stale auth from
+// transient network failures.
+export class AuthExpiredError extends Error {
+  constructor() {
+    super('Auth session expired');
+    this.name = 'AuthExpiredError';
+  }
+}
 
 // Maximum retry attempts for role loading (for newly registered users)
 const MAX_ROLE_RETRY_ATTEMPTS = 3;
@@ -28,6 +37,8 @@ interface RoleContextType {
   setShowRoleSelection: (show: boolean) => void;
   isLoadingRoles: boolean;
   isSettingUpAccount: boolean;
+  // Error from the role-loading query (null when loading or successful).
+  rolesError: Error | null;
 }
 
 export const RoleContext = createContext<RoleContextType | undefined>(undefined);
@@ -75,20 +86,34 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
           ...(token && { Authorization: `Bearer ${token}` })
         }
       });
+
+      // Stale/expired session: trigger centralized recovery and throw a marker
+      // error so the query stops retrying and the dashboard exits its loading
+      // state.
+      if (response.status === 401) {
+        console.warn('🔒 /api/user/roles returned 401 — triggering session recovery');
+        void handleExpiredSession();
+        throw new AuthExpiredError();
+      }
+
       if (!response.ok) {
         throw new Error('Failed to fetch roles');
       }
       const data = await response.json();
-      console.log('📋 Roles data received:', { 
-        roleCount: data.roles?.length || 0, 
+      console.log('📋 Roles data received:', {
+        roleCount: data.roles?.length || 0,
         activeRole: data.activeRole,
-        activeRoleId: data.activeRoleId 
+        activeRoleId: data.activeRoleId
       });
       return data;
     },
     enabled: !!user,
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
-    retry: 2, // Built-in retry for network failures
+    // Skip retry on auth-expired errors so we don't hammer the backend.
+    retry: (failureCount, error) => {
+      if (error instanceof AuthExpiredError) return false;
+      return failureCount < 2;
+    },
   });
 
   // Cleanup retry timeout on unmount
@@ -455,6 +480,7 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
         setShowRoleSelection,
         isLoadingRoles,
         isSettingUpAccount,
+        rolesError: rolesError as Error | null,
       }}
     >
       {children}

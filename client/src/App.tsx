@@ -1,11 +1,11 @@
 import React, { lazy, useEffect } from "react";
 import { Switch, Route, useLocation } from "wouter";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { queryClient } from "./lib/queryClient";
+import { queryClient, handleExpiredSession } from "./lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SupabaseProvider, useAuth } from "@/components/SupabaseProvider";
-import { RoleProvider, useRole } from "@/contexts/RoleContext";
+import { RoleProvider, useRole, AuthExpiredError } from "@/contexts/RoleContext";
 import { NotificationProvider } from "@/hooks/useNotifications";
 import { CartProvider } from "@/contexts/CartContext";
 import { FormTracker } from "@/components/FormTracker";
@@ -247,7 +247,17 @@ function SchoolAdminShellWrapper({ children }: { children: React.ReactNode }) {
 
 function DashboardRouter() {
   const { user } = useAuth();
-  const { activeRole, showRoleSelection, setActiveRole } = useRole();
+  const { activeRole, showRoleSelection, setActiveRole, isLoadingRoles, rolesError } = useRole();
+
+  // Safety net: if role loading failed because the session expired,
+  // trigger the centralized recovery. Limited to AuthExpiredError so a
+  // transient 500/network failure does not sign a valid user out.
+  React.useEffect(() => {
+    if (rolesError instanceof AuthExpiredError && !isLoadingRoles && !activeRole) {
+      console.warn('🔒 DashboardRouter: auth expired during role load — recovering');
+      void handleExpiredSession();
+    }
+  }, [rolesError, isLoadingRoles, activeRole]);
 
   console.log(`🚀 DashboardRouter called!`);
   console.log(`🔍 DashboardRouter - showRoleSelection:`, showRoleSelection, 'user email:', user?.email, 'activeRole:', activeRole);
@@ -294,8 +304,20 @@ function DashboardRouter() {
     return <MySchoolPage key={`dashboard-${activeRole}`} />;
   }
 
-  // Default fallback - show loading while role is being determined
+  // Default fallback - show loading while role is being determined.
+  // If the session expired, the effect above already triggered recovery;
+  // show a brief redirect message instead of an indefinite spinner.
   if (!activeRole) {
+    if (rolesError instanceof AuthExpiredError) {
+      return (
+        <div className="min-h-screen flex items-center justify-center" data-testid="dashboard-session-expired">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-gray-600">Your session expired. Sending you back to sign in…</p>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>

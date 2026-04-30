@@ -16,6 +16,28 @@ export const SupabaseLogin: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [sessionExpiredMessage, setSessionExpiredMessage] = useState<string | null>(null);
+
+  // Show a banner when redirected here by the session-expired recovery flow.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('session_expired') === '1') {
+      const message =
+        sessionStorage.getItem('session_expired_message') ||
+        'Your session expired. Please sign in again.';
+      setSessionExpiredMessage(message);
+
+      // Strip session_expired from the URL (preserve returnTo) so a refresh
+      // doesn't keep showing the banner.
+      params.delete('session_expired');
+      const remainingQuery = params.toString();
+      const newUrl =
+        window.location.pathname + (remainingQuery ? `?${remainingQuery}` : '');
+      window.history.replaceState({}, document.title, newUrl);
+
+      sessionStorage.removeItem('session_expired_message');
+    }
+  }, []);
 
   // Handle redirect after successful authentication
   // RoleContext handles role selection for multi-role users
@@ -81,6 +103,14 @@ export const SupabaseLogin: React.FC = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {sessionExpiredMessage && (
+            <Alert
+              className="mb-4 border-amber-200 bg-amber-50 text-amber-900"
+              data-testid="session-expired-banner"
+            >
+              <AlertDescription>{sessionExpiredMessage}</AlertDescription>
+            </Alert>
+          )}
           <div className="space-y-4">
             <form onSubmit={handleSignIn} className="space-y-4">
                 <div className="space-y-2">
