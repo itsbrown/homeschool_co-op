@@ -56,6 +56,11 @@ import {
   computeOutstandingDisplay,
   computeManualPayDisplay,
 } from "@/utils/parentBalance";
+import {
+  useUnpaidEnrollments,
+  usePayOutstanding,
+  type UnpaidEnrollment,
+} from "@/hooks/useUnpaidEnrollments";
 
 interface Payment {
   id: string;
@@ -1579,6 +1584,13 @@ function CombinedPaymentDialog({
 
 export default function PaymentManagement({ childId, defaultTab }: PaymentManagementProps) {
   const { toast } = useToast();
+  const {
+    unpaidEnrollments: payOutstandingEnrollments,
+    netDueCents: payOutstandingNetDueCents,
+    displayCents: payOutstandingDisplayCents,
+    isLoading: isLoadingPayOutstanding,
+  } = useUnpaidEnrollments();
+  const payOutstanding = usePayOutstanding();
   const [selectedPaymentId, setSelectedPaymentId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
@@ -1932,6 +1944,11 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
                   const creditsCents = creditsData?.totalAvailableCents || 0;
                   const { displayCents, showCreditsLine } =
                     computeOutstandingDisplay(outstandingCents, creditsCents);
+                  // Button visibility uses enrollment-only data (memberships
+                  // are not yet payable via the cart); display still includes them.
+                  const showPayButton =
+                    isLoadingPayOutstanding ||
+                    payOutstandingDisplayCents > 0;
                   return (
                     <>
                       <div className="text-2xl font-bold text-orange-600">
@@ -1950,6 +1967,28 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
                       <p className="text-xs text-muted-foreground mt-1">
                         {paymentStats.outstandingCount || 0} unpaid enrollments
                       </p>
+                      {showPayButton && (
+                        <Button
+                          className="mt-3 w-full h-11"
+                          onClick={() => payOutstanding(payOutstandingEnrollments)}
+                          disabled={
+                            isLoadingPayOutstanding ||
+                            payOutstandingEnrollments.length === 0
+                          }
+                          data-testid="button-pay-outstanding-overview"
+                        >
+                          {isLoadingPayOutstanding ? (
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          ) : (
+                            <CreditCard className="h-4 w-4 mr-2" />
+                          )}
+                          {isLoadingPayOutstanding
+                            ? 'Loading...'
+                            : payOutstandingNetDueCents > 0
+                            ? `Pay ${formatCurrency(payOutstandingNetDueCents)}`
+                            : 'Pay Now'}
+                        </Button>
+                      )}
                     </>
                   );
                 })()}
@@ -2371,7 +2410,22 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
             const groups = groupedPayments || [];
             const hasMultiplePaymentsInAnyGroup = groups.some((g: any) => g.paymentCount > 1);
 
-            if (groups.length === 0) {
+            // Filter out enrollments that already have a scheduled installment row,
+            // so we never double-show "What you owe" alongside the scheduled group.
+            const scheduledEnrollmentIds = new Set<number>(
+              (dbScheduledPayments || [])
+                .map((p: any) => p.enrollmentId)
+                .filter((id: any): id is number => typeof id === 'number'),
+            );
+            const unpaidWithoutScheduled = payOutstandingEnrollments.filter(
+              (e) => !scheduledEnrollmentIds.has(e.id),
+            );
+            const unpaidTotalCents = unpaidWithoutScheduled.reduce(
+              (sum, e) => sum + e.effectiveBalance,
+              0,
+            );
+
+            if (groups.length === 0 && unpaidWithoutScheduled.length === 0) {
               return (
                 <div className="text-center py-8 text-muted-foreground">
                   <Calendar className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
@@ -2383,6 +2437,86 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
 
             return (
               <div className="space-y-4">
+                {unpaidWithoutScheduled.length > 0 && (
+                  <Card className="border-l-4 border-l-blue-500" data-testid="card-what-you-owe">
+                    <CardHeader className="pb-3">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <CardTitle className="text-base flex items-center gap-2">
+                            <DollarSign className="h-4 w-4" />
+                            What you owe
+                          </CardTitle>
+                          <CardDescription>
+                            {unpaidWithoutScheduled.length} unpaid enrollment
+                            {unpaidWithoutScheduled.length === 1 ? '' : 's'}
+                          </CardDescription>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-2xl font-bold text-orange-600">
+                            {formatCurrency(unpaidTotalCents)}
+                          </div>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="pt-0">
+                      <div className="space-y-3">
+                        {unpaidWithoutScheduled.map((e) => (
+                          <div
+                            key={e.id}
+                            className="flex flex-col sm:flex-row sm:justify-between sm:items-center p-3 bg-muted/50 rounded-lg gap-3"
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className="h-8 w-8 rounded-full flex items-center justify-center bg-orange-100 text-orange-700 shrink-0">
+                                <DollarSign className="h-4 w-4" />
+                              </div>
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <h4 className="font-medium text-sm truncate">
+                                    {e.childName}
+                                  </h4>
+                                  <Badge
+                                    variant="outline"
+                                    className="text-xs bg-blue-50 text-blue-700 border-blue-200"
+                                  >
+                                    Class Enrollment
+                                  </Badge>
+                                </div>
+                                <p className="text-xs text-muted-foreground truncate">
+                                  {e.className}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3 sm:justify-end">
+                              <p className="font-medium">
+                                {formatCurrency(e.effectiveBalance)}
+                              </p>
+                              <Button
+                                size="sm"
+                                onClick={() => payOutstanding([e])}
+                                data-testid={`button-pay-unpaid-enrollment-${e.id}`}
+                              >
+                                Pay Now
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      {unpaidWithoutScheduled.length > 1 && (
+                        <div className="mt-4">
+                          <Button
+                            className="w-full bg-green-600 hover:bg-green-700"
+                            onClick={() => payOutstanding(unpaidWithoutScheduled)}
+                            data-testid="button-pay-all-unpaid"
+                          >
+                            <CreditCard className="h-4 w-4 mr-2" />
+                            Pay All ({formatCurrency(unpaidTotalCents)})
+                          </Button>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
+
                 {hasMultiplePaymentsInAnyGroup && (
                   <Alert className="border-blue-200 bg-blue-50">
                     <Users className="h-4 w-4 text-blue-600" />

@@ -1400,8 +1400,9 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const getEnrollmentBalance = (e: any): number =>
           e.effectiveBalance ?? Math.max(0, (e.totalCost || 0) - (e.totalPaid || 0) - (e.compAmountCents ?? 0));
 
-        const hasBalance = getEnrollmentBalance(latestEnrollment) > 0 && 
-                          latestEnrollment.paymentSystemVersion === 'v2_stripe';
+        // Include any unpaid enrollment regardless of paymentSystemVersion so
+        // legacy / Full-Payment plans flow through the Pay Outstanding pipeline.
+        const hasBalance = getEnrollmentBalance(latestEnrollment) > 0;
         
         // Check if there's a fully paid enrollment (enrolled with no balance)
         const hasFullyPaidEnrollment = sortedEnrollments.some(e => 

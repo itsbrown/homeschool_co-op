@@ -14,11 +14,14 @@ module.exports = {
     '<rootDir>/client/**/*.{spec,test}.{ts,tsx}',
   ],
   transform: {
-    '^.+\\.tsx?$': ['ts-jest', {
+    '^.+\\.(t|j)sx?$': ['ts-jest', {
+      diagnostics: false,
+      isolatedModules: true,
       tsconfig: {
         jsx: 'react-jsx',
         esModuleInterop: true,
         allowSyntheticDefaultImports: true,
+        allowJs: true,
       },
     }],
   },
@@ -31,4 +34,7 @@ module.exports = {
   coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov', 'html'],
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json'],
+  transformIgnorePatterns: [
+    '/node_modules/(?!(wouter|regexparam|mitt)/)',
+  ],
 };

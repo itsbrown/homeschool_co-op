@@ -10,6 +10,8 @@ import { useAuth } from "@/components/SupabaseProvider";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useCart } from "@/contexts/CartContext";
+import { useUnpaidEnrollments, usePayOutstanding } from "@/hooks/useUnpaidEnrollments";
+import { formatCurrency } from "@/lib/utils";
 import OnboardingTour from "@/components/onboarding/OnboardingTour";
 import { Input } from "@/components/ui/input";
 import ParentCalendarView from "@/components/calendar/ParentCalendarView";
@@ -239,6 +241,16 @@ export default function ParentDashboard() {
   const [memberIdInput, setMemberIdInput] = useState("");
   const { toast } = useToast();
   const { cart } = useCart();
+  const {
+    unpaidEnrollments,
+    displayCents: outstandingDisplayCents,
+    netDueCents: outstandingNetDueCents,
+    showCreditsLine: showOutstandingCreditsLine,
+    creditsCents: outstandingCreditsCents,
+    totalOutstandingCents,
+    isLoading: isLoadingUnpaid,
+  } = useUnpaidEnrollments();
+  const payOutstanding = usePayOutstanding();
 
   // Fetch user's member ID and membership status
   interface MemberIdResponse {
@@ -730,10 +742,43 @@ export default function ParentDashboard() {
                 <DollarSign className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">
-                  {enrollmentsData?.filter((e: any) => e.paymentStatus !== 'completed').length || 0}
-                </div>
-                <p className="text-xs text-muted-foreground">Unpaid enrollments</p>
+                {totalOutstandingCents > 0 ? (
+                  <>
+                    <div className="text-2xl font-bold text-orange-600">
+                      {formatCurrency(outstandingDisplayCents)}
+                    </div>
+                    {showOutstandingCreditsLine && (
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        <div>Owed: {formatCurrency(totalOutstandingCents)}</div>
+                        <div className="text-amber-700">
+                          − Credits available: {formatCurrency(outstandingCreditsCents)}
+                        </div>
+                      </div>
+                    )}
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {unpaidEnrollments.length} unpaid enrollment
+                      {unpaidEnrollments.length === 1 ? '' : 's'}
+                    </p>
+                    <Button
+                      className="mt-3 w-full h-11"
+                      onClick={() => payOutstanding(unpaidEnrollments)}
+                      disabled={isLoadingUnpaid || unpaidEnrollments.length === 0}
+                      data-testid="button-pay-outstanding-dashboard"
+                    >
+                      <CreditCard className="h-4 w-4 mr-2" />
+                      {outstandingNetDueCents > 0
+                        ? `Pay ${formatCurrency(outstandingNetDueCents)}`
+                        : 'Pay Now'}
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-2xl font-bold">
+                      {enrollmentsData?.filter((e: any) => e.paymentStatus !== 'completed').length || 0}
+                    </div>
+                    <p className="text-xs text-muted-foreground">Unpaid enrollments</p>
+                  </>
+                )}
               </CardContent>
             </Card>
 
