@@ -1442,9 +1442,10 @@ interface ConsolidatedPaymentReminderData {
     childName: string;
     className: string;
     amountCents: number;
-    dueDate: Date;
+    dueDate: Date | null;
     isOverdue: boolean;
     daysOverdue: number;
+    kind?: 'scheduled' | 'unscheduled';
   }>;
   overdueCount: number;
   overdueAmountCents: number;
@@ -1490,23 +1491,34 @@ export async function sendConsolidatedPaymentReminder(data: ConsolidatedPaymentR
       ? `Action Required: ${overdueCount} Overdue Payment${overdueCount > 1 ? 's' : ''} - ${formatCurrency(totalAmountCents)} Total Due`
       : `Payment Summary: ${formatCurrency(totalAmountCents)} Total Due`;
 
-    const paymentRows = payments.map(p => `
+    const paymentRows = payments.map(p => {
+      const isUnscheduled = p.kind === 'unscheduled' || p.dueDate === null;
+      const dueDateCell = isUnscheduled || !p.dueDate ? '&mdash;' : formatDate(p.dueDate);
+      let statusPill: string;
+      if (isUnscheduled) {
+        statusPill = `<span style="background-color: #E0E7FF; color: #3730A3; padding: 2px 8px; border-radius: 4px; font-size: 12px;">No Plan</span>`;
+      } else if (p.isOverdue) {
+        statusPill = `<span style="background-color: #FEE2E2; color: #991B1B; padding: 2px 8px; border-radius: 4px; font-size: 12px;">${p.daysOverdue}d overdue</span>`;
+      } else {
+        statusPill = `<span style="background-color: #FEF3C7; color: #92400E; padding: 2px 8px; border-radius: 4px; font-size: 12px;">Pending</span>`;
+      }
+      return `
       <tr style="border-bottom: 1px solid #E5E7EB;">
         <td style="padding: 12px 8px;">${p.childName}</td>
         <td style="padding: 12px 8px;">${p.className}</td>
-        <td style="padding: 12px 8px;">${formatDate(p.dueDate)}</td>
+        <td style="padding: 12px 8px;">${dueDateCell}</td>
         <td style="padding: 12px 8px; text-align: right; font-weight: 500;">${formatCurrency(p.amountCents)}</td>
-        <td style="padding: 12px 8px; text-align: center;">
-          ${p.isOverdue 
-            ? `<span style="background-color: #FEE2E2; color: #991B1B; padding: 2px 8px; border-radius: 4px; font-size: 12px;">${p.daysOverdue}d overdue</span>` 
-            : `<span style="background-color: #FEF3C7; color: #92400E; padding: 2px 8px; border-radius: 4px; font-size: 12px;">Pending</span>`}
-        </td>
+        <td style="padding: 12px 8px; text-align: center;">${statusPill}</td>
       </tr>
-    `).join('');
+    `;
+    }).join('');
 
-    const paymentTextRows = payments.map(p => 
-      `- ${p.childName} | ${p.className} | Due: ${formatDate(p.dueDate)} | ${formatCurrency(p.amountCents)} ${p.isOverdue ? `(${p.daysOverdue} days overdue)` : ''}`
-    ).join('\n');
+    const paymentTextRows = payments.map(p => {
+      const isUnscheduled = p.kind === 'unscheduled' || p.dueDate === null;
+      const dueText = isUnscheduled || !p.dueDate ? 'No Plan' : `Due: ${formatDate(p.dueDate)}`;
+      const overdueSuffix = !isUnscheduled && p.isOverdue ? ` (${p.daysOverdue} days overdue)` : '';
+      return `- ${p.childName} | ${p.className} | ${dueText} | ${formatCurrency(p.amountCents)}${overdueSuffix}`;
+    }).join('\n');
 
     const htmlContent = `
       <html>
