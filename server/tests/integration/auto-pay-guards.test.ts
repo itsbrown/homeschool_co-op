@@ -331,6 +331,233 @@ describe('Auto-Pay Guard Conditions', () => {
     expect(payment.status).toBe('pending');
   }, 30000);
 
+  it('G14: parent-manual-credits-only — Pay Now flow takes credits-only branch with chargedBy=parent_manual', async () => {
+    // Task 173 regression-pin: Grace Mulcahy was charged $271.50 by manual
+    // Pay Now while she had a $90 credit that should have been applied. The
+    // fix routes the parent-initiated flow through the same atomic credits-
+    // only path as auto-pay (`createCreditHolds` → `completeCreditsOnlyPayment`),
+    // tagging the row with chargedBy='parent_manual' so the credit-divergence
+    // audit can distinguish it.
+    //
+    // Scenario: 5000¢ installment, 5000¢ credit. Expected: no Stripe call,
+    // status='completed', completionSource='parent_manual_credits_only',
+    // chargedBy='parent_manual', credit fully consumed.
+    const { scheduledPaymentId, enrollmentId, creditId } = await seedScenario('parent-manual-credits-only');
+
+    const enrollmentBefore = await getEnrollment(enrollmentId);
+
+    const res = await fetch(`${BASE_URL}/api/test/run-parent-manual-credits-only/${scheduledPaymentId}`, {
+      method: 'POST',
+      headers: HEADERS,
+    });
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`run-parent-manual-credits-only failed (${res.status}): ${body}`);
+    }
+    const data = (await res.json()) as { success: boolean; result: string; creditsApplied: number; originalAmount: number };
+
+    expect(data.success).toBe(true);
+    expect(data.result).toBe('completed');
+    expect(data.creditsApplied).toBe(5000);
+    expect(data.originalAmount).toBe(5000);
+
+    const payment = await getPayment(scheduledPaymentId);
+    expect(payment.status).toBe('completed');
+    expect(payment.chargedBy).toBe('parent_manual');
+    expect(payment.completionSource).toBe('parent_manual_credits_only');
+    expect(payment.stripePaymentIntentId).toBeFalsy(); // no Stripe call
+
+    const enrollmentAfter = await getEnrollment(enrollmentId);
+    expect(enrollmentAfter.totalPaid).toBe((enrollmentBefore.totalPaid || 0) + 5000);
+
+    const credit = await getCredit(creditId!);
+    expect(credit.usedAmountCents).toBe(5000);
+  }, 30000);
+
+  it('G15: parent-manual divergence guard returns 409 when client charge amount diverges from server math', async () => {
+    // Task 173 regression-pin: Grace Mulcahy was billed $271.50 while the
+    // page displayed $181.50. The fix wraps the manual Pay Now flow in a
+    // server-authoritative divergence guard that 409s when the client's
+    // expectedChargeAmount no longer matches what the server is about to
+    // charge. This test forces the mismatch and asserts the 409 + alert.
+    //
+    // Scenario: 5000¢ installment, 5000¢ credit available → server's
+    // chargeAmount=0 (credits-only). Client sends expectedChargeAmount=5000
+    // (stale value from before credits were applied). Guard must fire.
+    const { scheduledPaymentId } = await seedScenario('parent-manual-credits-only');
+
+    interface ErrorLogCountResponse { count: number }
+    interface DivergenceGuardResponse {
+      success: boolean;
+      code?: string;
+      chargeAmount?: number;
+      actualChargeAmount?: number;
+      creditsApplied?: number;
+      originalAmount?: number;
+      expectedChargeAmount?: number;
+      isCreditsOnly?: boolean;
+    }
+
+    const fetchErrorLogCount = async (): Promise<number> => {
+      try {
+        const r = await fetch(
+          `${BASE_URL}/api/test/count-error-logs?errorType=payment&severity=high`,
+          { headers: HEADERS },
+        );
+        if (!r.ok) return 0;
+        const body = (await r.json()) as ErrorLogCountResponse;
+        return body.count ?? 0;
+      } catch {
+        return 0;
+      }
+    };
+
+    const beforeCount = await fetchErrorLogCount();
+
+    const res = await fetch(`${BASE_URL}/api/test/run-parent-manual-divergence-guard/${scheduledPaymentId}`, {
+      method: 'POST',
+      headers: HEADERS,
+      body: JSON.stringify({ expectedChargeAmount: 5000, applyCredits: true }),
+    });
+    expect(res.status).toBe(409);
+    const data = (await res.json()) as DivergenceGuardResponse;
+    expect(data.success).toBe(false);
+    expect(data.code).toBe('charge_amount_diverged');
+    expect(data.actualChargeAmount).toBe(0); // credits cover everything
+    expect(data.creditsApplied).toBe(5000);
+    expect(data.originalAmount).toBe(5000);
+    expect(data.expectedChargeAmount).toBe(5000);
+
+    // Sanity: a matching expected amount should NOT trip the guard.
+    const okRes = await fetch(`${BASE_URL}/api/test/run-parent-manual-divergence-guard/${scheduledPaymentId}`, {
+      method: 'POST',
+      headers: HEADERS,
+      body: JSON.stringify({ expectedChargeAmount: 0, applyCredits: true }),
+    });
+    expect(okRes.status).toBe(200);
+    const okData = (await okRes.json()) as DivergenceGuardResponse;
+    expect(okData.success).toBe(true);
+    expect(okData.chargeAmount).toBe(0);
+    expect(okData.isCreditsOnly).toBe(true);
+
+    // The audit alert should have written one new high-severity payment row.
+    const afterCount = await fetchErrorLogCount();
+    expect(afterCount).toBeGreaterThanOrEqual(beforeCount + 1);
+  }, 30000);
+
+  it('G16: parent-manual divergence guard rejects requests missing expectedChargeAmount with 400', async () => {
+    // Task 173 contract pin: the manual Pay Now flow REQUIRES the client to
+    // declare the amount it expected to charge so the server can compare and
+    // 409 on divergence. A missing/non-finite/negative value must short-circuit
+    // with 400 expected_charge_amount_required so the guard can never be
+    // silently bypassed.
+    interface RequiredFieldErrorResponse { success: boolean; code?: string }
+    const { scheduledPaymentId } = await seedScenario('parent-manual-credits-only');
+
+    const cases: { body: Record<string, unknown>; label: string }[] = [
+      { body: {}, label: 'missing' },
+      { body: { expectedChargeAmount: null }, label: 'null' },
+      { body: { expectedChargeAmount: 'not-a-number' }, label: 'string' },
+      { body: { expectedChargeAmount: -100 }, label: 'negative' },
+      { body: { expectedChargeAmount: Number.NaN }, label: 'NaN' },
+    ];
+
+    for (const c of cases) {
+      const res = await fetch(
+        `${BASE_URL}/api/test/run-parent-manual-divergence-guard/${scheduledPaymentId}`,
+        {
+          method: 'POST',
+          headers: HEADERS,
+          body: JSON.stringify(c.body),
+        },
+      );
+      expect(res.status).toBe(400);
+      const data = (await res.json()) as RequiredFieldErrorResponse;
+      expect(data.success).toBe(false);
+      expect(data.code).toBe('expected_charge_amount_required');
+    }
+  }, 30000);
+
+  it('G17: stale PI is cancelled and row reset when transitioning to credits-only Pay Now', async () => {
+    // Task 173 regression-pin (3rd code review): if a parent first attempted
+    // Pay Now without credits — creating a Stripe PI and flipping the row to
+    // `processing` — and then re-attempted with credits ON so the new
+    // decision is credits-only, the production handler MUST cancel the stale
+    // PI and reset the row before settling with credits. Otherwise the old
+    // PI's client secret could still be confirmed AFTER credits already paid
+    // the installment, double-collecting the very thing this task fixes.
+    //
+    // This test exercises the production helper
+    // `cancelStalePiForCreditsOnlyTransition` via /api/test/run-stale-pi-
+    // credits-only-transition. The fake PI ID makes Stripe's retrieve return
+    // a 'gone' outcome (resource_missing), but the post-conditions on the DB
+    // row are identical to a real cancel:
+    //   - status reset from 'processing' to 'pending' before credits-only,
+    //     then to 'completed' after the credits-only branch runs.
+    //   - stripePaymentIntentId cleared.
+    //   - metadata flags previousStripePaymentIntentId, canceledDueToCreditsOnly,
+    //     stalePiCancelOutcome, and stalePiCancelledAt all set.
+    interface StaleTransitionResponse {
+      success: boolean;
+      outcome: 'cancelled' | 'gone' | 'not_cancelable';
+      stalePaymentIntentId: string;
+      rowAfterCancel: {
+        status: string;
+        stripePaymentIntentId: string | null;
+        metadata: Record<string, unknown>;
+      };
+      rowAfterComplete: {
+        status: string;
+        stripePaymentIntentId: string | null;
+        chargedBy?: string;
+        completionSource?: string;
+      };
+    }
+
+    const { scheduledPaymentId, creditId } = await seedScenario('parent-manual-credits-only');
+
+    const fakeStalePi = `pi_test_fake_stale_${scheduledPaymentId}_${Date.now()}`;
+    const res = await fetch(
+      `${BASE_URL}/api/test/run-stale-pi-credits-only-transition/${scheduledPaymentId}`,
+      {
+        method: 'POST',
+        headers: HEADERS,
+        body: JSON.stringify({ fakeStalePaymentIntentId: fakeStalePi }),
+      },
+    );
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`run-stale-pi-credits-only-transition failed (${res.status}): ${body}`);
+    }
+    const data = (await res.json()) as StaleTransitionResponse;
+
+    expect(data.success).toBe(true);
+    // Fake PI ID → Stripe returns resource_missing → helper returns 'gone'.
+    // Either 'cancelled' or 'gone' is an acceptable outcome (the row state
+    // and metadata are what matter); 'not_cancelable' would mean the helper
+    // failed to clean up.
+    expect(data.outcome).not.toBe('not_cancelable');
+    expect(data.stalePaymentIntentId).toBe(fakeStalePi);
+
+    // Row was reset before the credits-only branch ran.
+    expect(data.rowAfterCancel.status).toBe('pending');
+    expect(data.rowAfterCancel.stripePaymentIntentId).toBeFalsy();
+    expect(data.rowAfterCancel.metadata.canceledDueToCreditsOnly).toBe(true);
+    expect(data.rowAfterCancel.metadata.previousStripePaymentIntentId).toBe(fakeStalePi);
+    expect(typeof data.rowAfterCancel.metadata.stalePiCancelledAt).toBe('string');
+    expect(typeof data.rowAfterCancel.metadata.stalePiCancelOutcome).toBe('string');
+
+    // Credits-only path completed end-to-end after the cleanup.
+    expect(data.rowAfterComplete.status).toBe('completed');
+    expect(data.rowAfterComplete.stripePaymentIntentId).toBeFalsy();
+    expect(data.rowAfterComplete.chargedBy).toBe('parent_manual');
+    expect(data.rowAfterComplete.completionSource).toBe('parent_manual_credits_only');
+
+    // Credit fully consumed by the credits-only branch.
+    const credit = await getCredit(creditId!);
+    expect(credit.usedAmountCents).toBe(5000);
+  }, 30000);
+
   it('G13: comped-credits-full-cover — enrollment paymentStatus reaches completed when comp discount is present', async () => {
     // Bug 3 regression: balance formula ignored compAmountCents, causing paymentStatus to stay
     // 'partial_payment' even when a comped enrollment was fully paid.

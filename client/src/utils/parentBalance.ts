@@ -102,3 +102,72 @@ export function computeParentOutstandingTotal(
   );
   return enrollmentsTotal + membershipsTotal;
 }
+
+function safeNumber(value: number): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return 0;
+  return Math.max(0, value);
+}
+
+/**
+ * Credit-aware Outstanding Balance display logic. Mirrors the rule the
+ * manual Pay Now flow uses on the server: credits default ON, so what the
+ * parent sees as "Outstanding" should equal what the card will actually be
+ * charged (gross owed minus available credits, floored at zero).
+ *
+ * `showCreditsLine` controls whether the breakdown ("Owed: X − Credits: Y")
+ * is rendered. We only show it when both sides are positive.
+ */
+export function computeOutstandingDisplay(
+  outstandingCents: number,
+  creditsCents: number,
+): { displayCents: number; netDueCents: number; showCreditsLine: boolean } {
+  const safeOutstanding = safeNumber(outstandingCents);
+  const safeCredits = safeNumber(creditsCents);
+  const netDueCents = Math.max(0, safeOutstanding - safeCredits);
+  const showCreditsLine = safeCredits > 0 && safeOutstanding > 0;
+  return {
+    displayCents: showCreditsLine ? netDueCents : safeOutstanding,
+    netDueCents,
+    showCreditsLine,
+  };
+}
+
+export const STRIPE_MIN_CHARGE_CENTS = 50;
+
+/**
+ * Client-side mirror of `server/utils/manualPayCredits.ts:computeManualPayCredits`.
+ * Drives the Pay Now dialog's displayed breakdown and the `expectedChargeAmount`
+ * the dialog sends to /pay; the server is still the sole authority and 409s on
+ * any divergence > 1¢. Keep the rules in lockstep with the server helper.
+ */
+export function computeManualPayDisplay(input: {
+  amount: number;
+  availableCredits: number;
+  applyCredits: boolean;
+}): {
+  creditsToApply: number;
+  amountAfterCredits: number;
+  isFullyCoveredByCredits: boolean;
+} {
+  const amount = safeNumber(input.amount);
+  const availableCredits = safeNumber(input.availableCredits);
+  const applyCredits = input.applyCredits !== false;
+
+  let creditsToApply = 0;
+  if (applyCredits && availableCredits > 0 && amount > 0) {
+    if (availableCredits >= amount) {
+      creditsToApply = amount;
+    } else {
+      const maxForPartial = amount - STRIPE_MIN_CHARGE_CENTS;
+      creditsToApply = availableCredits <= maxForPartial
+        ? availableCredits
+        : Math.max(0, maxForPartial);
+    }
+  }
+  const amountAfterCredits = Math.max(0, amount - creditsToApply);
+  return {
+    creditsToApply,
+    amountAfterCredits,
+    isFullyCoveredByCredits: amountAfterCredits === 0 && creditsToApply > 0,
+  };
+}

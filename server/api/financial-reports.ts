@@ -1816,5 +1816,161 @@ router.get('/balance-audit', balanceAuditHandler);
 export const balanceAuditAliasRouter = express.Router();
 balanceAuditAliasRouter.get('/', balanceAuditHandler);
 
+// ----------------------------------------------------------------------------
+// Credit-Divergence Audit (Task 173)
+//
+// Forensic ledger replay: for each parent-initiated card payment, computes the
+// credits that were *actually available at the moment the card was charged* —
+// approved_at <= processed_at, minus any usage the ledger had recorded by then
+// (unifiedCreditUsageLogs.created_at <= processed_at). This is the contract
+// the auto-pay scheduler uses, so the audit reflects whether Pay Now would
+// have made the same decision. Rows here are real refund candidates.
+// ----------------------------------------------------------------------------
+/**
+ * Reusable query: returns flagged manual-pay payments where the parent had
+ * unused approved credits at the moment the card was charged. Pass `schoolId`
+ * to scope to one school; omit for a global sweep (used by the daily notifier).
+ */
+export async function findCreditDivergenceFlaggedPayments(
+  schoolId?: number,
+): Promise<any[]> {
+  const db = await getDb();
+  const schoolFilter = typeof schoolId === 'number'
+    ? sql`AND sp.school_id = ${schoolId}`
+    : sql``;
+
+  const rows = await db.execute(
+    sql`
+        WITH manual_pays AS (
+          SELECT
+            sp.id,
+            sp.parent_id,
+            sp.parent_email,
+            sp.school_id,
+            sp.amount,
+            sp.processed_at,
+            sp.installment_number,
+            sp.total_installments,
+            sp.charged_by,
+            sp.completion_source,
+            sp.stripe_payment_intent_id,
+            sp.metadata,
+            pe.child_name,
+            pe.class_name
+          FROM scheduled_payments sp
+          LEFT JOIN program_enrollments pe ON pe.id = sp.enrollment_id
+          WHERE sp.status = 'completed'
+            AND sp.charged_by IN ('parent_manual', 'parent_manual_saved_card')
+            AND sp.processed_at IS NOT NULL
+            AND COALESCE((sp.metadata ->> 'creditsAppliedCents')::int, 0) < sp.amount
+            ${schoolFilter}
+        ),
+        -- For every (manual_pay, eligible_credit) pair compute the credit's
+        -- ledger-balance at the moment of the charge (approved <= processed_at,
+        -- minus usage_log entries whose created_at <= processed_at).
+        per_credit_balance AS (
+          SELECT
+            mp.id                                                       AS scheduled_payment_id,
+            mp.parent_id,
+            mp.school_id,
+            mp.amount,
+            mp.processed_at,
+            mp.installment_number,
+            mp.total_installments,
+            mp.charged_by,
+            mp.completion_source,
+            mp.stripe_payment_intent_id,
+            mp.metadata,
+            mp.child_name,
+            mp.class_name,
+            mp.parent_email,
+            c.id                                                        AS credit_id,
+            c.credit_amount_cents
+              - COALESCE((
+                  SELECT SUM(ucu.amount_cents)
+                  FROM unified_credit_usage_logs ucu
+                  WHERE ucu.credit_id = c.id
+                    AND ucu.created_at <= mp.processed_at
+                ), 0)
+              AS available_at_charge_cents
+          FROM manual_pays mp
+          JOIN credits c
+            ON c.user_id = mp.parent_id
+           AND c.school_id = mp.school_id
+           AND c.status IN ('approved', 'partially_used', 'used')
+           AND c.approved_at IS NOT NULL
+           AND c.approved_at <= mp.processed_at
+        )
+        SELECT
+          pcb.scheduled_payment_id                                       AS "scheduledPaymentId",
+          pcb.parent_id                                                  AS "parentId",
+          pcb.parent_email                                               AS "parentEmail",
+          u.name                                                         AS "parentName",
+          pcb.school_id                                                  AS "schoolId",
+          pcb.amount                                                     AS "chargedAmount",
+          pcb.processed_at                                               AS "processedAt",
+          pcb.installment_number                                         AS "installmentNumber",
+          pcb.total_installments                                         AS "totalInstallments",
+          pcb.charged_by                                                 AS "chargedBy",
+          pcb.completion_source                                          AS "completionSource",
+          pcb.stripe_payment_intent_id                                   AS "stripePaymentIntentId",
+          pcb.child_name                                                 AS "childName",
+          pcb.class_name                                                 AS "className",
+          COALESCE((pcb.metadata ->> 'creditsAppliedCents')::int, 0)     AS "creditsAppliedCents",
+          SUM(GREATEST(pcb.available_at_charge_cents, 0))::int           AS "unusedCreditsAtChargeCents",
+          LEAST(
+            pcb.amount - COALESCE((pcb.metadata ->> 'creditsAppliedCents')::int, 0),
+            SUM(GREATEST(pcb.available_at_charge_cents, 0))
+          )::int                                                         AS "estimatedRefundCents"
+        FROM per_credit_balance pcb
+        LEFT JOIN users u ON u.id = pcb.parent_id
+        GROUP BY
+          pcb.scheduled_payment_id, pcb.parent_id, pcb.parent_email,
+          pcb.school_id, pcb.amount, pcb.processed_at,
+          pcb.installment_number, pcb.total_installments, pcb.charged_by,
+          pcb.completion_source, pcb.stripe_payment_intent_id,
+          pcb.metadata, pcb.child_name, pcb.class_name, u.name
+        HAVING SUM(GREATEST(pcb.available_at_charge_cents, 0)) > 0
+        ORDER BY pcb.processed_at DESC, pcb.scheduled_payment_id DESC
+      `
+  );
+  return rows.rows as any[];
+}
+
+async function creditDivergenceAuditHandler(req: any, res: any) {
+  try {
+    const result = await getSchoolAdminWithFeatureCheck(req, 'financialReports');
+    if (isError(result)) {
+      return res.status(result.status).json({ error: result.error });
+    }
+    const { schoolId } = result;
+
+    const flaggedPayments = await findCreditDivergenceFlaggedPayments(schoolId);
+    const totalEstimatedRefundCents = flaggedPayments.reduce(
+      (sum, r) => sum + (r.estimatedRefundCents || 0),
+      0,
+    );
+
+    return res.json({
+      flaggedPayments,
+      summary: {
+        flaggedCount: flaggedPayments.length,
+        totalEstimatedRefundCents,
+      },
+    });
+  } catch (error: any) {
+    console.error('Error fetching credit-divergence audit:', error);
+    return res.status(500).json({ error: 'Failed to fetch credit divergence audit data' });
+  }
+}
+
+// Full path: GET /api/admin/financial-reports/credit-divergence-audit
+router.get('/credit-divergence-audit', creditDivergenceAuditHandler);
+
+// Alias router so the endpoint is also reachable at
+// /api/admin/credit-divergence-audit (mounted separately in app-init.ts).
+export const creditDivergenceAuditAliasRouter = express.Router();
+creditDivergenceAuditAliasRouter.get('/', creditDivergenceAuditHandler);
+
 export default router;
 

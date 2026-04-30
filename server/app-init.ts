@@ -30,7 +30,10 @@ import errorTelemetryRouter from "./api/error-telemetry";
 import { errorNotificationService } from "./services/error-notification";
 import { registerObjectStorageRoutes } from "./replit_integrations/object_storage";
 import unifiedUploadsRouter from "./api/unified-uploads";
-import financialReportsRouter, { balanceAuditAliasRouter } from "./api/financial-reports";
+import financialReportsRouter, {
+  balanceAuditAliasRouter,
+  creditDivergenceAuditAliasRouter,
+} from "./api/financial-reports";
 import retentionRouter from "./api/retention";
 import scheduleBuilderRouter from "./api/schedule-builder";
 import scheduleAiRouter from "./api/schedule-ai";
@@ -301,6 +304,9 @@ export async function initializeApp(app: Express, httpServer: Server): Promise<v
   app.use('/api/admin/financial-reports', jwtCheck, requireRole(['schoolAdmin', 'admin', 'superAdmin']), financialReportsRouter);
   // Alias: GET /api/admin/balance-audit → same handler as /api/admin/financial-reports/balance-audit
   app.use('/api/admin/balance-audit', jwtCheck, requireRole(['schoolAdmin', 'admin', 'superAdmin']), balanceAuditAliasRouter);
+  // Alias: GET /api/admin/credit-divergence-audit → same handler as
+  // /api/admin/financial-reports/credit-divergence-audit (Task 173)
+  app.use('/api/admin/credit-divergence-audit', jwtCheck, requireRole(['schoolAdmin', 'admin', 'superAdmin']), creditDivergenceAuditAliasRouter);
   app.use('/api/admin/retention', jwtCheck, requireRole(['schoolAdmin', 'admin', 'superAdmin']), retentionRouter);
   app.use('/api/admin/memberships', jwtCheck, requireRole(['schoolAdmin', 'admin', 'superAdmin']), membershipRouter);
 

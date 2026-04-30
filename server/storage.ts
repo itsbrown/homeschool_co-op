@@ -711,6 +711,21 @@ export interface IStorage {
     parentEmail: string;
     childName: string | null;
     className: string | null;
+    /**
+     * Audit field: who initiated the credits-only completion. Defaults to
+     * 'auto_pay' for backwards compatibility with the auto-pay scheduler;
+     * the parent-initiated Pay Now flow passes 'parent_manual'.
+     */
+    chargedBy?: 'auto_pay' | 'parent_manual' | 'parent_manual_saved_card' | 'admin_manual';
+    /**
+     * Optional override for `completion_source`. Defaults to 'credits_only'.
+     */
+    completionSource?: string;
+    /**
+     * Optional override for the human-readable description recorded on the
+     * payment row and credit-usage log. Defaults to the auto-pay phrasing.
+     */
+    description?: string;
   }): Promise<void>;
   getActiveHoldsForUser(userId: number): Promise<CreditHold[]>;
   getTotalHeldCreditsForUser(userId: number): Promise<number>;
@@ -7880,6 +7895,9 @@ import { DatabaseStorage } from "./dbStorage";
         parentEmail: string;
         childName: string | null;
         className: string | null;
+        chargedBy?: 'auto_pay' | 'parent_manual' | 'parent_manual_saved_card' | 'admin_manual';
+        completionSource?: string;
+        description?: string;
       }): Promise<void> {
         return this.dbStorage.completeCreditsOnlyPayment(params);
       }

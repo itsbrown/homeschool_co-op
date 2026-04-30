@@ -2,6 +2,7 @@ import {
   getEnrollmentEffectiveBalance,
   getMembershipOutstandingBalance,
   computeParentOutstandingTotal,
+  computeOutstandingDisplay,
 } from '../parentBalance';
 
 /**
@@ -165,5 +166,57 @@ describe('computeParentOutstandingTotal', () => {
     expect(computeParentOutstandingTotal(null)).toBe(0);
     expect(computeParentOutstandingTotal(undefined, undefined)).toBe(0);
     expect(computeParentOutstandingTotal([], [])).toBe(0);
+  });
+});
+
+/**
+ * Task 173 — credit-aware Outstanding Balance display.
+ *
+ * The displayed "Outstanding" amount on the Payment Management overview must
+ * match what the manual Pay Now flow will actually charge after the server
+ * auto-applies credits. These tests pin that contract.
+ */
+describe('computeOutstandingDisplay (credit-aware Outstanding Balance)', () => {
+  it('displays gross outstanding when there are no credits', () => {
+    const r = computeOutstandingDisplay(18_150, 0);
+    expect(r.displayCents).toBe(18_150);
+    expect(r.netDueCents).toBe(18_150);
+    expect(r.showCreditsLine).toBe(false);
+  });
+
+  it('subtracts credits and shows the breakdown when both sides are positive (Grace scenario)', () => {
+    // Grace had $181.50 owed and $90.00 in approved credits → display $91.50.
+    const r = computeOutstandingDisplay(18_150, 9_000);
+    expect(r.displayCents).toBe(9_150);
+    expect(r.netDueCents).toBe(9_150);
+    expect(r.showCreditsLine).toBe(true);
+  });
+
+  it('floors net at zero when credits exceed owed (and still shows the breakdown)', () => {
+    const r = computeOutstandingDisplay(5_000, 9_000);
+    expect(r.displayCents).toBe(0);
+    expect(r.netDueCents).toBe(0);
+    expect(r.showCreditsLine).toBe(true);
+  });
+
+  it('hides the credits breakdown when credits are zero', () => {
+    const r = computeOutstandingDisplay(5_000, 0);
+    expect(r.showCreditsLine).toBe(false);
+  });
+
+  it('hides the credits breakdown when nothing is owed (no negative-due display)', () => {
+    const r = computeOutstandingDisplay(0, 9_000);
+    expect(r.displayCents).toBe(0);
+    expect(r.showCreditsLine).toBe(false);
+  });
+
+  it('treats negative or NaN inputs as zero (defensive)', () => {
+    const r1 = computeOutstandingDisplay(-100, 5_000);
+    expect(r1.displayCents).toBe(0);
+    expect(r1.showCreditsLine).toBe(false);
+    const r2 = computeOutstandingDisplay(Number.NaN, Number.NaN);
+    expect(r2.displayCents).toBe(0);
+    expect(r2.netDueCents).toBe(0);
+    expect(r2.showCreditsLine).toBe(false);
   });
 });

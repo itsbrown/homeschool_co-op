@@ -53,6 +53,8 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import {
   getEnrollmentEffectiveBalance,
   getMembershipOutstandingBalance,
+  computeOutstandingDisplay,
+  computeManualPayDisplay,
 } from "@/utils/parentBalance";
 
 interface Payment {
@@ -145,7 +147,12 @@ interface StripePaymentHistoryResponse {
 }
 
 interface CreditsResponse {
-  totalAvailable?: number;
+  // /api/parent/credits returns the available balance in CENTS under
+  // `totalAvailableCents`. (`totalAvailable` was the legacy key name and
+  // does NOT exist on the response — reading it would silently return 0
+  // and cause the Outstanding Balance card to show the gross owed amount
+  // even when credits should reduce it.)
+  totalAvailableCents?: number;
   totalAvailableFormatted?: string;
   credits?: Array<Record<string, unknown>>;
 }
@@ -401,9 +408,12 @@ function ScheduledPaymentDialog({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  // Credit application state
+  // Credit application state.
+  // Task 173 — default applyCredits to TRUE so the manual Pay Now flow
+  // matches auto-pay. A parent with credits should never get charged the
+  // gross amount just because they didn't notice a toggle.
   const [availableCredits, setAvailableCredits] = useState<number>(0);
-  const [applyCredits, setApplyCredits] = useState(false);
+  const [applyCredits, setApplyCredits] = useState(true);
   const [loadingCredits, setLoadingCredits] = useState(false);
   const [creditPaymentComplete, setCreditPaymentComplete] = useState(false);
 
@@ -413,10 +423,15 @@ function ScheduledPaymentDialog({
   const [selectedPaymentMethodId, setSelectedPaymentMethodId] = useState<string>('new');
   const [isPayingWithSavedCard, setIsPayingWithSavedCard] = useState(false);
 
-  // Calculate credits to apply (capped at payment amount)
-  const creditsToApply = applyCredits ? Math.min(availableCredits, payment.amount) : 0;
-  const amountAfterCredits = Math.max(0, payment.amount - creditsToApply);
-  const isFullyCoveredByCredits = amountAfterCredits === 0 && creditsToApply > 0;
+  // Mirror the server's manual-pay math (`computeManualPayCredits`). The
+  // server is the sole authority and 409s on any divergence > 1¢ via
+  // `expectedChargeAmount`; this only drives the UI breakdown.
+  const { creditsToApply, amountAfterCredits, isFullyCoveredByCredits } =
+    computeManualPayDisplay({
+      amount: payment.amount,
+      availableCredits,
+      applyCredits,
+    });
   const usingSavedCard = selectedPaymentMethodId !== 'new' && !isFullyCoveredByCredits;
 
   // Fetch available credits and saved cards when dialog opens
@@ -446,7 +461,8 @@ function ScheduledPaymentDialog({
     if (!isOpen) {
       setClientSecret(null);
       setError(null);
-      setApplyCredits(false);
+      // Default to applyCredits=true on every reopen to match auto-pay parity.
+      setApplyCredits(true);
       setCreditPaymentComplete(false);
       setPaymentMethods([]);
       setSelectedPaymentMethodId('new');
@@ -526,13 +542,23 @@ function ScheduledPaymentDialog({
         },
         body: JSON.stringify({
           paymentId: payment.id,
-          creditsToApply: creditsToApply  // Amount is server-authoritative
+          // Send intent + expected total. Server is authoritative on credits
+          // and rejects with 409 `charge_amount_diverged` if the actual
+          // charge would differ from `expectedChargeAmount` by > 1¢.
+          applyCredits,
+          expectedChargeAmount: amountAfterCredits,
         })
       });
 
       const data = await response.json();
 
       if (!response.ok || !data.success) {
+        if (data.code === 'charge_amount_diverged') {
+          throw new Error(
+            data.error
+              || 'The charge amount changed since this page loaded. Please refresh and try again.',
+          );
+        }
         throw new Error(data.error || 'Failed to initialize payment');
       }
 
@@ -558,12 +584,19 @@ function ScheduledPaymentDialog({
     try {
       const response = await apiRequest('POST', '/api/scheduled-payments/pay', {
         paymentId: payment.id,
-        creditsToApply: creditsToApply,
+        applyCredits,
+        expectedChargeAmount: amountAfterCredits,
         paymentMethodId: selectedPaymentMethodId,
       });
 
       const data = await response.json();
       if (!response.ok || !data.success) {
+        if (data.code === 'charge_amount_diverged') {
+          throw new Error(
+            data.error
+              || 'The charge amount changed since this page loaded. Please refresh and try again.',
+          );
+        }
         throw new Error(data.error || 'Failed to charge saved card');
       }
 
@@ -604,7 +637,11 @@ function ScheduledPaymentDialog({
     }
   };
   
-  // Handle credit-only payment (no Stripe needed)
+  // Handle credit-only payment (no Stripe needed).
+  // Task 173 — route through the unified `/pay` endpoint so the same
+  // atomic `createCreditHolds` → `completeCreditsOnlyPayment` flow used
+  // by auto-pay finalizes the installment. The legacy `/pay-with-credits`
+  // endpoint is no longer wired from this dialog.
   const handleCreditOnlyPayment = async () => {
     setIsLoading(true);
     setError(null);
@@ -615,7 +652,7 @@ function ScheduledPaymentDialog({
         throw new Error('Please sign in to make a payment');
       }
 
-      const response = await fetch('/api/scheduled-payments/pay-with-credits', {
+      const response = await fetch('/api/scheduled-payments/pay', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -623,13 +660,20 @@ function ScheduledPaymentDialog({
         },
         body: JSON.stringify({
           paymentId: payment.id,
-          creditsToApply: creditsToApply
+          applyCredits: true,
+          expectedChargeAmount: 0,
         })
       });
 
       const data = await response.json();
 
       if (!response.ok || !data.success) {
+        if (data.code === 'charge_amount_diverged') {
+          throw new Error(
+            data.error
+              || 'Your credit balance changed. Please refresh and try again.',
+          );
+        }
         throw new Error(data.error || 'Failed to process credit payment');
       }
 
@@ -1028,8 +1072,10 @@ function CombinedPaymentDialog({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Task 173 — default applyCredits to TRUE so credits flow into combined
+  // payments by default (auto-pay parity).
   const [availableCredits, setAvailableCredits] = useState<number>(0);
-  const [applyCredits, setApplyCredits] = useState(false);
+  const [applyCredits, setApplyCredits] = useState(true);
   const [loadingCredits, setLoadingCredits] = useState(false);
   const [creditPaymentComplete, setCreditPaymentComplete] = useState(false);
 
@@ -1040,9 +1086,15 @@ function CombinedPaymentDialog({
   const [isPayingWithSavedCard, setIsPayingWithSavedCard] = useState(false);
 
   const totalAmount = payments.reduce((sum: number, p: any) => sum + p.amount, 0);
-  const creditsToApply = applyCredits ? Math.min(availableCredits, totalAmount) : 0;
-  const amountAfterCredits = Math.max(0, totalAmount - creditsToApply);
-  const isFullyCoveredByCredits = amountAfterCredits === 0 && creditsToApply > 0;
+  // Mirror the server's combined credit math (`computeManualPayCredits`).
+  // Server is authoritative; the divergence guard catches any drift via
+  // `expectedChargeAmount`.
+  const { creditsToApply, amountAfterCredits, isFullyCoveredByCredits } =
+    computeManualPayDisplay({
+      amount: totalAmount,
+      availableCredits,
+      applyCredits,
+    });
   const usingSavedCard = selectedPaymentMethodId !== 'new' && !isFullyCoveredByCredits;
 
   useEffect(() => {
@@ -1069,7 +1121,8 @@ function CombinedPaymentDialog({
     if (!isOpen) {
       setClientSecret(null);
       setError(null);
-      setApplyCredits(false);
+      // Default to applyCredits=true on every reopen to match auto-pay parity.
+      setApplyCredits(true);
       setCreditPaymentComplete(false);
       setPaymentMethods([]);
       setSelectedPaymentMethodId('new');
@@ -1144,11 +1197,22 @@ function CombinedPaymentDialog({
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ scheduledPaymentIds, creditsToApply })
+        body: JSON.stringify({
+          scheduledPaymentIds,
+          // Server-authoritative credits via the divergence guard.
+          applyCredits,
+          expectedChargeAmount: amountAfterCredits,
+        })
       });
 
       const data = await response.json();
       if (!response.ok || !data.success) {
+        if (data.code === 'charge_amount_diverged') {
+          throw new Error(
+            data.error
+              || 'The charge amount changed since this page loaded. Please refresh and try again.',
+          );
+        }
         throw new Error(data.error || 'Failed to initialize combined payment');
       }
 
@@ -1175,12 +1239,19 @@ function CombinedPaymentDialog({
       const scheduledPaymentIds = payments.map((p: any) => p.id);
       const response = await apiRequest('POST', '/api/scheduled-payments/pay-combined', {
         scheduledPaymentIds,
-        creditsToApply,
+        applyCredits,
+        expectedChargeAmount: amountAfterCredits,
         paymentMethodId: selectedPaymentMethodId,
       });
 
       const data = await response.json();
       if (!response.ok || !data.success) {
+        if (data.code === 'charge_amount_diverged') {
+          throw new Error(
+            data.error
+              || 'The charge amount changed since this page loaded. Please refresh and try again.',
+          );
+        }
         throw new Error(data.error || 'Failed to charge saved card');
       }
 
@@ -1227,17 +1298,30 @@ function CombinedPaymentDialog({
       if (!token) throw new Error('Please sign in to make a payment');
 
       const scheduledPaymentIds = payments.map((p: any) => p.id);
-      const response = await fetch('/api/scheduled-payments/pay-combined-with-credits', {
+      // Task 173 — route through unified `/pay-combined` so the credits-only
+      // zero-charge path uses the same atomic createCreditHolds →
+      // completeCreditsOnlyPayment flow as auto-pay (per installment).
+      const response = await fetch('/api/scheduled-payments/pay-combined', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ scheduledPaymentIds, creditsToApply })
+        body: JSON.stringify({
+          scheduledPaymentIds,
+          applyCredits: true,
+          expectedChargeAmount: 0,
+        })
       });
 
       const data = await response.json();
       if (!response.ok || !data.success) {
+        if (data.code === 'charge_amount_diverged') {
+          throw new Error(
+            data.error
+              || 'Your credit balance changed. Please refresh and try again.',
+          );
+        }
         throw new Error(data.error || 'Failed to process credit payment');
       }
 
@@ -1843,12 +1927,32 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
                 <CardTitle className="text-sm font-medium">Outstanding Balance</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-orange-600">
-                  {isLoadingEnrollments ? "Loading..." : formatCurrency(paymentStats.totalOutstanding || 0)}
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {paymentStats.outstandingCount || 0} unpaid enrollments
-                </p>
+                {(() => {
+                  const outstandingCents = paymentStats.totalOutstanding || 0;
+                  const creditsCents = creditsData?.totalAvailableCents || 0;
+                  const { displayCents, showCreditsLine } =
+                    computeOutstandingDisplay(outstandingCents, creditsCents);
+                  return (
+                    <>
+                      <div className="text-2xl font-bold text-orange-600">
+                        {isLoadingEnrollments
+                          ? 'Loading...'
+                          : formatCurrency(displayCents)}
+                      </div>
+                      {showCreditsLine && (
+                        <div className="mt-1 text-xs text-muted-foreground">
+                          <div>Owed: {formatCurrency(outstandingCents)}</div>
+                          <div className="text-amber-700">
+                            − Credits available: {formatCurrency(creditsCents)}
+                          </div>
+                        </div>
+                      )}
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {paymentStats.outstandingCount || 0} unpaid enrollments
+                      </p>
+                    </>
+                  );
+                })()}
               </CardContent>
             </Card>
             

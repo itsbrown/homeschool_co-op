@@ -4655,6 +4655,9 @@ export class DatabaseStorage implements IStorage {
     parentEmail: string;
     childName: string | null;
     className: string | null;
+    chargedBy?: 'auto_pay' | 'parent_manual' | 'parent_manual_saved_card' | 'admin_manual';
+    completionSource?: string;
+    description?: string;
   }): Promise<void> {
     const db = await getDb();
     const {
@@ -4662,6 +4665,12 @@ export class DatabaseStorage implements IStorage {
       creditsApplied, originalAmount, installmentNumber, totalInstallments,
       parentEmail, childName, className,
     } = params;
+    const chargedBy = params.chargedBy ?? 'auto_pay';
+    const completionSource = params.completionSource ?? 'credits_only';
+    const initiator = chargedBy === 'auto_pay' ? 'Auto-pay' : 'Parent';
+    const description =
+      params.description
+      ?? `${initiator} installment ${installmentNumber}/${totalInstallments} — fully covered by credits`;
 
     await db.transaction(async (tx) => {
       const pendingHolds = await tx
@@ -4684,7 +4693,7 @@ export class DatabaseStorage implements IStorage {
           creditId: hold.creditId,
           paymentHistoryId: null,
           amountCents: hold.amountCents,
-          description: `Auto-pay installment ${installmentNumber}/${totalInstallments} — fully covered by credits`,
+          description,
         });
         await tx.update(creditHolds)
           .set({ status: 'finalized' as CreditHoldStatus, finalizedAt: new Date() })
@@ -4699,7 +4708,7 @@ export class DatabaseStorage implements IStorage {
         currency: 'usd',
         childName: childName ?? null,
         className: className ?? null,
-        description: `Auto-pay installment ${installmentNumber} of ${totalInstallments} — fully covered by credits`,
+        description,
         status: 'completed',
         stripePaymentIntentId: null,
         stripeChargeId: null,
@@ -4709,11 +4718,12 @@ export class DatabaseStorage implements IStorage {
         originalPaymentId: null,
         paymentDate: new Date(),
         metadata: {
-          source: 'credits_only',
+          source: completionSource,
           scheduledPaymentId,
           creditsAppliedCents: creditsApplied,
           originalAmountCents: originalAmount,
-          autoPayInitiated: true,
+          autoPayInitiated: chargedBy === 'auto_pay',
+          chargedBy,
         },
       });
 
@@ -4740,8 +4750,8 @@ export class DatabaseStorage implements IStorage {
         .set({
           status: 'completed',
           processedAt: new Date(),
-          completionSource: 'credits_only',
-          chargedBy: 'auto_pay',
+          completionSource,
+          chargedBy,
           updatedAt: new Date(),
         })
         .where(eq(scheduledPayments.id, scheduledPaymentId));

@@ -3,8 +3,149 @@ import { storage } from '../storage';
 import Stripe from 'stripe';
 import { supabaseAuth } from '../middleware/supabase-auth';
 import { getStripeClient } from '../config/stripe';
+import {
+  computeManualPayCredits,
+  isChargeAmountDivergent,
+  STRIPE_MIN_CHARGE_CENTS,
+} from '../utils/manualPayCredits';
 
 const router = Router();
+
+/**
+ * Audit alert emitted whenever the divergence guard fires (manual Pay Now's
+ * charge amount no longer matches what the client showed the parent).
+ *
+ * Writes a high-severity entry to `error_logs` so the existing error
+ * notification pipeline (errorNotificationService) emails finance, and so
+ * the row appears in the admin error dashboard. Best-effort: callers wrap
+ * this in try/catch and never let an alert failure block the actual
+ * 409 response.
+ */
+async function emitDivergenceAlert(input: {
+  paymentId: number | string;
+  parentId: number | string;
+  parentEmail: string;
+  schoolId: number | string | null;
+  expectedChargeAmount: number | null | undefined;
+  actualChargeAmount: number;
+  creditsApplied: number;
+  originalAmount: number;
+  source?: 'pay' | 'pay-combined';
+}): Promise<void> {
+  await storage.createErrorLog({
+    errorType: 'payment',
+    severity: 'high',
+    message:
+      `Pay Now charge amount diverged from displayed amount ` +
+      `(expected ${input.expectedChargeAmount}¢, server ${input.actualChargeAmount}¢) ` +
+      `for parent ${input.parentEmail}. Charge was blocked.`,
+    route: input.source === 'pay-combined'
+      ? '/api/scheduled-payments/pay-combined'
+      : '/api/scheduled-payments/pay',
+    method: 'POST',
+    userEmail: input.parentEmail,
+    schoolId: input.schoolId == null ? null : Number(input.schoolId),
+    stackTrace: null,
+    metadata: {
+      paymentId: input.paymentId,
+      parentId: input.parentId,
+      expectedChargeAmount: input.expectedChargeAmount,
+      actualChargeAmount: input.actualChargeAmount,
+      creditsApplied: input.creditsApplied,
+      originalAmount: input.originalAmount,
+      source: input.source ?? 'pay',
+      detectedAt: new Date().toISOString(),
+    },
+    notificationSent: false,
+  });
+}
+
+/**
+ * Attempt to cancel a stale Stripe PaymentIntent. Returns:
+ *   - 'cancelled'      — PI was in a cancelable state (requires_payment_method,
+ *                        requires_confirmation, requires_action) and we
+ *                        cancelled it successfully.
+ *   - 'gone'           — Stripe says the PI is already canceled, not found,
+ *                        or we hit a transient error. Caller may treat as
+ *                        safe-to-replace (no chargeable PI remains).
+ *   - 'not_cancelable' — PI is in succeeded/processing/requires_capture; a
+ *                        charge has already been (or is being) collected.
+ *                        Caller MUST refuse to settle the same installment
+ *                        again to avoid double-collection.
+ *
+ * NOTE on `requires_action`: a PI in this status has had a confirmation
+ * attempt, but no charge has been captured yet. Stripe permits cancellation
+ * of such PIs; we include it here so credits-only re-attempts cannot leave
+ * a still-confirmable PI behind.
+ */
+async function tryCancelStalePaymentIntent(
+  stalePiId: string,
+): Promise<'cancelled' | 'gone' | 'not_cancelable'> {
+  const stripe = await getStripeClient();
+  try {
+    const existingIntent = await stripe.paymentIntents.retrieve(stalePiId);
+    if (
+      existingIntent.status === 'requires_payment_method' ||
+      existingIntent.status === 'requires_confirmation' ||
+      existingIntent.status === 'requires_action'
+    ) {
+      await stripe.paymentIntents.cancel(stalePiId);
+      return 'cancelled';
+    }
+    if (
+      existingIntent.status === 'succeeded' ||
+      existingIntent.status === 'processing' ||
+      existingIntent.status === 'requires_capture'
+    ) {
+      return 'not_cancelable';
+    }
+    // canceled / unknown → no chargeable PI left.
+    return 'gone';
+  } catch (cancelErr) {
+    console.error(
+      `⚠️ Could not cancel stale PI ${stalePiId} (treating as gone):`,
+      cancelErr,
+    );
+    return 'gone';
+  }
+}
+
+/**
+ * Cancel a stale Stripe PaymentIntent that's about to be replaced by the
+ * credits-only zero-charge path, then reset the scheduled payment row(s) to
+ * `pending` so the credits-only branch can complete safely.
+ *
+ * Why this exists: if a parent first attempted Pay Now without credits (a
+ * PI was created and the row went to `processing`) and then re-attempted
+ * with credits ON (decision now `isCreditsOnly`), the old PI is still
+ * confirmable by Stripe via its client secret. Settling the installment
+ * with credits without first cancelling the PI would let the card still be
+ * charged afterwards, double-collecting the same installment.
+ */
+export async function cancelStalePiForCreditsOnlyTransition(
+  stalePiId: string,
+  scheduledPaymentIds: number[],
+): Promise<'cancelled' | 'gone' | 'not_cancelable'> {
+  const outcome = await tryCancelStalePaymentIntent(stalePiId);
+  if (outcome === 'not_cancelable') return outcome;
+
+  for (const id of scheduledPaymentIds) {
+    const sp = await storage.getScheduledPaymentById(id);
+    if (!sp) continue;
+    await storage.updateScheduledPayment(id, {
+      status: 'pending',
+      stripePaymentIntentId: null,
+      metadata: {
+        ...((sp.metadata as Record<string, any>) || {}),
+        previousStripePaymentIntentId: stalePiId,
+        stalePiCancelledAt: new Date().toISOString(),
+        canceledDueToCreditsOnly: true,
+        stalePiCancelOutcome: outcome,
+      },
+    });
+  }
+  return outcome;
+}
 
 // Get upcoming scheduled payments from local database
 // This endpoint fetches scheduled payments created by the StripePaymentPlanService
@@ -296,18 +437,48 @@ router.get('/upcoming-old', async (req, res) => {
 });
 */
 
-// Process a scheduled payment
+// Process a scheduled payment.
+//
+// Server is the only source of truth for credits applied and charge amount;
+// the client only sends `applyCredits` (default true) and the required
+// `expectedChargeAmount` for the divergence guard.
 router.post('/pay', supabaseAuth, async (req: any, res) => {
   try {
-    const { paymentId, creditsToApply = 0, paymentMethodId } = req.body;
+    const {
+      paymentId,
+      paymentMethodId,
+      applyCredits: applyCreditsRaw,
+      expectedChargeAmount,
+    } = req.body;
+    // Default credits ON to match auto-pay behavior.
+    const applyCredits = applyCreditsRaw !== false;
     const userEmail = req.user.email;
 
-    console.log('💳 Processing scheduled payment:', { paymentId, userEmail, creditsToApply, paymentMethodId: paymentMethodId ? '[provided]' : null });
+    console.log('💳 Processing scheduled payment:', {
+      paymentId, userEmail, applyCredits, expectedChargeAmount,
+      paymentMethodId: paymentMethodId ? '[provided]' : null,
+    });
 
     if (!paymentId) {
       return res.status(400).json({
         success: false,
         error: 'Payment ID is required'
+      });
+    }
+
+    // expectedChargeAmount is REQUIRED — the divergence guard relies on it.
+    // Reject anything that is missing, non-numeric, negative, or non-finite.
+    if (
+      typeof expectedChargeAmount !== 'number' ||
+      !Number.isFinite(expectedChargeAmount) ||
+      expectedChargeAmount < 0
+    ) {
+      return res.status(400).json({
+        success: false,
+        code: 'expected_charge_amount_required',
+        error:
+          'expectedChargeAmount (cents) is required and must be a non-negative finite number. ' +
+          'Refresh the page so the displayed amount is sent with the payment request.',
       });
     }
 
@@ -336,27 +507,6 @@ router.post('/pay', supabaseAuth, async (req: any, res) => {
         error: 'This payment has already been completed'
       });
     }
-    
-    // Race-condition guard: reuse existing PaymentIntent if one was already created for this payment
-    if (scheduledPayment.status === 'processing' && scheduledPayment.stripePaymentIntentId) {
-      // PI already created — retrieve and return the existing intent (no new charge)
-      console.log(`🔄 Payment ${paymentId} is already processing — reusing existing PaymentIntent ${scheduledPayment.stripePaymentIntentId}`);
-      const stripe = await getStripeClient();
-      const existingIntent = await stripe.paymentIntents.retrieve(scheduledPayment.stripePaymentIntentId);
-      return res.json({
-        success: true,
-        clientSecret: existingIntent.client_secret,
-        paymentIntentId: existingIntent.id,
-        chargeAmount: existingIntent.amount,
-        creditsApplied: (scheduledPayment.metadata as Record<string, any>)?.pendingCreditsReservation || 0,
-        reused: true
-      });
-    }
-
-    // Log if retrying a processing payment with no stored PI (legacy/edge case — proceed to create new PI)
-    if (scheduledPayment.status === 'processing') {
-      console.log(`🔄 Retrying payment ${paymentId} in processing state with no stored PI — creating new PaymentIntent`);
-    }
 
     // SERVER-AUTHORITATIVE AMOUNT: Use the scheduled payment amount, not client-supplied
     const authoritativeAmount = scheduledPayment.amount;
@@ -371,26 +521,242 @@ router.post('/pay', supabaseAuth, async (req: any, res) => {
       });
     }
 
-    // SERVER-SIDE CREDIT VALIDATION
-    let validatedCreditsToApply = 0;
-    if (creditsToApply > 0) {
-      const availableCredits = await storage.getAvailableCredits(parentUser.id);
-      const totalAvailable = availableCredits.reduce((sum, c) => sum + (c.creditAmountCents - (c.usedAmountCents || 0)), 0);
-      
-      // Validate credits: can't apply more than available or more than payment amount
-      validatedCreditsToApply = Math.min(creditsToApply, totalAvailable, authoritativeAmount);
-      console.log('💰 Credit validation:', { requested: creditsToApply, available: totalAvailable, validated: validatedCreditsToApply });
+    // SERVER-AUTHORITATIVE CREDIT MATH — mirrors the auto-pay scheduler.
+    // *** This MUST run before any PI-reuse decision (code-review fix) ***
+    // so a parent who toggles "Apply credits" between attempts is not silently
+    // billed the previous PI's amount.
+    const availableCreditsRows = await storage.getAvailableCredits(parentUser.id);
+    const totalAvailableCredits = availableCreditsRows.reduce(
+      (sum, c) => sum + (c.creditAmountCents - (c.usedAmountCents || 0)),
+      0,
+    );
+    const decision = computeManualPayCredits({
+      amount: authoritativeAmount,
+      availableCredits: totalAvailableCredits,
+      applyCredits,
+    });
+    const validatedCreditsToApply = decision.creditsToApply;
+    const chargeAmount = decision.chargeAmount;
+    console.log('💰 Credit decision:', {
+      authoritativeAmount,
+      availableCredits: totalAvailableCredits,
+      applyCredits,
+      validatedCreditsToApply,
+      chargeAmount,
+      isCreditsOnly: decision.isCreditsOnly,
+    });
+
+    // DIVERGENCE GUARD: refuse to charge an amount the client did not show
+    // the parent. This is the regression-pin for Grace Mulcahy's case where
+    // the displayed amount and the Stripe charge silently disagreed. Runs
+    // BEFORE PI reuse so a stale PI cannot bypass the guard.
+    if (isChargeAmountDivergent(expectedChargeAmount, chargeAmount)) {
+      console.warn('⚠️ Charge amount diverged from client expectation', {
+        paymentId,
+        expectedChargeAmount,
+        actualChargeAmount: chargeAmount,
+        creditsApplied: validatedCreditsToApply,
+        originalAmount: authoritativeAmount,
+      });
+      try {
+        await emitDivergenceAlert({
+          paymentId: scheduledPayment.id,
+          parentId: parentUser.id,
+          parentEmail: userEmail,
+          schoolId: scheduledPayment.schoolId,
+          expectedChargeAmount,
+          actualChargeAmount: chargeAmount,
+          creditsApplied: validatedCreditsToApply,
+          originalAmount: authoritativeAmount,
+        });
+      } catch (alertErr) {
+        console.error('❌ Failed to emit divergence alert (non-blocking):', alertErr);
+      }
+      return res.status(409).json({
+        success: false,
+        code: 'charge_amount_diverged',
+        error:
+          'The amount we are about to charge no longer matches what was shown. ' +
+          'Please refresh the page and try again.',
+        expectedChargeAmount,
+        actualChargeAmount: chargeAmount,
+        creditsApplied: validatedCreditsToApply,
+        originalAmount: authoritativeAmount,
+      });
     }
 
-    // Calculate final charge amount after credits (using authoritative amount)
-    const chargeAmount = Math.max(0, authoritativeAmount - validatedCreditsToApply);
-    
-    // If credits fully cover the payment, don't create a Stripe intent
-    if (chargeAmount === 0) {
+    // STALE-PI CLEANUP for the credits-only transition. See
+    // `cancelStalePiForCreditsOnlyTransition` for rationale.
+    if (
+      scheduledPayment.status === 'processing' &&
+      scheduledPayment.stripePaymentIntentId &&
+      decision.isCreditsOnly
+    ) {
+      const stalePiId = scheduledPayment.stripePaymentIntentId;
+      const outcome = await cancelStalePiForCreditsOnlyTransition(
+        stalePiId,
+        [scheduledPayment.id],
+      );
+      if (outcome === 'not_cancelable') {
+        return res.status(409).json({
+          success: false,
+          code: 'stale_pi_not_cancelable',
+          error:
+            'A previous payment attempt is still being processed. Please refresh ' +
+            'the page in a moment and try again.',
+        });
+      }
+      scheduledPayment.status = 'pending';
+      scheduledPayment.stripePaymentIntentId = null;
+    }
+
+    // PI REUSE — only safe if the existing PI's amount still matches the
+    // freshly-computed `chargeAmount`. If the parent toggled "Apply credits"
+    // between attempts, the previous PI is stale; we cancel it and let the
+    // handler create a fresh one below (no double-charge risk because the
+    // old PI was never confirmed).
+    if (
+      scheduledPayment.status === 'processing' &&
+      scheduledPayment.stripePaymentIntentId &&
+      !decision.isCreditsOnly
+    ) {
+      const stripe = await getStripeClient();
+      const existingIntent = await stripe.paymentIntents.retrieve(scheduledPayment.stripePaymentIntentId);
+      const existingAmount = existingIntent.amount || 0;
+      if (!isChargeAmountDivergent(existingAmount, chargeAmount)) {
+        console.log(`🔄 Payment ${paymentId} reusing existing PaymentIntent ${existingIntent.id} (amount matches: ${existingAmount}¢)`);
+        return res.json({
+          success: true,
+          clientSecret: existingIntent.client_secret,
+          paymentIntentId: existingIntent.id,
+          chargeAmount: existingIntent.amount,
+          creditsApplied: (scheduledPayment.metadata as Record<string, any>)?.pendingCreditsReservation || 0,
+          reused: true
+        });
+      }
+      // Stale PI — amount no longer matches the credit-aware decision.
+      console.log(
+        `♻️ Cancelling stale PI ${existingIntent.id} (amount ${existingAmount}¢) ` +
+        `because charge amount changed to ${chargeAmount}¢ (parent likely toggled credits).`,
+      );
+      // Use the shared helper so the retry path treats `requires_action`
+      // as cancelable too, and so we REFUSE to create a replacement PI when
+      // the old one is already succeeded/processing/requires_capture
+      // (otherwise we'd end up with two chargeable PIs for one installment).
+      const cancelOutcome = await tryCancelStalePaymentIntent(existingIntent.id);
+      if (cancelOutcome === 'not_cancelable') {
+        console.error(
+          `🚨 Refusing to replace PI ${existingIntent.id} for payment ${scheduledPayment.id}: ` +
+          `existing PI is in non-cancelable status ${existingIntent.status}. ` +
+          `Creating a new PI would risk double-charging the same installment.`,
+        );
+        return res.status(409).json({
+          success: false,
+          code: 'stale_pi_not_cancelable',
+          error:
+            'A previous payment attempt is still being processed. Please refresh ' +
+            'the page in a moment and try again.',
+        });
+      }
+      // Reset the scheduled payment so the create-PI block below can run.
+      await storage.updateScheduledPayment(scheduledPayment.id, {
+        status: 'pending',
+        stripePaymentIntentId: null,
+        metadata: {
+          ...((scheduledPayment.metadata as Record<string, any>) || {}),
+          previousStripePaymentIntentId: existingIntent.id,
+          stalePiCancelledAt: new Date().toISOString(),
+          stalePiCancelOutcome: cancelOutcome,
+        },
+      });
+    }
+
+    // Log if retrying a processing payment with no stored PI (legacy/edge case — proceed to create new PI)
+    if (scheduledPayment.status === 'processing' && !scheduledPayment.stripePaymentIntentId) {
+      console.log(`🔄 Retrying payment ${paymentId} in processing state with no stored PI — creating new PaymentIntent`);
+    }
+
+    // Sanity guard for inputs the helper flagged as un-chargeable. Runs AFTER
+    // the credits-only branch below would have caught a fully-covered
+    // sub-Stripe-minimum installment, so this only rejects truly unchargeable
+    // (no credits cover, amount < $0.50) cases.
+    if (decision.tooSmall) {
       return res.status(400).json({
         success: false,
-        error: 'Payment fully covered by credits. Use pay-with-credits endpoint instead.'
+        error: `Installment amount $${(authoritativeAmount / 100).toFixed(2)} is below the $${(STRIPE_MIN_CHARGE_CENTS / 100).toFixed(2)} Stripe minimum.`,
       });
+    }
+
+    // CREDITS-ONLY ZERO-CHARGE PATH — atomic finalize, no Stripe call.
+    // Mirrors auto-pay scheduler's createCreditHolds → completeCreditsOnlyPayment
+    // sequence so the parent-manual flow has the same correctness guarantees.
+    if (decision.isCreditsOnly) {
+      const holdSessionId = `parent_manual_credits_${scheduledPayment.id}_${Date.now()}`;
+      const enrollmentForCredits = scheduledPayment.enrollmentId
+        ? await storage.getProgramEnrollmentById(scheduledPayment.enrollmentId)
+        : null;
+      let holdsCreated = false;
+      try {
+        const { totalHeld } = await storage.createCreditHolds(
+          parentUser.id,
+          validatedCreditsToApply,
+          holdSessionId,
+          `Parent-manual credits-only payment for scheduled payment ${scheduledPayment.id}`,
+          5,
+        );
+        if (totalHeld < validatedCreditsToApply) {
+          throw new Error(
+            `Could not reserve enough credits: needed ${validatedCreditsToApply}¢, reserved ${totalHeld}¢`,
+          );
+        }
+        holdsCreated = true;
+
+        await storage.completeCreditsOnlyPayment({
+          holdSessionId,
+          scheduledPaymentId: scheduledPayment.id,
+          parentId: parentUser.id,
+          enrollmentId: scheduledPayment.enrollmentId ?? null,
+          schoolId: scheduledPayment.schoolId,
+          creditsApplied: validatedCreditsToApply,
+          originalAmount: authoritativeAmount,
+          installmentNumber: scheduledPayment.installmentNumber || 1,
+          totalInstallments: scheduledPayment.totalInstallments || 1,
+          parentEmail: userEmail,
+          childName: enrollmentForCredits?.childName ?? null,
+          className: enrollmentForCredits?.className ?? null,
+          chargedBy: 'parent_manual',
+          completionSource: 'parent_manual_credits_only',
+          description:
+            `Parent-manual installment ${scheduledPayment.installmentNumber || 1}` +
+            `/${scheduledPayment.totalInstallments || 1} — fully covered by credits`,
+        });
+
+        console.log(
+          `✅ Credits-only manual payment completed for scheduled payment ${scheduledPayment.id} ` +
+          `(credits: ${validatedCreditsToApply}¢, original: ${authoritativeAmount}¢)`,
+        );
+        return res.json({
+          success: true,
+          creditsOnly: true,
+          alreadyConfirmed: true,
+          chargeAmount: 0,
+          creditsApplied: validatedCreditsToApply,
+          originalAmount: authoritativeAmount,
+        });
+      } catch (creditsErr: any) {
+        if (holdsCreated) {
+          try {
+            await storage.releaseCreditHolds(holdSessionId);
+          } catch (releaseErr) {
+            console.error('❌ Failed to release credit holds after credits-only failure:', releaseErr);
+          }
+        }
+        console.error('❌ Credits-only manual payment failed:', creditsErr);
+        return res.status(500).json({
+          success: false,
+          error: creditsErr?.message || 'Failed to apply credits to scheduled payment',
+        });
+      }
     }
 
     // CREDIT RESERVATION: Mark scheduled payment as processing with pending credits
@@ -1373,12 +1739,31 @@ router.get('/grouped', supabaseAuth, async (req: any, res) => {
 });
 
 // Pay multiple scheduled payments in a single combined Stripe charge
+// (Combined Pay Now flow).
+//
+// Task 173 — same divergence/credits-default fix as `/pay`:
+//   * Credits default ON (`applyCredits` defaults to true).
+//   * Server is the only source of truth for `creditsToApply` / `chargeAmount`.
+//   * Optional `expectedChargeAmount` is enforced via `isChargeAmountDivergent`.
+//   * Credits-only zero-charge path uses the same atomic
+//     `createCreditHolds` → `completeCreditsOnlyPayment` sequence per
+//     installment, in due-date order, so we never silently fall through to a
+//     gross Stripe charge.
 router.post('/pay-combined', supabaseAuth, async (req: any, res) => {
   try {
-    const { scheduledPaymentIds, creditsToApply = 0, paymentMethodId } = req.body;
+    const {
+      scheduledPaymentIds,
+      paymentMethodId,
+      applyCredits: applyCreditsRaw,
+      expectedChargeAmount,
+    } = req.body;
+    const applyCredits = applyCreditsRaw !== false;
     const userEmail = req.user.email;
 
-    console.log('💳 Processing combined payment:', { scheduledPaymentIds, userEmail, creditsToApply, paymentMethodId: paymentMethodId ? '[provided]' : null });
+    console.log('💳 Processing combined payment:', {
+      scheduledPaymentIds, userEmail, applyCredits, expectedChargeAmount,
+      paymentMethodId: paymentMethodId ? '[provided]' : null,
+    });
 
     if (!scheduledPaymentIds || !Array.isArray(scheduledPaymentIds) || scheduledPaymentIds.length === 0) {
       return res.status(400).json({
@@ -1391,6 +1776,21 @@ router.post('/pay-combined', supabaseAuth, async (req: any, res) => {
       return res.status(400).json({
         success: false,
         error: 'Cannot combine more than 50 payments at once'
+      });
+    }
+
+    // expectedChargeAmount is REQUIRED — divergence guard relies on it.
+    if (
+      typeof expectedChargeAmount !== 'number' ||
+      !Number.isFinite(expectedChargeAmount) ||
+      expectedChargeAmount < 0
+    ) {
+      return res.status(400).json({
+        success: false,
+        code: 'expected_charge_amount_required',
+        error:
+          'expectedChargeAmount (cents) is required and must be a non-negative finite number. ' +
+          'Refresh the page so the displayed amount is sent with the payment request.',
       });
     }
 
@@ -1428,32 +1828,6 @@ router.post('/pay-combined', supabaseAuth, async (req: any, res) => {
       });
     }
 
-    // Race-condition guard: reuse existing PaymentIntent if ALL payments in the group share one
-    const allProcessing = paymentsToProcess.every(p => p.status === 'processing');
-    if (allProcessing) {
-      const piIds = paymentsToProcess.map(p => p.stripePaymentIntentId).filter(Boolean) as string[];
-      const uniquePiIds = new Set(piIds);
-      if (piIds.length === paymentsToProcess.length && uniquePiIds.size === 1) {
-        // Every payment is processing and all share the same PI ID — reuse it, no new charge
-        const existingPiId = piIds[0];
-        console.log(`🔄 Combined payment group already processing — reusing existing PaymentIntent ${existingPiId}`);
-        const stripe = await getStripeClient();
-        const existingIntent = await stripe.paymentIntents.retrieve(existingPiId);
-        return res.json({
-          success: true,
-          clientSecret: existingIntent.client_secret,
-          paymentIntentId: existingIntent.id,
-          chargeAmount: existingIntent.amount,
-          combinedAmount: paymentsToProcess.reduce((sum, p) => sum + p.amount, 0),
-          creditsApplied: parseInt((existingIntent.metadata?.creditsAppliedCents) || '0'),
-          paymentCount: paymentsToProcess.length,
-          reused: true
-        });
-      }
-      // All processing but PI IDs are missing or inconsistent (legacy/edge case) — fall through to create new PI
-      console.log(`🔄 Combined payment group processing but PI state incomplete — creating new PaymentIntent`);
-    }
-
     const combinedAmount = paymentsToProcess.reduce((sum, p) => sum + p.amount, 0);
     console.log('💰 Server-authoritative combined amount:', combinedAmount);
 
@@ -1462,21 +1836,261 @@ router.post('/pay-combined', supabaseAuth, async (req: any, res) => {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
 
-    let validatedCreditsToApply = 0;
-    if (creditsToApply > 0) {
-      const availableCredits = await storage.getAvailableCredits(parentUser.id);
-      const totalAvailable = availableCredits.reduce((sum, c) => sum + (c.creditAmountCents - (c.usedAmountCents || 0)), 0);
-      validatedCreditsToApply = Math.min(creditsToApply, totalAvailable, combinedAmount);
-      console.log('💰 Credit validation:', { requested: creditsToApply, available: totalAvailable, validated: validatedCreditsToApply });
+    // SERVER-AUTHORITATIVE COMBINED CREDIT MATH — same helper as `/pay`,
+    // applied to the combined total. The combined Stripe charge is a single
+    // PI so we treat the group like one large installment for the helper.
+    // *** Runs BEFORE PI reuse (code-review fix) ***
+    const availableCreditsRows = await storage.getAvailableCredits(parentUser.id);
+    const totalAvailableCredits = availableCreditsRows.reduce(
+      (sum, c) => sum + (c.creditAmountCents - (c.usedAmountCents || 0)),
+      0,
+    );
+    const decision = computeManualPayCredits({
+      amount: combinedAmount,
+      availableCredits: totalAvailableCredits,
+      applyCredits,
+    });
+    const validatedCreditsToApply = decision.creditsToApply;
+    const chargeAmount = decision.chargeAmount;
+    console.log('💰 Combined credit decision:', {
+      combinedAmount,
+      availableCredits: totalAvailableCredits,
+      applyCredits,
+      validatedCreditsToApply,
+      chargeAmount,
+      isCreditsOnly: decision.isCreditsOnly,
+    });
+
+    if (isChargeAmountDivergent(expectedChargeAmount, chargeAmount)) {
+      console.warn('⚠️ Combined charge amount diverged from client expectation', {
+        scheduledPaymentIds, expectedChargeAmount,
+        actualChargeAmount: chargeAmount,
+        creditsApplied: validatedCreditsToApply,
+        originalAmount: combinedAmount,
+      });
+      try {
+        await emitDivergenceAlert({
+          paymentId: scheduledPaymentIds.join(','),
+          parentId: parentUser.id,
+          parentEmail: userEmail,
+          schoolId: paymentsToProcess[0]?.schoolId ?? null,
+          expectedChargeAmount,
+          actualChargeAmount: chargeAmount,
+          creditsApplied: validatedCreditsToApply,
+          originalAmount: combinedAmount,
+          source: 'pay-combined',
+        });
+      } catch (alertErr) {
+        console.error('❌ Failed to emit divergence alert (non-blocking):', alertErr);
+      }
+      return res.status(409).json({
+        success: false,
+        code: 'charge_amount_diverged',
+        error:
+          'The amount we are about to charge no longer matches what was shown. ' +
+          'Please refresh the page and try again.',
+        expectedChargeAmount,
+        actualChargeAmount: chargeAmount,
+        creditsApplied: validatedCreditsToApply,
+        originalAmount: combinedAmount,
+      });
     }
 
-    const chargeAmount = Math.max(0, combinedAmount - validatedCreditsToApply);
+    // STALE-PI CLEANUP for credits-only transition (combined). Same overcharge
+    // guard as /pay: if every installment shares a stale PI and the new
+    // decision is credits-only, cancel the PI before settling with credits.
+    const allProcessing = paymentsToProcess.every(p => p.status === 'processing');
+    if (allProcessing && decision.isCreditsOnly) {
+      const piIds = paymentsToProcess.map(p => p.stripePaymentIntentId).filter(Boolean) as string[];
+      const uniquePiIds = new Set(piIds);
+      if (piIds.length === paymentsToProcess.length && uniquePiIds.size === 1) {
+        const stalePiId = piIds[0];
+        const outcome = await cancelStalePiForCreditsOnlyTransition(
+          stalePiId,
+          paymentsToProcess.map(p => p.id),
+        );
+        if (outcome === 'not_cancelable') {
+          return res.status(409).json({
+            success: false,
+            code: 'stale_pi_not_cancelable',
+            error:
+              'A previous payment attempt is still being processed. Please refresh ' +
+              'the page in a moment and try again.',
+          });
+        }
+        for (const sp of paymentsToProcess) {
+          sp.status = 'pending';
+          sp.stripePaymentIntentId = null;
+        }
+      }
+    }
 
-    if (chargeAmount === 0) {
+    // PI REUSE — only safe if every installment is processing AND they all
+    // share the same PI AND that PI's amount still matches the freshly
+    // computed `chargeAmount`. Otherwise the parent toggled credits between
+    // attempts and we'd silently reuse a stale amount.
+    if (allProcessing && !decision.isCreditsOnly) {
+      const piIds = paymentsToProcess.map(p => p.stripePaymentIntentId).filter(Boolean) as string[];
+      const uniquePiIds = new Set(piIds);
+      if (piIds.length === paymentsToProcess.length && uniquePiIds.size === 1) {
+        const existingPiId = piIds[0];
+        const stripe = await getStripeClient();
+        const existingIntent = await stripe.paymentIntents.retrieve(existingPiId);
+        const existingAmount = existingIntent.amount || 0;
+        if (!isChargeAmountDivergent(existingAmount, chargeAmount)) {
+          console.log(`🔄 Combined payment reusing PI ${existingPiId} (amount matches: ${existingAmount}¢)`);
+          return res.json({
+            success: true,
+            clientSecret: existingIntent.client_secret,
+            paymentIntentId: existingIntent.id,
+            chargeAmount: existingIntent.amount,
+            combinedAmount,
+            creditsApplied: parseInt((existingIntent.metadata?.creditsAppliedCents) || '0'),
+            paymentCount: paymentsToProcess.length,
+            reused: true
+          });
+        }
+        // Stale PI — cancel via the shared helper (treats requires_action
+        // as cancelable and refuses to proceed when the old PI is already
+        // succeeded/processing/requires_capture, preventing two chargeable
+        // PIs for the same combined group).
+        console.log(
+          `♻️ Cancelling stale combined PI ${existingPiId} (amount ${existingAmount}¢) ` +
+          `because charge amount changed to ${chargeAmount}¢ (parent likely toggled credits).`,
+        );
+        const cancelOutcome = await tryCancelStalePaymentIntent(existingPiId);
+        if (cancelOutcome === 'not_cancelable') {
+          console.error(
+            `🚨 Refusing to replace combined PI ${existingPiId}: ` +
+            `existing PI is in non-cancelable status ${existingIntent.status}. ` +
+            `Creating a new PI would risk double-charging the same installments.`,
+          );
+          return res.status(409).json({
+            success: false,
+            code: 'stale_pi_not_cancelable',
+            error:
+              'A previous payment attempt is still being processed. Please refresh ' +
+              'the page in a moment and try again.',
+          });
+        }
+        // Reset all installments back to pending so the create-PI block can run.
+        for (const sp of paymentsToProcess) {
+          await storage.updateScheduledPayment(sp.id, {
+            status: 'pending',
+            stripePaymentIntentId: null,
+            metadata: {
+              ...((sp.metadata as Record<string, any>) || {}),
+              previousStripePaymentIntentId: existingPiId,
+              stalePiCancelledAt: new Date().toISOString(),
+              stalePiCancelOutcome: cancelOutcome,
+            },
+          });
+          sp.status = 'pending';
+          sp.stripePaymentIntentId = null;
+        }
+      } else {
+        console.log(`🔄 Combined payment group processing but PI state incomplete — creating new PaymentIntent`);
+      }
+    }
+
+    if (decision.tooSmall) {
       return res.status(400).json({
         success: false,
-        error: 'Payment fully covered by credits. Use pay-with-credits endpoint instead.'
+        error: `Combined amount $${(combinedAmount / 100).toFixed(2)} is below the $${(STRIPE_MIN_CHARGE_CENTS / 100).toFixed(2)} Stripe minimum.`,
       });
+    }
+
+    // CREDITS-ONLY ZERO-CHARGE PATH for the combined group.
+    // Apply credits installment-by-installment (in due-date order) using the
+    // same atomic helper auto-pay uses. Each installment has its own hold
+    // session so a partial failure can be released without affecting the
+    // others. We pre-validate that total available credits >= combined amount.
+    if (decision.isCreditsOnly) {
+      const sortedPayments = [...paymentsToProcess].sort(
+        (a, b) => new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime(),
+      );
+      const completedIds: number[] = [];
+      const heldSessions: string[] = [];
+      try {
+        for (const sp of sortedPayments) {
+          const holdSessionId = `parent_manual_combined_${sp.id}_${Date.now()}`;
+          const enrollment = sp.enrollmentId
+            ? await storage.getProgramEnrollmentById(sp.enrollmentId)
+            : null;
+          const { totalHeld } = await storage.createCreditHolds(
+            parentUser.id,
+            sp.amount,
+            holdSessionId,
+            `Parent-manual combined credits-only hold for scheduled payment ${sp.id}`,
+            5,
+          );
+          heldSessions.push(holdSessionId);
+          if (totalHeld < sp.amount) {
+            throw new Error(
+              `Could not reserve enough credits for installment ${sp.id}: needed ${sp.amount}¢, reserved ${totalHeld}¢`,
+            );
+          }
+          await storage.completeCreditsOnlyPayment({
+            holdSessionId,
+            scheduledPaymentId: sp.id,
+            parentId: parentUser.id,
+            enrollmentId: sp.enrollmentId ?? null,
+            schoolId: sp.schoolId,
+            creditsApplied: sp.amount,
+            originalAmount: sp.amount,
+            installmentNumber: sp.installmentNumber || 1,
+            totalInstallments: sp.totalInstallments || 1,
+            parentEmail: userEmail,
+            childName: enrollment?.childName ?? null,
+            className: enrollment?.className ?? null,
+            chargedBy: 'parent_manual',
+            completionSource: 'parent_manual_credits_only',
+            description:
+              `Parent-manual combined installment ${sp.installmentNumber || 1}` +
+              `/${sp.totalInstallments || 1} — fully covered by credits`,
+          });
+          // Pop the just-finalized session so the catch block doesn't try to
+          // release holds that have already been finalized inside the tx.
+          heldSessions.pop();
+          completedIds.push(sp.id);
+        }
+        console.log(
+          `✅ Combined credits-only manual payment completed for ${completedIds.length} installments ` +
+          `(credits: ${validatedCreditsToApply}¢)`,
+        );
+        return res.json({
+          success: true,
+          creditsOnly: true,
+          alreadyConfirmed: true,
+          chargeAmount: 0,
+          combinedAmount,
+          creditsApplied: validatedCreditsToApply,
+          paymentCount: completedIds.length,
+        });
+      } catch (creditsErr: any) {
+        // Best-effort release of any held-but-not-finalized sessions. Already
+        // finalized installments cannot be rolled back here — the payment
+        // rows exist and the credits have been used. Surface the error so the
+        // operator can reconcile manually.
+        for (const sessionId of heldSessions) {
+          try {
+            await storage.releaseCreditHolds(sessionId);
+          } catch (releaseErr) {
+            console.error('❌ Failed to release combined credit holds:', releaseErr);
+          }
+        }
+        console.error('❌ Combined credits-only payment failed:', creditsErr, {
+          completedIds,
+          remainingIds: sortedPayments
+            .map(sp => sp.id)
+            .filter(id => !completedIds.includes(id)),
+        });
+        return res.status(500).json({
+          success: false,
+          error: creditsErr?.message || 'Failed to apply credits to combined payment',
+          partiallyCompletedScheduledPaymentIds: completedIds,
+        });
+      }
     }
 
     for (const payment of paymentsToProcess) {

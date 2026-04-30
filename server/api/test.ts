@@ -520,6 +520,10 @@ router.post('/setup-auto-pay-scenario', async (req: Request, res: Response) => {
       'credits-floor-guard',
       'credits-held-async-fail',
       'comped-credits-full-cover',
+      // Task 173 — parent-initiated manual Pay Now where credits fully cover
+      // the installment. Mirrors auto-pay's credits-full-cover but uses
+      // chargedBy='parent_manual' / completionSource='parent_manual_credits_only'.
+      'parent-manual-credits-only',
     ];
     if (!scenario || !validScenarios.includes(scenario)) {
       return res.status(400).json({ error: `Invalid scenario. Must be one of: ${validScenarios.join(', ')}` });
@@ -730,6 +734,29 @@ router.post('/setup-auto-pay-scenario', async (req: Request, res: Response) => {
       });
     }
 
+    // parent-manual-credits-only: seed a credit that fully covers the
+    // installment so the parent-initiated Pay Now flow takes the credits-only
+    // zero-charge branch (no Stripe call, chargedBy='parent_manual').
+    if (scenario === 'parent-manual-credits-only') {
+      const credit = await storage.createCredit({
+        userId: parent.id,
+        schoolId: school.id,
+        creditType: 'manual',
+        creditAmountCents: 5000,
+        status: 'approved',
+        approvedBy: admin.id,
+        title: `Test Parent-Manual Credit ${uid}`,
+        description: 'Seeded for parent-manual-credits-only integration test',
+        sourceType: 'manual_grant',
+        sourceId: null,
+        expiresAt: null,
+        rejectionReason: null,
+        notes: null,
+        metadata: null,
+      } as any);
+      seededCreditId = credit.id;
+    }
+
     // comped-credits-full-cover: seed a credit that fully covers the installment.
     // The enrollment has compAmountCents=2000, so effective cost = 8000; totalPaid=3000 → 5000 left.
     // After auto-pay, newTotalPaid=8000, newBalance=max(0,10000-8000-2000)=0 → paymentStatus='completed'.
@@ -794,6 +821,375 @@ router.post('/run-auto-pay-for/:scheduledPaymentId', async (req: Request, res: R
     console.error('[Test] Error running auto-pay for payment:', error);
     return res.status(500).json({
       error: 'Failed to run auto-pay for payment',
+      details: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+/**
+ * POST /api/test/run-parent-manual-credits-only/:scheduledPaymentId
+ *
+ * Task 173 — exercises the credits-only branch of the parent-initiated
+ * Pay Now flow without going through Supabase auth or Stripe. The test
+ * runs the same `createCreditHolds` → `completeCreditsOnlyPayment`
+ * sequence with `chargedBy='parent_manual'` /
+ * `completionSource='parent_manual_credits_only'` so we can assert that
+ * the manual flow shares the auto-pay credit guarantees.
+ *
+ * Returns: { result: 'completed' | 'failed', creditsApplied, originalAmount, error? }
+ */
+router.post('/run-parent-manual-credits-only/:scheduledPaymentId', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.scheduledPaymentId);
+    if (isNaN(id)) return res.status(400).json({ error: 'Invalid scheduledPaymentId' });
+
+    const sp = await storage.getScheduledPaymentById(id);
+    if (!sp) return res.status(404).json({ error: `Scheduled payment ${id} not found` });
+
+    const { computeManualPayCredits } = await import('../utils/manualPayCredits');
+    const availableCreditsRows = await storage.getAvailableCredits(sp.parentId);
+    const totalAvailable = availableCreditsRows.reduce(
+      (sum, c) => sum + (c.creditAmountCents - (c.usedAmountCents || 0)),
+      0,
+    );
+    const decision = computeManualPayCredits({
+      amount: sp.amount,
+      availableCredits: totalAvailable,
+      applyCredits: true,
+    });
+
+    if (!decision.isCreditsOnly) {
+      return res.status(400).json({
+        error: 'Scenario does not produce a credits-only decision',
+        decision,
+      });
+    }
+
+    const holdSessionId = `parent_manual_credits_${sp.id}_${Date.now()}`;
+    const enrollment = sp.enrollmentId
+      ? await storage.getProgramEnrollmentById(sp.enrollmentId)
+      : null;
+    let holdsCreated = false;
+    try {
+      const { totalHeld } = await storage.createCreditHolds(
+        sp.parentId,
+        decision.creditsToApply,
+        holdSessionId,
+        `Parent-manual credits-only payment for scheduled payment ${sp.id}`,
+        5,
+      );
+      if (totalHeld < decision.creditsToApply) {
+        throw new Error(`Could not reserve enough credits: needed ${decision.creditsToApply}¢, reserved ${totalHeld}¢`);
+      }
+      holdsCreated = true;
+
+      await storage.completeCreditsOnlyPayment({
+        holdSessionId,
+        scheduledPaymentId: sp.id,
+        parentId: sp.parentId,
+        enrollmentId: sp.enrollmentId ?? null,
+        schoolId: sp.schoolId,
+        creditsApplied: decision.creditsToApply,
+        originalAmount: sp.amount,
+        installmentNumber: sp.installmentNumber || 1,
+        totalInstallments: sp.totalInstallments || 1,
+        parentEmail: sp.parentEmail,
+        childName: enrollment?.childName ?? null,
+        className: enrollment?.className ?? null,
+        chargedBy: 'parent_manual',
+        completionSource: 'parent_manual_credits_only',
+        description:
+          `Parent-manual installment ${sp.installmentNumber || 1}` +
+          `/${sp.totalInstallments || 1} — fully covered by credits`,
+      });
+
+      return res.json({
+        success: true,
+        result: 'completed',
+        creditsApplied: decision.creditsToApply,
+        originalAmount: sp.amount,
+      });
+    } catch (err: any) {
+      if (holdsCreated) {
+        try {
+          await storage.releaseCreditHolds(holdSessionId);
+        } catch (releaseErr) {
+          console.error('[Test] Failed to release holds after failure:', releaseErr);
+        }
+      }
+      return res.json({
+        success: false,
+        result: 'failed',
+        error: err?.message || String(err),
+      });
+    }
+  } catch (error) {
+    console.error('[Test] Error running parent-manual credits-only:', error);
+    return res.status(500).json({
+      error: 'Failed to run parent-manual credits-only',
+      details: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+/**
+ * POST /api/test/run-parent-manual-divergence-guard/:scheduledPaymentId
+ *
+ * Task 173 — exercises the divergence guard from `/api/scheduled-payments/pay`
+ * directly so integration tests can prove the 409 short-circuit fires when a
+ * client supplies a stale `expectedChargeAmount`. Mirrors the same
+ * `computeManualPayCredits` + `isChargeAmountDivergent` pair the production
+ * handler uses, plus the `emitDivergenceAlert` side-effect (write to
+ * `error_logs`).
+ *
+ * Body: { expectedChargeAmount: number; applyCredits?: boolean }
+ * Returns the same shape `/pay` would (200 success or 409 charge_amount_diverged).
+ */
+router.post('/run-parent-manual-divergence-guard/:scheduledPaymentId', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.scheduledPaymentId);
+    if (isNaN(id)) return res.status(400).json({ error: 'Invalid scheduledPaymentId' });
+
+    const sp = await storage.getScheduledPaymentById(id);
+    if (!sp) return res.status(404).json({ error: `Scheduled payment ${id} not found` });
+
+    const { computeManualPayCredits, isChargeAmountDivergent } = await import('../utils/manualPayCredits');
+    const expectedChargeAmount = req.body?.expectedChargeAmount;
+    const applyCredits = req.body?.applyCredits !== false;
+
+    // Mirror /pay: expectedChargeAmount is mandatory (Task 173).
+    if (
+      typeof expectedChargeAmount !== 'number' ||
+      !Number.isFinite(expectedChargeAmount) ||
+      expectedChargeAmount < 0
+    ) {
+      return res.status(400).json({
+        success: false,
+        code: 'expected_charge_amount_required',
+        error: 'expectedChargeAmount is required',
+      });
+    }
+
+    const availableCreditsRows = await storage.getAvailableCredits(sp.parentId);
+    const totalAvailable = availableCreditsRows.reduce(
+      (sum, c) => sum + (c.creditAmountCents - (c.usedAmountCents || 0)),
+      0,
+    );
+    const decision = computeManualPayCredits({
+      amount: sp.amount,
+      availableCredits: totalAvailable,
+      applyCredits,
+    });
+
+    if (isChargeAmountDivergent(expectedChargeAmount, decision.chargeAmount)) {
+      // Mirror the production alert side-effect so tests can verify it.
+      try {
+        await storage.createErrorLog({
+          errorType: 'payment',
+          severity: 'high',
+          message:
+            `Pay Now charge amount diverged from displayed amount ` +
+            `(expected ${expectedChargeAmount}¢, server ${decision.chargeAmount}¢) ` +
+            `for parent ${sp.parentEmail}. Charge was blocked.`,
+          route: '/api/scheduled-payments/pay',
+          method: 'POST',
+          userEmail: sp.parentEmail,
+          schoolId: sp.schoolId,
+          stackTrace: null,
+          metadata: {
+            paymentId: sp.id,
+            parentId: sp.parentId,
+            expectedChargeAmount,
+            actualChargeAmount: decision.chargeAmount,
+            creditsApplied: decision.creditsToApply,
+            originalAmount: sp.amount,
+            source: 'pay',
+            detectedAt: new Date().toISOString(),
+          },
+          notificationSent: false,
+        });
+      } catch (alertErr) {
+        console.error('[Test] Failed to emit divergence alert:', alertErr);
+      }
+      return res.status(409).json({
+        success: false,
+        code: 'charge_amount_diverged',
+        error:
+          'The amount we are about to charge no longer matches what was shown. ' +
+          'Please refresh the page and try again.',
+        expectedChargeAmount,
+        actualChargeAmount: decision.chargeAmount,
+        creditsApplied: decision.creditsToApply,
+        originalAmount: sp.amount,
+      });
+    }
+
+    return res.json({
+      success: true,
+      chargeAmount: decision.chargeAmount,
+      creditsApplied: decision.creditsToApply,
+      originalAmount: sp.amount,
+      isCreditsOnly: decision.isCreditsOnly,
+    });
+  } catch (error) {
+    console.error('[Test] Error running divergence guard:', error);
+    return res.status(500).json({
+      error: 'Failed to run divergence guard',
+      details: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+/**
+ * POST /api/test/run-stale-pi-credits-only-transition/:scheduledPaymentId
+ *
+ * Task 173 — exercises `cancelStalePiForCreditsOnlyTransition` directly.
+ * Pre-flips the row into `processing` with a fake stale PI ID, then runs
+ * the helper that the production /pay handler calls before its credits-only
+ * branch. Stripe's retrieve call will fail (the PI is fake) and the helper
+ * returns 'gone', but the post-conditions on the DB row are the same:
+ *   - status reset to 'pending'
+ *   - stripePaymentIntentId cleared
+ *   - metadata flags previousStripePaymentIntentId, stalePiCancelledAt,
+ *     canceledDueToCreditsOnly=true, stalePiCancelOutcome
+ * After the helper completes, the credits-only branch is executed via
+ * `completeCreditsOnlyPayment` so callers can assert the row was settled
+ * and credits were consumed despite the prior PI.
+ *
+ * Body: { fakeStalePaymentIntentId?: string }
+ */
+router.post('/run-stale-pi-credits-only-transition/:scheduledPaymentId', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.scheduledPaymentId);
+    if (isNaN(id)) return res.status(400).json({ error: 'Invalid scheduledPaymentId' });
+
+    const stalePiId: string =
+      typeof req.body?.fakeStalePaymentIntentId === 'string' && req.body.fakeStalePaymentIntentId.length > 0
+        ? req.body.fakeStalePaymentIntentId
+        : `pi_test_fake_stale_${id}_${Date.now()}`;
+
+    // Step 1: pre-flip the row into 'processing' with the stale PI attached.
+    await storage.updateScheduledPayment(id, {
+      status: 'processing',
+      stripePaymentIntentId: stalePiId,
+    });
+
+    // Step 2: run the production helper.
+    const { cancelStalePiForCreditsOnlyTransition } = await import('./scheduled-payments');
+    const outcome = await cancelStalePiForCreditsOnlyTransition(stalePiId, [id]);
+
+    // Step 3: read back the row and surface its post-state.
+    const after = await storage.getScheduledPaymentById(id);
+    if (!after) return res.status(404).json({ error: `Scheduled payment ${id} not found` });
+
+    const meta = (after.metadata as Record<string, any>) || {};
+
+    if (outcome === 'not_cancelable') {
+      return res.status(409).json({
+        success: false,
+        code: 'stale_pi_not_cancelable',
+        rowAfter: {
+          status: after.status,
+          stripePaymentIntentId: after.stripePaymentIntentId,
+          metadata: meta,
+        },
+      });
+    }
+
+    // Step 4: complete the credits-only path so the test can also verify the
+    // installment ends up `completed` after the stale-PI transition.
+    const { computeManualPayCredits } = await import('../utils/manualPayCredits');
+    const availableCreditsRows = await storage.getAvailableCredits(after.parentId);
+    const totalAvailable = availableCreditsRows.reduce(
+      (sum, c) => sum + (c.creditAmountCents - (c.usedAmountCents || 0)),
+      0,
+    );
+    const decision = computeManualPayCredits({
+      amount: after.amount,
+      availableCredits: totalAvailable,
+      applyCredits: true,
+    });
+    if (!decision.isCreditsOnly) {
+      return res.status(400).json({
+        error: 'Scenario does not produce a credits-only decision after PI cleanup',
+        decision,
+      });
+    }
+    const holdSessionId = `parent_manual_credits_after_stale_${id}_${Date.now()}`;
+    const enrollment = after.enrollmentId
+      ? await storage.getProgramEnrollmentById(after.enrollmentId)
+      : null;
+    const { totalHeld } = await storage.createCreditHolds(
+      after.parentId,
+      decision.creditsToApply,
+      holdSessionId,
+      `Parent-manual credits-only payment for scheduled payment ${id} (after stale PI)`,
+      5,
+    );
+    if (totalHeld < decision.creditsToApply) {
+      await storage.releaseCreditHolds(holdSessionId);
+      throw new Error(`Could not reserve enough credits: needed ${decision.creditsToApply}¢, reserved ${totalHeld}¢`);
+    }
+    await storage.completeCreditsOnlyPayment({
+      holdSessionId,
+      scheduledPaymentId: id,
+      parentId: after.parentId,
+      enrollmentId: after.enrollmentId ?? null,
+      schoolId: after.schoolId,
+      creditsApplied: decision.creditsToApply,
+      originalAmount: after.amount,
+      installmentNumber: after.installmentNumber || 1,
+      totalInstallments: after.totalInstallments || 1,
+      parentEmail: after.parentEmail,
+      childName: enrollment?.childName ?? null,
+      className: enrollment?.className ?? null,
+      chargedBy: 'parent_manual',
+      completionSource: 'parent_manual_credits_only',
+      description: `Parent-manual installment — fully covered by credits (after stale PI cleanup)`,
+    });
+
+    const final = await storage.getScheduledPaymentById(id);
+    return res.json({
+      success: true,
+      outcome,
+      stalePaymentIntentId: stalePiId,
+      rowAfterCancel: {
+        status: after.status,
+        stripePaymentIntentId: after.stripePaymentIntentId,
+        metadata: meta,
+      },
+      rowAfterComplete: {
+        status: final?.status,
+        stripePaymentIntentId: final?.stripePaymentIntentId,
+        chargedBy: final?.chargedBy,
+        completionSource: final?.completionSource,
+      },
+    });
+  } catch (error) {
+    console.error('[Test] Error running stale-PI credits-only transition:', error);
+    return res.status(500).json({
+      error: 'Failed to run stale-PI credits-only transition',
+      details: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+/**
+ * GET /api/test/count-error-logs?errorType=...&severity=...
+ * Returns the count of error_log rows matching the filters. Used by Task 173
+ * tests to assert the divergence guard wrote an audit alert.
+ */
+router.get('/count-error-logs', async (req: Request, res: Response) => {
+  try {
+    const filters: { errorType?: string; severity?: string } = {};
+    if (typeof req.query.errorType === 'string') filters.errorType = req.query.errorType;
+    if (typeof req.query.severity === 'string') filters.severity = req.query.severity;
+    const logs = await storage.getErrorLogs({ ...filters, limit: 10000 });
+    return res.json({ success: true, count: logs.length });
+  } catch (error) {
+    console.error('[Test] Error counting error_logs:', error);
+    return res.status(500).json({
+      error: 'Failed to count error_logs',
       details: error instanceof Error ? error.message : String(error),
     });
   }

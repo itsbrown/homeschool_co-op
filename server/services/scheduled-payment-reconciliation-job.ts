@@ -9,6 +9,7 @@
 
 import { reconcileAllScheduledPayments } from './scheduled-payment-reconciliation';
 import { runCreditIntegrityCheck } from './credit-integrity-check';
+import { findCreditDivergenceFlaggedPayments } from '../api/financial-reports';
 import { storage } from '../storage';
 
 // Configuration
@@ -82,11 +83,51 @@ async function runDailyReconciliation(): Promise<void> {
       console.error('[ReconciliationJob] Credit integrity check failed:', integrityErr);
     }
 
+    // Task 173 — credit-divergence audit notifier. Emits a high-severity
+    // error_log row whenever the audit query (forensic ledger replay against
+    // unified_credit_usage_logs at processed_at time) flags any manual Pay Now
+    // charges where the parent had unused approved credits. Finance gets
+    // emailed via the existing errorNotificationService pipeline.
+    let creditDivergenceFlagged = 0;
+    try {
+      const flagged = await findCreditDivergenceFlaggedPayments();
+      creditDivergenceFlagged = flagged.length;
+      if (creditDivergenceFlagged > 0) {
+        const totalRefundCents = flagged.reduce(
+          (sum, r) => sum + (r.estimatedRefundCents || 0),
+          0,
+        );
+        await storage.createErrorLog({
+          errorType: 'payment',
+          message:
+            `Credit-divergence audit found ${creditDivergenceFlagged} manual ` +
+            `Pay Now charge(s) where the parent had unused approved credits ` +
+            `at the time of charge. Estimated refund total: $${(totalRefundCents / 100).toFixed(2)}.`,
+          severity: 'high',
+          route: '/scheduled-job/reconciliation',
+          method: 'CRON',
+          userEmail: null,
+          schoolId: null,
+          stackTrace: null,
+          metadata: {
+            flaggedCount: creditDivergenceFlagged,
+            totalEstimatedRefundCents: totalRefundCents,
+            flaggedSample: flagged.slice(0, 10),
+            auditEndpoint: '/api/admin/financial-reports/credit-divergence-audit',
+          },
+          notificationSent: false,
+        });
+      }
+    } catch (auditErr) {
+      console.error('[ReconciliationJob] Credit-divergence audit failed:', auditErr);
+    }
+
     console.log('[ReconciliationJob] Daily reconciliation complete:', {
       enrollmentsProcessed: summary.totalEnrollmentsProcessed,
       paymentsMarkedCompleted: summary.totalPaymentsMarkedCompleted,
       errors: summary.errors.length,
       creditIntegrityViolations,
+      creditDivergenceFlagged,
       durationMs: Date.now() - startTime
     });
     
