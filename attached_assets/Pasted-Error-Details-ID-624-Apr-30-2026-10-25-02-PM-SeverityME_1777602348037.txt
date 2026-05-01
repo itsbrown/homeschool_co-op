@@ -1,0 +1,89 @@
+Error Details
+ID: 624 | Apr 30, 2026, 10:25:02 PM
+
+SeverityMEDIUM
+Type
+frontend
+
+Route
+/payments
+
+Method
+N/A
+
+User
+Anonymous
+
+School ID
+N/A
+
+Message
+Payment Error: The amount we are about to charge no longer matches what was shown. Please refresh the page and try again.
+
+Metadata
+{
+  "online": true,
+  "source": "toast",
+  "userId": 10,
+  "network": {
+    "rtt": 100,
+    "downlink": 10,
+    "saveData": false,
+    "effectiveType": "4g"
+  },
+  "language": "en-US",
+  "referrer": "https://e9b53de1-e746-4728-984c-69d24304d3d8-00-8l7syqdrxe0h.picard.replit.dev/cart/checkout",
+  "schoolId": null,
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",
+  "activeRole": "parent",
+  "hasSession": true,
+  "toastTitle": "Payment Error",
+  "breadcrumbs": [
+    {
+      "route": "/cart/success",
+      "title": "American Seekers Academy - Adaptive Learning Platform",
+      "timestamp": "2026-05-01T02:22:14.750Z"
+    }
+  ],
+  "formContext": null,
+  "memoryUsage": {
+    "usedJSHeapSize": 85,
+    "totalJSHeapSize": 97
+  },
+  "pageLoadTime": 3288,
+  "sessionStart": "2026-05-01T01:05:25.737Z",
+  "correlationId": "367a82ab-17f8-449c-93bb-6a1731d6f166",
+  "recentActions": [
+    {
+      "type": "scroll",
+      "target": "4%",
+      "secondsAgo": 65
+    },
+    {
+      "type": "scroll",
+      "target": "44%",
+      "secondsAgo": 29
+    },
+    {
+      "type": "click",
+      "target": "div.text-sm",
+      "secondsAgo": 27
+    },
+    {
+      "type": "click",
+      "target": "[data-testid=\"button-pay-all-2026-06-01\"]",
+      "secondsAgo": 24
+    },
+    {
+      "type": "click",
+      "target": "[data-testid=\"button-pay-all-2026-06-01\"]",
+      "secondsAgo": 1
+    }
+  ],
+  "userEmailHint": "joc***",
+  "viewportWidth": 2280,
+  "viewportHeight": 1316,
+  "toastDescription": "The amount we are about to charge no longer matches what was shown. Please refresh the page and try again.",
+  "sessionErrorCount": 3,
+  "timeOnCurrentPage": 167241
+}
