@@ -56,6 +56,7 @@ The platform features a full-stack architecture designed for scalability, securi
 -   **Scheduled Payment Synchronization System**: Ensures scheduled payment statuses sync with actual payments.
 -   **Immediate Payment Confirmation**: Client confirms successful Stripe payments server-side for verification.
 -   **Payment Allocation Audit Trail**: Complete audit trail for payment disbursement via `payment_allocations` table.
+-   **Balance-Aware Payment Allocator (feature-flagged)**: When `BALANCE_AWARE_ALLOCATION=true`, `PaymentProcessorService.processPayment` weighs each enrollment by its current `effective_balance` instead of splitting the cart total evenly across enrollment IDs. Fully-paid enrollments in mixed carts receive `$0` and are never overpaid; the legacy even-split path remains the default until the flag is flipped. Defined in `server/lib/splitIntegerEvenly.ts` (`allocatePaymentByBalance`) with full coverage in `server/tests/splitIntegerEvenly.test.ts`.
 -   **Membership Fee Priority Disbursement**: Membership amount is allocated first from total payment when included in biweekly payments.
 -   **Server-Authoritative Cart Pricing**: Server is the single source of truth for all cart pricing.
 -   **Server-Authoritative Enrollment Payment Display**: `totalPaid` and `remainingBalance` fields on enrollment are the single source of truth.

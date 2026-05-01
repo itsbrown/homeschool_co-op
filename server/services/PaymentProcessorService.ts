@@ -10,13 +10,21 @@
  */
 
 import { storage } from '../storage';
-import { splitAmountAcrossEnrollments } from '../lib/splitIntegerEvenly';
+import {
+  splitAmountAcrossEnrollments,
+  allocatePaymentByBalance,
+  type EnrollmentBalanceInput,
+} from '../lib/splitIntegerEvenly';
 import {
   CanonicalSnapshot,
   SignedSnapshot,
   verifyChecksum,
 } from '../lib/calculateCartSnapshot';
-import type { InsertStripePaymentHistory, InsertPaymentAllocation } from '@shared/schema';
+import {
+  computeEffectiveBalance,
+  type InsertStripePaymentHistory,
+  type InsertPaymentAllocation,
+} from '@shared/schema';
 
 export type PaymentSource = 'stripe' | 'manual' | 'payment_plan';
 
@@ -93,6 +101,67 @@ function isChecksumShadowMode(): boolean {
 }
 
 /**
+ * Feature flag for the balance-aware payment allocator.
+ *
+ * When `BALANCE_AWARE_ALLOCATION=true`, `processPayment` weighs each
+ * enrollment by its current `effective_balance` instead of splitting the
+ * total evenly. Defaults to OFF so the rollout is opt-in and the legacy
+ * even-split path remains the default until the flag is flipped.
+ *
+ * Truthy values: "true", "1", "yes", "on" (case-insensitive).
+ */
+export function isBalanceAwareAllocationEnabled(): boolean {
+  const raw = process.env.BALANCE_AWARE_ALLOCATION;
+  if (!raw) return false;
+  const normalized = raw.trim().toLowerCase();
+  return normalized === 'true' || normalized === '1' || normalized === 'yes' || normalized === 'on';
+}
+
+/**
+ * Load each enrollment's current effective balance for the balance-aware
+ * allocator. Falls back to the `computeEffectiveBalance` formula whenever
+ * the generated `effectiveBalance` column is unavailable (in-memory storage,
+ * older records, etc.). Missing enrollments are reported with balance `0`
+ * so they receive `$0` and the caller can still reconcile the payment.
+ */
+async function loadEnrollmentBalances(
+  enrollmentIds: number[],
+): Promise<EnrollmentBalanceInput[]> {
+  const results: EnrollmentBalanceInput[] = [];
+  for (const enrollmentId of enrollmentIds) {
+    try {
+      const enrollment = await storage.getProgramEnrollmentById(enrollmentId);
+      if (!enrollment) {
+        console.warn('⚠️ PaymentProcessor: Enrollment not found while loading balance', {
+          enrollmentId,
+        });
+        results.push({ enrollmentId, effectiveBalanceCents: 0 });
+        continue;
+      }
+      const generated = (enrollment as { effectiveBalance?: number | null }).effectiveBalance;
+      const balance = typeof generated === 'number'
+        ? generated
+        : computeEffectiveBalance(
+            enrollment.totalCost || 0,
+            enrollment.totalPaid || 0,
+            (enrollment as { compAmountCents?: number | null }).compAmountCents ?? null,
+          );
+      results.push({
+        enrollmentId,
+        effectiveBalanceCents: Math.max(0, balance),
+      });
+    } catch (err) {
+      console.error('❌ PaymentProcessor: Failed to load enrollment balance', {
+        enrollmentId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      results.push({ enrollmentId, effectiveBalanceCents: 0 });
+    }
+  }
+  return results;
+}
+
+/**
  * Main payment processing function.
  * Call this from webhook handlers and manual payment endpoints.
  */
@@ -163,14 +232,39 @@ export async function processPayment(
       }
     }
 
-    // Step 4: Calculate payment allocations using deterministic splitting
-    const allocations = splitAmountAcrossEnrollments(input.amountCents, input.enrollmentIds);
-    
-    console.log('📊 PaymentProcessor: Calculated allocations', {
-      totalCents: input.amountCents,
-      enrollmentCount: allocations.length,
-      allocations: allocations.map(a => ({ id: a.enrollmentId, cents: a.amountCents })),
-    });
+    // Step 4: Calculate payment allocations.
+    //
+    // Default behaviour: deterministic even split across enrollment IDs.
+    //
+    // When `BALANCE_AWARE_ALLOCATION` is enabled, the allocator instead
+    // weighs each enrollment by its current `effective_balance` so that
+    // already-paid enrollments cannot be over-allocated. This is the fix
+    // for the Puccia incident (March 25 2026), where a $2,720 payment was
+    // split evenly across 4 enrollments — including 2 that had already
+    // been paid in full — leaving a phantom $1,240 outstanding balance.
+    let allocations: { enrollmentId: number; amountCents: number }[];
+    const balanceAwareEnabled = isBalanceAwareAllocationEnabled();
+
+    if (balanceAwareEnabled && input.enrollmentIds.length > 0) {
+      const balanceInputs = await loadEnrollmentBalances(input.enrollmentIds);
+      allocations = allocatePaymentByBalance(input.amountCents, balanceInputs);
+      console.log('📊 PaymentProcessor: Calculated allocations (balance-aware)', {
+        totalCents: input.amountCents,
+        enrollmentCount: allocations.length,
+        balances: balanceInputs.map(b => ({
+          id: b.enrollmentId,
+          balanceCents: b.effectiveBalanceCents,
+        })),
+        allocations: allocations.map(a => ({ id: a.enrollmentId, cents: a.amountCents })),
+      });
+    } else {
+      allocations = splitAmountAcrossEnrollments(input.amountCents, input.enrollmentIds);
+      console.log('📊 PaymentProcessor: Calculated allocations (even-split)', {
+        totalCents: input.amountCents,
+        enrollmentCount: allocations.length,
+        allocations: allocations.map(a => ({ id: a.enrollmentId, cents: a.amountCents })),
+      });
+    }
 
     // Step 5: Create payment record with snapshot
     const snapshot = input.signedSnapshot?.snapshot;
