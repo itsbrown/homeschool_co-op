@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { Link } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -260,18 +260,23 @@ function ScheduledPaymentForm({
   onError,
   onCancel,
   amount,
-  paymentId
+  paymentId,
+  disabled = false,
 }: { 
   onSuccess: () => void; 
   onError: (error: string) => void;
   onCancel: () => void;
   amount: number;
   paymentId: string | number;
+  disabled?: boolean;
 }) {
   const stripe = useStripe();
   const elements = useElements();
   const [isProcessing, setIsProcessing] = useState(false);
   const [elementsReady, setElementsReady] = useState(false);
+  // Single-flight guard for Pay button — prevents a fast double-click from
+  // firing two confirmPayment calls before `isProcessing` re-renders.
+  const submittingRef = useRef(false);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -286,6 +291,9 @@ function ScheduledPaymentForm({
       return;
     }
 
+    if (disabled) return;
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setIsProcessing(true);
 
     try {
@@ -300,6 +308,7 @@ function ScheduledPaymentForm({
       if (error) {
         onError(error.message || 'Payment failed');
         setIsProcessing(false);
+        submittingRef.current = false;
       } else if (paymentIntent && paymentIntent.status === 'succeeded') {
         // IMMEDIATELY confirm with server to update scheduled payment status
         // This provides immediate UI update without waiting for webhook
@@ -332,13 +341,16 @@ function ScheduledPaymentForm({
       } else if (paymentIntent && paymentIntent.status === 'requires_action') {
         onError('Additional verification required. Please try again.');
         setIsProcessing(false);
+        submittingRef.current = false;
       } else {
         onError('Payment status unknown. Please check your payment history.');
         setIsProcessing(false);
+        submittingRef.current = false;
       }
     } catch (err: any) {
       onError(err.message || 'An error occurred during payment');
       setIsProcessing(false);
+      submittingRef.current = false;
     }
   };
 
@@ -360,7 +372,7 @@ function ScheduledPaymentForm({
         </Button>
         <Button 
           type="submit" 
-          disabled={!stripe || !elementsReady || isProcessing} 
+          disabled={!stripe || !elementsReady || isProcessing || disabled} 
           className="flex-1"
         >
           {isProcessing ? (
@@ -428,6 +440,37 @@ function ScheduledPaymentDialog({
   const [selectedPaymentMethodId, setSelectedPaymentMethodId] = useState<string>('new');
   const [isPayingWithSavedCard, setIsPayingWithSavedCard] = useState(false);
 
+  // Snapshot the scheduled-payment IDs we are paying for when the dialog
+  // opens. We use this as the stable input to the stale-status guard so a
+  // late re-render that drops the IDs from upcoming doesn't false-positive.
+  const [snapshotIds, setSnapshotIds] = useState<Array<string | number>>([]);
+  // Single-flight guard: bridges the gap between a click handler firing
+  // and the corresponding `is*` state updating, so two synchronous clicks
+  // can never trigger two network requests.
+  const submittingRef = useRef(false);
+
+  // Live status of the snapshotted scheduled payments. Reads from cache —
+  // the parent Payment Management page already keeps this query warm.
+  const { data: upcomingForStatus } = useQuery<ScheduledPaymentsUpcomingResponse>({
+    queryKey: ['/api/scheduled-payments/upcoming'],
+    enabled: isOpen,
+  });
+
+  const arePaymentsStale = useMemo(() => {
+    if (!isOpen || snapshotIds.length === 0) return false;
+    if (!upcomingForStatus?.payments) return false;
+    const byId = new Map<string, string>();
+    for (const p of upcomingForStatus.payments) byId.set(String(p.id), p.status);
+    // `pending` and `overdue` are both payable per the scheduled-payment
+    // lifecycle. Anything else (processing/completed/paid/cancelled/skipped/failed)
+    // or a missing row means another flow already moved on.
+    return snapshotIds.some((id) => {
+      const status = byId.get(String(id));
+      if (!status) return true;
+      return status !== 'pending' && status !== 'overdue';
+    });
+  }, [isOpen, snapshotIds, upcomingForStatus]);
+
   // Mirror the server's manual-pay math (`computeManualPayCredits`). The
   // server is the sole authority and 409s on any divergence > 1¢ via
   // `expectedChargeAmount`; this only drives the UI breakdown.
@@ -442,10 +485,12 @@ function ScheduledPaymentDialog({
   // Fetch available credits and saved cards when dialog opens
   useEffect(() => {
     if (isOpen) {
+      setSnapshotIds([payment.id]);
+      submittingRef.current = false;
       fetchCredits();
       fetchPaymentMethods();
     }
-  }, [isOpen]);
+  }, [isOpen, payment.id]);
 
   // Create payment intent when dialog opens (only if not fully covered by credits AND user wants to enter a new card)
   useEffect(() => {
@@ -583,6 +628,9 @@ function ScheduledPaymentDialog({
   // One-click pay with a saved card (off-session via backend)
   const handleSavedCardPayment = async () => {
     if (selectedPaymentMethodId === 'new') return;
+    if (submittingRef.current) return;
+    if (arePaymentsStale) return;
+    submittingRef.current = true;
     setIsPayingWithSavedCard(true);
     setError(null);
 
@@ -637,6 +685,7 @@ function ScheduledPaymentDialog({
         description: err.message || 'Failed to charge saved card',
         variant: 'destructive',
       });
+      submittingRef.current = false;
     } finally {
       setIsPayingWithSavedCard(false);
     }
@@ -648,6 +697,9 @@ function ScheduledPaymentDialog({
   // by auto-pay finalizes the installment. The legacy `/pay-with-credits`
   // endpoint is no longer wired from this dialog.
   const handleCreditOnlyPayment = async () => {
+    if (submittingRef.current) return;
+    if (arePaymentsStale) return;
+    submittingRef.current = true;
     setIsLoading(true);
     setError(null);
     
@@ -687,11 +739,17 @@ function ScheduledPaymentDialog({
         title: "Payment Successful",
         description: `Payment completed using ${formatCurrency(creditsToApply)} in credits.`,
       });
-      queryClient.invalidateQueries({ queryKey: ['/api/payment-history'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/parent/credits'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments/upcoming'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/parent/enrollments'] });
+      // Await every cache key listed in task #192's "Done looks like" so the
+      // page reflects the settlement before we close the dialog. The
+      // `/api/scheduled-payments` prefix partial-matches the `/upcoming` and
+      // `/grouped` sub-keys.
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['/api/parent/enrollments'] }),
+        queryClient.invalidateQueries({ queryKey: ['/api/parent/credits'] }),
+        queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments'] }),
+        queryClient.invalidateQueries({ queryKey: ['/api/payment-history'] }),
+        queryClient.invalidateQueries({ queryKey: ['/api/enrollments'] }),
+      ]);
       onSuccess();
       onClose();
     } catch (err: any) {
@@ -701,24 +759,29 @@ function ScheduledPaymentDialog({
         description: err.message || 'Failed to process credit payment',
         variant: "destructive",
       });
+      submittingRef.current = false;
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleSuccess = () => {
+  const handleSuccess = async () => {
     toast({
       title: "Payment Successful",
       description: "Your payment has been processed successfully.",
     });
-    // Invalidate queries to refresh data — Outstanding Balance card reads from
-    // /api/parent/enrollments, and credits balance from /api/parent/credits.
-    queryClient.invalidateQueries({ queryKey: ['/api/payment-history'] });
-    queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments'] });
-    queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments/upcoming'] });
-    queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments/grouped'] });
-    queryClient.invalidateQueries({ queryKey: ['/api/parent/credits'] });
-    queryClient.invalidateQueries({ queryKey: ['/api/parent/enrollments'] });
+    // Await every cache key listed in task #192's "Done looks like" so the
+    // page reflects the settlement before we close the dialog. Outstanding
+    // Balance card reads from /api/parent/enrollments. The
+    // `/api/scheduled-payments` prefix partial-matches `/upcoming` and
+    // `/grouped` so a single invalidation refreshes both.
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['/api/parent/enrollments'] }),
+      queryClient.invalidateQueries({ queryKey: ['/api/parent/credits'] }),
+      queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments'] }),
+      queryClient.invalidateQueries({ queryKey: ['/api/payment-history'] }),
+      queryClient.invalidateQueries({ queryKey: ['/api/enrollments'] }),
+    ]);
     onSuccess();
     onClose();
   };
@@ -859,13 +922,35 @@ function ScheduledPaymentDialog({
                 <p className="font-medium text-green-800">No card payment needed!</p>
                 <p className="text-sm text-green-600">Your credits fully cover this payment.</p>
               </div>
+              {arePaymentsStale && (
+                <p
+                  className="text-xs text-muted-foreground text-center"
+                  data-testid="text-stale-payment-helper"
+                >
+                  This installment is no longer pending — refresh to see the latest status.
+                </p>
+              )}
               <div className="flex gap-2">
                 <Button variant="outline" onClick={onClose} className="flex-1">
                   Cancel
                 </Button>
-                <Button onClick={handleCreditOnlyPayment} className="flex-1">
-                  <Award className="h-4 w-4 mr-2" />
-                  Pay with Credits
+                <Button
+                  onClick={handleCreditOnlyPayment}
+                  className="flex-1"
+                  disabled={isLoading || arePaymentsStale}
+                  data-testid="pay-with-credits-button"
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      <Award className="h-4 w-4 mr-2" />
+                      Pay with Credits
+                    </>
+                  )}
                 </Button>
               </div>
             </div>
@@ -876,6 +961,14 @@ function ScheduledPaymentDialog({
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription>{error}</AlertDescription>
                 </Alert>
+              )}
+              {arePaymentsStale && (
+                <p
+                  className="text-xs text-muted-foreground"
+                  data-testid="text-stale-payment-helper"
+                >
+                  This installment is no longer pending — refresh to see the latest status.
+                </p>
               )}
               <div className="flex gap-2 pt-2">
                 <Button
@@ -890,7 +983,7 @@ function ScheduledPaymentDialog({
                 <Button
                   type="button"
                   onClick={handleSavedCardPayment}
-                  disabled={isPayingWithSavedCard}
+                  disabled={isPayingWithSavedCard || arePaymentsStale}
                   className="flex-1"
                   data-testid="pay-with-saved-card-button"
                 >
@@ -914,26 +1007,37 @@ function ScheduledPaymentDialog({
               <p className="text-muted-foreground">Initializing payment...</p>
             </div>
           ) : clientSecret ? (
-            <Elements 
-              stripe={stripePromise} 
-              options={{ 
-                clientSecret,
-                appearance: {
-                  theme: 'stripe',
-                  variables: {
-                    colorPrimary: '#1e3a5f',
+            <>
+              {arePaymentsStale && (
+                <p
+                  className="text-xs text-muted-foreground"
+                  data-testid="text-stale-payment-helper"
+                >
+                  This installment is no longer pending — refresh to see the latest status.
+                </p>
+              )}
+              <Elements
+                stripe={stripePromise}
+                options={{
+                  clientSecret,
+                  appearance: {
+                    theme: 'stripe',
+                    variables: {
+                      colorPrimary: '#1e3a5f',
+                    }
                   }
-                }
-              }}
-            >
-              <ScheduledPaymentForm 
-                onSuccess={handleSuccess}
-                onError={handleError}
-                onCancel={onClose}
-                amount={amountAfterCredits}
-                paymentId={payment.id}
-              />
-            </Elements>
+                }}
+              >
+                <ScheduledPaymentForm
+                  onSuccess={handleSuccess}
+                  onError={handleError}
+                  onCancel={onClose}
+                  amount={amountAfterCredits}
+                  paymentId={payment.id}
+                  disabled={arePaymentsStale}
+                />
+              </Elements>
+            </>
           ) : null}
         </div>
       </DialogContent>
@@ -946,18 +1050,23 @@ function CombinedPaymentForm({
   onError,
   onCancel,
   amount,
-  scheduledPaymentIds
+  scheduledPaymentIds,
+  disabled = false,
 }: { 
   onSuccess: (paymentIntentId: string) => void; 
   onError: (error: string) => void;
   onCancel: () => void;
   amount: number;
   scheduledPaymentIds: number[];
+  disabled?: boolean;
 }) {
   const stripe = useStripe();
   const elements = useElements();
   const [isProcessing, setIsProcessing] = useState(false);
   const [elementsReady, setElementsReady] = useState(false);
+  // Single-flight guard for the Pay All button — prevents a fast double-click
+  // from firing two confirmPayment calls before `isProcessing` re-renders.
+  const submittingRef = useRef(false);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -969,6 +1078,9 @@ function CombinedPaymentForm({
       onError('Please wait for the payment form to load.');
       return;
     }
+    if (disabled) return;
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setIsProcessing(true);
     try {
       const { error, paymentIntent } = await stripe.confirmPayment({
@@ -981,6 +1093,7 @@ function CombinedPaymentForm({
       if (error) {
         onError(error.message || 'Payment failed');
         setIsProcessing(false);
+        submittingRef.current = false;
       } else if (paymentIntent && paymentIntent.status === 'succeeded') {
         try {
           const token = localStorage.getItem('supabase_token');
@@ -1005,13 +1118,16 @@ function CombinedPaymentForm({
       } else if (paymentIntent && paymentIntent.status === 'requires_action') {
         onError('Additional verification required. Please try again.');
         setIsProcessing(false);
+        submittingRef.current = false;
       } else {
         onError('Payment status unknown. Please check your payment history.');
         setIsProcessing(false);
+        submittingRef.current = false;
       }
     } catch (err: any) {
       onError(err.message || 'An error occurred during payment');
       setIsProcessing(false);
+      submittingRef.current = false;
     }
   };
 
@@ -1033,7 +1149,7 @@ function CombinedPaymentForm({
         </Button>
         <Button 
           type="submit" 
-          disabled={!stripe || !elementsReady || isProcessing} 
+          disabled={!stripe || !elementsReady || isProcessing || disabled} 
           className="flex-1"
         >
           {isProcessing ? (
@@ -1090,6 +1206,36 @@ function CombinedPaymentDialog({
   const [selectedPaymentMethodId, setSelectedPaymentMethodId] = useState<string>('new');
   const [isPayingWithSavedCard, setIsPayingWithSavedCard] = useState(false);
 
+  // Snapshot the scheduled-payment IDs we are paying for when the dialog
+  // opens. We use this as the stable input to the stale-status guard.
+  const [snapshotIds, setSnapshotIds] = useState<Array<string | number>>([]);
+  // Single-flight guard: bridges the gap between a click handler firing
+  // and the corresponding `is*` state updating, so two synchronous clicks
+  // can never trigger two network requests.
+  const submittingRef = useRef(false);
+
+  // Live status of the snapshotted scheduled payments. Reads from cache —
+  // the parent Payment Management page already keeps this query warm.
+  const { data: upcomingForStatus } = useQuery<ScheduledPaymentsUpcomingResponse>({
+    queryKey: ['/api/scheduled-payments/upcoming'],
+    enabled: isOpen,
+  });
+
+  const arePaymentsStale = useMemo(() => {
+    if (!isOpen || snapshotIds.length === 0) return false;
+    if (!upcomingForStatus?.payments) return false;
+    const byId = new Map<string, string>();
+    for (const p of upcomingForStatus.payments) byId.set(String(p.id), p.status);
+    // `pending` and `overdue` are both payable per the scheduled-payment
+    // lifecycle. Anything else (processing/completed/paid/cancelled/skipped/failed)
+    // or a missing row means another flow already moved on.
+    return snapshotIds.some((id) => {
+      const status = byId.get(String(id));
+      if (!status) return true;
+      return status !== 'pending' && status !== 'overdue';
+    });
+  }, [isOpen, snapshotIds, upcomingForStatus]);
+
   const totalAmount = payments.reduce((sum: number, p: any) => sum + p.amount, 0);
   // Mirror the server's combined credit math (`computeManualPayCredits`).
   // Server is authoritative; the divergence guard catches any drift via
@@ -1104,9 +1250,14 @@ function CombinedPaymentDialog({
 
   useEffect(() => {
     if (isOpen) {
+      setSnapshotIds(payments.map((p: any) => p.id));
+      submittingRef.current = false;
       fetchCredits();
       fetchPaymentMethods();
     }
+    // We intentionally only re-snapshot when the dialog opens (not on every
+    // render) so the stale guard reflects the IDs the user committed to.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
   useEffect(() => {
@@ -1237,6 +1388,9 @@ function CombinedPaymentDialog({
   // One-click pay-all using a saved card (off-session via backend)
   const handleSavedCardPayment = async () => {
     if (selectedPaymentMethodId === 'new') return;
+    if (submittingRef.current) return;
+    if (arePaymentsStale) return;
+    submittingRef.current = true;
     setIsPayingWithSavedCard(true);
     setError(null);
 
@@ -1274,11 +1428,12 @@ function CombinedPaymentDialog({
         } catch (confirmErr) {
           console.warn('⚠️ Error confirming saved-card combined payment:', confirmErr);
         }
-        handleSuccess(data.paymentIntentId);
+        await handleSuccess(data.paymentIntentId);
       } else if (data.clientSecret) {
         setClientSecret(data.clientSecret);
         setSelectedPaymentMethodId('new');
         setError('Additional verification needed. Please confirm using the card form below.');
+        submittingRef.current = false;
       } else {
         throw new Error('Unexpected payment response');
       }
@@ -1289,12 +1444,16 @@ function CombinedPaymentDialog({
         description: err.message || 'Failed to charge saved card',
         variant: 'destructive',
       });
+      submittingRef.current = false;
     } finally {
       setIsPayingWithSavedCard(false);
     }
   };
 
   const handleCreditOnlyPayment = async () => {
+    if (submittingRef.current) return;
+    if (arePaymentsStale) return;
+    submittingRef.current = true;
     setIsLoading(true);
     setError(null);
 
@@ -1335,12 +1494,17 @@ function CombinedPaymentDialog({
         title: "Payment Successful",
         description: `${payments.length} payments completed using ${formatCurrency(creditsToApply)} in credits.`,
       });
-      queryClient.invalidateQueries({ queryKey: ['/api/payment-history'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/parent/credits'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments/upcoming'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments/grouped'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/parent/enrollments'] });
+      // Await every cache key listed in task #192's "Done looks like" so the
+      // page reflects the settlement before we close the dialog. The
+      // `/api/scheduled-payments` prefix partial-matches the `/upcoming` and
+      // `/grouped` sub-keys.
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['/api/parent/enrollments'] }),
+        queryClient.invalidateQueries({ queryKey: ['/api/parent/credits'] }),
+        queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments'] }),
+        queryClient.invalidateQueries({ queryKey: ['/api/payment-history'] }),
+        queryClient.invalidateQueries({ queryKey: ['/api/enrollments'] }),
+      ]);
       onSuccess();
       onClose();
     } catch (err: any) {
@@ -1350,24 +1514,29 @@ function CombinedPaymentDialog({
         description: err.message || 'Failed to process credit payment',
         variant: "destructive",
       });
+      submittingRef.current = false;
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleSuccess = (paymentIntentId: string) => {
+  const handleSuccess = async (_paymentIntentId: string) => {
     toast({
       title: "Payment Successful",
       description: `Combined payment for ${payments.length} installments processed successfully.`,
     });
-    queryClient.invalidateQueries({ queryKey: ['/api/payment-history'] });
-    queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments'] });
-    queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments/upcoming'] });
-    queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments/grouped'] });
-    queryClient.invalidateQueries({ queryKey: ['/api/parent/credits'] });
-    // Outstanding Balance card reads from /api/parent/enrollments — must invalidate
-    // for the family balance to update after a paid combined installment set.
-    queryClient.invalidateQueries({ queryKey: ['/api/parent/enrollments'] });
+    // Await every cache key listed in task #192's "Done looks like" so the
+    // page reflects the settlement before we close the dialog. Outstanding
+    // Balance card reads from /api/parent/enrollments. The
+    // `/api/scheduled-payments` prefix partial-matches `/upcoming` and
+    // `/grouped` so a single invalidation refreshes both.
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['/api/parent/enrollments'] }),
+      queryClient.invalidateQueries({ queryKey: ['/api/parent/credits'] }),
+      queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments'] }),
+      queryClient.invalidateQueries({ queryKey: ['/api/payment-history'] }),
+      queryClient.invalidateQueries({ queryKey: ['/api/enrollments'] }),
+    ]);
     onSuccess();
     onClose();
   };
@@ -1500,11 +1669,23 @@ function CombinedPaymentDialog({
                 <p className="font-medium text-green-800">No card payment needed!</p>
                 <p className="text-sm text-green-600">Your credits fully cover this payment.</p>
               </div>
+              {arePaymentsStale && (
+                <p
+                  className="text-sm text-muted-foreground text-center"
+                  data-testid="combined-payment-stale-helper"
+                >
+                  These installments were just updated. Please close and reopen this dialog.
+                </p>
+              )}
               <div className="flex gap-2">
                 <Button variant="outline" onClick={onClose} className="flex-1">
                   Cancel
                 </Button>
-                <Button onClick={handleCreditOnlyPayment} className="flex-1">
+                <Button
+                  onClick={handleCreditOnlyPayment}
+                  className="flex-1"
+                  disabled={isLoading || arePaymentsStale}
+                >
                   <Award className="h-4 w-4 mr-2" />
                   Pay with Credits
                 </Button>
@@ -1517,6 +1698,14 @@ function CombinedPaymentDialog({
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription>{error}</AlertDescription>
                 </Alert>
+              )}
+              {arePaymentsStale && (
+                <p
+                  className="text-sm text-muted-foreground"
+                  data-testid="combined-payment-stale-helper"
+                >
+                  These installments were just updated. Please close and reopen this dialog.
+                </p>
               )}
               <div className="flex gap-2 pt-2">
                 <Button
@@ -1531,7 +1720,7 @@ function CombinedPaymentDialog({
                 <Button
                   type="button"
                   onClick={handleSavedCardPayment}
-                  disabled={isPayingWithSavedCard}
+                  disabled={isPayingWithSavedCard || arePaymentsStale}
                   className="flex-1"
                   data-testid="pay-all-with-saved-card-button"
                 >
@@ -1555,26 +1744,37 @@ function CombinedPaymentDialog({
               <p className="text-muted-foreground">Initializing payment...</p>
             </div>
           ) : clientSecret ? (
-            <Elements
-              stripe={stripePromise}
-              options={{
-                clientSecret,
-                appearance: {
-                  theme: 'stripe',
-                  variables: {
-                    colorPrimary: '#1e3a5f',
+            <>
+              {arePaymentsStale && (
+                <p
+                  className="text-sm text-muted-foreground mb-2"
+                  data-testid="combined-payment-stale-helper"
+                >
+                  These installments were just updated. Please close and reopen this dialog.
+                </p>
+              )}
+              <Elements
+                stripe={stripePromise}
+                options={{
+                  clientSecret,
+                  appearance: {
+                    theme: 'stripe',
+                    variables: {
+                      colorPrimary: '#1e3a5f',
+                    }
                   }
-                }
-              }}
-            >
-              <CombinedPaymentForm
-                onSuccess={handleSuccess}
-                onError={handleError}
-                onCancel={onClose}
-                amount={amountAfterCredits}
-                scheduledPaymentIds={payments.map((p: any) => p.id)}
-              />
-            </Elements>
+                }}
+              >
+                <CombinedPaymentForm
+                  onSuccess={handleSuccess}
+                  onError={handleError}
+                  onCancel={onClose}
+                  amount={amountAfterCredits}
+                  scheduledPaymentIds={payments.map((p: any) => p.id)}
+                  disabled={arePaymentsStale}
+                />
+              </Elements>
+            </>
           ) : null}
         </div>
       </DialogContent>
