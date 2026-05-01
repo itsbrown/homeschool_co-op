@@ -1149,18 +1149,20 @@ export default function ParentProfilePage() {
     },
   });
 
-  // Reallocate payment mutation
+  // Reallocate payment mutation. The endpoint contract is cents-only
+  // (`amountCents: positive integer`); callers convert at the boundary so
+  // the dollar→cents math lives in exactly one place per call site.
   const reallocatePaymentMutation = useMutation({
-    mutationFn: async ({ enrollmentId, targetType, amount, targetEnrollmentId, adminComment }: {
+    mutationFn: async ({ enrollmentId, targetType, amountCents, targetEnrollmentId, adminComment }: {
       enrollmentId: number;
       targetType: 'enrollment' | 'credit' | 'refund' | 'manual_refund';
-      amount: number;
+      amountCents: number;
       targetEnrollmentId?: number;
       adminComment: string;
     }) => {
       const response = await apiRequest("POST", `/api/admin/enrollments/${enrollmentId}/reallocate-payment`, {
         targetType,
-        amount, // dollars — backend converts to cents
+        amountCents,
         targetEnrollmentId: targetEnrollmentId || undefined,
         adminComment
       });
@@ -1283,10 +1285,13 @@ export default function ParentProfilePage() {
       });
       return;
     }
+    // Convert dollars → cents at the call boundary (multiply by 100, round
+    // to nearest integer to avoid floating-point drift like 12.34 * 100).
+    const amountCents = Math.round(amount * 100);
     reallocatePaymentMutation.mutate({
       enrollmentId: selectedEnrollment.id,
       targetType: reallocateType,
-      amount,
+      amountCents,
       targetEnrollmentId: reallocateType === 'enrollment' ? parseInt(reallocateTargetEnrollmentId) : undefined,
       adminComment: reallocateComment
     });

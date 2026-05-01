@@ -103,7 +103,7 @@ export function RefundDialog({ enrollment, open, onOpenChange, onSuccess }: Refu
         `/api/admin/enrollments/${enrollment.id}/reallocate-payment`,
         {
           targetType: 'refund',
-          amount: refundAmountCents,
+          amountCents: refundAmountCents,
           adminComment,
         }
       );
