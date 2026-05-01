@@ -38,6 +38,17 @@ export async function safeJsonParse(response: Response): Promise<any> {
 interface ApiRequestOptions {
   rawFormData?: boolean;
   token?: string;
+  /**
+   * Task 193 — opt-in list of HTTP status codes that should be returned to
+   * the caller as a normal `Response` (so the body is readable) instead of
+   * being thrown as `Error("<status>: <body>")` and auto-captured by
+   * `captureApiError`. Use this when the endpoint encodes an actionable
+   * outcome in a non-2xx body — e.g. `/api/scheduled-payments/pay` returns
+   * 409 with `code: 'charge_amount_diverged'` so the caller can do friendly
+   * self-recovery. Default: `[]` (preserve historical throw-on-non-2xx
+   * behavior). 401/403/404 still take their dedicated paths.
+   */
+  passthroughStatuses?: number[];
 }
 
 // Flag to prevent multiple simultaneous refresh attempts
@@ -224,7 +235,7 @@ export async function apiRequest(
   method: "GET" | "POST" | "PUT" | "DELETE" | "PATCH",
   url: string,
   body?: unknown,
-  options?: RequestInit,
+  options?: RequestInit & ApiRequestOptions,
   _retryCount: number = 0
 ): Promise<Response> {
   // Safety check for undefined URL
@@ -238,7 +249,17 @@ export async function apiRequest(
 
   // Check if body is FormData to handle file uploads properly
   const isFormData = body instanceof FormData;
-  
+
+  // Task 193 — extract our app-level options BEFORE spreading the rest into
+  // RequestInit, so they don't end up as garbage fetch() init fields.
+  const passthroughStatuses = options?.passthroughStatuses;
+  const fetchOptions: RequestInit | undefined = options
+    ? (() => {
+        const { rawFormData: _rawFormData, token: _token, passthroughStatuses: _ps, ...rest } = options;
+        return rest;
+      })()
+    : undefined;
+
   const config: RequestInit = {
     method,
     headers: {
@@ -246,10 +267,10 @@ export async function apiRequest(
       ...(!isFormData && { "Content-Type": "application/json" }),
       ...(token && { Authorization: `Bearer ${token}` }),
       ...(activeRole && { 'X-Active-Role': activeRole }),
-      ...options?.headers,
+      ...fetchOptions?.headers,
     },
     credentials: "include",
-    ...options,
+    ...fetchOptions,
   };
 
   if (body) {
@@ -322,6 +343,14 @@ export async function apiRequest(
 
   // For other error statuses, check if response is ok before trying to read body
   if (!response.ok) {
+    // Task 193 — caller-managed status passthrough. The 4xx body is the
+    // contract (e.g. /pay 409 with `code: 'charge_amount_diverged'`); the
+    // caller will read it and surface a friendly UI. Skip both the auto
+    // capture and the throw so the body remains readable.
+    if (passthroughStatuses && passthroughStatuses.includes(response.status)) {
+      return response;
+    }
+
     // Clone the response so we can read it without consuming the original stream
     const responseClone = response.clone();
     let errorText = '';

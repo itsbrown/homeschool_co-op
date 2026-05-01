@@ -392,6 +392,7 @@ describe('Auto-Pay Guard Conditions', () => {
       code?: string;
       chargeAmount?: number;
       actualChargeAmount?: number;
+      serverChargeAmount?: number;
       creditsApplied?: number;
       originalAmount?: number;
       expectedChargeAmount?: number;
@@ -424,6 +425,12 @@ describe('Auto-Pay Guard Conditions', () => {
     expect(data.success).toBe(false);
     expect(data.code).toBe('charge_amount_diverged');
     expect(data.actualChargeAmount).toBe(0); // credits cover everything
+    // Task 193 — new contract: 409 body must include `serverChargeAmount`
+    // (the canonical name) alongside legacy `actualChargeAmount`. Both must
+    // mirror each other so existing telemetry/clients keep working while the
+    // new client surfaces the friendlier name.
+    expect(data.serverChargeAmount).toBe(0);
+    expect(data.serverChargeAmount).toBe(data.actualChargeAmount);
     expect(data.creditsApplied).toBe(5000);
     expect(data.originalAmount).toBe(5000);
     expect(data.expectedChargeAmount).toBe(5000);

@@ -937,12 +937,22 @@ export function captureError(
 }
 
 // Helper for capturing API errors
+//
+// Task 193 — `severityOverride` lets a caller downgrade (or upgrade) the
+// auto-derived severity when the same status code carries different real-world
+// urgency. The canonical example is the friendly `charge_amount_diverged`
+// 409 self-recovery: the `already_paid` branch is harmless and should log as
+// `low` so it does not flood the medium-severity alert channel, while the
+// `balance_changed` branch keeps the default `medium`. When omitted we fall
+// back to the historical statusCode-based mapping (5xx=high, 4xx=medium,
+// else low) so existing callers are unaffected.
 export function captureApiError(
   message: string,
   statusCode: number,
   route: string,
   method: string,
-  metadata?: Record<string, any>
+  metadata?: Record<string, any>,
+  severityOverride?: 'low' | 'medium' | 'high' | 'critical',
 ): Promise<boolean> {
   return errorTracker.captureError({
     message,
@@ -950,7 +960,9 @@ export function captureApiError(
     route,
     method,
     errorType: 'api',
-    severity: statusCode >= 500 ? 'high' : statusCode >= 400 ? 'medium' : 'low',
+    severity:
+      severityOverride
+      ?? (statusCode >= 500 ? 'high' : statusCode >= 400 ? 'medium' : 'low'),
     metadata,
   });
 }

@@ -3,6 +3,7 @@ import { Link } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { handleChargeAmountDivergence } from "./handleChargeAmountDivergence";
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { stripePromise } from '@/config/stripe';
 import { Loader2 } from "lucide-react";
@@ -412,6 +413,8 @@ interface ScheduledPaymentDialogProps {
   formatDate: (date: string) => string;
 }
 
+// Friendly self-recovery for the `charge_amount_diverged` 409.
+
 function ScheduledPaymentDialog({ 
   payment, 
   isOpen, 
@@ -444,9 +447,11 @@ function ScheduledPaymentDialog({
   // opens. We use this as the stable input to the stale-status guard so a
   // late re-render that drops the IDs from upcoming doesn't false-positive.
   const [snapshotIds, setSnapshotIds] = useState<Array<string | number>>([]);
-  // Single-flight guard: bridges the gap between a click handler firing
-  // and the corresponding `is*` state updating, so two synchronous clicks
-  // can never trigger two network requests.
+
+  // Server-confirmed amount after a divergence recovery. When non-null,
+  // it overrides the locally-derived total and is sent as `expectedChargeAmount`
+  // on retry. Cleared on close or when the user changes inputs.
+  const [serverConfirmedAmount, setServerConfirmedAmount] = useState<number | null>(null);
   const submittingRef = useRef(false);
 
   // Live status of the snapshotted scheduled payments. Reads from cache —
@@ -471,16 +476,22 @@ function ScheduledPaymentDialog({
     });
   }, [isOpen, snapshotIds, upcomingForStatus]);
 
-  // Mirror the server's manual-pay math (`computeManualPayCredits`). The
-  // server is the sole authority and 409s on any divergence > 1¢ via
-  // `expectedChargeAmount`; this only drives the UI breakdown.
+  // UI-side mirror of the server's manual-pay math. The server is
+  // authoritative and 409s on any divergence > 1¢.
   const { creditsToApply, amountAfterCredits, isFullyCoveredByCredits } =
     computeManualPayDisplay({
       amount: payment.amount,
       availableCredits,
       applyCredits,
     });
-  const usingSavedCard = selectedPaymentMethodId !== 'new' && !isFullyCoveredByCredits;
+  // After a divergence recovery, prefer the server's amount.
+  const effectiveChargeAmount =
+    serverConfirmedAmount !== null ? serverConfirmedAmount : amountAfterCredits;
+  const isFullyCovered =
+    serverConfirmedAmount !== null
+      ? serverConfirmedAmount === 0
+      : isFullyCoveredByCredits;
+  const usingSavedCard = selectedPaymentMethodId !== 'new' && !isFullyCovered;
 
   // Fetch available credits and saved cards when dialog opens
   useEffect(() => {
@@ -497,14 +508,19 @@ function ScheduledPaymentDialog({
     if (
       isOpen &&
       !clientSecret &&
-      !isFullyCoveredByCredits &&
+      !isFullyCovered &&
       !loadingCredits &&
       !loadingPaymentMethods &&
       selectedPaymentMethodId === 'new'
     ) {
       createPaymentIntent();
     }
-  }, [isOpen, isFullyCoveredByCredits, loadingCredits, loadingPaymentMethods, applyCredits, selectedPaymentMethodId]);
+  }, [isOpen, isFullyCovered, loadingCredits, loadingPaymentMethods, applyCredits, selectedPaymentMethodId]);
+
+  // Drop the server-confirmed override when inputs change.
+  useEffect(() => {
+    setServerConfirmedAmount(null);
+  }, [applyCredits, selectedPaymentMethodId]);
 
   // Reset state when dialog closes
   useEffect(() => {
@@ -517,6 +533,7 @@ function ScheduledPaymentDialog({
       setPaymentMethods([]);
       setSelectedPaymentMethodId('new');
       setIsPayingWithSavedCard(false);
+      setServerConfirmedAmount(null);
     }
   }, [isOpen]);
 
@@ -571,7 +588,7 @@ function ScheduledPaymentDialog({
 
   const createPaymentIntent = async () => {
     // Don't create Stripe intent if fully covered by credits or paying with a saved card
-    if (isFullyCoveredByCredits || selectedPaymentMethodId !== 'new') {
+    if (isFullyCovered || selectedPaymentMethodId !== 'new') {
       return;
     }
     
@@ -579,35 +596,49 @@ function ScheduledPaymentDialog({
     setError(null);
     
     try {
-      const token = localStorage.getItem('supabase_token');
-      if (!token) {
-        throw new Error('Please sign in to make a payment');
-      }
-
-      const response = await fetch('/api/scheduled-payments/pay', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          paymentId: payment.id,
-          // Send intent + expected total. Server is authoritative on credits
-          // and rejects with 409 `charge_amount_diverged` if the actual
-          // charge would differ from `expectedChargeAmount` by > 1¢.
-          applyCredits,
-          expectedChargeAmount: amountAfterCredits,
-        })
-      });
+      const response = await apiRequest('POST', '/api/scheduled-payments/pay', {
+        paymentId: payment.id,
+        applyCredits,
+        expectedChargeAmount: effectiveChargeAmount,
+      }, { passthroughStatuses: [409] });
 
       const data = await response.json();
 
       if (!response.ok || !data.success) {
         if (data.code === 'charge_amount_diverged') {
-          throw new Error(
-            data.error
-              || 'The charge amount changed since this page loaded. Please refresh and try again.',
-          );
+          const result = await handleChargeAmountDivergence({
+            data,
+            snapshotIds: [payment.id],
+            endpoint: '/api/scheduled-payments/pay',
+            method: 'POST',
+            context: 'single',
+          });
+          if (result.classification === 'already_paid') {
+            toast({
+              title: 'Payment already settled',
+              description:
+                'This installment is already taken care of — refreshing your view.',
+            });
+            onSuccess();
+            onClose();
+            return;
+          }
+          // balance_changed — keep the dialog open with refreshed numbers
+          // so the parent can re-confirm the new amount. Re-fetch credits
+          // (the on-screen credit balance widget reads from local state)
+          // and pin `serverConfirmedAmount` so the displayed total + the
+          // next retry match the server's view exactly.
+          await fetchCredits();
+          setServerConfirmedAmount(result.serverChargeAmount);
+          const friendly =
+            `Your balance just updated. The amount we'd charge is now ` +
+            `${formatCurrency(result.serverChargeAmount)}. Please review and try again.`;
+          setError(friendly);
+          toast({
+            title: 'Balance updated',
+            description: friendly,
+          });
+          return;
         }
         throw new Error(data.error || 'Failed to initialize payment');
       }
@@ -638,17 +669,44 @@ function ScheduledPaymentDialog({
       const response = await apiRequest('POST', '/api/scheduled-payments/pay', {
         paymentId: payment.id,
         applyCredits,
-        expectedChargeAmount: amountAfterCredits,
+        expectedChargeAmount: effectiveChargeAmount,
         paymentMethodId: selectedPaymentMethodId,
-      });
+      }, { passthroughStatuses: [409] });
 
       const data = await response.json();
       if (!response.ok || !data.success) {
         if (data.code === 'charge_amount_diverged') {
-          throw new Error(
-            data.error
-              || 'The charge amount changed since this page loaded. Please refresh and try again.',
-          );
+          const result = await handleChargeAmountDivergence({
+            data,
+            snapshotIds: [payment.id],
+            endpoint: '/api/scheduled-payments/pay',
+            method: 'POST',
+            context: 'single',
+          });
+          if (result.classification === 'already_paid') {
+            toast({
+              title: 'Payment already settled',
+              description:
+                'This installment is already taken care of — refreshing your view.',
+            });
+            onSuccess();
+            onClose();
+            return;
+          }
+          // Re-fetch credits + pin server-confirmed amount so the dialog
+          // breakdown matches the server's view; next click will use it.
+          await fetchCredits();
+          setServerConfirmedAmount(result.serverChargeAmount);
+          const friendly =
+            `Your balance just updated. The amount we'd charge is now ` +
+            `${formatCurrency(result.serverChargeAmount)}. Please review and try again.`;
+          setError(friendly);
+          toast({
+            title: 'Balance updated',
+            description: friendly,
+          });
+          submittingRef.current = false;
+          return;
         }
         throw new Error(data.error || 'Failed to charge saved card');
       }
@@ -704,32 +762,52 @@ function ScheduledPaymentDialog({
     setError(null);
     
     try {
-      const token = localStorage.getItem('supabase_token');
-      if (!token) {
-        throw new Error('Please sign in to make a payment');
-      }
-
-      const response = await fetch('/api/scheduled-payments/pay', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          paymentId: payment.id,
-          applyCredits: true,
-          expectedChargeAmount: 0,
-        })
-      });
+      const response = await apiRequest('POST', '/api/scheduled-payments/pay', {
+        paymentId: payment.id,
+        applyCredits: true,
+        expectedChargeAmount: 0,
+      }, { passthroughStatuses: [409] });
 
       const data = await response.json();
 
       if (!response.ok || !data.success) {
         if (data.code === 'charge_amount_diverged') {
-          throw new Error(
-            data.error
-              || 'Your credit balance changed. Please refresh and try again.',
-          );
+          const result = await handleChargeAmountDivergence({
+            data,
+            snapshotIds: [payment.id],
+            endpoint: '/api/scheduled-payments/pay',
+            method: 'POST',
+            context: 'single',
+          });
+          if (result.classification === 'already_paid') {
+            toast({
+              title: 'Payment already settled',
+              description:
+                'This installment is already taken care of — refreshing your view.',
+            });
+            onSuccess();
+            onClose();
+            return;
+          }
+          // Credits-only path with balance_changed almost always means the
+          // parent's credit balance moved. Re-fetch credits + pin the
+          // server-confirmed amount so the breakdown matches the server
+          // and the next click hits the right amount.
+          await fetchCredits();
+          setServerConfirmedAmount(result.serverChargeAmount);
+          const friendly = result.serverChargeAmount > 0
+            ? `Your credit balance changed. The remaining amount is now ` +
+              `${formatCurrency(result.serverChargeAmount)} after credits. ` +
+              `Please review and try again.`
+            : `Your credit balance changed. Please review the updated payment ` +
+              `summary and try again.`;
+          setError(friendly);
+          toast({
+            title: 'Credits updated',
+            description: friendly,
+          });
+          submittingRef.current = false;
+          return;
         }
         throw new Error(data.error || 'Failed to process credit payment');
       }
@@ -838,8 +916,17 @@ function ScheduledPaymentDialog({
               )}
               <div className="flex justify-between pt-2 border-t border-border mt-2">
                 <span className="font-semibold">Amount Due:</span>
-                <span className="font-bold text-lg">{formatCurrency(amountAfterCredits)}</span>
+                <span className="font-bold text-lg" data-testid="text-amount-due">{formatCurrency(effectiveChargeAmount)}</span>
               </div>
+              {serverConfirmedAmount !== null && (
+                <p
+                  className="text-xs text-amber-700 mt-1"
+                  data-testid="text-server-confirmed-amount"
+                >
+                  Updated by server after a balance change — this is the
+                  amount we will actually charge.
+                </p>
+              )}
             </div>
           </div>
 
@@ -873,9 +960,9 @@ function ScheduledPaymentDialog({
                   <div className="flex items-center gap-1">
                     <Check className="h-4 w-4" />
                     <span>
-                      {isFullyCoveredByCredits 
+                      {isFullyCovered
                         ? `Full payment covered by credits! Remaining credits: ${formatCurrency(availableCredits - creditsToApply)}`
-                        : `${formatCurrency(creditsToApply)} will be applied. You'll pay ${formatCurrency(amountAfterCredits)} with card.`
+                        : `${formatCurrency(creditsToApply)} will be applied. You'll pay ${formatCurrency(effectiveChargeAmount)} with card.`
                       }
                     </span>
                   </div>
@@ -885,7 +972,7 @@ function ScheduledPaymentDialog({
           )}
 
           {/* Saved card selector — only when not fully covered by credits */}
-          {!isFullyCoveredByCredits && paymentMethods.length > 0 && (
+          {!isFullyCovered && paymentMethods.length > 0 && (
             <SavedCardSelector
               paymentMethods={paymentMethods}
               selectedPaymentMethodId={selectedPaymentMethodId}
@@ -911,11 +998,11 @@ function ScheduledPaymentDialog({
             <div className="text-center py-4">
               <AlertCircle className="h-8 w-8 text-destructive mx-auto mb-2" />
               <p className="text-destructive mb-4">{error}</p>
-              <Button onClick={isFullyCoveredByCredits ? handleCreditOnlyPayment : createPaymentIntent} variant="outline">
+              <Button onClick={isFullyCovered ? handleCreditOnlyPayment : createPaymentIntent} variant="outline">
                 Try Again
               </Button>
             </div>
-          ) : isFullyCoveredByCredits ? (
+          ) : isFullyCovered ? (
             <div className="space-y-4">
               <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
                 <Check className="h-8 w-8 text-green-600 mx-auto mb-2" />
@@ -995,7 +1082,7 @@ function ScheduledPaymentDialog({
                   ) : (
                     <>
                       <Zap className="mr-2 h-4 w-4" />
-                      Pay {formatCurrency(amountAfterCredits)}
+                      Pay {formatCurrency(effectiveChargeAmount)}
                     </>
                   )}
                 </Button>
@@ -1032,7 +1119,7 @@ function ScheduledPaymentDialog({
                   onSuccess={handleSuccess}
                   onError={handleError}
                   onCancel={onClose}
-                  amount={amountAfterCredits}
+                  amount={effectiveChargeAmount}
                   paymentId={payment.id}
                   disabled={arePaymentsStale}
                 />
@@ -1206,12 +1293,13 @@ function CombinedPaymentDialog({
   const [selectedPaymentMethodId, setSelectedPaymentMethodId] = useState<string>('new');
   const [isPayingWithSavedCard, setIsPayingWithSavedCard] = useState(false);
 
-  // Snapshot the scheduled-payment IDs we are paying for when the dialog
-  // opens. We use this as the stable input to the stale-status guard.
+  // Server-confirmed amount after a divergence recovery. When non-null,
+  // it overrides the locally-derived total and is sent as `expectedChargeAmount`
+  // on retry. Cleared on close or when the user changes inputs.
+  const [serverConfirmedAmount, setServerConfirmedAmount] = useState<number | null>(null);
+
+  // Snapshot the scheduled-payment IDs at open time for the stale-status guard.
   const [snapshotIds, setSnapshotIds] = useState<Array<string | number>>([]);
-  // Single-flight guard: bridges the gap between a click handler firing
-  // and the corresponding `is*` state updating, so two synchronous clicks
-  // can never trigger two network requests.
   const submittingRef = useRef(false);
 
   // Live status of the snapshotted scheduled payments. Reads from cache —
@@ -1237,16 +1325,21 @@ function CombinedPaymentDialog({
   }, [isOpen, snapshotIds, upcomingForStatus]);
 
   const totalAmount = payments.reduce((sum: number, p: any) => sum + p.amount, 0);
-  // Mirror the server's combined credit math (`computeManualPayCredits`).
-  // Server is authoritative; the divergence guard catches any drift via
-  // `expectedChargeAmount`.
+  // UI-side mirror of the server's combined credit math. Server is authoritative.
   const { creditsToApply, amountAfterCredits, isFullyCoveredByCredits } =
     computeManualPayDisplay({
       amount: totalAmount,
       availableCredits,
       applyCredits,
     });
-  const usingSavedCard = selectedPaymentMethodId !== 'new' && !isFullyCoveredByCredits;
+  // After a divergence recovery, prefer the server's amount.
+  const effectiveChargeAmount =
+    serverConfirmedAmount !== null ? serverConfirmedAmount : amountAfterCredits;
+  const isFullyCovered =
+    serverConfirmedAmount !== null
+      ? serverConfirmedAmount === 0
+      : isFullyCoveredByCredits;
+  const usingSavedCard = selectedPaymentMethodId !== 'new' && !isFullyCovered;
 
   useEffect(() => {
     if (isOpen) {
@@ -1264,14 +1357,14 @@ function CombinedPaymentDialog({
     if (
       isOpen &&
       !clientSecret &&
-      !isFullyCoveredByCredits &&
+      !isFullyCovered &&
       !loadingCredits &&
       !loadingPaymentMethods &&
       selectedPaymentMethodId === 'new'
     ) {
       createPaymentIntent();
     }
-  }, [isOpen, isFullyCoveredByCredits, loadingCredits, loadingPaymentMethods, applyCredits, selectedPaymentMethodId]);
+  }, [isOpen, isFullyCovered, loadingCredits, loadingPaymentMethods, applyCredits, selectedPaymentMethodId]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -1283,8 +1376,14 @@ function CombinedPaymentDialog({
       setPaymentMethods([]);
       setSelectedPaymentMethodId('new');
       setIsPayingWithSavedCard(false);
+      setServerConfirmedAmount(null);
     }
   }, [isOpen]);
+
+  // Drop the server-confirmed override when inputs change.
+  useEffect(() => {
+    setServerConfirmedAmount(null);
+  }, [applyCredits, selectedPaymentMethodId]);
 
   const fetchCredits = async () => {
     setLoadingCredits(true);
@@ -1335,7 +1434,7 @@ function CombinedPaymentDialog({
   };
 
   const createPaymentIntent = async () => {
-    if (isFullyCoveredByCredits || selectedPaymentMethodId !== 'new') {
+    if (isFullyCovered || selectedPaymentMethodId !== 'new') {
       return;
     }
 
@@ -1343,31 +1442,46 @@ function CombinedPaymentDialog({
     setError(null);
 
     try {
-      const token = localStorage.getItem('supabase_token');
-      if (!token) throw new Error('Please sign in to make a payment');
-
       const scheduledPaymentIds = payments.map((p: any) => p.id);
-      const response = await fetch('/api/scheduled-payments/pay-combined', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          scheduledPaymentIds,
-          // Server-authoritative credits via the divergence guard.
-          applyCredits,
-          expectedChargeAmount: amountAfterCredits,
-        })
-      });
+      const response = await apiRequest('POST', '/api/scheduled-payments/pay-combined', {
+        scheduledPaymentIds,
+        applyCredits,
+        expectedChargeAmount: effectiveChargeAmount,
+      }, { passthroughStatuses: [409] });
 
       const data = await response.json();
       if (!response.ok || !data.success) {
         if (data.code === 'charge_amount_diverged') {
-          throw new Error(
-            data.error
-              || 'The charge amount changed since this page loaded. Please refresh and try again.',
-          );
+          const result = await handleChargeAmountDivergence({
+            data,
+            snapshotIds: scheduledPaymentIds,
+            endpoint: '/api/scheduled-payments/pay-combined',
+            method: 'POST',
+            context: 'combined',
+          });
+          if (result.classification === 'already_paid') {
+            toast({
+              title: 'Payments already settled',
+              description:
+                'These installments are already taken care of — refreshing your view.',
+            });
+            onSuccess();
+            onClose();
+            return;
+          }
+          // Re-fetch credits + pin server-confirmed amount so the dialog
+          // breakdown matches the server's view; next click will use it.
+          await fetchCredits();
+          setServerConfirmedAmount(result.serverChargeAmount);
+          const friendly =
+            `Your balance just updated. The combined amount we'd charge is now ` +
+            `${formatCurrency(result.serverChargeAmount)}. Please review and try again.`;
+          setError(friendly);
+          toast({
+            title: 'Balance updated',
+            description: friendly,
+          });
+          return;
         }
         throw new Error(data.error || 'Failed to initialize combined payment');
       }
@@ -1399,17 +1513,44 @@ function CombinedPaymentDialog({
       const response = await apiRequest('POST', '/api/scheduled-payments/pay-combined', {
         scheduledPaymentIds,
         applyCredits,
-        expectedChargeAmount: amountAfterCredits,
+        expectedChargeAmount: effectiveChargeAmount,
         paymentMethodId: selectedPaymentMethodId,
-      });
+      }, { passthroughStatuses: [409] });
 
       const data = await response.json();
       if (!response.ok || !data.success) {
         if (data.code === 'charge_amount_diverged') {
-          throw new Error(
-            data.error
-              || 'The charge amount changed since this page loaded. Please refresh and try again.',
-          );
+          const result = await handleChargeAmountDivergence({
+            data,
+            snapshotIds: scheduledPaymentIds,
+            endpoint: '/api/scheduled-payments/pay-combined',
+            method: 'POST',
+            context: 'combined',
+          });
+          if (result.classification === 'already_paid') {
+            toast({
+              title: 'Payments already settled',
+              description:
+                'These installments are already taken care of — refreshing your view.',
+            });
+            onSuccess();
+            onClose();
+            return;
+          }
+          // Re-fetch credits + pin server-confirmed amount so the dialog
+          // breakdown matches the server's view; next click will use it.
+          await fetchCredits();
+          setServerConfirmedAmount(result.serverChargeAmount);
+          const friendly =
+            `Your balance just updated. The combined amount we'd charge is now ` +
+            `${formatCurrency(result.serverChargeAmount)}. Please review and try again.`;
+          setError(friendly);
+          toast({
+            title: 'Balance updated',
+            description: friendly,
+          });
+          submittingRef.current = false;
+          return;
         }
         throw new Error(data.error || 'Failed to charge saved card');
       }
@@ -1458,33 +1599,53 @@ function CombinedPaymentDialog({
     setError(null);
 
     try {
-      const token = localStorage.getItem('supabase_token');
-      if (!token) throw new Error('Please sign in to make a payment');
-
       const scheduledPaymentIds = payments.map((p: any) => p.id);
       // Task 173 — route through unified `/pay-combined` so the credits-only
       // zero-charge path uses the same atomic createCreditHolds →
       // completeCreditsOnlyPayment flow as auto-pay (per installment).
-      const response = await fetch('/api/scheduled-payments/pay-combined', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          scheduledPaymentIds,
-          applyCredits: true,
-          expectedChargeAmount: 0,
-        })
-      });
+      const response = await apiRequest('POST', '/api/scheduled-payments/pay-combined', {
+        scheduledPaymentIds,
+        applyCredits: true,
+        expectedChargeAmount: 0,
+      }, { passthroughStatuses: [409] });
 
       const data = await response.json();
       if (!response.ok || !data.success) {
         if (data.code === 'charge_amount_diverged') {
-          throw new Error(
-            data.error
-              || 'Your credit balance changed. Please refresh and try again.',
-          );
+          const result = await handleChargeAmountDivergence({
+            data,
+            snapshotIds: scheduledPaymentIds,
+            endpoint: '/api/scheduled-payments/pay-combined',
+            method: 'POST',
+            context: 'combined',
+          });
+          if (result.classification === 'already_paid') {
+            toast({
+              title: 'Payments already settled',
+              description:
+                'These installments are already taken care of — refreshing your view.',
+            });
+            onSuccess();
+            onClose();
+            return;
+          }
+          // Re-fetch credits + pin server-confirmed amount so the dialog
+          // breakdown matches the server's view; next click will use it.
+          await fetchCredits();
+          setServerConfirmedAmount(result.serverChargeAmount);
+          const friendly = result.serverChargeAmount > 0
+            ? `Your credit balance changed. The remaining combined amount is now ` +
+              `${formatCurrency(result.serverChargeAmount)} after credits. ` +
+              `Please review and try again.`
+            : `Your credit balance changed. Please review the updated payment ` +
+              `summary and try again.`;
+          setError(friendly);
+          toast({
+            title: 'Credits updated',
+            description: friendly,
+          });
+          submittingRef.current = false;
+          return;
         }
         throw new Error(data.error || 'Failed to process credit payment');
       }
@@ -1587,8 +1748,17 @@ function CombinedPaymentDialog({
                 )}
                 <div className="flex justify-between pt-2 border-t border-border mt-2">
                   <span className="font-semibold">Amount Due:</span>
-                  <span className="font-bold text-lg">{formatCurrency(amountAfterCredits)}</span>
+                  <span className="font-bold text-lg" data-testid="text-combined-amount-due">{formatCurrency(effectiveChargeAmount)}</span>
                 </div>
+                {serverConfirmedAmount !== null && (
+                  <p
+                    className="text-xs text-amber-700 mt-1"
+                    data-testid="text-combined-server-confirmed-amount"
+                  >
+                    Updated by server after a balance change — this is the
+                    amount we will actually charge.
+                  </p>
+                )}
               </div>
             </div>
           </div>
@@ -1622,9 +1792,9 @@ function CombinedPaymentDialog({
                   <div className="flex items-center gap-1">
                     <Check className="h-4 w-4" />
                     <span>
-                      {isFullyCoveredByCredits
+                      {isFullyCovered
                         ? `Full payment covered by credits! Remaining credits: ${formatCurrency(availableCredits - creditsToApply)}`
-                        : `${formatCurrency(creditsToApply)} will be applied. You'll pay ${formatCurrency(amountAfterCredits)} with card.`
+                        : `${formatCurrency(creditsToApply)} will be applied. You'll pay ${formatCurrency(effectiveChargeAmount)} with card.`
                       }
                     </span>
                   </div>
@@ -1634,7 +1804,7 @@ function CombinedPaymentDialog({
           )}
 
           {/* Saved card selector — only when not fully covered by credits */}
-          {!isFullyCoveredByCredits && paymentMethods.length > 0 && (
+          {!isFullyCovered && paymentMethods.length > 0 && (
             <SavedCardSelector
               paymentMethods={paymentMethods}
               selectedPaymentMethodId={selectedPaymentMethodId}
@@ -1658,11 +1828,11 @@ function CombinedPaymentDialog({
             <div className="text-center py-4">
               <AlertCircle className="h-8 w-8 text-destructive mx-auto mb-2" />
               <p className="text-destructive mb-4">{error}</p>
-              <Button onClick={isFullyCoveredByCredits ? handleCreditOnlyPayment : createPaymentIntent} variant="outline">
+              <Button onClick={isFullyCovered ? handleCreditOnlyPayment : createPaymentIntent} variant="outline">
                 Try Again
               </Button>
             </div>
-          ) : isFullyCoveredByCredits ? (
+          ) : isFullyCovered ? (
             <div className="space-y-4">
               <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
                 <Check className="h-8 w-8 text-green-600 mx-auto mb-2" />
@@ -1732,7 +1902,7 @@ function CombinedPaymentDialog({
                   ) : (
                     <>
                       <Zap className="mr-2 h-4 w-4" />
-                      Pay {formatCurrency(amountAfterCredits)}
+                      Pay {formatCurrency(effectiveChargeAmount)}
                     </>
                   )}
                 </Button>
@@ -1769,7 +1939,7 @@ function CombinedPaymentDialog({
                   onSuccess={handleSuccess}
                   onError={handleError}
                   onCancel={onClose}
-                  amount={amountAfterCredits}
+                  amount={effectiveChargeAmount}
                   scheduledPaymentIds={payments.map((p: any) => p.id)}
                   disabled={arePaymentsStale}
                 />

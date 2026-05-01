@@ -1018,6 +1018,9 @@ router.post('/run-parent-manual-divergence-guard/:scheduledPaymentId', async (re
           'The amount we are about to charge no longer matches what was shown. ' +
           'Please refresh the page and try again.',
         expectedChargeAmount,
+        // Task 193 — mirror the production handler's contract: client reads
+        // `serverChargeAmount`; `actualChargeAmount` kept for backward-compat.
+        serverChargeAmount: decision.chargeAmount,
         actualChargeAmount: decision.chargeAmount,
         creditsApplied: decision.creditsToApply,
         originalAmount: sp.amount,

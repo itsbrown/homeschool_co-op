@@ -31,6 +31,11 @@ async function emitDivergenceAlert(input: {
   creditsApplied: number;
   originalAmount: number;
   source?: 'pay' | 'pay-combined';
+  // Task 193 — capture release/recovery context so the admin can audit the
+  // self-recovery path (stranded hold released, prior PI flagged).
+  creditHoldSessionId?: string | null;
+  creditHoldReleased?: boolean;
+  previousStripePaymentIntentId?: string | null;
 }): Promise<void> {
   await storage.createErrorLog({
     errorType: 'payment',
@@ -51,13 +56,79 @@ async function emitDivergenceAlert(input: {
       parentId: input.parentId,
       expectedChargeAmount: input.expectedChargeAmount,
       actualChargeAmount: input.actualChargeAmount,
+      // Task 193 — `serverChargeAmount` mirrors `actualChargeAmount` and is
+      // the field name used by the friendly client recovery flow.
+      serverChargeAmount: input.actualChargeAmount,
       creditsApplied: input.creditsApplied,
       originalAmount: input.originalAmount,
       source: input.source ?? 'pay',
+      creditHoldSessionId: input.creditHoldSessionId ?? null,
+      creditHoldReleased: input.creditHoldReleased ?? false,
+      previousStripePaymentIntentId: input.previousStripePaymentIntentId ?? null,
       detectedAt: new Date().toISOString(),
     },
     notificationSent: false,
   });
+}
+
+/**
+ * Task 193 — when the divergence guard fires, defensively release any credit
+ * hold a prior attempt may have placed on this scheduled payment. The
+ * partial-credit Stripe path stores `creditHoldSessionId` in metadata before
+ * the PI is confirmed; if the parent re-attempted with a different credit
+ * decision, that hold is now stranded. We also clear the metadata flags so
+ * subsequent attempts start from a clean state. Best-effort: failures here
+ * never block the 409 response.
+ */
+async function releaseStrandedHoldOnDivergence(scheduledPayment: {
+  id: number;
+  metadata: unknown;
+}): Promise<{ creditHoldSessionId: string | null; released: boolean }> {
+  const meta = (scheduledPayment.metadata as Record<string, any>) || {};
+  const creditHoldSessionId: string | null =
+    typeof meta.creditHoldSessionId === 'string' && meta.creditHoldSessionId.length > 0
+      ? meta.creditHoldSessionId
+      : null;
+  let released = false;
+
+  if (creditHoldSessionId) {
+    try {
+      const result = await storage.releaseCreditHolds(creditHoldSessionId);
+      released = result.releasedCount > 0;
+      console.log(
+        `💧 Released stranded credit hold ${creditHoldSessionId} after divergence ` +
+        `(released=${result.releasedCount} totalReleased=${result.totalReleased}¢)`,
+      );
+    } catch (releaseErr) {
+      console.error(
+        `❌ Failed to release stranded credit hold ${creditHoldSessionId} after divergence:`,
+        releaseErr,
+      );
+    }
+  }
+
+  // Clear bookkeeping flags whether or not a hold existed, so the row reflects
+  // a clean state for the parent's next attempt.
+  if (creditHoldSessionId || meta.pendingCreditsReservation) {
+    try {
+      await storage.updateScheduledPayment(scheduledPayment.id, {
+        metadata: {
+          ...meta,
+          pendingCreditsReservation: 0,
+          creditHoldSessionId: null,
+          chargeAmountDivergedAt: new Date().toISOString(),
+          chargeAmountDivergedReleasedHold: released,
+        },
+      });
+    } catch (updateErr) {
+      console.error(
+        `❌ Failed to clear divergence metadata flags for scheduled payment ${scheduledPayment.id}:`,
+        updateErr,
+      );
+    }
+  }
+
+  return { creditHoldSessionId, released };
 }
 
 /**
@@ -558,6 +629,13 @@ router.post('/pay', supabaseAuth, async (req: any, res) => {
         creditsApplied: validatedCreditsToApply,
         originalAmount: authoritativeAmount,
       });
+      // Task 193 — release any credit hold a prior attempt may have stranded
+      // on this row before answering 409, and capture the release status for
+      // the audit log + admin dashboard.
+      const release = await releaseStrandedHoldOnDivergence(scheduledPayment);
+      const previousStripePaymentIntentId =
+        ((scheduledPayment.metadata as Record<string, any>) || {})
+          .previousStripePaymentIntentId ?? scheduledPayment.stripePaymentIntentId ?? null;
       try {
         await emitDivergenceAlert({
           paymentId: scheduledPayment.id,
@@ -568,6 +646,10 @@ router.post('/pay', supabaseAuth, async (req: any, res) => {
           actualChargeAmount: chargeAmount,
           creditsApplied: validatedCreditsToApply,
           originalAmount: authoritativeAmount,
+          source: 'pay',
+          creditHoldSessionId: release.creditHoldSessionId,
+          creditHoldReleased: release.released,
+          previousStripePaymentIntentId,
         });
       } catch (alertErr) {
         console.error('❌ Failed to emit divergence alert (non-blocking):', alertErr);
@@ -579,6 +661,10 @@ router.post('/pay', supabaseAuth, async (req: any, res) => {
           'The amount we are about to charge no longer matches what was shown. ' +
           'Please refresh the page and try again.',
         expectedChargeAmount,
+        // Task 193 — `serverChargeAmount` is the field the client recovery
+        // flow reads. `actualChargeAmount` is preserved for backward-compat
+        // with any older clients still in the wild.
+        serverChargeAmount: chargeAmount,
         actualChargeAmount: chargeAmount,
         creditsApplied: validatedCreditsToApply,
         originalAmount: authoritativeAmount,
@@ -1868,6 +1954,26 @@ router.post('/pay-combined', supabaseAuth, async (req: any, res) => {
         creditsApplied: validatedCreditsToApply,
         originalAmount: combinedAmount,
       });
+      // Task 193 — release any stranded credit holds across every installment
+      // in the combined group before answering 409. Each row may carry its
+      // own creditHoldSessionId in metadata from a prior partial-credit
+      // attempt; we release them defensively.
+      const releaseSummaries: Array<{
+        scheduledPaymentId: number;
+        creditHoldSessionId: string | null;
+        released: boolean;
+      }> = [];
+      for (const sp of paymentsToProcess) {
+        const release = await releaseStrandedHoldOnDivergence(sp);
+        releaseSummaries.push({
+          scheduledPaymentId: sp.id,
+          creditHoldSessionId: release.creditHoldSessionId,
+          released: release.released,
+        });
+      }
+      const firstReleased = releaseSummaries.find((r) => r.creditHoldSessionId);
+      const previousStripePaymentIntentId =
+        paymentsToProcess[0]?.stripePaymentIntentId ?? null;
       try {
         await emitDivergenceAlert({
           paymentId: scheduledPaymentIds.join(','),
@@ -1879,6 +1985,9 @@ router.post('/pay-combined', supabaseAuth, async (req: any, res) => {
           creditsApplied: validatedCreditsToApply,
           originalAmount: combinedAmount,
           source: 'pay-combined',
+          creditHoldSessionId: firstReleased?.creditHoldSessionId ?? null,
+          creditHoldReleased: releaseSummaries.some((r) => r.released),
+          previousStripePaymentIntentId,
         });
       } catch (alertErr) {
         console.error('❌ Failed to emit divergence alert (non-blocking):', alertErr);
@@ -1890,6 +1999,9 @@ router.post('/pay-combined', supabaseAuth, async (req: any, res) => {
           'The amount we are about to charge no longer matches what was shown. ' +
           'Please refresh the page and try again.',
         expectedChargeAmount,
+        // Task 193 — `serverChargeAmount` is the field the client recovery
+        // flow reads. `actualChargeAmount` is preserved for backward-compat.
+        serverChargeAmount: chargeAmount,
         actualChargeAmount: chargeAmount,
         creditsApplied: validatedCreditsToApply,
         originalAmount: combinedAmount,
