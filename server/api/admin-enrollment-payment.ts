@@ -4,6 +4,10 @@ import { storage } from '../storage';
 import { recalculatePaymentSchedule, validateFrequencyChange, type PaymentFrequency } from '../lib/payment-calculator';
 import { getStripeClient } from '../config/stripe';
 import { CurrencyUtils } from '../../shared/currency-utils';
+import {
+  PaymentReallocationService,
+  PaymentReallocationError,
+} from '../services/PaymentReallocationService';
 
 const router = express.Router();
 
@@ -534,115 +538,60 @@ router.post('/:enrollmentId/reallocate-payment', async (req: any, res) => {
         return res.status(403).json({ error: 'Cannot transfer payments to enrollments in other schools' });
       }
 
-      // Prevent transferring to cancelled/withdrawn enrollments
-      if (targetEnrollment.status === 'cancelled' || targetEnrollment.status === 'withdrawn') {
-        return res.status(400).json({ 
-          error: 'Cannot transfer payments to a cancelled or withdrawn enrollment',
-          hint: 'Please select an active enrollment as the target'
-        });
-      }
-
-      // Check if transfer would cause overpayment
-      const targetTotalPaid = targetEnrollment.totalPaid || 0;
-      const targetNewTotalPaid = targetTotalPaid + amountCents;
-      if (targetNewTotalPaid > targetEnrollment.totalCost) {
-        return res.status(400).json({ 
-          error: 'Transfer would result in overpayment on target enrollment',
-          details: {
-            targetCurrentPaid: targetTotalPaid,
-            targetTotalCost: targetEnrollment.totalCost,
-            transferAmount: amountCents,
-            wouldExceedBy: targetNewTotalPaid - targetEnrollment.totalCost
-          }
-        });
-      }
-
-      // Update source enrollment
-      const sourceNewTotalPaid = sourceTotalPaid - amountCents;
-      const sourceNewBalance = calcBalance(sourceEnrollment.totalCost, sourceNewTotalPaid, sourceEnrollment.compAmountCents);
-      const sourceMetadata = (sourceEnrollment.metadata && typeof sourceEnrollment.metadata === 'object') 
-        ? sourceEnrollment.metadata as Record<string, any> 
-        : {};
-      await storage.updateProgramEnrollment(enrollmentId, {
-        totalPaid: sourceNewTotalPaid,
-        remainingBalance: sourceNewBalance,
-        paymentStatus: sourceNewBalance === 0 ? 'completed' : (sourceNewTotalPaid > 0 ? 'partial_payment' : 'pending'),
-        metadata: {
-          ...sourceMetadata,
-          paymentReallocationHistory: [
-            ...(Array.isArray(sourceMetadata.paymentReallocationHistory) ? sourceMetadata.paymentReallocationHistory : []),
-            { ...auditEntry, direction: 'outgoing' }
-          ]
-        }
-      });
-
-      // Update target enrollment
-      const targetNewBalance = calcBalance(targetEnrollment.totalCost, targetNewTotalPaid, targetEnrollment.compAmountCents);
-      const targetMetadata = (targetEnrollment.metadata && typeof targetEnrollment.metadata === 'object') 
-        ? targetEnrollment.metadata as Record<string, any> 
-        : {};
-      await storage.updateProgramEnrollment(targetEnrollmentId, {
-        totalPaid: targetNewTotalPaid,
-        remainingBalance: targetNewBalance,
-        paymentStatus: targetNewBalance === 0 ? 'completed' : 'partial_payment',
-        metadata: {
-          ...targetMetadata,
-          paymentReallocationHistory: [
-            ...(Array.isArray(targetMetadata.paymentReallocationHistory) ? targetMetadata.paymentReallocationHistory : []),
-            { ...auditEntry, direction: 'incoming', sourceEnrollmentId: enrollmentId }
-          ]
-        }
-      });
-
-      console.log(`✅ Transferred $${(amountCents / 100).toFixed(2)} from enrollment ${enrollmentId} to ${targetEnrollmentId}`);
-      
-      // Create payment allocations for reallocation (source of truth)
-      // Requires existing allocations to maintain ledger integrity
+      // Delegate the actual cents-level move to the shared service. The
+      // service handles validation (target inactive, overpayment, etc.),
+      // updates both enrollments' cached totals + metadata audit log, and
+      // writes the standard reallocation_out/reallocation_in audit pair.
+      let serviceResult;
       try {
-        const existingAllocations = await storage.getPaymentAllocationsByEnrollmentId(enrollmentId);
-        
-        if (existingAllocations.length > 0) {
-          const paymentHistoryId = existingAllocations[0].paymentHistoryId;
-          
-          // Create outgoing allocation from source
-          await storage.createPaymentAllocation({
-            paymentHistoryId,
-            enrollmentId: enrollmentId,
-            membershipEnrollmentId: null,
-            allocatedAmountCents: -amountCents,
-            allocationType: 'reallocation_out',
-            sourceAllocationId: null,
-            adminComment,
-            metadata: { targetEnrollmentId, adminEmail: userEmail }
-          });
-          
-          // Create incoming allocation to target
-          await storage.createPaymentAllocation({
-            paymentHistoryId,
-            enrollmentId: targetEnrollmentId,
-            membershipEnrollmentId: null,
-            allocatedAmountCents: amountCents,
-            allocationType: 'reallocation_in',
-            sourceAllocationId: null,
-            adminComment,
-            metadata: { sourceEnrollmentId: enrollmentId, adminEmail: userEmail }
-          });
-          console.log('✅ Created reallocation payment allocations');
-        } else {
-          // Pre-migration enrollment without allocations - still process via cached totals
-          // Allocations will be created when backfill runs
-          console.log('⚠️ Legacy enrollment without allocations - reallocation processed via cached totals only');
+        serviceResult = await PaymentReallocationService.reallocate({
+          sourceEnrollmentId: enrollmentId,
+          targetEnrollmentId,
+          amountCents,
+          adminComment,
+          performedBy: userEmail,
+          performedById: user.id,
+        });
+      } catch (err) {
+        if (err instanceof PaymentReallocationError) {
+          if (err.code === 'TARGET_INACTIVE') {
+            return res.status(400).json({
+              error: 'Cannot transfer payments to a cancelled or withdrawn enrollment',
+              hint: 'Please select an active enrollment as the target',
+            });
+          }
+          if (err.code === 'WOULD_OVERPAY_TARGET') {
+            return res.status(400).json({
+              error: 'Transfer would result in overpayment on target enrollment',
+              details: err.details,
+            });
+          }
+          if (err.code === 'AMOUNT_EXCEEDS_TOTAL_PAID') {
+            return res.status(400).json({
+              error: 'Amount exceeds total paid',
+              details: err.details,
+            });
+          }
+          if (err.code === 'TARGET_NOT_FOUND') {
+            return res.status(404).json({ error: 'Target enrollment not found' });
+          }
+          return res.status(400).json({ error: err.message, details: err.details });
         }
-      } catch (allocationError) {
-        console.error('⚠️ Error creating reallocation allocations (non-blocking):', allocationError);
+        throw err;
       }
-      
+
+      console.log(
+        `✅ Transferred $${(amountCents / 100).toFixed(2)} from enrollment ${enrollmentId} to ${targetEnrollmentId} ` +
+          `(audit pair ${serviceResult.outAllocationId}/${serviceResult.inAllocationId} ` +
+          `anchor ${serviceResult.anchorPaymentHistoryId})`,
+      );
+
       result.targetEnrollment = {
         id: targetEnrollmentId,
         childName: targetEnrollment.childName,
         className: targetEnrollment.className,
-        newTotalPaid: targetNewTotalPaid,
-        newRemainingBalance: targetNewBalance
+        newTotalPaid: serviceResult.target.newTotalPaid,
+        newRemainingBalance: serviceResult.target.newRemainingBalance,
       };
 
     } else if (targetType === 'credit') {
