@@ -3,6 +3,11 @@ import {
   getMembershipOutstandingBalance,
   computeParentOutstandingTotal,
   computeOutstandingDisplay,
+  computeOutstandingBreakdown,
+  sumSpendableCredits,
+  type ParentCreditRecord,
+  type ParentEnrollmentBalanceFields,
+  type ParentMembershipBalanceFields,
 } from '../parentBalance';
 
 /**
@@ -218,5 +223,296 @@ describe('computeOutstandingDisplay (credit-aware Outstanding Balance)', () => {
     expect(r2.displayCents).toBe(0);
     expect(r2.netDueCents).toBe(0);
     expect(r2.showCreditsLine).toBe(false);
+  });
+});
+
+describe('computeOutstandingBreakdown (canonical Owed contract)', () => {
+  it('returns zeros when there is nothing owed and no credits', () => {
+    const r = computeOutstandingBreakdown({
+      enrollments: [],
+      memberships: [],
+      creditsCents: 0,
+    });
+    expect(r.enrollmentsCents).toBe(0);
+    expect(r.enrollmentCount).toBe(0);
+    expect(r.membershipsCents).toBe(0);
+    expect(r.membershipCount).toBe(0);
+    expect(r.totalOwedCents).toBe(0);
+    expect(r.creditsAvailableCents).toBe(0);
+    expect(r.creditsCents).toBe(0);
+    expect(r.creditsAppliedToEnrollments).toBe(0);
+    expect(r.payableNowCents).toBe(0);
+    expect(r.netDueCents).toBe(0);
+    expect(r.displayCents).toBe(0);
+    expect(r.showCreditsLine).toBe(false);
+    expect(r.showMembershipLine).toBe(false);
+  });
+
+  it('uses effectiveBalance for enrollments — never remainingBalance', () => {
+    const enrollments: ParentEnrollmentBalanceFields[] = [
+      {
+        effectiveBalance: 12_500,
+        totalCost: 50_000,
+        totalPaid: 37_500,
+        compAmountCents: 0,
+      },
+    ];
+    const r = computeOutstandingBreakdown({
+      enrollments,
+      memberships: [],
+      creditsCents: 0,
+    });
+    expect(r.enrollmentsCents).toBe(12_500);
+    expect(r.enrollmentCount).toBe(1);
+    expect(r.totalOwedCents).toBe(12_500);
+    expect(r.netDueCents).toBe(12_500);
+    expect(r.payableNowCents).toBe(12_500);
+  });
+
+  it('applies credits to enrollments first; memberships are paid separately', () => {
+    const enrollments: ParentEnrollmentBalanceFields[] = [
+      { effectiveBalance: 20_000 },
+    ];
+    const memberships: ParentMembershipBalanceFields[] = [
+      { remainingBalance: 5_000, status: 'active' },
+    ];
+    const r = computeOutstandingBreakdown({
+      enrollments,
+      memberships,
+      creditsCents: 3_000,
+    });
+    expect(r.enrollmentsCents).toBe(20_000);
+    expect(r.enrollmentCount).toBe(1);
+    expect(r.membershipsCents).toBe(5_000);
+    expect(r.membershipCount).toBe(1);
+    expect(r.totalOwedCents).toBe(25_000);
+    expect(r.creditsAvailableCents).toBe(3_000);
+    expect(r.creditsCents).toBe(3_000);
+    expect(r.creditsAppliedToEnrollments).toBe(3_000);
+    expect(r.payableNowCents).toBe(17_000);
+    expect(r.netDueCents).toBe(22_000);
+    expect(r.displayCents).toBe(22_000);
+    expect(r.showCreditsLine).toBe(true);
+    expect(r.showMembershipLine).toBe(true);
+  });
+
+  it('caps credits at enrollmentsCents — credits never reduce membership', () => {
+    const enrollments: ParentEnrollmentBalanceFields[] = [
+      { effectiveBalance: 5_000 },
+    ];
+    const memberships: ParentMembershipBalanceFields[] = [
+      { remainingBalance: 4_000, status: 'active' },
+    ];
+    const r = computeOutstandingBreakdown({
+      enrollments,
+      memberships,
+      creditsCents: 20_000,
+    });
+    expect(r.creditsAppliedToEnrollments).toBe(5_000);
+    expect(r.payableNowCents).toBe(0);
+    expect(r.membershipsCents).toBe(4_000);
+    expect(r.netDueCents).toBe(4_000);
+    expect(r.showMembershipLine).toBe(true);
+  });
+
+  it('skips expired/suspended memberships (denylist) and only counts those with positive balance', () => {
+    const memberships: ParentMembershipBalanceFields[] = [
+      { remainingBalance: 1_000, status: 'expired' },
+      { remainingBalance: 2_000, status: 'suspended' },
+      { remainingBalance: 0, status: 'active' },
+      { remainingBalance: 3_000, status: 'grace_period' },
+      { remainingBalance: 4_000, status: 'active' },
+    ];
+    const r = computeOutstandingBreakdown({
+      enrollments: [],
+      memberships,
+      creditsCents: 0,
+    });
+    expect(r.membershipsCents).toBe(7_000);
+    expect(r.membershipCount).toBe(2);
+    expect(r.netDueCents).toBe(7_000);
+  });
+
+  it('only counts enrollments with a positive balance (paid-up enrollments are skipped)', () => {
+    const enrollments: ParentEnrollmentBalanceFields[] = [
+      { effectiveBalance: 12_500 },
+      { effectiveBalance: 0 },
+      { effectiveBalance: 7_500 },
+    ];
+    const r = computeOutstandingBreakdown({
+      enrollments,
+      memberships: [],
+      creditsCents: 0,
+    });
+    expect(r.enrollmentsCents).toBe(20_000);
+    expect(r.enrollmentCount).toBe(2);
+  });
+
+  it('hides the credits line when enrollments owe nothing', () => {
+    const memberships: ParentMembershipBalanceFields[] = [
+      { remainingBalance: 5_000, status: 'active' },
+    ];
+    const r = computeOutstandingBreakdown({
+      enrollments: [],
+      memberships,
+      creditsCents: 9_000,
+    });
+    expect(r.showCreditsLine).toBe(false);
+    expect(r.netDueCents).toBe(5_000);
+  });
+
+  it('hides the membership line when no memberships owe anything', () => {
+    const enrollments: ParentEnrollmentBalanceFields[] = [
+      { effectiveBalance: 1_000 },
+    ];
+    const r = computeOutstandingBreakdown({
+      enrollments,
+      memberships: [],
+      creditsCents: 0,
+    });
+    expect(r.showMembershipLine).toBe(false);
+    expect(r.netDueCents).toBe(1_000);
+  });
+
+  it('handles null / undefined inputs defensively', () => {
+    const r = computeOutstandingBreakdown({
+      enrollments: null,
+      memberships: undefined,
+      creditsCents: null,
+    });
+    expect(r.enrollmentsCents).toBe(0);
+    expect(r.membershipsCents).toBe(0);
+    expect(r.creditsCents).toBe(0);
+    expect(r.creditsAvailableCents).toBe(0);
+    expect(r.totalOwedCents).toBe(0);
+    expect(r.netDueCents).toBe(0);
+  });
+
+  it('filters credit records by status (approved + partially_used) and excludes expired/pending — anti-regression', () => {
+    const credits: ParentCreditRecord[] = [
+      { status: 'approved',       remainingCents: 3_000 },
+      { status: 'partially_used', remainingCents: 2_000 },
+      { status: 'pending',        remainingCents: 10_000 },
+      { status: 'expired',        remainingCents: 5_000 },
+      { status: 'consumed',       remainingCents: 2_500 },
+      {
+        status: 'approved',
+        remainingCents: 4_000,
+        expiresAt: '2020-01-01T00:00:00Z',
+      },
+      {
+        status: 'approved',
+        remainingCents: 1_000,
+        expiresAt: new Date(2099, 0, 1).toISOString(),
+      },
+    ];
+    const enrollments: ParentEnrollmentBalanceFields[] = [
+      { effectiveBalance: 10_000 },
+    ];
+    const r = computeOutstandingBreakdown({
+      enrollments,
+      memberships: [],
+      credits,
+    });
+    expect(r.creditsAvailableCents).toBe(6_000);
+    expect(r.creditsAppliedToEnrollments).toBe(6_000);
+    expect(r.payableNowCents).toBe(4_000);
+    expect(r.netDueCents).toBe(4_000);
+  });
+
+  it('netDueCents is the value the three parent surfaces must agree on', () => {
+    const enrollments: ParentEnrollmentBalanceFields[] = [
+      { effectiveBalance: 12_500, totalCost: 50_000, totalPaid: 37_500 },
+      { effectiveBalance: 7_500 },
+    ];
+    const memberships: ParentMembershipBalanceFields[] = [
+      { remainingBalance: 4_000, status: 'active' },
+    ];
+    const r = computeOutstandingBreakdown({
+      enrollments,
+      memberships,
+      creditsCents: 5_000,
+    });
+    expect(r.netDueCents).toBe(19_000);
+    expect(r.totalOwedCents).toBe(24_000);
+    expect(r.enrollmentCount).toBe(2);
+    expect(r.membershipCount).toBe(1);
+  });
+
+  it('regression fixture: stripe-managed + comped enrollments, unpaid membership, mixed-status credits', () => {
+    const enrollments: ParentEnrollmentBalanceFields[] = [
+      {
+        effectiveBalance: 12_500,
+        totalCost: 50_000,
+        totalPaid: 37_500,
+        compAmountCents: 0,
+      },
+      {
+        effectiveBalance: 0,
+        totalCost: 30_000,
+        totalPaid: 0,
+        compAmountCents: 30_000,
+      },
+    ];
+    const memberships: ParentMembershipBalanceFields[] = [
+      { remainingBalance: 4_500, status: 'active' },
+    ];
+    const credits: ParentCreditRecord[] = [
+      { status: 'approved',       remainingCents: 3_000 },
+      { status: 'pending',        remainingCents: 10_000 },
+      { status: 'expired',        remainingCents: 5_000 },
+      {
+        status: 'approved',
+        remainingCents: 2_000,
+        expiresAt: '2020-01-01T00:00:00Z',
+      },
+      {
+        status: 'partially_used',
+        remainingCents: 1_500,
+        expiresAt: new Date(2099, 0, 1).toISOString(),
+      },
+    ];
+    const r = computeOutstandingBreakdown({
+      enrollments,
+      memberships,
+      credits,
+    });
+    expect(r.enrollmentsCents).toBe(12_500);
+    expect(r.enrollmentCount).toBe(1);
+    expect(r.membershipsCents).toBe(4_500);
+    expect(r.membershipCount).toBe(1);
+    expect(r.totalOwedCents).toBe(17_000);
+    expect(r.creditsAvailableCents).toBe(4_500);
+    expect(r.creditsAppliedToEnrollments).toBe(4_500);
+    expect(r.payableNowCents).toBe(8_000);
+    expect(r.netDueCents).toBe(12_500);
+    expect(r.displayCents).toBe(12_500);
+    expect(r.showCreditsLine).toBe(true);
+    expect(r.showMembershipLine).toBe(true);
+  });
+});
+
+describe('sumSpendableCredits (credit-status filter)', () => {
+  it('returns 0 for null / empty input', () => {
+    expect(sumSpendableCredits(null)).toBe(0);
+    expect(sumSpendableCredits(undefined)).toBe(0);
+    expect(sumSpendableCredits([])).toBe(0);
+  });
+
+  it('falls back to creditAmountCents - usedAmountCents when remainingCents missing', () => {
+    const records: ParentCreditRecord[] = [
+      { status: 'approved', creditAmountCents: 10_000, usedAmountCents: 4_000 },
+    ];
+    expect(sumSpendableCredits(records)).toBe(6_000);
+  });
+
+  it('treats missing/null status as NOT spendable (defense-in-depth)', () => {
+    const records: ParentCreditRecord[] = [
+      { status: 'approved', remainingCents: 5_000 },
+      { remainingCents: 10_000 },
+      { status: null, remainingCents: 7_500 },
+      { status: '', remainingCents: 2_500 },
+    ];
+    expect(sumSpendableCredits(records)).toBe(5_000);
   });
 });

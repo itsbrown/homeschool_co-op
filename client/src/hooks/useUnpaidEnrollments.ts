@@ -3,12 +3,18 @@ import { useQuery } from '@tanstack/react-query';
 import { useCart } from '@/contexts/CartContext';
 import {
   getEnrollmentEffectiveBalance,
+  getMembershipOutstandingBalance,
   computeParentOutstandingTotal,
   computeOutstandingDisplay,
+  computeOutstandingBreakdown,
+  type OutstandingBreakdown,
+  type ParentMembershipBalanceFields,
+  type ParentCreditRecord,
 } from '@/utils/parentBalance';
 
 interface CreditsResponse {
   totalAvailableCents?: number;
+  credits?: ParentCreditRecord[];
 }
 
 interface ParentEnrollmentRow {
@@ -68,6 +74,10 @@ export function useUnpaidEnrollments() {
     queryKey: ['/api/parent/credits'],
   });
 
+  const { data: membershipsRaw } = useQuery<ParentMembershipBalanceFields[]>({
+    queryKey: ['/api/parent/memberships'],
+  });
+
   const unpaidEnrollments = useMemo<UnpaidEnrollment[]>(() => {
     const rows = normalizeEnrollments(enrollmentsRaw);
     const result: UnpaidEnrollment[] = [];
@@ -95,11 +105,29 @@ export function useUnpaidEnrollments() {
     return result;
   }, [enrollmentsRaw]);
 
+  const unpaidMemberships = useMemo<ParentMembershipBalanceFields[]>(() => {
+    return (membershipsRaw ?? []).filter(
+      (m) => getMembershipOutstandingBalance(m) > 0,
+    );
+  }, [membershipsRaw]);
+
+  const breakdown = useMemo<OutstandingBreakdown>(
+    () =>
+      computeOutstandingBreakdown({
+        enrollments: unpaidEnrollments,
+        memberships: unpaidMemberships,
+        credits: creditsData?.credits,
+        creditsCents: creditsData?.totalAvailableCents,
+      }),
+    [unpaidEnrollments, unpaidMemberships, creditsData],
+  );
+
+  const creditsCents = breakdown.creditsAvailableCents;
+
   const totalOutstandingCents = useMemo(
     () => computeParentOutstandingTotal(unpaidEnrollments),
     [unpaidEnrollments],
   );
-  const creditsCents = creditsData?.totalAvailableCents ?? 0;
   const display = useMemo(
     () => computeOutstandingDisplay(totalOutstandingCents, creditsCents),
     [totalOutstandingCents, creditsCents],
@@ -107,11 +135,21 @@ export function useUnpaidEnrollments() {
 
   return {
     unpaidEnrollments,
+    unpaidMemberships,
     totalOutstandingCents,
     creditsCents,
-    netDueCents: display.netDueCents,
-    displayCents: display.displayCents,
-    showCreditsLine: display.showCreditsLine,
+    breakdown,
+    netDueCents: breakdown.netDueCents,
+    displayCents: breakdown.displayCents,
+    showCreditsLine: breakdown.showCreditsLine,
+    showMembershipLine: breakdown.showMembershipLine,
+    membershipsCents: breakdown.membershipsCents,
+    payableNowCents: breakdown.payableNowCents,
+    totalOwedCents: breakdown.totalOwedCents,
+    enrollmentCount: breakdown.enrollmentCount,
+    membershipCount: breakdown.membershipCount,
+    enrollmentsOnlyDisplayCents: display.displayCents,
+    enrollmentsOnlyNetDueCents: display.netDueCents,
     isLoading,
   };
 }

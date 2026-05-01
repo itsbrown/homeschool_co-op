@@ -16,6 +16,8 @@
  *   See `asa-payment-patterns` "Parent Payments page shows $0" pitfall.
  */
 
+import { computeEffectiveBalance } from '@shared/schema';
+
 export interface ParentEnrollmentBalanceFields {
   /** Server-computed effective balance in cents (preferred). */
   effectiveBalance?: number | null;
@@ -45,10 +47,11 @@ export function getEnrollmentEffectiveBalance(
   if (typeof enrollment.effectiveBalance === 'number') {
     return enrollment.effectiveBalance;
   }
-  const totalCost = enrollment.totalCost ?? 0;
-  const totalPaid = enrollment.totalPaid ?? 0;
-  const compAmount = enrollment.compAmountCents ?? 0;
-  return Math.max(0, totalCost - totalPaid - compAmount);
+  return computeEffectiveBalance(
+    enrollment.totalCost ?? 0,
+    enrollment.totalPaid ?? 0,
+    enrollment.compAmountCents ?? 0,
+  );
 }
 
 export interface ParentMembershipBalanceFields {
@@ -129,6 +132,128 @@ export function computeOutstandingDisplay(
     displayCents: showCreditsLine ? netDueCents : safeOutstanding,
     netDueCents,
     showCreditsLine,
+  };
+}
+
+/** Shape of a parent credit record from `/api/parent/credits`. */
+export interface ParentCreditRecord {
+  status?: string | null;
+  remainingCents?: number | null;
+  creditAmountCents?: number | null;
+  usedAmountCents?: number | null;
+  expiresAt?: string | Date | null;
+}
+
+const SPENDABLE_CREDIT_STATUSES = new Set(['approved', 'partially_used']);
+
+/**
+ * Sum credit records the parent can actually spend at checkout. Requires an
+ * explicit spendable status; excludes expired credits.
+ */
+export function sumSpendableCredits(
+  records: ParentCreditRecord[] | null | undefined,
+): number {
+  if (!records || records.length === 0) return 0;
+  const now = Date.now();
+  let total = 0;
+  for (const c of records) {
+    if (!c.status || !SPENDABLE_CREDIT_STATUSES.has(c.status)) continue;
+    if (c.expiresAt) {
+      const exp = c.expiresAt instanceof Date
+        ? c.expiresAt.getTime()
+        : new Date(c.expiresAt).getTime();
+      if (Number.isFinite(exp) && exp < now) continue;
+    }
+    const remaining =
+      typeof c.remainingCents === 'number'
+        ? c.remainingCents
+        : Math.max(0, (c.creditAmountCents ?? 0) - (c.usedAmountCents ?? 0));
+    if (remaining > 0) total += remaining;
+  }
+  return total;
+}
+
+/**
+ * Canonical "Owed" breakdown rendered by every parent-facing balance surface.
+ * `netDueCents` is the headline; `payableNowCents` is what the cart charges
+ * (memberships are paid separately, so credits never reduce them).
+ */
+export interface OutstandingBreakdown {
+  enrollmentsCents: number;
+  enrollmentCount: number;
+  membershipsCents: number;
+  membershipCount: number;
+  totalOwedCents: number;
+  creditsAvailableCents: number;
+  /** @deprecated use `creditsAvailableCents`. */
+  creditsCents: number;
+  creditsAppliedToEnrollments: number;
+  payableNowCents: number;
+  netDueCents: number;
+  displayCents: number;
+  showCreditsLine: boolean;
+  showMembershipLine: boolean;
+}
+
+/**
+ * Compute the canonical outstanding-balance breakdown. Pass raw `credits`
+ * records when available; otherwise pass a pre-aggregated `creditsCents`.
+ */
+export function computeOutstandingBreakdown(input: {
+  enrollments: ParentEnrollmentBalanceFields[] | null | undefined;
+  memberships: ParentMembershipBalanceFields[] | null | undefined;
+  credits?: ParentCreditRecord[] | null;
+  creditsCents?: number | null;
+}): OutstandingBreakdown {
+  let enrollmentsCents = 0;
+  let enrollmentCount = 0;
+  for (const enrollment of input.enrollments ?? []) {
+    const balance = Math.max(0, getEnrollmentEffectiveBalance(enrollment));
+    if (balance > 0) {
+      enrollmentsCents += balance;
+      enrollmentCount += 1;
+    }
+  }
+
+  let membershipsCents = 0;
+  let membershipCount = 0;
+  for (const membership of input.memberships ?? []) {
+    const balance = getMembershipOutstandingBalance(membership);
+    if (balance > 0) {
+      membershipsCents += balance;
+      membershipCount += 1;
+    }
+  }
+
+  const creditsAvailableCents = input.credits
+    ? sumSpendableCredits(input.credits)
+    : safeNumber(input.creditsCents ?? 0);
+
+  const totalOwedCents = enrollmentsCents + membershipsCents;
+  const creditsAppliedToEnrollments = Math.min(
+    creditsAvailableCents,
+    enrollmentsCents,
+  );
+  const payableNowCents = Math.max(
+    0,
+    enrollmentsCents - creditsAppliedToEnrollments,
+  );
+  const netDueCents = payableNowCents + membershipsCents;
+
+  return {
+    enrollmentsCents,
+    enrollmentCount,
+    membershipsCents,
+    membershipCount,
+    totalOwedCents,
+    creditsAvailableCents,
+    creditsCents: creditsAvailableCents,
+    creditsAppliedToEnrollments,
+    payableNowCents,
+    netDueCents,
+    displayCents: netDueCents,
+    showCreditsLine: creditsAvailableCents > 0 && enrollmentsCents > 0,
+    showMembershipLine: membershipsCents > 0,
   };
 }
 

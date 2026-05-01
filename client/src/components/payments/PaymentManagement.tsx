@@ -54,7 +54,6 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import {
   getEnrollmentEffectiveBalance,
   getMembershipOutstandingBalance,
-  computeOutstandingDisplay,
   computeManualPayDisplay,
 } from "@/utils/parentBalance";
 import {
@@ -823,6 +822,7 @@ function ScheduledPaymentDialog({
       // `/grouped` sub-keys.
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['/api/parent/enrollments'] }),
+        queryClient.invalidateQueries({ queryKey: ['/api/parent/memberships'] }),
         queryClient.invalidateQueries({ queryKey: ['/api/parent/credits'] }),
         queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments'] }),
         queryClient.invalidateQueries({ queryKey: ['/api/payment-history'] }),
@@ -855,6 +855,7 @@ function ScheduledPaymentDialog({
     // `/grouped` so a single invalidation refreshes both.
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ['/api/parent/enrollments'] }),
+      queryClient.invalidateQueries({ queryKey: ['/api/parent/memberships'] }),
       queryClient.invalidateQueries({ queryKey: ['/api/parent/credits'] }),
       queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments'] }),
       queryClient.invalidateQueries({ queryKey: ['/api/payment-history'] }),
@@ -1661,6 +1662,7 @@ function CombinedPaymentDialog({
       // `/grouped` sub-keys.
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['/api/parent/enrollments'] }),
+        queryClient.invalidateQueries({ queryKey: ['/api/parent/memberships'] }),
         queryClient.invalidateQueries({ queryKey: ['/api/parent/credits'] }),
         queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments'] }),
         queryClient.invalidateQueries({ queryKey: ['/api/payment-history'] }),
@@ -1693,6 +1695,7 @@ function CombinedPaymentDialog({
     // `/grouped` so a single invalidation refreshes both.
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ['/api/parent/enrollments'] }),
+      queryClient.invalidateQueries({ queryKey: ['/api/parent/memberships'] }),
       queryClient.invalidateQueries({ queryKey: ['/api/parent/credits'] }),
       queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments'] }),
       queryClient.invalidateQueries({ queryKey: ['/api/payment-history'] }),
@@ -1956,8 +1959,15 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
   const { toast } = useToast();
   const {
     unpaidEnrollments: payOutstandingEnrollments,
-    netDueCents: payOutstandingNetDueCents,
     displayCents: payOutstandingDisplayCents,
+    showCreditsLine: payOutstandingShowCreditsLine,
+    showMembershipLine: payOutstandingShowMembershipLine,
+    creditsCents: payOutstandingCreditsCents,
+    membershipsCents: payOutstandingMembershipsCents,
+    payableNowCents: payOutstandingPayableNowCents,
+    totalOwedCents: payOutstandingTotalOwedCents,
+    enrollmentCount: payOutstandingEnrollmentCount,
+    membershipCount: payOutstandingMembershipCount,
     isLoading: isLoadingPayOutstanding,
   } = useUnpaidEnrollments();
   const payOutstanding = usePayOutstanding();
@@ -2310,33 +2320,46 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
               </CardHeader>
               <CardContent>
                 {(() => {
-                  const outstandingCents = paymentStats.totalOutstanding || 0;
-                  const creditsCents = creditsData?.totalAvailableCents || 0;
-                  const { displayCents, showCreditsLine } =
-                    computeOutstandingDisplay(outstandingCents, creditsCents);
-                  // Button visibility uses enrollment-only data (memberships
-                  // are not yet payable via the cart); display still includes them.
                   const showPayButton =
                     isLoadingPayOutstanding ||
-                    payOutstandingDisplayCents > 0;
+                    payOutstandingPayableNowCents > 0;
                   return (
                     <>
-                      <div className="text-2xl font-bold text-orange-600">
+                      <div
+                        className="text-2xl font-bold text-orange-600"
+                        data-testid="text-outstanding-amount-overview"
+                      >
                         {isLoadingEnrollments
                           ? 'Loading...'
-                          : formatCurrency(displayCents)}
+                          : formatCurrency(payOutstandingDisplayCents)}
                       </div>
-                      {showCreditsLine && (
+                      {payOutstandingShowCreditsLine && (
                         <div className="mt-1 text-xs text-muted-foreground">
-                          <div>Owed: {formatCurrency(outstandingCents)}</div>
+                          <div>Owed: {formatCurrency(payOutstandingTotalOwedCents)}</div>
                           <div className="text-amber-700">
-                            − Credits available: {formatCurrency(creditsCents)}
+                            − Credits available: {formatCurrency(payOutstandingCreditsCents)}
                           </div>
                         </div>
                       )}
                       <p className="text-xs text-muted-foreground mt-1">
-                        {paymentStats.outstandingCount || 0} unpaid enrollments
+                        {payOutstandingEnrollmentCount} unpaid enrollment
+                        {payOutstandingEnrollmentCount === 1 ? '' : 's'}
+                        {payOutstandingMembershipCount > 0 && (
+                          <>
+                            {' + '}
+                            {payOutstandingMembershipCount} membership
+                            {payOutstandingMembershipCount === 1 ? '' : 's'}
+                          </>
+                        )}
                       </p>
+                      {payOutstandingShowMembershipLine && (
+                        <div
+                          className="mt-2 text-xs text-muted-foreground"
+                          data-testid="text-membership-paid-separately-overview"
+                        >
+                          − Membership {formatCurrency(payOutstandingMembershipsCents)} (paid separately)
+                        </div>
+                      )}
                       {showPayButton && (
                         <Button
                           className="mt-3 w-full h-11"
@@ -2354,8 +2377,8 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
                           )}
                           {isLoadingPayOutstanding
                             ? 'Loading...'
-                            : payOutstandingNetDueCents > 0
-                            ? `Pay ${formatCurrency(payOutstandingNetDueCents)}`
+                            : payOutstandingPayableNowCents > 0
+                            ? `Pay ${formatCurrency(payOutstandingPayableNowCents)}`
                             : 'Pay Now'}
                         </Button>
                       )}

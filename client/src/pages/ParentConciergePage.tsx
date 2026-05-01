@@ -123,7 +123,9 @@ function ContextSidebar({ context, isLoading }: { context: ContextData | null; i
           <CardContent className="p-4">
             <div className="flex items-center gap-2 mb-1">
               <DollarSign className="h-4 w-4 text-muted-foreground" />
-              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Payments Due</span>
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                Scheduled Installments Pending
+              </span>
             </div>
             <div className="text-xl font-bold">{formatCurrency(context.payments.totalDue)}</div>
             {context.payments.overdueCount > 0 && (

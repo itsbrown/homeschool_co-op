@@ -246,8 +246,13 @@ export default function ParentDashboard() {
     displayCents: outstandingDisplayCents,
     netDueCents: outstandingNetDueCents,
     showCreditsLine: showOutstandingCreditsLine,
+    showMembershipLine: showOutstandingMembershipLine,
     creditsCents: outstandingCreditsCents,
-    totalOutstandingCents,
+    membershipsCents: outstandingMembershipsCents,
+    payableNowCents: outstandingPayableNowCents,
+    totalOwedCents: outstandingTotalOwedCents,
+    enrollmentCount: outstandingEnrollmentCount,
+    membershipCount: outstandingMembershipCount,
     isLoading: isLoadingUnpaid,
   } = useUnpaidEnrollments();
   const payOutstanding = usePayOutstanding();
@@ -742,23 +747,41 @@ export default function ParentDashboard() {
                 <DollarSign className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                {totalOutstandingCents > 0 ? (
+                {outstandingNetDueCents > 0 ? (
                   <>
-                    <div className="text-2xl font-bold text-orange-600">
+                    <div
+                      className="text-2xl font-bold text-orange-600"
+                      data-testid="text-outstanding-amount-dashboard"
+                    >
                       {formatCurrency(outstandingDisplayCents)}
                     </div>
                     {showOutstandingCreditsLine && (
                       <div className="mt-1 text-xs text-muted-foreground">
-                        <div>Owed: {formatCurrency(totalOutstandingCents)}</div>
+                        <div>Owed: {formatCurrency(outstandingTotalOwedCents)}</div>
                         <div className="text-amber-700">
                           − Credits available: {formatCurrency(outstandingCreditsCents)}
                         </div>
                       </div>
                     )}
                     <p className="text-xs text-muted-foreground mt-1">
-                      {unpaidEnrollments.length} unpaid enrollment
-                      {unpaidEnrollments.length === 1 ? '' : 's'}
+                      {outstandingEnrollmentCount} unpaid enrollment
+                      {outstandingEnrollmentCount === 1 ? '' : 's'}
+                      {outstandingMembershipCount > 0 && (
+                        <>
+                          {' + '}
+                          {outstandingMembershipCount} membership
+                          {outstandingMembershipCount === 1 ? '' : 's'}
+                        </>
+                      )}
                     </p>
+                    {showOutstandingMembershipLine && (
+                      <div
+                        className="mt-2 text-xs text-muted-foreground"
+                        data-testid="text-membership-paid-separately-dashboard"
+                      >
+                        − Membership {formatCurrency(outstandingMembershipsCents)} (paid separately)
+                      </div>
+                    )}
                     <Button
                       className="mt-3 w-full h-11"
                       onClick={() => payOutstanding(unpaidEnrollments)}
@@ -766,8 +789,8 @@ export default function ParentDashboard() {
                       data-testid="button-pay-outstanding-dashboard"
                     >
                       <CreditCard className="h-4 w-4 mr-2" />
-                      {outstandingNetDueCents > 0
-                        ? `Pay ${formatCurrency(outstandingNetDueCents)}`
+                      {outstandingPayableNowCents > 0
+                        ? `Pay ${formatCurrency(outstandingPayableNowCents)}`
                         : 'Pay Now'}
                     </Button>
                   </>
