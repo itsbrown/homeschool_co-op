@@ -977,17 +977,23 @@ export default function CartCheckout() {
       if (!response.ok) {
         const errorData = await response.json();
         const errorCode = errorData.error || '';
+        // EXPLICIT allow-list of server error codes that should render the
+        // "Prices Have Changed" recovery block. Switched away from a
+        // substring check on errorData.message because that previously
+        // caught any 409 whose message happened to contain "changed" /
+        // "mismatch" / "cart prices" — including the biweekly-schedule
+        // false-positive 409s tracked in #186 — and rendered the
+        // blocking screen on benign drift. Anything not in this list
+        // falls through to the generic-error path below.
         const isMismatchError = [
           'MEMBERSHIP_AMOUNT_MISMATCH',
-          'TOTAL_MISMATCH_OVERPAYMENT', 
+          'TOTAL_MISMATCH_OVERPAYMENT',
           'UNIFIED_TOTAL_MISMATCH',
           'ZERO_SERVER_TOTAL_MISMATCH',
-          'AMOUNT_MISMATCH'
-        ].includes(errorCode) || 
-          errorData.message?.toLowerCase().includes('mismatch') ||
-          errorData.message?.toLowerCase().includes('prices have changed') ||
-          errorData.message?.toLowerCase().includes('cart prices');
-        
+          'AMOUNT_MISMATCH',
+          'PRICING_CHANGED',
+        ].includes(errorCode);
+
         if (isMismatchError) {
           setIsPriceMismatchError(true);
           setError(errorData.message || 'Prices have changed. Please refresh your cart.');

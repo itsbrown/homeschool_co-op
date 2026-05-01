@@ -49,6 +49,18 @@ export interface PaymentPlanData {
     enrollmentCredits: number;
     membershipCredits: number;
   };
+  // SNAPSHOT-PINNED biweekly plan (#186). When set, the first PaymentIntent
+  // amount is forced to `firstPaymentAmount` exactly so the parent is
+  // charged what they were quoted on screen — eliminating any drift
+  // between the snapshot's biweekly schedule and the recompute that
+  // happens inside buildPaymentPhases. Future installment dueDates are
+  // still derived from the (now cart-wide) date range.
+  cachedBiweeklyPlan?: {
+    firstPaymentAmount: number; // cents — pins firstPhase.amount
+    numberOfPayments: number;
+    totalAmount: number;
+    finalPaymentAmount: number;
+  } | null;
 }
 
 export interface PaymentPhase {
@@ -92,76 +104,140 @@ export class StripePaymentPlanService {
 
     let programStartDate: Date | null = null;
     let programEndDate: Date | null = null;
-    
+
     if (data.paymentFrequency && data.paymentFrequency !== 'one_time' && data.enrollmentIds.length > 0) {
-      const firstEnrollment = await this.storage.getProgramEnrollmentById(data.enrollmentIds[0]);
-      
-      if (firstEnrollment?.programStartDate && firstEnrollment?.programEndDate) {
-        const parsedStartDate = new Date(firstEnrollment.programStartDate);
-        const parsedEndDate = new Date(firstEnrollment.programEndDate);
-        
-        if (!isNaN(parsedStartDate.getTime()) && !isNaN(parsedEndDate.getTime())) {
-          programStartDate = parsedStartDate;
-          programEndDate = parsedEndDate;
-          console.log('📅 Using enrollment dates for payment schedule:', {
-            startDate: programStartDate.toLocaleDateString(),
-            endDate: programEndDate.toLocaleDateString()
-          });
-        }
-      }
-      
-      if (!programStartDate || !programEndDate) {
-        const classId = firstEnrollment?.marketplaceClassId || firstEnrollment?.classId || firstEnrollment?.programId;
-        if (classId) {
-          try {
-            const classData = await this.storage.getClassById(classId) as any;
-            if (classData) {
-              let startDate = classData.startDate ? new Date(classData.startDate) : null;
-              let endDate = classData.endDate ? new Date(classData.endDate) : null;
-              
-              const variantId = firstEnrollment?.variantId;
-              if (variantId && classData.priceVariants) {
-                try {
-                  const variants = typeof classData.priceVariants === 'string' 
-                    ? JSON.parse(classData.priceVariants) 
-                    : classData.priceVariants;
-                  const variant = Array.isArray(variants) 
-                    ? variants.find((v: any) => v.id === variantId)
-                    : null;
-                  if (variant) {
-                    if (variant.startDate) startDate = new Date(variant.startDate);
-                    if (variant.endDate) endDate = new Date(variant.endDate);
+      // CART-WIDE DATE RANGE (#186) — earliest start / latest end across
+      // ALL enrollments in the cart. The previous "first enrollment only"
+      // lookup disagreed with calculatePaymentPlans (which iterates every
+      // line) whenever the first enrollment's class had already ended but
+      // other classes ran later — sizing the PaymentIntent off a
+      // collapsed schedule (often a single full-amount phase) while the
+      // parent had been shown a multi-installment biweekly plan.
+      for (const enrollmentId of data.enrollmentIds) {
+        try {
+          const enrollment = await this.storage.getProgramEnrollmentById(enrollmentId);
+          if (!enrollment) continue;
+
+          let lineStart: Date | null = null;
+          let lineEnd: Date | null = null;
+
+          if (enrollment.programStartDate && enrollment.programEndDate) {
+            const parsedStart = new Date(enrollment.programStartDate);
+            const parsedEnd = new Date(enrollment.programEndDate);
+            if (!isNaN(parsedStart.getTime()) && !isNaN(parsedEnd.getTime())) {
+              lineStart = parsedStart;
+              lineEnd = parsedEnd;
+            }
+          }
+
+          if (!lineStart || !lineEnd) {
+            const classId = enrollment.marketplaceClassId || enrollment.classId || enrollment.programId;
+            if (classId) {
+              try {
+                const classData = await this.storage.getClassById(classId) as any;
+                if (classData) {
+                  let cStart = classData.startDate ? new Date(classData.startDate) : null;
+                  let cEnd = classData.endDate ? new Date(classData.endDate) : null;
+
+                  const variantId = enrollment.variantId;
+                  if (variantId && classData.priceVariants) {
+                    try {
+                      const variants = typeof classData.priceVariants === 'string'
+                        ? JSON.parse(classData.priceVariants)
+                        : classData.priceVariants;
+                      const variant = Array.isArray(variants)
+                        ? variants.find((v: any) => v.id === variantId)
+                        : null;
+                      if (variant) {
+                        if (variant.startDate) cStart = new Date(variant.startDate);
+                        if (variant.endDate) cEnd = new Date(variant.endDate);
+                      }
+                    } catch (e) {
+                      console.warn('Could not parse price variants for date fallback:', e);
+                    }
                   }
-                } catch (e) {
-                  console.warn('Could not parse price variants for date fallback:', e);
+
+                  if (cStart && !isNaN(cStart.getTime())) lineStart = lineStart || cStart;
+                  if (cEnd && !isNaN(cEnd.getTime())) lineEnd = lineEnd || cEnd;
                 }
-              }
-              
-              if (startDate && !isNaN(startDate.getTime()) && endDate && !isNaN(endDate.getTime())) {
-                programStartDate = startDate;
-                programEndDate = endDate;
-                console.log('📅 Fell back to class dates for payment schedule:', {
-                  classId,
-                  startDate: programStartDate.toLocaleDateString(),
-                  endDate: programEndDate.toLocaleDateString()
-                });
+              } catch (e) {
+                console.warn('⚠️ Could not fetch class for date fallback:', e);
               }
             }
-          } catch (e) {
-            console.warn('⚠️ Could not fetch class for date fallback:', e);
           }
+
+          if (lineStart && (!programStartDate || lineStart < programStartDate)) {
+            programStartDate = lineStart;
+          }
+          if (lineEnd && (!programEndDate || lineEnd > programEndDate)) {
+            programEndDate = lineEnd;
+          }
+        } catch (e) {
+          console.warn(`⚠️ Could not resolve dates for enrollment ${enrollmentId}:`, e);
         }
+      }
+
+      if (programStartDate && programEndDate) {
+        console.log('📅 Cart-wide date range for payment schedule:', {
+          startDate: programStartDate.toLocaleDateString(),
+          endDate: programEndDate.toLocaleDateString(),
+          enrollmentCount: data.enrollmentIds.length,
+        });
       }
     }
 
     // Build payment phases based on plan type and frequency
-    const phases = this.buildPaymentPhases(
-      data.paymentPlan, 
-      data.totalAmount, 
+    let phases = this.buildPaymentPhases(
+      data.paymentPlan,
+      data.totalAmount,
       data.paymentFrequency,
       programStartDate,
       programEndDate
     );
+
+    // SNAPSHOT-PINNED OVERRIDE (#186) — when the trust path supplied a
+    // cached biweekly plan, force the first phase amount (and the final
+    // phase amount, which absorbs rounding remainder) to the exact
+    // figures the parent was quoted on screen. We keep the recomputed
+    // phase dates / count so future scheduled payments still work, but
+    // re-distribute amounts so the schedule sums to data.totalAmount
+    // using the cached firstPaymentAmount as the per-installment amount.
+    if (
+      data.cachedBiweeklyPlan &&
+      data.paymentPlan === 'biweekly' &&
+      phases.length > 1
+    ) {
+      const cached = data.cachedBiweeklyPlan;
+      const installmentCount = phases.length;
+      const middleAmount = cached.firstPaymentAmount;
+      // Final installment absorbs any remainder so the plan still sums
+      // to data.totalAmount.
+      const middlesSum = middleAmount * (installmentCount - 1);
+      const finalAmount = data.totalAmount - middlesSum;
+      // Defensive: if the recompute produced a wildly different shape
+      // (e.g. installmentCount drift > 1 from cached), fall back to the
+      // recomputed phases rather than emit a negative final amount.
+      if (finalAmount >= STRIPE_MINIMUM_AMOUNT) {
+        phases = phases.map((p, i) => ({
+          ...p,
+          amount: i === installmentCount - 1 ? finalAmount : middleAmount,
+        }));
+        console.log('🔓 [#186] Pinned biweekly phases to cached snapshot:', {
+          cachedFirstPaymentAmount: middleAmount,
+          installmentCount,
+          finalAmount,
+          totalSum: middlesSum + finalAmount,
+        });
+      } else {
+        console.warn('⚠️ [#186] Cached biweekly plan does not fit recomputed schedule shape, falling back to recompute', {
+          cachedFirstPaymentAmount: cached.firstPaymentAmount,
+          cachedNumberOfPayments: cached.numberOfPayments,
+          recomputedInstallmentCount: installmentCount,
+          recomputedTotalAmount: data.totalAmount,
+        });
+      }
+    }
+
     console.log('📅 Built phases:', phases.length);
 
     // Create immediate PaymentIntent for the first payment

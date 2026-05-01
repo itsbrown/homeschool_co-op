@@ -26,8 +26,24 @@
 export const SNAPSHOT_TRUST_TTL_MS = 90_000; // 90 seconds — must be <= 120s
 export const ABSOLUTE_TRUSTED_AMOUNT_CEILING_CENTS = 5_000_000; // $50,000
 export const MIN_REASONABLE_TRUSTED_AMOUNT_CENTS = 50_000; // $500 — see sanity bound below
+// Slack added on top of cartItemTotalLineCostCents when applying the sum-based
+// sanity bound. Allows tiny rounding drift between the cached items total and
+// the sum of per-line authoritative prices, while still catching gross tampering.
+export const SANITY_BOUND_SLACK_CENTS = 1_000; // $10
 
 const EVICTION_INTERVAL_MS = 30_000; // sweep stale entries every 30s
+
+/**
+ * Trimmed biweekly plan entry cached alongside the snapshot so the trust
+ * path in /create-payment-intent can size the PaymentIntent off the exact
+ * authoritative number the parent was shown (no recompute, no false 409).
+ */
+export interface CachedBiweeklyPlan {
+  firstPaymentAmount: number; // cents — what the PaymentIntent gets sized to
+  numberOfPayments: number;
+  totalAmount: number; // cents — full payable amount across the schedule
+  finalPaymentAmount: number; // cents — last installment (handles rounding remainder)
+}
 
 export interface CachedSnapshot {
   userId: number; // integer DB user id (req.user.id), NEVER the Supabase UUID
@@ -44,7 +60,19 @@ export interface CachedSnapshot {
   isFreeEnrollment: boolean;
   freeEnrollmentReason: string | null;
   cartItemFingerprint: string;
-  cartItemMaxLineCostCents: number; // cents — drives the relative sanity bound
+  cartItemMaxLineCostCents: number; // cents — secondary guard for single-line carts
+  // cents — sum of authoritative per-line costs (snapshot.pricing.itemPrices
+  // sums + any remainingBalance for existing-enrollment lines). Drives the
+  // primary sum-based sanity bound so multi-item carts whose largest single
+  // line is small (e.g. $900) but whose legitimate cart total is large
+  // (e.g. $8,200 across 21 items) are NOT spuriously rejected.
+  cartItemTotalLineCostCents: number;
+  // Cached biweekly plan from the snapshot (when payable amount > 0).
+  // The trust path in /create-payment-intent uses these numbers directly
+  // when the parent toggles to biweekly so the PaymentIntent is sized off
+  // the exact figure the parent was shown — no schedule re-verification,
+  // no false 409 from recomputed dates / drift.
+  biweeklyPlan: CachedBiweeklyPlan | null;
   issuedAt: number; // epoch ms (Date.now())
 }
 
@@ -140,19 +168,46 @@ export function verifyTrustedSnapshot(
   if (cachedPromo !== incomingPromo) {
     return { trusted: false, reason: 'promo_mismatch', ageMs };
   }
-  // Defense-in-depth sanity bound — if the cached itemsTotal is implausibly
-  // large given the max single per-line cost, fall through to strict
-  // validation. MIN_REASONABLE_TRUSTED_AMOUNT_CENTS exists so a single-line
-  // tiny cart can't accidentally fail the multiplier check.
-  const relativeCeiling = Math.max(
-    5 * snapshot.cartItemMaxLineCostCents,
+  // PRIMARY sanity bound — sum-based: itemsTotal (post-discount) must
+  // not exceed the sum of authoritative per-line costs (pre-discount)
+  // plus a small slack. Mathematically impossible for a legitimate
+  // snapshot (discounts can only lower the total), so a violation means
+  // the cached value is implausibly inflated and we fall through to
+  // strict validation. MIN_REASONABLE_TRUSTED_AMOUNT_CENTS gives a $500
+  // floor so genuinely tiny carts ($50 single class) still trust.
+  //
+  // SECONDARY guard for single-line carts only — when there is no sum
+  // signal (legacy snapshot where cartItemTotalLineCostCents wasn't
+  // recorded, OR a single-line cart where sum == max-line by definition),
+  // also enforce the previous "5x max line cost" ceiling. For multi-line
+  // carts the sum check fully subsumes this, so we don't apply it (that
+  // was the #186 false-reject root cause for the 21-line $8,200 cart
+  // with $900 max-line).
+  //
+  // ABSOLUTE ceiling — anything above $50,000 outright rejected.
+  const sumCeiling = Math.max(
+    snapshot.cartItemTotalLineCostCents + SANITY_BOUND_SLACK_CENTS,
     MIN_REASONABLE_TRUSTED_AMOUNT_CENTS,
   );
-  if (
-    snapshot.itemsTotal > relativeCeiling ||
-    snapshot.itemsTotal > ABSOLUTE_TRUSTED_AMOUNT_CEILING_CENTS
-  ) {
+  const exceedsAbsolute = snapshot.itemsTotal > ABSOLUTE_TRUSTED_AMOUNT_CEILING_CENTS;
+  const exceedsSum = snapshot.itemsTotal > sumCeiling;
+
+  if (exceedsAbsolute || exceedsSum) {
     return { trusted: false, reason: 'sanity_bound_failed', ageMs };
+  }
+
+  // Single-line / legacy fallback: only fire when we have no usable sum
+  // signal (cartItemTotalLineCostCents is 0 or absent). Multi-line carts
+  // already passed the sum check above.
+  const hasSumSignal = snapshot.cartItemTotalLineCostCents > 0;
+  if (!hasSumSignal && snapshot.cartItemMaxLineCostCents > 0) {
+    const maxLineCeiling = Math.max(
+      5 * snapshot.cartItemMaxLineCostCents,
+      MIN_REASONABLE_TRUSTED_AMOUNT_CENTS,
+    );
+    if (snapshot.itemsTotal > maxLineCeiling) {
+      return { trusted: false, reason: 'sanity_bound_failed', ageMs };
+    }
   }
 
   return { trusted: true, snapshot, ageMs };

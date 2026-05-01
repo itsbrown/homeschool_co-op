@@ -134,15 +134,28 @@ router.post('/snapshot', supabaseAuth, async (req: any, res) => {
     // cart-vs-DB revalidation. This is the snapshot-trust path consumed by
     // payment-plan / frequency toggles in CartCheckout.tsx.
     try {
-      // Largest single per-line cost — drives the relative sanity bound.
-      // Use itemPrices (server-derived per-line authoritative price) and
-      // any client-supplied remainingBalance so existing-enrollment lines
-      // still register a real per-line ceiling.
-      const cartItemMaxLineCostCents = Math.max(
+      // Build per-cart-line authoritative cost. itemPrices is the
+      // server-derived per-line price for new enrollments; remainingBalance
+      // is the client-asserted remainder for existing-enrollment lines.
+      // Critically: a given cart line should never have BOTH set — a new
+      // enrollment has an itemPrice; an existing-enrollment line has a
+      // remainingBalance. Take the MAX per line to avoid double-counting
+      // (defense against malformed client payloads), then sum across lines.
+      const perLineAuthoritative: number[] = cartItems.map((line: any, idx: number) => {
+        const itemPrice = snapshot.pricing.itemPrices?.[idx]?.price ?? 0;
+        const remainingBalance = line?.remainingBalance ?? 0;
+        return Math.max(itemPrice > 0 ? itemPrice : 0, remainingBalance > 0 ? remainingBalance : 0);
+      });
+      // Primary sanity bound input: SUM of authoritative per-line costs.
+      // Scales linearly with cart size so multi-child carts (e.g. 21
+      // enrollments across 8 children) whose itemsTotal far exceeds 5x
+      // the largest single line still pass the trust check.
+      const cartItemTotalLineCostCents = perLineAuthoritative.reduce(
+        (sum, p) => sum + p,
         0,
-        ...snapshot.pricing.itemPrices.map((line: any) => line?.price ?? 0),
-        ...cartItems.map((line: any) => line?.remainingBalance ?? 0),
       );
+      // Secondary guard for single-line-cart edge case (and legacy snapshots).
+      const cartItemMaxLineCostCents = Math.max(0, ...perLineAuthoritative);
       const fingerprint = computeCartItemFingerprint(
         cartItems.map((i) => ({
           classId: i.classId,
@@ -151,6 +164,25 @@ router.post('/snapshot', supabaseAuth, async (req: any, res) => {
           enrollmentId: i.enrollmentId,
         })),
       );
+      // Cache the biweekly plan from the snapshot (when present) so the
+      // /create-payment-intent trust path can size the PaymentIntent off
+      // the EXACT figure the parent was shown — no schedule re-verification
+      // needed, no false PRICING_CHANGED 409 from re-derived dates.
+      const biweeklyFromSnapshot = (snapshot.paymentPlans || []).find(
+        (p: any) => p?.id === 'biweekly',
+      );
+      const biweeklyPlan = biweeklyFromSnapshot
+        ? {
+            firstPaymentAmount: biweeklyFromSnapshot.amount ?? 0,
+            numberOfPayments: biweeklyFromSnapshot.numberOfPayments ?? 1,
+            totalAmount:
+              biweeklyFromSnapshot.totalAmount ?? snapshot.totals.payableAmount,
+            finalPaymentAmount:
+              biweeklyFromSnapshot.finalPaymentAmount ??
+              biweeklyFromSnapshot.amount ??
+              0,
+          }
+        : null;
       const cached: CachedSnapshot = {
         userId: user.id,
         itemsTotal: snapshot.totals.itemsTotal,
@@ -169,6 +201,8 @@ router.post('/snapshot', supabaseAuth, async (req: any, res) => {
         freeEnrollmentReason: snapshot.freeEnrollmentReason,
         cartItemFingerprint: fingerprint,
         cartItemMaxLineCostCents,
+        cartItemTotalLineCostCents,
+        biweeklyPlan,
         issuedAt: Date.now(),
       };
       cacheSnapshot(snapshot.snapshotId, cached);
@@ -180,6 +214,9 @@ router.post('/snapshot', supabaseAuth, async (req: any, res) => {
         creditsToApply: cached.creditsToApply,
         appliedPromoCode: cached.appliedPromoCode,
         cartItemMaxLineCostCents,
+        cartItemTotalLineCostCents,
+        hasBiweeklyPlan: !!biweeklyPlan,
+        biweeklyFirstPaymentAmount: biweeklyPlan?.firstPaymentAmount ?? null,
         fingerprint,
       });
     } catch (cacheErr) {

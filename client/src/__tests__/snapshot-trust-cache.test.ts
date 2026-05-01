@@ -87,6 +87,8 @@ describe('verifyTrustedSnapshot', () => {
       freeEnrollmentReason: null,
       cartItemFingerprint: fingerprint,
       cartItemMaxLineCostCents: 80_00,
+      cartItemTotalLineCostCents: 100_00,
+      biweeklyPlan: null,
       issuedAt: Date.now(),
       ...overrides,
     };

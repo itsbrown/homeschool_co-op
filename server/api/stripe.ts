@@ -1761,54 +1761,118 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
       }
       
       if (expectedSchedule && paymentPlan === 'biweekly') {
-        const { calculateCheckoutBiweeklySchedule } = await import('../lib/payment-calculator');
-        
-        const anchorDate = expectedSchedule.snapshotGeneratedAt 
-          ? new Date(expectedSchedule.snapshotGeneratedAt) 
-          : new Date();
-        
-        let verifyStartDate: Date | null = null;
-        let verifyEndDate: Date | null = null;
-        
-        if (enrollmentIds.length > 0) {
-          const firstEnrollment = await storage.getProgramEnrollmentById(enrollmentIds[0]);
-          if (firstEnrollment?.programStartDate && firstEnrollment?.programEndDate) {
-            verifyStartDate = new Date(firstEnrollment.programStartDate);
-            verifyEndDate = new Date(firstEnrollment.programEndDate);
-          }
-          if ((!verifyStartDate || !verifyEndDate) && firstEnrollment) {
-            const classId = (firstEnrollment as any).marketplaceClassId || (firstEnrollment as any).classId || (firstEnrollment as any).programId;
-            if (classId) {
-              const classData = await storage.getClassById(classId) as any;
-              if (classData?.startDate && classData?.endDate) {
-                verifyStartDate = new Date(classData.startDate);
-                verifyEndDate = new Date(classData.endDate);
+        // SNAPSHOT TRUST PATH — when verifyTrustedSnapshot honoured the
+        // cached snapshot, the parent was already shown the snapshot's
+        // biweekly plan, the cart fingerprint matches, and we have nothing
+        // new to verify. Skip the recompute-vs-expected comparison entirely
+        // and use the cached biweekly first-payment amount as authoritative
+        // for sizing the PaymentIntent. Eliminates the "first-enrollment
+        // dates" false 409 for multi-class carts (#186 root cause #2).
+        if (useTrustedSnapshot && trustedSnapshot?.biweeklyPlan) {
+          console.log(`🔓 [${checkoutRequestId}] SNAPSHOT TRUST PATH — skipping biweekly schedule re-verification`, {
+            snapshotId: trustedSnapshotId,
+            cachedFirstPaymentAmount: trustedSnapshot.biweeklyPlan.firstPaymentAmount,
+            cachedNumberOfPayments: trustedSnapshot.biweeklyPlan.numberOfPayments,
+            expectedFirstPaymentAmount: expectedSchedule.firstPaymentAmount,
+            expectedNumberOfPayments: expectedSchedule.numberOfPayments,
+          });
+        } else {
+          const { calculateCheckoutBiweeklySchedule } = await import('../lib/payment-calculator');
+
+          const anchorDate = expectedSchedule.snapshotGeneratedAt
+            ? new Date(expectedSchedule.snapshotGeneratedAt)
+            : new Date();
+
+          // CART-WIDE date range — earliest start and latest end across ALL
+          // enrollments in the cart. The previous "first enrollment only"
+          // lookup disagreed with the snapshot endpoint (which iterates
+          // every cart item via calculatePaymentPlans →
+          // calculateCheckoutBiweeklySchedule with earliestStartDate /
+          // latestEndDate) whenever the first enrollment's class had
+          // already ended but other classes extended later — collapsing
+          // biweekly to one payment of the full total and producing a
+          // guaranteed false PAYMENT SCHEDULE MISMATCH (#186 root cause #2).
+          let verifyStartDate: Date | null = null;
+          let verifyEndDate: Date | null = null;
+
+          for (const enrollmentId of enrollmentIds) {
+            try {
+              const enrollment = await storage.getProgramEnrollmentById(enrollmentId);
+              if (!enrollment) continue;
+
+              let lineStart: Date | null = null;
+              let lineEnd: Date | null = null;
+
+              if ((enrollment as any).programStartDate && (enrollment as any).programEndDate) {
+                lineStart = new Date((enrollment as any).programStartDate);
+                lineEnd = new Date((enrollment as any).programEndDate);
               }
+
+              // Fall back to class/variant dates the same way calculatePaymentPlans does.
+              if (!lineStart || !lineEnd) {
+                const classId = (enrollment as any).marketplaceClassId
+                  || (enrollment as any).classId
+                  || (enrollment as any).programId;
+                if (classId) {
+                  const classData = await storage.getClassById(classId) as any;
+                  if (classData?.startDate && classData?.endDate) {
+                    lineStart = lineStart || new Date(classData.startDate);
+                    lineEnd = lineEnd || new Date(classData.endDate);
+                  }
+                  // Variant-specific dates take precedence when present
+                  const variantId = (enrollment as any).variantId;
+                  if (variantId && classData?.priceVariants) {
+                    try {
+                      const variants = typeof classData.priceVariants === 'string'
+                        ? JSON.parse(classData.priceVariants)
+                        : classData.priceVariants;
+                      const variant = Array.isArray(variants)
+                        ? variants.find((v: any) => v.id === variantId)
+                        : null;
+                      if (variant?.startDate) lineStart = new Date(variant.startDate);
+                      if (variant?.endDate) lineEnd = new Date(variant.endDate);
+                    } catch {
+                      // Non-fatal: fall through to class-level dates already set
+                    }
+                  }
+                }
+              }
+
+              if (lineStart && (!verifyStartDate || lineStart < verifyStartDate)) {
+                verifyStartDate = lineStart;
+              }
+              if (lineEnd && (!verifyEndDate || lineEnd > verifyEndDate)) {
+                verifyEndDate = lineEnd;
+              }
+            } catch (e) {
+              console.warn(`Could not resolve dates for enrollment ${enrollmentId} during biweekly verification:`, e);
             }
           }
-        }
-        
-        if (verifyStartDate && verifyEndDate) {
-          const serverSchedule = calculateCheckoutBiweeklySchedule(totalWithMembership, verifyStartDate, verifyEndDate, anchorDate);
-          const amountDiff = Math.abs(serverSchedule.firstPaymentAmount - expectedSchedule.firstPaymentAmount);
-          const countDiff = serverSchedule.numberOfPayments !== expectedSchedule.numberOfPayments;
-          
-          if (amountDiff > 2 || countDiff) {
-            console.warn(`🚨 [${checkoutRequestId}] PAYMENT SCHEDULE MISMATCH DETECTED:`, {
-              expected: { amount: expectedSchedule.firstPaymentAmount, count: expectedSchedule.numberOfPayments },
-              actual: { amount: serverSchedule.firstPaymentAmount, count: serverSchedule.numberOfPayments },
-              amountDiff,
-              totalWithMembership,
-              anchorDate: anchorDate.toISOString()
-            });
-            return res.status(409).json({
-              message: 'Payment schedule has changed. Please refresh your cart and try again.',
-              error: 'PRICING_CHANGED',
-              serverSchedule: {
-                firstPaymentAmount: serverSchedule.firstPaymentAmount,
-                numberOfPayments: serverSchedule.numberOfPayments,
-              }
-            });
+
+          if (verifyStartDate && verifyEndDate) {
+            const serverSchedule = calculateCheckoutBiweeklySchedule(totalWithMembership, verifyStartDate, verifyEndDate, anchorDate);
+            const amountDiff = Math.abs(serverSchedule.firstPaymentAmount - expectedSchedule.firstPaymentAmount);
+            const countDiff = serverSchedule.numberOfPayments !== expectedSchedule.numberOfPayments;
+
+            if (amountDiff > 2 || countDiff) {
+              console.warn(`🚨 [${checkoutRequestId}] PAYMENT SCHEDULE MISMATCH DETECTED:`, {
+                expected: { amount: expectedSchedule.firstPaymentAmount, count: expectedSchedule.numberOfPayments },
+                actual: { amount: serverSchedule.firstPaymentAmount, count: serverSchedule.numberOfPayments },
+                amountDiff,
+                totalWithMembership,
+                anchorDate: anchorDate.toISOString(),
+                verifyStartDate: verifyStartDate.toISOString(),
+                verifyEndDate: verifyEndDate.toISOString(),
+              });
+              return res.status(409).json({
+                message: 'Payment schedule has changed. Please refresh your cart and try again.',
+                error: 'PRICING_CHANGED',
+                serverSchedule: {
+                  firstPaymentAmount: serverSchedule.firstPaymentAmount,
+                  numberOfPayments: serverSchedule.numberOfPayments,
+                }
+              });
+            }
           }
         }
       }
@@ -1822,7 +1886,15 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
         membership: serverMembership,
         discountSnapshot,
         creditsAppliedCents: validatedCreditsToApply,
-        creditAllocation: creditAllocationForPayment
+        creditAllocation: creditAllocationForPayment,
+        // SNAPSHOT TRUST PATH (#186) — thread the cached biweekly plan
+        // through so the PaymentIntent is sized off the EXACT figure the
+        // parent was shown. Null on full-payment carts and on the strict
+        // path; the service falls back to its date-driven schedule in
+        // those cases.
+        cachedBiweeklyPlan: useTrustedSnapshot && trustedSnapshot?.biweeklyPlan
+          ? trustedSnapshot.biweeklyPlan
+          : null,
       });
 
       console.log('✅ Payment plan created successfully:', {

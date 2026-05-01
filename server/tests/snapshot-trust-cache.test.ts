@@ -63,6 +63,11 @@ function freshCachedSnapshot(overrides: Partial<CachedSnapshot> = {}): CachedSna
     freeEnrollmentReason: null,
     cartItemFingerprint: computeCartItemFingerprint(baseCartItems),
     cartItemMaxLineCostCents: 120_00,
+    // Sum of authoritative per-line costs (drives the new primary
+    // sanity bound). Defaulted slightly above itemsTotal so the default
+    // fixture passes the bound; tests override it for the relevant cases.
+    cartItemTotalLineCostCents: 220_00,
+    biweeklyPlan: null,
     issuedAt: Date.now(),
     ...overrides,
   };
@@ -195,11 +200,16 @@ describe('snapshot trust path — backend integration', () => {
     if (!result.trusted) expect(result.reason).toBe('sanity_bound_failed');
   });
 
-  it('rejects when itemsTotal is wildly out of proportion to the cart\'s max line cost', () => {
-    // cartItemMaxLineCostCents = 100, but itemsTotal = 100_000 → > 5x ceiling
+  it('rejects when itemsTotal is wildly out of proportion to the cart\'s line costs', () => {
+    // Both the sum-based ceiling AND the single-line ceiling are violated.
+    // sum = $100, max-line = $100, itemsTotal = $1000 → reject (sanity_bound_failed).
     cacheSnapshot(
       'snap_relative',
-      freshCachedSnapshot({ itemsTotal: 1_000_00, cartItemMaxLineCostCents: 100_00 }),
+      freshCachedSnapshot({
+        itemsTotal: 1_000_00,
+        cartItemMaxLineCostCents: 100_00,
+        cartItemTotalLineCostCents: 100_00,
+      }),
     );
     const result = verifyTrustedSnapshot({
       snapshotId: 'snap_relative',
@@ -210,6 +220,124 @@ describe('snapshot trust path — backend integration', () => {
     });
     expect(result.trusted).toBe(false);
     if (!result.trusted) expect(result.reason).toBe('sanity_bound_failed');
+  });
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Sum-based sanity bound (#186) — multi-item cart whose itemsTotal far
+  // exceeds 5x the largest single line but legitimately equals the sum of
+  // per-line costs must NOT be rejected. The previous "5 * maxLineCost"
+  // heuristic was the trust-cache half of the false-positive that
+  // produced the "Prices Have Changed" screen on biweekly toggle.
+  // ──────────────────────────────────────────────────────────────────────
+  describe('sum-based sanity bound (#186)', () => {
+    it('TRUSTS a 21-line multi-child cart whose itemsTotal ≈ sum of per-line costs', () => {
+      // Production-shaped repro: parent jocimarie@gmail.com had 21
+      // enrollments across 8 children, items total $8,200.63, largest
+      // single per-line cost $900. Old rule: 5 * $900 = $4,500 ceiling →
+      // false reject. New rule: sum-based ceiling ≈ $8,200 → TRUST.
+      const itemsTotalCents = 820_063; // $8,200.63
+      const lineSumCents = 825_000; // $8,250 — slightly above itemsTotal (post-discount)
+      const maxLineCents = 90_000; // $900 — well below 5x trick
+
+      cacheSnapshot(
+        'snap_21_line_cart',
+        freshCachedSnapshot({
+          itemsTotal: itemsTotalCents,
+          subtotal: lineSumCents,
+          cartItemTotalLineCostCents: lineSumCents,
+          cartItemMaxLineCostCents: maxLineCents,
+        }),
+      );
+
+      const result = verifyTrustedSnapshot({
+        snapshotId: 'snap_21_line_cart',
+        userId: 9001,
+        cartItemFingerprint: computeCartItemFingerprint(baseCartItems),
+        creditsToApply: 0,
+        appliedPromoCode: null,
+      });
+
+      expect(result.trusted).toBe(true);
+      if (result.trusted) {
+        expect(result.snapshot.itemsTotal).toBe(itemsTotalCents);
+      }
+    });
+
+    it('REJECTS a snapshot whose itemsTotal is wildly inflated above the sum of per-line costs', () => {
+      // Same shape as the TRUST case above but itemsTotal has been
+      // implausibly inflated to $30,000 while per-line sum is still $8,250.
+      // Both bounds are violated → sanity_bound_failed (no false trust).
+      cacheSnapshot(
+        'snap_inflated',
+        freshCachedSnapshot({
+          itemsTotal: 3_000_000, // $30,000 (still under absolute ceiling)
+          subtotal: 825_000,
+          cartItemTotalLineCostCents: 825_000,
+          cartItemMaxLineCostCents: 90_000,
+        }),
+      );
+
+      const result = verifyTrustedSnapshot({
+        snapshotId: 'snap_inflated',
+        userId: 9001,
+        cartItemFingerprint: computeCartItemFingerprint(baseCartItems),
+        creditsToApply: 0,
+        appliedPromoCode: null,
+      });
+
+      expect(result.trusted).toBe(false);
+      if (!result.trusted) expect(result.reason).toBe('sanity_bound_failed');
+    });
+
+    it('REJECTS when sum bound is exceeded even if max-line ceiling would have passed', () => {
+      // Defense against trust-cache bypass: if cartItemTotalLineCostCents
+      // is small (e.g. $200) but cartItemMaxLineCostCents is large
+      // (e.g. $5,000 → 5x ceiling = $25,000), the snapshot must STILL
+      // reject when itemsTotal exceeds the sum bound. Sum is primary;
+      // max-line is not an escape hatch for multi-line carts.
+      cacheSnapshot(
+        'snap_sum_primary',
+        freshCachedSnapshot({
+          itemsTotal: 10_000_00, // $10,000 — would slip under 5*$5,000 = $25,000
+          subtotal: 200_00,
+          cartItemTotalLineCostCents: 200_00, // sum bound: max($210, $500) = $500
+          cartItemMaxLineCostCents: 5_000_00, // single $5,000 line
+        }),
+      );
+      const result = verifyTrustedSnapshot({
+        snapshotId: 'snap_sum_primary',
+        userId: 9001,
+        cartItemFingerprint: computeCartItemFingerprint(baseCartItems),
+        creditsToApply: 0,
+        appliedPromoCode: null,
+      });
+      expect(result.trusted).toBe(false);
+      if (!result.trusted) expect(result.reason).toBe('sanity_bound_failed');
+    });
+
+    it('TRUSTS a tiny single-line cart (edge case: max-line guard kicks in via MIN floor)', () => {
+      // Single $50 enrollment. sum = max-line = $50.
+      // sum ceiling = max($50 + $10, $500) = $500 → TRUST.
+      // max-line ceiling = max(5 * $50, $500) = $500 → TRUST.
+      cacheSnapshot(
+        'snap_single_line_tiny',
+        freshCachedSnapshot({
+          itemsTotal: 50_00,
+          subtotal: 50_00,
+          cartItemTotalLineCostCents: 50_00,
+          cartItemMaxLineCostCents: 50_00,
+        }),
+      );
+
+      const result = verifyTrustedSnapshot({
+        snapshotId: 'snap_single_line_tiny',
+        userId: 9001,
+        cartItemFingerprint: computeCartItemFingerprint(baseCartItems),
+        creditsToApply: 0,
+        appliedPromoCode: null,
+      });
+      expect(result.trusted).toBe(true);
+    });
   });
 
   it('eviction sweep removes expired entries', () => {
@@ -277,6 +405,60 @@ describe('snapshot trust path — backend integration', () => {
         schedule.paymentAmount * (schedule.numberOfPayments - 1) +
         schedule.finalPaymentAmount;
       expect(sum).toBe(cachedTotal);
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Cached biweekly plan (#186) — when the snapshot includes a biweekly
+  // plan, the trust path in /create-payment-intent uses its
+  // firstPaymentAmount directly to size the PaymentIntent so the
+  // schedule re-verification (which previously diverged on
+  // first-enrollment-only date lookup) is skipped entirely.
+  // ──────────────────────────────────────────────────────────────────────
+  describe('cached biweekly plan (#186)', () => {
+    it('exposes biweekly plan numbers needed to size the PaymentIntent', () => {
+      const biweeklyPlan = {
+        firstPaymentAmount: 273_354, // $2,733.54
+        numberOfPayments: 3,
+        totalAmount: 820_063, // $8,200.63
+        finalPaymentAmount: 273_355, // remainder rounded into final
+      };
+      cacheSnapshot(
+        'snap_biweekly_plan',
+        freshCachedSnapshot({
+          itemsTotal: 820_063,
+          subtotal: 850_000,
+          cartItemTotalLineCostCents: 850_000,
+          cartItemMaxLineCostCents: 90_000,
+          biweeklyPlan,
+        }),
+      );
+      const result = verifyTrustedSnapshot({
+        snapshotId: 'snap_biweekly_plan',
+        userId: 9001,
+        cartItemFingerprint: computeCartItemFingerprint(baseCartItems),
+        creditsToApply: 0,
+        appliedPromoCode: null,
+      });
+      expect(result.trusted).toBe(true);
+      if (result.trusted) {
+        expect(result.snapshot.biweeklyPlan).toEqual(biweeklyPlan);
+      }
+    });
+
+    it('snapshots that omit a biweekly plan still trust (full-payment carts)', () => {
+      cacheSnapshot('snap_no_biweekly', freshCachedSnapshot({ biweeklyPlan: null }));
+      const result = verifyTrustedSnapshot({
+        snapshotId: 'snap_no_biweekly',
+        userId: 9001,
+        cartItemFingerprint: computeCartItemFingerprint(baseCartItems),
+        creditsToApply: 0,
+        appliedPromoCode: null,
+      });
+      expect(result.trusted).toBe(true);
+      if (result.trusted) {
+        expect(result.snapshot.biweeklyPlan).toBeNull();
+      }
     });
   });
 
