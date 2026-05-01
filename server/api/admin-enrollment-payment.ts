@@ -425,7 +425,7 @@ router.get('/:enrollmentId/payment-plan', async (req: any, res) => {
  * Reallocate payments from one enrollment to another, convert to credit, or refund via Stripe
  * Requires school admin role - auth middleware applied at router registration
  *
- * Body (canonical):
+ * Body:
  *   {
  *     targetType: 'enrollment' | 'credit' | 'refund' | 'manual_refund',
  *     amountCents: number (positive integer, in cents),
@@ -433,19 +433,9 @@ router.get('/:enrollmentId/payment-plan', async (req: any, res) => {
  *     adminComment: string (required - justification for reallocation)
  *   }
  *
- * Legacy body (DEPRECATED — kept for one release for safe rollout):
- *   The `amount` field (dollars, decimal allowed) is still accepted as a
- *   fallback and converted to cents internally via `CurrencyUtils.toStorage`.
- *   Every dollars-path hit emits a `[DEPRECATED]` console.warn so unmigrated
- *   callers can be tracked in the logs. If both `amountCents` and `amount`
- *   are supplied, `amountCents` wins (no warning emitted). The `amount`
- *   fallback will be removed in a future release once logs are silent for
- *   one full release cycle.
- *
  * See `server/utils/reallocatePaymentAmount.ts` for the parsing/validation
  * helper and `server/tests/reallocatePaymentAmount.test.ts` for the contract
- * tests covering: (a) canonical happy path, (b) legacy path + warning,
- * (c) both fields → canonical wins, (d) integer/positive validation.
+ * tests covering the canonical happy path and integer/positive validation.
  */
 router.post('/:enrollmentId/reallocate-payment', async (req: any, res) => {
   try {
@@ -472,14 +462,9 @@ router.post('/:enrollmentId/reallocate-payment', async (req: any, res) => {
       return res.status(403).json({ error: 'Only school administrators can reallocate payments' });
     }
 
-    // Resolve the canonical amountCents from the request body. This accepts
-    // the new `amountCents: number` (positive integer) field and, for one
-    // release, the legacy `amount: number` (dollars) field. The legacy path
-    // emits a deprecation warning that includes the route path so we can
-    // identify any unmigrated caller from the logs.
-    const amountResult = resolveReallocateAmountCents(req.body, {
-      callerHint: `POST /api/admin/enrollments/${enrollmentId}/reallocate-payment`,
-    });
+    // Resolve the canonical amountCents (positive integer, in cents) from
+    // the request body.
+    const amountResult = resolveReallocateAmountCents(req.body);
     if (!amountResult.ok) {
       return res.status(400).json({ error: amountResult.error });
     }
