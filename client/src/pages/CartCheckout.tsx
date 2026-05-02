@@ -590,7 +590,11 @@ export default function CartCheckout() {
   // when called immediately after applyPromoCode (before React state updates)
   // Returns the authoritative data directly for immediate use (avoids React state timing issues)
   const fetchCartSnapshot = async (promoCodeOverride?: string | null, creditsOverride?: number): Promise<AuthoritativeDataType | null> => {
-    if (cart.items.length === 0) return null; // No items to sync
+    // Allow membership-only carts (e.g., "Pay Outstanding" for a membership
+    // with no enrollments). The /cart/snapshot endpoint accepts an empty
+    // items array and still derives membership/credits from the parent's
+    // school config and credit balance.
+    if (cart.items.length === 0 && !cart.membership) return null; // Nothing to sync
     
     try {
       setSnapshotLoading(true);

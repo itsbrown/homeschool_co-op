@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useCart } from '@/contexts/CartContext';
+import { useCart, type MembershipFee } from '@/contexts/CartContext';
 import {
   getEnrollmentEffectiveBalance,
   getMembershipOutstandingBalance,
@@ -41,6 +41,20 @@ type EnrollmentsResponse =
   | null
   | undefined;
 
+/** Raw row shape returned by `/api/parent/memberships` (enriched in `server/api/parent.ts`). */
+interface UnpaidMembershipRow extends ParentMembershipBalanceFields {
+  schoolId?: number | null;
+  schoolName?: string | null;
+  membershipYear?: number | null;
+}
+
+export interface UnpaidMembership extends ParentMembershipBalanceFields {
+  schoolId: number;
+  schoolName: string;
+  membershipYear: number;
+  outstandingBalanceCents: number;
+}
+
 export interface UnpaidEnrollment {
   id: number;
   childId: number;
@@ -74,7 +88,7 @@ export function useUnpaidEnrollments() {
     queryKey: ['/api/parent/credits'],
   });
 
-  const { data: membershipsRaw } = useQuery<ParentMembershipBalanceFields[]>({
+  const { data: membershipsRaw } = useQuery<UnpaidMembershipRow[]>({
     queryKey: ['/api/parent/memberships'],
   });
 
@@ -105,10 +119,29 @@ export function useUnpaidEnrollments() {
     return result;
   }, [enrollmentsRaw]);
 
-  const unpaidMemberships = useMemo<ParentMembershipBalanceFields[]>(() => {
-    return (membershipsRaw ?? []).filter(
-      (m) => getMembershipOutstandingBalance(m) > 0,
-    );
+  const unpaidMemberships = useMemo<UnpaidMembership[]>(() => {
+    const result: UnpaidMembership[] = [];
+    for (const m of membershipsRaw ?? []) {
+      const balance = getMembershipOutstandingBalance(m);
+      if (balance <= 0) continue;
+      // Skip rows missing the cart-required fields (defensive — the API
+      // enriches every row with schoolId/schoolName/membershipYear).
+      if (
+        m.schoolId == null ||
+        !m.schoolName ||
+        m.membershipYear == null
+      ) {
+        continue;
+      }
+      result.push({
+        ...m,
+        schoolId: m.schoolId,
+        schoolName: m.schoolName,
+        membershipYear: m.membershipYear,
+        outstandingBalanceCents: balance,
+      });
+    }
+    return result;
   }, [membershipsRaw]);
 
   const breakdown = useMemo<OutstandingBreakdown>(
@@ -155,10 +188,10 @@ export function useUnpaidEnrollments() {
 }
 
 export function usePayOutstanding() {
-  const { cart, addItem, openCart } = useCart();
+  const { cart, addItem, setMembership, openCart } = useCart();
 
   return useCallback(
-    (toPay: UnpaidEnrollment[]) => {
+    (toPay: UnpaidEnrollment[], toPayMemberships: UnpaidMembership[] = []) => {
       for (const e of toPay) {
         if (!e || e.effectiveBalance <= 0) continue;
         const alreadyInCart = cart.items.some(
@@ -188,8 +221,23 @@ export function usePayOutstanding() {
           true,
         );
       }
+
+      // Cart only supports a single membership at a time; the parent should
+      // typically have at most one outstanding membership row anyway. Take the
+      // first if multiple are present.
+      const firstMembership = toPayMemberships[0];
+      if (firstMembership && !cart.membership) {
+        const fee: MembershipFee = {
+          schoolId: firstMembership.schoolId,
+          schoolName: firstMembership.schoolName,
+          amount: firstMembership.outstandingBalanceCents,
+          year: firstMembership.membershipYear,
+        };
+        setMembership(fee);
+      }
+
       openCart();
     },
-    [cart.items, addItem, openCart],
+    [cart.items, cart.membership, addItem, setMembership, openCart],
   );
 }

@@ -243,13 +243,11 @@ export default function ParentDashboard() {
   const { cart } = useCart();
   const {
     unpaidEnrollments,
+    unpaidMemberships,
     displayCents: outstandingDisplayCents,
     netDueCents: outstandingNetDueCents,
     showCreditsLine: showOutstandingCreditsLine,
-    showMembershipLine: showOutstandingMembershipLine,
     creditsCents: outstandingCreditsCents,
-    membershipsCents: outstandingMembershipsCents,
-    payableNowCents: outstandingPayableNowCents,
     totalOwedCents: outstandingTotalOwedCents,
     enrollmentCount: outstandingEnrollmentCount,
     membershipCount: outstandingMembershipCount,
@@ -774,23 +772,19 @@ export default function ParentDashboard() {
                         </>
                       )}
                     </p>
-                    {showOutstandingMembershipLine && (
-                      <div
-                        className="mt-2 text-xs text-muted-foreground"
-                        data-testid="text-membership-paid-separately-dashboard"
-                      >
-                        − Membership {formatCurrency(outstandingMembershipsCents)} (paid separately)
-                      </div>
-                    )}
                     <Button
                       className="mt-3 w-full h-11"
-                      onClick={() => payOutstanding(unpaidEnrollments)}
-                      disabled={isLoadingUnpaid || unpaidEnrollments.length === 0}
+                      onClick={() => payOutstanding(unpaidEnrollments, unpaidMemberships)}
+                      disabled={
+                        isLoadingUnpaid ||
+                        (unpaidEnrollments.length === 0 &&
+                          unpaidMemberships.length === 0)
+                      }
                       data-testid="button-pay-outstanding-dashboard"
                     >
                       <CreditCard className="h-4 w-4 mr-2" />
-                      {outstandingPayableNowCents > 0
-                        ? `Pay ${formatCurrency(outstandingPayableNowCents)}`
+                      {outstandingNetDueCents > 0
+                        ? `Pay ${formatCurrency(outstandingNetDueCents)}`
                         : 'Pay Now'}
                     </Button>
                   </>

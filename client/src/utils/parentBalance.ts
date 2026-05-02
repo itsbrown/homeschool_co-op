@@ -175,8 +175,8 @@ export function sumSpendableCredits(
 
 /**
  * Canonical "Owed" breakdown rendered by every parent-facing balance surface.
- * `netDueCents` is the headline; `payableNowCents` is what the cart charges
- * (memberships are paid separately, so credits never reduce them).
+ * Memberships now flow through the cart alongside enrollments, so credits
+ * apply across the full owed amount and `netDueCents === payableNowCents`.
  */
 export interface OutstandingBreakdown {
   enrollmentsCents: number;
@@ -187,11 +187,18 @@ export interface OutstandingBreakdown {
   creditsAvailableCents: number;
   /** @deprecated use `creditsAvailableCents`. */
   creditsCents: number;
+  /**
+   * Credits applied across the full owed amount (enrollments + memberships).
+   * Field name retained for back-compat; the historical
+   * "credits-can-only-touch-enrollments" cap was removed when memberships
+   * became cart-payable.
+   */
   creditsAppliedToEnrollments: number;
   payableNowCents: number;
   netDueCents: number;
   displayCents: number;
   showCreditsLine: boolean;
+  /** @deprecated memberships are no longer "paid separately". Always false. */
   showMembershipLine: boolean;
 }
 
@@ -230,15 +237,18 @@ export function computeOutstandingBreakdown(input: {
     : safeNumber(input.creditsCents ?? 0);
 
   const totalOwedCents = enrollmentsCents + membershipsCents;
+  // Credits now apply across the full owed amount because memberships flow
+  // through the cart alongside enrollments. The previous cap at
+  // `enrollmentsCents` was a workaround for memberships being paid separately.
   const creditsAppliedToEnrollments = Math.min(
     creditsAvailableCents,
-    enrollmentsCents,
+    totalOwedCents,
   );
   const payableNowCents = Math.max(
     0,
-    enrollmentsCents - creditsAppliedToEnrollments,
+    totalOwedCents - creditsAppliedToEnrollments,
   );
-  const netDueCents = payableNowCents + membershipsCents;
+  const netDueCents = payableNowCents;
 
   return {
     enrollmentsCents,
@@ -252,8 +262,8 @@ export function computeOutstandingBreakdown(input: {
     payableNowCents,
     netDueCents,
     displayCents: netDueCents,
-    showCreditsLine: creditsAvailableCents > 0 && enrollmentsCents > 0,
-    showMembershipLine: membershipsCents > 0,
+    showCreditsLine: creditsAvailableCents > 0 && totalOwedCents > 0,
+    showMembershipLine: false,
   };
 }
 

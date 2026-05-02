@@ -1959,12 +1959,11 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
   const { toast } = useToast();
   const {
     unpaidEnrollments: payOutstandingEnrollments,
+    unpaidMemberships: payOutstandingMemberships,
     displayCents: payOutstandingDisplayCents,
+    netDueCents: payOutstandingNetDueCents,
     showCreditsLine: payOutstandingShowCreditsLine,
-    showMembershipLine: payOutstandingShowMembershipLine,
     creditsCents: payOutstandingCreditsCents,
-    membershipsCents: payOutstandingMembershipsCents,
-    payableNowCents: payOutstandingPayableNowCents,
     totalOwedCents: payOutstandingTotalOwedCents,
     enrollmentCount: payOutstandingEnrollmentCount,
     membershipCount: payOutstandingMembershipCount,
@@ -2322,7 +2321,7 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
                 {(() => {
                   const showPayButton =
                     isLoadingPayOutstanding ||
-                    payOutstandingPayableNowCents > 0;
+                    payOutstandingNetDueCents > 0;
                   return (
                     <>
                       <div
@@ -2352,21 +2351,19 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
                           </>
                         )}
                       </p>
-                      {payOutstandingShowMembershipLine && (
-                        <div
-                          className="mt-2 text-xs text-muted-foreground"
-                          data-testid="text-membership-paid-separately-overview"
-                        >
-                          − Membership {formatCurrency(payOutstandingMembershipsCents)} (paid separately)
-                        </div>
-                      )}
                       {showPayButton && (
                         <Button
                           className="mt-3 w-full h-11"
-                          onClick={() => payOutstanding(payOutstandingEnrollments)}
+                          onClick={() =>
+                            payOutstanding(
+                              payOutstandingEnrollments,
+                              payOutstandingMemberships,
+                            )
+                          }
                           disabled={
                             isLoadingPayOutstanding ||
-                            payOutstandingEnrollments.length === 0
+                            (payOutstandingEnrollments.length === 0 &&
+                              payOutstandingMemberships.length === 0)
                           }
                           data-testid="button-pay-outstanding-overview"
                         >
@@ -2377,8 +2374,8 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
                           )}
                           {isLoadingPayOutstanding
                             ? 'Loading...'
-                            : payOutstandingPayableNowCents > 0
-                            ? `Pay ${formatCurrency(payOutstandingPayableNowCents)}`
+                            : payOutstandingNetDueCents > 0
+                            ? `Pay ${formatCurrency(payOutstandingNetDueCents)}`
                             : 'Pay Now'}
                         </Button>
                       )}

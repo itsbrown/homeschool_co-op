@@ -269,7 +269,7 @@ describe('computeOutstandingBreakdown (canonical Owed contract)', () => {
     expect(r.payableNowCents).toBe(12_500);
   });
 
-  it('applies credits to enrollments first; memberships are paid separately', () => {
+  it('applies credits across enrollments + memberships (memberships are now cart-payable)', () => {
     const enrollments: ParentEnrollmentBalanceFields[] = [
       { effectiveBalance: 20_000 },
     ];
@@ -289,14 +289,14 @@ describe('computeOutstandingBreakdown (canonical Owed contract)', () => {
     expect(r.creditsAvailableCents).toBe(3_000);
     expect(r.creditsCents).toBe(3_000);
     expect(r.creditsAppliedToEnrollments).toBe(3_000);
-    expect(r.payableNowCents).toBe(17_000);
+    expect(r.payableNowCents).toBe(22_000);
     expect(r.netDueCents).toBe(22_000);
     expect(r.displayCents).toBe(22_000);
     expect(r.showCreditsLine).toBe(true);
-    expect(r.showMembershipLine).toBe(true);
+    expect(r.showMembershipLine).toBe(false);
   });
 
-  it('caps credits at enrollmentsCents — credits never reduce membership', () => {
+  it('credits can fully cover enrollments + memberships together', () => {
     const enrollments: ParentEnrollmentBalanceFields[] = [
       { effectiveBalance: 5_000 },
     ];
@@ -308,11 +308,11 @@ describe('computeOutstandingBreakdown (canonical Owed contract)', () => {
       memberships,
       creditsCents: 20_000,
     });
-    expect(r.creditsAppliedToEnrollments).toBe(5_000);
+    expect(r.creditsAppliedToEnrollments).toBe(9_000);
     expect(r.payableNowCents).toBe(0);
     expect(r.membershipsCents).toBe(4_000);
-    expect(r.netDueCents).toBe(4_000);
-    expect(r.showMembershipLine).toBe(true);
+    expect(r.netDueCents).toBe(0);
+    expect(r.showMembershipLine).toBe(false);
   });
 
   it('skips expired/suspended memberships (denylist) and only counts those with positive balance', () => {
@@ -348,7 +348,7 @@ describe('computeOutstandingBreakdown (canonical Owed contract)', () => {
     expect(r.enrollmentCount).toBe(2);
   });
 
-  it('hides the credits line when enrollments owe nothing', () => {
+  it('shows the credits line when only memberships owe — credits now apply to them too', () => {
     const memberships: ParentMembershipBalanceFields[] = [
       { remainingBalance: 5_000, status: 'active' },
     ];
@@ -357,21 +357,43 @@ describe('computeOutstandingBreakdown (canonical Owed contract)', () => {
       memberships,
       creditsCents: 9_000,
     });
-    expect(r.showCreditsLine).toBe(false);
-    expect(r.netDueCents).toBe(5_000);
+    expect(r.showCreditsLine).toBe(true);
+    expect(r.creditsAppliedToEnrollments).toBe(5_000);
+    expect(r.netDueCents).toBe(0);
   });
 
-  it('hides the membership line when no memberships owe anything', () => {
+  it('hides the credits line when nothing is owed (no enrollments, no memberships)', () => {
+    const r = computeOutstandingBreakdown({
+      enrollments: [],
+      memberships: [],
+      creditsCents: 9_000,
+    });
+    expect(r.showCreditsLine).toBe(false);
+    expect(r.netDueCents).toBe(0);
+  });
+
+  it('always hides the membership "(paid separately)" line — memberships are now cart-payable', () => {
     const enrollments: ParentEnrollmentBalanceFields[] = [
       { effectiveBalance: 1_000 },
     ];
-    const r = computeOutstandingBreakdown({
+    const r1 = computeOutstandingBreakdown({
       enrollments,
       memberships: [],
       creditsCents: 0,
     });
-    expect(r.showMembershipLine).toBe(false);
-    expect(r.netDueCents).toBe(1_000);
+    expect(r1.showMembershipLine).toBe(false);
+    expect(r1.netDueCents).toBe(1_000);
+
+    const memberships: ParentMembershipBalanceFields[] = [
+      { remainingBalance: 4_500, status: 'active' },
+    ];
+    const r2 = computeOutstandingBreakdown({
+      enrollments,
+      memberships,
+      creditsCents: 0,
+    });
+    expect(r2.showMembershipLine).toBe(false);
+    expect(r2.netDueCents).toBe(5_500);
   });
 
   it('handles null / undefined inputs defensively', () => {
@@ -484,11 +506,11 @@ describe('computeOutstandingBreakdown (canonical Owed contract)', () => {
     expect(r.totalOwedCents).toBe(17_000);
     expect(r.creditsAvailableCents).toBe(4_500);
     expect(r.creditsAppliedToEnrollments).toBe(4_500);
-    expect(r.payableNowCents).toBe(8_000);
+    expect(r.payableNowCents).toBe(12_500);
     expect(r.netDueCents).toBe(12_500);
     expect(r.displayCents).toBe(12_500);
     expect(r.showCreditsLine).toBe(true);
-    expect(r.showMembershipLine).toBe(true);
+    expect(r.showMembershipLine).toBe(false);
   });
 });
 

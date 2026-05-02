@@ -291,7 +291,7 @@ export default function CartDrawer() {
                   variant="outline"
                   onClick={() => clearCart()}
                   className="flex-1"
-                  disabled={cart.items.length === 0}
+                  disabled={cart.items.length === 0 && !cart.membership}
                 >
                   <Trash2 className="h-4 w-4 mr-2" />
                   Clear
@@ -300,7 +300,7 @@ export default function CartDrawer() {
                   type="button"
                   onClick={handleCheckout}
                   className="flex-1 relative z-50"
-                  disabled={cart.items.length === 0}
+                  disabled={cart.items.length === 0 && !cart.membership}
                   style={{ pointerEvents: 'auto' }}
                 >
                   <CreditCard className="h-4 w-4 mr-2" />
