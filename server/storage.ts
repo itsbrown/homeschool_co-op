@@ -6116,59 +6116,41 @@ import { DatabaseStorage } from "./dbStorage";
     }
 
     async createProgramEnrollment(enrollment: InsertProgramEnrollment): Promise<ProgramEnrollment> {
+      if (!this.dbStorage || typeof this.dbStorage.createProgramEnrollment !== 'function') {
+        console.error('🚨 SILENT-FALLBACK-AVERTED: createProgramEnrollment called but DB storage unavailable or method missing. Refusing to fall back to memStorage (Task #216).');
+        throw new Error('Database storage is required for createProgramEnrollment (no in-memory fallback)');
+      }
       try {
-        if (this.dbStorage && typeof this.dbStorage.createProgramEnrollment === 'function') {
-          return await this.dbStorage.createProgramEnrollment(enrollment);
-        } else {
-          if (process.env.NODE_ENV === 'production') {
-            throw new Error('Database storage is required in production environment');
-          }
-          console.log('💾 DB storage unavailable or method missing, using memStorage fallback for createProgramEnrollment');
-          return await this.memStorage.createProgramEnrollment(enrollment);
-        }
+        return await this.dbStorage.createProgramEnrollment(enrollment);
       } catch (error) {
-        if (process.env.NODE_ENV === 'production') {
-          throw error;
-        }
-        console.error('❌ Error creating program enrollment in database, falling back to memStorage:', error);
-        return await this.memStorage.createProgramEnrollment(enrollment);
+        console.error('🚨 SILENT-FALLBACK-AVERTED: createProgramEnrollment failed against Postgres. Surfacing the real error instead of falling back to memStorage (Task #216).', error);
+        throw error;
       }
     }
 
     async updateProgramEnrollment(id: number, enrollment: Partial<InsertProgramEnrollment>): Promise<ProgramEnrollment | undefined> {
+      if (!this.dbStorage || typeof this.dbStorage.updateProgramEnrollment !== 'function') {
+        console.error('🚨 SILENT-FALLBACK-AVERTED: updateProgramEnrollment called but DB storage unavailable or method missing. Refusing to fall back to memStorage (Task #216).');
+        throw new Error('Database storage is required for updateProgramEnrollment (no in-memory fallback)');
+      }
       try {
-        if (this.dbStorage && typeof this.dbStorage.updateProgramEnrollment === 'function') {
-          return await this.dbStorage.updateProgramEnrollment(id, enrollment);
-        } else {
-          if (process.env.NODE_ENV === 'production') {
-            throw new Error('Database storage is required in production environment');
-          }
-          console.log('💾 DB storage unavailable or method missing, using memStorage fallback for updateProgramEnrollment');
-          return await this.memStorage.updateProgramEnrollment(id, enrollment);
-        }
+        return await this.dbStorage.updateProgramEnrollment(id, enrollment);
       } catch (error) {
-        if (process.env.NODE_ENV === 'production') {
-          throw error;
-        }
-        console.error('❌ Error updating program enrollment in database, falling back to memStorage:', error);
-        return await this.memStorage.updateProgramEnrollment(id, enrollment);
+        console.error('🚨 SILENT-FALLBACK-AVERTED: updateProgramEnrollment failed against Postgres. Surfacing the real error instead of falling back to memStorage (Task #216).', error);
+        throw error;
       }
     }
 
     async deleteProgramEnrollment(id: number): Promise<void> {
+      if (!this.dbStorage || typeof this.dbStorage.deleteProgramEnrollment !== 'function') {
+        console.error('🚨 SILENT-FALLBACK-AVERTED: deleteProgramEnrollment called but DB storage unavailable or method missing. Refusing to fall back to memStorage (Task #216).');
+        throw new Error('Database storage is required for deleteProgramEnrollment (no in-memory fallback)');
+      }
       try {
-        if (this.dbStorage && typeof this.dbStorage.deleteProgramEnrollment === 'function') {
-          return await this.dbStorage.deleteProgramEnrollment(id);
-        } else {
-          console.log('💾 DB storage unavailable, using memStorage fallback for deleteProgramEnrollment');
-          return await this.memStorage.deleteProgramEnrollment(id);
-        }
+        return await this.dbStorage.deleteProgramEnrollment(id);
       } catch (error) {
-        if (process.env.NODE_ENV === 'production') {
-          throw error;
-        }
-        console.log('❌ Error deleting program enrollment from database, falling back to memStorage:', error);
-        return await this.memStorage.deleteProgramEnrollment(id);
+        console.error('🚨 SILENT-FALLBACK-AVERTED: deleteProgramEnrollment failed against Postgres. Surfacing the real error instead of falling back to memStorage (Task #216).', error);
+        throw error;
       }
     }
 
@@ -6283,23 +6265,16 @@ import { DatabaseStorage } from "./dbStorage";
     }
 
     async createEnrollment(enrollment: any): Promise<any> {
+      // All enrollments now stored in unified program_enrollments table
+      if (!this.dbStorage || typeof this.dbStorage.createProgramEnrollment !== 'function') {
+        console.error('🚨 SILENT-FALLBACK-AVERTED: createEnrollment called but DB storage unavailable or method missing. Refusing to fall back to memStorage (Task #216).');
+        throw new Error('Database storage is required for createEnrollment (no in-memory fallback)');
+      }
       try {
-        // All enrollments now stored in unified program_enrollments table
-        if (this.dbStorage && typeof this.dbStorage.createProgramEnrollment === 'function') {
-          return await this.dbStorage.createProgramEnrollment(enrollment);
-        } else {
-          if (process.env.NODE_ENV === 'production') {
-            throw new Error('Database storage is required in production environment');
-          }
-          console.log('💾 DB storage unavailable or method missing, using memStorage fallback for createEnrollment');
-          return await this.memStorage.createEnrollment(enrollment);
-        }
+        return await this.dbStorage.createProgramEnrollment(enrollment);
       } catch (error) {
-        if (process.env.NODE_ENV === 'production') {
-          throw error;
-        }
-        console.error('❌ Error creating enrollment in database, falling back to memStorage:', error);
-        return await this.memStorage.createEnrollment(enrollment);
+        console.error('🚨 SILENT-FALLBACK-AVERTED: createEnrollment failed against Postgres. Surfacing the real error instead of falling back to memStorage (Task #216).', error);
+        throw error;
       }
     }
 
@@ -6374,27 +6349,18 @@ import { DatabaseStorage } from "./dbStorage";
     }
 
     async updateEnrollment(idOrEnrollment: any, updates?: any): Promise<any> {
+      // Handle both calling signatures
+      const id = typeof idOrEnrollment === 'number' ? idOrEnrollment : idOrEnrollment.id;
+      const data = typeof idOrEnrollment === 'number' ? updates : idOrEnrollment;
+      if (!this.dbStorage || typeof this.dbStorage.updateProgramEnrollment !== 'function') {
+        console.error('🚨 SILENT-FALLBACK-AVERTED: updateEnrollment called but DB storage unavailable or method missing. Refusing to fall back to memStorage (Task #216).');
+        throw new Error('Database storage is required for updateEnrollment (no in-memory fallback)');
+      }
       try {
-        // Handle both calling signatures
-        const id = typeof idOrEnrollment === 'number' ? idOrEnrollment : idOrEnrollment.id;
-        const data = typeof idOrEnrollment === 'number' ? updates : idOrEnrollment;
-        if (this.dbStorage && typeof this.dbStorage.updateProgramEnrollment === 'function') {
-          return await this.dbStorage.updateProgramEnrollment(id, data);
-        } else {
-          if (process.env.NODE_ENV === 'production') {
-            throw new Error('Database storage is required in production environment');
-          }
-          console.log('💾 DB storage unavailable or method missing, using memStorage fallback for updateEnrollment');
-          return await this.memStorage.updateEnrollment(id, data);
-        }
+        return await this.dbStorage.updateProgramEnrollment(id, data);
       } catch (error) {
-        if (process.env.NODE_ENV === 'production') {
-          throw error;
-        }
-        console.error('❌ Error updating enrollment in database, falling back to memStorage:', error);
-        const id = typeof idOrEnrollment === 'number' ? idOrEnrollment : idOrEnrollment.id;
-        const data = typeof idOrEnrollment === 'number' ? updates : idOrEnrollment;
-        return await this.memStorage.updateEnrollment(id, data);
+        console.error('🚨 SILENT-FALLBACK-AVERTED: updateEnrollment failed against Postgres. Surfacing the real error instead of falling back to memStorage (Task #216).', error);
+        throw error;
       }
     }
 
