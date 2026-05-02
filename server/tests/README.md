@@ -322,7 +322,72 @@ expect(response.body).toBeDefined();
 
 ## CI/CD Integration
 
-Tests are automatically run in CI/CD pipeline before deployment. See `.github/workflows/integration-tests.yml` for configuration.
+Tests are automatically run in CI on every push to `main` and every pull
+request via `.github/workflows/tests.yml`. The single `tests` job boots the
+dev server, then runs the full `npm test` script (server integration suite +
+client jsdom suite). The earlier `integration-tests.yml` workflow has been
+removed — `tests.yml` is now the canonical entry point.
+
+## Payment-Flow Regression Harness
+
+The `server/tests/integration/payment-flow/` suite is a **black-box regression
+harness** for the cart → PaymentIntent → webhook → enrollment flow. Unlike the
+phase suites above, these tests do NOT spin up an in-process Express server.
+They drive the real dev server (`npm run dev`, port 5000) over HTTP and use a
+real Stripe test client to create + confirm PaymentIntents.
+
+### Layout
+
+```
+server/tests/integration/payment-flow/
+├── helpers/
+│   ├── signWebhook.ts            # HMAC-SHA256 sign Stripe payloads (t=...,v1=...)
+│   ├── stripeTestClient.ts       # Memoized Stripe client (sk_test_ only)
+│   ├── confirmPaymentIntent.ts   # Create + confirm PI with pm_card_visa
+│   └── seedCartScenario.ts       # POST /api/test/setup-cart-scenario wrapper
+└── cart-pi-success.test.ts       # Worked example: regression gate for finding #1
+```
+
+### Required env
+
+| Variable                       | Purpose                                                                    |
+| ------------------------------ | -------------------------------------------------------------------------- |
+| `DATABASE_URL`                 | Postgres connection (must have app schema applied via `npm run db:push`).  |
+| `STRIPE_WEBHOOK_SECRET`        | Used by both the dev server and `signWebhook` — values must match.         |
+| `STRIPE_TEST_SECRET_KEY`       | Stripe test-mode secret (task-spec name). Bridged to `TESTING_STRIPE_SECRET_KEY` automatically. |
+| `TESTING_STRIPE_SECRET_KEY`    | Codebase-native alias (`server/config/stripe.ts` reads this). Either name works. |
+| `PAYMENT_PROCESSOR_ENABLED`    | Must be `true`; `server/tests/setup.ts` throws otherwise.                  |
+| `STRIPE_WEBHOOK_DEV_BYPASS`    | Should be `false` so signature verification is actually exercised.         |
+| `TEST_BASE_URL`                | Optional; defaults to `http://localhost:5000`.                             |
+
+### Running locally
+
+```bash
+# Terminal 1
+npm run dev
+
+# Terminal 2 (after the server is listening on :5000)
+npm run test:server          # full server integration suite (incl. payment-flow)
+npm run test:client          # client jsdom unit tests
+npm test                     # both suites in series
+```
+
+### What `cart-pi-success.test.ts` proves
+
+1. `/api/test/setup-cart-scenario` actually persists a `program_enrollment`
+   row to Postgres (regression gate for finding #1 — the silent MemStorage
+   fallback when `child_name` was NULL).
+2. The real cart endpoints accept a session-cookie-authenticated request
+   end-to-end:
+   `/api/test/login` → `/api/cart/snapshot` → `/api/stripe/create-payment-intent`
+   → server-side `paymentIntents.confirm(pm_card_visa)` → signed
+   `payment_intent.succeeded` POST to `/api/stripe/webhook`.
+3. After the webhook returns 200, the program_enrollment row in Postgres is
+   updated to `status: 'enrolled'`, `remainingBalance: 0`, and a
+   `stripe_payment_history` row exists for the PaymentIntent ID.
+
+The suite runs as part of the standard `npm test` step in CI; failures
+block the build the same way the rest of the suite does.
 
 ## Next Steps
 

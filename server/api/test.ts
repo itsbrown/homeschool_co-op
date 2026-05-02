@@ -4,6 +4,20 @@ import { storage } from '../storage';
 import { nanoid } from 'nanoid';
 import { processOneScheduledPayment, recoverOneScheduledPayment } from '../services/auto-pay-scheduler';
 import { handleScheduledPaymentFailed } from '../services/auto-pay-webhook-helpers';
+import { getDb } from '../db';
+import { eq, sql } from 'drizzle-orm';
+import {
+  programEnrollments,
+  stripePaymentHistory,
+  credits,
+  membershipEnrollments,
+  type InsertProgramEnrollment,
+  type ProgramEnrollment,
+  type InsertCredit,
+  type Credit,
+  type InsertMembershipEnrollment,
+  type MembershipEnrollment,
+} from '@shared/schema';
 
 const router = Router();
 
@@ -31,20 +45,42 @@ router.use(testOnlyMiddleware);
 
 /**
  * POST /api/test/setup-cart-scenario
- * Creates a complete test scenario for cart persistence testing
- * 
- * Returns:
- * - parent: { email, password, id }
- * - child: { id, firstName, lastName }
- * - class: { id, title }
- * - enrollment: { id, status }
- * - school: { id, name, registrationCode }
+ * Seeds parent + child + class + pending program_enrollment for the
+ * payment-flow harness. Writes via direct db.insert so MemStorage
+ * fallback cannot mask NOT NULL / CHECK violations (Task #203 #1).
  */
 router.post('/setup-cart-scenario', async (req: Request, res: Response) => {
   try {
     const testDb = new TestDatabase();
     const uniqueId = nanoid(8);
-    
+
+    type AllowedPaymentPlan = 'full_payment' | 'deposit_only' | 'biweekly' | 'custom';
+    const validPaymentPlans = ['full_payment', 'deposit_only', 'biweekly', 'custom'] as const;
+    const isAllowedPaymentPlan = (value: unknown): value is AllowedPaymentPlan =>
+      typeof value === 'string' &&
+      (validPaymentPlans as readonly string[]).includes(value);
+    const requestedPaymentPlan: unknown = req.body?.paymentPlan;
+    if (requestedPaymentPlan !== undefined && !isAllowedPaymentPlan(requestedPaymentPlan)) {
+      return res.status(400).json({
+        error: `Invalid paymentPlan. Must be one of: ${validPaymentPlans.join(', ')}`,
+      });
+    }
+    const paymentPlan: AllowedPaymentPlan = isAllowedPaymentPlan(requestedPaymentPlan)
+      ? requestedPaymentPlan
+      : 'full_payment';
+
+    const rawWithCredits: unknown = req.body?.withCredits;
+    let withCreditsCents = 0;
+    if (rawWithCredits !== undefined && rawWithCredits !== false && rawWithCredits !== null) {
+      if (typeof rawWithCredits !== 'number' || !Number.isFinite(rawWithCredits) || rawWithCredits < 0) {
+        return res.status(400).json({
+          error: 'withCredits must be a non-negative integer (amount in cents) or omitted.',
+        });
+      }
+      withCreditsCents = Math.floor(rawWithCredits);
+    }
+    const withMembership = req.body?.withMembership === true;
+
     // 1. Create school admin
     // Note: Don't pass password in overrides - let createTestUser hash it properly
     const adminPassword = 'TestPassword123!';
@@ -53,38 +89,31 @@ router.post('/setup-cart-scenario', async (req: Request, res: Response) => {
       username: `testadmin_${uniqueId}`,
       name: 'Test Admin',
       role: 'schoolAdmin'
-      // password will be hashed inside createTestUser
     });
-    // Manually hash and set the password to ensure it's stored correctly
     const bcrypt = await import('bcryptjs');
     const hashedAdminPassword = await bcrypt.hash(adminPassword, 10);
     await storage.updateUser(admin.id, { password: hashedAdminPassword });
-    
+
     // 2. Create school
     const school = await testDb.createTestSchool(admin.id, {
       name: `Test School Cart ${uniqueId}`,
       registrationCode: `CART${uniqueId.toUpperCase()}`
     });
-    
-    // Update admin's schoolId
     await storage.updateUser(admin.id, { schoolId: school.id });
-    
+
     // 3. Create parent user
     const parentEmail = `parent_${uniqueId}@test.com`;
     const parentPassword = 'TestPassword123!';
-    
     const parent = await testDb.createTestUser({
       email: parentEmail,
       username: `testparent_${uniqueId}`,
       name: 'Test Parent',
       role: 'parent',
       schoolId: school.id
-      // password will be hashed inside createTestUser
     });
-    // Manually hash and set the password to ensure it's stored correctly
     const hashedParentPassword = await bcrypt.hash(parentPassword, 10);
     await storage.updateUser(parent.id, { password: hashedParentPassword });
-    
+
     // 4. Create child
     const child = await testDb.createTestChild(parent.id, {
       firstName: 'Test',
@@ -94,41 +123,122 @@ router.post('/setup-cart-scenario', async (req: Request, res: Response) => {
       schoolId: school.id,
       parentEmail: parentEmail
     });
-    
-    // 5. Create category
+
+    // 5. Create category (with text `category` column for DB CHECK compatibility)
     const category = await testDb.createTestCategory(school.id, {
-      name: 'Test Category'
+      name: `Cart Category ${uniqueId}`
     });
-    
+
     // 6. Create class
     const classItem = await testDb.createTestClass(school.id, {
       title: `Math Fundamentals Cart Test ${uniqueId}`,
       description: 'Test class for cart persistence',
-      price: 10000, // $100.00
+      price: 10000, // $100.00 in cents
       status: 'upcoming',
-      categoryId: category.id
+      categoryId: category.id,
+      category: `Cart Category ${uniqueId}`,
     });
-    
-    // 7. Create pending enrollment
-    const enrollment = await storage.createProgramEnrollment({
+
+    // 7. Pending enrollment — direct db.insert (no MemStorage fallback).
+    //    createTestClass writes to the marketplace `classes` table, so the
+    //    enrollment must use classType='marketplace' + marketplaceClassId
+    //    (not classId, which FKs to school_classes).
+    const enrollmentInsert: InsertProgramEnrollment = {
       childId: child.id,
-      classId: classItem.id,
+      classType: 'marketplace',
+      marketplaceClassId: classItem.id,
       parentId: parent.id,
-      parentEmail: parentEmail,
+      parentEmail,
       schoolId: school.id,
       status: 'pending_payment',
-      paymentPlan: 'full',
-      price: 10000
-    });
-    
+      paymentPlan,
+      paymentSystemVersion: 'v2_stripe',
+      paymentStatus: 'pending',
+      childName: `${child.firstName} ${child.lastName}`,
+      className: classItem.title,
+      totalCost: 10000,
+      totalPaid: 0,
+      remainingBalance: 10000,
+      depositRequired: 0,
+      enrollmentDate: new Date(),
+    };
+
+    const db = await getDb();
+    if (!db) {
+      return res.status(500).json({ error: 'Postgres required (getDb returned null)' });
+    }
+    const inserted = await db
+      .insert(programEnrollments)
+      .values(enrollmentInsert)
+      .returning();
+    const enrollment: ProgramEnrollment | undefined = inserted[0];
+    if (!enrollment) {
+      return res.status(500).json({ error: 'enrollment insert returned no row' });
+    }
+
+    // 8. Optional credit grant — direct insert, status='approved' so the
+    //    cart pricing path can spend it. Used to drive the credits-applied
+    //    branch of /api/cart/snapshot in regression tests.
+    let credit: Credit | null = null;
+    if (withCreditsCents > 0) {
+      const creditInsert: InsertCredit = {
+        userId: parent.id,
+        schoolId: school.id,
+        creditType: 'marketing',
+        creditAmountCents: withCreditsCents,
+        status: 'approved',
+        approvedBy: admin.id,
+        title: `Test seed credit (${withCreditsCents}¢)`,
+      };
+      const insertedCredits = await db.insert(credits).values(creditInsert).returning();
+      credit = insertedCredits[0] ?? null;
+      if (!credit) {
+        return res.status(500).json({ error: 'credit insert returned no row' });
+      }
+    }
+
+    // 9. Optional membership enrollment — direct insert, status='enrolled'
+    //    so the cart membership-required branch is satisfied.
+    let membership: MembershipEnrollment | null = null;
+    if (withMembership) {
+      const now = new Date();
+      const oneYearOut = new Date(now);
+      oneYearOut.setFullYear(oneYearOut.getFullYear() + 1);
+      const membershipAmount = 5000;
+      const membershipInsert: InsertMembershipEnrollment = {
+        schoolId: school.id,
+        parentUserId: parent.id,
+        membershipYear: now.getFullYear(),
+        amount: membershipAmount,
+        amountPaid: membershipAmount,
+        remainingBalance: 0,
+        totalAmount: membershipAmount,
+        balanceDue: 0,
+        status: 'enrolled',
+        dueDate: now,
+        endDate: oneYearOut,
+        expirationDate: oneYearOut,
+        membershipTier: 'basic',
+        startDate: now,
+      };
+      const insertedMemberships = await db
+        .insert(membershipEnrollments)
+        .values(membershipInsert)
+        .returning();
+      membership = insertedMemberships[0] ?? null;
+      if (!membership) {
+        return res.status(500).json({ error: 'membership insert returned no row' });
+      }
+    }
+
     console.log(`✅ Created cart test scenario:
       - Parent: ${parentEmail}
       - Child: ${child.firstName} ${child.lastName} (ID: ${child.id})
       - Class: ${classItem.title} (ID: ${classItem.id})
-      - Enrollment: ID ${enrollment.id} (status: ${enrollment.status})
+      - Enrollment: ID ${enrollment.id} (status: ${enrollment.status}, totalCost: ${enrollment.totalCost}, remainingBalance: ${enrollment.remainingBalance})
       - School: ${school.name} (Code: ${school.registrationCode})
     `);
-    
+
     res.json({
       success: true,
       data: {
@@ -149,22 +259,90 @@ router.post('/setup-cart-scenario', async (req: Request, res: Response) => {
         },
         enrollment: {
           id: enrollment.id,
-          status: enrollment.status
+          status: enrollment.status,
+          totalCost: enrollment.totalCost,
+          remainingBalance: enrollment.remainingBalance,
+          paymentPlan: enrollment.paymentPlan,
         },
         school: {
           id: school.id,
           name: school.name,
           registrationCode: school.registrationCode
-        }
+        },
+        credit: credit
+          ? { id: credit.id, amountCents: credit.creditAmountCents, status: credit.status }
+          : null,
+        membership: membership
+          ? {
+              id: membership.id,
+              status: membership.status,
+              membershipYear: membership.membershipYear,
+              totalAmount: membership.totalAmount,
+            }
+          : null,
       }
     });
-    
+
   } catch (error) {
     console.error('❌ Error setting up cart test scenario:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Failed to setup cart test scenario',
       details: error instanceof Error ? error.message : String(error)
     });
+  }
+});
+
+/** GET /api/test/program-enrollment/:id — returns the row or null. */
+router.get('/program-enrollment/:id', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'enrollment id must be an integer' });
+    }
+    const enrollment = await storage.getProgramEnrollmentById(id);
+    return res.json(enrollment ?? null);
+  } catch (error) {
+    console.error('[Test] program-enrollment lookup error:', error);
+    return res.status(500).json({ error: String(error) });
+  }
+});
+
+/** GET /api/test/stripe-payment/:paymentIntentId — returns the row or null. */
+router.get('/stripe-payment/:paymentIntentId', async (req: Request, res: Response) => {
+  try {
+    const piId = req.params.paymentIntentId;
+    if (!piId) {
+      return res.status(400).json({ error: 'paymentIntentId required' });
+    }
+    const record = await storage.getStripePaymentByIntentId(piId);
+    return res.json(record ?? null);
+  } catch (error) {
+    console.error('[Test] stripe-payment lookup error:', error);
+    return res.status(500).json({ error: String(error) });
+  }
+});
+
+/** GET /api/test/stripe-payment-count/:paymentIntentId — Task #203 #3. */
+router.get('/stripe-payment-count/:paymentIntentId', async (req: Request, res: Response) => {
+  try {
+    const piId = req.params.paymentIntentId;
+    if (!piId) {
+      return res.status(400).json({ error: 'paymentIntentId required' });
+    }
+    const db = await getDb();
+    if (!db) {
+      return res.status(500).json({
+        error: 'stripe-payment-count requires Postgres; getDb() returned null.',
+      });
+    }
+    const rows = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(stripePaymentHistory)
+      .where(eq(stripePaymentHistory.paymentIntentId, piId));
+    return res.json({ count: rows[0]?.count ?? 0 });
+  } catch (error) {
+    console.error('[Test] stripe-payment-count error:', error);
+    return res.status(500).json({ error: String(error) });
   }
 });
 
