@@ -143,6 +143,28 @@ const mutation = useMutation({
 - Don't use stock images as full-width section backgrounds — use gradients or solid colors instead
 - Don't hardcode cultural, religious, or demographic content in sample data, CSV templates, or placeholder text — always use neutral, generic examples
 
+## Route Mounting Order
+
+Although this is a backend concern, it lives in the frontend skill because it directly governs how `apiRequest` and TanStack Query behave when a route is silently shadowed.
+
+- **The SPA `*` handler must be the very last `app.use` registered in `server/index.ts`** — not just last in the file as written, but last in registration order at runtime.
+- **The catch-all must explicitly skip `/api/*`** — otherwise a real `5xx` (or a missing-route `404`) from the API gets masked as `200 <!DOCTYPE html>...`. The frontend then receives `200` with HTML, `JSON.parse` fails, and the user sees a confusing client-side error with no server-side signal.
+- **Boot-time self-check pseudocode** — fail boot if any registered API prefix returns the SPA HTML:
+  ```ts
+  // After all routers are mounted in server/index.ts:
+  const apiPrefixes = ['/api/financial-reports', '/api/payment-history', /* ... */];
+  for (const prefix of apiPrefixes) {
+    const probe = await fetch(`http://localhost:${PORT}${prefix}/__healthz`);
+    const body = await probe.text();
+    if (body.startsWith('<!DOCTYPE html>')) {
+      throw new Error(`SPA catch-all is shadowing ${prefix} — refusing to start`);
+    }
+  }
+  ```
+- **Real bug example (Task #203 finding #16)**: `POST /api/financial-reports/send-summary-reminder` is defined in `server/api/financial-reports.ts:1259` but responded with `200 <!DOCTYPE html>...` because the `/api/financial-reports` router was unmounted (or shadowed by an earlier route). Parents and admins could not trigger summary emails, and there was no error in any log. The SPA catch-all swallowed the request silently.
+
+See `ARCHITECTURAL_PATTERNS.md` §13 for the full wrong/right code patterns and the post-mortem index in §17.
+
 ## Class Data Fetching Pattern (Important)
 
 Two separate pages list classes for parents, each using a **different API endpoint**:

@@ -160,6 +160,44 @@ Query `program_enrollments` directly — **not `scheduled_payments`** — for ou
 
 **Auto-heal at read time**: When a report endpoint fetches enrollment records, it can cancel stale `scheduled_payments` in the same pass using fire-and-forget: `storage.updateScheduledPaymentStatus(id, 'cancelled').catch(() => {})`. Pattern used in `server/api/financial-reports.ts`.
 
+## Generated Columns and Derived Values
+
+PostgreSQL `GENERATED ALWAYS AS STORED` columns (and any application-derived field stored alongside its inputs) need both a write-side rule and a periodic drift check.
+
+### The rule
+**Never write directly to a generated column from application code.** Always update the input columns (`total_cost`, `total_paid`, `comp_amount_cents`) and let the generator recompute. Direct writes to `effective_balance` are rejected by Postgres on rows under the `GENERATED` constraint, but legacy rows created before the constraint was added — or rows touched by raw SQL during a migration — can drift permanently.
+
+### The drift-detection query template
+Run this query in CI on every PR that touches the generated column or its inputs. `drift` must equal `0`.
+
+```sql
+SELECT
+  COUNT(*) AS total,
+  COUNT(*) FILTER (
+    WHERE col != formula(...)
+  ) AS drift
+FROM table_name;
+```
+
+### Real bug example: `effective_balance` 19/240 drift (Task #203 finding #19)
+On May 2026, the canonical drift query against `program_enrollments` returned `total=240, drift=19` — **19 of 240 enrollments (~8%)** had an `effective_balance` value that did not equal `GREATEST(0, total_cost - total_paid - COALESCE(comp_amount_cents, 0))`. Legacy rows created before the `GENERATED` constraint was added retained stale values, so admin balance reports and parent "you owe" displays disagreed for ~8% of families with no error or warning anywhere in the logs.
+
+```sql
+-- The exact query that surfaced the bug:
+SELECT
+  COUNT(*) AS total,
+  COUNT(*) FILTER (
+    WHERE effective_balance != GREATEST(
+      0,
+      COALESCE(total_cost, 0) - COALESCE(total_paid, 0) - COALESCE(comp_amount_cents, 0)
+    )
+  ) AS drift
+FROM program_enrollments;
+```
+
+### Recommended periodic CI check
+Add this drift query as a scheduled CI job (daily or per-deploy) that fails the build if `drift > 0`. A passing build proves the generated column matches its formula across all rows; a failing build flags the need for a one-shot backfill before any further write traffic adds more drift. See `ARCHITECTURAL_PATTERNS.md` §12 for the full pattern (rule, why-it-matters, wrong/right code, real-bug example) and the post-mortem index in §17.
+
 ## Common Pitfalls
 
 - **`remainingBalance` is unreliable for aggregations**: `0` (not NULL) for deposits and comped accounts — `COALESCE` won't help. Use `effective_balance` in SQL or `totalCost - totalPaid - (compAmountCents ?? 0)` in TypeScript.

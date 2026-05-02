@@ -86,6 +86,29 @@ description: Workflow configuration, port binding, testing patterns, and deploym
 - Check workflow logs for server errors
 - Check browser console logs for frontend errors
 
+### Test Seed Integrity
+Test-seed endpoints (`/api/test/setup-cart-scenario`, `/api/test/setup-auto-pay-scenario`, etc.) must persist to Postgres via the same storage interface as production code. They must populate every NOT NULL column on the target table, and they must return `5xx` (never `200` with a MemStorage row) when a DB write fails. A silent MemStorage fallback hides schema-violating bugs and creates rows that downstream tests cannot SELECT.
+
+- **List the NOT NULL columns first**:
+  ```sql
+  SELECT column_name FROM information_schema.columns
+  WHERE table_name = 'program_enrollments' AND is_nullable = 'NO';
+  ```
+- **Round-trip the row** — after creating, SELECT it back from Postgres in the same handler; return `500` if not found.
+- **Never `catch` a DB error and fall through to `memStorage`** — fail loud with the underlying constraint violation in the response body.
+
+**Historical example (Task #203 #8)**: `setup-cart-scenario` hit `null value in column "child_name"` on every call and silently fell back to MemStorage. The seed returned `200`, but `POST /api/payment-history/manual` (#17) returned `400 "Enrollment not found"` because the manual-payment lookup hit Postgres, not MemStorage. Two scenarios silently broke from one missing column. See `ARCHITECTURAL_PATTERNS.md` §11.
+
+### Payment-Flow Integration Tests
+End-to-end Stripe-touching tests live under `server/tests/integration/payment-flow/` (created in the parallel test-harness task — exact paths TBD until that task merges).
+
+- **How to run**: `npm run test:server` (filter with `-- payment-flow` if the runner supports it)
+- **Helpers**: `server/tests/integration/payment-flow/helpers/` (TODO: filled in once the harness lands)
+- **Stripe test-mode wiring**:
+  - **In dev**: the harness fetches the Stripe test key from the Replit Connection API (`stripe`, environment=`development`), the same path `server/stripeClient.ts` and `server/config/stripe.ts` use. Do **not** rely on `STRIPE_SECRET_KEY` (it is `sk_live_…` in this project) or on `TESTING_STRIPE_SECRET_KEY` (a different test account that does not match the Connection-API key in use).
+  - **In CI**: a GitHub secret (TBD: name set by the harness task) supplies the same Stripe test account credentials. CI must never use the live key.
+- **What a payment-flow test must prove** (per the eight money-path patterns in `ARCHITECTURAL_PATTERNS.md` §9–§16): webhook persistence (DB row exists after a signed event), idempotency on `/create-payment-intent`, snapshot/commit parity, env-flag fail-loud behavior, no SPA shadowing of `/api/*` routes.
+
 ## Environment Variables
 
 - **Secrets** (API keys, credentials): Use the secrets request tool — never set directly or expose values

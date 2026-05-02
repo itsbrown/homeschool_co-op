@@ -12,6 +12,22 @@ description: Stripe payment integration, payment plan types, scheduled payment l
 - **Server-authoritative pricing** — server is the single source of truth for all cart pricing
 - **Stripe minimum**: $0.50 (50 cents) per transaction — all payment plans must enforce this
 
+## Money-Path Safety Rules
+
+These four rules are derived from the Task #203 sweep (May 2026). They apply to every change that touches Stripe, payment intents, scheduled payments, refunds, credits, or balance computation. See `ARCHITECTURAL_PATTERNS.md` §9–§16 for the wrong/right code blocks and the post-mortem index that maps each rule to its regression test.
+
+### 1. Webhook handler success means a DB row, not a 200 response
+A handler that returns `200 {handled:true}` without persisting anything is a silent failure — Stripe will not redeliver. Every payment-bearing webhook (`payment_intent.succeeded`, `charge.refunded`, `invoice.payment_succeeded`) must end with a row in `stripe_payment_history` (or `refunds`, `payment_allocations`) that can be SELECTed by `(stripe_event_id, payment_intent_id)`. **Real bug (#1, #2, #18)**: cart-originated `payment_intent.succeeded` events returned `200 {handled:true}` but wrote nothing — payment history, receipts, refunds, scheduled payments, and balance updates all silently broke.
+
+### 2. Stripe-creating endpoints must be idempotent on `(userId, snapshotId)`
+Every endpoint that creates a PaymentIntent, SetupIntent, Refund, or scheduled payment must return the same Stripe ID (and the same `enrollmentIds`) when called twice with identical body within a short window. Stripe's `Idempotency-Key` header is necessary but not sufficient — it protects Stripe-side state, not the application rows we create alongside the PI. Use a per-`(userId, snapshotId)` advisory lock or a row-level dedup check. **Real bug (#6b)**: two parallel `/api/stripe/create-payment-intent` calls with identical body produced two different PIs and two different enrollment rows (`11` and `12`); either could have been confirmed and double-charged.
+
+### 3. Snapshot DTO and commit endpoint must agree on `isFreeEnrollment` and `availableCredits`
+`/api/cart/snapshot` and `/api/stripe/create-payment-intent` (and `/api/cart/calculate`, `/api/cart/validate`) must compute every shared flag from the same code path. A paired test must take the snapshot output and feed it into the commit endpoint without modification. If snapshot says `payable=0, isFreeEnrollment=true`, commit must accept `total=0` — never reject with `409 UNIFIED_TOTAL_MISMATCH`. **Real bug (#9, #10)**: snapshot returned `payable=0, isFreeEnrollment=true` for a 100%-credit cart; commit rejected with `409 UNIFIED_TOTAL_MISMATCH`. Snapshot also failed to surface `availableCredits` (returned `undefined`), confirming the two endpoints used independent pricing paths.
+
+### 4. Env-flag-gated code paths must throw in dev when the flag is missing
+Any production-required env flag (`PAYMENT_PROCESSOR_ENABLED`, `STRIPE_WEBHOOK_SECRET`, `AUTO_PAY_SINGLE_INSTANCE`) gating money-path code must throw at first use in dev when missing — never silently skip. If a flag legitimately needs to be off in dev, the missing branch must log at WARN with the feature being skipped and the env-flag name to set. **Real bug (#1, root cause)**: `PAYMENT_PROCESSOR_ENABLED` was unset in dev; the webhook persistence branch silently returned with no log line; six downstream Task #203 scenarios failed without a single error in any log.
+
 ## Payment Plan Types
 
 ### Full Payment (`full`)
