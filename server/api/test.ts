@@ -179,6 +179,19 @@ router.post('/setup-cart-scenario', async (req: Request, res: Response) => {
       return res.status(500).json({ error: 'enrollment insert returned no row' });
     }
 
+    // 7b. Round-trip SELECT — confirms the row is visible to the same
+    //     storage layer that downstream endpoints use. If a NOT NULL or
+    //     CHECK violation silently routed us to MemStorage, this lookup
+    //     will return undefined and we return 5xx instead of pretending
+    //     the seed succeeded (Task #221, ARCHITECTURAL_PATTERNS §11).
+    const enrollmentRoundTrip = await storage.getProgramEnrollmentById(enrollment.id);
+    if (!enrollmentRoundTrip) {
+      return res.status(500).json({
+        error: 'enrollment round-trip SELECT returned no row',
+        details: `inserted enrollment id=${enrollment.id} not visible to storage.getProgramEnrollmentById`,
+      });
+    }
+
     // 8. Optional credit grant — direct insert, status='approved' so the
     //    cart pricing path can spend it. Used to drive the credits-applied
     //    branch of /api/cart/snapshot in regression tests.
@@ -197,6 +210,13 @@ router.post('/setup-cart-scenario', async (req: Request, res: Response) => {
       credit = insertedCredits[0] ?? null;
       if (!credit) {
         return res.status(500).json({ error: 'credit insert returned no row' });
+      }
+      const creditRoundTrip = await storage.getCreditById(credit.id);
+      if (!creditRoundTrip) {
+        return res.status(500).json({
+          error: 'credit round-trip SELECT returned no row',
+          details: `inserted credit id=${credit.id} not visible to storage.getCreditById`,
+        });
       }
     }
 
@@ -232,6 +252,13 @@ router.post('/setup-cart-scenario', async (req: Request, res: Response) => {
       if (!membership) {
         return res.status(500).json({ error: 'membership insert returned no row' });
       }
+      const membershipRoundTrip = await storage.getMembershipEnrollmentById(membership.id);
+      if (!membershipRoundTrip) {
+        return res.status(500).json({
+          error: 'membership round-trip SELECT returned no row',
+          details: `inserted membership id=${membership.id} not visible to storage.getMembershipEnrollmentById`,
+        });
+      }
     }
 
     console.log(`✅ Created cart test scenario:
@@ -249,6 +276,11 @@ router.post('/setup-cart-scenario', async (req: Request, res: Response) => {
           email: parentEmail,
           password: parentPassword,
           id: parent.id
+        },
+        admin: {
+          email: admin.email,
+          password: adminPassword,
+          id: admin.id,
         },
         child: {
           id: child.id,
@@ -601,6 +633,36 @@ router.get('/refund-payment-for/:originalPaymentId', async (req: Request, res: R
     return res.json(refund);
   } catch (error) {
     console.error('[Test] refund-payment-for error:', error);
+    return res.status(500).json({ error: String(error) });
+  }
+});
+
+/**
+ * GET /api/test/manual-payment-enrollment-visibility/:id
+ *
+ * Exercises the *exact* lookup path that `POST /api/payment-history/manual`
+ * uses to find an enrollment: `storage.getAllEnrollments().find(e => e.id === id)`.
+ * If the seed silently routed through MemStorage (Task #203 finding #1, Task #221),
+ * this lookup returns `visible: false` and the regression test fails.
+ *
+ * Returns: { visible: boolean, totalEnrollments: number, enrollment: ProgramEnrollment | null }
+ */
+router.get('/manual-payment-enrollment-visibility/:id', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'enrollment id must be an integer' });
+    }
+    const allEnrollments: ProgramEnrollment[] = await storage.getAllEnrollments();
+    const found: ProgramEnrollment | null =
+      allEnrollments.find((e: ProgramEnrollment) => e.id === id) ?? null;
+    return res.json({
+      visible: found !== null,
+      totalEnrollments: allEnrollments.length,
+      enrollment: found,
+    });
+  } catch (error) {
+    console.error('[Test] manual-payment-enrollment-visibility error:', error);
     return res.status(500).json({ error: String(error) });
   }
 });

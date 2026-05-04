@@ -8,6 +8,7 @@ const HEADERS = {
 
 export interface CartScenario {
   parent: { email: string; password: string; id: number };
+  admin: { email: string; password: string; id: number };
   child: { id: number; firstName: string; lastName: string };
   class: { id: number; title: string; price: number };
   enrollment: {
