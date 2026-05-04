@@ -2406,20 +2406,91 @@ async function runMigrations() {
     }
   }
 
-  // Add effective_balance generated column — the single source of truth for what a family owes.
+  // Add / repair effective_balance generated column — the single source of truth for what a family owes.
   // Replaces the unreliable remaining_balance field (which is set to 0 for deposit_only/stripe_managed
   // enrollments after a deposit, and for comped accounts — causing false positives in financial reports).
-  // Formula: total_cost - total_paid - COALESCE(comp_amount_cents, 0)
-  // PostgreSQL GENERATED ALWAYS AS STORED populates all existing rows immediately on ADD COLUMN.
+  // Canonical formula: GREATEST(0, total_cost - total_paid - COALESCE(comp_amount_cents, 0))
+  //
+  // The GREATEST(0, ...) wrapper matters: legacy rows that were overpaid (total_paid > total_cost)
+  // would otherwise produce a negative effective_balance, which disagrees with the canonical drift
+  // query in ARCHITECTURAL_PATTERNS.md §12 and made admin balance reports / parent "you owe" displays
+  // disagree for ~8% of families (Task #203 finding #19, fixed in Task #220).
+  //
+  // PostgreSQL does not support altering the generation expression of an existing generated column,
+  // so when the stored expression doesn't match the canonical formula we DROP and re-ADD the column;
+  // STORED generated columns are recomputed for every row on ADD, which is the one-shot backfill.
   try {
-    console.log('Running migration: Adding effective_balance generated column to program_enrollments...');
+    console.log('Running migration: Ensuring effective_balance generated column on program_enrollments uses canonical formula...');
     const db = await getDb();
-    await db.execute(sql`
-      ALTER TABLE program_enrollments
-      ADD COLUMN IF NOT EXISTS effective_balance INTEGER
-      GENERATED ALWAYS AS (total_cost - total_paid - COALESCE(comp_amount_cents, 0)) STORED
+    const colInfo: any = await db.execute(sql`
+      SELECT generation_expression
+      FROM information_schema.columns
+      WHERE table_name = 'program_enrollments' AND column_name = 'effective_balance'
     `);
-    console.log('✅ Migration completed: effective_balance generated column added to program_enrollments');
+    const rows = (colInfo.rows ?? colInfo) as Array<{ generation_expression: string | null }>;
+    const rawExpr = rows?.[0]?.generation_expression ?? '';
+    // Normalize the stored expression for comparison: lowercase, strip whitespace,
+    // and strip every parenthesis so Postgres' added associativity parens
+    // (e.g. `((total_cost - total_paid) - COALESCE(...))`) compare equal to the
+    // canonical source form. Safe here because the expression is a fixed,
+    // repo-controlled formula — operator precedence is unchanged either way.
+    // Canonical normalized form:
+    //   greatest0,total_cost-total_paid-coalescecomp_amount_cents,0
+    const normalize = (s: string) => s
+      .toLowerCase()
+      .replace(/\s+/g, '')
+      .replace(/[()]/g, '');
+    const CANONICAL_EXPR = normalize(
+      'GREATEST(0, total_cost - total_paid - COALESCE(comp_amount_cents, 0))'
+    );
+    const hasColumn = rows && rows.length > 0;
+    const usesCanonicalFormula = hasColumn && normalize(rawExpr) === CANONICAL_EXPR;
+
+    if (!hasColumn) {
+      await db.execute(sql`
+        ALTER TABLE program_enrollments
+        ADD COLUMN effective_balance INTEGER
+        GENERATED ALWAYS AS (GREATEST(0, total_cost - total_paid - COALESCE(comp_amount_cents, 0))) STORED
+      `);
+      console.log('✅ Migration completed: effective_balance generated column added to program_enrollments');
+    } else if (!usesCanonicalFormula) {
+      console.log(`Backfill: effective_balance uses non-canonical expression (${expr}); dropping and re-adding to force recompute on every row.`);
+      await db.execute(sql`ALTER TABLE program_enrollments DROP COLUMN effective_balance`);
+      await db.execute(sql`
+        ALTER TABLE program_enrollments
+        ADD COLUMN effective_balance INTEGER
+        GENERATED ALWAYS AS (GREATEST(0, total_cost - total_paid - COALESCE(comp_amount_cents, 0))) STORED
+      `);
+      console.log('✅ Backfill completed: effective_balance recreated with canonical GREATEST(0,...) formula; all rows recomputed.');
+    } else {
+      // Belt-and-suspenders: even when the formula already matches, run the drift query and
+      // force-recompute any straggler rows by issuing a no-op update. This protects against
+      // any future raw-SQL drift sneaking in between deploys.
+      const driftRes: any = await db.execute(sql`
+        SELECT COUNT(*)::int AS drift
+        FROM program_enrollments
+        WHERE effective_balance IS DISTINCT FROM GREATEST(
+          0,
+          COALESCE(total_cost, 0) - COALESCE(total_paid, 0) - COALESCE(comp_amount_cents, 0)
+        )
+      `);
+      const driftRows = (driftRes.rows ?? driftRes) as Array<{ drift: number }>;
+      const drift = Number(driftRows?.[0]?.drift ?? 0);
+      if (drift > 0) {
+        console.log(`Backfill: ${drift} row(s) drift detected; issuing no-op update to force recompute.`);
+        await db.execute(sql`
+          UPDATE program_enrollments
+          SET total_paid = total_paid
+          WHERE effective_balance IS DISTINCT FROM GREATEST(
+            0,
+            COALESCE(total_cost, 0) - COALESCE(total_paid, 0) - COALESCE(comp_amount_cents, 0)
+          )
+        `);
+        console.log(`✅ Backfill completed: ${drift} row(s) recomputed.`);
+      } else {
+        console.log('✅ effective_balance generated column already matches canonical formula; no drift.');
+      }
+    }
   } catch (effectiveBalanceError: any) {
     console.log('effective_balance migration note:', effectiveBalanceError.message);
   }

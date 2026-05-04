@@ -151,9 +151,9 @@ Set to `0` (not NULL) for `deposit_only`/`stripe_managed` enrollments after a de
 ### The `effective_balance` Generated Column (Gold Standard)
 `program_enrollments.effective_balance` is a PostgreSQL `GENERATED ALWAYS AS STORED` column:
 ```sql
-effective_balance = total_cost - total_paid - COALESCE(comp_amount_cents, 0)
+effective_balance = GREATEST(0, total_cost - total_paid - COALESCE(comp_amount_cents, 0))
 ```
-Use in SQL queries (`WHERE effective_balance > 0`) and in TypeScript: `enrollment.totalCost - enrollment.totalPaid - (enrollment.compAmountCents ?? 0)`.
+The `GREATEST(0, ...)` wrapper matters: overpaid enrollments (`total_paid > total_cost`) clamp to `0` instead of going negative, matching the canonical drift query in `ARCHITECTURAL_PATTERNS.md` §12. Use in SQL queries (`WHERE effective_balance > 0`) and in TypeScript: `Math.max(0, enrollment.totalCost - enrollment.totalPaid - (enrollment.compAmountCents ?? 0))`.
 
 ### Financial Report Aggregations
 Query `program_enrollments` directly — **not `scheduled_payments`** — for outstanding balance totals. Many enrollments have remaining balances but no `scheduled_payments` records (legacy enrollments, comped plans).
@@ -197,6 +197,26 @@ FROM program_enrollments;
 
 ### Recommended periodic CI check
 Add this drift query as a scheduled CI job (daily or per-deploy) that fails the build if `drift > 0`. A passing build proves the generated column matches its formula across all rows; a failing build flags the need for a one-shot backfill before any further write traffic adds more drift. See `ARCHITECTURAL_PATTERNS.md` §12 for the full pattern (rule, why-it-matters, wrong/right code, real-bug example) and the post-mortem index in §17.
+
+In this repo the check is wired up as the `effective-balance-drift` validation command (`scripts/check-effective-balance-drift.ts`). Run it any time with the validation skill:
+```js
+await startValidationRun({ commandIds: ["effective-balance-drift"] });
+```
+Exit code `0` = drift is `0`, exit code `1` = drift detected (CI should fail), exit code `2` = `DATABASE_URL` missing or DB unreachable.
+
+### How to run the backfill if drift recurs
+If the drift check fails, the fastest fix is to **restart the app** — the migration block in `server/init-db.ts` (introduced in Task #220) is idempotent: on every boot it inspects the column's `generation_expression`, drops and re-adds the column if the expression isn't the canonical `GREATEST(0, ...)` formula, and otherwise issues a no-op `UPDATE program_enrollments SET total_paid = total_paid` against any drifting rows to force `STORED` recomputation.
+
+If a manual repair is needed (e.g. drift appears in production between deploys and you don't want to wait for the next restart), the equivalent one-shot is:
+```sql
+UPDATE program_enrollments
+SET total_paid = total_paid
+WHERE effective_balance IS DISTINCT FROM GREATEST(
+  0,
+  COALESCE(total_cost, 0) - COALESCE(total_paid, 0) - COALESCE(comp_amount_cents, 0)
+);
+```
+**Never** issue `UPDATE program_enrollments SET effective_balance = ...` directly — Postgres rejects it on the generated column, and any legacy non-generated drift would just be re-introduced.
 
 ## Common Pitfalls
 

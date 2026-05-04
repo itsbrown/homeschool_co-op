@@ -24,7 +24,7 @@ localPort = 5904
 externalPort = 3000
 
 [workflows]
-runButton = "Start application"
+runButton = "Project"
 
 [[workflows.workflow]]
 name = "Project"
@@ -34,6 +34,10 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "workflow.run"
 args = "Start application"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "effective-balance-drift"
 
 [[workflows.workflow]]
 name = "Start application"
@@ -52,6 +56,17 @@ mode = "sequential"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "NODE_ENV=development tsx server/index.ts"
+
+[[workflows.workflow]]
+name = "effective-balance-drift"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npx tsx scripts/check-effective-balance-drift.ts"
+
+[workflows.workflow.metadata]
+isValidation = true
 
 [agent]
 integrations = ["javascript_stripe:1.0.0", "twilio:1.0.0", "stripe:1.0.0", "javascript_object_storage:2.0.0"]

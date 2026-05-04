@@ -618,7 +618,7 @@ export const programEnrollments = pgTable("program_enrollments", {
   // Formula: total_cost - total_paid - COALESCE(comp_amount_cents, 0)
   // Always use this for read/display; use remainingBalance only when recording payments.
   effectiveBalance: integer("effective_balance").generatedAlwaysAs(
-    sql`total_cost - total_paid - COALESCE(comp_amount_cents, 0)`,
+    sql`GREATEST(0, total_cost - total_paid - COALESCE(comp_amount_cents, 0))`,
     { mode: 'stored' }
   ),
   
