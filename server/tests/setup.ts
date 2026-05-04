@@ -12,4 +12,5 @@ if (process.env.PAYMENT_PROCESSOR_ENABLED !== 'true') {
   );
 }
 
+import { jest } from '@jest/globals';
 jest.setTimeout(30000);

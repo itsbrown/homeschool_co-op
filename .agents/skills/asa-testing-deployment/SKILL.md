@@ -100,14 +100,35 @@ Test-seed endpoints (`/api/test/setup-cart-scenario`, `/api/test/setup-auto-pay-
 **Historical example (Task #203 #8)**: `setup-cart-scenario` hit `null value in column "child_name"` on every call and silently fell back to MemStorage. The seed returned `200`, but `POST /api/payment-history/manual` (#17) returned `400 "Enrollment not found"` because the manual-payment lookup hit Postgres, not MemStorage. Two scenarios silently broke from one missing column. See `ARCHITECTURAL_PATTERNS.md` §11.
 
 ### Payment-Flow Integration Tests
-End-to-end Stripe-touching tests live under `server/tests/integration/payment-flow/` (created in the parallel test-harness task — exact paths TBD until that task merges).
+End-to-end Stripe-touching tests live under `server/tests/integration/payment-flow/`.
 
-- **How to run**: `npm run test:server` (filter with `-- payment-flow` if the runner supports it)
-- **Helpers**: `server/tests/integration/payment-flow/helpers/` (TODO: filled in once the harness lands)
+- **How to run**: `PAYMENT_PROCESSOR_ENABLED=true npm run test:server -- --runInBand --testPathPatterns="payment-flow/<name>"` — `--runInBand` is **required**; multi-worker jest hits foreign-key contention on the shared dev Postgres (one worker's seed deletes a class while another worker is inserting an enrollment that references it). `PAYMENT_PROCESSOR_ENABLED=true` is enforced by `server/tests/setup.ts` and must be set explicitly when invoking the runner.
+- **Helpers** (all under `server/tests/integration/payment-flow/helpers/`):
+  - `signWebhook.ts` — signs a Stripe event with `STRIPE_WEBHOOK_SECRET` so `/api/stripe/webhook` accepts it.
+  - `stripeTestClient.ts` — returns a Stripe SDK client wired to the dev Connection-API test key.
+  - `confirmTestPaymentIntent.ts` — confirms a PI with a Stripe test card.
+  - `seedCartScenario.ts` — `getProgramEnrollment(id)` reads back a row from Postgres for assertions.
+  - `autoPayHelpers.ts` — wrappers for `/api/test/setup-auto-pay-scenario`, `/setup-multi-enrollment-cart-scenario`, `/seed-paid-enrollment-with-payment`, `/scheduled-payment/:id`, `/payment-by-stripe-id/:id`, `/refund-payment-for/:id`.
 - **Stripe test-mode wiring**:
   - **In dev**: the harness fetches the Stripe test key from the Replit Connection API (`stripe`, environment=`development`), the same path `server/stripeClient.ts` and `server/config/stripe.ts` use. Do **not** rely on `STRIPE_SECRET_KEY` (it is `sk_live_…` in this project) or on `TESTING_STRIPE_SECRET_KEY` (a different test account that does not match the Connection-API key in use).
   - **In CI**: a GitHub secret (TBD: name set by the harness task) supplies the same Stripe test account credentials. CI must never use the live key.
 - **What a payment-flow test must prove** (per the eight money-path patterns in `ARCHITECTURAL_PATTERNS.md` §9–§16): webhook persistence (DB row exists after a signed event), idempotency on `/create-payment-intent`, snapshot/commit parity, env-flag fail-loud behavior, no SPA shadowing of `/api/*` routes.
+
+#### Hard-won rules (Task #217)
+
+1. **Always import jest from `@jest/globals`** at the top of every server test file:
+   ```typescript
+   import { describe, it, expect, beforeAll } from '@jest/globals';
+   ```
+   Under `--experimental-vm-modules` ESM, the `jest` global is **not** auto-injected. A missing import surfaces as `ReferenceError: jest is not defined` — and `server/tests/setup.ts` itself needs `import { jest } from '@jest/globals'` for the same reason. A missing import in `setup.ts` silently breaks every test in the suite, not just one file.
+
+2. **Cart-checkout endpoints reject session cookies — they require a real Supabase JWT.** `POST /api/test/login` only sets a session cookie. `/api/cart/snapshot` and `/api/stripe/create-payment-intent` go through `supabaseAuth`, which expects an `Authorization: Bearer …` header and returns `401 "Missing or invalid authorization header"` to session-only callers. Webhook-flow tests must drive PaymentIntents **directly** with the `paymentType` metadata the webhook handler expects (`scheduled_payment`, `balance_payment`, etc.) instead of going through the cart route. Cart auth in tests is an unsolved problem — do not assume the existing `cart-pi-success.test.ts` pattern works.
+
+3. **For non-cart-checkout PI metadata shapes, the webhook handler skips PaymentProcessorService whenever it returns `success: false`.** PaymentProcessor returns false when the parent has no `stripe_customer_id` or no signed snapshot — both of which are true in tests. The legacy branch (`processBalancePayment`, scheduled-payment branch, etc.) then runs and writes to the legacy `payments` table. This is why direct-PI tests work without setting up customers/snapshots.
+
+4. **Refund regressions must pre-seed the `payments` row, not derive it from a success webhook.** `charge.refunded` queries `payments` via `storage.getPaymentByStripeId`. Whether the original payment lands in `payments` (legacy) or `stripe_payment_history` (PaymentProcessor) depends on which success branch ran in production. Pre-seeding via `/api/test/seed-paid-enrollment-with-payment` keeps the refund test focused on the refund handler in isolation and immune to upstream routing changes.
+
+5. **`program_enrollments.status` enum reminder.** Allowed values are `pending_payment | pending_admin_approval | enrolled | waitlist | cancelled | completed | withdrawn | failed`. There is no `'active'` — that's the `users` table. Wrong values fail a CHECK constraint at insert time, not at validation time.
 
 ## Environment Variables
 

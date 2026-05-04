@@ -17,6 +17,9 @@ import {
   type Credit,
   type InsertMembershipEnrollment,
   type MembershipEnrollment,
+  type Child,
+  type Class,
+  type Payment,
 } from '@shared/schema';
 
 const router = Router();
@@ -289,6 +292,316 @@ router.post('/setup-cart-scenario', async (req: Request, res: Response) => {
       error: 'Failed to setup cart test scenario',
       details: error instanceof Error ? error.message : String(error)
     });
+  }
+});
+
+/**
+ * POST /api/test/setup-multi-enrollment-cart-scenario
+ * Seeds a parent + 2 children + 2 pending enrollments so a single
+ * PaymentIntent can be allocated across both enrollments by the webhook
+ * handler.
+ */
+router.post('/setup-multi-enrollment-cart-scenario', async (req: Request, res: Response) => {
+  try {
+    const testDb = new TestDatabase();
+    const uniqueId = nanoid(8);
+    const bcrypt = await import('bcryptjs');
+
+    const adminPassword = 'TestPassword123!';
+    const admin = await testDb.createTestUser({
+      email: `admin_multi_${uniqueId}@test.com`,
+      username: `testadmin_multi_${uniqueId}`,
+      name: 'Test Admin Multi',
+      role: 'schoolAdmin',
+    });
+    const hashedAdminPassword = await bcrypt.hash(adminPassword, 10);
+    await storage.updateUser(admin.id, { password: hashedAdminPassword });
+
+    const school = await testDb.createTestSchool(admin.id, {
+      name: `Test School Multi ${uniqueId}`,
+      registrationCode: `MULT${uniqueId.toUpperCase()}`,
+    });
+    await storage.updateUser(admin.id, { schoolId: school.id });
+
+    const parentEmail = `parent_multi_${uniqueId}@test.com`;
+    const parentPassword = 'TestPassword123!';
+    const parent = await testDb.createTestUser({
+      email: parentEmail,
+      username: `testparent_multi_${uniqueId}`,
+      name: 'Test Parent Multi',
+      role: 'parent',
+      schoolId: school.id,
+    });
+    const hashedParentPassword = await bcrypt.hash(parentPassword, 10);
+    await storage.updateUser(parent.id, { password: hashedParentPassword });
+
+    const childA = await testDb.createTestChild(parent.id, {
+      firstName: 'Alice',
+      lastName: 'Multi',
+      birthdate: '2015-01-01',
+      gradeLevel: '3rd Grade',
+      schoolId: school.id,
+      parentEmail,
+    });
+    const childB = await testDb.createTestChild(parent.id, {
+      firstName: 'Bob',
+      lastName: 'Multi',
+      birthdate: '2016-01-01',
+      gradeLevel: '2nd Grade',
+      schoolId: school.id,
+      parentEmail,
+    });
+
+    const category = await testDb.createTestCategory(school.id, {
+      name: `Multi Category ${uniqueId}`,
+    });
+    const classA = await testDb.createTestClass(school.id, {
+      title: `Multi Class A ${uniqueId}`,
+      price: 10000,
+      status: 'upcoming',
+      categoryId: category.id,
+      category: `Multi Category ${uniqueId}`,
+    });
+    const classB = await testDb.createTestClass(school.id, {
+      title: `Multi Class B ${uniqueId}`,
+      price: 10000,
+      status: 'upcoming',
+      categoryId: category.id,
+      category: `Multi Category ${uniqueId}`,
+    });
+
+    const db = await getDb();
+    if (!db) {
+      return res.status(500).json({ error: 'Postgres required (getDb returned null)' });
+    }
+
+    const insertEnrollment = async (child: Child, cls: Class): Promise<ProgramEnrollment> => {
+      const insert: InsertProgramEnrollment = {
+        childId: child.id,
+        classType: 'marketplace',
+        marketplaceClassId: cls.id,
+        parentId: parent.id,
+        parentEmail,
+        schoolId: school.id,
+        status: 'pending_payment',
+        paymentPlan: 'full_payment',
+        paymentSystemVersion: 'v2_stripe',
+        paymentStatus: 'pending',
+        childName: `${child.firstName} ${child.lastName}`,
+        className: cls.title,
+        totalCost: 10000,
+        totalPaid: 0,
+        remainingBalance: 10000,
+        depositRequired: 0,
+        enrollmentDate: new Date(),
+      };
+      const rows = await db.insert(programEnrollments).values(insert).returning();
+      if (!rows[0]) throw new Error('enrollment insert returned no row');
+      return rows[0];
+    };
+
+    const enrollmentA = await insertEnrollment(childA, classA);
+    const enrollmentB = await insertEnrollment(childB, classB);
+
+    res.json({
+      success: true,
+      data: {
+        parent: { email: parentEmail, password: parentPassword, id: parent.id },
+        school: { id: school.id, name: school.name, registrationCode: school.registrationCode },
+        enrollments: [
+          {
+            id: enrollmentA.id,
+            childId: childA.id,
+            childName: `${childA.firstName} ${childA.lastName}`,
+            classId: classA.id,
+            className: classA.title,
+            totalCost: enrollmentA.totalCost,
+            remainingBalance: enrollmentA.remainingBalance,
+          },
+          {
+            id: enrollmentB.id,
+            childId: childB.id,
+            childName: `${childB.firstName} ${childB.lastName}`,
+            classId: classB.id,
+            className: classB.title,
+            totalCost: enrollmentB.totalCost,
+            remainingBalance: enrollmentB.remainingBalance,
+          },
+        ],
+      },
+    });
+  } catch (error) {
+    console.error('❌ Error setting up multi-enrollment cart scenario:', error);
+    res.status(500).json({
+      error: 'Failed to setup multi-enrollment cart scenario',
+      details: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+/**
+ * GET /api/test/payment-by-stripe-id/:stripeId
+ * Returns the payments-table row whose stripePaymentIntentId matches.
+ */
+router.get('/payment-by-stripe-id/:stripeId', async (req: Request, res: Response) => {
+  try {
+    const stripeId = req.params.stripeId;
+    if (!stripeId) return res.status(400).json({ error: 'stripeId required' });
+    const payment = await storage.getPaymentByStripeId(stripeId);
+    return res.json(payment ?? null);
+  } catch (error) {
+    console.error('[Test] payment-by-stripe-id error:', error);
+    return res.status(500).json({ error: String(error) });
+  }
+});
+
+/**
+ * POST /api/test/seed-paid-enrollment-with-payment
+ * Seeds an enrollment marked paid plus a matching row in the legacy payments
+ * table — the same shape the cart/balance webhook path produces. Used by the
+ * charge.refunded regression so the refund handler can find the original
+ * payment regardless of which success branch (legacy vs PaymentProcessor)
+ * actually wrote it in production. Pre-seeding keeps the refund test focused
+ * on refund-handling logic in isolation.
+ */
+router.post('/seed-paid-enrollment-with-payment', async (req: Request, res: Response) => {
+  try {
+    const testDb = new TestDatabase();
+    const uniqueId = nanoid(8);
+    const bcrypt = await import('bcryptjs');
+
+    const adminPassword = 'TestPassword123!';
+    const admin = await testDb.createTestUser({
+      email: `admin_paid_${uniqueId}@test.com`,
+      username: `testadmin_paid_${uniqueId}`,
+      name: 'Test Admin Paid',
+      role: 'schoolAdmin',
+    });
+    await storage.updateUser(admin.id, { password: await bcrypt.hash(adminPassword, 10) });
+
+    const school = await testDb.createTestSchool(admin.id, {
+      name: `Test School Paid ${uniqueId}`,
+      registrationCode: `PAID${uniqueId.toUpperCase()}`,
+    });
+    await storage.updateUser(admin.id, { schoolId: school.id });
+
+    const parentEmail = `parent_paid_${uniqueId}@test.com`;
+    const parent = await testDb.createTestUser({
+      email: parentEmail,
+      username: `testparent_paid_${uniqueId}`,
+      name: 'Test Parent Paid',
+      role: 'parent',
+      schoolId: school.id,
+    });
+
+    const child = await testDb.createTestChild(parent.id, {
+      firstName: 'Paid',
+      lastName: 'Child',
+      birthdate: '2015-01-01',
+      gradeLevel: '3rd Grade',
+      schoolId: school.id,
+      parentEmail,
+    });
+
+    const category = await testDb.createTestCategory(school.id, {
+      name: `Paid Category ${uniqueId}`,
+    });
+    const cls = await testDb.createTestClass(school.id, {
+      title: `Paid Class ${uniqueId}`,
+      price: 10000,
+      status: 'upcoming',
+      categoryId: category.id,
+      category: `Paid Category ${uniqueId}`,
+    });
+
+    const totalCost = 10000;
+    const db = await getDb();
+    if (!db) return res.status(500).json({ error: 'Postgres required (getDb returned null)' });
+
+    const enrollmentInsert: InsertProgramEnrollment = {
+      childId: child.id,
+      classType: 'marketplace',
+      marketplaceClassId: cls.id,
+      parentId: parent.id,
+      parentEmail,
+      schoolId: school.id,
+      status: 'enrolled',
+      paymentPlan: 'full_payment',
+      paymentSystemVersion: 'v2_stripe',
+      paymentStatus: 'completed',
+      childName: `${child.firstName} ${child.lastName}`,
+      className: cls.title,
+      totalCost,
+      totalPaid: totalCost,
+      remainingBalance: 0,
+      depositRequired: 0,
+      enrollmentDate: new Date(),
+    };
+    const [enrollment] = await db.insert(programEnrollments).values(enrollmentInsert).returning();
+    if (!enrollment) throw new Error('enrollment insert returned no row');
+
+    const stripePaymentIntentId = `pi_test_seed_${uniqueId}_${Date.now()}`;
+    const payment = await storage.createPayment({
+      schoolId: school.id,
+      parentId: parent.id,
+      parentEmail,
+      childName: `${child.firstName} ${child.lastName}`,
+      className: cls.title,
+      description: `Seeded payment for refund test ${uniqueId}`,
+      amount: totalCost,
+      currency: 'usd',
+      status: 'completed',
+      stripePaymentIntentId,
+      stripeChargeId: null,
+      stripeRefundId: null,
+      originalPaymentId: null,
+      enrollmentIds: [enrollment.id],
+      paymentMethod: 'stripe',
+      paymentDate: new Date(),
+      metadata: { seeded: true, scenario: 'refund-regression' },
+    });
+
+    res.json({
+      success: true,
+      data: {
+        parent: { id: parent.id, email: parentEmail },
+        school: { id: school.id, name: school.name },
+        enrollment: {
+          id: enrollment.id,
+          totalCost: enrollment.totalCost,
+          totalPaid: enrollment.totalPaid,
+          remainingBalance: enrollment.remainingBalance,
+        },
+        payment: {
+          id: payment.id,
+          stripePaymentIntentId,
+          amount: payment.amount,
+        },
+      },
+    });
+  } catch (error) {
+    console.error('❌ Error seeding paid enrollment with payment:', error);
+    res.status(500).json({
+      error: 'Failed to seed paid enrollment with payment',
+      details: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+/**
+ * GET /api/test/refund-payment-for/:originalPaymentId
+ * Returns the refund payment row (negative amount, originalPaymentId set).
+ */
+router.get('/refund-payment-for/:originalPaymentId', async (req: Request, res: Response) => {
+  try {
+    const originalId = parseInt(req.params.originalPaymentId);
+    if (isNaN(originalId)) return res.status(400).json({ error: 'invalid originalPaymentId' });
+    const all: Payment[] = await storage.getAllPayments();
+    const refund = all.find((p) => p.originalPaymentId === originalId && (p.amount ?? 0) < 0) ?? null;
+    return res.json(refund);
+  } catch (error) {
+    console.error('[Test] refund-payment-for error:', error);
+    return res.status(500).json({ error: String(error) });
   }
 });
 
@@ -965,7 +1278,9 @@ router.post('/setup-auto-pay-scenario', async (req: Request, res: Response) => {
       scenario,
       scheduledPaymentId: scheduledPayment.id,
       parentId: parent.id,
+      parentEmail: `ap_parent_${uid}@test.com`,
       enrollmentId: enrollment.id,
+      schoolId: school.id,
       ...(seededCreditId !== null && { creditId: seededCreditId }),
       ...(seededHoldSessionId !== null && { holdSessionId: seededHoldSessionId }),
     });
