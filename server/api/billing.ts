@@ -8,6 +8,7 @@ import { createClient } from '@supabase/supabase-js';
 import { dataLayer } from '../services/dataLayer';
 import { getStripeClient } from '../config/stripe';
 import { supabaseAuth } from '../middleware/supabase-auth';
+import { programEnrollmentOwedCents } from '../services/amount-owed';
 
 const router = Router();
 
@@ -465,9 +466,7 @@ router.get('/summary', async (req, res) => {
 
       const totalAmount = enrollment.totalCost ?? classDetails?.price ?? 0;
       const totalPaid = enrollment.totalPaid ?? (enrollment as any).amount ?? 0;
-      const balance = enrollment.remainingBalance != null
-        ? enrollment.remainingBalance
-        : Math.max(0, totalAmount - totalPaid);
+      const balance = programEnrollmentOwedCents(enrollment as any);
 
       enrollmentDetails.push({
         enrollmentId: enrollment.id,
@@ -601,10 +600,10 @@ router.post('/pay-balance', async (req, res) => {
       return res.status(403).json({ error: 'One or more enrollments are not owned by this user' });
     }
 
-    const amountCents = validEnrollments.reduce((sum, enrollment) => {
-      const remaining = enrollment.remainingBalance ?? Math.max(0, (enrollment.totalCost || 0) - (enrollment.totalPaid || 0));
-      return sum + Math.max(0, remaining);
-    }, 0);
+    const amountCents = validEnrollments.reduce(
+      (sum, enrollment) => sum + programEnrollmentOwedCents(enrollment as any),
+      0
+    );
 
     if (amountCents <= 0) {
       return res.status(400).json({ error: 'No outstanding balance found for selected enrollments' });

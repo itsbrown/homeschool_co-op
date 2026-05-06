@@ -158,6 +158,8 @@ export interface CartItem {
   depositRequired?: number;
   amountPaid?: number;
   remainingBalance?: number;
+  /** Server-computed cents owed (same formula as /api/billing/summary); prefer over remainingBalance when present */
+  owedCents?: number;
   totalCost?: number;
   variantId?: string;
   variantName?: string;
@@ -1286,24 +1288,33 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         // Find the latest enrollment and check if it has a balance due
         const latestEnrollment = sortedEnrollments[0];
-        const hasBalance = latestEnrollment.remainingBalance > 0 && 
+        const latestOwed =
+          typeof latestEnrollment.owedCents === 'number' && Number.isFinite(latestEnrollment.owedCents)
+            ? latestEnrollment.owedCents
+            : Math.max(0, Number(latestEnrollment.remainingBalance ?? 0));
+        const hasBalance = latestOwed > 0 && 
                           latestEnrollment.paymentSystemVersion === 'v2_stripe';
         
         // Check if there's a fully paid enrollment (enrolled with no balance)
+        const enrollmentOwed = (e: any) =>
+          typeof e.owedCents === 'number' && Number.isFinite(e.owedCents)
+            ? e.owedCents
+            : Math.max(0, Number(e.remainingBalance ?? 0));
+
         const hasFullyPaidEnrollment = sortedEnrollments.some(e => 
-          (e.status === 'enrolled' && (e.remainingBalance === 0 || e.remainingBalance === null)) ||
-          (e.paymentStatus === 'completed' && (e.remainingBalance === 0 || e.remainingBalance === null))
+          (e.status === 'enrolled' && enrollmentOwed(e) === 0) ||
+          (e.paymentStatus === 'completed' && enrollmentOwed(e) === 0)
         );
 
         // Check if latest enrollment is fully paid
-        const latestIsPaid = (latestEnrollment.status === 'enrolled' && (latestEnrollment.remainingBalance === 0 || latestEnrollment.remainingBalance === null)) ||
-                           (latestEnrollment.paymentStatus === 'completed' && (latestEnrollment.remainingBalance === 0 || latestEnrollment.remainingBalance === null));
+        const latestIsPaid = (latestEnrollment.status === 'enrolled' && enrollmentOwed(latestEnrollment) === 0) ||
+                           (latestEnrollment.paymentStatus === 'completed' && enrollmentOwed(latestEnrollment) === 0);
 
         // Skip items where there's a fully paid enrollment OR latest enrollment is paid OR on waitlist
         const isWaitlisted = latestEnrollment.status === 'waitlist';
         const shouldSkip = hasFullyPaidEnrollment || latestIsPaid || isWaitlisted;
 
-        if (!isWaitlisted && !shouldSkip && (hasBalance || (latestEnrollment.status === 'pending_payment' && latestEnrollment.remainingBalance > 0))) {
+        if (!isWaitlisted && !shouldSkip && (hasBalance || (latestEnrollment.status === 'pending_payment' && latestOwed > 0))) {
           unpaidEnrollments.push(latestEnrollment);
         }
       }
@@ -1312,8 +1323,11 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const cartItems: CartItem[] = unpaidEnrollments.map((enrollment: any) => {
         // CRITICAL: All monetary values MUST be in cents per schema.ts
         // If seeing incorrect calculations, check database data integrity
-        const remainingBalance = enrollment.remainingBalance || enrollment.totalCost || 0;
-        const amountPaid = enrollment.amountPaid || 0;
+        const remainingBalance =
+          typeof enrollment.owedCents === 'number' && Number.isFinite(enrollment.owedCents)
+            ? enrollment.owedCents
+            : enrollment.remainingBalance || enrollment.totalCost || 0;
+        const amountPaid = enrollment.amountPaid || enrollment.totalPaid || 0;
         
         // Debug logging for troubleshooting cart calculation issues
         if (enrollment.id) {

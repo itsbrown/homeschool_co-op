@@ -4,6 +4,7 @@ import path from 'path';
 import { storage } from '../storage';
 import { jwtCheck } from '../middleware/auth0-auth';
 import { sendNewStudentNotificationEmail } from '../lib/email-service';
+import { programEnrollmentOwedCents } from '../services/amount-owed';
 
 const router = Router();
 
@@ -376,7 +377,12 @@ router.get('/enrollments', jwtCheck, async (req: any, res) => {
 
     console.log(`📚 Found ${parentEnrollments.length} enrollments for parent ${userEmail}`);
 
-    return res.status(200).json(parentEnrollments);
+    const withOwed = parentEnrollments.map((enrollment: any) => ({
+      ...enrollment,
+      owedCents: programEnrollmentOwedCents(enrollment),
+    }));
+
+    return res.status(200).json(withOwed);
   } catch (error) {
     console.error('❌ Error fetching enrollments:', error);
     return res.status(500).json({ 

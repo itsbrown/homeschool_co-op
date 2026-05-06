@@ -6,6 +6,7 @@ import { supabaseAuth } from '../middleware/supabase-auth';
 import { requireSchoolContext } from '../middleware/require-school-context';
 import { getStripeClient, getStripePublishableKey } from '../config/stripe';
 import { calculateMembershipDiscount } from '../utils/membership';
+import { programEnrollmentOwedCents } from '../services/amount-owed';
 
 const router = Router();
 
@@ -317,8 +318,7 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
       );
       const authoritativeEnrollmentTotal = enrollmentsForAmount.reduce((sum, enrollment) => {
         if (!enrollment) return sum;
-        // For initial checkout, charge the enrollment's canonical total_cost.
-        return sum + Math.max(0, enrollment.totalCost || 0);
+        return sum + programEnrollmentOwedCents(enrollment as any);
       }, 0);
 
       // Validate membership request if present - use server-derived values only
