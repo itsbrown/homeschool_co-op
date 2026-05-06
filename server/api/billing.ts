@@ -64,16 +64,15 @@ const paymentRateLimit = rateLimit({
 export async function processBalancePayment(paymentIntent: Stripe.PaymentIntent, userEmail: string, enrollmentIds: number[], totalAmount: number) {
   try {
     const { paymentPlan = 'full' } = paymentIntent.metadata;
-    const isMonthly = paymentPlan === 'monthly';
-    // Calculate the actual amount for this installment
-    const currentPaymentAmount = isMonthly ? Math.round(paymentIntent.amount / 3) : paymentIntent.amount;
+    // PaymentIntent.amount is already the amount actually charged for this transaction.
+    // Do not divide by plan cadence.
+    const currentPaymentAmount = paymentIntent.amount;
     
     console.log('💰 Processing balance payment with installment support:', {
       enrollmentIds,
       paymentPlan,
-      isMonthly,
       currentPaymentAmount,
-      totalAmount: totalAmount * 100
+      totalAmount
     });
     
     // Get all enrollments
@@ -96,8 +95,8 @@ export async function processBalancePayment(paymentIntent: Stripe.PaymentIntent,
     // Update each enrollment
     for (const enrollment of enrollments) {
       const newAmountPaid = (enrollment.totalPaid || 0) + paymentPerEnrollment;
-      const classData = enrollment.programId ? await storage.getClassById(enrollment.programId) : null;
-      const totalCost = classData?.price || 0;
+      const classData = await resolveClassForEnrollment(enrollment);
+      const totalCost = enrollment.totalCost ?? classData?.price ?? 0;
       const remainingBalance = Math.max(0, totalCost - newAmountPaid);
       
       // All payments now use Stripe-managed status
@@ -147,8 +146,8 @@ export async function processBalancePayment(paymentIntent: Stripe.PaymentIntent,
         enrollmentIds: enrollmentIds,
         paymentDate: new Date().toISOString(),
         paymentPlan,
-        installmentNumber: isMonthly ? 1 : 1,
-        totalInstallments: isMonthly ? 3 : 1,
+        installmentNumber: 1,
+        totalInstallments: 1,
         isFirstInstallment: true
       },
       paymentDate: new Date()
@@ -181,23 +180,23 @@ export async function processBalancePayment(paymentIntent: Stripe.PaymentIntent,
 router.post('/create-payment-intent', paymentRateLimit, async (req, res) => {
   try {
     const { amount, currency = 'usd', parentEmail, enrollmentDetails, paymentPlan = 'full' } = req.body;
-
-    // Calculate installment amount for monthly plans  
-    // Note: amount is already in cents, so no need to multiply by 100
-    const isMonthly = paymentPlan === 'monthly';
-    const installmentAmount = isMonthly ? Math.round(amount / 3) : amount;
+    const normalizedAmount = Math.round(amount);
+    if (!Number.isFinite(normalizedAmount) || normalizedAmount <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Amount must be a positive integer in cents'
+      });
+    }
     
     console.log('💳 Payment plan details:', {
       paymentPlan,
-      totalAmount: amount, // amount is already in cents
-      installmentAmount,
-      isMonthly
+      totalAmount: normalizedAmount
     });
 
     // Create payment intent
     const stripe = await getStripeClient();
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: installmentAmount, // For monthly: first installment; for full: total amount
+      amount: normalizedAmount,
       currency,
       metadata: {
         parentEmail,
@@ -235,7 +234,7 @@ router.post('/create-payment-intent', paymentRateLimit, async (req, res) => {
       status: 'pending',
       parentEmail,
       stripePaymentIntentId: paymentIntent.id,
-      amount,
+      amount: normalizedAmount,
       currency,
       childName: 'Multiple Children',
       className: 'Multiple Classes',
@@ -266,65 +265,6 @@ router.post('/create-payment-intent', paymentRateLimit, async (req, res) => {
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Failed to create payment intent'
-    });
-  }
-});
-
-// Handle payment confirmation
-router.post('/confirm-payment', async (req, res) => {
-  try {
-    const { paymentIntentId, parentEmail, enrollmentDetails } = req.body;
-
-    // Retrieve payment intent from Stripe
-    const stripe = await getStripeClient();
-    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
-
-    if (paymentIntent.status === 'succeeded') {
-      // Update payment status in database
-      const payment = await storage.getPaymentByStripeId(paymentIntentId);
-      if (payment) {
-        await storage.updatePaymentStatus(payment.id, 'succeeded');
-      }
-
-      // Send confirmation email
-      const emailData = {
-        parentEmail,
-        payment: {
-          ...payment!,
-          status: 'completed' as const
-        },
-        enrollmentDetails: enrollmentDetails?.map((detail: any) => ({
-          childName: detail.childName,
-          className: detail.className,
-          price: detail.price,
-          amountPaid: detail.amountPaid
-        })) || []
-      };
-
-      await sendPaymentConfirmationEmail(emailData);
-
-      res.json({
-        success: true,
-        message: 'Payment confirmed and email sent',
-        payment: {
-          id: payment?.id,
-          status: 'completed',
-          amount: paymentIntent.amount / 100,
-          currency: paymentIntent.currency
-        }
-      });
-    } else {
-      res.status(400).json({
-        success: false,
-        error: 'Payment not successful',
-        status: paymentIntent.status
-      });
-    }
-  } catch (error) {
-    console.error('Error confirming payment:', error);
-    res.status(500).json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to confirm payment'
     });
   }
 });
@@ -642,18 +582,44 @@ router.post('/pay-balance', async (req, res) => {
       return res.status(401).json({ error: 'User email not found' });
     }
 
-    const { enrollmentIds, totalAmount, paymentDetails, paymentPlan } = req.body;
+    const { enrollmentIds, paymentDetails, paymentPlan } = req.body;
+    if (!Array.isArray(enrollmentIds) || enrollmentIds.length === 0) {
+      return res.status(400).json({ error: 'enrollmentIds is required' });
+    }
 
-    console.log('💳 Processing payment for:', userEmail, 'Amount:', totalAmount);
+    const userChildren = await storage.getChildrenByParentEmail(userEmail);
+    const userChildIds = new Set(userChildren.map(c => c.id));
+    const targetEnrollments = await Promise.all(
+      enrollmentIds.map((id: number) => storage.getProgramEnrollmentById(id))
+    );
+    const validEnrollments = targetEnrollments.filter((enrollment): enrollment is NonNullable<typeof enrollment> =>
+      !!enrollment && userChildIds.has(enrollment.childId)
+    );
+
+    if (validEnrollments.length !== enrollmentIds.length) {
+      return res.status(403).json({ error: 'One or more enrollments are not owned by this user' });
+    }
+
+    const amountCents = validEnrollments.reduce((sum, enrollment) => {
+      const remaining = enrollment.remainingBalance ?? Math.max(0, (enrollment.totalCost || 0) - (enrollment.totalPaid || 0));
+      return sum + Math.max(0, remaining);
+    }, 0);
+
+    if (amountCents <= 0) {
+      return res.status(400).json({ error: 'No outstanding balance found for selected enrollments' });
+    }
+
+    console.log('💳 Processing payment for:', userEmail, 'Amount (cents):', amountCents);
 
     // Create payment intent
     const stripe = await getStripeClient();
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: Math.round(totalAmount * 100), // Convert dollars to cents for Stripe
+      amount: amountCents,
       currency: 'usd',
       metadata: {
         parentEmail: userEmail,
         enrollmentIds: JSON.stringify(enrollmentIds),
+        amountCents: amountCents.toString(),
         paymentPlan: paymentPlan,
         paymentType: 'balance_payment'
       },

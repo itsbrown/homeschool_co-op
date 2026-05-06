@@ -310,10 +310,21 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
 
       console.log('✅ Using enrollments with IDs:', enrollmentIds);
 
+      // SECURITY: Recompute enrollment total server-side from DB state.
+      // Never trust client-provided `total` for charge amount.
+      const enrollmentsForAmount = await Promise.all(
+        enrollmentIds.map((id: number) => storage.getProgramEnrollmentById(id))
+      );
+      const authoritativeEnrollmentTotal = enrollmentsForAmount.reduce((sum, enrollment) => {
+        if (!enrollment) return sum;
+        // For initial checkout, charge the enrollment's canonical total_cost.
+        return sum + Math.max(0, enrollment.totalCost || 0);
+      }, 0);
+
       // Validate membership request if present - use server-derived values only
       // SECURITY: Do not trust client-provided schoolId/parentUserId - derive from authenticated session
       const membershipAmount = membership?.amount || 0;
-      const totalWithMembership = total + membershipAmount;
+      const totalWithMembership = authoritativeEnrollmentTotal + membershipAmount;
       
       // Build secure membership data from server-side validated parent info
       let serverMembership: { 
@@ -416,12 +427,19 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
         };
         
         console.log('🎫 Membership fee included in payment (server-validated):', {
-          enrollmentTotal: total,
+          enrollmentTotal: authoritativeEnrollmentTotal,
           membershipAmount,
           totalWithMembership,
           membershipYear: serverMembership.year,
           parentUserId: serverMembership.parentUserId,
           schoolId: serverMembership.schoolId
+        });
+      }
+
+      if (total !== undefined && total !== authoritativeEnrollmentTotal) {
+        console.warn('⚠️ Client total mismatch ignored in favor of server-computed amount:', {
+          clientTotal: total,
+          authoritativeEnrollmentTotal
         });
       }
 
