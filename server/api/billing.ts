@@ -8,6 +8,7 @@ import { createClient } from '@supabase/supabase-js';
 import { dataLayer } from '../services/dataLayer';
 import { getStripeClient } from '../config/stripe';
 import { supabaseAuth } from '../middleware/supabase-auth';
+import { calculateCanonicalEnrollmentAmount } from '../services/canonical-payment-amount';
 
 const router = Router();
 
@@ -644,18 +645,46 @@ router.post('/pay-balance', async (req, res) => {
 
     const { enrollmentIds, totalAmount, paymentDetails, paymentPlan } = req.body;
 
-    console.log('💳 Processing payment for:', userEmail, 'Amount:', totalAmount);
+    const parentUser = await storage.getUserByEmail(userEmail);
+    if (!parentUser) {
+      return res.status(404).json({ error: 'Parent user not found' });
+    }
+
+    const canonicalAmount = await calculateCanonicalEnrollmentAmount({
+      enrollmentIds: Array.isArray(enrollmentIds) ? enrollmentIds : [],
+      parentId: parentUser.id,
+      parentEmail: userEmail,
+    });
+
+    if (canonicalAmount.totalAmountCents <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'No payable balance found for the selected enrollments',
+      });
+    }
+
+    if (typeof totalAmount === 'number' && Math.round(totalAmount * 100) !== canonicalAmount.totalAmountCents) {
+      console.warn('⚠️ Client pay-balance amount mismatch; using canonical server amount', {
+        parentEmail: userEmail,
+        clientTotalCents: Math.round(totalAmount * 100),
+        canonicalTotalCents: canonicalAmount.totalAmountCents,
+        enrollmentIds: canonicalAmount.enrollmentIds,
+      });
+    }
+
+    console.log('💳 Processing payment for:', userEmail, 'Amount (cents):', canonicalAmount.totalAmountCents);
 
     // Create payment intent
     const stripe = await getStripeClient();
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: Math.round(totalAmount * 100), // Convert dollars to cents for Stripe
+      amount: canonicalAmount.totalAmountCents,
       currency: 'usd',
       metadata: {
         parentEmail: userEmail,
-        enrollmentIds: JSON.stringify(enrollmentIds),
+        enrollmentIds: JSON.stringify(canonicalAmount.enrollmentIds),
         paymentPlan: paymentPlan,
-        paymentType: 'balance_payment'
+        paymentType: 'balance_payment',
+        canonicalAmountCents: String(canonicalAmount.totalAmountCents),
       },
       automatic_payment_methods: {
         enabled: true,
@@ -668,7 +697,8 @@ router.post('/pay-balance', async (req, res) => {
     res.json({
       success: true,
       clientSecret: paymentIntent.client_secret,
-      paymentIntentId: paymentIntent.id
+      paymentIntentId: paymentIntent.id,
+      canonicalAmountCents: canonicalAmount.totalAmountCents
     });
 
   } catch (error) {
