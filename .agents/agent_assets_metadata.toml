@@ -24,3 +24,15 @@ id = "RmdBjm3XsynuBDD0jdJrg"
 uri = "file://.local/qa-package/qa-reference.md"
 type = "text"
 title = "QA Reference Guide"
+
+[[outputs]]
+id = "zO0Ce9mwupEgnyGKqsPNb"
+uri = "file://exports/brevo-contacts.csv"
+type = "table"
+title = "Brevo Contacts Export (695 contacts, 120 KB)"
+
+[[outputs]]
+id = "iUOnHjA1jBURKTekiUh_9"
+uri = "file://attached_assets/brevo-contacts.csv"
+type = "table"
+title = "Brevo Contacts Export (695 contacts)"
