@@ -517,15 +517,16 @@ router.get('/summary', async (req, res) => {
       console.log('⚠️ Could not fetch scheduled payments:', error);
     }
     
-    // Total outstanding = enrollment balances + pending scheduled payments
-    const combinedBalance = totalBalance + scheduledPaymentsTotal;
+    // C2: scheduled_payments are installments of the same enrollment debt; adding them on top of
+    // remaining_balance double-counts. Expose schedule totals separately; canonical owed = enrollments.
+    const canonicalBalance = totalBalance;
 
     const summary = {
-      totalBalance: combinedBalance,
+      totalBalance: canonicalBalance,
       totalBalanceFormatted: new Intl.NumberFormat('en-US', {
         style: 'currency',
         currency: 'USD'
-      }).format(combinedBalance / 100),
+      }).format(canonicalBalance / 100),
       enrollmentBalance: totalBalance,
       scheduledPaymentsBalance: scheduledPaymentsTotal,
       pendingScheduledPayments: pendingScheduledPayments.length,
@@ -535,7 +536,7 @@ router.get('/summary', async (req, res) => {
     };
 
     console.log('✅ Billing summary generated:', {
-      combinedBalance,
+      canonicalBalance,
       enrollmentBalance: totalBalance,
       scheduledPaymentsBalance: scheduledPaymentsTotal,
       pendingScheduledPayments: pendingScheduledPayments.length,
