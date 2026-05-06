@@ -11,6 +11,43 @@ import { supabaseAuth } from '../middleware/supabase-auth';
 
 const router = Router();
 
+/**
+ * Resolve a class row for a program enrollment.
+ *
+ * Program enrollments can reference a class via three different columns depending on how they were
+ * created (cart checkout vs admin enrollment vs legacy migrations):
+ *   - marketplaceClassId: marketplace classes table (the standard cart-checkout path)
+ *   - programId:          legacy column kept for backwards compatibility
+ *   - classId:            school_classes table (rarely used; schema-defined but no live writers)
+ *
+ * The previous billing-summary code only looked up `enrollment.classId` against the `classes`
+ * table, which silently dropped most marketplace enrollments from the summary. This helper tries
+ * each candidate ID against the `classes` table (which is what storage.getClassById queries) and
+ * returns the first match, or null if none resolve.
+ *
+ * Callers should NOT use the return value as the source of truth for amounts — the canonical
+ * amount fields are denormalized onto program_enrollments (total_cost, total_paid,
+ * remaining_balance). This helper is for display-only fields like the class title.
+ */
+async function resolveClassForEnrollment(
+  enrollment: { marketplaceClassId?: number | null; programId?: number | null; classId?: number | null }
+): Promise<{ id: number; title: string; price: number } | null> {
+  const candidateIds = [
+    enrollment.marketplaceClassId,
+    enrollment.programId,
+    enrollment.classId,
+  ].filter((id): id is number => typeof id === 'number' && id > 0);
+
+  for (const id of candidateIds) {
+    const cls = await storage.getClassById(id);
+    if (cls) {
+      return { id: cls.id, title: cls.title, price: cls.price };
+    }
+  }
+
+  return null;
+}
+
 // Rate limiting for payment endpoints
 const paymentRateLimit = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -465,32 +502,38 @@ router.get('/summary', async (req, res) => {
     }
     console.log('📋 Found enrollments:', allEnrollments.length);
 
-    // Calculate enrollment details with balances
+    // Calculate enrollment details with balances.
+    //
+    // C3 fix: Resolve the class via marketplaceClassId | programId | classId — not just classId.
+    // The schema allows any of these and most production rows use marketplaceClassId. The previous
+    // implementation looked up only enrollment.classId and then `continue`-d if the class was not
+    // found, silently dropping ~88% of marketplace enrollments from the summary while the cart
+    // drawer (which doesn't do this lookup) showed them. That divergence is the dominant source of
+    // "I don't see my balance" reports.
+    //
+    // We also stop dropping enrollments when the class lookup fails. The amount fields
+    // (total_cost, total_paid, remaining_balance) are denormalized on program_enrollments, so the
+    // balance is correct even without a class row. The only field we lose is the display title.
     const enrollmentDetails = [];
     let totalBalance = 0;
 
     for (const enrollment of allEnrollments) {
-      // Get class details
-      const classDetails = await storage.getClassById(enrollment.classId);
-      if (!classDetails) continue;
+      const classDetails = await resolveClassForEnrollment(enrollment);
 
-      // Get child details
       const child = children.find(c => c.id === enrollment.childId);
       if (!child) continue;
 
-      // Calculate balance based on enrollment data
-      const totalAmount = enrollment.totalCost || classDetails.price || 0;
-      const totalPaid = enrollment.totalPaid || enrollment.amount || 0; // Use updated totalPaid field
-      // Use remainingBalance if available, otherwise calculate from totalCost - totalPaid
-      const balance = enrollment.remainingBalance !== undefined 
-        ? enrollment.remainingBalance 
-        : (totalAmount - totalPaid);
+      const totalAmount = enrollment.totalCost ?? classDetails?.price ?? 0;
+      const totalPaid = enrollment.totalPaid ?? (enrollment as any).amount ?? 0;
+      const balance = enrollment.remainingBalance != null
+        ? enrollment.remainingBalance
+        : Math.max(0, totalAmount - totalPaid);
 
-      // Always show all enrollments, but only add positive balances to total
       enrollmentDetails.push({
         enrollmentId: enrollment.id,
         childName: `${child.firstName} ${child.lastName}`,
-        className: classDetails.title,
+        className: classDetails?.title ?? '(class details unavailable)',
+        classType: enrollment.classType,
         classPrice: totalAmount,
         amountPaid: totalPaid,
         balance: balance,
@@ -498,8 +541,7 @@ router.get('/summary', async (req, res) => {
         enrollmentDate: enrollment.enrollmentDate,
         depositRequired: enrollment.depositRequired || Math.round(totalAmount * 0.1)
       });
-      
-      // Only add positive balances to the total outstanding amount
+
       if (balance > 0) {
         totalBalance += balance;
       }

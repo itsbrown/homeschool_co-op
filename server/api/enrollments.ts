@@ -55,14 +55,19 @@ router.get('/child/:childId', async (req, res) => {
     
     console.log(`📚 Found ${enrollments.length} enrollments for child ${childId}:`, enrollments);
     
-    // Enhance enrollments with variant details from class schedule
+    // Enhance enrollments with variant details from class schedule.
+    //
+    // C3 sibling fix: previously this lookup only ran when `enrollment.classId` was set, which
+    // skipped marketplace enrollments (which use `marketplaceClassId` instead). Variants were
+    // lost in the API response for ~88% of enrollments. We now resolve via the same fallback
+    // chain used by the billing summary helper.
     const enhancedEnrollments = await Promise.all(enrollments.map(async (enrollment: any) => {
       let variantDetails = null;
-      
-      // If enrollment has a variantId, look up the variant from the class
-      if (enrollment.variantId && enrollment.classId) {
+
+      const classRefId = enrollment.marketplaceClassId ?? enrollment.programId ?? enrollment.classId;
+      if (enrollment.variantId && classRefId) {
         try {
-          const classData = await storage.getClassById(enrollment.classId);
+          const classData = await storage.getClassById(classRefId);
           if (classData && classData.schedule) {
             let schedule;
             try {
@@ -70,7 +75,7 @@ router.get('/child/:childId', async (req, res) => {
                 ? JSON.parse(classData.schedule) 
                 : classData.schedule;
             } catch (parseErr) {
-              console.log(`📚 Failed to parse schedule for class ${enrollment.classId}:`, parseErr);
+              console.log(`📚 Failed to parse schedule for class ${classRefId}:`, parseErr);
               schedule = null;
             }
             
