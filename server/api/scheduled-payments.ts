@@ -238,15 +238,15 @@ router.get('/upcoming-old', async (req, res) => {
 // Process a scheduled payment
 router.post('/pay', supabaseAuth, async (req: any, res) => {
   try {
-    const { paymentId, amount, description } = req.body;
+    const { paymentId, description } = req.body;
     const userEmail = req.user.email;
 
-    console.log('💳 Processing scheduled payment:', { paymentId, amount, description, userEmail });
+    console.log('💳 Processing scheduled payment:', { paymentId, description, userEmail });
 
-    if (!paymentId || !amount) {
+    if (!paymentId) {
       return res.status(400).json({
         success: false,
-        error: 'Payment ID and amount are required'
+        error: 'Payment ID is required'
       });
     }
 
@@ -269,12 +269,21 @@ router.post('/pay', supabaseAuth, async (req: any, res) => {
 
     // Create Stripe payment intent
     const stripe = await getStripeClient();
+    const amountCents = Math.round(scheduledPayment.amount);
+    if (!Number.isFinite(amountCents) || amountCents <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Scheduled payment has invalid amount'
+      });
+    }
+
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: Math.round(amount), // Amount should be in cents
+      amount: amountCents,
       currency: 'usd',
       metadata: {
         type: 'scheduled_payment',
         scheduledPaymentId: paymentId.toString(),
+        amountCents: amountCents.toString(),
         parentEmail: userEmail,
         description: description || `Scheduled Payment ${scheduledPayment.installmentNumber}`
       },
