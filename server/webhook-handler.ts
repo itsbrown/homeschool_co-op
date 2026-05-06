@@ -505,16 +505,31 @@ export const webhookHandler = async (req: Request, res: Response) => {
             // Calculate payment per item
             const amountPerItem = Math.round(paymentIntent.amount / items.length);
             
-            // Update each enrollment in database
+            // Update each enrollment in database.
+            //
+            // M2 fix: previously this matcher only checked programId/classId. Marketplace
+            // enrollments (which are ~88% of production rows) write to marketplaceClassId, so the
+            // matcher silently failed and the webhook logged "Enrollment not found" while the
+            // parent's card was charged. We now match by enrollmentId first (most precise; cart
+            // already passes it where available) and fall back to childId + any of the three
+            // class-reference columns matching either of the two class-reference columns from the
+            // cart item.
             const updatedEnrollments = [];
             for (const item of items) {
               try {
-                // Get program enrollments from database
                 const allEnrollments = await storage.getAllEnrollments();
-                const enrollment = allEnrollments.find((e: any) => 
-                  e.childId === item.childId && (e.programId === item.classId || e.classId === item.classId)
-                );
-                
+
+                const candidateClassIds = [item.classId, item.marketplaceClassId, item.programId]
+                  .filter((id: any) => typeof id === 'number' && id > 0);
+
+                const enrollment = allEnrollments.find((e: any) => {
+                  if (item.enrollmentId && e.id === item.enrollmentId) return true;
+                  if (e.childId !== item.childId) return false;
+                  return candidateClassIds.some((cid: number) =>
+                    e.programId === cid || e.classId === cid || e.marketplaceClassId === cid
+                  );
+                });
+
                 if (enrollment) {
                   const currentAmount = enrollment.totalPaid || 0;
                   const newAmount = currentAmount + amountPerItem;
