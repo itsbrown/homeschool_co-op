@@ -448,14 +448,14 @@ router.post('/confirm', async (req: any, res) => {
 
     console.log(`📝 Confirming ${idsToConfirm.length} enrollments:`, idsToConfirm);
 
-    // Update enrollments to 'enrolled' status
+    // Update enrollments to 'enrolled' status only.
+    // Do NOT force financial fields here. Stripe webhook/payment handlers are the
+    // single source of truth for total_paid/remaining_balance/payment_status.
     await db.transaction(async (tx: any) => {
       const result = await tx
         .update(programEnrollments)
         .set({ 
-          status: 'enrolled',
-          remainingBalance: 0,
-          paymentStatus: 'completed'
+          status: 'enrolled'
         })
         .where(inArray(programEnrollments.id, idsToConfirm))
         .returning({ id: programEnrollments.id });
