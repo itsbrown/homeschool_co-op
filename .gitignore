@@ -1,4 +1,5 @@
 node_modules
+.worktree-*/
 dist
 .DS_Store
 server/public

@@ -1,0 +1,17 @@
+---
+description: Git branching, cleanliness, and where workflow is documented
+alwaysApply: true
+---
+
+# Git workflow (project convention)
+
+**Source of truth:** [docs/GIT_WORKFLOW.md](docs/GIT_WORKFLOW.md) and [CONTRIBUTING.md](CONTRIBUTING.md). Follow them when changing branches, committing, or pushing.
+
+**Defaults for agent work:**
+
+- Treat **`main` as clean** relative to `origin/main` unless the user explicitly wants local-only state. Prefer a **`fix/` or `feature/` branch** for multi-step or PR-bound work.
+- **Do not** bundle unrelated changes (e.g. `data/*.json` drift, local `package.json` experiments) into documentation or feature commits unless the user asks.
+- When preparing commits or PRs, **stage only paths that belong to the task**; leave other local modifications untouched or call them out.
+- For parallel lines of work, use **worktrees** as described in `docs/GIT_WORKFLOW.md` (prefer paths **outside** this repo directory).
+
+If the user’s workspace is dirty on an old or merged branch, **restore or branch per `docs/GIT_WORKFLOW.md`** before declaring the task done.
