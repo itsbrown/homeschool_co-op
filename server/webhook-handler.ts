@@ -228,11 +228,19 @@ export const webhookHandler = async (req: Request, res: Response) => {
         const paymentType = paymentIntent.metadata.paymentType || paymentIntent.metadata.type;
         console.log('🔍 Payment type:', paymentType);
         
-        // Check if this payment was already processed (to avoid double processing)
+        // Check if this payment was already processed (to avoid double processing).
+        // We intentionally do NOT skip when the existing row is still pending:
+        // create-payment-intent pre-inserts pending payments before Stripe confirms.
+        // Skipping here caused "charged but balance unchanged" incidents.
         const existingPayment = await storage.getPaymentByStripeId(paymentIntent.id);
         if (existingPayment) {
-          console.log('⚠️ Payment already processed, skipping:', paymentIntent.id);
-          break;
+          if (existingPayment.status === 'pending') {
+            console.log('ℹ️ Existing payment row is pending; continuing webhook processing:', paymentIntent.id);
+            await storage.updatePaymentStatus(existingPayment.id, 'succeeded');
+          } else {
+            console.log('⚠️ Payment already processed, skipping:', paymentIntent.id, 'status:', existingPayment.status);
+            break;
+          }
         }
         
         if (paymentType === 'scheduled_payment') {
