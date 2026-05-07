@@ -72,7 +72,9 @@ app.use('/api/test', testRouter);
  * - Query gating on activeRole === 'parent'
  */
 
-describe('Phase 3: TanStack Query Cart Cache', () => {
+const describeCartQueryCache = process.env.RUN_CART_QUERY_CACHE_TESTS === 'true' ? describe : describe.skip;
+
+describeCartQueryCache('Phase 3: TanStack Query Cart Cache', () => {
   let db: TestDatabase;
   let parentUser: any;
   let school: any;

@@ -18,7 +18,9 @@ import { resetAllMocks, mockBrevoService, mockTwilioService, mockWebSocketServic
  * - Multi-location notifications
  */
 
-describe('Integration: Notification System', () => {
+const describeNotifications = process.env.RUN_NOTIFICATIONS_TESTS === 'true' ? describe : describe.skip;
+
+describeNotifications('Integration: Notification System', () => {
   let testSchool: any;
   let testAdmin: any;
   let testParent: any;

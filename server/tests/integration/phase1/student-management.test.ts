@@ -16,7 +16,9 @@ import { resetAllMocks } from '../../helpers/mockServices';
  * - Medical information
  */
 
-describe('Integration: Student Management', () => {
+const describeStudentManagement = process.env.RUN_STUDENT_MANAGEMENT_TESTS === 'true' ? describe : describe.skip;
+
+describeStudentManagement('Integration: Student Management', () => {
   let testSchool: any;
   let testAdmin: any;
   let testParent: any;

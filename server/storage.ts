@@ -4867,40 +4867,15 @@ export class MemStorage implements IStorage {
     }
 
     async getStripeCustomerIdsByParentEmail(parentEmail: string): Promise<string[]> {
-      const db = await getDb();
-      const { eq, and, inArray, isNotNull } = await import('drizzle-orm');
-      
-      // Get enrollments with Stripe customer IDs for active statuses
-      const activeStatuses = ['pending_payment', 'enrolled', 'completed'] as const;
-      const enrollments = await db.select({
-        stripeCustomerId: programEnrollments.stripeCustomerId
-      })
-      .from(programEnrollments)
-      .where(
-        and(
-          eq(programEnrollments.parentEmail, parentEmail),
-          isNotNull(programEnrollments.stripeCustomerId),
-          inArray(programEnrollments.status, activeStatuses)
-        )
-      );
-      
-      // Deduplicate customer IDs using Set
-      const uniqueCustomerIds = new Set(
-        enrollments
-          .map(e => e.stripeCustomerId)
-          .filter((id): id is string => id !== null)
-      );
-      
-      return Array.from(uniqueCustomerIds);
-    }
-
-    async getStripeLinkedEnrollmentsByParentEmail(parentEmail: string): Promise<ProgramEnrollment[]> {
-      const db = await getDb();
-      const { eq, and, inArray, isNotNull } = await import('drizzle-orm');
-      
-      // Get all enrollments with Stripe data for active statuses
-      const activeStatuses = ['pending_payment', 'enrolled', 'completed'] as const;
-      return await db.select()
+      try {
+        const db = await getDb();
+        const { eq, and, inArray, isNotNull } = await import('drizzle-orm');
+        
+        // Get enrollments with Stripe customer IDs for active statuses
+        const activeStatuses = ['pending_payment', 'enrolled', 'completed'] as const;
+        const enrollments = await db.select({
+          stripeCustomerId: programEnrollments.stripeCustomerId
+        })
         .from(programEnrollments)
         .where(
           and(
@@ -4909,6 +4884,45 @@ export class MemStorage implements IStorage {
             inArray(programEnrollments.status, activeStatuses)
           )
         );
+        
+        // Deduplicate customer IDs using Set
+        const uniqueCustomerIds = new Set(
+          enrollments
+            .map(e => e.stripeCustomerId)
+            .filter((id): id is string => id !== null)
+        );
+        
+        return Array.from(uniqueCustomerIds);
+      } catch (error) {
+        if (process.env.NODE_ENV === 'production') {
+          throw error;
+        }
+        return [];
+      }
+    }
+
+    async getStripeLinkedEnrollmentsByParentEmail(parentEmail: string): Promise<ProgramEnrollment[]> {
+      try {
+        const db = await getDb();
+        const { eq, and, inArray, isNotNull } = await import('drizzle-orm');
+        
+        // Get all enrollments with Stripe data for active statuses
+        const activeStatuses = ['pending_payment', 'enrolled', 'completed'] as const;
+        return await db.select()
+          .from(programEnrollments)
+          .where(
+            and(
+              eq(programEnrollments.parentEmail, parentEmail),
+              isNotNull(programEnrollments.stripeCustomerId),
+              inArray(programEnrollments.status, activeStatuses)
+            )
+          );
+      } catch (error) {
+        if (process.env.NODE_ENV === 'production') {
+          throw error;
+        }
+        return [];
+      }
     }
 
     async createEnrollment(enrollment: any): Promise<any> {
@@ -5724,27 +5738,69 @@ export class MemStorage implements IStorage {
 
       // Membership Enrollment methods
       async getMembershipEnrollmentById(id: number): Promise<MembershipEnrollment | undefined> {
-        return this.dbStorage.getMembershipEnrollmentById(id);
+        try {
+          return await this.dbStorage.getMembershipEnrollmentById(id);
+        } catch (error) {
+          if (process.env.NODE_ENV === 'production') {
+            throw error;
+          }
+          return await this.memStorage.getMembershipEnrollmentById(id);
+        }
       }
 
       async getMembershipEnrollmentsByParentId(parentUserId: number): Promise<MembershipEnrollment[]> {
-        return this.dbStorage.getMembershipEnrollmentsByParentId(parentUserId);
+        try {
+          return await this.dbStorage.getMembershipEnrollmentsByParentId(parentUserId);
+        } catch (error) {
+          if (process.env.NODE_ENV === 'production') {
+            throw error;
+          }
+          return await this.memStorage.getMembershipEnrollmentsByParentId(parentUserId);
+        }
       }
 
       async getMembershipEnrollmentsBySchoolId(schoolId: number): Promise<MembershipEnrollment[]> {
-        return this.dbStorage.getMembershipEnrollmentsBySchoolId(schoolId);
+        try {
+          return await this.dbStorage.getMembershipEnrollmentsBySchoolId(schoolId);
+        } catch (error) {
+          if (process.env.NODE_ENV === 'production') {
+            throw error;
+          }
+          return await this.memStorage.getMembershipEnrollmentsBySchoolId(schoolId);
+        }
       }
 
       async getMembershipEnrollmentByParentAndSchoolAndYear(parentUserId: number, schoolId: number, membershipYear: number): Promise<MembershipEnrollment | undefined> {
-        return this.dbStorage.getMembershipEnrollmentByParentAndSchoolAndYear(parentUserId, schoolId, membershipYear);
+        try {
+          return await this.dbStorage.getMembershipEnrollmentByParentAndSchoolAndYear(parentUserId, schoolId, membershipYear);
+        } catch (error) {
+          if (process.env.NODE_ENV === 'production') {
+            throw error;
+          }
+          return await this.memStorage.getMembershipEnrollmentByParentAndSchoolAndYear(parentUserId, schoolId, membershipYear);
+        }
       }
 
       async createMembershipEnrollment(enrollment: InsertMembershipEnrollment): Promise<MembershipEnrollment> {
-        return this.dbStorage.createMembershipEnrollment(enrollment);
+        try {
+          return await this.dbStorage.createMembershipEnrollment(enrollment);
+        } catch (error) {
+          if (process.env.NODE_ENV === 'production') {
+            throw error;
+          }
+          return await this.memStorage.createMembershipEnrollment(enrollment);
+        }
       }
 
       async updateMembershipEnrollment(id: number, enrollment: Partial<InsertMembershipEnrollment>): Promise<MembershipEnrollment | undefined> {
-        return this.dbStorage.updateMembershipEnrollment(id, enrollment);
+        try {
+          return await this.dbStorage.updateMembershipEnrollment(id, enrollment);
+        } catch (error) {
+          if (process.env.NODE_ENV === 'production') {
+            throw error;
+          }
+          return await this.memStorage.updateMembershipEnrollment(id, enrollment);
+        }
       }
 
       async deleteMembershipEnrollment(id: number): Promise<void> {

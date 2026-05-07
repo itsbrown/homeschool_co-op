@@ -3,7 +3,6 @@ import "./test-env-loader";
 
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
-import { setupVite, serveStatic, log } from "./vite";
 import fileUpload from "express-fileupload";
 import path from "path";
 import fileUploadRouter from './api/file-upload';
@@ -47,6 +46,8 @@ if (currentEnv === 'production') {
 }
 
 const app = express();
+export { app };
+export default app;
 
 // CRITICAL: Apply Stripe webhook handler BEFORE any global body parsers
 // This ensures webhook signature verification gets the raw buffer
@@ -114,7 +115,7 @@ app.use((req, res, next) => {
         logLine = logLine.slice(0, 79) + "…";
       }
 
-      log(logLine);
+      console.log(logLine);
     }
   });
 
@@ -243,22 +244,30 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
   // doesn't interfere with the other routes
-  if (app.get("env") === "development") {
+  if (process.env.NODE_ENV === "test") {
+    // Jest imports app/server routes only; skip vite/static client wiring.
+  } else if (app.get("env") === "development") {
+    const { setupVite } = await import("./vite");
     await setupVite(app, server);
   } else {
+    const { serveStatic } = await import("./vite");
     serveStatic(app);
   }
 
   // ALWAYS serve the app on port 5000
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
+  if (process.env.NODE_ENV === "test") {
+    return;
+  }
+
   const port = 5000;
   server.listen({
     port,
     host: "0.0.0.0",
     reusePort: true,
   }, async () => {
-    log(`serving on port ${port}`);
+    console.log(`serving on port ${port}`);
 
     // Background jobs and data loading only run in development
     // Autoscale deployments don't support persistent background tasks
