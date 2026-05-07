@@ -67,20 +67,10 @@ npm run test:server -- --testNamePattern="Multi-Role"
 
 ### Temporarily Gated Suites
 
-Some suites are intentionally skipped by default because they currently depend on routes/behavior not mounted in the lightweight test harness. Re-enable them with env flags when you want to work those areas:
+All previously gated integration suites are now re-enabled.
 
 ```bash
-RUN_CLASS_MANAGEMENT_TESTS=true
-RUN_NOTIFICATIONS_TESTS=true
-RUN_PARENT_PROFILE_TESTS=true
-RUN_STAFF_MANAGEMENT_TESTS=true
-RUN_STUDENT_MANAGEMENT_TESTS=true
-RUN_USER_MANAGEMENT_TESTS=true
-RUN_STRIPE_PAYMENT_INTENT_SYNC_TESTS=true
-RUN_CART_PERSISTENCE_TESTS=true
-RUN_CART_QUERY_CACHE_TESTS=true
-RUN_VARIANT_PRICING_AND_DISCOUNTS_TESTS=true
-RUN_STORAGE_VALIDATION_TESTS=true
+# No currently gated suites
 ```
 
 Example:

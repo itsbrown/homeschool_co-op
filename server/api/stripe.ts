@@ -95,7 +95,7 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
     // Check for existing Stripe subscription for this user (skipped in Jest: no Stripe keys)
     let existingSubscription: any = null;
     let hasActiveSubscription = false;
-    if (process.env.NODE_ENV !== 'test') {
+    if (process.env.NODE_ENV !== 'test' || process.env.ENABLE_STRIPE_PREFLIGHT_IN_TESTS === 'true') {
       const stripe = await getStripeClient();
 
       try {
@@ -190,7 +190,7 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
         console.error('⚠️ Error checking Stripe subscription (non-blocking):', stripeError.message);
       }
     } else {
-      console.log('🧪 Test mode: skipping live Stripe subscription preflight');
+      console.log('🧪 Test mode: skipping Stripe subscription preflight (ENABLE_STRIPE_PREFLIGHT_IN_TESTS not set)');
     }
     
     try {
@@ -238,7 +238,8 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
           (e.childId === item.childId &&
            ((item.classType === 'marketplace' && e.marketplaceClassId === item.marketplaceClassId) ||
             (item.classType !== 'marketplace' && e.classId === item.classId)) &&
-           e.status === 'pending_payment')
+           e.status === 'pending_payment' &&
+           (e.parentEmail === userEmail || e.parentId === parent.id))
         );
         
         if (enrollment) {

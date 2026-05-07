@@ -29,13 +29,17 @@ router.get('/children', jwtCheck, async (req: any, res) => {
     // Get children by parent email from storage
     console.log('🔍 Attempting to fetch children from storage...');
     
-    // Debug: Get all children to see what's in storage
-    const allChildren = await storage.getAllChildren();
-    console.log('🔍 All children in storage:', allChildren.map(c => ({ 
-      id: c.id, 
-      firstName: c.firstName, 
-      lastName: c.lastName 
-    })));
+    // Avoid hard dependency on getAllChildren in tests where DB may be unavailable.
+    try {
+      const allChildren = await storage.getAllChildren();
+      console.log('🔍 All children in storage:', allChildren.map(c => ({
+        id: c.id,
+        firstName: c.firstName,
+        lastName: c.lastName
+      })));
+    } catch {
+      // Optional debug only.
+    }
     
     const children = await storage.getChildrenByParentEmail(userEmail);
 
@@ -332,11 +336,7 @@ router.post('/children', jwtCheck, async (req: any, res) => {
       }
     }
 
-    return res.status(201).json({
-      success: true,
-      message: 'Child registered successfully',
-      child: savedChild
-    });
+    return res.status(201).json(savedChild);
 
   } catch (error) {
     console.error('❌ Error registering child:', error);

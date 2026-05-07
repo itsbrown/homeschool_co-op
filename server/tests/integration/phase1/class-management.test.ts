@@ -16,9 +16,7 @@ import { resetAllMocks } from '../../helpers/mockServices';
  * - Multi-location class management
  */
 
-const describeClassManagement = process.env.RUN_CLASS_MANAGEMENT_TESTS === 'true' ? describe : describe.skip;
-
-describeClassManagement('Integration: Class Management', () => {
+describe('Integration: Class Management', () => {
   let testSchool: any;
   let testAdmin: any;
   let testLocation: any;
@@ -125,7 +123,7 @@ describeClassManagement('Integration: Class Management', () => {
 
       const parent = await testDb.createTestUser({ role: 'parent' });
       const child = await testDb.createTestChild(parent.id);
-      await testDb.createTestEnrollment(child.id, classRecord.id);
+      await testDb.createTestEnrollment(classRecord.id, child.id);
 
       await api.loginAsUser(testAdmin.email);
       
@@ -309,8 +307,8 @@ describeClassManagement('Integration: Class Management', () => {
       const child1 = await testDb.createTestChild(parent.id);
       const child2 = await testDb.createTestChild(parent.id);
       
-      await testDb.createTestEnrollment(child1.id, classRecord.id);
-      await testDb.createTestEnrollment(child2.id, classRecord.id);
+      await testDb.createTestEnrollment(classRecord.id, child1.id);
+      await testDb.createTestEnrollment(classRecord.id, child2.id);
 
       await api.loginAsUser(testAdmin.email);
       const response = await api.get(`/api/classes/${classRecord.id}`);
@@ -332,8 +330,8 @@ describeClassManagement('Integration: Class Management', () => {
       const child3 = await testDb.createTestChild(parent.id);
 
       // Fill the class
-      await testDb.createTestEnrollment(child1.id, classRecord.id);
-      await testDb.createTestEnrollment(child2.id, classRecord.id);
+      await testDb.createTestEnrollment(classRecord.id, child1.id);
+      await testDb.createTestEnrollment(classRecord.id, child2.id);
 
       // Attempt to over-enroll
       await api.loginAsUser(parent.email);
