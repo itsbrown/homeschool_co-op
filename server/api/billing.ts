@@ -49,6 +49,34 @@ async function resolveClassForEnrollment(
   return null;
 }
 
+/** School id from enrollment.parent + class; fills gaps when rows lack explicit school_id. */
+async function resolveSchoolIdForBalancePaymentIntent(
+  firstEnrollment: any | null | undefined,
+  parentUser: { schoolId?: number | null }
+): Promise<number | undefined> {
+  const direct = firstEnrollment?.schoolId ?? parentUser.schoolId;
+  if (direct != null && direct !== '') return Number(direct);
+
+  if (firstEnrollment?.childId != null) {
+    const child = await storage.getChildById(Number(firstEnrollment.childId));
+    if (child?.schoolId != null) return Number(child.schoolId);
+  }
+
+  const candidateIds = [
+    firstEnrollment?.marketplaceClassId,
+    firstEnrollment?.programId,
+    firstEnrollment?.classId,
+  ].filter((id): id is number => typeof id === 'number' && id > 0);
+
+  for (const id of candidateIds) {
+    const cls = await storage.getClassById(id);
+    const sid = cls && typeof (cls as any).schoolId === 'number' ? (cls as any).schoolId : null;
+    if (sid != null) return Number(sid);
+  }
+
+  return undefined;
+}
+
 // Rate limiting for payment endpoints
 const paymentRateLimit = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -199,6 +227,8 @@ router.post('/create-payment-intent', paymentRateLimit, async (req, res) => {
     const paymentIntent = await stripe.paymentIntents.create({
       amount: normalizedAmount,
       currency,
+      // Card-only: avoids Dashboard APM bundles that require return_url on server-side confirm / CLI.
+      payment_method_types: ['card'],
       metadata: {
         parentEmail,
         enrollmentDetails: JSON.stringify(enrollmentDetails),
@@ -221,8 +251,8 @@ router.post('/create-payment-intent', paymentRateLimit, async (req, res) => {
     const firstEnrollment = enrollmentDetails && enrollmentDetails.length > 0
       ? await storage.getProgramEnrollmentById(enrollmentDetails[0].enrollmentId)
       : null;
-    
-    const schoolId = firstEnrollment?.schoolId || parentUser.schoolId;
+
+    const schoolId = await resolveSchoolIdForBalancePaymentIntent(firstEnrollment, parentUser);
     if (!schoolId) {
       return res.status(400).json({
         success: false,

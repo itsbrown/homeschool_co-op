@@ -294,8 +294,13 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
       // Start scheduled payment reminder job (sends email reminders for upcoming/overdue payments)
       startScheduledPaymentReminderJob();
       
-      // Load notifications and notification recipients from JSON into database
-      await storage.initializeNotifications();
+      // Load notifications and notification recipients from JSON into database.
+      // In local fallback mode, DB may be unavailable; do not crash server startup.
+      try {
+        await storage.initializeNotifications();
+      } catch (error) {
+        console.warn('⚠️ Skipping notification initialization in local fallback mode:', (error as Error).message);
+      }
     } else {
       console.log('☁️ Production mode: Background jobs disabled (not compatible with Autoscale deployments)');
       console.log('💡 Use Scheduled Deployments or Reserved VM for background tasks');
