@@ -18,9 +18,7 @@ import { resetAllMocks, mockBrevoService, mockTwilioService, mockWebSocketServic
  * - Multi-location notifications
  */
 
-const describeNotifications = process.env.RUN_NOTIFICATIONS_TESTS === 'true' ? describe : describe.skip;
-
-describeNotifications('Integration: Notification System', () => {
+describe('Integration: Notification System', () => {
   let testSchool: any;
   let testAdmin: any;
   let testParent: any;
@@ -130,7 +128,7 @@ describeNotifications('Integration: Notification System', () => {
     it('should send notification to all parents', async () => {
       const parent2 = await testDb.createTestUser({ 
         role: 'parent',
-        email: 'parent2@test.com'
+        email: 'parent3@test.com'
       });
 
       await api.loginAsUser(testAdmin.email);

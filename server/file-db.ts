@@ -1,15 +1,9 @@
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
 import { Class, InsertClass } from '@shared/schema';
 
-// Get directory paths for ES modules
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
 // Directory for storing data
-const DATA_DIR = path.join(__dirname, '../data');
+const DATA_DIR = path.resolve(process.cwd(), 'data');
 
 // Ensure data directory exists
 if (!fs.existsSync(DATA_DIR)) {

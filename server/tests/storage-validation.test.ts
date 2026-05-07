@@ -1,8 +1,6 @@
 import { describe, it, expect } from '@jest/globals';
 
-const describeStorageValidation = process.env.RUN_STORAGE_VALIDATION_TESTS === 'true' ? describe : describe.skip;
-
-describeStorageValidation('Storage validation', () => {
+describe('Storage validation', () => {
   it('validates basic FileStorage input guards', async () => {
     const { FileStorage } = await import('../file-storage');
     const storage = new FileStorage();
