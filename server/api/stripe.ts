@@ -212,8 +212,14 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
         const allEnrollments = await storage.getAllEnrollments?.() || [];
         
         for (const item of items) {
-          // Cart payloads use `price` (cents); enrollment records use `totalCost`
-          const lineAmountCents = Math.max(0, Number(item.totalCost ?? item.price ?? 0));
+          // Cart payloads use `price` (cents); enrollment records use `totalCost`.
+          // Treat empty strings as "missing" so we correctly fall back to price.
+          const totalCostValue = item.totalCost;
+          const priceValue = item.price;
+          const hasTotalCost = totalCostValue !== null && totalCostValue !== undefined && totalCostValue !== '';
+          const hasPrice = priceValue !== null && priceValue !== undefined && priceValue !== '';
+          const resolvedAmount = hasTotalCost ? Number(totalCostValue) : hasPrice ? Number(priceValue) : 0;
+          const lineAmountCents = Math.max(0, Number.isFinite(resolvedAmount) ? resolvedAmount : 0);
           // Get the child to fetch schoolId
           const child = children.find((c: any) => c.id === item.childId);
           if (!child) {
