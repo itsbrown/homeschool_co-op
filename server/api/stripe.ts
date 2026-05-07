@@ -218,8 +218,14 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
           const priceValue = item.price;
           const hasTotalCost = totalCostValue !== null && totalCostValue !== undefined && totalCostValue !== '';
           const hasPrice = priceValue !== null && priceValue !== undefined && priceValue !== '';
-          const resolvedAmount = hasTotalCost ? Number(totalCostValue) : hasPrice ? Number(priceValue) : 0;
-          const lineAmountCents = Math.max(0, Number.isFinite(resolvedAmount) ? resolvedAmount : 0);
+          const parsedTotalCost = hasTotalCost ? Number(totalCostValue) : NaN;
+          const parsedPrice = hasPrice ? Number(priceValue) : NaN;
+          const resolvedAmount = Number.isFinite(parsedTotalCost)
+            ? parsedTotalCost
+            : Number.isFinite(parsedPrice)
+              ? parsedPrice
+              : 0;
+          const lineAmountCents = Math.max(0, resolvedAmount);
           // Get the child to fetch schoolId
           const child = children.find((c: any) => c.id === item.childId);
           if (!child) {
