@@ -4733,7 +4733,15 @@ export class MemStorage implements IStorage {
     async getProgramEnrollmentById(id: number): Promise<ProgramEnrollment | undefined> {
       try {
         if (this.dbStorage && typeof this.dbStorage.getProgramEnrollmentById === 'function') {
-          return await this.dbStorage.getProgramEnrollmentById(id);
+          const fromDb = await this.dbStorage.getProgramEnrollmentById(id);
+          if (fromDb) {
+            return fromDb;
+          }
+          // DB answered "no row" — enrollment may exist only in mem after DB-write fallback (tests / local)
+          if (process.env.NODE_ENV === 'production') {
+            return undefined;
+          }
+          return (await this.memStorage.getProgramEnrollmentById(id)) ?? undefined;
         } else {
           console.log('💾 DB storage unavailable, using memStorage fallback for getProgramEnrollmentById');
           return await this.memStorage.getProgramEnrollmentById(id);
