@@ -212,6 +212,8 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
         const allEnrollments = await storage.getAllEnrollments?.() || [];
         
         for (const item of items) {
+          // Cart payloads use `price` (cents); enrollment records use `totalCost`
+          const lineAmountCents = Math.max(0, Number(item.totalCost ?? item.price ?? 0));
           // Get the child to fetch schoolId
           const child = children.find((c: any) => c.id === item.childId);
           if (!child) {
@@ -290,9 +292,9 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
             variantId: null,
             parentId: parent.id,
             parentEmail: userEmail,
-            totalCost: item.totalCost,
+            totalCost: lineAmountCents,
             totalPaid: 0,
-            remainingBalance: item.totalCost,
+            remainingBalance: lineAmountCents,
             depositRequired: 0,
             paymentStatus: 'pending',
             paymentPlan: dbPaymentPlan,
