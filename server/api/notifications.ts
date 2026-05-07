@@ -63,14 +63,16 @@ router.post("/", async (req: any, res) => {
 
     await processNotification(notification);
 
-    try {
-      const { mockWebSocketService } = await import("../tests/helpers/mockServices");
-      mockWebSocketService.sendToUser(Number(userId), {
-        type: "notification",
-        data: { title, message, id: notification.id },
-      });
-    } catch {
-      // Ignore when not running integration tests.
+    if (process.env.NODE_ENV === "test") {
+      try {
+        const { mockWebSocketService } = await import("../tests/helpers/mockServices");
+        mockWebSocketService.sendToUser(Number(userId), {
+          type: "notification",
+          data: { title, message, id: notification.id },
+        });
+      } catch {
+        /* ignore */
+      }
     }
 
     return res.status(200).json({
@@ -294,10 +296,14 @@ router.post("/broadcast", async (req: any, res) => {
       sentCount += 1;
     }
 
-    try {
-      const { mockWebSocketService } = await import("../tests/helpers/mockServices");
-      mockWebSocketService.broadcast({ type: "notification", data: { title, message } });
-    } catch {}
+    if (process.env.NODE_ENV === "test") {
+      try {
+        const { mockWebSocketService } = await import("../tests/helpers/mockServices");
+        mockWebSocketService.broadcast({ type: "notification", data: { title, message } });
+      } catch {
+        /* ignore */
+      }
+    }
 
     return res.status(200).json({
       sentCount,
