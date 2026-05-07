@@ -211,13 +211,18 @@ export async function processEnrollmentReminders(): Promise<{ sent: number; skip
 let reminderInterval: ReturnType<typeof setInterval> | null = null;
 
 export function startEnrollmentReminderScheduler(): void {
+  if (reminderInterval) {
+    console.log('ℹ️ Enrollment reminder scheduler already running; skipping duplicate start');
+    return;
+  }
   // Run immediately on startup (after a short delay to let the server initialize)
-  setTimeout(() => {
+  const startupTimeout = setTimeout(() => {
     console.log('🚀 Running initial enrollment reminder check...');
     processEnrollmentReminders().catch(err => {
       console.error('Error in initial reminder processing:', err);
     });
   }, 30000); // 30 second delay
+  startupTimeout.unref?.();
 
   // Then run every 6 hours
   const intervalHours = 6;
@@ -227,6 +232,7 @@ export function startEnrollmentReminderScheduler(): void {
       console.error('Error in scheduled reminder processing:', err);
     });
   }, intervalHours * 60 * 60 * 1000);
+  reminderInterval.unref?.();
 
   console.log(`✅ Enrollment reminder scheduler started (runs every ${intervalHours} hours)`);
 }

@@ -6,6 +6,25 @@ import { getStripeClient } from './config/stripe';
 import { createReceiptFromPayment } from './services/receiptService';
 
 // Stripe client will be lazily initialized within the webhook handler
+const RECENT_WEBHOOK_EVENTS_MAX = 1000;
+const RECENT_WEBHOOK_TTL_MS = 1000 * 60 * 60; // 1 hour
+const recentWebhookEvents = new Map<string, number>();
+
+function cleanupRecentWebhookEvents(now: number): void {
+  for (const [eventId, seenAt] of recentWebhookEvents.entries()) {
+    if (now - seenAt > RECENT_WEBHOOK_TTL_MS) {
+      recentWebhookEvents.delete(eventId);
+    }
+  }
+  // Keep memory bounded even under heavy event volume.
+  if (recentWebhookEvents.size > RECENT_WEBHOOK_EVENTS_MAX) {
+    const entries = Array.from(recentWebhookEvents.entries()).sort((a, b) => a[1] - b[1]);
+    const toTrim = recentWebhookEvents.size - RECENT_WEBHOOK_EVENTS_MAX;
+    for (let i = 0; i < toTrim; i++) {
+      recentWebhookEvents.delete(entries[i][0]);
+    }
+  }
+}
 
 /**
  * Standalone Stripe webhook handler that must be applied BEFORE any JSON body parsers.
@@ -105,6 +124,15 @@ export const webhookHandler = async (req: Request, res: Response) => {
 
   // Handle the event - process webhooks securely
   console.log('📥 Processing webhook event:', event.type);
+  const now = Date.now();
+  cleanupRecentWebhookEvents(now);
+  if (event?.id && recentWebhookEvents.has(event.id)) {
+    console.log('↩️ Duplicate webhook event received, acknowledging without reprocessing:', event.id);
+    return res.json({ received: true, event_type: event.type, duplicate: true });
+  }
+  if (event?.id) {
+    recentWebhookEvents.set(event.id, now);
+  }
   
   try {
     switch (event.type) {
@@ -116,6 +144,16 @@ export const webhookHandler = async (req: Request, res: Response) => {
         // Get the payment intent from the session
         const paymentIntent = await stripe.paymentIntents.retrieve(session.payment_intent as string);
         console.log('💳 Retrieved payment intent from session:', paymentIntent.id);
+
+        // Durable idempotency guard:
+        // checkout.session.completed and payment_intent.succeeded can both arrive for the same PI.
+        // Payment records persist to DB/file storage, so this protects against duplicate enrollment updates
+        // even across process restarts.
+        const alreadyRecordedPayment = await storage.getPaymentByStripeId(paymentIntent.id);
+        if (alreadyRecordedPayment) {
+          console.log('↩️ Checkout session already reflected in payment history, skipping duplicate processing:', paymentIntent.id);
+          break;
+        }
         
         // Process the checkout session payment - same logic as payment_intent.succeeded
         const itemsJson = paymentIntent.metadata.itemsJson;
