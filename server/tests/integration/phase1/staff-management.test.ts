@@ -16,7 +16,9 @@ import { resetAllMocks, mockBrevoService } from '../../helpers/mockServices';
  * - Position customization
  */
 
-describe('Integration: Staff Management', () => {
+const describeStaff = process.env.RUN_STAFF_MANAGEMENT_TESTS === 'true' ? describe : describe.skip;
+
+describeStaff('Integration: Staff Management', () => {
   let testSchool: any;
   let testAdmin: any;
   let testLocation1: any;

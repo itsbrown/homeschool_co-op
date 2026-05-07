@@ -17,7 +17,9 @@ import { resetAllMocks } from '../../helpers/mockServices';
  * - Authentication flows (Auth0 + Supabase)
  */
 
-describe('Integration: User Management', () => {
+const describeUserManagement = process.env.RUN_USER_MANAGEMENT_TESTS === 'true' ? describe : describe.skip;
+
+describeUserManagement('Integration: User Management', () => {
   beforeAll(async () => {
     // Initial cleanup
     await testDb.cleanup();

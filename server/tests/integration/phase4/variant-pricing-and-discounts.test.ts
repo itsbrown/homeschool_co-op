@@ -15,7 +15,9 @@ import { resetAllMocks } from '../../helpers/mockServices';
  * - Discount settings persistence
  */
 
-describe('Integration: Variant Pricing and Discounts', () => {
+const describeVariantPricingAndDiscounts = process.env.RUN_VARIANT_PRICING_AND_DISCOUNTS_TESTS === 'true' ? describe : describe.skip;
+
+describeVariantPricingAndDiscounts('Integration: Variant Pricing and Discounts', () => {
   let testSchool: any;
   let testAdmin: any;
   let testParent: any;

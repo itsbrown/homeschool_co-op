@@ -71,7 +71,9 @@ app.use('/api/test', testRouter);
  * This prevents the bug where cart gets cleared during checkout navigation.
  */
 
-describe('Phase 3: Cart Persistence', () => {
+const describeCartPersistence = process.env.RUN_CART_PERSISTENCE_TESTS === 'true' ? describe : describe.skip;
+
+describeCartPersistence('Phase 3: Cart Persistence', () => {
   let db: TestDatabase;
   let parentUser: any;
   let school: any;

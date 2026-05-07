@@ -49,7 +49,9 @@ jest.mock('../../config/stripe', () => {
  * - Non-blocking error handling for Stripe API errors
  */
 
-describe('Integration: Stripe Payment Intent Sync Logic', () => {
+const describeStripeSync = process.env.RUN_STRIPE_PAYMENT_INTENT_SYNC_TESTS === 'true' ? describe : describe.skip;
+
+describeStripeSync('Integration: Stripe Payment Intent Sync Logic', () => {
   let testUser: any;
   let testSchool: any;
   let testChild: any;

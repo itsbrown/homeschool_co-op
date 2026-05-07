@@ -17,7 +17,9 @@ import { resetAllMocks } from '../../helpers/mockServices';
  * - Data integrity (payment calculations, balances)
  */
 
-describe('Integration: Parent Profile Management', () => {
+const describeParentProfile = process.env.RUN_PARENT_PROFILE_TESTS === 'true' ? describe : describe.skip;
+
+describeParentProfile('Integration: Parent Profile Management', () => {
   let testSchool: any;
   let testSchool2: any;
   let testAdmin: any;

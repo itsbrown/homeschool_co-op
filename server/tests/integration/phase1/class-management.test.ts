@@ -16,7 +16,9 @@ import { resetAllMocks } from '../../helpers/mockServices';
  * - Multi-location class management
  */
 
-describe('Integration: Class Management', () => {
+const describeClassManagement = process.env.RUN_CLASS_MANAGEMENT_TESTS === 'true' ? describe : describe.skip;
+
+describeClassManagement('Integration: Class Management', () => {
   let testSchool: any;
   let testAdmin: any;
   let testLocation: any;

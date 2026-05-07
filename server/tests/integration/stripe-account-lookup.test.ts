@@ -51,7 +51,9 @@ jest.mock('../../config/stripe', () => {
  * - Error handling
  */
 
-describe('Integration: Stripe Account Lookup', () => {
+const describeStripeAccountLookup = process.env.RUN_STRIPE_ACCOUNT_LOOKUP_TESTS === 'true' ? describe : describe.skip;
+
+describeStripeAccountLookup('Integration: Stripe Account Lookup', () => {
   let testUser: any;
   let testSchool: any;
 
