@@ -1,5 +1,7 @@
 node_modules
 .worktree-*/
+# Runtime timestamped JSON snapshots (new files only; does not remove existing tracked backups)
+data/backups/*-*-*T*.json
 dist
 .DS_Store
 server/public

@@ -65,15 +65,15 @@ npm run test:server -- --testPathPatterns=phase1/user-management
 npm run test:server -- --testNamePattern="Multi-Role"
 ```
 
-### Temporarily Gated Suites
+### Conditional suites
 
-All previously gated integration suites are now re-enabled.
+Most suites run without a live DB via the test harness. **`phase2/multi-role-management`** talks to PostgreSQL (`getDb()` / Drizzle). It runs **only when** `TEST_DATABASE_URL` is set; otherwise Jest shows **1 skipped** suite on a full `npm run test:server` run.
 
 ```bash
-# No currently gated suites
+TEST_DATABASE_URL="postgresql://user:password@localhost:5432/asa_test" npm run test:server -- --testPathPatterns=phase2/multi-role-management
 ```
 
-Example:
+Feature-flag example:
 
 ```bash
 RUN_CART_QUERY_CACHE_TESTS=true npm run test:server -- --testPathPatterns=phase3/cart-query-cache
