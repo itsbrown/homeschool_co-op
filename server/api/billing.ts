@@ -9,6 +9,7 @@ import { createClient } from '@supabase/supabase-js';
 import { dataLayer } from '../services/dataLayer';
 import { getStripeClient } from '../config/stripe';
 import { supabaseAuth } from '../middleware/supabase-auth';
+import { getChildrenForAuthenticatedParent } from '../lib/parent-auth-scope';
 import {
   buildIdempotencyFingerprint,
   createInMemoryIdempotencyStore,
@@ -624,7 +625,7 @@ router.get('/summary', async (req, res) => {
       const testEmail = req.headers['x-test-user-email'] as string | undefined;
       if (testEmail) {
         const userEmail = testEmail;
-        const children = await storage.getChildrenByParentEmail(userEmail);
+        const children = await getChildrenForAuthenticatedParent(storage, { email: userEmail });
         if (!children || children.length === 0) {
           return res.json({
             totalBalance: 0,
@@ -705,7 +706,10 @@ router.get('/summary', async (req, res) => {
     console.log('🔍 Getting billing summary for:', userEmail);
 
     // Get all children for this parent
-    const children = await storage.getChildrenByParentEmail(userEmail);
+    const children = await getChildrenForAuthenticatedParent(storage, {
+      email: userEmail,
+      supabaseId: user.id,
+    });
     if (!children || children.length === 0) {
       console.log('📋 No children found for parent:', userEmail);
       return res.json({
@@ -874,7 +878,10 @@ router.post('/pay-balance', async (req, res) => {
       return res.status(400).json({ error: 'enrollmentIds is required' });
     }
 
-    const userChildren = await storage.getChildrenByParentEmail(userEmail);
+    const userChildren = await getChildrenForAuthenticatedParent(storage, {
+      email: userEmail,
+      supabaseId: user.id,
+    });
     const userChildIds = new Set(userChildren.map(c => c.id));
     const targetEnrollments = await Promise.all(
       enrollmentIds.map((id: number) => storage.getProgramEnrollmentById(id))
@@ -1053,7 +1060,10 @@ router.post('/confirm-payment', async (req, res) => {
     }
 
     // Get user's children to verify ownership and block unauthorized requests before detail validation.
-    const userChildren = await storage.getChildrenByParentEmail(userEmail);
+    const userChildren = await getChildrenForAuthenticatedParent(storage, {
+      email: userEmail,
+      supabaseId: user.id,
+    });
     const userChildIds = new Set(userChildren.map(child => child.id));
     const targetEnrollments = await Promise.all(
       enrollmentIds.map((id: number) => storage.getProgramEnrollmentById(id))

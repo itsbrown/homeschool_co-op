@@ -4,6 +4,8 @@ import path from 'path';
 import { storage } from '../storage';
 import { jwtCheck } from '../middleware/auth0-auth';
 import { sendNewStudentNotificationEmail } from '../lib/email-service';
+import { getChildrenForAuthenticatedParent, resolveParentDbUser } from '../lib/parent-auth-scope';
+import { enrollmentMatchesParent, emailsMatch } from '@shared/parent-identity';
 
 const router = Router();
 
@@ -41,7 +43,10 @@ router.get('/children', jwtCheck, async (req: any, res) => {
       // Optional debug only.
     }
     
-    const children = await storage.getChildrenByParentEmail(userEmail);
+    const children = await getChildrenForAuthenticatedParent(storage, {
+      email: userEmail,
+      supabaseId: req.auth?.supabaseId,
+    });
 
     console.log(`🔍 Found ${children.length} children for parent ${userEmail}:`, children);
 
@@ -114,8 +119,13 @@ router.get('/children/:id', jwtCheck, async (req: any, res) => {
       });
     }
     
-    // 🔒 SECURITY: Verify parent owns this child
-    if (child.parentEmail !== userEmail) {
+    const dbUser = await resolveParentDbUser(storage, {
+      email: userEmail,
+      supabaseId: req.auth?.supabaseId,
+    });
+    const ownsByLink = dbUser != null && child.parentId === dbUser.id;
+    const ownsByEmail = emailsMatch(child.parentEmail, userEmail);
+    if (!ownsByLink && !ownsByEmail) {
       return res.status(403).json({ 
         message: 'Access denied: You can only view your own children',
         error: 'NOT_YOUR_CHILD'
@@ -182,7 +192,10 @@ router.post('/children', jwtCheck, async (req: any, res) => {
     }
 
     // Find the parent user to get their ID
-    const parent = await storage.getUserByEmail(userEmail);
+    const parent = await resolveParentDbUser(storage, {
+      email: userEmail,
+      supabaseId: req.auth?.supabaseId,
+    });
     if (!parent) {
       console.log('❌ Parent user not found:', userEmail);
       return res.status(404).json({ 
@@ -369,9 +382,13 @@ router.get('/enrollments', jwtCheck, async (req: any, res) => {
     // Get all enrollments from storage
     const allEnrollments = await storage.getAllEnrollments();
     
-    // Filter enrollments for this parent's email
-    const parentEnrollments = allEnrollments.filter((enrollment: any) => 
-      enrollment.parentEmail === userEmail
+    const dbUser = await resolveParentDbUser(storage, {
+      email: userEmail,
+      supabaseId: req.auth?.supabaseId,
+    });
+
+    const parentEnrollments = allEnrollments.filter((enrollment: any) =>
+      enrollmentMatchesParent(enrollment, dbUser?.id, userEmail)
     );
 
     console.log(`📚 Found ${parentEnrollments.length} enrollments for parent ${userEmail}`);
@@ -404,7 +421,10 @@ router.get('/memberships', jwtCheck, async (req: any, res) => {
     console.log('🎫 Parent requesting memberships for email:', userEmail);
 
     // Get the parent user from database
-    const user = await storage.getUserByEmail(userEmail);
+    const user = await resolveParentDbUser(storage, {
+      email: userEmail,
+      supabaseId: req.auth?.supabaseId,
+    });
     if (!user) {
       console.log('❌ User not found in database');
       return res.status(404).json({ 
@@ -463,7 +483,10 @@ router.get('/memberships/confirm', jwtCheck, async (req: any, res) => {
     }
 
     // Get the parent user from database
-    const user = await storage.getUserByEmail(userEmail);
+    const user = await resolveParentDbUser(storage, {
+      email: userEmail,
+      supabaseId: req.auth?.supabaseId,
+    });
     if (!user) {
       return res.status(404).json({ 
         message: 'User not found',
@@ -576,7 +599,10 @@ router.post('/memberships/checkout', jwtCheck, async (req: any, res) => {
     }
 
     // Get the parent user from database
-    const user = await storage.getUserByEmail(userEmail);
+    const user = await resolveParentDbUser(storage, {
+      email: userEmail,
+      supabaseId: req.auth?.supabaseId,
+    });
     if (!user) {
       return res.status(404).json({ 
         message: 'User not found',
@@ -728,7 +754,10 @@ router.get('/member-id', jwtCheck, async (req: any, res) => {
       });
     }
 
-    const user = await storage.getUserByEmail(userEmail);
+    const user = await resolveParentDbUser(storage, {
+      email: userEmail,
+      supabaseId: req.auth?.supabaseId,
+    });
     if (!user) {
       return res.status(404).json({ 
         message: 'User not found',
@@ -776,7 +805,10 @@ router.put('/member-id', jwtCheck, async (req: any, res) => {
       }
     }
 
-    const user = await storage.getUserByEmail(userEmail);
+    const user = await resolveParentDbUser(storage, {
+      email: userEmail,
+      supabaseId: req.auth?.supabaseId,
+    });
     if (!user) {
       return res.status(404).json({ 
         message: 'User not found',
@@ -819,7 +851,10 @@ router.get('/school-documents', jwtCheck, async (req: any, res) => {
       });
     }
 
-    const user = await storage.getUserByEmail(userEmail);
+    const user = await resolveParentDbUser(storage, {
+      email: userEmail,
+      supabaseId: req.auth?.supabaseId,
+    });
     if (!user) {
       return res.status(404).json({ 
         message: 'User not found',
@@ -867,7 +902,10 @@ router.get('/payment-receipts', jwtCheck, async (req: any, res) => {
       });
     }
 
-    const user = await storage.getUserByEmail(userEmail);
+    const user = await resolveParentDbUser(storage, {
+      email: userEmail,
+      supabaseId: req.auth?.supabaseId,
+    });
     if (!user) {
       return res.status(404).json({ 
         message: 'User not found',
