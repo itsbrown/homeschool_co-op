@@ -14,6 +14,15 @@
 
 import { storage } from '../storage';
 import { sendScheduledPaymentReminder, sendOverduePaymentNotice } from '../lib/email-service';
+import { getDb } from '../db';
+import { scheduledPayments } from '../../shared/schema';
+import { and, gte, inArray, lt, lte } from 'drizzle-orm';
+import {
+  type AutoPayCandidateLike,
+  type DueAutoPayQueryCriteria,
+  evaluateAutoPayPolicy,
+  getDueAutoPayCandidates,
+} from './autopay-policy';
 
 export interface ReminderResult {
   scheduledPaymentId: number;
@@ -22,6 +31,12 @@ export interface ReminderResult {
   daysUntilDue: number;
   sent: boolean;
   error?: string;
+}
+
+export interface AutoPayExecutionResult {
+  scheduledPaymentId: number;
+  action: 'process' | 'skip';
+  reason?: 'retry_cap_reached' | 'stale_attempt';
 }
 
 let reminderInterval: ReturnType<typeof setInterval> | null = null;
@@ -35,6 +50,63 @@ const REMINDER_DAYS = {
   ONE_DAY_OVERDUE: -1,
   SEVEN_DAYS_OVERDUE: -7
 };
+
+async function queryDueScheduledPayments(criteria: DueAutoPayQueryCriteria): Promise<AutoPayCandidateLike[]> {
+  const db = await getDb();
+  const rows = await db
+    .select({
+      id: scheduledPayments.id,
+      scheduledDate: scheduledPayments.scheduledDate,
+      retryCount: scheduledPayments.retryCount,
+      status: scheduledPayments.status,
+    })
+    .from(scheduledPayments)
+    .where(
+      and(
+        inArray(scheduledPayments.status, criteria.statuses),
+        lte(scheduledPayments.scheduledDate, criteria.dueOnOrBefore),
+        gte(scheduledPayments.scheduledDate, criteria.dueOnOrAfter),
+        lt(scheduledPayments.retryCount, criteria.retryCountLessThan),
+      )
+    );
+
+  return rows;
+}
+
+/**
+ * Live AutoPay execution path. Uses DB-query criteria as source-of-truth for due candidates,
+ * then applies policy guards deterministically.
+ */
+export async function processAutoPayExecutionPath(now: Date = new Date()): Promise<AutoPayExecutionResult[]> {
+  const results: AutoPayExecutionResult[] = [];
+
+  const dueCandidates = await getDueAutoPayCandidates(
+    { queryDueScheduledPayments },
+    now
+  );
+
+  for (const candidate of dueCandidates) {
+    const decision = evaluateAutoPayPolicy(candidate, now);
+    if (decision.action === 'skip') {
+      await storage.updateScheduledPaymentStatus(candidate.id, 'cancelled');
+      results.push({
+        scheduledPaymentId: candidate.id,
+        action: 'skip',
+        reason: decision.reason,
+      });
+      continue;
+    }
+
+    // Runtime processing path can proceed to actual charge execution.
+    // We explicitly avoid mutating retry/status here unless policy transitions it terminal.
+    results.push({
+      scheduledPaymentId: candidate.id,
+      action: 'process',
+    });
+  }
+
+  return results;
+}
 
 /**
  * Calculate days until a payment is due (negative if overdue)
@@ -249,6 +321,15 @@ export function startScheduledPaymentReminderJob(): void {
       console.log(`📧 Initial reminder check: ${results.filter(r => r.sent).length} reminders sent`);
     }
   });
+  processAutoPayExecutionPath().then(results => {
+    if (results.length > 0) {
+      const skipped = results.filter(r => r.action === 'skip').length;
+      const processable = results.filter(r => r.action === 'process').length;
+      console.log(`💳 Initial AutoPay execution check: ${processable} processable, ${skipped} terminal-skipped`);
+    }
+  }).catch(error => {
+    console.error('❌ Error during initial AutoPay execution path:', error);
+  });
   
   // Then run every 6 hours
   const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
@@ -257,6 +338,15 @@ export function startScheduledPaymentReminderJob(): void {
       if (results.length > 0) {
         console.log(`📧 Scheduled reminder check: ${results.filter(r => r.sent).length} reminders sent`);
       }
+    });
+    processAutoPayExecutionPath().then(results => {
+      if (results.length > 0) {
+        const skipped = results.filter(r => r.action === 'skip').length;
+        const processable = results.filter(r => r.action === 'process').length;
+        console.log(`💳 Scheduled AutoPay execution check: ${processable} processable, ${skipped} terminal-skipped`);
+      }
+    }).catch(error => {
+      console.error('❌ Error during scheduled AutoPay execution path:', error);
     });
   }, SIX_HOURS_MS);
   reminderInterval.unref?.();

@@ -241,7 +241,8 @@ describe('Integration: Billing server-authoritative amount enforcement', () => {
         .set(authHeader)
         .send({
           enrollmentIds: [enrollment.id],
-          paymentDetails: { totalAmountCents: 1 },
+          amount: 1,
+          total: 1,
           paymentPlan: 'full',
         });
 

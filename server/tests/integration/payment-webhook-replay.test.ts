@@ -140,4 +140,64 @@ describe('Integration: payment webhook replay idempotency', () => {
     expect(updatedEnrollment?.totalPaid).toBe(10000);
     expect(updatedEnrollment?.remainingBalance).toBe(0);
   });
+
+  it('treats replay as no-op when payment for intent is already completed', async () => {
+    const app = buildApp();
+    const { parent, enrollment } = await setupPendingPaymentFixture();
+
+    const firstResponse = await request(app)
+      .post(endpoint)
+      .set('stripe-signature', 't=1,v1=fake')
+      .send({
+        id: 'evt_completed_seed',
+        type: 'payment_intent.succeeded',
+        data: {
+          object: {
+            id: 'pi_pending_replay_1',
+            amount: 10000,
+            currency: 'usd',
+            metadata: {
+              paymentType: 'balance_payment',
+              parentEmail: parent.email,
+              enrollmentIds: JSON.stringify([enrollment.id]),
+            },
+          },
+        },
+      });
+
+    expect(firstResponse.status).toBe(200);
+    await storage.updatePaymentStatus('pi_pending_replay_1', 'completed');
+    const beforeReplayEnrollment = await storage.getProgramEnrollmentById(enrollment.id);
+
+    const replayResponse = await request(app)
+      .post(endpoint)
+      .set('stripe-signature', 't=1,v1=fake')
+      .send({
+        id: 'evt_replay_completed_noop',
+        type: 'payment_intent.succeeded',
+        data: {
+          object: {
+            id: 'pi_pending_replay_1',
+            amount: 10000,
+            currency: 'usd',
+            metadata: {
+              paymentType: 'balance_payment',
+              parentEmail: parent.email,
+              enrollmentIds: JSON.stringify([enrollment.id]),
+            },
+          },
+        },
+      });
+
+    expect(replayResponse.status).toBe(200);
+
+    const payments = await storage.getAllPayments();
+    const paymentRowsForIntent = payments.filter((p: any) => p.stripePaymentIntentId === 'pi_pending_replay_1');
+    expect(paymentRowsForIntent).toHaveLength(1);
+    expect(paymentRowsForIntent[0].status).toBe('completed');
+
+    const afterReplayEnrollment = await storage.getProgramEnrollmentById(enrollment.id);
+    expect(afterReplayEnrollment?.totalPaid).toBe(beforeReplayEnrollment?.totalPaid);
+    expect(afterReplayEnrollment?.remainingBalance).toBe(beforeReplayEnrollment?.remainingBalance);
+  });
 });
