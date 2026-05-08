@@ -949,6 +949,80 @@ export const insertRefundSchema = createInsertSchema(refunds)
 export type InsertRefund = z.infer<typeof insertRefundSchema>;
 export type Refund = typeof refunds.$inferSelect;
 
+// Task #222 — Refund webhook event durability table.
+// Persists exactly one row per Stripe refund webhook event (charge.refunded,
+// refund.updated, refund.failed) keyed on a UNIQUE stripe_event_id. This is
+// the refund-side analog of Task #219's persistence-first claim on
+// stripe_payment_history for payment_intent.succeeded.
+//
+// Uniqueness on stripe_event_id is enforced at the DB layer so concurrent
+// Stripe deliveries of the same event race on the insert and only one wins —
+// the loser falls into the unique-violation branch and reuses the existing
+// row id. Application-level "if exists" checks are race-prone and are NOT
+// the source of truth for idempotency.
+export const refundEvents = pgTable("refund_events", {
+  id: serial("id").primaryKey(),
+
+  // Stripe identifiers — both required for cross-referencing
+  stripeEventId: text("stripe_event_id").notNull().unique(),
+  stripeRefundId: text("stripe_refund_id").notNull(),
+  stripeChargeId: text("stripe_charge_id"),
+  stripePaymentIntentId: text("stripe_payment_intent_id"),
+
+  // Event classification
+  eventType: text("event_type", {
+    enum: ["charge.refunded", "refund.updated", "refund.failed"],
+  }).notNull(),
+
+  // Refund snapshot (amounts in cents)
+  amountCents: integer("amount_cents").notNull(),
+  currency: text("currency").default("usd").notNull(),
+  refundStatus: text("refund_status"), // pending | succeeded | failed | canceled
+  reason: text("reason"),
+  failureReason: text("failure_reason"),
+
+  // Cross-references to the original payment, populated when resolvable.
+  // Either side may be null — the unified processor writes only to
+  // stripe_payment_history; the legacy `processBalancePayment` path writes
+  // to `payments`. Bug A is fixed by trying BOTH lookups.
+  originalPaymentId: integer("original_payment_id").references(() => payments.id),
+  originalPaymentHistoryId: integer("original_payment_history_id").references(() => stripePaymentHistory.id),
+
+  // Outcome of side-effect processing (for observability — not a constraint)
+  // 'persisted'      : row written, side effects deferred (skip branch)
+  // 'processed'      : row written, enrollment rollback + allocations applied
+  // 'failed_lookup'  : row written, no original payment found (skip branch)
+  // 'failed_processing' : row written, side effects raised an error → handler
+  //                       returned 5xx so Stripe retries the same event
+  processingStatus: text("processing_status", {
+    enum: ["persisted", "processed", "failed_lookup", "failed_processing"],
+  }).default("persisted").notNull(),
+
+  // Raw event payload for forensic replay / re-processing.
+  rawEvent: jsonb("raw_event"),
+
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertRefundEventSchema = createInsertSchema(refundEvents)
+  .omit({ id: true, createdAt: true, updatedAt: true })
+  .extend({
+    stripeChargeId: z.string().nullable().default(null),
+    stripePaymentIntentId: z.string().nullable().default(null),
+    refundStatus: z.string().nullable().default(null),
+    reason: z.string().nullable().default(null),
+    failureReason: z.string().nullable().default(null),
+    originalPaymentId: z.number().nullable().default(null),
+    originalPaymentHistoryId: z.number().nullable().default(null),
+    rawEvent: z.any().nullable().default(null),
+    processingStatus: z
+      .enum(["persisted", "processed", "failed_lookup", "failed_processing"])
+      .default("persisted"),
+  });
+export type InsertRefundEvent = z.infer<typeof insertRefundEventSchema>;
+export type RefundEvent = typeof refundEvents.$inferSelect;
+
 // Stripe Payment History table - for syncing payment data from Stripe API
 export const stripePaymentHistory = pgTable("stripe_payment_history", {
   id: serial("id").primaryKey(),

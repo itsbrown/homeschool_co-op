@@ -16,6 +16,7 @@ import {
   paymentReceipts, type PaymentReceipt, type InsertPaymentReceipt,
   stripeSubscriptionSchedules, type StripeSubscriptionSchedule, type InsertStripeSubscriptionSchedule,
   stripePaymentHistory, type StripePaymentHistory, type InsertStripePaymentHistory,
+  refundEvents, type RefundEvent, type InsertRefundEvent,
   classes, type Class, type InsertClass,
   activities, type Activity, type InsertActivity,
   roleInvitations, type RoleInvitation, type InsertRoleInvitation,
@@ -390,6 +391,11 @@ export interface IStorage {
   getPaymentsByParentEmail(parentEmail: string): Promise<Payment[]>;
   getPaymentByStripeId(stripePaymentIntentId: string): Promise<Payment | undefined>;
   updatePaymentStatus(id: number, status: 'pending' | 'succeeded' | 'failed' | 'canceled'): Promise<Payment | undefined>;
+
+  // Task #222 — Refund Event durability methods
+  saveRefundEvent(event: InsertRefundEvent): Promise<RefundEvent>;
+  getRefundEventByEventId(stripeEventId: string): Promise<RefundEvent | undefined>;
+  updateRefundEvent(id: number, update: Partial<InsertRefundEvent>): Promise<RefundEvent | undefined>;
 
   // Stripe Payment History methods
   saveStripePayment(payment: InsertStripePaymentHistory): Promise<StripePaymentHistory>;
@@ -3700,7 +3706,7 @@ export class MemStorage implements IStorage {
     const result = await db.select().from(stripePaymentHistory).where(eq(stripePaymentHistory.idempotencyKey, idempotencyKey)).limit(1);
     return result[0];
   }
-  
+
   // Payment Discounts methods implementation
   async createPaymentDiscount(discount: InsertPaymentDiscount): Promise<PaymentDiscount> {
     const db = await getDb();
@@ -5206,6 +5212,74 @@ export class MemStorage implements IStorage {
   async getMismatchedStatusCredits(_schoolId?: number): Promise<Credit[]> { return []; }
   async getCompletedScheduledPaymentsWithCreditSource(_schoolId?: number): Promise<ScheduledPayment[]> { return []; }
   async getUnifiedCreditUsageLogsByScheduledPaymentId(_scheduledPaymentId: number): Promise<UnifiedCreditUsageLog[]> { return []; }
+
+  // Task #222 — Refund event durability stubs (MemStorage is dev/test only;
+  // the webhook handler refuses to ack 200 unless DatabaseStorage is active,
+  // so these throw to make any silent in-mem persistence loud).
+  private refundEventsStore: Map<number, RefundEvent> = new Map();
+  private refundEventIdCounter = 1;
+  async saveRefundEvent(event: InsertRefundEvent): Promise<RefundEvent> {
+    for (const existing of this.refundEventsStore.values()) {
+      if (existing.stripeEventId === event.stripeEventId) {
+        const err: Error & { code?: string } = new Error(
+          'duplicate key value violates unique constraint',
+        );
+        err.code = '23505';
+        throw err;
+      }
+    }
+    const id = this.refundEventIdCounter++;
+    const now = new Date();
+    const row: RefundEvent = {
+      id,
+      stripeEventId: event.stripeEventId,
+      stripeRefundId: event.stripeRefundId,
+      stripeChargeId: event.stripeChargeId ?? null,
+      stripePaymentIntentId: event.stripePaymentIntentId ?? null,
+      eventType: event.eventType,
+      amountCents: event.amountCents,
+      currency: event.currency ?? 'usd',
+      refundStatus: event.refundStatus ?? null,
+      reason: event.reason ?? null,
+      failureReason: event.failureReason ?? null,
+      originalPaymentId: event.originalPaymentId ?? null,
+      originalPaymentHistoryId: event.originalPaymentHistoryId ?? null,
+      processingStatus: event.processingStatus ?? 'persisted',
+      rawEvent: event.rawEvent ?? null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.refundEventsStore.set(id, row);
+    return row;
+  }
+  async getRefundEventByEventId(stripeEventId: string): Promise<RefundEvent | undefined> {
+    for (const e of this.refundEventsStore.values()) if (e.stripeEventId === stripeEventId) return e;
+    return undefined;
+  }
+  async updateRefundEvent(id: number, update: Partial<InsertRefundEvent>): Promise<RefundEvent | undefined> {
+    const existing = this.refundEventsStore.get(id);
+    if (!existing) return undefined;
+    const merged: RefundEvent = {
+      ...existing,
+      stripeChargeId: update.stripeChargeId ?? existing.stripeChargeId,
+      stripePaymentIntentId:
+        update.stripePaymentIntentId ?? existing.stripePaymentIntentId,
+      eventType: update.eventType ?? existing.eventType,
+      amountCents: update.amountCents ?? existing.amountCents,
+      currency: update.currency ?? existing.currency,
+      refundStatus: update.refundStatus ?? existing.refundStatus,
+      reason: update.reason ?? existing.reason,
+      failureReason: update.failureReason ?? existing.failureReason,
+      originalPaymentId: update.originalPaymentId ?? existing.originalPaymentId,
+      originalPaymentHistoryId:
+        update.originalPaymentHistoryId ?? existing.originalPaymentHistoryId,
+      processingStatus: update.processingStatus ?? existing.processingStatus,
+      rawEvent: update.rawEvent ?? existing.rawEvent,
+      updatedAt: new Date(),
+    };
+    this.refundEventsStore.set(id, merged);
+    return merged;
+  }
 }
 
 import { DatabaseStorage } from "./dbStorage";
@@ -8030,6 +8104,28 @@ import { DatabaseStorage } from "./dbStorage";
           return this.dbStorage.getStripePaymentByEventId(stripeEventId);
         }
         return undefined;
+      }
+
+      // Task #222 — Refund event durability. Same money-path discipline as
+      // saveStripePayment: refuse the MemStorage fallback so the webhook
+      // handler cannot ack 200 on a non-durable in-mem row.
+      async saveRefundEvent(event: InsertRefundEvent): Promise<RefundEvent> {
+        if (this.dbStorage instanceof DatabaseStorage) {
+          return this.dbStorage.saveRefundEvent(event);
+        }
+        return this.memStorage.saveRefundEvent(event);
+      }
+      async getRefundEventByEventId(stripeEventId: string): Promise<RefundEvent | undefined> {
+        if (this.dbStorage instanceof DatabaseStorage) {
+          return this.dbStorage.getRefundEventByEventId(stripeEventId);
+        }
+        return this.memStorage.getRefundEventByEventId(stripeEventId);
+      }
+      async updateRefundEvent(id: number, update: Partial<InsertRefundEvent>): Promise<RefundEvent | undefined> {
+        if (this.dbStorage instanceof DatabaseStorage) {
+          return this.dbStorage.updateRefundEvent(id, update);
+        }
+        return this.memStorage.updateRefundEvent(id, update);
       }
 
       async getPaymentByIdempotencyKey(idempotencyKey: string): Promise<StripePaymentHistory | undefined> {

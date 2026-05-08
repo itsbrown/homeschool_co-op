@@ -20,6 +20,8 @@ import {
   type PaymentSource,
 } from './services/PaymentProcessorService';
 import { recordTask219Skip } from './lib/task219SkipLog';
+import { recordTask222Skip } from './lib/task222SkipLog';
+import type { InsertRefundEvent, InsertPaymentAllocation } from '@shared/schema';
 import { AUTOPAY_MAX_RETRIES } from './services/auto-pay-scheduler';
 import { handleScheduledPaymentFailed } from './services/auto-pay-webhook-helpers';
 
@@ -152,10 +154,17 @@ export const webhookHandler = async (req: Request, res: Response) => {
   console.log('📥 Processing webhook event:', event.type);
   const now = Date.now();
   cleanupRecentWebhookEvents(now);
-  // Task #219: events whose contract is "persistence-required" must NEVER be
-  // acknowledged 200 unless a stripe_payment_history row exists for them.
+  // Task #219 + #222: events whose contract is "persistence-required" must
+  // NEVER be acknowledged 200 unless a durable row exists for them. Task #219
+  // covers payment_intent.succeeded (stripe_payment_history); Task #222 adds
+  // the three refund events (refund_events).
+  const REFUND_PERSISTENCE_EVENTS = new Set([
+    'charge.refunded',
+    'refund.updated',
+    'refund.failed',
+  ]);
   const isPersistenceRequiredEvent = (t: string): boolean =>
-    t === 'payment_intent.succeeded';
+    t === 'payment_intent.succeeded' || REFUND_PERSISTENCE_EVENTS.has(t);
 
   if (event?.id && recentWebhookEvents.has(event.id)) {
     console.log('↩️ Duplicate webhook event received, acknowledging without reprocessing:', event.id);
@@ -164,8 +173,13 @@ export const webhookHandler = async (req: Request, res: Response) => {
     // before persisting — we must NOT acknowledge; return 5xx so Stripe retries.
     let persistedRowId: number | null = null;
     try {
-      const existing = await storage.getStripePaymentByEventId(event.id);
-      persistedRowId = existing?.id ?? null;
+      if (REFUND_PERSISTENCE_EVENTS.has(event.type)) {
+        const existing = await storage.getRefundEventByEventId(event.id);
+        persistedRowId = existing?.id ?? null;
+      } else {
+        const existing = await storage.getStripePaymentByEventId(event.id);
+        persistedRowId = existing?.id ?? null;
+      }
     } catch (lookupErr) {
       console.warn('[Task#219][Webhook][replay] failed to look up persisted row by event id', {
         eventId: event.id,
@@ -1481,46 +1495,299 @@ export const webhookHandler = async (req: Request, res: Response) => {
       }
       break;
 
-    case 'charge.refunded':
+    case 'charge.refunded': {
+      // ============================================================
+      // Task #222 — Persistence-first refund webhook handler.
+      //
+      // Bug A (silent failure): the legacy handler called
+      // storage.getPaymentByStripeId() which only checks the legacy
+      // `payments` table. Unified-processor charges live ONLY in
+      // `stripe_payment_history`, so refunds against unified payments
+      // hit `if (!originalPayment) break;` and were silently dropped.
+      //
+      // Bug B (no event durability): the prior handler did all its
+      // idempotency on the side-effect rows (payments table) — there
+      // was no row representing "we received and acknowledged Stripe
+      // event X". A crash between side effects + 200 ack would leave
+      // partial state with no audit trail.
+      //
+      // Fix: INSERT-first into `refund_events` keyed on a UNIQUE
+      // stripe_event_id (DB-level, race-safe). Side effects then
+      // proceed and the row is updated to processing_status='processed'.
+      // Lookups try BOTH `payments` AND `stripe_payment_history`.
+      // ============================================================
       const refundEvent = event.data.object as Stripe.Charge;
       console.log('🔄 Refund processed:', refundEvent.id);
-      
+
+      const paymentIntentId = (refundEvent.payment_intent as string) || null;
+      const stripeRefunds = refundEvent.refunds?.data || [];
+      if (stripeRefunds.length === 0) {
+        // Cannot persist a refund event without a refund id — surface a
+        // structured skip and break (no 5xx; the event is malformed).
+        const skip = {
+          eventId: event.id,
+          eventType: event.type,
+          refundId: null,
+          paymentIntentId,
+          reason: 'no_refund_data_in_event',
+          metadataKey: 'refunds.data',
+          metadataValue: '[]',
+          persistedRowId: null,
+        };
+        console.warn('[Task#222][Webhook][skip] charge.refunded carried no refunds.data', skip);
+        recordTask222Skip(skip);
+        break;
+      }
+      const latestRefund = stripeRefunds[stripeRefunds.length - 1];
+      const refundAmountCents = latestRefund.amount;
+
+      // ---- Persistence-first claim --------------------------------
+      // Mirror Task #219's pattern: INSERT first; on 23505 unique
+      // violation reuse the existing row. Anything else throws into
+      // the outer catch → 500 → Stripe retries.
+      let refundEventRow: { id: number; processingStatus: string } | null = null;
+      let isReplay = false;
       try {
-        // Get the payment intent ID from the charge
-        const paymentIntentId = refundEvent.payment_intent as string;
-        console.log('💳 Processing refund for payment intent:', paymentIntentId);
-        
-        // Find the original payment in our system
-        const originalPayment = await storage.getPaymentByStripeId(paymentIntentId);
-        
+        if (
+          process.env.NODE_ENV !== 'production' &&
+          req.headers['x-task-222-fault-inject-persistence'] === 'true'
+        ) {
+          throw new PersistenceClaimError(
+            'TASK_222_FAULT_INJECT_PERSISTENCE: synthetic DB failure (test header)',
+          );
+        }
+        const insertPayload: InsertRefundEvent = {
+          stripeEventId: event.id,
+          stripeRefundId: latestRefund.id,
+          stripeChargeId: (latestRefund.charge as string) || refundEvent.id || null,
+          stripePaymentIntentId: paymentIntentId,
+          eventType: 'charge.refunded',
+          amountCents: refundAmountCents,
+          currency: latestRefund.currency || refundEvent.currency || 'usd',
+          refundStatus: latestRefund.status || null,
+          reason: latestRefund.reason || null,
+          failureReason: latestRefund.failure_reason ?? null,
+          originalPaymentId: null,
+          originalPaymentHistoryId: null,
+          processingStatus: 'persisted',
+          rawEvent: event,
+        };
+        const claimed = await storage.saveRefundEvent(insertPayload);
+        refundEventRow = { id: claimed.id, processingStatus: claimed.processingStatus };
+        persistedRowId = claimed.id;
+        console.log('🔒 [Task#222] claimed charge.refunded in refund_events', {
+          eventId: event.id,
+          refundId: latestRefund.id,
+          persistedRowId,
+        });
+      } catch (claimErr: unknown) {
+        if (claimErr instanceof PersistenceClaimError) throw claimErr;
+        const errObj = claimErr as { code?: string; message?: string } | null;
+        const isUnique =
+          errObj?.code === '23505' ||
+          /unique|duplicate/i.test(errObj?.message || '');
+        if (isUnique) {
+          const existing = await storage.getRefundEventByEventId(event.id);
+          if (!existing) {
+            throw new PersistenceClaimError(
+              `[Task#222] unique violation on saveRefundEvent but no existing row for event=${event.id}`,
+              claimErr,
+            );
+          }
+          refundEventRow = { id: existing.id, processingStatus: existing.processingStatus };
+          persistedRowId = existing.id;
+          isReplay = true;
+          console.warn('[Task#222][Webhook][replay] charge.refunded already persisted — reusing row', {
+            eventId: event.id,
+            refundId: latestRefund.id,
+            persistedRowId,
+            previousProcessingStatus: existing.processingStatus,
+          });
+          if (existing.processingStatus === 'processed') {
+            // Side effects already applied — true idempotent replay.
+            break;
+          }
+          // Otherwise fall through and re-attempt side effects (the prior
+          // attempt persisted but crashed before completing them).
+        } else {
+          throw new PersistenceClaimError(
+            `[Task#222] saveRefundEvent failed for event=${event.id} refund=${latestRefund.id}: ${errObj?.message ?? String(claimErr)}`,
+            claimErr,
+          );
+        }
+      }
+
+      // ---- Original payment lookup (Bug A fix) --------------------
+      // Try BOTH the legacy `payments` table AND the unified
+      // `stripe_payment_history` table. Either may carry the original
+      // charge depending on which payment path created it.
+      const originalPayment = paymentIntentId
+        ? await storage.getPaymentByStripeId(paymentIntentId)
+        : undefined;
+      const originalPaymentHistory = paymentIntentId
+        ? await storage.getStripePaymentByIntentId(paymentIntentId)
+        : undefined;
+
+      if (!originalPayment && !originalPaymentHistory) {
+        // No matching payment in EITHER table — durably record this as a
+        // failed lookup so ops can audit/replay later. Ack 200 (we have
+        // a durable row); do not 5xx (Stripe shouldn't retry forever
+        // for an unknown payment).
+        const skip = {
+          eventId: event.id,
+          eventType: event.type,
+          refundId: latestRefund.id,
+          paymentIntentId,
+          reason: 'original_payment_not_found_in_either_table',
+          metadataKey: 'payment_intent_id',
+          metadataValue: paymentIntentId,
+          persistedRowId,
+        };
+        console.warn('[Task#222][Webhook][skip] charge.refunded — no original payment found in payments OR stripe_payment_history', skip);
+        recordTask222Skip(skip);
+        if (refundEventRow) {
+          await storage.updateRefundEvent(refundEventRow.id, {
+            processingStatus: 'failed_lookup',
+          });
+        }
+        break;
+      }
+
+      // Backfill the refund_events row with the cross-references now
+      // that we know which side(s) matched.
+      if (refundEventRow) {
+        await storage.updateRefundEvent(refundEventRow.id, {
+          originalPaymentId: originalPayment?.id ?? null,
+          originalPaymentHistoryId: originalPaymentHistory?.id ?? null,
+        });
+      }
+
+      try {
+        // The legacy `payments`-table side effects (create refund payment
+        // row, update enrollments, send email, broadcast) only apply when
+        // the legacy row exists. For unified-processor-only payments we
+        // skip those — the negative payment_allocation below is the
+        // unified source of truth — and surface a structured info skip.
         if (!originalPayment) {
-          console.log('⚠️ Original payment not found for refund:', paymentIntentId);
+          const skip = {
+            eventId: event.id,
+            eventType: event.type,
+            refundId: latestRefund.id,
+            paymentIntentId,
+            reason: 'unified_processor_payment_no_legacy_row',
+            metadataKey: 'stripe_payment_history.id',
+            metadataValue: String(originalPaymentHistory!.id),
+            persistedRowId,
+          };
+          console.warn('[Task#222][Webhook][skip] legacy `payments` row absent — using unified path only', skip);
+          recordTask222Skip(skip);
+        }
+        if (!originalPayment) {
+          // Unified-only path: roll back enrollment balances driven by the
+          // POSITIVE payment_allocations rows that the unified processor
+          // wrote for this stripe_payment_history. Each enrollment gets
+          // its share refunded (totalPaid reduced, status transitioned)
+          // and a matching NEGATIVE payment_allocation is written so the
+          // ledger reflects the refund as the source of truth.
+          const unifiedHistoryId = originalPaymentHistory!.id;
+          const positiveAllocs = (
+            await storage.getPaymentAllocationsByPaymentHistoryId(unifiedHistoryId)
+          ).filter((a) => a.allocatedAmountCents > 0 && a.enrollmentId !== null);
+
+          let remainingUnifiedRefund = refundAmountCents;
+          for (let i = 0; i < positiveAllocs.length; i++) {
+            const alloc = positiveAllocs[i];
+            const enrollmentId = alloc.enrollmentId as number;
+            const enrollment = await storage.getProgramEnrollmentById(enrollmentId);
+            if (!enrollment) continue;
+            const currentPaid = enrollment.totalPaid || 0;
+            const isLast = i === positiveAllocs.length - 1;
+            const refundForEnrollment = isLast
+              ? remainingUnifiedRefund
+              : Math.min(remainingUnifiedRefund, alloc.allocatedAmountCents, currentPaid);
+            if (refundForEnrollment <= 0) continue;
+
+            const newPaid = Math.max(0, currentPaid - refundForEnrollment);
+            const newRemaining = Math.max(0, (enrollment.totalCost || 0) - newPaid);
+            const paymentStatus: 'pending' | 'completed' | 'partial_payment' | 'refunded' =
+              newPaid === 0 ? 'refunded' : newRemaining > 0 ? 'partial_payment' : 'completed';
+            await storage.updateProgramEnrollment(enrollment.id, {
+              totalPaid: newPaid,
+              remainingBalance: newRemaining,
+              paymentStatus,
+            });
+            console.log(
+              `✅ [Task#222 unified] Rolled back enrollment ${enrollment.id}: refunded=$${refundForEnrollment / 100}, paid=$${newPaid / 100}, remaining=$${newRemaining / 100}, status=${paymentStatus}`,
+            );
+
+            const negativeAlloc: InsertPaymentAllocation = {
+              paymentHistoryId: unifiedHistoryId,
+              enrollmentId: enrollment.id,
+              membershipEnrollmentId: null,
+              sourceAllocationId: alloc.id,
+              allocatedAmountCents: -refundForEnrollment,
+              allocationType: 'refund',
+              adminComment: `Stripe refund ${latestRefund.id} (unified)`,
+              metadata: {
+                stripeRefundId: latestRefund.id,
+                refundReason: latestRefund.reason || 'Refund processed',
+                processedViaWebhook: true,
+                stripeEventId: event.id,
+              },
+            };
+            await storage.createPaymentAllocation(negativeAlloc);
+            remainingUnifiedRefund -= refundForEnrollment;
+          }
+
+          if (positiveAllocs.length === 0) {
+            // No positive allocations to anchor the rollback to — still
+            // write a single membership/no-enrollment negative allocation
+            // so the unified ledger is non-empty.
+            const negativeAlloc: InsertPaymentAllocation = {
+              paymentHistoryId: unifiedHistoryId,
+              enrollmentId: null,
+              membershipEnrollmentId: null,
+              sourceAllocationId: null,
+              allocatedAmountCents: -refundAmountCents,
+              allocationType: 'refund',
+              adminComment: `Stripe refund ${latestRefund.id} (unified, no enrollment alloc)`,
+              metadata: {
+                stripeRefundId: latestRefund.id,
+                refundReason: latestRefund.reason || 'Refund processed',
+                processedViaWebhook: true,
+                stripeEventId: event.id,
+              },
+            };
+            await storage.createPaymentAllocation(negativeAlloc);
+          }
+
+          if (refundEventRow) {
+            await storage.updateRefundEvent(refundEventRow.id, {
+              processingStatus: 'processed',
+            });
+          }
           break;
         }
-        
-        // Get refund details
-        const refunds = refundEvent.refunds?.data || [];
-        if (refunds.length === 0) {
-          console.log('⚠️ No refund data found in charge.refunded event');
-          break;
-        }
-        
-        const latestRefund = refunds[refunds.length - 1]; // Get the most recent refund
-        const refundAmountCents = latestRefund.amount;
-        
+
+        // ---- Legacy side-effects (unchanged from prior handler) ----
         console.log(`🔄 Processing refund of $${refundAmountCents / 100} for payment ${originalPayment.id}`);
-        
-        // IDEMPOTENCY CHECK: Skip if this refund was already processed
+
+        // Idempotency on the legacy `payments` row: if a refund payment
+        // already exists for this stripe refund id, do not duplicate it.
         const allPayments = await storage.getAllPayments();
-        const existingRefund = allPayments.find((p: any) => 
+        const existingRefund = allPayments.find((p: any) =>
           p.stripePaymentIntentId === latestRefund.id
         );
-        
         if (existingRefund) {
-          console.log(`✅ Refund ${latestRefund.id} already processed, skipping duplicate webhook`);
+          console.log(`✅ Refund ${latestRefund.id} already processed in payments table, skipping`);
+          if (refundEventRow) {
+            await storage.updateRefundEvent(refundEventRow.id, {
+              processingStatus: 'processed',
+            });
+          }
           break;
         }
-        
+
         // Create refund payment record
         const refundPaymentData = {
           schoolId: originalPayment.schoolId || 1,
@@ -1635,7 +1902,8 @@ export const webhookHandler = async (req: Request, res: Response) => {
                   console.log(`⚠️ No payment history found for intent ${paymentIntentId}, cannot create allocation`);
                 }
               } catch (allocationError) {
-                console.error('⚠️ Error creating refund allocation (non-blocking):', allocationError);
+                console.error('❌ Error creating refund allocation:', allocationError);
+                throw allocationError;
               }
               
               remainingRefund -= refundForThisEnrollment;
@@ -1647,6 +1915,11 @@ export const webhookHandler = async (req: Request, res: Response) => {
           }
         } catch (enrollmentError) {
           console.error('❌ Failed to update enrollments for webhook refund:', enrollmentError);
+          // Rethrow so the outer charge.refunded catch marks the
+          // refund_event as failed_processing and returns 5xx for Stripe
+          // retry. Enrollment rollback is the critical side effect; we
+          // must NOT silently ack a refund whose enrollment state is wrong.
+          throw enrollmentError;
         }
         
         // Send refund notification email
@@ -1705,12 +1978,121 @@ export const webhookHandler = async (req: Request, res: Response) => {
         } catch (error) {
           console.error('❌ Failed to push real-time refund update:', error);
         }
-        
-        console.log('✅ Refund webhook processing complete');
+
+        // Mark the durable refund_events row as processed once side
+        // effects complete. Used by the regression test (P5) and the
+        // replay path to short-circuit duplicate Stripe deliveries.
+        if (refundEventRow) {
+          await storage.updateRefundEvent(refundEventRow.id, {
+            processingStatus: 'processed',
+          });
+        }
+        console.log('✅ Refund webhook processing complete', { isReplay, persistedRowId });
       } catch (error) {
-        console.error('❌ Error processing refund webhook:', error);
+        console.error('❌ Error processing refund webhook side effects:', error);
+        // Side effects failed AFTER the durable row was claimed. Mark the
+        // refund_event row as failed_processing for ops visibility, surface
+        // a structured skip, then RETHROW so the outer handler returns 5xx
+        // and Stripe retries the same event id. The unique constraint on
+        // stripe_event_id makes the retry idempotent for the event row
+        // while re-running the side effects.
+        recordTask222Skip({
+          eventId: event.id,
+          eventType: event.type,
+          refundId: latestRefund.id,
+          paymentIntentId,
+          reason: 'side_effects_failed_after_persistence',
+          metadataKey: 'error.message',
+          metadataValue: (error as Error)?.message ?? null,
+          persistedRowId,
+        });
+        if (refundEventRow) {
+          try {
+            await storage.updateRefundEvent(refundEventRow.id, {
+              processingStatus: 'failed_processing',
+              failureReason: (error as Error)?.message ?? 'unknown',
+            });
+          } catch (updateErr) {
+            console.error('❌ Could not mark refund_event as failed_processing:', updateErr);
+          }
+        }
+        throw error;
       }
       break;
+    }
+
+    case 'refund.updated':
+    case 'refund.failed': {
+      // Task #222 — refund.updated / refund.failed are persistence-required
+      // events: their job is to record state transitions of an existing
+      // refund (pending → succeeded, → failed, → canceled) so reconciliation
+      // can replay from refund_events. There are no side effects beyond the
+      // durable row + structured skip log.
+      const refundObj = event.data.object as Stripe.Refund;
+      console.log(`🔄 ${event.type}:`, refundObj.id, refundObj.status);
+
+      try {
+        if (
+          process.env.NODE_ENV !== 'production' &&
+          req.headers['x-task-222-fault-inject-persistence'] === 'true'
+        ) {
+          throw new PersistenceClaimError(
+            'TASK_222_FAULT_INJECT_PERSISTENCE: synthetic DB failure (test header)',
+          );
+        }
+        const insertPayload: InsertRefundEvent = {
+          stripeEventId: event.id,
+          stripeRefundId: refundObj.id,
+          stripeChargeId: (refundObj.charge as string) || null,
+          stripePaymentIntentId: (refundObj.payment_intent as string) || null,
+          eventType: event.type as 'refund.updated' | 'refund.failed',
+          amountCents: refundObj.amount,
+          currency: refundObj.currency || 'usd',
+          refundStatus: refundObj.status || null,
+          reason: refundObj.reason || null,
+          failureReason: refundObj.failure_reason || null,
+          originalPaymentId: null,
+          originalPaymentHistoryId: null,
+          processingStatus: 'persisted',
+          rawEvent: event,
+        };
+        const claimed = await storage.saveRefundEvent(insertPayload);
+        persistedRowId = claimed.id;
+        console.log(`🔒 [Task#222] claimed ${event.type} in refund_events`, {
+          eventId: event.id,
+          refundId: refundObj.id,
+          status: refundObj.status,
+          persistedRowId,
+        });
+      } catch (claimErr: unknown) {
+        if (claimErr instanceof PersistenceClaimError) throw claimErr;
+        const errObj = claimErr as { code?: string; message?: string } | null;
+        const isUnique =
+          errObj?.code === '23505' ||
+          /unique|duplicate/i.test(errObj?.message || '');
+        if (isUnique) {
+          const existing = await storage.getRefundEventByEventId(event.id);
+          if (!existing) {
+            throw new PersistenceClaimError(
+              `[Task#222] unique violation on saveRefundEvent (${event.type}) but no existing row for event=${event.id}`,
+              claimErr,
+            );
+          }
+          persistedRowId = existing.id;
+          console.warn(`[Task#222][Webhook][replay] ${event.type} already persisted — reusing row`, {
+            eventId: event.id,
+            refundId: refundObj.id,
+            persistedRowId,
+          });
+        } else {
+          throw new PersistenceClaimError(
+            `[Task#222] saveRefundEvent failed for ${event.type} event=${event.id}: ${errObj?.message ?? String(claimErr)}`,
+            claimErr,
+          );
+        }
+      }
+      break;
+    }
 
     // ===== MEMBERSHIP SUBSCRIPTION EVENTS =====
     // These were previously handled by insecure /api/stripe-webhooks/* endpoints

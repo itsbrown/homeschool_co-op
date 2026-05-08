@@ -70,7 +70,8 @@ import {
   WeekPlanBlock, InsertWeekPlanBlock, weekPlanBlocks,
   WeekPlanBlockHistory, InsertWeekPlanBlockHistory, weekPlanBlockHistory,
   StripePaymentHistory, InsertStripePaymentHistory, stripePaymentHistory,
-  EmailLog, InsertEmailLog, emailLog
+  EmailLog, InsertEmailLog, emailLog,
+  RefundEvent, InsertRefundEvent, refundEvents
 } from '../shared/schema';
 
 /**
@@ -4934,6 +4935,31 @@ export class DatabaseStorage implements IStorage {
   async getPaymentByIdempotencyKey(idempotencyKey: string): Promise<StripePaymentHistory | undefined> {
     const db = await getDb();
     const [record] = await db.select().from(stripePaymentHistory).where(eq(stripePaymentHistory.idempotencyKey, idempotencyKey)).limit(1);
+    return record;
+  }
+
+  // Task #222 — Refund Event durability methods. saveRefundEvent intentionally
+  // lets the unique-violation (Postgres 23505) on stripe_event_id propagate so
+  // the webhook handler can claim/replay deterministically.
+  async saveRefundEvent(event: InsertRefundEvent): Promise<RefundEvent> {
+    const db = await getDb();
+    const [record] = await db.insert(refundEvents).values(event).returning();
+    return record;
+  }
+
+  async getRefundEventByEventId(stripeEventId: string): Promise<RefundEvent | undefined> {
+    const db = await getDb();
+    const [record] = await db.select().from(refundEvents).where(eq(refundEvents.stripeEventId, stripeEventId)).limit(1);
+    return record;
+  }
+
+  async updateRefundEvent(id: number, update: Partial<InsertRefundEvent>): Promise<RefundEvent | undefined> {
+    const db = await getDb();
+    const [record] = await db
+      .update(refundEvents)
+      .set({ ...update, updatedAt: new Date() })
+      .where(eq(refundEvents.id, id))
+      .returning();
     return record;
   }
 

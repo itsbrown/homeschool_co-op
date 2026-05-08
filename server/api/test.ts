@@ -9,6 +9,7 @@ import { eq, sql } from 'drizzle-orm';
 import {
   programEnrollments,
   stripePaymentHistory,
+  refundEvents,
   credits,
   membershipEnrollments,
   type InsertProgramEnrollment,
@@ -703,6 +704,128 @@ router.get('/task-219-skips/:eventId', async (req: Request, res: Response) => {
   if (!eventId) return res.status(400).json({ error: 'eventId required' });
   const { getTask219SkipsForEvent } = await import('../lib/task219SkipLog');
   return res.json({ entries: getTask219SkipsForEvent(eventId) });
+});
+
+/** GET /api/test/task-222-skips/:eventId — Task #222 runtime skip-WARN proof. */
+router.get('/task-222-skips/:eventId', async (req: Request, res: Response) => {
+  const eventId = req.params.eventId;
+  if (!eventId) return res.status(400).json({ error: 'eventId required' });
+  const { getTask222SkipsForEvent } = await import('../lib/task222SkipLog');
+  return res.json({ entries: getTask222SkipsForEvent(eventId) });
+});
+
+/** GET /api/test/refund-event-by-event/:eventId — Task #222 idempotency proof. */
+router.get('/refund-event-by-event/:eventId', async (req: Request, res: Response) => {
+  try {
+    const eventId = req.params.eventId;
+    if (!eventId) return res.status(400).json({ error: 'eventId required' });
+    const db = await getDb();
+    if (!db) return res.status(500).json({ error: 'requires Postgres' });
+    const rows = await db.select().from(refundEvents).where(eq(refundEvents.stripeEventId, eventId));
+    return res.json({
+      count: rows.length,
+      rows: rows.map((r) => ({
+        id: r.id,
+        stripeEventId: r.stripeEventId,
+        stripeRefundId: r.stripeRefundId,
+        stripePaymentIntentId: r.stripePaymentIntentId,
+        eventType: r.eventType,
+        amountCents: r.amountCents,
+        refundStatus: r.refundStatus,
+        processingStatus: r.processingStatus,
+        originalPaymentId: r.originalPaymentId,
+        originalPaymentHistoryId: r.originalPaymentHistoryId,
+        createdAt: r.createdAt,
+      })),
+    });
+  } catch (error) {
+    console.error('[Test] refund-event-by-event error:', error);
+    return res.status(500).json({ error: String(error) });
+  }
+});
+
+/** GET /api/test/refund-event-count-by-refund-id/:refundId — Task #222 P5 dedup proof. */
+router.get('/refund-event-count-by-refund-id/:refundId', async (req: Request, res: Response) => {
+  try {
+    const refundId = req.params.refundId;
+    if (!refundId) return res.status(400).json({ error: 'refundId required' });
+    const db = await getDb();
+    if (!db) return res.status(500).json({ error: 'requires Postgres' });
+    const rows = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(refundEvents)
+      .where(eq(refundEvents.stripeRefundId, refundId));
+    return res.json({ count: rows[0]?.count ?? 0 });
+  } catch (error) {
+    console.error('[Test] refund-event-count error:', error);
+    return res.status(500).json({ error: String(error) });
+  }
+});
+
+/**
+ * POST /api/test/seed-unified-payment
+ * Pre-inserts a stripe_payment_history row WITHOUT a corresponding `payments`
+ * row — simulating a unified-processor charge. Used by the Bug-A regression
+ * test to prove the refund handler resolves payments via stripe_payment_history.
+ * Body: { paymentIntentId, userId, amount }
+ */
+router.post('/seed-unified-payment', async (req: Request, res: Response) => {
+  try {
+    const { paymentIntentId, userId, amount, enrollmentId } = req.body ?? {};
+    if (!paymentIntentId || !userId) {
+      return res.status(400).json({ error: 'paymentIntentId and userId required' });
+    }
+    const db = await getDb();
+    if (!db) return res.status(500).json({ error: 'Postgres required' });
+    const seedRow: typeof stripePaymentHistory.$inferInsert = {
+      userId,
+      paymentIntentId,
+      customerId: null,
+      subscriptionId: null,
+      amount: amount ?? 1000,
+      currency: 'usd',
+      status: 'succeeded',
+      paymentMethod: null,
+      description: `Task #222 unified-only seed for ${paymentIntentId}`,
+      idempotencyKey: `task222-seed:${nanoid(8)}`,
+      source: 'stripe',
+      stripeCreatedAt: new Date(),
+    };
+    const inserted = await db.insert(stripePaymentHistory).values(seedRow).returning();
+    const historyId = inserted[0]?.id;
+
+    // Optionally seed a positive payment_allocation linking the unified
+    // payment to a program_enrollment AND advance the enrollment's
+    // totalPaid so the refund-rollback assertions have something to roll back.
+    let allocationId: number | null = null;
+    if (historyId && typeof enrollmentId === 'number') {
+      await storage.createPaymentAllocation({
+        paymentHistoryId: historyId,
+        enrollmentId,
+        membershipEnrollmentId: null,
+        sourceAllocationId: null,
+        allocatedAmountCents: amount ?? 1000,
+        allocationType: 'payment',
+        adminComment: 'Task #222 unified seed',
+        metadata: { seededBy: 'task222-test' },
+      });
+      const existing = await storage.getProgramEnrollmentById(enrollmentId);
+      if (existing) {
+        const newPaid = (existing.totalPaid || 0) + (amount ?? 1000);
+        const newRem = Math.max(0, (existing.totalCost || 0) - newPaid);
+        await storage.updateProgramEnrollment(enrollmentId, {
+          totalPaid: newPaid,
+          remainingBalance: newRem,
+          paymentStatus: newRem === 0 ? 'completed' : 'partial_payment',
+        });
+      }
+    }
+
+    return res.json({ id: historyId, paymentIntentId, allocationId });
+  } catch (error) {
+    console.error('[Test] seed-unified-payment error:', error);
+    return res.status(500).json({ error: String(error) });
+  }
 });
 
 /**
