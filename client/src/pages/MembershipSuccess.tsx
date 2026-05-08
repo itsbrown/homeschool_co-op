@@ -6,6 +6,7 @@ import { CheckCircle, ArrowRight, Calendar, CreditCard, Loader2, AlertCircle, Bu
 import ParentAppShell from '@/components/layout/ParentAppShell';
 import { useToast } from '@/hooks/use-toast';
 import { queryClient } from '@/lib/queryClient';
+import { refreshPostPaymentState } from '@/lib/postPaymentRefresh';
 import { useAuth } from '@/components/SupabaseProvider';
 
 interface MembershipDetails {
@@ -92,7 +93,7 @@ export default function MembershipSuccess() {
           });
         }
 
-        queryClient.invalidateQueries({ queryKey: ['/api/parent/memberships'] });
+        await refreshPostPaymentState(queryClient);
 
       } catch (error) {
         console.error('❌ Error processing membership:', error);

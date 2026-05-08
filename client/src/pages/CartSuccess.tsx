@@ -6,6 +6,7 @@ import { CheckCircle, ArrowRight, Calendar, CreditCard, Loader2, AlertCircle } f
 import ParentAppShell from '@/components/layout/ParentAppShell';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
+import { refreshPostPaymentState } from '@/lib/postPaymentRefresh';
 import { useAuth } from '@/components/SupabaseProvider';
 import { useCart } from '@/contexts/CartContext';
 import { trackPurchase } from '@/lib/analytics';
@@ -130,13 +131,8 @@ export default function CartSuccess() {
             // Continue anyway - cart already cleared in localStorage
           }
           
-          // Invalidate and refetch the exact keys used by cart/billing views
-          await queryClient.invalidateQueries({ queryKey: ['/api/parent/enrollments'] });
-          await queryClient.refetchQueries({ queryKey: ['/api/parent/enrollments'], type: 'all' });
-          queryClient.invalidateQueries({ queryKey: ['billing-summary'] });
-          queryClient.invalidateQueries({ queryKey: ['/api/billing/summary'] });
-          queryClient.invalidateQueries({ queryKey: ['payment-history'] });
-          queryClient.invalidateQueries({ queryKey: ['/api/payment-history/history'] });
+          // Refresh all payment/membership caches so "Pay now" state converges immediately.
+          await refreshPostPaymentState(queryClient);
           
           console.log('✅ Cart cleared and queries invalidated');
           
