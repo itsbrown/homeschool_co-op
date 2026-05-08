@@ -9,6 +9,47 @@ import { generateMemberId } from '../utils/membership';
 
 const router = express.Router();
 
+/** Unverified JSON webhook routes below are blocked in production; use POST /api/stripe/webhook. */
+function blockLegacyStripeWebhookInProduction(routeLabel: string): express.RequestHandler {
+  return (_req, res, next) => {
+    if (process.env.NODE_ENV === 'production') {
+      console.warn(`Blocked legacy unverified Stripe route (${routeLabel}) in production`);
+      return res.status(410).json({
+        error: 'Endpoint disabled',
+        message:
+          'Configure Stripe to send all events (including membership) to POST /api/stripe/webhook.',
+      });
+    }
+    next();
+  };
+}
+
+/**
+ * Membership subscription Stripe events — invoked from verified webhook-handler and (non-prod only)
+ * legacy POST /api/stripe-webhooks/membership for unsigned test payloads.
+ */
+export async function processMembershipStripeEvent(event: Stripe.Event): Promise<void> {
+  switch (event.type) {
+    case 'invoice.paid':
+      await handleMembershipInvoicePaid(event.data.object);
+      break;
+    case 'invoice.payment_failed':
+      await handleMembershipPaymentFailed(event.data.object);
+      break;
+    case 'customer.subscription.created':
+      await handleMembershipSubscriptionCreated(event.data.object);
+      break;
+    case 'customer.subscription.updated':
+      await handleMembershipSubscriptionUpdated(event.data.object);
+      break;
+    case 'customer.subscription.deleted':
+      await handleMembershipSubscriptionDeleted(event.data.object);
+      break;
+    default:
+      console.log('ℹ️ Unhandled membership webhook event type:', event.type);
+  }
+}
+
 /**
  * Safely parse Stripe Unix timestamp to Date
  * Returns current date as fallback if timestamp is invalid
@@ -29,7 +70,7 @@ function safeStripeDate(timestamp: number | undefined | null): Date {
 /**
  * Enhanced Stripe webhook handler for subscription schedules
  */
-router.post('/subscription-schedules', async (req, res) => {
+router.post('/subscription-schedules', blockLegacyStripeWebhookInProduction('subscription-schedules'), async (req, res) => {
   try {
     console.log('🔔 Stripe subscription schedule webhook received');
     
@@ -444,45 +485,10 @@ async function handleFinalPaymentFailure(schedule: any, invoice: any) {
  * Stripe webhook handler for membership subscriptions
  * Handles: invoice.paid, invoice.payment_failed, customer.subscription.updated
  */
-router.post('/membership', async (req, res) => {
+router.post('/membership', blockLegacyStripeWebhookInProduction('membership'), async (req, res) => {
   try {
-    console.log('🔔 Stripe membership webhook received');
-    
-    const event = req.body;
-    
-    // In a real implementation, verify webhook signature here:
-    // const signature = req.headers['stripe-signature'];
-    // const event = stripe.webhooks.constructEvent(req.body, signature, webhookSecret);
-    
-    switch (event.type) {
-      case 'invoice.paid':
-        console.log('✅ Invoice paid for membership');
-        await handleMembershipInvoicePaid(event.data.object);
-        break;
-        
-      case 'invoice.payment_failed':
-        console.log('❌ Invoice payment failed for membership');
-        await handleMembershipPaymentFailed(event.data.object);
-        break;
-        
-      case 'customer.subscription.created':
-        console.log('🆕 Subscription created for membership');
-        await handleMembershipSubscriptionCreated(event.data.object);
-        break;
-        
-      case 'customer.subscription.updated':
-        console.log('🔄 Subscription updated for membership');
-        await handleMembershipSubscriptionUpdated(event.data.object);
-        break;
-        
-      case 'customer.subscription.deleted':
-        console.log('🗑️ Subscription deleted/cancelled for membership');
-        await handleMembershipSubscriptionDeleted(event.data.object);
-        break;
-        
-      default:
-        console.log('ℹ️ Unhandled membership webhook event type:', event.type);
-    }
+    console.log('🔔 Stripe membership webhook received (legacy unverified route; dev/test only)');
+    await processMembershipStripeEvent(req.body as Stripe.Event);
 
     res.json({ received: true });
   } catch (error) {

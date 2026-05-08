@@ -4,6 +4,7 @@ import { storage } from './storage';
 import { sendPaymentReceipt } from './lib/email-service';
 import { getStripeClient } from './config/stripe';
 import { createReceiptFromPayment } from './services/receiptService';
+import { processMembershipStripeEvent } from './api/stripe-webhook';
 
 // Stripe client will be lazily initialized within the webhook handler
 const RECENT_WEBHOOK_EVENTS_MAX = 1000;
@@ -867,6 +868,14 @@ export const webhookHandler = async (req: Request, res: Response) => {
       } catch (error) {
         console.error('❌ Error processing refund webhook:', error);
       }
+      break;
+
+    case 'invoice.paid':
+    case 'invoice.payment_failed':
+    case 'customer.subscription.created':
+    case 'customer.subscription.updated':
+    case 'customer.subscription.deleted':
+      await processMembershipStripeEvent(event);
       break;
 
       default:
