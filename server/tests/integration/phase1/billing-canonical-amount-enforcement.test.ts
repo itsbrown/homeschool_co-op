@@ -127,6 +127,10 @@ describe('Integration: Billing canonical amount enforcement', () => {
     return { Authorization: 'Bearer test-token' };
   }
 
+  function idempotencyHeader(value: string): Record<string, string> {
+    return { 'Idempotency-Key': `billing-canonical-${value}` };
+  }
+
   function stripeAmountCentsFromCall(startingCallCount: number): number {
     const nextCall = mockStripePaymentIntentsCreate.mock.calls[startingCallCount];
     expect(nextCall).toBeDefined();
@@ -154,6 +158,7 @@ describe('Integration: Billing canonical amount enforcement', () => {
     const response = await request(app)
       .post('/api/billing/pay-balance')
       .set(authHeader())
+      .set(idempotencyHeader('matching'))
       .send({
         enrollmentIds: [enrollmentA.id, enrollmentB.id],
         paymentPlan: 'full',
@@ -164,12 +169,12 @@ describe('Integration: Billing canonical amount enforcement', () => {
     expect(stripeAmountCentsFromCall(initialCallCount)).toBe(expectedAmount);
   });
 
-  it('ignores mismatched client total and charges server-derived amount', async () => {
+  it('returns divergence conflict for mismatched client total', async () => {
     const initialCallCount = mockStripePaymentIntentsCreate.mock.calls.length;
-    const expectedAmount = await currentAuthoritativeAmountCents([enrollmentA.id, enrollmentB.id]);
     const response = await request(app)
       .post('/api/billing/pay-balance')
       .set(authHeader())
+      .set(idempotencyHeader('mismatched'))
       .send({
         enrollmentIds: [enrollmentA.id, enrollmentB.id],
         paymentPlan: 'full',
@@ -177,16 +182,21 @@ describe('Integration: Billing canonical amount enforcement', () => {
         total: 1,
       });
 
-    expect(response.status).toBe(200);
-    expect(stripeAmountCentsFromCall(initialCallCount)).toBe(expectedAmount);
+    expect(response.status).toBe(409);
+    expect(response.body).toEqual(
+      expect.objectContaining({
+        error: expect.any(String),
+      })
+    );
+    expect(mockStripePaymentIntentsCreate.mock.calls.length).toBe(initialCallCount);
   });
 
-  it('ignores malformed client total values and charges server-derived amount', async () => {
+  it('returns divergence conflict for malformed client total values', async () => {
     const initialCallCount = mockStripePaymentIntentsCreate.mock.calls.length;
-    const expectedAmount = await currentAuthoritativeAmountCents([enrollmentA.id, enrollmentB.id]);
     const response = await request(app)
       .post('/api/billing/pay-balance')
       .set(authHeader())
+      .set(idempotencyHeader('malformed'))
       .send({
         enrollmentIds: [enrollmentA.id, enrollmentB.id],
         paymentPlan: 'full',
@@ -194,8 +204,13 @@ describe('Integration: Billing canonical amount enforcement', () => {
         total: 'not-a-number',
       });
 
-    expect(response.status).toBe(200);
-    expect(stripeAmountCentsFromCall(initialCallCount)).toBe(expectedAmount);
+    expect(response.status).toBe(409);
+    expect(response.body).toEqual(
+      expect.objectContaining({
+        error: expect.any(String),
+      })
+    );
+    expect(mockStripePaymentIntentsCreate.mock.calls.length).toBe(initialCallCount);
   });
 
   it('works when client total is absent and still charges server-derived amount', async () => {
@@ -204,6 +219,7 @@ describe('Integration: Billing canonical amount enforcement', () => {
     const response = await request(app)
       .post('/api/billing/pay-balance')
       .set(authHeader())
+      .set(idempotencyHeader('absent'))
       .send({
         enrollmentIds: [enrollmentA.id, enrollmentB.id],
         paymentPlan: 'full',

@@ -42,6 +42,10 @@ jest.mock('@supabase/supabase-js', () => ({
 import billingRouter, { processBalancePayment, splitCentsEvenly } from '../api/billing';
 
 describe('Billing cents consistency', () => {
+  function idempotencyHeader(value: string): Record<string, string> {
+    return { 'Idempotency-Key': `billing-cents-${value}` };
+  }
+
   beforeEach(() => {
     jest.clearAllMocks();
     mockGetStripeClient.mockResolvedValue({
@@ -81,7 +85,7 @@ describe('Billing cents consistency', () => {
     expect(allocation.reduce((sum, amount) => sum + amount, 0)).toBe(10001);
   });
 
-  it('treats fractional client amount as advisory and uses authoritative cents amount', async () => {
+  it('returns divergence conflict for fractional client amount', async () => {
     const app = express();
     app.use(express.json());
     app.use('/api/billing', billingRouter);
@@ -89,6 +93,7 @@ describe('Billing cents consistency', () => {
     const response = await request(app)
       .post('/api/billing/create-payment-intent')
       .set('Authorization', 'Bearer test-token')
+      .set(idempotencyHeader('fractional'))
       .send({
         amount: 1099.5,
         currency: 'usd',
@@ -96,15 +101,16 @@ describe('Billing cents consistency', () => {
         enrollmentDetails: [{ enrollmentId: 101 }],
       });
 
-    expect(response.status).toBe(200);
-    expect(mockStripeCreate).toHaveBeenCalledWith(
+    expect(response.status).toBe(409);
+    expect(response.body).toEqual(
       expect.objectContaining({
-        amount: 1099,
+        error: expect.any(String),
       }),
     );
+    expect(mockStripeCreate).not.toHaveBeenCalled();
   });
 
-  it('treats malformed client amount as advisory and uses authoritative cents amount', async () => {
+  it('returns divergence conflict for malformed client amount', async () => {
     const app = express();
     app.use(express.json());
     app.use('/api/billing', billingRouter);
@@ -112,6 +118,7 @@ describe('Billing cents consistency', () => {
     const response = await request(app)
       .post('/api/billing/create-payment-intent')
       .set('Authorization', 'Bearer test-token')
+      .set(idempotencyHeader('malformed'))
       .send({
         amount: '12.34',
         currency: 'usd',
@@ -119,12 +126,13 @@ describe('Billing cents consistency', () => {
         enrollmentDetails: [{ enrollmentId: 101 }],
       });
 
-    expect(response.status).toBe(200);
-    expect(mockStripeCreate).toHaveBeenCalledWith(
+    expect(response.status).toBe(409);
+    expect(response.body).toEqual(
       expect.objectContaining({
-        amount: 1099,
+        error: expect.any(String),
       }),
     );
+    expect(mockStripeCreate).not.toHaveBeenCalled();
   });
 
   it('uses integer cents as-is without 100x conversion drift', async () => {
@@ -135,6 +143,7 @@ describe('Billing cents consistency', () => {
     const response = await request(app)
       .post('/api/billing/create-payment-intent')
       .set('Authorization', 'Bearer test-token')
+      .set(idempotencyHeader('integer'))
       .send({
         amount: 1099,
         currency: 'usd',

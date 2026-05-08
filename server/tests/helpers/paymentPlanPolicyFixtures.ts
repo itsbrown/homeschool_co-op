@@ -5,7 +5,10 @@ export interface PaymentPlanPolicyFixture {
   paymentFrequency: "one_time" | "weekly" | "biweekly" | "monthly";
   expectedInstallmentCount: number;
   expectedFirstChargeCents?: number;
+  policyIntent: "baseline_supported_plan" | "odd_cent_regression_guard";
 }
+
+export const SUPPORTED_PAYMENT_PLANS = ["full", "deposit", "split", "biweekly"] as const;
 
 /**
  * Regression matrix substrate for payment plan policy tests.
@@ -20,6 +23,7 @@ export function buildPaymentPlanPolicyMatrix(): PaymentPlanPolicyFixture[] {
       paymentFrequency: "one_time",
       expectedInstallmentCount: 1,
       expectedFirstChargeCents: 10000,
+      policyIntent: "baseline_supported_plan",
     },
     {
       name: "deposit baseline",
@@ -28,6 +32,7 @@ export function buildPaymentPlanPolicyMatrix(): PaymentPlanPolicyFixture[] {
       paymentFrequency: "one_time",
       expectedInstallmentCount: 2,
       expectedFirstChargeCents: 1000,
+      policyIntent: "baseline_supported_plan",
     },
     {
       name: "split baseline",
@@ -36,6 +41,7 @@ export function buildPaymentPlanPolicyMatrix(): PaymentPlanPolicyFixture[] {
       paymentFrequency: "one_time",
       expectedInstallmentCount: 2,
       expectedFirstChargeCents: 5001,
+      policyIntent: "odd_cent_regression_guard",
     },
     {
       name: "biweekly baseline",
@@ -44,6 +50,7 @@ export function buildPaymentPlanPolicyMatrix(): PaymentPlanPolicyFixture[] {
       paymentFrequency: "biweekly",
       expectedInstallmentCount: 4,
       expectedFirstChargeCents: 2501,
+      policyIntent: "odd_cent_regression_guard",
     },
   ];
 }

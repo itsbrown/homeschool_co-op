@@ -119,33 +119,48 @@ describe('Integration: Billing server-authoritative amount enforcement', () => {
       warnSpy.mockRestore();
     });
 
-    it('ignores mismatched client amount and logs warning', async () => {
+    it('returns recoverable divergence for mismatched client amount', async () => {
       const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
       const response = await request(app).post(endpoint).set(authHeader).send(payload(1));
 
-      expect(response.status).toBe(200);
-      expect(mockPaymentIntentsCreate).toHaveBeenCalledWith(
-        expect.objectContaining({ amount: 5000 })
+      expect(response.status).toBe(409);
+      expect(response.body).toEqual(
+        expect.objectContaining({
+          success: false,
+          error: 'AMOUNT_DIVERGENCE',
+          recoverable: true,
+          action: 'REFRESH_AND_REPRICE',
+          divergence: expect.objectContaining({
+            operation: 'billing_create_payment_intent',
+            clientAmountCents: 1,
+            authoritativeAmountCents: 5000,
+          }),
+        })
       );
-      expect(warnSpy).toHaveBeenCalledWith(
-        '⚠️ Client amount mismatch ignored in favor of server-computed amount:',
-        expect.objectContaining({ clientAmount: 1, authoritativeAmount: 5000 })
-      );
+      expect(mockPaymentIntentsCreate).not.toHaveBeenCalled();
       warnSpy.mockRestore();
     });
 
-    it('ignores malformed client amount and logs warning', async () => {
+    it('returns recoverable divergence for malformed client amount', async () => {
       const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
       const response = await request(app).post(endpoint).set(authHeader).send(payload('abc'));
 
-      expect(response.status).toBe(200);
-      expect(mockPaymentIntentsCreate).toHaveBeenCalledWith(
-        expect.objectContaining({ amount: 5000 })
+      expect(response.status).toBe(409);
+      expect(response.body).toEqual(
+        expect.objectContaining({
+          success: false,
+          error: 'AMOUNT_DIVERGENCE',
+          recoverable: true,
+          action: 'REFRESH_AND_REPRICE',
+          divergence: expect.objectContaining({
+            operation: 'billing_create_payment_intent',
+            clientAmountRaw: 'abc',
+            clientAmountMalformed: true,
+            authoritativeAmountCents: 5000,
+          }),
+        })
       );
-      expect(warnSpy).toHaveBeenCalledWith(
-        '⚠️ Malformed client amount ignored in favor of server-computed amount:',
-        expect.objectContaining({ clientAmount: 'abc', authoritativeAmount: 5000 })
-      );
+      expect(mockPaymentIntentsCreate).not.toHaveBeenCalled();
       warnSpy.mockRestore();
     });
 
@@ -219,7 +234,7 @@ describe('Integration: Billing server-authoritative amount enforcement', () => {
     const endpoint = '/api/billing/pay-balance';
     const authHeader = { Authorization: 'Bearer test-token' };
 
-    it('uses server-derived amount when client total mismatches', async () => {
+    it('returns recoverable divergence when pay-balance client total mismatches', async () => {
       const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
       const response = await request(app)
         .post(endpoint)
@@ -230,14 +245,21 @@ describe('Integration: Billing server-authoritative amount enforcement', () => {
           paymentPlan: 'full',
         });
 
-      expect(response.status).toBe(200);
-      expect(mockPaymentIntentsCreate).toHaveBeenCalledWith(
-        expect.objectContaining({ amount: 5000 })
+      expect(response.status).toBe(409);
+      expect(response.body).toEqual(
+        expect.objectContaining({
+          success: false,
+          error: 'AMOUNT_DIVERGENCE',
+          recoverable: true,
+          action: 'REFRESH_AND_REPRICE',
+          divergence: expect.objectContaining({
+            operation: 'billing_pay_balance',
+            clientAmountCents: 1,
+            authoritativeAmountCents: 5000,
+          }),
+        })
       );
-      expect(warnSpy).toHaveBeenCalledWith(
-        '⚠️ Client total mismatch ignored in favor of server-computed balance amount:',
-        expect.objectContaining({ clientTotal: 1, authoritativeAmount: 5000 })
-      );
+      expect(mockPaymentIntentsCreate).not.toHaveBeenCalled();
       warnSpy.mockRestore();
     });
 

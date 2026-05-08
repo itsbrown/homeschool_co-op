@@ -298,8 +298,8 @@ describe('Integration: Canonical amount enforcement', () => {
       .send({
         enrollmentIds: [enrollmentForBilling.id],
         paymentPlan: 'full',
-        amount: 1,
-        total: 1,
+        amount: 12345,
+        total: 12345,
       });
 
     expect(billingResponse.status).toBe(200);
@@ -367,5 +367,36 @@ describe('Integration: Canonical amount enforcement', () => {
       })
     );
     expect(mockCreateEducationalPaymentPlan).not.toHaveBeenCalled();
+  });
+
+  it('preserves supported payment-plan policy with server-authoritative totals under tampered client total', async () => {
+    const plans: Array<{ paymentPlan: string; paymentFrequency: string }> = [
+      { paymentPlan: 'full', paymentFrequency: 'one_time' },
+      { paymentPlan: 'deposit', paymentFrequency: 'one_time' },
+      { paymentPlan: 'split', paymentFrequency: 'one_time' },
+      { paymentPlan: 'biweekly', paymentFrequency: 'biweekly' },
+    ];
+
+    for (const plan of plans) {
+      mockCreateEducationalPaymentPlan.mockClear();
+      const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const response = await api.post('/api/stripe/create-payment-intent', {
+        ...baseCartPayload(),
+        paymentPlan: plan.paymentPlan,
+        paymentFrequency: plan.paymentFrequency,
+        total: 1, // Deliberately tampered client total
+      });
+
+      expect(response.status).toBe(200);
+      expect(totalAmountPassedToPlanService()).toBe(12345);
+      expect(hasClientTotalMismatchWarning(consoleWarnSpy)).toBe(true);
+
+      const firstCall = mockCreateEducationalPaymentPlan.mock.calls[0];
+      expect(firstCall[0].paymentPlan).toBe(plan.paymentPlan);
+      expect(firstCall[0].paymentFrequency).toBe(plan.paymentFrequency);
+
+      consoleWarnSpy.mockRestore();
+    }
   });
 });

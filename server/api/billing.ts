@@ -20,6 +20,36 @@ const router = Router();
 const PAY_BALANCE_IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1000;
 type PayBalanceResponsePayload = { success: true; clientSecret: string | null; paymentIntentId: string };
 const payBalanceIdempotencyStore = createInMemoryIdempotencyStore<PayBalanceResponsePayload>();
+type DivergenceAction = 'REFRESH_AND_REPRICE';
+
+function sendRecoverableDivergence(
+  res: any,
+  details: {
+    operation: string;
+    authoritativeAmountCents: number;
+    clientAmountRaw: unknown;
+    clientAmountParsed: number | null;
+    malformed: boolean;
+  }
+) {
+  return res.status(409).json({
+    success: false,
+    error: 'AMOUNT_DIVERGENCE',
+    recoverable: true,
+    action: 'REFRESH_AND_REPRICE' as DivergenceAction,
+    message: 'Client totals diverged from server-authoritative amounts. Refresh pricing and retry.',
+    divergence: {
+      operation: details.operation,
+      clientAmountRaw: details.clientAmountRaw ?? null,
+      clientAmountCents: details.clientAmountParsed,
+      clientAmountMalformed: details.malformed,
+      authoritativeAmountCents: details.authoritativeAmountCents,
+      deltaCents: details.clientAmountParsed === null
+        ? null
+        : details.clientAmountParsed - details.authoritativeAmountCents,
+    },
+  });
+}
 
 function parseIntegerCents(value: unknown): number | null {
   if (typeof value === 'number') {
@@ -350,14 +380,28 @@ router.post('/create-payment-intent', paymentRateLimit, supabaseAuth, async (req
 
     const advisoryAmount = parseAdvisoryAmountCents(amount);
     if (advisoryAmount.malformed) {
-      console.warn('⚠️ Malformed client amount ignored in favor of server-computed amount:', {
+      console.warn('⚠️ Malformed client amount diverged from server-computed amount:', {
         clientAmount: amount,
         authoritativeAmount: authoritativeAmountCents
       });
+      return sendRecoverableDivergence(res, {
+        operation: 'billing_create_payment_intent',
+        authoritativeAmountCents,
+        clientAmountRaw: amount,
+        clientAmountParsed: advisoryAmount.parsed,
+        malformed: true,
+      });
     } else if (advisoryAmount.parsed !== null && advisoryAmount.parsed !== authoritativeAmountCents) {
-      console.warn('⚠️ Client amount mismatch ignored in favor of server-computed amount:', {
+      console.warn('⚠️ Client amount mismatch diverged from server-computed amount:', {
         clientAmount: advisoryAmount.parsed,
         authoritativeAmount: authoritativeAmountCents
+      });
+      return sendRecoverableDivergence(res, {
+        operation: 'billing_create_payment_intent',
+        authoritativeAmountCents,
+        clientAmountRaw: amount,
+        clientAmountParsed: advisoryAmount.parsed,
+        malformed: false,
       });
     }
 
@@ -858,14 +902,28 @@ router.post('/pay-balance', async (req, res) => {
       req.body?.total;
     const advisoryClientTotal = parseAdvisoryAmountCents(advisoryClientTotalRaw);
     if (advisoryClientTotal.malformed) {
-      console.warn('⚠️ Malformed client total ignored in favor of server-computed balance amount:', {
+      console.warn('⚠️ Malformed client total diverged from server-computed balance amount:', {
         clientTotal: advisoryClientTotalRaw,
         authoritativeAmount: amountCents
       });
+      return sendRecoverableDivergence(res, {
+        operation: 'billing_pay_balance',
+        authoritativeAmountCents: amountCents,
+        clientAmountRaw: advisoryClientTotalRaw,
+        clientAmountParsed: advisoryClientTotal.parsed,
+        malformed: true,
+      });
     } else if (advisoryClientTotal.parsed !== null && advisoryClientTotal.parsed !== amountCents) {
-      console.warn('⚠️ Client total mismatch ignored in favor of server-computed balance amount:', {
+      console.warn('⚠️ Client total mismatch diverged from server-computed balance amount:', {
         clientTotal: advisoryClientTotal.parsed,
         authoritativeAmount: amountCents
+      });
+      return sendRecoverableDivergence(res, {
+        operation: 'billing_pay_balance',
+        authoritativeAmountCents: amountCents,
+        clientAmountRaw: advisoryClientTotalRaw,
+        clientAmountParsed: advisoryClientTotal.parsed,
+        malformed: false,
       });
     }
 
@@ -1023,14 +1081,28 @@ router.post('/confirm-payment', async (req, res) => {
 
     const advisoryAmount = parseAdvisoryAmountCents(amount);
     if (advisoryAmount.malformed) {
-      console.warn('⚠️ Malformed confirm-payment amount ignored in favor of server-computed amount:', {
+      console.warn('⚠️ Malformed confirm-payment amount diverged from server-computed amount:', {
         clientAmount: amount,
         authoritativeAmount: authoritativeTotalAmount
       });
+      return sendRecoverableDivergence(res, {
+        operation: 'billing_confirm_payment',
+        authoritativeAmountCents: authoritativeTotalAmount,
+        clientAmountRaw: amount,
+        clientAmountParsed: advisoryAmount.parsed,
+        malformed: true,
+      });
     } else if (advisoryAmount.parsed !== null && advisoryAmount.parsed !== authoritativeTotalAmount) {
-      console.warn('⚠️ confirm-payment amount mismatch ignored in favor of server-computed amount:', {
+      console.warn('⚠️ confirm-payment amount mismatch diverged from server-computed amount:', {
         clientAmount: advisoryAmount.parsed,
         authoritativeAmount: authoritativeTotalAmount
+      });
+      return sendRecoverableDivergence(res, {
+        operation: 'billing_confirm_payment',
+        authoritativeAmountCents: authoritativeTotalAmount,
+        clientAmountRaw: amount,
+        clientAmountParsed: advisoryAmount.parsed,
+        malformed: false,
       });
     }
 

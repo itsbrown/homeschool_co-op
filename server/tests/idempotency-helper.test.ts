@@ -21,6 +21,7 @@ describe("idempotency-helper replay semantics", () => {
     const matrix = buildPaymentPlanPolicyMatrix();
     expect(matrix.map((entry) => entry.paymentPlan)).toEqual(["full", "deposit", "split", "biweekly"]);
     expect(matrix[0].expectedFirstChargeCents).toBe(10000);
+    expect(matrix.every((entry) => !!entry.policyIntent)).toBe(true);
   });
 
   it("returns replay response for same key and same fingerprint", () => {
