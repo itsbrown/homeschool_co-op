@@ -92,12 +92,24 @@ Serve static SPA assets as your deploy already configures (many setups copy `dis
 
 The app starts several **in-process** timers in **development** (and guarded paths elsewhere): enrollment reminders (`server/services/enrollmentReminderScheduler.ts`), scheduled payment reminders (`server/services/scheduled-payment-reminders.ts`), membership jobs (`server/index.ts`). **Autoscale/multi-instance deployments** won’t reliably run exactly one singleton across replicas.
 
+Current runtime behavior:
+- `development`: background jobs run by default.
+- `test`: background jobs stay off.
+- `production`/`staging`: background jobs are **off by default** and only run when `ENABLE_BACKGROUND_JOBS=true`.
+- Optional: set `BACKGROUND_JOBS_ROLE=singleton` (or another label) for clearer startup logs and deployment intent.
+
 Operational choices:
 
 1. Run a **designated singleton** (Reserved VM / single worker dyno / one Replit Scheduled Deployment) whose job includes calling your reminder-processing entry points on a cron, **or**
 2. Extract reminder logic behind a queue/cron elsewhere and disable duplicate timers per instance via platform config once you consolidate.
 
 Singleton **in-process** guards only prevent double registration **inside one Node process**.
+
+Quick deploy checklist for singleton mode:
+- Web/API replicas: leave `ENABLE_BACKGROUND_JOBS` unset/false.
+- Exactly one worker replica: set `ENABLE_BACKGROUND_JOBS=true`.
+- Keep the same `DATABASE_URL` and mail provider creds on the worker.
+- Verify startup logs include `Starting background services (role=...)` on worker and `Background jobs disabled for this process` on web replicas.
 
 ## 11) Code map (quick audit)
 

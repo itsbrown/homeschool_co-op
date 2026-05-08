@@ -32,6 +32,21 @@ import userRolesRouter from "./api/user-roles";
 const currentEnv = process.env.NODE_ENV || 'development';
 console.log('🚀 Server starting in environment:', currentEnv);
 
+function parseBooleanEnv(value: string | undefined, defaultValue = false): boolean {
+  if (value === undefined) return defaultValue;
+  const normalized = value.trim().toLowerCase();
+  return ['1', 'true', 'yes', 'on'].includes(normalized);
+}
+
+function shouldRunBackgroundJobs(env: string): boolean {
+  if (env === 'test') return false;
+  if (env === 'development') return true;
+
+  // Production/staging safety: background jobs run only with explicit singleton opt-in.
+  // This avoids accidental multi-replica schedulers in autoscaled web fleets.
+  return parseBooleanEnv(process.env.ENABLE_BACKGROUND_JOBS, false);
+}
+
 if (currentEnv === 'production') {
   console.log('✅ Production mode: Database fallbacks disabled, test authentication blocked');
   // Verify critical production environment variables are set
@@ -269,10 +284,10 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
   }, async () => {
     console.log(`serving on port ${port}`);
 
-    // Background jobs and data loading only run in development
-    // Autoscale deployments don't support persistent background tasks
-    if (currentEnv === 'development' || currentEnv === 'test') {
-      console.log('🔧 Development mode: Starting background services...');
+    // Background jobs should run only in local development or explicit singleton worker mode.
+    if (shouldRunBackgroundJobs(currentEnv)) {
+      const singletonRole = process.env.BACKGROUND_JOBS_ROLE || (currentEnv === 'development' ? 'local-dev' : 'singleton');
+      console.log(`🔧 Starting background services (role=${singletonRole})...`);
       
       // Dynamically import background services to avoid side effects in production
       const { backupService } = await import('./services/backupService.js');
@@ -302,8 +317,8 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
         console.warn('⚠️ Skipping notification initialization in local fallback mode:', (error as Error).message);
       }
     } else {
-      console.log('☁️ Production mode: Background jobs disabled (not compatible with Autoscale deployments)');
-      console.log('💡 Use Scheduled Deployments or Reserved VM for background tasks');
+      console.log('☁️ Background jobs disabled for this process');
+      console.log('💡 In production/staging, set ENABLE_BACKGROUND_JOBS=true only on one dedicated worker process');
     }
   });
 })();
