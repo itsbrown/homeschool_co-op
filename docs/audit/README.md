@@ -43,6 +43,6 @@ Every report in this directory must satisfy:
 
 These reports SHOULD exist but currently don't. They were lost to the `.local/` path issue:
 
-- `docs/audit/219-stop-payments-disappearing-report.md` (lost when #219 and #238 merged)
+- ~~`docs/audit/219-stop-payments-disappearing-report.md` (lost when #219 and #238 merged)~~ — **backfilled by task #240** on 2026-05-08.
 
 If a backfill task is opened, it follows the same close gate as the original.
