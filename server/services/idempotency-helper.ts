@@ -22,6 +22,8 @@ export interface IdempotencyStore<T = unknown> {
   delete(key: string): void;
 }
 
+export const IDEMPOTENCY_CONFLICT_ERROR = "IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_PAYLOAD";
+
 /** Stable, deterministic fingerprint for Pay All-style operations. */
 export function buildIdempotencyFingerprint(input: IdempotencyFingerprintInput): string {
   const normalized = {
@@ -70,8 +72,35 @@ export function resolveIdempotentReplay<T>(
   if (!existing) return { replay: false };
 
   if (existing.fingerprint !== fingerprint) {
-    throw new Error("IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_PAYLOAD");
+    throw new Error(IDEMPOTENCY_CONFLICT_ERROR);
   }
 
   return { replay: true, response: existing.response };
+}
+
+/** Save a successful response to store for future replays. */
+export function storeIdempotentResponse<T>(
+  store: IdempotencyStore<T>,
+  input: {
+    key: string;
+    fingerprint: string;
+    response: T;
+    createdAtMs?: number;
+    ttlMs: number;
+  },
+): IdempotencyRecord<T> {
+  if (!Number.isFinite(input.ttlMs) || input.ttlMs <= 0) {
+    throw new Error("ttlMs must be a positive number");
+  }
+
+  const createdAtMs = input.createdAtMs ?? Date.now();
+  const record: IdempotencyRecord<T> = {
+    key: input.key,
+    fingerprint: input.fingerprint,
+    response: input.response,
+    createdAtMs,
+    expiresAtMs: createdAtMs + input.ttlMs,
+  };
+  store.set(record);
+  return record;
 }

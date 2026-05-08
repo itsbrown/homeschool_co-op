@@ -197,6 +197,22 @@ describe('Integration: Billing server-authoritative amount enforcement', () => {
       );
       expect(mockPaymentIntentsCreate).not.toHaveBeenCalled();
     });
+
+    it('returns 400 with error payload for structurally invalid request after auth', async () => {
+      const response = await request(app).post(endpoint).set(authHeader).send({
+        parentEmail: parent.email,
+        paymentPlan: 'full',
+        // enrollmentDetails intentionally omitted to hit detailed validation layer
+      });
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual(
+        expect.objectContaining({
+          error: expect.any(String),
+        })
+      );
+      expect(mockPaymentIntentsCreate).not.toHaveBeenCalled();
+    });
   });
 
   describe('billing/pay-balance', () => {
@@ -268,6 +284,91 @@ describe('Integration: Billing server-authoritative amount enforcement', () => {
         })
       );
       expect(mockPaymentIntentsCreate).not.toHaveBeenCalled();
+    });
+
+    it('returns same logical outcome for idempotent replay with same key and payload', async () => {
+      mockPaymentIntentsCreate.mockReset();
+      mockPaymentIntentsCreate.mockResolvedValueOnce({
+        id: 'pi_idempotent_once',
+        client_secret: 'pi_idempotent_once_secret',
+        amount: 5000,
+        currency: 'usd',
+      });
+
+      const idempotencyKey = 'pay-all-idem-key-1';
+      const first = await request(app)
+        .post(endpoint)
+        .set(authHeader)
+        .set('Idempotency-Key', idempotencyKey)
+        .send({
+          enrollmentIds: [enrollment.id],
+          paymentDetails: { totalAmountCents: 5000 },
+          paymentPlan: 'full',
+        });
+
+      const second = await request(app)
+        .post(endpoint)
+        .set(authHeader)
+        .set('Idempotency-Key', idempotencyKey)
+        .send({
+          enrollmentIds: [enrollment.id],
+          paymentDetails: { totalAmountCents: 5000 },
+          paymentPlan: 'full',
+        });
+
+      expect(first.status).toBe(200);
+      expect(second.status).toBe(200);
+      expect(second.body.paymentIntentId).toBe(first.body.paymentIntentId);
+      expect(second.body.clientSecret).toBe(first.body.clientSecret);
+      expect(mockPaymentIntentsCreate).toHaveBeenCalledTimes(1);
+    });
+
+    it('returns 409 when idempotency key is replayed with a different payload', async () => {
+      const extraEnrollment = await storage.createProgramEnrollment({
+        schoolId: parent.schoolId,
+        classType: 'school_class',
+        classId: enrollment.classId,
+        childId: child.id,
+        childName: `${child.firstName} ${child.lastName}`,
+        className: enrollment.className,
+        parentId: parent.id,
+        parentEmail: parent.email,
+        totalCost: 2000,
+        totalPaid: 0,
+        remainingBalance: 2000,
+        paymentStatus: 'pending',
+        status: 'pending_payment',
+      } as any);
+
+      const idempotencyKey = 'pay-all-idem-key-2';
+      const first = await request(app)
+        .post(endpoint)
+        .set(authHeader)
+        .set('Idempotency-Key', idempotencyKey)
+        .send({
+          enrollmentIds: [enrollment.id],
+          paymentDetails: { totalAmountCents: 5000 },
+          paymentPlan: 'full',
+        });
+
+      const second = await request(app)
+        .post(endpoint)
+        .set(authHeader)
+        .set('Idempotency-Key', idempotencyKey)
+        .send({
+          enrollmentIds: [enrollment.id, extraEnrollment.id],
+          paymentDetails: { totalAmountCents: 7000 },
+          paymentPlan: 'full',
+        });
+
+      expect(first.status).toBe(200);
+      expect(second.status).toBe(409);
+      expect(second.body).toEqual(
+        expect.objectContaining({
+          success: false,
+          error: 'Idempotency key reused with different payload',
+        })
+      );
     });
   });
 });

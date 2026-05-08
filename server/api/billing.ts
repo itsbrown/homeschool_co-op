@@ -9,8 +9,17 @@ import { createClient } from '@supabase/supabase-js';
 import { dataLayer } from '../services/dataLayer';
 import { getStripeClient } from '../config/stripe';
 import { supabaseAuth } from '../middleware/supabase-auth';
+import {
+  buildIdempotencyFingerprint,
+  createInMemoryIdempotencyStore,
+  resolveIdempotentReplay,
+  type IdempotencyRecord,
+} from '../services/idempotency-helper';
 
 const router = Router();
+const PAY_BALANCE_IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1000;
+type PayBalanceResponsePayload = { success: true; clientSecret: string | null; paymentIntentId: string };
+const payBalanceIdempotencyStore = createInMemoryIdempotencyStore<PayBalanceResponsePayload>();
 
 function parseIntegerCents(value: unknown): number | null {
   if (typeof value === 'number') {
@@ -860,6 +869,41 @@ router.post('/pay-balance', async (req, res) => {
       });
     }
 
+    const idempotencyKeyRaw = req.get('Idempotency-Key');
+    const idempotencyKey = typeof idempotencyKeyRaw === 'string' ? idempotencyKeyRaw.trim() : '';
+    const schoolIdForFingerprint = validEnrollments[0]?.schoolId ?? null;
+    const idempotencyFingerprint = idempotencyKey
+      ? buildIdempotencyFingerprint({
+          parentEmail: userEmail,
+          enrollmentIds: enrollmentIds as number[],
+          amountCents,
+          operation: 'billing_pay_balance',
+          schoolId: schoolIdForFingerprint,
+        })
+      : null;
+
+    if (idempotencyKey && idempotencyFingerprint) {
+      try {
+        const replay = resolveIdempotentReplay(
+          payBalanceIdempotencyStore,
+          idempotencyKey,
+          idempotencyFingerprint
+        );
+        if (replay.replay) {
+          console.log('♻️ Idempotent pay-balance replay served from cache');
+          return res.json(replay.response);
+        }
+      } catch (idempotencyError: any) {
+        if (idempotencyError?.message === 'IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_PAYLOAD') {
+          return res.status(409).json({
+            success: false,
+            error: 'Idempotency key reused with different payload'
+          });
+        }
+        throw idempotencyError;
+      }
+    }
+
     console.log('💳 Processing payment for:', userEmail, 'Amount (cents):', amountCents);
 
     // Create payment intent
@@ -882,11 +926,24 @@ router.post('/pay-balance', async (req, res) => {
 
     console.log('✅ Payment intent created:', paymentIntent.id);
 
-    res.json({
+    const responsePayload: PayBalanceResponsePayload = {
       success: true,
       clientSecret: paymentIntent.client_secret,
       paymentIntentId: paymentIntent.id
-    });
+    };
+
+    if (idempotencyKey && idempotencyFingerprint) {
+      const record: IdempotencyRecord<PayBalanceResponsePayload> = {
+        key: idempotencyKey,
+        fingerprint: idempotencyFingerprint,
+        createdAtMs: Date.now(),
+        expiresAtMs: Date.now() + PAY_BALANCE_IDEMPOTENCY_TTL_MS,
+        response: responsePayload,
+      };
+      payBalanceIdempotencyStore.set(record);
+    }
+
+    res.json(responsePayload);
 
   } catch (error) {
     console.error('❌ Error creating payment intent:', error);

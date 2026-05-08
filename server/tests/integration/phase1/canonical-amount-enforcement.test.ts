@@ -352,4 +352,20 @@ describe('Integration: Canonical amount enforcement', () => {
 
     consoleWarnSpy.mockRestore();
   });
+
+  it('returns 400 with error payload for structurally invalid checkout request after auth', async () => {
+    const response = await api.post('/api/stripe/create-payment-intent', {
+      ...baseCartPayload(),
+      items: [],
+      total: 12345,
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual(
+      expect.objectContaining({
+        error: expect.any(String),
+      })
+    );
+    expect(mockCreateEducationalPaymentPlan).not.toHaveBeenCalled();
+  });
 });
