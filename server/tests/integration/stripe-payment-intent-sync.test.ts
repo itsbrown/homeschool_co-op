@@ -577,6 +577,81 @@ describe('Integration: Stripe Payment Intent Sync Logic', () => {
   });
 
   describe('Payment Intent Creation Integration', () => {
+    it('should treat mismatched client total as advisory and log warning', async () => {
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      (mockStripeCustomersSearch as any).mockResolvedValue({ data: [] });
+
+      await api.loginAsUser(testUser.email);
+
+      const response = await api.post('/api/stripe/create-payment-intent', {
+        items: [{
+          childId: testChild.id,
+          childName: `${testChild.firstName} ${testChild.lastName}`,
+          classId: testClass.id,
+          className: testClass.name,
+          classType: 'school',
+          price: 10000
+        }],
+        subtotal: 10000,
+        total: 1, // Deliberately mismatched client total
+        discounts: [],
+        parentEmail: testUser.email
+      });
+
+      expect(response.status).toBe(200);
+      expect(warnSpy).toHaveBeenCalledWith(
+        '⚠️ Client total mismatch ignored in favor of server-computed amount:',
+        expect.objectContaining({
+          clientTotal: 1,
+          authoritativeTotal: 10000
+        })
+      );
+
+      warnSpy.mockRestore();
+    });
+
+    it('should use server enrollment total authority for split plans despite tampered client total', async () => {
+      (mockStripeCustomersSearch as any).mockResolvedValue({ data: [] });
+
+      // Pre-create pending enrollment so checkout amount comes from server enrollment state.
+      const existingEnrollment = await testDb.createTestEnrollment(testClass.id, testChild.id, {
+        schoolId: testSchool.id,
+        parentId: testUser.id,
+        parentEmail: testUser.email,
+        childName: `${testChild.firstName} ${testChild.lastName}`,
+        className: testClass.name,
+        classType: 'school',
+        status: 'pending_payment',
+        totalCost: 10000,
+        amountPaid: 0,
+        remainingBalance: 10000
+      });
+
+      await api.loginAsUser(testUser.email);
+
+      const response = await api.post('/api/stripe/create-payment-intent', {
+        items: [{
+          enrollmentId: existingEnrollment.id,
+          childId: testChild.id,
+          childName: `${testChild.firstName} ${testChild.lastName}`,
+          classId: testClass.id,
+          className: testClass.name,
+          classType: 'school',
+          price: 1 // Tampered item amount should not become payment authority
+        }],
+        subtotal: 1,
+        total: 1,
+        discounts: [],
+        parentEmail: testUser.email,
+        paymentPlan: 'split',
+        paymentFrequency: 'one_time'
+      });
+
+      expect(response.status).toBe(200);
+      expect(response.body.scheduledPayments).toHaveLength(1);
+      expect(response.body.scheduledPayments[0].amount).toBe(5000);
+    });
+
     it('should create payment intent even when no Stripe sync occurs', async () => {
       // No Stripe customer or subscription
       (mockStripeCustomersSearch as any).mockResolvedValue({ data: [] });

@@ -6,6 +6,7 @@ import { supabaseAuth } from '../middleware/supabase-auth';
 import { requireSchoolContext } from '../middleware/require-school-context';
 import { getStripeClient, getStripePublishableKey } from '../config/stripe';
 import { calculateMembershipDiscount } from '../utils/membership';
+import { calculateCanonicalAmounts } from '../services/canonical-amount-calculator';
 
 const router = Router();
 
@@ -334,16 +335,43 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
       const enrollmentsForAmount = await Promise.all(
         enrollmentIds.map((id: number) => storage.getProgramEnrollmentById(id))
       );
-      const authoritativeEnrollmentTotal = enrollmentsForAmount.reduce((sum, enrollment) => {
-        if (!enrollment) return sum;
-        // For initial checkout, charge the enrollment's canonical total_cost.
-        return sum + Math.max(0, enrollment.totalCost || 0);
-      }, 0);
+      const membershipAmount = membership?.amount || 0;
+      const authoritativeAmountResult = calculateCanonicalAmounts({
+        mode: 'checkout',
+        items: enrollmentsForAmount
+          .filter((enrollment: any) => Boolean(enrollment))
+          .map((enrollment: any) => ({
+            id: String(enrollment.id),
+            totalCostCents: enrollment.totalCost,
+            totalPaidCents: enrollment.totalPaid,
+            remainingBalanceCents: enrollment.remainingBalance
+          })),
+        membershipAmountCents: membershipAmount || 0
+      });
+
+      if (!authoritativeAmountResult.validation.isValid) {
+        console.error('❌ Canonical checkout amount validation failed', {
+          errors: authoritativeAmountResult.validation.errors,
+          enrollmentIds
+        });
+        return res.status(500).json({
+          message: 'Failed to validate checkout amount',
+          error: 'INVALID_CANONICAL_AMOUNT'
+        });
+      }
+
+      if (authoritativeAmountResult.validation.hasWarnings) {
+        console.warn('⚠️ Canonical checkout amount warnings', {
+          warnings: authoritativeAmountResult.validation.warnings,
+          enrollmentIds
+        });
+      }
+
+      const authoritativeEnrollmentTotal = authoritativeAmountResult.enrollmentSubtotalCents;
 
       // Validate membership request if present - use server-derived values only
       // SECURITY: Do not trust client-provided schoolId/parentUserId - derive from authenticated session
-      const membershipAmount = membership?.amount || 0;
-      const totalWithMembership = authoritativeEnrollmentTotal + membershipAmount;
+      const totalWithMembership = authoritativeAmountResult.totalAmountCents;
       
       // Build secure membership data from server-side validated parent info
       let serverMembership: { 
@@ -455,10 +483,10 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
         });
       }
 
-      if (total !== undefined && total !== authoritativeEnrollmentTotal) {
+      if (total !== undefined && total !== totalWithMembership) {
         console.warn('⚠️ Client total mismatch ignored in favor of server-computed amount:', {
           clientTotal: total,
-          authoritativeEnrollmentTotal
+          authoritativeTotal: totalWithMembership
         });
       }
 
