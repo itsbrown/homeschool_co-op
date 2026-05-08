@@ -19,6 +19,7 @@ import {
   checkSchemaReady,
   type PaymentSource,
 } from './services/PaymentProcessorService';
+import { recordTask219Skip } from './lib/task219SkipLog';
 import { AUTOPAY_MAX_RETRIES } from './services/auto-pay-scheduler';
 import { handleScheduledPaymentFailed } from './services/auto-pay-webhook-helpers';
 
@@ -151,14 +152,69 @@ export const webhookHandler = async (req: Request, res: Response) => {
   console.log('📥 Processing webhook event:', event.type);
   const now = Date.now();
   cleanupRecentWebhookEvents(now);
+  // Task #219: events whose contract is "persistence-required" must NEVER be
+  // acknowledged 200 unless a stripe_payment_history row exists for them.
+  const isPersistenceRequiredEvent = (t: string): boolean =>
+    t === 'payment_intent.succeeded';
+
   if (event?.id && recentWebhookEvents.has(event.id)) {
     console.log('↩️ Duplicate webhook event received, acknowledging without reprocessing:', event.id);
-    return res.json({ received: true, event_type: event.type, duplicate: true });
+    // Replay path: look up the persisted row by stripe_event_id. For
+    // persistence-required events a missing row means the prior attempt failed
+    // before persisting — we must NOT acknowledge; return 5xx so Stripe retries.
+    let persistedRowId: number | null = null;
+    try {
+      const existing = await storage.getStripePaymentByEventId(event.id);
+      persistedRowId = existing?.id ?? null;
+    } catch (lookupErr) {
+      console.warn('[Task#219][Webhook][replay] failed to look up persisted row by event id', {
+        eventId: event.id,
+        eventType: event.type,
+        error: (lookupErr as Error).message,
+      });
+    }
+    if (isPersistenceRequiredEvent(event.type) && persistedRowId === null) {
+      // Eject from the in-memory dedup cache so a Stripe retry can re-enter
+      // the full handler instead of re-hitting this same replay branch.
+      recentWebhookEvents.delete(event.id);
+      console.error('[Task#219][Webhook][replay] persistence-required event has no persisted row — refusing to ack', {
+        eventId: event.id,
+        eventType: event.type,
+      });
+      return res.status(500).json({
+        error: 'Persistence row missing for persistence-required event',
+        event_type: event.type,
+        eventId: event.id,
+      });
+    }
+    return res.json({
+      received: true,
+      event_type: event.type,
+      handled: true,
+      duplicate: true,
+      persistedRowId,
+    });
   }
-  if (event?.id) {
-    recentWebhookEvents.set(event.id, now);
+  // Task #219: do NOT add to dedup cache yet. We add only after a successful
+  // 2xx response is sent, so a 5xx (Stripe retry) is never suppressed by
+  // an entry left over from a failed first attempt.
+
+  // Task #219: Track the stripe_payment_history row id persisted for this event
+  // so the 2xx response can return it. A persistence-required path that ends
+  // with a null id throws to surface a 5xx (Stripe will retry).
+  let persistedRowId: number | null = null;
+
+  // Task #219: typed marker error for the persistence-claim path. The inner
+  // case-level catch swallows generic errors but re-throws this one so the
+  // outer handler can return 5xx. Replaces ad-hoc `(err as any).taskId = 219`.
+  class PersistenceClaimError extends Error {
+    readonly taskId = 219 as const;
+    constructor(message: string, public override readonly cause?: unknown) {
+      super(message);
+      this.name = 'PersistenceClaimError';
+    }
   }
-  
+
   try {
     switch (event.type) {
     case 'checkout.session.completed':
@@ -535,8 +591,119 @@ export const webhookHandler = async (req: Request, res: Response) => {
       console.log('🔍 Payment metadata:', paymentIntent.metadata);
       
       try {
-        // CRITICAL: Skip cart-checkout payments — checkout.session.completed is the single
-        // source of truth for these. Stripe always fires both events for Checkout Sessions.
+        // ============================================================
+        // Task #219 — PERSISTENCE-FIRST IDEMPOTENCY CLAIM
+        // ============================================================
+        // ARCHITECTURAL_PATTERNS.md §9 + §16: a successful Stripe event MUST persist a
+        // row to stripe_payment_history keyed by stripe_event_id BEFORE any side-effect
+        // logic runs and BEFORE any skip branch can swallow the event. The unique
+        // constraint on stripe_event_id is the race-safe enforcement point.
+        //
+        // Behavior:
+        //   - INSERT-first; on 23505 unique violation lookup the existing row and
+        //     return its id (idempotent replay).
+        //   - On 23505 against payment_intent_id (e.g. checkout.session.completed
+        //     already claimed this PI), reuse that row's id.
+        //   - On any other DB error: throw → outer catch returns 500 → Stripe retries.
+        //   - If parentEmail metadata is missing we cannot satisfy the FK to users;
+        //     log WARN and proceed without persistence (these are legacy non-cart
+        //     paths — scheduled-payment + cart paths always set parentEmail).
+        const claimParentEmail = paymentIntent.metadata?.parentEmail;
+        const claimParentUser = claimParentEmail
+          ? await storage.getUserByEmail(claimParentEmail)
+          : null;
+        if (claimParentUser) {
+          try {
+            // Task #219 — fault injection hook for the regression test's
+            // "persistence failure → 5xx" property. Gated to non-production
+            // environments so a malicious header in prod cannot trigger it.
+            if (
+              process.env.NODE_ENV !== 'production' &&
+              req.headers['x-task-219-fault-inject-persistence'] === 'true'
+            ) {
+              throw new PersistenceClaimError(
+                'TASK_219_FAULT_INJECT_PERSISTENCE: synthetic DB failure (test header)',
+              );
+            }
+            const claimed = await storage.saveStripePayment({
+              userId: claimParentUser.id,
+              paymentIntentId: paymentIntent.id,
+              stripeEventId: event.id,
+              customerId: (paymentIntent.customer as string) || null,
+              subscriptionId: null,
+              amount: paymentIntent.amount,
+              currency: paymentIntent.currency || 'usd',
+              status: 'succeeded',
+              paymentMethod: null,
+              description: `payment_intent.succeeded ${paymentIntent.id}`,
+              idempotencyKey: `pi_succeeded:${event.id}`,
+              source: 'stripe',
+              snapshotJson: null,
+              snapshotChecksum: null,
+              subtotalAmount: null,
+              discountTotal: null,
+              discountSnapshot: null,
+              stripeCreatedAt: new Date(paymentIntent.created * 1000),
+            });
+            persistedRowId = claimed.id;
+            console.log('🔒 [Task#219] claimed payment_intent.succeeded in stripe_payment_history', {
+              eventId: event.id,
+              paymentIntentId: paymentIntent.id,
+              persistedRowId,
+            });
+          } catch (claimErr: unknown) {
+            // PersistenceClaimError already carries `taskId = 219` — let it bubble.
+            if (claimErr instanceof PersistenceClaimError) throw claimErr;
+            const errObj = claimErr as { code?: string; message?: string } | null;
+            const isUnique =
+              errObj?.code === '23505' ||
+              /unique|duplicate/i.test(errObj?.message || '');
+            if (isUnique) {
+              // Replay or sibling event already wrote a row. Find it.
+              const byEvent = await storage.getStripePaymentByEventId(event.id);
+              const existing = byEvent ?? await storage.getStripePaymentByIntentId(paymentIntent.id);
+              if (!existing) {
+                throw new PersistenceClaimError(
+                  `[Task#219] unique violation on saveStripePayment but no existing row found for event=${event.id} pi=${paymentIntent.id}`,
+                  claimErr,
+                );
+              }
+              persistedRowId = existing.id;
+              console.warn('[Task#219][Webhook][replay] event already persisted — reusing row', {
+                eventId: event.id,
+                eventType: event.type,
+                paymentIntentId: paymentIntent.id,
+                persistedRowId,
+                reason: byEvent ? 'duplicate_event_id' : 'duplicate_payment_intent_id',
+              });
+              // Idempotent replay: do not re-run downstream side effects.
+              break;
+            }
+            // Genuine DB failure → propagate to outer catch → 500 → Stripe retries.
+            throw new PersistenceClaimError(
+              `[Task#219] saveStripePayment failed for event=${event.id} pi=${paymentIntent.id}: ${errObj?.message ?? String(claimErr)}`,
+              claimErr,
+            );
+          }
+        } else {
+          const skipMissing = {
+            eventId: event.id,
+            eventType: event.type,
+            paymentIntentId: paymentIntent.id,
+            reason: 'missing_parent_email',
+            metadataKey: 'parentEmail',
+            metadataValue: claimParentEmail ?? null,
+            persistedRowId,
+          };
+          console.warn('[Task#219][Webhook][skip] payment_intent.succeeded missing parentEmail — cannot persist (no user FK)', skipMissing);
+          recordTask219Skip(skipMissing);
+        }
+        // ============================================================
+
+        // CRITICAL: Skip cart-checkout payments' DOWNSTREAM business logic —
+        // checkout.session.completed is the single source of truth for cart side
+        // effects (enrollment updates, allocations, receipts). Persistence above
+        // already guaranteed exactly one stripe_payment_history row.
         //
         // Detection strategy (four independent signals, cheapest first):
         //   1. metadata.paymentType === 'cart_checkout'  (set by this app's checkout flow)
@@ -552,17 +719,51 @@ export const webhookHandler = async (req: Request, res: Response) => {
           !!paymentIntent.metadata?.itemsJson;
         
         if (isCartCheckoutByMetadata) {
-          console.log('⏭️ Skipping payment_intent.succeeded for checkout-originated payment (metadata signal) — checkout.session.completed owns this flow', {
+          const skipCartMeta = {
+            eventId: event.id,
+            eventType: event.type,
             paymentIntentId: paymentIntent.id,
-            paymentType: paymentIntent.metadata?.paymentType,
-            hasItemsJson: !!paymentIntent.metadata?.itemsJson,
-          });
+            reason: 'cart_checkout_metadata_signal',
+            metadataKey: paymentIntent.metadata?.paymentType === 'cart_checkout' ? 'paymentType' : 'itemsJson',
+            metadataValue: paymentIntent.metadata?.paymentType === 'cart_checkout'
+              ? 'cart_checkout'
+              : '<itemsJson present>',
+            persistedRowId,
+          };
+          console.warn('[Task#219][Webhook][skip] payment_intent.succeeded — cart-checkout downstream owned by checkout.session.completed', skipCartMeta);
+          recordTask219Skip(skipCartMeta);
           break;
         }
 
         // Signal 3: explicit checkout_session_id check via Stripe API
         // For PaymentIntents created through Checkout Sessions, list associated sessions.
         // If the session's own metadata confirms cart checkout, this PI is owned by checkout.session.completed.
+        // Task #219 — fault-injection hook for the regression test's
+        // `stripe_api_checkout_session_match` skip-branch coverage. Gated to
+        // non-production so a malicious header in prod cannot trigger it.
+        // When set, synthesize the same skip outcome the real
+        // stripe.checkout.sessions.list match would produce.
+        if (
+          process.env.NODE_ENV !== 'production' &&
+          req.headers['x-task-219-fake-stripe-checkout-session-match'] === 'true'
+        ) {
+          const skipApiMatch = {
+            eventId: event.id,
+            eventType: event.type,
+            paymentIntentId: paymentIntent.id,
+            reason: 'stripe_api_checkout_session_match',
+            metadataKey: 'session.metadata.paymentType',
+            metadataValue: 'cart_checkout',
+            persistedRowId,
+          };
+          console.warn('[Task#219][Webhook][skip] payment_intent.succeeded — Stripe API confirms cart-checkout origin (fault-injected)', {
+            ...skipApiMatch,
+            checkoutSessionId: 'cs_test_fault_inject',
+            checkoutStatus: 'complete',
+          });
+          recordTask219Skip(skipApiMatch);
+          break;
+        }
         try {
           const sessions = await stripe.checkout.sessions.list({
             payment_intent: paymentIntent.id,
@@ -574,11 +775,21 @@ export const webhookHandler = async (req: Request, res: Response) => {
               checkoutSession.metadata?.paymentType === 'cart_checkout' ||
               !!checkoutSession.metadata?.itemsJson;
             if (sessionIsCartCheckout) {
-              console.log('⏭️ Skipping payment_intent.succeeded — Stripe checkout.sessions API confirms cart checkout origin', {
+              const skipApiMatch = {
+                eventId: event.id,
+                eventType: event.type,
                 paymentIntentId: paymentIntent.id,
+                reason: 'stripe_api_checkout_session_match',
+                metadataKey: checkoutSession.metadata?.paymentType === 'cart_checkout' ? 'session.metadata.paymentType' : 'session.metadata.itemsJson',
+                metadataValue: checkoutSession.metadata?.paymentType ?? '<itemsJson present>',
+                persistedRowId,
+              };
+              console.warn('[Task#219][Webhook][skip] payment_intent.succeeded — Stripe API confirms cart-checkout origin', {
+                ...skipApiMatch,
                 checkoutSessionId: checkoutSession.id,
                 checkoutStatus: checkoutSession.status,
               });
+              recordTask219Skip(skipApiMatch);
               break;
             }
           }
@@ -586,14 +797,27 @@ export const webhookHandler = async (req: Request, res: Response) => {
           console.warn('⚠️ stripe.checkout.sessions.list lookup failed (non-fatal, continuing):', listErr);
         }
         
-        // Signal 4: check if checkout.session.completed already processed this via stripe_payment_history
-        // This catches edge cases where metadata may not be set (e.g., older checkout sessions)
+        // Signal 4: check if checkout.session.completed already processed this via stripe_payment_history.
+        // Task #219: discriminate by idempotency_key prefix — our own pi_succeeded:* row (just
+        // inserted at the top of this case) must not be misread as a checkout-owned row, otherwise
+        // every non-cart event would skip its downstream business logic.
         const alreadyClaimedByCheckout = await storage.getStripePaymentByIntentId(paymentIntent.id);
-        if (alreadyClaimedByCheckout) {
-          console.log('⏭️ Skipping payment_intent.succeeded — already processed by checkout.session.completed (found in stripe_payment_history)', {
+        if (alreadyClaimedByCheckout && alreadyClaimedByCheckout.idempotencyKey?.startsWith('checkout:')) {
+          persistedRowId = alreadyClaimedByCheckout.id;
+          const skipCheckoutOwns = {
+            eventId: event.id,
+            eventType: event.type,
             paymentIntentId: paymentIntent.id,
+            reason: 'checkout_session_completed_already_owns',
+            metadataKey: 'idempotency_key',
+            metadataValue: alreadyClaimedByCheckout.idempotencyKey,
+            persistedRowId,
+          };
+          console.warn('[Task#219][Webhook][skip] payment_intent.succeeded — checkout.session.completed already owns this PI', {
+            ...skipCheckoutOwns,
             historyId: alreadyClaimedByCheckout.id,
           });
+          recordTask219Skip(skipCheckoutOwns);
           break;
         }
         
@@ -1139,10 +1363,17 @@ export const webhookHandler = async (req: Request, res: Response) => {
         } else {
           // Unknown payment type — log and skip. Cart-checkout payments are handled by
           // checkout.session.completed and are rejected above via the early-exit guard.
-          console.log('⚠️ Unhandled payment type in payment_intent.succeeded — skipping', {
+          const skipUnhandled = {
+            eventId: event.id,
+            eventType: event.type,
             paymentIntentId: paymentIntent.id,
-            paymentType,
-          });
+            reason: 'unhandled_payment_type',
+            metadataKey: 'paymentType',
+            metadataValue: paymentType ?? null,
+            persistedRowId,
+          };
+          console.warn('[Task#219][Webhook][skip] payment_intent.succeeded — unhandled paymentType', skipUnhandled);
+          recordTask219Skip(skipUnhandled);
         }
 
         // AUTO-PAY: Capture payment method ID for future auto-pay charges
@@ -1168,7 +1399,15 @@ export const webhookHandler = async (req: Request, res: Response) => {
           console.error('[AutoPay] Failed to save payment method (non-fatal):', autoPayErr.message);
         }
 
-      } catch (error) {
+      } catch (error: unknown) {
+        // Task #219: persistence-claim failures MUST escape this case so the
+        // outer handler returns 5xx (Stripe will retry). The PersistenceClaimError
+        // class carries `taskId === 219`; we also accept any error tagged with
+        // that marker to be defensive against re-thrown wrappers.
+        const tagged = (error as { taskId?: number } | null)?.taskId === 219;
+        if (error instanceof PersistenceClaimError || tagged) {
+          throw error;
+        }
         console.error('❌ Error processing payment:', error);
       }
       break;
@@ -1506,12 +1745,38 @@ export const webhookHandler = async (req: Request, res: Response) => {
       console.log('📦 Unhandled event type:', event.type, '- responding with 200 OK');
         // Return 200 OK for unhandled events to prevent retries
         res.json({ received: true, event_type: event.type, handled: false });
+        // Mark as duplicate AFTER successful ack so retries are suppressed.
+        if (event?.id) {
+          recentWebhookEvents.set(event.id, now);
+        }
         return;
     }
 
-    // Success response for handled events
-    res.json({ received: true, event_type: event.type, handled: true });
-    console.log('✅ Successfully processed webhook event:', event.type);
+    // Task #219: enforce the persistence invariant before acknowledging.
+    // A persistence-required event that reaches the 2xx path without a
+    // persisted row id is a contract violation — return 5xx so Stripe retries.
+    if (isPersistenceRequiredEvent(event.type) && persistedRowId === null) {
+      console.error('[Task#219][Webhook] persistence-required event reached success path with null persistedRowId — refusing to ack', {
+        eventId: event?.id,
+        eventType: event.type,
+      });
+      res.status(500).json({
+        error: 'Persistence row missing for persistence-required event',
+        event_type: event.type,
+        eventId: event?.id,
+      });
+      return;
+    }
+    // Success response for handled events.
+    // Task #219: include persistedRowId for callers (and the regression test)
+    // to verify exactly-one-row idempotency in stripe_payment_history.
+    res.json({ received: true, event_type: event.type, handled: true, persistedRowId });
+    console.log('✅ Successfully processed webhook event:', event.type, { persistedRowId });
+    // Only NOW is it safe to mark this event id as a duplicate to suppress
+    // identical retries — a failed attempt above leaves the cache untouched.
+    if (event?.id) {
+      recentWebhookEvents.set(event.id, now);
+    }
     
   } catch (eventError: any) {
     console.error('❌ Error processing webhook event:', event.type, eventError.message);

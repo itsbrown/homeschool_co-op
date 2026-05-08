@@ -393,6 +393,7 @@ export interface IStorage {
 
   // Stripe Payment History methods
   saveStripePayment(payment: InsertStripePaymentHistory): Promise<StripePaymentHistory>;
+  getStripePaymentByEventId(stripeEventId: string): Promise<StripePaymentHistory | undefined>;
   getStripePaymentHistoryById(id: number): Promise<StripePaymentHistory | undefined>;
   getStripePaymentHistoryByUserId(userId: number): Promise<StripePaymentHistory[]>;
   getStripePaymentsBySubscription(subscriptionId: string): Promise<StripePaymentHistory[]>;
@@ -3685,6 +3686,12 @@ export class MemStorage implements IStorage {
   async getStripePaymentByIntentId(paymentIntentId: string): Promise<StripePaymentHistory | undefined> {
     const db = await getDb();
     const result = await db.select().from(stripePaymentHistory).where(eq(stripePaymentHistory.paymentIntentId, paymentIntentId)).limit(1);
+    return result[0];
+  }
+
+  async getStripePaymentByEventId(stripeEventId: string): Promise<StripePaymentHistory | undefined> {
+    const db = await getDb();
+    const result = await db.select().from(stripePaymentHistory).where(eq(stripePaymentHistory.stripeEventId, stripeEventId)).limit(1);
     return result[0];
   }
 
@@ -7967,24 +7974,19 @@ import { DatabaseStorage } from "./dbStorage";
 
       // ==================== STRIPE PAYMENT HISTORY ====================
       async saveStripePayment(payment: InsertStripePaymentHistory): Promise<StripePaymentHistory> {
+        // Task #219: NEVER fall back to MemStorage on the money path. A
+        // non-durable in-memory row would let `persistedRowId` look real to
+        // the webhook handler, which would then ack Stripe with 200 — exactly
+        // the silent-loss failure mode this task eliminates. All errors
+        // (unique violations AND infrastructure failures) propagate so the
+        // outer handler returns 5xx and Stripe retries.
         if (this.dbStorage instanceof DatabaseStorage) {
-          try {
-            return await this.dbStorage.saveStripePayment(payment);
-          } catch (err: any) {
-            // CRITICAL: unique constraint violations (Postgres code 23505) MUST propagate.
-            // The webhook idempotency mechanism depends on this throw to skip duplicate events.
-            // Swallowing it would allow double-processing to proceed.
-            const isUniqueViolation =
-              err?.code === '23505' ||
-              err?.message?.includes('unique') ||
-              err?.message?.includes('duplicate');
-            if (isUniqueViolation) {
-              throw err;
-            }
-            // Only fall back to mem for genuine infrastructure errors (e.g. DB connection lost)
-            console.warn('[CombinedStorage] saveStripePayment DB failed (non-unique error), falling back to mem:', err);
-          }
+          return this.dbStorage.saveStripePayment(payment);
         }
+        // No Postgres available at all (test/dev with disabled DB) — keep the
+        // mem path so non-money-path call sites continue to work, but the
+        // webhook handler runs only when DatabaseStorage is active in
+        // practice.
         return this.memStorage.saveStripePayment(payment);
       }
 
@@ -8019,6 +8021,15 @@ import { DatabaseStorage } from "./dbStorage";
           }
         }
         return this.memStorage.getStripePaymentByIntentId(paymentIntentId);
+      }
+
+      async getStripePaymentByEventId(stripeEventId: string): Promise<StripePaymentHistory | undefined> {
+        // Task #219: lookup by stripe_event_id is the authoritative idempotency
+        // key for webhook events; never silently fall back to mem on this path.
+        if (this.dbStorage instanceof DatabaseStorage) {
+          return this.dbStorage.getStripePaymentByEventId(stripeEventId);
+        }
+        return undefined;
       }
 
       async getPaymentByIdempotencyKey(idempotencyKey: string): Promise<StripePaymentHistory | undefined> {

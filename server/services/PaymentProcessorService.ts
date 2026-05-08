@@ -58,7 +58,22 @@ export interface PaymentProcessorResult {
  * Set to true to start processing through the new unified service.
  */
 export function isPaymentProcessorEnabled(): boolean {
-  return process.env.PAYMENT_PROCESSOR_ENABLED === 'true';
+  // Task #219 + ARCHITECTURAL_PATTERNS.md §15: money-path env flags must throw
+  // at first use in dev/test rather than silently default to false. A missing
+  // flag means the operator has not made a decision; defaulting to "off"
+  // hid Task #203 finding #1 for months. Production explicitly opts in/out.
+  const raw = process.env.PAYMENT_PROCESSOR_ENABLED;
+  if (raw === undefined || raw === '') {
+    const env = process.env.NODE_ENV;
+    if (env === 'development' || env === 'test') {
+      throw new Error(
+        'PAYMENT_PROCESSOR_ENABLED is not set. Money-path env flags must be explicit ' +
+        'in dev/test ("true" or "false"). See ARCHITECTURAL_PATTERNS.md §15.',
+      );
+    }
+    return false;
+  }
+  return raw === 'true';
 }
 
 /**
@@ -112,7 +127,17 @@ function isChecksumShadowMode(): boolean {
  */
 export function isBalanceAwareAllocationEnabled(): boolean {
   const raw = process.env.BALANCE_AWARE_ALLOCATION;
-  if (!raw) return false;
+  // Task #219: money-path env flags must be explicit in dev/test so a missing
+  // value cannot silently change allocation behavior. Production is permitted
+  // to default to false (legacy even-split) without a hard failure because
+  // changing the deploy contract is out of scope for this task.
+  if (raw === undefined || raw === '') {
+    if (process.env.NODE_ENV === 'production') return false;
+    throw new Error(
+      'BALANCE_AWARE_ALLOCATION must be set explicitly ("true"/"false") in development/test. ' +
+      'Silent defaults on money-path flags are forbidden.',
+    );
+  }
   const normalized = raw.trim().toLowerCase();
   return normalized === 'true' || normalized === '1' || normalized === 'yes' || normalized === 'on';
 }

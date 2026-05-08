@@ -697,6 +697,85 @@ router.get('/stripe-payment/:paymentIntentId', async (req: Request, res: Respons
   }
 });
 
+/** GET /api/test/task-219-skips/:eventId — Task #219 runtime skip-WARN proof. */
+router.get('/task-219-skips/:eventId', async (req: Request, res: Response) => {
+  const eventId = req.params.eventId;
+  if (!eventId) return res.status(400).json({ error: 'eventId required' });
+  const { getTask219SkipsForEvent } = await import('../lib/task219SkipLog');
+  return res.json({ entries: getTask219SkipsForEvent(eventId) });
+});
+
+/**
+ * POST /api/test/seed-checkout-owned-pi
+ * Pre-inserts a stripe_payment_history row with idempotency_key='checkout:<sessionId>'
+ * for the given paymentIntentId — simulating the state where checkout.session.completed
+ * has already claimed the PI. Used by the P4 "checkout_session_completed_already_owns"
+ * runtime branch test.
+ */
+router.post('/seed-checkout-owned-pi', async (req: Request, res: Response) => {
+  try {
+    const { paymentIntentId, userId, amount } = req.body ?? {};
+    if (!paymentIntentId || !userId) {
+      return res.status(400).json({ error: 'paymentIntentId and userId required' });
+    }
+    const db = await getDb();
+    if (!db) return res.status(500).json({ error: 'Postgres required' });
+    const sessionId = `cs_test_seed_${nanoid(8)}`;
+    const seedRow: typeof stripePaymentHistory.$inferInsert = {
+      userId,
+      paymentIntentId,
+      customerId: null,
+      subscriptionId: null,
+      amount: amount ?? 1000,
+      currency: 'usd',
+      status: 'succeeded',
+      paymentMethod: null,
+      description: `Pre-seeded checkout-owned PI for ${paymentIntentId}`,
+      idempotencyKey: `checkout:${sessionId}`,
+      source: 'stripe',
+      stripeCreatedAt: new Date(),
+    };
+    const inserted = await db.insert(stripePaymentHistory).values(seedRow).returning();
+    return res.json({ id: inserted[0]?.id, sessionId });
+  } catch (error) {
+    console.error('[Test] seed-checkout-owned-pi error:', error);
+    return res.status(500).json({ error: String(error) });
+  }
+});
+
+/** GET /api/test/stripe-payment-by-event/:eventId — Task #219 idempotency proof. */
+router.get('/stripe-payment-by-event/:eventId', async (req: Request, res: Response) => {
+  try {
+    const eventId = req.params.eventId;
+    if (!eventId) {
+      return res.status(400).json({ error: 'eventId required' });
+    }
+    const db = await getDb();
+    if (!db) {
+      return res.status(500).json({ error: 'requires Postgres; getDb() returned null.' });
+    }
+    const rows = await db
+      .select()
+      .from(stripePaymentHistory)
+      .where(eq(stripePaymentHistory.stripeEventId, eventId));
+    return res.json({
+      count: rows.length,
+      rows: rows.map((r) => ({
+        id: r.id,
+        stripeEventId: r.stripeEventId,
+        paymentIntentId: r.paymentIntentId,
+        amount: r.amount,
+        status: r.status,
+        idempotencyKey: r.idempotencyKey,
+        createdAt: r.createdAt,
+      })),
+    });
+  } catch (error) {
+    console.error('[Test] stripe-payment-by-event error:', error);
+    return res.status(500).json({ error: String(error) });
+  }
+});
+
 /** GET /api/test/stripe-payment-count/:paymentIntentId — Task #203 #3. */
 router.get('/stripe-payment-count/:paymentIntentId', async (req: Request, res: Response) => {
   try {

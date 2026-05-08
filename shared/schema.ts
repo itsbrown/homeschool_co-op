@@ -956,6 +956,9 @@ export const stripePaymentHistory = pgTable("stripe_payment_history", {
   
   // Stripe identifiers
   paymentIntentId: text("payment_intent_id").notNull().unique(), // Stripe payment_intent ID
+  // Task #219: stripe_event_id is the durable idempotency key for webhook events.
+  // Unique to guarantee race-safe single-row persistence on replay.
+  stripeEventId: text("stripe_event_id").unique(),
   customerId: text("customer_id"), // Stripe customer ID (nullable for credit-only checkouts)
   subscriptionId: text("subscription_id"), // Stripe subscription ID if applicable
   
@@ -1001,6 +1004,7 @@ export const insertStripePaymentHistorySchema = createInsertSchema(stripePayment
     discountTotal: z.number().nullable().default(null),
     discountSnapshot: z.any().nullable().default(null),
     idempotencyKey: z.string().nullable().default(null),
+    stripeEventId: z.string().nullable().default(null),
     source: z.enum(["stripe", "manual", "payment_plan", "credit"]).nullable().default(null),
     snapshotJson: z.any().nullable().default(null),
     snapshotChecksum: z.string().nullable().default(null),

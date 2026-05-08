@@ -52,6 +52,8 @@ integrations = ["javascript_stripe:1.0.0", "twilio:1.0.0", "stripe:1.0.0", "java
 [userenv.shared]
 ERROR_NOTIFICATION_EMAIL = "errors@americanseekersacademy.com"
 APP_URL = "https://accounts.americanseekersacademy.com"
+PAYMENT_PROCESSOR_ENABLED = "true"
+BALANCE_AWARE_ALLOCATION = "false"
 
 [postMerge]
 path = "scripts/post-merge.sh"

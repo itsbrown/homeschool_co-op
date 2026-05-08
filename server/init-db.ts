@@ -2399,6 +2399,25 @@ async function runMigrations() {
     await db.execute(sql`ALTER TABLE categories ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT TRUE NOT NULL`);
     console.log('✅ Migration completed: is_public column added to categories');
 
+    // Task #219 — durable migration for stripe_event_id idempotency.
+    // The unique constraint is the race-safe enforcement point that prevents
+    // a successful payment_intent.succeeded event from being persisted twice
+    // (concurrent webhook deliveries) or silently dropped (partial writes).
+    console.log('Running migration: Task #219 — adding stripe_event_id + unique constraint to stripe_payment_history...');
+    await db.execute(sql`ALTER TABLE stripe_payment_history ADD COLUMN IF NOT EXISTS stripe_event_id TEXT`);
+    await db.execute(sql`
+      DO $$ BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint
+          WHERE conname = 'stripe_payment_history_stripe_event_id_key'
+        ) THEN
+          ALTER TABLE stripe_payment_history
+            ADD CONSTRAINT stripe_payment_history_stripe_event_id_key UNIQUE (stripe_event_id);
+        END IF;
+      END $$;
+    `);
+    console.log('✅ Migration completed: Task #219 stripe_event_id + unique constraint applied');
+
   } catch (fundraiserError) {
     const errorMessage = fundraiserError instanceof Error ? fundraiserError.message : String(fundraiserError);
     if (!errorMessage.includes('Database connection not available')) {

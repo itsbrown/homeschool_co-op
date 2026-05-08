@@ -4925,6 +4925,12 @@ export class DatabaseStorage implements IStorage {
     return record;
   }
 
+  async getStripePaymentByEventId(stripeEventId: string): Promise<StripePaymentHistory | undefined> {
+    const db = await getDb();
+    const [record] = await db.select().from(stripePaymentHistory).where(eq(stripePaymentHistory.stripeEventId, stripeEventId)).limit(1);
+    return record;
+  }
+
   async getPaymentByIdempotencyKey(idempotencyKey: string): Promise<StripePaymentHistory | undefined> {
     const db = await getDb();
     const [record] = await db.select().from(stripePaymentHistory).where(eq(stripePaymentHistory.idempotencyKey, idempotencyKey)).limit(1);
