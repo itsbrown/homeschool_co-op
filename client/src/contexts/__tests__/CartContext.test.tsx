@@ -2,13 +2,15 @@ import { renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { CartProvider, useCart } from '../CartContext';
 
+const mockAuthState = {
+  user: { email: 'test@example.com' },
+  isAuthenticated: true,
+  isLoading: false,
+};
+
 // Mock dependencies
 jest.mock('@/components/SupabaseProvider', () => ({
-  useAuth: () => ({
-    user: { email: 'test@example.com' },
-    isAuthenticated: true,
-    isLoading: false,
-  }),
+  useAuth: () => mockAuthState,
 }));
 
 jest.mock('@/contexts/RoleContext', () => ({
@@ -48,6 +50,9 @@ describe('CartContext', () => {
     // Clear localStorage before each test
     localStorage.clear();
     jest.clearAllMocks();
+    mockAuthState.user = { email: 'test@example.com' };
+    mockAuthState.isAuthenticated = true;
+    mockAuthState.isLoading = false;
   });
 
   afterEach(() => {
@@ -172,6 +177,47 @@ describe('CartContext', () => {
       const refreshPromise = result.current.refreshCart();
       expect(refreshPromise).toBeInstanceOf(Promise);
       await refreshPromise;
+    });
+  });
+
+  describe('Logout cache handling', () => {
+    it('clears the exact parent enrollments query key on logout', async () => {
+      (global.fetch as any).mockResolvedValue({
+        ok: true,
+        json: async () => [],
+      });
+
+      const queryClient = new QueryClient({
+        defaultOptions: {
+          queries: {
+            retry: false,
+            gcTime: 0,
+          },
+        },
+      });
+
+      const wrapper = ({ children }: { children: React.ReactNode }) => (
+        <QueryClientProvider client={queryClient}>
+          <CartProvider>{children}</CartProvider>
+        </QueryClientProvider>
+      );
+
+      const { rerender } = renderHook(() => useCart(), { wrapper });
+
+      await waitFor(() => {
+        expect(queryClient.getQueryData(['/api/parent/enrollments'])).toBeDefined();
+      });
+
+      queryClient.setQueryData(['/api/parent/enrollments'], [{ id: 123 }]);
+      expect(queryClient.getQueryData(['/api/parent/enrollments'])).toEqual([{ id: 123 }]);
+
+      mockAuthState.user = null as any;
+      mockAuthState.isAuthenticated = false;
+      rerender();
+
+      await waitFor(() => {
+        expect(queryClient.getQueryData(['/api/parent/enrollments'])).toEqual([]);
+      });
     });
   });
 });

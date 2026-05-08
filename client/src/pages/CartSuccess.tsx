@@ -18,6 +18,7 @@ export default function CartSuccess() {
   const [processing, setProcessing] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [processedEnrollments, setProcessedEnrollments] = useState<number>(0);
+  const userCartStorageKey = user?.email ? `asa_cart_${user.email}` : 'asa_cart_guest';
 
   useEffect(() => {
     const processStripeRedirect = async () => {
@@ -38,7 +39,11 @@ export default function CartSuccess() {
           console.log('✅ Payment succeeded! PaymentIntent:', paymentIntent);
           
           // Get cart data to know how many items were purchased
-          let cartData = localStorage.getItem('cart') || sessionStorage.getItem('cart_backup');
+          let cartData =
+            localStorage.getItem(userCartStorageKey) ||
+            localStorage.getItem('asa_cart') ||
+            localStorage.getItem('cart') ||
+            sessionStorage.getItem('cart_backup');
           let itemCount = 1;
           let enrollmentIds: number[] = [];
           
@@ -110,6 +115,7 @@ export default function CartSuccess() {
           });
 
           // Clear ALL cart data
+          localStorage.removeItem(userCartStorageKey);
           localStorage.removeItem('cart');
           localStorage.removeItem('asa_cart');
           localStorage.removeItem('selectedPaymentPlan');
@@ -124,10 +130,13 @@ export default function CartSuccess() {
             // Continue anyway - cart already cleared in localStorage
           }
           
-          // Invalidate queries to refresh data
-          queryClient.invalidateQueries({ queryKey: ['/api/enrollments'] });
+          // Invalidate and refetch the exact keys used by cart/billing views
+          await queryClient.invalidateQueries({ queryKey: ['/api/parent/enrollments'] });
+          await queryClient.refetchQueries({ queryKey: ['/api/parent/enrollments'], type: 'all' });
           queryClient.invalidateQueries({ queryKey: ['billing-summary'] });
+          queryClient.invalidateQueries({ queryKey: ['/api/billing/summary'] });
           queryClient.invalidateQueries({ queryKey: ['payment-history'] });
+          queryClient.invalidateQueries({ queryKey: ['/api/payment-history/history'] });
           
           console.log('✅ Cart cleared and queries invalidated');
           

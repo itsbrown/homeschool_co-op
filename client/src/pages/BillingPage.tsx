@@ -1093,11 +1093,18 @@ export default function BillingPage() {
 
   const getSelectedTotal = () => {
     if (!billingSummary) return 0;
-    
-    // Always use the real-time total balance from the API
-    const realTimeTotal = billingSummary.totalBalance || 0;
-    console.log('🧮 Real-time total balance from API:', realTimeTotal);
-    return realTimeTotal;
+
+    if (selectedEnrollments.length === 0) {
+      const realTimeTotal = billingSummary.totalBalance || 0;
+      console.log('🧮 Real-time total balance from API (all enrollments):', realTimeTotal);
+      return realTimeTotal;
+    }
+
+    const selectedTotal = billingSummary.enrollmentDetails
+      .filter(detail => selectedEnrollments.includes(detail.enrollmentId))
+      .reduce((total, detail) => total + detail.balance, 0);
+    console.log('🧮 Selected enrollments total:', selectedTotal, 'from', selectedEnrollments.length, 'enrollment(s)');
+    return selectedTotal;
   };
 
   const getPaymentPlanAmount = () => {
