@@ -2679,15 +2679,29 @@ router.patch('/:id/paid', supabaseAuth, async (req: any, res) => {
     
     console.log('✅ Marking payment as paid:', { paymentId, userEmail });
     
-    // Update the scheduled payment status
-    const updatedPayment = await storage.updateScheduledPaymentStatus(paymentId, 'paid');
-    
-    if (!updatedPayment) {
+    const allScheduledPayments = await storage.getScheduledPaymentsByParentEmail(userEmail);
+    const payment = allScheduledPayments.find((p) => p.id === paymentId);
+    if (!payment) {
       return res.status(404).json({
         success: false,
         error: 'Scheduled payment not found'
       });
     }
+    if (payment.parentEmail !== userEmail) {
+      return res.status(403).json({
+        success: false,
+        error: 'Payment does not belong to this user'
+      });
+    }
+    if (payment.status !== 'pending' && payment.status !== 'overdue') {
+      return res.status(400).json({
+        success: false,
+        error: `Payment is already ${payment.status}`
+      });
+    }
+    
+    // Update the scheduled payment status
+    const updatedPayment = await storage.updateScheduledPaymentStatus(paymentId, 'paid');
     
     res.json({
       success: true,

@@ -3111,6 +3111,12 @@ router.patch("/my-school/agreement", supabaseAuth, async (req: any, res) => {
 // Update school "Free After Threshold" discount configuration
 router.patch("/my-school/free-after-threshold", supabaseAuth, async (req: any, res) => {
   try {
+    const role = req.user?.role || req.auth?.payload?.role;
+    const allowedRoles = ['schoolAdmin', 'superAdmin', 'admin'];
+    if (!allowedRoles.includes(role)) {
+      return res.status(403).json({ message: 'Insufficient permissions' });
+    }
+
     const schoolId = await getSchoolIdFromRequest(req, res);
     if (schoolId === null) return;
 
@@ -3143,24 +3149,14 @@ router.patch("/my-school/free-after-threshold", supabaseAuth, async (req: any, r
 
     console.log('🔄 Updating "Free After Threshold" configuration with:', updateData);
 
-    // Use Drizzle ORM to update the school
-    const db = await getDb();
-
-    // Update the school's "Free After Threshold" configuration
-    const updatedSchools = await db
-      .update(schools)
-      .set(updateData)
-      .where(eq(schools.id, schoolId))
-      .returning();
-
-    if (!updatedSchools || updatedSchools.length === 0) {
+    // Use storage abstraction so test/non-prod can fallback to memStorage.
+    const updatedSchool = await storage.updateSchool(schoolId, updateData as any);
+    if (!updatedSchool) {
       console.error('❌ Database update failed - no school found with ID:', schoolId);
       return res.status(404).json({ 
         message: "School not found"
       });
     }
-
-    const updatedSchool = updatedSchools[0];
     console.log('✅ "Free After Threshold" configuration updated successfully');
 
     return res.json({

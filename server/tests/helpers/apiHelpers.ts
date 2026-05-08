@@ -6,6 +6,7 @@ export class ApiTestHelper {
   private app: Application | null = null;
   private authToken: string | null = null;
   private cookies: string[] = [];
+  private testUserEmail: string | null = null;
 
   async init() {
     if (!this.app) {
@@ -24,6 +25,25 @@ export class ApiTestHelper {
   clearAuth() {
     this.authToken = null;
     this.cookies = [];
+    this.testUserEmail = null;
+  }
+
+  setTestUserEmail(email: string | null) {
+    this.testUserEmail = email;
+  }
+
+  private applyAuthHeaders(req: request.Test) {
+    let nextReq = req;
+    if (this.authToken) {
+      nextReq = nextReq.set('Authorization', `Bearer ${this.authToken}`);
+    }
+    if (this.cookies.length > 0) {
+      nextReq = nextReq.set('Cookie', this.cookies);
+    }
+    if (this.testUserEmail) {
+      nextReq = nextReq.set('x-test-user-email', this.testUserEmail);
+    }
+    return nextReq;
   }
 
   private async ensureApp(): Promise<Application> {
@@ -35,15 +55,7 @@ export class ApiTestHelper {
 
   async get(url: string, query?: Record<string, any>) {
     const app = await this.ensureApp();
-    let req = request(app).get(url);
-    
-    if (this.authToken) {
-      req = req.set('Authorization', `Bearer ${this.authToken}`);
-    }
-    
-    if (this.cookies.length > 0) {
-      req = req.set('Cookie', this.cookies);
-    }
+    let req = this.applyAuthHeaders(request(app).get(url));
 
     if (query) {
       req = req.query(query);
@@ -54,15 +66,7 @@ export class ApiTestHelper {
 
   async post(url: string, data?: any) {
     const app = await this.ensureApp();
-    let req = request(app).post(url);
-    
-    if (this.authToken) {
-      req = req.set('Authorization', `Bearer ${this.authToken}`);
-    }
-    
-    if (this.cookies.length > 0) {
-      req = req.set('Cookie', this.cookies);
-    }
+    let req = this.applyAuthHeaders(request(app).post(url));
 
     if (data) {
       req = req.send(data);
@@ -73,15 +77,7 @@ export class ApiTestHelper {
 
   async put(url: string, data?: any) {
     const app = await this.ensureApp();
-    let req = request(app).put(url);
-    
-    if (this.authToken) {
-      req = req.set('Authorization', `Bearer ${this.authToken}`);
-    }
-    
-    if (this.cookies.length > 0) {
-      req = req.set('Cookie', this.cookies);
-    }
+    let req = this.applyAuthHeaders(request(app).put(url));
 
     if (data) {
       req = req.send(data);
@@ -92,15 +88,7 @@ export class ApiTestHelper {
 
   async patch(url: string, data?: any) {
     const app = await this.ensureApp();
-    let req = request(app).patch(url);
-    
-    if (this.authToken) {
-      req = req.set('Authorization', `Bearer ${this.authToken}`);
-    }
-    
-    if (this.cookies.length > 0) {
-      req = req.set('Cookie', this.cookies);
-    }
+    let req = this.applyAuthHeaders(request(app).patch(url));
 
     if (data) {
       req = req.send(data);
@@ -111,32 +99,16 @@ export class ApiTestHelper {
 
   async delete(url: string) {
     const app = await this.ensureApp();
-    let req = request(app).delete(url);
-    
-    if (this.authToken) {
-      req = req.set('Authorization', `Bearer ${this.authToken}`);
-    }
-    
-    if (this.cookies.length > 0) {
-      req = req.set('Cookie', this.cookies);
-    }
+    let req = this.applyAuthHeaders(request(app).delete(url));
 
     return req;
   }
 
   async uploadFile(url: string, fieldName: string, filePath: string, data?: any) {
     const app = await this.ensureApp();
-    let req = request(app)
+    let req = this.applyAuthHeaders(request(app)
       .post(url)
-      .attach(fieldName, filePath);
-    
-    if (this.authToken) {
-      req = req.set('Authorization', `Bearer ${this.authToken}`);
-    }
-    
-    if (this.cookies.length > 0) {
-      req = req.set('Cookie', this.cookies);
-    }
+      .attach(fieldName, filePath));
 
     if (data) {
       Object.keys(data).forEach(key => {
@@ -148,6 +120,7 @@ export class ApiTestHelper {
   }
 
   async loginAsUser(email: string, password: string = 'password') {
+    this.setTestUserEmail(email);
     const response = await this.post('/api/auth/login', { email, password });
     
     // Session-based authentication - save cookies

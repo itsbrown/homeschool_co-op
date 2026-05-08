@@ -9,24 +9,29 @@ const router = express.Router();
 router.get('/', async (req, res) => {
   try {
     const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 10;
+    const limit = parseInt(req.query.limit as string) || 50;
     const search = req.query.search as string || '';
     const category = req.query.category as string || '';
+    const categoryId = req.query.categoryId ? parseInt(req.query.categoryId as string) : undefined;
+    const locationId = req.query.locationId ? parseInt(req.query.locationId as string) : undefined;
+    const locationIds = Array.isArray(req.query.locationIds)
+      ? (req.query.locationIds as string[]).map(id => parseInt(id)).filter(id => !isNaN(id))
+      : [];
+    const sortBy = req.query.sortBy as string || '';
+    const sortOrder = ((req.query.sortOrder as string) || 'asc').toLowerCase() === 'desc' ? 'desc' : 'asc';
     const categoryName = req.query.categoryName as string || '';
     const statusParam = req.query.status as string || '';
 
-    // Validate status before using it
+    // Map API-facing statuses to storage-supported statuses where needed.
     let status: "published" | "draft" | "" = "";
-    if (statusParam === "published" || statusParam === "draft") {
-      status = statusParam;
-    }
+    if (statusParam === "published" || statusParam === "draft") status = statusParam;
 
     const options = {
       page,
       limit,
       search,
       category,
-      status
+      status: statusParam === 'active' ? "" : status
     };
 
     // Get classes count for pagination
@@ -45,18 +50,52 @@ router.get('/', async (req, res) => {
       return true;
     });
 
+    if (statusParam) {
+      classes = classes.filter((c: any) => c.status === statusParam || (statusParam === 'active' && c.status === 'published'));
+    }
+    if (typeof locationId === 'number' && !isNaN(locationId)) {
+      classes = classes.filter((c: any) => c.locationId === locationId);
+    }
+    if (locationIds.length > 0) {
+      classes = classes.filter((c: any) => locationIds.includes(c.locationId));
+    }
+    if (typeof categoryId === 'number' && !isNaN(categoryId)) {
+      classes = classes.filter((c: any) => c.categoryId === categoryId);
+    }
+
     // Additional filtering by categoryName if provided
     if (categoryName && classes.length > 0) {
       classes = classes.filter(c => c.categoryName === categoryName);
     }
 
+    if (sortBy) {
+      classes = [...classes].sort((a: any, b: any) => {
+        const av = a?.[sortBy];
+        const bv = b?.[sortBy];
+        if (av === bv) return 0;
+        if (av == null) return 1;
+        if (bv == null) return -1;
+        const result = typeof av === 'string' && typeof bv === 'string'
+          ? av.localeCompare(bv)
+          : Number(av) - Number(bv);
+        return sortOrder === 'desc' ? -result : result;
+      });
+    }
+
     // Calculate enrollment counts for each class
     const classesWithEnrollmentCounts = await Promise.all(
       classes.map(async (cls) => {
-        const enrollmentCount = await storage.getEnrollmentCountForClass(cls.id);
+        let enrollmentCount = 0;
+        try {
+          enrollmentCount = await storage.getEnrollmentCountForClass(cls.id);
+        } catch {
+          enrollmentCount = 0;
+        }
         return {
           ...cls,
-          enrollmentCount
+          enrollmentCount,
+          currentEnrollment: enrollmentCount,
+          spotsAvailable: Math.max((cls.maxStudents || cls.capacity || 0) - enrollmentCount, 0),
         };
       })
     );
@@ -78,6 +117,98 @@ router.get('/', async (req, res) => {
   }
 });
 
+router.post('/', async (req: any, res) => {
+  try {
+    if (req.user?.role === 'teacher' && req.user?.permissions?.canCreateClasses === false) {
+      return res.status(403).json({ error: 'permission denied' });
+    }
+    const classItem = await storage.createClass(req.body as any);
+    return res.status(200).json({ class: classItem });
+  } catch (error) {
+    console.error('Error creating class:', error);
+    return res.status(500).json({ message: 'Failed to create class' });
+  }
+});
+
+// Public classes endpoint used by integration tests.
+router.get('/public', async (_req, res) => {
+  try {
+    const classes = await storage.getAllClasses();
+    const visible = classes.filter((c: any) => c.status !== 'draft' && !c.isAdminOnly);
+    res.json({ classes: visible });
+  } catch (error) {
+    console.error('Error fetching public classes:', error);
+    res.status(500).json({ message: 'Failed to fetch public classes' });
+  }
+});
+
+router.get('/shared/:token', async (req, res) => {
+  try {
+    const token = String(req.params.token || '');
+    const classes = await storage.getAllClasses();
+    const classItem = classes.find((c: any) => c.shareToken === token && c.isPublic);
+    if (!classItem) return res.status(404).json({ message: 'Shared class not found' });
+    return res.json({ class: classItem });
+  } catch (error) {
+    console.error('Error fetching shared class:', error);
+    return res.status(500).json({ message: 'Failed to fetch shared class' });
+  }
+});
+
+router.get('/:id/roster', async (req, res) => {
+  try {
+    const classId = parseInt(req.params.id);
+    const status = req.query.status as string | undefined;
+    const includeParentInfo = String(req.query.includeParentInfo || 'false') === 'true';
+    const sortBy = req.query.sortBy as string | undefined;
+    const enrollments = (await storage.getAllEnrollments()).filter((e: any) =>
+      e.classId === classId || e.marketplaceClassId === classId
+    );
+    let roster = await Promise.all(enrollments.map(async (e: any) => {
+      const child = await storage.getChildById(e.childId);
+      const parent = child?.parentId ? await storage.getUser(child.parentId) : null;
+      return {
+        id: child?.id,
+        firstName: child?.firstName,
+        lastName: child?.lastName,
+        dateOfBirth: child?.birthdate,
+        enrollmentStatus: e.status,
+        hasSevereAllergies: !!(child?.hasSevereAllergies || (Array.isArray(child?.allergies) && child.allergies.some((a: string) => String(a).toLowerCase().includes('severe')))),
+        ...(includeParentInfo ? { parentName: parent?.name || '', parentEmail: parent?.email || '' } : {}),
+      };
+    }));
+    if (status) roster = roster.filter((r: any) => r.enrollmentStatus === status);
+    if (sortBy === 'lastName') {
+      roster = roster.sort((a: any, b: any) =>
+        String(a.lastName || '').toLowerCase().localeCompare(String(b.lastName || '').toLowerCase())
+      );
+    }
+    return res.status(200).json({ roster });
+  } catch (error) {
+    console.error('Error fetching class roster:', error);
+    return res.status(500).json({ message: 'Failed to fetch class roster' });
+  }
+});
+
+router.get('/:id/roster/export', async (req, res) => {
+  try {
+    const classId = parseInt(req.params.id);
+    const enrollments = (await storage.getAllEnrollments()).filter((e: any) =>
+      e.classId === classId || e.marketplaceClassId === classId
+    );
+    const rows = await Promise.all(enrollments.map(async (e: any) => {
+      const child = await storage.getChildById(e.childId);
+      return `${child?.firstName || ''},${child?.lastName || ''},${e.status || ''}`;
+    }));
+    const csv = ['First Name,Last Name,Status', ...rows].join('\n');
+    res.setHeader('content-type', 'text/csv; charset=utf-8');
+    return res.status(200).send(csv);
+  } catch (error) {
+    console.error('Error exporting roster:', error);
+    return res.status(500).json({ message: 'Failed to export roster' });
+  }
+});
+
 // Get class by ID
 router.get('/:id', async (req, res) => {
   try {
@@ -92,15 +223,90 @@ router.get('/:id', async (req, res) => {
     }
 
     // Calculate enrollment count dynamically
-    const enrollmentCount = await storage.getEnrollmentCountForClass(classItem.id);
+    let enrollmentCount = 0;
+    try {
+      const allEnrollments = await (storage.getAllEnrollments?.() || Promise.resolve([]));
+      enrollmentCount = allEnrollments.filter((e: any) =>
+        (e.classId === classItem.id || e.marketplaceClassId === classItem.id) &&
+        e.status !== 'cancelled'
+      ).length;
+    } catch {
+      enrollmentCount = 0;
+    }
 
     res.json({
-      ...classItem,
-      enrollmentCount
+      class: {
+        ...classItem,
+        enrollmentCount,
+        currentEnrollment: enrollmentCount,
+        spotsAvailable: Math.max(((classItem as any).maxStudents || (classItem as any).capacity || 0) - enrollmentCount, 0),
+      }
     });
   } catch (error) {
     console.error('Error fetching class:', error);
     res.status(500).json({ message: 'Failed to fetch class' });
+  }
+});
+
+router.patch('/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ message: 'Invalid class ID' });
+    const updated = await storage.updateClass(id, req.body || {});
+    if (!updated) return res.status(404).json({ message: 'Class not found' });
+    return res.json({ class: updated });
+  } catch (error) {
+    console.error('Error updating class:', error);
+    return res.status(500).json({ message: 'Failed to update class' });
+  }
+});
+
+router.delete('/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ message: 'Invalid class ID' });
+
+    const enrollmentsByClass = await storage.getEnrollmentsByClassId(id);
+    const allEnrollments = await (storage.getAllEnrollments?.() || Promise.resolve([]));
+    const merged = [...enrollmentsByClass, ...allEnrollments.filter((e: any) => e.classId === id || e.marketplaceClassId === id)];
+    const seenIds = new Set<number>();
+    const activeEnrollments = merged.filter((e: any) => {
+      const dedupeKey = Number(e.id || 0);
+      if (dedupeKey && seenIds.has(dedupeKey)) return false;
+      if (dedupeKey) seenIds.add(dedupeKey);
+      return e.status !== 'cancelled' && e.status !== 'completed';
+    });
+    if (activeEnrollments.length > 0) {
+      return res.status(400).json({ error: 'Cannot delete class with active enrollments' });
+    }
+
+    await storage.deleteClass(id);
+    return res.json({ message: 'Class deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting class:', error);
+    return res.status(500).json({ message: 'Failed to delete class' });
+  }
+});
+
+router.post('/:id/share', async (req: any, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ message: 'Invalid class ID' });
+    const classItem: any = await storage.getClassById(id);
+    if (!classItem) return res.status(404).json({ message: 'Class not found' });
+
+    const role = req.user?.role || req.session?.userRole;
+    const canSharePrivate = role === 'admin' || role === 'superAdmin' || role === 'schoolAdmin';
+    if (!classItem.isPublic && !canSharePrivate) {
+      return res.status(403).json({ message: 'Insufficient permissions to share private class' });
+    }
+
+    const shareToken = classItem.shareToken || `${id}-${Math.random().toString(36).slice(2, 10)}`;
+    await storage.updateClass(id, { ...(classItem.shareToken ? {} : { shareToken }) } as any);
+    return res.json({ shareUrl: `/api/classes/shared/${shareToken}`, shareToken });
+  } catch (error) {
+    console.error('Error sharing class:', error);
+    return res.status(500).json({ message: 'Failed to share class' });
   }
 });
 

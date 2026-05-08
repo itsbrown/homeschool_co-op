@@ -423,7 +423,7 @@ export class TestDatabase {
 
   async createTestMembershipEnrollment(parentId: number, schoolId: number, overrides: any = {}) {
     const membershipData = {
-      parentId,
+      parentUserId: parentId,
       schoolId,
       membershipYear: overrides.membershipYear || new Date().getFullYear(),
       amount: overrides.amount || 15000,

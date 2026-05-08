@@ -26,20 +26,32 @@ describe('Integration: Variant Pricing and Discounts', () => {
 
   beforeAll(async () => {
     await testDb.cleanup();
-    
-    // Setup test environment
+  });
+
+  afterAll(async () => {
+    await testDb.cleanup();
+  });
+
+  beforeEach(async () => {
+    resetAllMocks();
+
+    await testDb.cleanup();
+
+    // Setup isolated environment per test to prevent cross-test enrollments/config drift.
     const env = await testDb.setupTestEnvironment();
     testSchool = env.school;
     testAdmin = env.admin;
     testLocation = env.locations[0];
     testCategory = env.categories[0];
 
-    // Create test parent and children
-    testParent = await testDb.createTestUser({ 
+    // Ensure admin has a concrete schoolId for /my-school routes.
+    testAdmin = await testDb.updateUser(testAdmin.id, { schoolId: testSchool.id });
+
+    testParent = await testDb.createTestUser({
       role: 'parent',
-      schoolId: testSchool.id 
+      schoolId: testSchool.id
     });
-    
+
     testChild1 = await testDb.createTestChild(testParent.id, {
       schoolId: testSchool.id,
       firstName: 'Alice',
@@ -51,14 +63,6 @@ describe('Integration: Variant Pricing and Discounts', () => {
       firstName: 'Bob',
       lastName: 'Test'
     });
-  });
-
-  afterAll(async () => {
-    await testDb.cleanup();
-  });
-
-  beforeEach(() => {
-    resetAllMocks();
   });
 
   describe('Variant Pricing for Marketplace Classes', () => {

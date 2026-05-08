@@ -9,8 +9,74 @@ import { dataLayer } from '../services/dataLayer';
 import { getStripeClient } from '../config/stripe';
 import { supabaseAuth } from '../middleware/supabase-auth';
 import { isPaymentProcessorEnabled } from '../services/PaymentProcessorService';
+import { calculateCanonicalEnrollmentAmount } from '../services/canonical-payment-amount';
 
 const router = Router();
+
+/**
+ * Resolve a class row for a program enrollment.
+ *
+ * Program enrollments can reference a class via three different columns depending on how they were
+ * created (cart checkout vs admin enrollment vs legacy migrations):
+ *   - marketplaceClassId: marketplace classes table (the standard cart-checkout path)
+ *   - programId:          legacy column kept for backwards compatibility
+ *   - classId:            school_classes table (rarely used; schema-defined but no live writers)
+ *
+ * The previous billing-summary code only looked up `enrollment.classId` against the `classes`
+ * table, which silently dropped most marketplace enrollments from the summary. This helper tries
+ * each candidate ID against the `classes` table (which is what storage.getClassById queries) and
+ * returns the first match, or null if none resolve.
+ *
+ * Callers should NOT use the return value as the source of truth for amounts — the canonical
+ * amount fields are denormalized onto program_enrollments (total_cost, total_paid,
+ * remaining_balance). This helper is for display-only fields like the class title.
+ */
+async function resolveClassForEnrollment(
+  enrollment: { marketplaceClassId?: number | null; programId?: number | null; classId?: number | null }
+): Promise<{ id: number; title: string; price: number } | null> {
+  const candidateIds = [
+    enrollment.marketplaceClassId,
+    enrollment.programId,
+    enrollment.classId,
+  ].filter((id): id is number => typeof id === 'number' && id > 0);
+
+  for (const id of candidateIds) {
+    const cls = await storage.getClassById(id);
+    if (cls) {
+      return { id: cls.id, title: cls.title, price: cls.price };
+    }
+  }
+
+  return null;
+}
+
+/** School id from enrollment.parent + class; fills gaps when rows lack explicit school_id. */
+async function resolveSchoolIdForBalancePaymentIntent(
+  firstEnrollment: any | null | undefined,
+  parentUser: { schoolId?: number | null }
+): Promise<number | undefined> {
+  const direct = firstEnrollment?.schoolId ?? parentUser.schoolId;
+  if (direct != null && direct !== '') return Number(direct);
+
+  if (firstEnrollment?.childId != null) {
+    const child = await storage.getChildById(Number(firstEnrollment.childId));
+    if (child?.schoolId != null) return Number(child.schoolId);
+  }
+
+  const candidateIds = [
+    firstEnrollment?.marketplaceClassId,
+    firstEnrollment?.programId,
+    firstEnrollment?.classId,
+  ].filter((id): id is number => typeof id === 'number' && id > 0);
+
+  for (const id of candidateIds) {
+    const cls = await storage.getClassById(id);
+    const sid = cls && typeof (cls as any).schoolId === 'number' ? (cls as any).schoolId : null;
+    if (sid != null) return Number(sid);
+  }
+
+  return undefined;
+}
 
 // Rate limiting for payment endpoints
 const paymentRateLimit = rateLimit({
@@ -247,6 +313,8 @@ router.post('/create-payment-intent', paymentRateLimit, async (req, res) => {
     const paymentIntent = await stripe.paymentIntents.create({
       amount: installmentAmount, // For monthly: first installment; for full: total amount
       currency,
+      // Card-only: avoids Dashboard APM bundles that require return_url on server-side confirm / CLI.
+      payment_method_types: ['card'],
       metadata: {
         parentEmail,
         enrollmentDetails: JSON.stringify(enrollmentDetails),
@@ -270,8 +338,8 @@ router.post('/create-payment-intent', paymentRateLimit, async (req, res) => {
     const firstEnrollment = enrollmentDetails && enrollmentDetails.length > 0
       ? await storage.getProgramEnrollmentById(enrollmentDetails[0].enrollmentId)
       : null;
-    
-    const schoolId = firstEnrollment?.schoolId || parentUser.schoolId;
+
+    const schoolId = await resolveSchoolIdForBalancePaymentIntent(firstEnrollment, parentUser);
     if (!schoolId) {
       return res.status(400).json({
         success: false,
@@ -563,35 +631,43 @@ router.get('/summary', supabaseAuth, async (req: any, res) => {
     }
     console.log('📋 Found enrollments:', allEnrollments.length);
 
-    // Calculate enrollment details with balances
+    // Calculate enrollment details with balances.
+    //
+    // C3 fix: Resolve the class via marketplaceClassId | programId | classId — not just classId.
+    // The schema allows any of these and most production rows use marketplaceClassId. The previous
+    // implementation looked up only enrollment.classId and then `continue`-d if the class was not
+    // found, silently dropping ~88% of marketplace enrollments from the summary while the cart
+    // drawer (which doesn't do this lookup) showed them. That divergence is the dominant source of
+    // "I don't see my balance" reports.
+    //
+    // We also stop dropping enrollments when the class lookup fails. The amount fields
+    // (total_cost, total_paid, remaining_balance) are denormalized on program_enrollments, so the
+    // balance is correct even without a class row. The only field we lose is the display title.
     const enrollmentDetails = [];
     let totalBalance = 0;
 
     for (const enrollment of allEnrollments) {
-      // Get class details
-      const classDetails = await storage.getClassById(enrollment.classId);
-      if (!classDetails) continue;
+      const classDetails = await resolveClassForEnrollment(enrollment);
 
-      // Get child details
       const child = children.find(c => c.id === enrollment.childId);
       if (!child) continue;
 
       // Calculate balance using effectiveBalance — the DB-generated source of truth.
       // effectiveBalance = total_cost - total_paid - COALESCE(comp_amount_cents, 0)
       // For stripe_managed enrollments remainingBalance is 0, so we must not use it here.
-      const totalAmount = enrollment.totalCost || classDetails.price || 0;
-      const totalPaid = enrollment.totalPaid || enrollment.amount || 0;
+      const totalAmount = enrollment.totalCost ?? classDetails?.price ?? 0;
+      const totalPaid = enrollment.totalPaid ?? (enrollment as any).amount ?? 0;
       // Prefer the DB-computed effectiveBalance; fall back to application formula only if
       // the generated column is unavailable (e.g. in-memory storage during testing).
       const balance = enrollment.effectiveBalance != null
         ? Math.max(0, enrollment.effectiveBalance)
         : Math.max(0, totalAmount - totalPaid - (enrollment.compAmountCents || 0));
 
-      // Always show all enrollments, but only add positive balances to total
       enrollmentDetails.push({
         enrollmentId: enrollment.id,
         childName: `${child.firstName} ${child.lastName}`,
-        className: classDetails.title,
+        className: classDetails?.title ?? '(class details unavailable)',
+        classType: enrollment.classType,
         classPrice: totalAmount,
         amountPaid: totalPaid,
         balance: balance,
@@ -599,8 +675,7 @@ router.get('/summary', supabaseAuth, async (req: any, res) => {
         enrollmentDate: enrollment.enrollmentDate,
         depositRequired: enrollment.depositRequired || Math.round(totalAmount * 0.1)
       });
-      
-      // Only add positive balances to the total outstanding amount
+
       if (balance > 0) {
         totalBalance += balance;
       }
@@ -728,18 +803,46 @@ router.post('/pay-balance', async (req, res) => {
 
     const { enrollmentIds, totalAmount, paymentDetails, paymentPlan } = req.body;
 
-    console.log('💳 Processing payment for:', userEmail, 'Amount:', totalAmount);
+    const parentUser = await storage.getUserByEmail(userEmail);
+    if (!parentUser) {
+      return res.status(404).json({ error: 'Parent user not found' });
+    }
+
+    const canonicalAmount = await calculateCanonicalEnrollmentAmount({
+      enrollmentIds: Array.isArray(enrollmentIds) ? enrollmentIds : [],
+      parentId: parentUser.id,
+      parentEmail: userEmail,
+    });
+
+    if (canonicalAmount.totalAmountCents <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'No payable balance found for the selected enrollments',
+      });
+    }
+
+    if (typeof totalAmount === 'number' && Math.round(totalAmount * 100) !== canonicalAmount.totalAmountCents) {
+      console.warn('⚠️ Client pay-balance amount mismatch; using canonical server amount', {
+        parentEmail: userEmail,
+        clientTotalCents: Math.round(totalAmount * 100),
+        canonicalTotalCents: canonicalAmount.totalAmountCents,
+        enrollmentIds: canonicalAmount.enrollmentIds,
+      });
+    }
+
+    console.log('💳 Processing payment for:', userEmail, 'Amount (cents):', canonicalAmount.totalAmountCents);
 
     // Create payment intent
     const stripe = await getStripeClient();
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: Math.round(totalAmount * 100), // Convert dollars to cents for Stripe
+      amount: canonicalAmount.totalAmountCents,
       currency: 'usd',
       metadata: {
         parentEmail: userEmail,
-        enrollmentIds: JSON.stringify(enrollmentIds),
+        enrollmentIds: JSON.stringify(canonicalAmount.enrollmentIds),
         paymentPlan: paymentPlan,
-        paymentType: 'balance_payment'
+        paymentType: 'balance_payment',
+        canonicalAmountCents: String(canonicalAmount.totalAmountCents),
       },
       automatic_payment_methods: {
         enabled: true,
@@ -752,7 +855,8 @@ router.post('/pay-balance', async (req, res) => {
     res.json({
       success: true,
       clientSecret: paymentIntent.client_secret,
-      paymentIntentId: paymentIntent.id
+      paymentIntentId: paymentIntent.id,
+      canonicalAmountCents: canonicalAmount.totalAmountCents
     });
 
   } catch (error) {

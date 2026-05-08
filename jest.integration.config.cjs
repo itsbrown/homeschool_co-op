@@ -2,6 +2,8 @@ module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'node',
   rootDir: '.',
+  setupFiles: ['<rootDir>/server/tests/jest-setup-env.cjs'],
+  modulePathIgnorePatterns: ['<rootDir>/.worktree-'],
   moduleNameMapper: {
     '^@shared/(.*)$': '<rootDir>/shared/$1',
     // server/lib/database-url.mjs uses bare ESM `export` syntax that ts-jest

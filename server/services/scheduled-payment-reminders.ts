@@ -24,6 +24,8 @@ export interface ReminderResult {
   error?: string;
 }
 
+let reminderInterval: ReturnType<typeof setInterval> | null = null;
+
 // Days before/after due date to send reminders
 const REMINDER_DAYS = {
   SEVEN_DAYS_BEFORE: 7,
@@ -287,6 +289,10 @@ export async function processScheduledPaymentReminders(): Promise<ReminderResult
  * Runs every 6 hours to check for payments needing reminders
  */
 export function startScheduledPaymentReminderJob(): void {
+  if (reminderInterval) {
+    console.log('ℹ️ Scheduled payment reminder job already running; skipping duplicate start');
+    return;
+  }
   console.log('🔔 Starting scheduled payment reminder job...');
   
   // Run immediately on startup
@@ -298,13 +304,21 @@ export function startScheduledPaymentReminderJob(): void {
   
   // Then run every 6 hours
   const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
-  setInterval(() => {
+  reminderInterval = setInterval(() => {
     processScheduledPaymentReminders().then(results => {
       if (results.length > 0) {
         console.log(`📧 Scheduled reminder check: ${results.filter(r => r.sent).length} reminders sent`);
       }
     });
   }, SIX_HOURS_MS);
+  reminderInterval.unref?.();
   
   console.log('✅ Scheduled payment reminder job initialized - runs every 6 hours');
+}
+
+export function stopScheduledPaymentReminderJob(): void {
+  if (reminderInterval) {
+    clearInterval(reminderInterval);
+    reminderInterval = null;
+  }
 }

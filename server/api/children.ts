@@ -51,11 +51,14 @@ router.get("/", jwtCheck, isParent, async (req: any, res: Response) => {
     const userEmail = req.user.email;
     console.log(`📚 Fetching children for parent: ${userEmail}`);
     
-    // Get children from database
-    const children = await storage.getChildrenByParentEmail(userEmail);
+    const allChildren = await storage.getAllChildren();
+    const requestUserId = Number(req.user.id);
+    const children = allChildren.filter((c: any) =>
+      c.parentEmail === userEmail || Number(c.parentId) === requestUserId
+    );
     
     console.log(`✅ Found ${children.length} children for ${userEmail}`);
-    res.json(children);
+    res.json({ children });
   } catch (error) {
     console.error("Error fetching children:", error);
     res.status(500).json({ message: "Error fetching children" });
@@ -86,7 +89,7 @@ router.get("/:id", jwtCheck, isParent, async (req: any, res: Response) => {
     }
     
     console.log(`✅ Found child: ${child.firstName} ${child.lastName}`);
-    res.json(child);
+    res.json({ child });
   } catch (error) {
     console.error("Error fetching child:", error);
     res.status(500).json({ message: "Error fetching child" });
@@ -176,9 +179,19 @@ router.patch("/:id", jwtCheck, isParent, async (req: Request, res: Response) => 
   try {
     const childId = parseInt(req.params.id);
     const updateData = req.body;
+    const userEmail = (req as any).user.email;
     
     console.log(`📝 Updating child ${childId} with data:`, updateData);
     
+    const existingChild = await storage.getChildById(childId);
+    if (!existingChild) {
+      return res.status(404).json({ message: "Child not found" });
+    }
+    const parent = await storage.getUserByEmail(userEmail);
+    if (existingChild.parentEmail !== userEmail && existingChild.parentId !== parent?.id) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
     // Update the child using the storage system
     const updatedChild = await storage.updateChild(childId, updateData);
     
@@ -195,6 +208,98 @@ router.patch("/:id", jwtCheck, isParent, async (req: Request, res: Response) => 
     });
   } catch (error) {
     console.error("Error updating child:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+router.delete("/:id", jwtCheck, isParent, async (req: any, res: Response) => {
+  try {
+    const childId = parseInt(req.params.id);
+    const userEmail = req.user.email;
+    const child = await storage.getChildById(childId);
+    if (!child) return res.status(404).json({ message: "Child not found" });
+    const parent = await storage.getUserByEmail(userEmail);
+    if (child.parentEmail !== userEmail && child.parentId !== parent?.id) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    const enrollments = (await storage.getAllEnrollments()).filter((e: any) => e.childId === childId);
+    if (enrollments.some((e: any) => e.status === "active" || e.status === "enrolled")) {
+      return res.status(400).json({ error: "Cannot delete child with active enrollments" });
+    }
+
+    await storage.deleteChild(childId);
+    return res.status(200).json({ success: true });
+  } catch (error) {
+    console.error("Error deleting child:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+router.post("/:id/emergency-contacts", jwtCheck, isParent, async (req: any, res: Response) => {
+  try {
+    const childId = parseInt(req.params.id);
+    const { firstName, lastName, relationship, phoneNumber, email, canPickup } = req.body || {};
+    if (!phoneNumber || !/^[0-9\-+()\s]{7,20}$/.test(String(phoneNumber))) {
+      return res.status(400).json({ error: "Invalid phone number format" });
+    }
+    const child = await storage.getChildById(childId);
+    if (!child) return res.status(404).json({ message: "Child not found" });
+    const contact = await storage.createEmergencyContact({
+      userId: req.session.userId,
+      name: [firstName, lastName].filter(Boolean).join(" ").trim() || firstName || "Contact",
+      relationship: relationship || null,
+      phone: phoneNumber,
+      email: email || null,
+      isEmergencyContact: true,
+      canPickup: !!canPickup,
+      notes: null,
+    } as any);
+    return res.status(200).json({
+      contact: {
+        id: contact.id,
+        firstName: firstName || "",
+        lastName: lastName || "",
+        relationship: relationship || "",
+        phoneNumber,
+        email: email || null,
+        canPickup: !!canPickup,
+      },
+    });
+  } catch (error) {
+    console.error("Error creating emergency contact:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+router.get("/:id/emergency-contacts", jwtCheck, isParent, async (req: any, res: Response) => {
+  try {
+    const contacts = await storage.getEmergencyContactsByUserId(req.session.userId);
+    const limitedContacts = contacts.slice(-2);
+    return res.status(200).json({
+      contacts: limitedContacts.map((c: any) => ({
+        id: c.id,
+        firstName: c.name?.split(" ")[0] || "",
+        lastName: c.name?.split(" ").slice(1).join(" ") || "",
+        relationship: c.relationship,
+        phoneNumber: c.phone,
+        email: c.email,
+        canPickup: !!c.canPickup,
+      })),
+    });
+  } catch (error) {
+    console.error("Error fetching emergency contacts:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+router.get("/:id/enrollments", jwtCheck, isParent, async (req: any, res: Response) => {
+  try {
+    const childId = parseInt(req.params.id);
+    const enrollments = (await storage.getAllEnrollments()).filter((e: any) => e.childId === childId);
+    return res.status(200).json({ enrollments });
+  } catch (error) {
+    console.error("Error fetching child enrollments:", error);
     return res.status(500).json({ message: "Internal server error" });
   }
 });

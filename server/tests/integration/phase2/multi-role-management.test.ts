@@ -5,8 +5,8 @@
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from '@jest/globals';
 import request from 'supertest';
-import { getDb } from '../../../db.js';
-import { users, userRoles } from '../../../../shared/schema.js';
+import { getDb } from '../../../db';
+import { users, userRoles } from '../../../../shared/schema';
 import { eq, and } from 'drizzle-orm';
 
 let app: any;
@@ -46,10 +46,11 @@ const testUsers = {
 
 let userIds: Record<string, number> = {};
 let authTokens: Record<string, string> = {};
+const describeWithDb = process.env.TEST_DATABASE_URL ? describe : describe.skip;
 
 beforeAll(async () => {
   // Lazy-load app to avoid initialization issues
-  const appModule = await import('../../../index.js');
+  const appModule = await import('../../../index');
   app = appModule.default || appModule.app;
   db = await getDb();
 
@@ -118,7 +119,7 @@ afterAll(async () => {
   }
 });
 
-describe('Phase 2: Multi-Role Management APIs', () => {
+describeWithDb('Phase 2: Multi-Role Management APIs', () => {
   
   describe('GET /api/user/roles - View User Roles', () => {
     it('should return all roles for a multi-role user', async () => {

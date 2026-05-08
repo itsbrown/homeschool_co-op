@@ -45,24 +45,38 @@ server/tests/
 ### Running All Tests
 
 ```bash
-# Run all integration tests
-npm run test:integration
+# Run the server integration config used in CI/local triage
+npm run test:server
 
 # Or using Jest directly
-npx jest --config=jest.config.js
+npx jest --config=jest.integration.config.cjs
 ```
 
 ### Running Specific Test Suites
 
 ```bash
 # Run Phase 1 tests only
-npm run test:integration -- server/tests/integration/phase1
+npm run test:server -- --testPathPatterns=phase1
 
 # Run specific test file
-npm run test:integration -- server/tests/integration/phase1/user-management.test.ts
+npm run test:server -- --testPathPatterns=phase1/user-management
 
 # Run tests matching a pattern
-npm run test:integration -- --testNamePattern="Multi-Role"
+npm run test:server -- --testNamePattern="Multi-Role"
+```
+
+### Conditional suites
+
+Most suites run without a live DB via the test harness. **`phase2/multi-role-management`** talks to PostgreSQL (`getDb()` / Drizzle). It runs **only when** `TEST_DATABASE_URL` is set; otherwise Jest shows **1 skipped** suite on a full `npm run test:server` run.
+
+```bash
+TEST_DATABASE_URL="postgresql://user:password@localhost:5432/asa_test" npm run test:server -- --testPathPatterns=phase2/multi-role-management
+```
+
+Feature-flag example:
+
+```bash
+RUN_CART_QUERY_CACHE_TESTS=true npm run test:server -- --testPathPatterns=phase3/cart-query-cache
 ```
 
 ### Running with Coverage

@@ -7,6 +7,36 @@ import { storage } from '../storage';
 // Supabase JWT verification middleware with fallback for development
 export const jwtCheck = async (req: any, res: Response, next: NextFunction) => {
   try {
+    // Test harness shortcut: allow x-test-user-email in NODE_ENV=test
+    // so integration suites can authenticate without live Supabase tokens.
+    if (process.env.NODE_ENV === 'test' && req.headers['x-test-user-email']) {
+      const testEmail = String(req.headers['x-test-user-email']);
+      const { storage } = await import('../storage');
+      const testUser = await storage.getUserByEmail(testEmail);
+      if (testUser) {
+        req.user = {
+          id: testUser.supabaseId || String(testUser.id),
+          email: testUser.email,
+          role: testUser.role,
+          dbUser: testUser,
+        };
+        req.auth = {
+          userId: testUser.supabaseId || String(testUser.id),
+          supabaseId: testUser.supabaseId || String(testUser.id),
+          email: testUser.email,
+          role: testUser.role,
+          isActive: testUser.isActive ?? true,
+          schoolId: testUser.schoolId,
+          dbUserId: testUser.id,
+          payload: {
+            email: testUser.email,
+            role: testUser.role,
+          },
+        };
+        return next();
+      }
+    }
+
     const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {

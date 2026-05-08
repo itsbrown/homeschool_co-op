@@ -1003,8 +1003,10 @@ export class MemStorage implements IStorage {
     this.initializeKnowledgeBases().catch(console.error);
     // Classes are now in database - no longer loading from JSON file
     // this.initializeSampleClasses().catch(console.error);
-    // Children are now in database - no longer loading from JSON file
-    // this.initializeChildren().catch(console.error);
+    // Local dev / file mode: load children from JSON (DB may be unavailable)
+    if (process.env.NODE_ENV !== 'test') {
+      this.initializeChildren().catch(console.error);
+    }
     this.initializeScheduledPayments().catch(console.error);
     this.initializePayments().catch(console.error);
     // School students are now in database - no longer loading from JSON file
@@ -2116,7 +2118,11 @@ export class MemStorage implements IStorage {
 
   // Program Enrollment methods
   async getProgramEnrollmentById(id: number): Promise<ProgramEnrollment | undefined> {
-    return this.programEnrollmentsStore.get(id);
+    const fromStore = this.programEnrollmentsStore.get(id);
+    if (fromStore) return fromStore;
+    // enrollments.json loads into classEnrollments[] but not programEnrollmentsStore
+    const fromFile = this.classEnrollments?.find((e: any) => Number(e?.id) === Number(id));
+    return fromFile ?? undefined;
   }
 
   async getProgramEnrollmentsByParent(parentId: number): Promise<ProgramEnrollment[]> {
@@ -2487,10 +2493,16 @@ export class MemStorage implements IStorage {
   }
 
   async getEnrollmentById(id: number): Promise<any> {
-    // Read from programEnrollmentsStore (the canonical source for all enrollments)
     const enrollment = this.programEnrollmentsStore.get(id);
-    console.log(`📝 ENROLLMENT QUERY: Enrollment ${id} ${enrollment ? 'found' : 'not found'} in programEnrollmentsStore`);
-    return enrollment;
+    if (enrollment) {
+      console.log(`📝 ENROLLMENT QUERY: Enrollment ${id} found in programEnrollmentsStore`);
+      return enrollment;
+    }
+    const fromFile = this.classEnrollments?.find((e: any) => Number(e?.id) === Number(id));
+    console.log(
+      `📝 ENROLLMENT QUERY: Enrollment ${id} ${fromFile ? 'found' : 'not found'} in classEnrollments (file-backed)`
+    );
+    return fromFile;
   }
 
   async updateEnrollment(idOrEnrollment: any, updates?: any): Promise<any> {
@@ -6051,7 +6063,15 @@ import { DatabaseStorage } from "./dbStorage";
     async getProgramEnrollmentById(id: number): Promise<ProgramEnrollment | undefined> {
       try {
         if (this.dbStorage && typeof this.dbStorage.getProgramEnrollmentById === 'function') {
-          return await this.dbStorage.getProgramEnrollmentById(id);
+          const fromDb = await this.dbStorage.getProgramEnrollmentById(id);
+          if (fromDb) {
+            return fromDb;
+          }
+          // DB answered "no row" — enrollment may exist only in mem after DB-write fallback (tests / local)
+          if (process.env.NODE_ENV === 'production') {
+            return undefined;
+          }
+          return (await this.memStorage.getProgramEnrollmentById(id)) ?? undefined;
         } else {
           console.log('💾 DB storage unavailable, using memStorage fallback for getProgramEnrollmentById');
           return await this.memStorage.getProgramEnrollmentById(id);

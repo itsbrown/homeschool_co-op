@@ -128,7 +128,7 @@ describe('Integration: Notification System', () => {
     it('should send notification to all parents', async () => {
       const parent2 = await testDb.createTestUser({ 
         role: 'parent',
-        email: 'parent2@test.com'
+        email: 'parent3@test.com'
       });
 
       await api.loginAsUser(testAdmin.email);
