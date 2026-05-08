@@ -27,6 +27,37 @@ function cleanupRecentWebhookEvents(now: number): void {
   }
 }
 
+async function applyBalancePaymentToEnrollmentsOnly(
+  paymentIntent: Stripe.PaymentIntent,
+  enrollmentIds: number[],
+): Promise<void> {
+  if (!Array.isArray(enrollmentIds) || enrollmentIds.length === 0) {
+    return;
+  }
+
+  const amountCents = typeof paymentIntent.amount === 'number' ? paymentIntent.amount : 0;
+  if (!Number.isInteger(amountCents) || amountCents <= 0) {
+    throw new Error('Payment intent amount must be a positive integer in cents');
+  }
+
+  const amountPerEnrollment = Math.round(amountCents / enrollmentIds.length);
+  for (const enrollmentId of enrollmentIds) {
+    const enrollment = await storage.getProgramEnrollmentById(enrollmentId);
+    if (!enrollment) continue;
+
+    const currentAmountPaid = enrollment.totalPaid || 0;
+    const newAmountPaid = currentAmountPaid + amountPerEnrollment;
+    const remainingBalance = Math.max(0, (enrollment.totalCost || 0) - newAmountPaid);
+    await storage.updateProgramEnrollment(enrollment.id, {
+      totalPaid: newAmountPaid,
+      remainingBalance,
+      paymentStatus: 'stripe_managed',
+      paymentSystemVersion: 'v2_stripe',
+      status: 'enrolled',
+    });
+  }
+}
+
 /**
  * Standalone Stripe webhook handler that must be applied BEFORE any JSON body parsers.
  * This handler requires raw buffer access for signature verification.
@@ -272,10 +303,12 @@ export const webhookHandler = async (req: Request, res: Response) => {
         // create-payment-intent pre-inserts pending payments before Stripe confirms.
         // Skipping here caused "charged but balance unchanged" incidents.
         const existingPayment = await storage.getPaymentByStripeId(paymentIntent.id);
+        let hadPreexistingPendingPayment = false;
         if (existingPayment) {
           if (existingPayment.status === 'pending') {
             console.log('ℹ️ Existing payment row is pending; continuing webhook processing:', paymentIntent.id);
             await storage.updatePaymentStatus(existingPayment.id, 'succeeded');
+            hadPreexistingPendingPayment = true;
           } else {
             console.log('⚠️ Payment already processed, skipping:', paymentIntent.id, 'status:', existingPayment.status);
             break;
@@ -458,12 +491,18 @@ export const webhookHandler = async (req: Request, res: Response) => {
           console.log('💰 Processing payment for enrollments:', enrollmentIds, 'payment type:', paymentType);
           
           if (enrollmentIds.length > 0 && parentEmail) {
-            // Calculate payment amount in dollars (Stripe amount is in cents)
-            const totalAmount = paymentIntent.amount / 100;
-            
-            // Import and call the processBalancePayment function
-            const { processBalancePayment } = await import('./api/billing.js');
-            await processBalancePayment(paymentIntent, parentEmail, enrollmentIds, totalAmount);
+            if (hadPreexistingPendingPayment) {
+              // Pre-existing pending payment records are authoritative for payment history.
+              // Apply enrollment effects only to avoid duplicate financial side effects on replay.
+              await applyBalancePaymentToEnrollmentsOnly(paymentIntent, enrollmentIds);
+            } else {
+              // Calculate payment amount in dollars (Stripe amount is in cents)
+              const totalAmount = paymentIntent.amount / 100;
+              
+              // Import and call the processBalancePayment function
+              const { processBalancePayment } = await import('./api/billing.js');
+              await processBalancePayment(paymentIntent, parentEmail, enrollmentIds, totalAmount);
+            }
             
             console.log('✅ Balance payment processed via webhook for payment type:', paymentType);
           } else {
