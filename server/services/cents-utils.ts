@@ -121,3 +121,22 @@ export function allocateCentsByWeights(totalCents: number, weights: number[]): n
 
   return baseShares;
 }
+
+/**
+ * Canonical owed amount per enrollment in cents.
+ * Uses remainingBalance when valid; otherwise derives from totalCost - totalPaid.
+ */
+export function calculateEnrollmentOwedCents(input: {
+  totalCostCents?: unknown;
+  totalPaidCents?: unknown;
+  remainingBalanceCents?: unknown;
+}): number {
+  const normalizedRemaining = parseRequiredIntegerCents(input.remainingBalanceCents);
+  if (normalizedRemaining !== null) {
+    return Math.max(0, normalizedRemaining);
+  }
+
+  const totalCost = normalizeToNonNegativeIntegerCents(input.totalCostCents);
+  const totalPaid = normalizeToNonNegativeIntegerCents(input.totalPaidCents);
+  return Math.max(0, totalCost - totalPaid);
+}

@@ -1,5 +1,6 @@
 import { describe, expect, it } from '@jest/globals';
 import {
+  calculateEnrollmentOwedCents,
   allocateCentsByWeights,
   isNonNegativeIntegerCents,
   normalizeToNonNegativeIntegerCents,
@@ -88,6 +89,37 @@ describe('cents-utils helper primitives', () => {
       expect(() => allocateCentsByWeights(10, [])).toThrow('weights must be a non-empty array');
       expect(() => allocateCentsByWeights(10, [1, -1])).toThrow('weights must contain only non-negative integers');
       expect(() => allocateCentsByWeights(10, [1, 1.5])).toThrow('weights must contain only non-negative integers');
+    });
+  });
+
+  describe('calculateEnrollmentOwedCents', () => {
+    it('prefers remainingBalance when valid integer cents', () => {
+      expect(
+        calculateEnrollmentOwedCents({
+          totalCostCents: 10000,
+          totalPaidCents: 9000,
+          remainingBalanceCents: 400,
+        }),
+      ).toBe(400);
+    });
+
+    it('falls back to totalCost-totalPaid when remainingBalance is malformed', () => {
+      expect(
+        calculateEnrollmentOwedCents({
+          totalCostCents: 10000,
+          totalPaidCents: 2500,
+          remainingBalanceCents: '12.34',
+        }),
+      ).toBe(7500);
+    });
+
+    it('never returns negative owed amount', () => {
+      expect(
+        calculateEnrollmentOwedCents({
+          totalCostCents: 1000,
+          totalPaidCents: 2000,
+        }),
+      ).toBe(0);
     });
   });
 });
