@@ -157,6 +157,25 @@ describe("calculateCanonicalAmounts", () => {
     expect(result.validation.hasWarnings).toBe(true);
   });
 
+  it("treats malformed client-provided aggregate as warning-only and ignores it", () => {
+    const result = calculateCanonicalAmounts({
+      mode: "checkout",
+      items: [{ id: "line-1", totalCostCents: 10000, totalPaidCents: 0 }],
+      membershipAmountCents: 500,
+      clientProvidedTotalAmountCents: "10.50",
+    });
+
+    expect(result.totalAmountCents).toBe(10500);
+    expect(result.mismatch.clientProvidedTotalAmountCents).toBeNull();
+    expect(result.mismatch.clientTotalMismatchCents).toBe(0);
+    expect(result.validation.isValid).toBe(true);
+    expect(result.validation.warnings).toEqual(
+      expect.arrayContaining([
+        "Client-provided total is malformed and was ignored",
+      ]),
+    );
+  });
+
   it("enforces integer cents invariants for negative and fractional membership values", () => {
     const result = calculateCanonicalAmounts({
       mode: "checkout",

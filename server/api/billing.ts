@@ -12,6 +12,36 @@ import { supabaseAuth } from '../middleware/supabase-auth';
 
 const router = Router();
 
+function parseIntegerCents(value: unknown): number | null {
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value) || !Number.isInteger(value)) return null;
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!/^-?\d+$/.test(trimmed)) return null;
+    const parsed = Number(trimmed);
+    if (!Number.isFinite(parsed) || !Number.isInteger(parsed)) return null;
+    return parsed;
+  }
+
+  return null;
+}
+
+export function splitCentsEvenly(totalCents: number, recipientCount: number): number[] {
+  if (!Number.isInteger(totalCents) || totalCents < 0) {
+    throw new Error('totalCents must be a non-negative integer');
+  }
+  if (!Number.isInteger(recipientCount) || recipientCount <= 0) {
+    throw new Error('recipientCount must be a positive integer');
+  }
+
+  const base = Math.floor(totalCents / recipientCount);
+  const remainder = totalCents % recipientCount;
+  return Array.from({ length: recipientCount }, (_, index) => base + (index < remainder ? 1 : 0));
+}
+
 /**
  * Resolve a class row for a program enrollment.
  *
@@ -77,6 +107,29 @@ async function resolveSchoolIdForBalancePaymentIntent(
   return undefined;
 }
 
+function getAuthoritativeRemainingBalanceCents(enrollment: any): number {
+  if (Number.isFinite(enrollment?.remainingBalance)) {
+    return Math.max(0, Math.round(Number(enrollment.remainingBalance)));
+  }
+
+  const totalCost = parseIntegerCents(enrollment?.totalCost) ?? 0;
+  const totalPaid = parseIntegerCents(enrollment?.totalPaid) ?? 0;
+  return Math.max(0, totalCost - totalPaid);
+}
+
+function parseAdvisoryAmountCents(value: unknown): { parsed: number | null; malformed: boolean } {
+  if (value === null || value === undefined || value === '') {
+    return { parsed: null, malformed: false };
+  }
+
+  const parsed = parseIntegerCents(value);
+  if (parsed === null) {
+    return { parsed: null, malformed: true };
+  }
+
+  return { parsed, malformed: false };
+}
+
 // Rate limiting for payment endpoints
 const paymentRateLimit = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -95,7 +148,10 @@ export async function processBalancePayment(paymentIntent: Stripe.PaymentIntent,
     const { paymentPlan = 'full' } = paymentIntent.metadata;
     // PaymentIntent.amount is already the amount actually charged for this transaction.
     // Do not divide by plan cadence.
-    const currentPaymentAmount = paymentIntent.amount;
+    const currentPaymentAmount = parseIntegerCents(paymentIntent.amount);
+    if (currentPaymentAmount === null || currentPaymentAmount <= 0) {
+      throw new Error('Payment intent amount must be a positive integer in cents');
+    }
     
     console.log('💰 Processing balance payment with installment support:', {
       enrollmentIds,
@@ -119,11 +175,13 @@ export async function processBalancePayment(paymentIntent: Stripe.PaymentIntent,
     }
     
     // Calculate payment per enrollment for this installment
-    const paymentPerEnrollment = Math.round(currentPaymentAmount / enrollments.length);
+    const allocationByEnrollment = splitCentsEvenly(currentPaymentAmount, enrollments.length);
     
     // Update each enrollment
-    for (const enrollment of enrollments) {
-      const newAmountPaid = (enrollment.totalPaid || 0) + paymentPerEnrollment;
+    for (let index = 0; index < enrollments.length; index++) {
+      const enrollment = enrollments[index];
+      const allocatedAmountCents = allocationByEnrollment[index];
+      const newAmountPaid = (enrollment.totalPaid || 0) + allocatedAmountCents;
       const classData = await resolveClassForEnrollment(enrollment);
       const totalCost = enrollment.totalCost ?? classData?.price ?? 0;
       const remainingBalance = Math.max(0, totalCost - newAmountPaid);
@@ -206,51 +264,117 @@ export async function processBalancePayment(paymentIntent: Stripe.PaymentIntent,
 // All payment plans are now managed directly through Stripe's native APIs
 
 // Create payment intent
-router.post('/create-payment-intent', paymentRateLimit, async (req, res) => {
+router.post('/create-payment-intent', paymentRateLimit, supabaseAuth, async (req: any, res) => {
   try {
     const { amount, currency = 'usd', parentEmail, enrollmentDetails, paymentPlan = 'full' } = req.body;
-    const normalizedAmount = Math.round(amount);
-    if (!Number.isFinite(normalizedAmount) || normalizedAmount <= 0) {
-      return res.status(400).json({
+    const authenticatedEmail = req.user?.email;
+    if (!authenticatedEmail) {
+      return res.status(401).json({
         success: false,
-        error: 'Amount must be a positive integer in cents'
+        error: 'User email not found'
       });
     }
-    
-    console.log('💳 Payment plan details:', {
-      paymentPlan,
-      totalAmount: normalizedAmount
-    });
 
-    // Create payment intent
-    const stripe = await getStripeClient();
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: normalizedAmount,
-      currency,
-      // Card-only: avoids Dashboard APM bundles that require return_url on server-side confirm / CLI.
-      payment_method_types: ['card'],
-      metadata: {
-        parentEmail,
-        enrollmentDetails: JSON.stringify(enrollmentDetails),
-        paymentPlan,
-        paymentType: 'balance_payment',
-        enrollmentIds: JSON.stringify(enrollmentDetails.map((e: any) => e.enrollmentId))
-      }
-    });
+    const effectiveParentEmail = typeof parentEmail === 'string' && parentEmail.trim().length > 0
+      ? parentEmail.trim()
+      : authenticatedEmail;
+    if (effectiveParentEmail !== authenticatedEmail) {
+      return res.status(403).json({
+        success: false,
+        error: 'Cannot create payment intent for another parent'
+      });
+    }
+
+    if (!Array.isArray(enrollmentDetails) || enrollmentDetails.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'enrollmentDetails is required'
+      });
+    }
 
     // Get parent user and schoolId before creating payment record
-    const parentUser = await storage.getUserByEmail(parentEmail);
+    const parentUser = await storage.getUserByEmail(effectiveParentEmail);
     if (!parentUser) {
       return res.status(404).json({
         success: false,
         error: 'Parent user not found'
       });
     }
+
+    const enrollmentIds = enrollmentDetails
+      .map((e: any) => parseIntegerCents(e?.enrollmentId))
+      .filter((id: number | null): id is number => id !== null && id > 0);
+
+    if (enrollmentIds.length === 0 || enrollmentIds.length !== enrollmentDetails.length) {
+      return res.status(400).json({
+        success: false,
+        error: 'enrollmentDetails must contain valid enrollmentId values'
+      });
+    }
+
+    const authoritativeEnrollments = await Promise.all(
+      enrollmentIds.map((id: number) => storage.getProgramEnrollmentById(id))
+    );
+    const validEnrollments = authoritativeEnrollments.filter((enrollment): enrollment is NonNullable<typeof enrollment> =>
+      !!enrollment && (
+        enrollment.parentId === parentUser.id ||
+        enrollment.parentEmail === effectiveParentEmail
+      )
+    );
+
+    if (validEnrollments.length !== enrollmentIds.length) {
+      return res.status(403).json({
+        success: false,
+        error: 'One or more enrollments are not owned by this parent'
+      });
+    }
+
+    const authoritativeAmountCents = validEnrollments.reduce((sum, enrollment) => {
+      return sum + getAuthoritativeRemainingBalanceCents(enrollment);
+    }, 0);
+    if (authoritativeAmountCents <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'No outstanding balance found for selected enrollments'
+      });
+    }
+
+    const advisoryAmount = parseAdvisoryAmountCents(amount);
+    if (advisoryAmount.malformed) {
+      console.warn('⚠️ Malformed client amount ignored in favor of server-computed amount:', {
+        clientAmount: amount,
+        authoritativeAmount: authoritativeAmountCents
+      });
+    } else if (advisoryAmount.parsed !== null && advisoryAmount.parsed !== authoritativeAmountCents) {
+      console.warn('⚠️ Client amount mismatch ignored in favor of server-computed amount:', {
+        clientAmount: advisoryAmount.parsed,
+        authoritativeAmount: authoritativeAmountCents
+      });
+    }
+
+    console.log('💳 Payment plan details:', {
+      paymentPlan,
+      totalAmount: authoritativeAmountCents
+    });
+
+    // Create payment intent
+    const stripe = await getStripeClient();
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: authoritativeAmountCents,
+      currency,
+      // Card-only: avoids Dashboard APM bundles that require return_url on server-side confirm / CLI.
+      payment_method_types: ['card'],
+      metadata: {
+        parentEmail: effectiveParentEmail,
+        enrollmentDetails: JSON.stringify(enrollmentDetails),
+        paymentPlan,
+        paymentType: 'balance_payment',
+        enrollmentIds: JSON.stringify(enrollmentIds)
+      }
+    });
     
     // Get schoolId from first enrollment or parent
-    const firstEnrollment = enrollmentDetails && enrollmentDetails.length > 0
-      ? await storage.getProgramEnrollmentById(enrollmentDetails[0].enrollmentId)
-      : null;
+    const firstEnrollment = validEnrollments[0] || null;
 
     const schoolId = await resolveSchoolIdForBalancePaymentIntent(firstEnrollment, parentUser);
     if (!schoolId) {
@@ -263,24 +387,26 @@ router.post('/create-payment-intent', paymentRateLimit, async (req, res) => {
     // Store payment in database
     const paymentData: InsertPayment = {
       status: 'pending',
-      parentEmail,
+      parentEmail: effectiveParentEmail,
       stripePaymentIntentId: paymentIntent.id,
-      amount: normalizedAmount,
+      amount: authoritativeAmountCents,
       currency,
       childName: 'Multiple Children',
       className: 'Multiple Classes',
-      description: `Payment for ${enrollmentDetails.length} enrollment(s)`,
+      description: `Payment for ${enrollmentIds.length} enrollment(s)`,
       schoolId: schoolId,
       parentId: parentUser.id,
       stripeChargeId: null,
       stripeRefundId: null,
       originalPaymentId: null,
       paymentMethod: 'stripe' as const,
-      enrollmentIds: enrollmentDetails.map((e: any) => e.enrollmentId),
+      enrollmentIds,
       paymentDate: null,
       metadata: {
         enrollmentDetails,
-        clientSecret: paymentIntent.client_secret
+        clientSecret: paymentIntent.client_secret,
+        advisoryClientAmount: advisoryAmount.parsed,
+        advisoryClientAmountMalformed: advisoryAmount.malformed
       }
     };
 
@@ -317,10 +443,30 @@ router.post('/enrollments/:enrollmentId/payment', async (req, res) => {
       });
     }
 
-    // Update enrollment with payment
+    // Server-authoritative amount: always apply the persisted remaining balance.
     const currentAmount = enrollment.totalPaid || 0;
-    const newAmount = currentAmount + amount;
+    const appliedAmount = getAuthoritativeRemainingBalanceCents(enrollment);
+    if (appliedAmount <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'No outstanding balance found for this enrollment'
+      });
+    }
+    const newAmount = currentAmount + appliedAmount;
     const remainingBalance = Math.max(0, (enrollment.totalCost || 0) - newAmount);
+
+    const advisoryAmount = parseAdvisoryAmountCents(amount);
+    if (advisoryAmount.malformed) {
+      console.warn('⚠️ Malformed client amount ignored in favor of server enrollment balance:', {
+        clientAmount: amount,
+        authoritativeAmount: appliedAmount
+      });
+    } else if (advisoryAmount.parsed !== null && advisoryAmount.parsed !== appliedAmount) {
+      console.warn('⚠️ Client amount mismatch ignored in favor of server enrollment balance:', {
+        clientAmount: advisoryAmount.parsed,
+        authoritativeAmount: appliedAmount
+      });
+    }
 
     await storage.updateProgramEnrollment(enrollment.id, {
       totalPaid: newAmount,
@@ -335,7 +481,7 @@ router.post('/enrollments/:enrollmentId/payment', async (req, res) => {
       childName: enrollment.childName,
       className: enrollment.className,
       description: `Payment for enrollment ${enrollmentId}`,
-      amount: amount,
+      amount: appliedAmount,
       currency: 'usd',
       status: 'completed',
       schoolId: enrollment.schoolId || 0,
@@ -689,12 +835,29 @@ router.post('/pay-balance', async (req, res) => {
     }
 
     const amountCents = validEnrollments.reduce((sum, enrollment) => {
-      const remaining = enrollment.remainingBalance ?? Math.max(0, (enrollment.totalCost || 0) - (enrollment.totalPaid || 0));
-      return sum + Math.max(0, remaining);
+      return sum + getAuthoritativeRemainingBalanceCents(enrollment);
     }, 0);
 
     if (amountCents <= 0) {
       return res.status(400).json({ error: 'No outstanding balance found for selected enrollments' });
+    }
+
+    const advisoryClientTotalRaw =
+      paymentDetails?.totalAmountCents ??
+      paymentDetails?.amount ??
+      paymentDetails?.total ??
+      req.body?.total;
+    const advisoryClientTotal = parseAdvisoryAmountCents(advisoryClientTotalRaw);
+    if (advisoryClientTotal.malformed) {
+      console.warn('⚠️ Malformed client total ignored in favor of server-computed balance amount:', {
+        clientTotal: advisoryClientTotalRaw,
+        authoritativeAmount: amountCents
+      });
+    } else if (advisoryClientTotal.parsed !== null && advisoryClientTotal.parsed !== amountCents) {
+      console.warn('⚠️ Client total mismatch ignored in favor of server-computed balance amount:', {
+        clientTotal: advisoryClientTotal.parsed,
+        authoritativeAmount: amountCents
+      });
     }
 
     console.log('💳 Processing payment for:', userEmail, 'Amount (cents):', amountCents);
@@ -738,6 +901,7 @@ router.post('/pay-balance', async (req, res) => {
 router.post('/confirm-payment', async (req, res) => {
   try {
     const { paymentIntentId, enrollmentIds, amount, paymentDate } = req.body;
+
     console.log('💳 Confirming payment:', paymentIntentId, 'for enrollments:', enrollmentIds);
 
     // Extract user email from Supabase token
@@ -766,45 +930,75 @@ router.post('/confirm-payment', async (req, res) => {
       return res.status(401).json({ error: 'User email not found' });
     }
 
-    // Update enrollment statuses
-    const allEnrollments = await storage.getAllEnrollments();
-    const updatedEnrollments = [];
-    const amountPerEnrollment = Math.round(amount / enrollmentIds.length);
+    if (!Array.isArray(enrollmentIds) || enrollmentIds.length === 0 || enrollmentIds.some((id: unknown) => !Number.isInteger(id))) {
+      return res.status(400).json({
+        success: false,
+        error: 'enrollmentIds must be a non-empty array of integer IDs'
+      });
+    }
 
-    console.log('🔍 All enrollment IDs in storage:', allEnrollments.map(e => e.id));
-    console.log('🔍 Looking for enrollment IDs:', enrollmentIds);
-
-    // Get user's children to verify ownership
+    // Get user's children to verify ownership and block unauthorized requests before detail validation.
     const userChildren = await storage.getChildrenByParentEmail(userEmail);
-    const userChildIds = userChildren.map(child => child.id);
+    const userChildIds = new Set(userChildren.map(child => child.id));
+    const targetEnrollments = await Promise.all(
+      enrollmentIds.map((id: number) => storage.getProgramEnrollmentById(id))
+    );
+    const validEnrollments = targetEnrollments.filter((enrollment): enrollment is NonNullable<typeof enrollment> =>
+      !!enrollment && userChildIds.has(enrollment.childId)
+    );
+    if (validEnrollments.length !== enrollmentIds.length) {
+      return res.status(403).json({
+        success: false,
+        error: 'One or more enrollments are not owned by this user'
+      });
+    }
 
-    for (const enrollmentId of enrollmentIds) {
-      const enrollment = allEnrollments.find(e => e.id === enrollmentId);
-      console.log(`🔍 Found enrollment ${enrollmentId}:`, enrollment ? 'YES' : 'NO');
-      
-      if (enrollment && userChildIds.includes(enrollment.childId)) {
-        console.log(`🔄 Updating enrollment ${enrollmentId} from status '${enrollment.status}' to 'completed'`);
-        
-        // Update the enrollment with payment information
-        await storage.updateProgramEnrollment(enrollment.id, {
-          status: 'completed',
-          totalPaid: (enrollment.totalPaid || 0) + amountPerEnrollment,
-          notes: enrollment.notes ? `${enrollment.notes}\nPayment of $${amountPerEnrollment/100} received on ${new Date().toISOString()}` : `Payment of $${amountPerEnrollment/100} received on ${new Date().toISOString()}`
-        });
-        
-        const updatedEnrollment = {
-          ...enrollment,
-          status: 'completed' as const,
-          totalPaid: (enrollment.totalPaid || 0) + amountPerEnrollment,
-          notes: enrollment.notes ? `${enrollment.notes}\nPayment of $${amountPerEnrollment/100} received on ${new Date().toISOString()}` : `Payment of $${amountPerEnrollment/100} received on ${new Date().toISOString()}`
-        };
-        updatedEnrollments.push(updatedEnrollment);
-        console.log('✅ Updated enrollment:', enrollmentId, 'status to completed, amount paid:', amountPerEnrollment);
-      } else if (enrollment && !userChildIds.includes(enrollment.childId)) {
-        console.log(`❌ Enrollment ${enrollmentId} belongs to child ${enrollment.childId}, not authorized for user ${userEmail}`);
-      } else {
-        console.log(`❌ Enrollment ${enrollmentId} not found in storage`);
-      }
+    // Server-authoritative amount from persisted enrollment balances.
+    const authoritativeTotalAmount = validEnrollments.reduce((sum, enrollment) => {
+      return sum + getAuthoritativeRemainingBalanceCents(enrollment);
+    }, 0);
+    if (authoritativeTotalAmount <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'No outstanding balance found for selected enrollments'
+      });
+    }
+
+    const advisoryAmount = parseAdvisoryAmountCents(amount);
+    if (advisoryAmount.malformed) {
+      console.warn('⚠️ Malformed confirm-payment amount ignored in favor of server-computed amount:', {
+        clientAmount: amount,
+        authoritativeAmount: authoritativeTotalAmount
+      });
+    } else if (advisoryAmount.parsed !== null && advisoryAmount.parsed !== authoritativeTotalAmount) {
+      console.warn('⚠️ confirm-payment amount mismatch ignored in favor of server-computed amount:', {
+        clientAmount: advisoryAmount.parsed,
+        authoritativeAmount: authoritativeTotalAmount
+      });
+    }
+
+    const updatedEnrollments: any[] = [];
+    for (const enrollment of validEnrollments) {
+      const amountForEnrollment = getAuthoritativeRemainingBalanceCents(enrollment);
+      const updatedTotalPaid = (enrollment.totalPaid || 0) + amountForEnrollment;
+      const updatedRemainingBalance = Math.max(0, (enrollment.totalCost || 0) - updatedTotalPaid);
+      console.log(`🔄 Updating enrollment ${enrollment.id} from status '${enrollment.status}' to 'completed'`);
+
+      await storage.updateProgramEnrollment(enrollment.id, {
+        status: 'completed',
+        totalPaid: updatedTotalPaid,
+        remainingBalance: updatedRemainingBalance,
+        notes: enrollment.notes ? `${enrollment.notes}\nPayment of $${amountForEnrollment / 100} received on ${new Date().toISOString()}` : `Payment of $${amountForEnrollment / 100} received on ${new Date().toISOString()}`
+      });
+
+      updatedEnrollments.push({
+        ...enrollment,
+        status: 'completed' as const,
+        totalPaid: updatedTotalPaid,
+        remainingBalance: updatedRemainingBalance,
+        amountAppliedCents: amountForEnrollment,
+      });
+      console.log('✅ Updated enrollment:', enrollment.id, 'status to completed, amount paid:', amountForEnrollment);
     }
 
     // Get child and class details for payment record
@@ -829,7 +1023,7 @@ router.post('/confirm-payment', async (req, res) => {
       parentEmail: userEmail,
       childName: childName,
       className: className,
-      amount: amount,
+      amount: authoritativeTotalAmount,
       currency: 'usd',
       status: 'completed' as const,
       description: `Payment for ${enrollmentIds.length} enrollment(s)`,
@@ -871,7 +1065,7 @@ router.post('/confirm-payment', async (req, res) => {
           childName: child ? `${child.firstName} ${child.lastName}` : 'Unknown Child',
           className: classDetails?.title || classDetails?.description || 'Unknown Class',
           price: classDetails?.price || 0,
-          amountPaid: Math.round(amount / enrollmentIds.length),
+          amountPaid: enrollment.amountAppliedCents || 0,
         };
       }));
 
@@ -1006,11 +1200,13 @@ router.post('/process-recent-payment', supabaseAuth, async (req, res) => {
     console.log(`📋 Processing ${items.length} enrollment items`);
 
     // Calculate payment per item
-    const amountPerItem = Math.round(targetPaymentIntent.amount / items.length);
+    const amountAllocation = splitCentsEvenly(targetPaymentIntent.amount, items.length);
     
     // Update each enrollment
     const updatedEnrollments = [];
-    for (const item of items) {
+    for (let index = 0; index < items.length; index++) {
+      const item = items[index];
+      const amountPerItem = amountAllocation[index];
       try {
         // Find enrollment by child and class
         const allEnrollments = await storage.getAllEnrollments();
@@ -1055,7 +1251,7 @@ router.post('/process-recent-payment', supabaseAuth, async (req, res) => {
       updatedEnrollments: updatedEnrollments.map(e => ({
         childName: e.childName,
         className: e.className,
-        newAmount: e.amount / 100,
+        newAmount: e.totalPaid / 100,
         remainingBalance: e.remainingBalance / 100
       }))
     });

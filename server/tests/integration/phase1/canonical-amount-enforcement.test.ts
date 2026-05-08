@@ -1,12 +1,32 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, jest } from '@jest/globals';
+import express from 'express';
+import request from 'supertest';
 import { api } from '../../helpers/apiHelpers';
 import { testDb } from '../../helpers/testDatabase';
 
 const mockCreateEducationalPaymentPlan = jest.fn();
+let mockStripePaymentIntentsCreate: jest.Mock;
+let mockSupabaseGetUser: jest.Mock;
 
 jest.mock('../../../services/stripe-payment-plans', () => ({
   StripePaymentPlanService: jest.fn().mockImplementation(() => ({
     createEducationalPaymentPlan: mockCreateEducationalPaymentPlan,
+  })),
+}));
+
+jest.mock('../../../config/stripe', () => ({
+  getStripeClient: jest.fn(async () => ({
+    paymentIntents: {
+      create: (...args: any[]) => mockStripePaymentIntentsCreate(...args),
+    },
+  })),
+}));
+
+jest.mock('@supabase/supabase-js', () => ({
+  createClient: jest.fn(() => ({
+    auth: {
+      getUser: (...args: any[]) => mockSupabaseGetUser(...args),
+    },
   })),
 }));
 
@@ -15,8 +35,16 @@ describe('Integration: Canonical amount enforcement', () => {
   let school: any;
   let child: any;
   let klass: any;
+  let billingApp: express.Express;
+  let enrollmentForBilling: any;
 
   beforeAll(async () => {
+    mockStripePaymentIntentsCreate = jest.fn();
+    mockSupabaseGetUser = jest.fn();
+    const billingRouter = (await import('../../../api/billing')).default;
+    billingApp = express();
+    billingApp.use(express.json());
+    billingApp.use('/api/billing', billingRouter);
     await api.init();
     await testDb.cleanup();
   });
@@ -28,12 +56,18 @@ describe('Integration: Canonical amount enforcement', () => {
   beforeEach(async () => {
     await testDb.cleanup();
     mockCreateEducationalPaymentPlan.mockReset();
+    mockStripePaymentIntentsCreate.mockReset();
+    mockSupabaseGetUser.mockReset();
     mockCreateEducationalPaymentPlan.mockResolvedValue({
       paymentIntent: {
         id: 'pi_canonical_amount_test',
         client_secret: 'pi_canonical_amount_test_secret',
       },
       scheduledPayments: [],
+    });
+    mockStripePaymentIntentsCreate.mockResolvedValue({
+      id: 'pi_billing_cross_check',
+      client_secret: 'pi_billing_cross_check_secret',
     });
 
     const admin = await testDb.createTestUser({
@@ -70,6 +104,23 @@ describe('Integration: Canonical amount enforcement', () => {
       price: 12345,
     });
 
+    enrollmentForBilling = await testDb.createTestEnrollment(klass.id, child.id, {
+      schoolId: school.id,
+      parentId: parentUser.id,
+      parentEmail: parentUser.email,
+      childName: `${child.firstName} ${child.lastName}`,
+      className: klass.title,
+      status: 'pending_payment',
+      totalCost: 12345,
+      totalPaid: 0,
+      remainingBalance: 12345,
+    });
+
+    mockSupabaseGetUser.mockResolvedValue({
+      data: { user: { email: parentUser.email } },
+      error: null,
+    });
+
     await api.loginAsUser(parentUser.email);
   });
 
@@ -97,6 +148,12 @@ describe('Integration: Canonical amount enforcement', () => {
     const firstCall = mockCreateEducationalPaymentPlan.mock.calls[0];
     expect(firstCall).toBeDefined();
     return firstCall[0].totalAmount;
+  }
+
+  function billingAmountPassedToStripe(): number {
+    const firstCall = mockStripePaymentIntentsCreate.mock.calls[0];
+    expect(firstCall).toBeDefined();
+    return firstCall[0].amount;
   }
 
   function hasClientTotalMismatchWarning(consoleWarnSpy: jest.SpiedFunction<typeof console.warn>): boolean {
@@ -221,6 +278,76 @@ describe('Integration: Canonical amount enforcement', () => {
 
     expect(response.status).toBe(200);
     expect(totalAmountPassedToPlanService()).toBe(12345 + 17500);
+    expect(hasClientTotalMismatchWarning(consoleWarnSpy)).toBe(true);
+
+    consoleWarnSpy.mockRestore();
+  });
+
+  it('keeps checkout and billing server-authoritative totals consistent for the same class amount', async () => {
+    const checkoutResponse = await api.post('/api/stripe/create-payment-intent', {
+      ...baseCartPayload(),
+      total: 1,
+    });
+
+    expect(checkoutResponse.status).toBe(200);
+    const checkoutAuthoritativeAmount = totalAmountPassedToPlanService();
+
+    const billingResponse = await request(billingApp)
+      .post('/api/billing/pay-balance')
+      .set({ Authorization: 'Bearer test-token' })
+      .send({
+        enrollmentIds: [enrollmentForBilling.id],
+        paymentPlan: 'full',
+        amount: 1,
+        total: 1,
+      });
+
+    expect(billingResponse.status).toBe(200);
+    const billingAuthoritativeAmount = billingAmountPassedToStripe();
+
+    expect(checkoutAuthoritativeAmount).toBe(12345);
+    expect(billingAuthoritativeAmount).toBe(12345);
+    expect(billingAuthoritativeAmount).toBe(checkoutAuthoritativeAmount);
+  });
+
+  it('returns 401 with error payload when checkout request is unauthenticated', async () => {
+    api.clearAuth();
+
+    const response = await api.post('/api/stripe/create-payment-intent', {
+      ...baseCartPayload(),
+      total: 12345,
+    });
+
+    expect(response.status).toBe(401);
+    expect(response.body).toEqual(
+      expect.objectContaining({
+        error: expect.any(String),
+      })
+    );
+    expect(mockCreateEducationalPaymentPlan).not.toHaveBeenCalled();
+  });
+
+  it('ignores tampered line-item price and uses server class amount authority', async () => {
+    const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const response = await api.post('/api/stripe/create-payment-intent', {
+      ...baseCartPayload(),
+      items: [
+        {
+          childId: child.id,
+          childName: `${child.firstName} ${child.lastName}`,
+          classId: klass.id,
+          className: klass.name,
+          classType: 'school',
+          price: 1, // Deliberately tampered client line-item price
+        },
+      ],
+      subtotal: 1,
+      total: 1,
+    });
+
+    expect(response.status).toBe(200);
+    expect(totalAmountPassedToPlanService()).toBe(12345);
     expect(hasClientTotalMismatchWarning(consoleWarnSpy)).toBe(true);
 
     consoleWarnSpy.mockRestore();

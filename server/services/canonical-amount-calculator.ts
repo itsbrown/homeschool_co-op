@@ -5,6 +5,7 @@
  * - Integer cents only end-to-end.
  * - Caller-provided aggregate totals are treated as untrusted and never used to compute totals.
  */
+import { parseOptionalIntegerCents } from "./cents-utils";
 
 export type AmountCalculationMode = "checkout" | "billing";
 
@@ -70,29 +71,26 @@ function parseNonNegativeIntegerCents(
   errors: string[],
   lineId?: string,
 ): { value: number; invalid: boolean } {
-  if (value === null || value === undefined || value === "") {
+  const parsed = parseOptionalIntegerCents(value);
+  if (parsed.value === null && !parsed.malformed) {
     return { value: 0, invalid: false };
   }
 
-  if (typeof value === "string") {
-    if (!/^-?\d+$/.test(value.trim())) {
+  if (parsed.malformed) {
+    if (typeof value === "string" && !/^-?\d+$/.test(value.trim())) {
       errors.push(`${lineId ? `Line "${lineId}"` : field} has malformed ${field}`);
       return { value: 0, invalid: true };
     }
-    value = Number(value);
-  }
-
-  if (typeof value !== "number" || !Number.isFinite(value) || !Number.isInteger(value)) {
     errors.push(`${lineId ? `Line "${lineId}"` : field} has non-integer ${field}`);
     return { value: 0, invalid: true };
   }
 
-  if (value < 0) {
+  if ((parsed.value as number) < 0) {
     errors.push(`${lineId ? `Line "${lineId}"` : field} has negative ${field}`);
     return { value: 0, invalid: true };
   }
 
-  return { value, invalid: false };
+  return { value: parsed.value as number, invalid: false };
 }
 
 export function calculateCanonicalAmounts(
@@ -220,18 +218,17 @@ export function calculateCanonicalAmounts(
   const membershipAmountCents = parsedMembership.value;
   const totalAmountCents = enrollmentSubtotalCents + membershipAmountCents;
 
-  const parsedClientTotal = parseNonNegativeIntegerCents(
-    request.clientProvidedTotalAmountCents,
-    "clientProvidedTotalAmountCents",
-    errors,
-  );
+  const parsedClientTotal = parseOptionalIntegerCents(request.clientProvidedTotalAmountCents);
+  if (parsedClientTotal.malformed) {
+    warnings.push("Client-provided total is malformed and was ignored");
+  }
   const clientProvidedTotalAmountCents =
     request.clientProvidedTotalAmountCents === null ||
     request.clientProvidedTotalAmountCents === undefined ||
     request.clientProvidedTotalAmountCents === "" ||
-    parsedClientTotal.invalid
+    parsedClientTotal.malformed
       ? null
-      : parsedClientTotal.value;
+      : (parsedClientTotal.value as number);
 
   const clientTotalMismatchCents =
     clientProvidedTotalAmountCents === null
