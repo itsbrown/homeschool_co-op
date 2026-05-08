@@ -183,6 +183,87 @@ export async function deriveSchoolIdFromCart(items: CartItem[], options?: { stri
   }
 }
 
+/**
+ * Minimal structural shape of a membership row needed by the membership
+ * balance helpers below. Captures the columns we read from
+ * `membership_enrollments` and tolerates rows arriving from any storage
+ * source (Drizzle row, MemStorage clone, JSON fixture).
+ */
+export interface MembershipRowForBalance {
+  id?: number | string | null;
+  schoolId?: number | string | null;
+  membershipYear?: number | null;
+  amount?: number | null;
+  amountPaid?: number | null;
+  remainingBalance?: number | null;
+  status?: string | null;
+}
+
+/**
+ * Find an unpaid membership row matching `schoolId` for the current or next
+ * year. Skips paid statuses (`enrolled`, `grace_period`) and rows we never
+ * want to re-charge from (`expired`, `suspended`). Pure function — exported
+ * for direct testing (task #212).
+ */
+export function findUnpaidMembershipRow<T extends MembershipRowForBalance>(
+  memberships: ReadonlyArray<T> | null | undefined,
+  schoolId: number,
+  currentYear: number,
+): T | null {
+  if (!memberships || memberships.length === 0) return null;
+  return (
+    memberships.find(
+      (m) =>
+        (m.membershipYear === currentYear || m.membershipYear === currentYear + 1) &&
+        Number(m.schoolId) === Number(schoolId) &&
+        !['expired', 'suspended'].includes(m.status ?? '') &&
+        !isActiveMembership(m.status ?? null),
+    ) ?? null
+  );
+}
+
+/**
+ * Compute the remaining balance (in cents) of an unpaid membership row.
+ * Prefers the row's `remainingBalance` column; falls back to
+ * `amount - amountPaid`. Anomalies (overpayment, NULL paid info, NaN) clamp
+ * to 0 and emit a WARN — they MUST NOT silently fall back to the school's
+ * full fee (the bug task #212 fixes). Pure function — exported for direct
+ * testing.
+ */
+export function computeUnpaidMembershipRemainingCents(
+  row: MembershipRowForBalance,
+): number {
+  const id = row?.id;
+  const rowAmount = row?.amount ?? 0;
+  const rowAmountPaid = row?.amountPaid;
+  const rowRemainingBalance = row?.remainingBalance;
+  let remaining: number;
+  if (typeof rowRemainingBalance === 'number') {
+    remaining = rowRemainingBalance;
+  } else if (typeof rowAmountPaid === 'number') {
+    remaining = rowAmount - rowAmountPaid;
+  } else {
+    console.warn('🎫 Membership row missing amountPaid AND remainingBalance — clamping to 0', {
+      membershipId: id,
+      rowAmount,
+      rowAmountPaid,
+      rowRemainingBalance,
+    });
+    return 0;
+  }
+  if (!Number.isFinite(remaining) || remaining < 0) {
+    console.warn('🎫 Membership remaining balance anomaly — clamping to 0', {
+      membershipId: id,
+      rowAmount,
+      rowAmountPaid,
+      rowRemainingBalance,
+      computed: remaining,
+    });
+    return 0;
+  }
+  return remaining;
+}
+
 function isDiscountCurrentlyValid(discount: Discount): boolean {
   const now = new Date();
   
@@ -1128,9 +1209,28 @@ export async function calculateCartSnapshot(
     remainingBalance: activeMembership.remainingBalance 
   } : null);
   
+  // Find an UNPAID membership row matching the same school/year. If a parent
+  // has already partially paid the membership, we must charge the row's
+  // remaining balance (server-authoritative) instead of the school's full fee
+  // — see task #212.
+  const unpaidMembershipRow = !alreadyPaid
+    ? findUnpaidMembershipRow(existingMemberships, schoolId, currentYear)
+    : null;
+
   // Calculate membership discount if applicable
   let discountedMembershipAmount = membershipFeeAmount;
-  if (!alreadyPaid && membershipFeeAmount > 0) {
+  if (!alreadyPaid && unpaidMembershipRow) {
+    // Use the partial-payment remaining balance from the existing
+    // membership_enrollments row. This ensures the server agrees with the
+    // "Pay Outstanding" UI (which reads `outstandingBalanceCents` from the
+    // same row) and never charges the full fee twice.
+    discountedMembershipAmount = computeUnpaidMembershipRemainingCents(unpaidMembershipRow);
+    console.log('🎫 Cart snapshot using unpaid membership row remaining balance:', {
+      membershipId: unpaidMembershipRow.id,
+      schoolFullFee: membershipFeeAmount,
+      remainingBalance: discountedMembershipAmount,
+    });
+  } else if (!alreadyPaid && membershipFeeAmount > 0) {
     try {
       const { calculateMembershipDiscount } = await import('./membership');
       const discountResult = await calculateMembershipDiscount(schoolId, userId, membershipFeeAmount);
