@@ -1,3 +1,5 @@
+import { type AutoPayMetricsSink, emitAutoPayMetric } from "./autopay-observability";
+
 export const AUTOPAY_MAX_RETRY_ATTEMPTS = 3;
 export const AUTOPAY_STALE_ATTEMPT_DAYS = 14;
 
@@ -68,16 +70,40 @@ export function isStaleAttemptDate(
 export function evaluateAutoPayPolicy(
   candidate: AutoPayCandidateLike,
   now: Date = new Date(),
+  metricsSink?: AutoPayMetricsSink,
 ): AutoPayPolicyDecision {
   if (isRetryCapReached(candidate.retryCount)) {
+    emitAutoPayMetric(metricsSink, {
+      metric: "autopay_failure_total",
+      labels: {
+        source: "policy",
+        action: "skip",
+        reason_code: "retry_cap_reached",
+      },
+    });
     return { action: "skip", reason: "retry_cap_reached" };
   }
 
   const dueDateInput = candidate.dueDate ?? candidate.scheduledDate;
   if (isStaleAttemptDate(dueDateInput ?? null, now)) {
+    emitAutoPayMetric(metricsSink, {
+      metric: "autopay_failure_total",
+      labels: {
+        source: "policy",
+        action: "skip",
+        reason_code: "stale_attempt",
+      },
+    });
     return { action: "skip", reason: "stale_attempt" };
   }
 
+  emitAutoPayMetric(metricsSink, {
+    metric: "autopay_transition_total",
+    labels: {
+      source: "policy",
+      action: "process",
+    },
+  });
   return { action: "process" };
 }
 

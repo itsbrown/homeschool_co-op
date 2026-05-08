@@ -23,6 +23,12 @@ import {
   evaluateAutoPayPolicy,
   getDueAutoPayCandidates,
 } from './autopay-policy';
+import {
+  emitAutoPayCreditCoveredSkipNotice,
+  emitAutoPayPreChargeNotice,
+  isCreditCoveredAutoPayCandidate,
+} from './autopay-notifications';
+import { type AutoPayMetricsSink, emitAutoPayMetric } from './autopay-observability';
 
 export interface ReminderResult {
   scheduledPaymentId: number;
@@ -36,7 +42,7 @@ export interface ReminderResult {
 export interface AutoPayExecutionResult {
   scheduledPaymentId: number;
   action: 'process' | 'skip';
-  reason?: 'retry_cap_reached' | 'stale_attempt';
+  reason?: 'retry_cap_reached' | 'stale_attempt' | 'credit_covered';
 }
 
 let reminderInterval: ReturnType<typeof setInterval> | null = null;
@@ -57,6 +63,10 @@ async function queryDueScheduledPayments(criteria: DueAutoPayQueryCriteria): Pro
     .select({
       id: scheduledPayments.id,
       scheduledDate: scheduledPayments.scheduledDate,
+      parentId: scheduledPayments.parentId,
+      parentEmail: scheduledPayments.parentEmail,
+      amount: scheduledPayments.amount,
+      metadata: scheduledPayments.metadata,
       retryCount: scheduledPayments.retryCount,
       status: scheduledPayments.status,
     })
@@ -77,18 +87,37 @@ async function queryDueScheduledPayments(criteria: DueAutoPayQueryCriteria): Pro
  * Live AutoPay execution path. Uses DB-query criteria as source-of-truth for due candidates,
  * then applies policy guards deterministically.
  */
-export async function processAutoPayExecutionPath(now: Date = new Date()): Promise<AutoPayExecutionResult[]> {
+export async function processAutoPayExecutionPath(
+  now: Date = new Date(),
+  metricsSink?: AutoPayMetricsSink,
+): Promise<AutoPayExecutionResult[]> {
   const results: AutoPayExecutionResult[] = [];
 
   const dueCandidates = await getDueAutoPayCandidates(
     { queryDueScheduledPayments },
     now
   );
+  emitAutoPayMetric(metricsSink, {
+    metric: 'autopay_backlog_total',
+    labels: {
+      source: 'execution_path',
+      reason_code: 'stuck_processing_backlog',
+      backlog_size: dueCandidates.length,
+    },
+  });
 
   for (const candidate of dueCandidates) {
-    const decision = evaluateAutoPayPolicy(candidate, now);
+    const decision = evaluateAutoPayPolicy(candidate, now, metricsSink);
     if (decision.action === 'skip') {
       await storage.updateScheduledPaymentStatus(candidate.id, 'cancelled');
+      emitAutoPayMetric(metricsSink, {
+        metric: 'autopay_failure_total',
+        labels: {
+          source: 'execution_path',
+          action: 'skip',
+          reason_code: decision.reason,
+        },
+      });
       results.push({
         scheduledPaymentId: candidate.id,
         action: 'skip',
@@ -97,8 +126,34 @@ export async function processAutoPayExecutionPath(now: Date = new Date()): Promi
       continue;
     }
 
+    await emitAutoPayPreChargeNotice(candidate, now);
+    if (isCreditCoveredAutoPayCandidate(candidate)) {
+      await emitAutoPayCreditCoveredSkipNotice(candidate);
+      emitAutoPayMetric(metricsSink, {
+        metric: 'autopay_transition_total',
+        labels: {
+          source: 'execution_path',
+          action: 'skip',
+          reason_code: 'credit_covered',
+        },
+      });
+      results.push({
+        scheduledPaymentId: candidate.id,
+        action: 'skip',
+        reason: 'credit_covered',
+      });
+      continue;
+    }
+
     // Runtime processing path can proceed to actual charge execution.
     // We explicitly avoid mutating retry/status here unless policy transitions it terminal.
+    emitAutoPayMetric(metricsSink, {
+      metric: 'autopay_transition_total',
+      labels: {
+        source: 'execution_path',
+        action: 'process',
+      },
+    });
     results.push({
       scheduledPaymentId: candidate.id,
       action: 'process',

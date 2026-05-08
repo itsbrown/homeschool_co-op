@@ -1,5 +1,6 @@
 import { describe, expect, it } from "@jest/globals";
 import { buildAutoPayAttemptKey, decideAutoPayAttemptStart } from "../services/autopay-lifecycle";
+import { type AutoPayMetricEvent } from "../services/autopay-observability";
 
 describe("autopay lifecycle replay safety", () => {
   it("replays existing processing attempt instead of creating duplicate charge", () => {
@@ -38,14 +39,25 @@ describe("autopay lifecycle replay safety", () => {
   });
 
   it("skips attempts at retry cap", () => {
+    const metrics: AutoPayMetricEvent[] = [];
     const decision = decideAutoPayAttemptStart({
       id: 3,
       amount: 5000,
       status: "pending",
       retryCount: 3,
+    }, {
+      emit: (event) => metrics.push(event),
     });
 
     expect(decision).toEqual({ action: "skip_terminal", reason: "retry_cap_reached" });
+    expect(metrics).toContainEqual({
+      metric: "autopay_failure_total",
+      labels: {
+        source: "lifecycle",
+        transition: "skip_terminal",
+        reason_code: "retry_cap_reached",
+      },
+    });
   });
 
   it("builds deterministic attempt key", () => {

@@ -3,6 +3,7 @@ import {
   buildAutoPayReconciliationCriteria,
   reconcileStuckAutoPayProcessingAttempts,
 } from "../services/autopay-reconciliation";
+import { type AutoPayMetricEvent } from "../services/autopay-observability";
 
 describe("autopay reconciliation", () => {
   it("builds deterministic stuck-processing query criteria", () => {
@@ -14,6 +15,7 @@ describe("autopay reconciliation", () => {
   });
 
   it("marks succeeded processing attempts as completed from Stripe truth", async () => {
+    const metrics: AutoPayMetricEvent[] = [];
     const repository = {
       queryProcessingScheduledPayments: jest.fn(async () => [
         { id: 10, amount: 2000, status: "processing", retryCount: 1, stripePaymentIntentId: "pi_ok" },
@@ -30,11 +32,27 @@ describe("autopay reconciliation", () => {
       repository,
       stripeGateway,
       new Date("2026-05-08T12:00:00.000Z"),
+      { emit: (event) => metrics.push(event) },
     );
 
     expect(result).toEqual([{ paymentId: 10, action: "completed_from_stripe_truth" }]);
     expect(repository.markScheduledPaymentCompleted).toHaveBeenCalledTimes(1);
     expect(repository.markScheduledPaymentFailed).not.toHaveBeenCalled();
+    expect(metrics).toContainEqual({
+      metric: "autopay_backlog_total",
+      labels: {
+        source: "reconciliation",
+        reason_code: "stuck_processing_backlog",
+        backlog_size: 1,
+      },
+    });
+    expect(metrics).toContainEqual({
+      metric: "autopay_divergence_total",
+      labels: {
+        source: "reconciliation",
+        divergence_code: "processing_vs_stripe_succeeded",
+      },
+    });
   });
 
   it("moves failed Stripe truth attempts back to pending when below retry cap", async () => {
@@ -64,6 +82,7 @@ describe("autopay reconciliation", () => {
   });
 
   it("marks as failed at retry cap and avoids further retry loops", async () => {
+    const metrics: AutoPayMetricEvent[] = [];
     const repository = {
       queryProcessingScheduledPayments: jest.fn(async () => [
         { id: 12, amount: 2000, status: "processing", retryCount: 2, stripePaymentIntentId: "pi_fail" },
@@ -76,7 +95,9 @@ describe("autopay reconciliation", () => {
       getPaymentIntentStatus: jest.fn(async () => "canceled" as const),
     };
 
-    const result = await reconcileStuckAutoPayProcessingAttempts(repository, stripeGateway);
+    const result = await reconcileStuckAutoPayProcessingAttempts(repository, stripeGateway, new Date("2026-05-08T12:00:00.000Z"), {
+      emit: (event) => metrics.push(event),
+    });
 
     expect(result).toEqual([{ paymentId: 12, action: "failed_retry_cap_reached" }]);
     expect(repository.markScheduledPaymentFailed).toHaveBeenCalledWith(12, {
@@ -84,9 +105,19 @@ describe("autopay reconciliation", () => {
       retryCount: 3,
     });
     expect(repository.markScheduledPaymentPending).not.toHaveBeenCalled();
+    expect(metrics).toContainEqual({
+      metric: "autopay_failure_total",
+      labels: {
+        source: "reconciliation",
+        action: "failed_retry_cap_reached",
+        reason_code: "retry_exhausted",
+        stripe_status: "stripe_canceled",
+      },
+    });
   });
 
   it("handles missing payment intent deterministically", async () => {
+    const metrics: AutoPayMetricEvent[] = [];
     const repository = {
       queryProcessingScheduledPayments: jest.fn(async () => [
         { id: 13, amount: 2000, status: "processing", retryCount: 0, stripePaymentIntentId: null },
@@ -99,7 +130,9 @@ describe("autopay reconciliation", () => {
       getPaymentIntentStatus: jest.fn(async () => "processing" as const),
     };
 
-    const result = await reconcileStuckAutoPayProcessingAttempts(repository, stripeGateway);
+    const result = await reconcileStuckAutoPayProcessingAttempts(repository, stripeGateway, new Date("2026-05-08T12:00:00.000Z"), {
+      emit: (event) => metrics.push(event),
+    });
 
     expect(result).toEqual([{ paymentId: 13, action: "failed_missing_payment_intent" }]);
     expect(repository.markScheduledPaymentPending).toHaveBeenCalledWith(13, {
@@ -107,5 +140,12 @@ describe("autopay reconciliation", () => {
       retryCount: 1,
     });
     expect(stripeGateway.getPaymentIntentStatus).not.toHaveBeenCalled();
+    expect(metrics).toContainEqual({
+      metric: "autopay_divergence_total",
+      labels: {
+        source: "reconciliation",
+        divergence_code: "processing_without_payment_intent",
+      },
+    });
   });
 });

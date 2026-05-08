@@ -1,4 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
+import { type AutoPayMetricEvent } from "../services/autopay-observability";
 import {
   AUTOPAY_MAX_RETRY_ATTEMPTS,
   AUTOPAY_STALE_ATTEMPT_DAYS,
@@ -25,13 +26,24 @@ describe("autopay policy guards", () => {
   });
 
   it("returns deterministic terminal reason for retry cap", () => {
+    const metrics: AutoPayMetricEvent[] = [];
     const decision = evaluateAutoPayPolicy({
       id: 1,
       retryCount: 3,
       dueDate: "2026-05-08T00:00:00.000Z",
       status: "pending",
+    }, new Date("2026-05-08T00:00:00.000Z"), {
+      emit: (event) => metrics.push(event),
     });
     expect(decision).toEqual({ action: "skip", reason: "retry_cap_reached" });
+    expect(metrics).toContainEqual({
+      metric: "autopay_failure_total",
+      labels: {
+        source: "policy",
+        action: "skip",
+        reason_code: "retry_cap_reached",
+      },
+    });
   });
 
   it("returns deterministic terminal reason for stale attempts", () => {
