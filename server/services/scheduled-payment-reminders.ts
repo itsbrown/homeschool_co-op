@@ -15,14 +15,22 @@
 import { storage } from '../storage';
 import { sendScheduledPaymentReminder, sendOverduePaymentNotice } from '../lib/email-service';
 import { getDb } from '../db';
-import { scheduledPayments } from '../../shared/schema';
-import { and, gte, inArray, lt, lte } from 'drizzle-orm';
+import { getStripeClient } from '../config/stripe';
+import { scheduledPayments, type InsertPayment } from '../../shared/schema';
+import { and, eq, gte, inArray, lt, lte } from 'drizzle-orm';
 import {
   type AutoPayCandidateLike,
   type DueAutoPayQueryCriteria,
   evaluateAutoPayPolicy,
   getDueAutoPayCandidates,
 } from './autopay-policy';
+import {
+  mapStripePaymentIntentStatusString,
+  reconcileStuckAutoPayProcessingAttempts,
+  type AutoPayReconciliationRepository,
+  type AutoPayReconciliationResult,
+  type ProcessingScheduledPaymentLike,
+} from './autopay-reconciliation';
 
 export interface ReminderResult {
   scheduledPaymentId: number;
@@ -40,6 +48,246 @@ export interface AutoPayExecutionResult {
 }
 
 let reminderInterval: ReturnType<typeof setInterval> | null = null;
+let autopayReconciliationInterval: ReturnType<typeof setInterval> | null = null;
+
+/** Hourly: stuck `processing` rows are keyed off AUTOPAY_PROCESSING_STUCK_MINUTES (see autopay-observability). */
+export const AUTOPAY_RECONCILIATION_INTERVAL_MS = 60 * 60 * 1000;
+
+function resolveEnrollmentIdsForScheduledRow(row: { enrollmentId: number; metadata: unknown }): number[] {
+  const meta = row.metadata as Record<string, unknown> | null | undefined;
+  const fromMeta = meta?.enrollmentIds;
+  if (Array.isArray(fromMeta) && fromMeta.length > 0) {
+    return fromMeta.filter((id): id is number => typeof id === 'number' && Number.isFinite(id));
+  }
+  return [row.enrollmentId];
+}
+
+async function resolvePaymentLabelsForEnrollment(enrollmentId: number): Promise<{ childName: string; className: string }> {
+  const enrollment = await storage.getProgramEnrollmentById(enrollmentId);
+  if (!enrollment) {
+    return { childName: 'Student', className: 'Class' };
+  }
+  let childName = 'Student';
+  let className = 'Class';
+  if (enrollment.childId) {
+    const child = await storage.getChildById(enrollment.childId);
+    if (child) {
+      childName = `${child.firstName} ${child.lastName}`.trim();
+    }
+  }
+  if (enrollment.classId) {
+    const cls = await storage.getClassById(enrollment.classId);
+    if (cls) {
+      className = cls.title || cls.description || 'Class';
+    }
+  }
+  return { childName, className };
+}
+
+/**
+ * When reconciliation marks a scheduled payment completed from Stripe truth but no `payments` row exists yet
+ * (missed webhook), apply the same enrollment split and ledger row the webhook would have created.
+ * Skips if a completed payment already exists for the PI (idempotent with webhook).
+ */
+async function applyReconciliationLedgerSideEffectsIfNeeded(scheduledPaymentId: number): Promise<void> {
+  const db = await getDb();
+  const [row] = await db.select().from(scheduledPayments).where(eq(scheduledPayments.id, scheduledPaymentId));
+  if (!row?.stripePaymentIntentId) {
+    return;
+  }
+
+  const existing = await storage.getPaymentByStripeId(row.stripePaymentIntentId);
+  if (existing?.status === 'completed') {
+    return;
+  }
+  if (existing) {
+    console.warn(
+      `[autopay-reconciliation] skip ledger backfill for payment ${scheduledPaymentId}: PI ${row.stripePaymentIntentId} already has payments row (status=${existing.status})`,
+    );
+    return;
+  }
+
+  const stripe = await getStripeClient();
+  const pi = await stripe.paymentIntents.retrieve(row.stripePaymentIntentId);
+  if (pi.status !== 'succeeded') {
+    return;
+  }
+
+  const racing = await storage.getPaymentByStripeId(row.stripePaymentIntentId);
+  if (racing?.status === 'completed') {
+    return;
+  }
+  if (racing) {
+    console.warn(
+      `[autopay-reconciliation] skip ledger backfill for payment ${scheduledPaymentId}: concurrent payments row appeared (status=${racing.status})`,
+    );
+    return;
+  }
+
+  const enrollmentIds = resolveEnrollmentIdsForScheduledRow(row);
+  if (enrollmentIds.length === 0) {
+    console.error(`[autopay-reconciliation] no enrollment ids for scheduled payment ${scheduledPaymentId}`);
+    return;
+  }
+
+  const shareCents = Math.round(Number(pi.amount) / enrollmentIds.length);
+
+  for (const enrollmentId of enrollmentIds) {
+    const enrollment = await storage.getProgramEnrollmentById(enrollmentId);
+    if (!enrollment) {
+      console.error(`[autopay-reconciliation] enrollment ${enrollmentId} not found (scheduled ${scheduledPaymentId})`);
+      continue;
+    }
+    const newPaid = (enrollment.totalPaid || 0) + shareCents;
+    const newBal = Math.max(0, (enrollment.totalCost || 0) - newPaid);
+    await storage.updateProgramEnrollment(enrollmentId, {
+      totalPaid: newPaid,
+      remainingBalance: newBal,
+      paymentStatus: newBal <= 0 ? 'completed' : 'partial_payment',
+    });
+  }
+
+  const { childName, className } = await resolvePaymentLabelsForEnrollment(enrollmentIds[0]!);
+  const parentUser = await storage.getUserByEmail(row.parentEmail);
+  const paymentPayload: InsertPayment = {
+    schoolId: row.schoolId,
+    parentId: parentUser?.id ?? null,
+    parentEmail: row.parentEmail,
+    childName,
+    className,
+    description: `Scheduled payment ${row.installmentNumber} of ${row.totalInstallments} (reconciliation)`,
+    amount: pi.amount,
+    currency: pi.currency || 'usd',
+    status: 'completed',
+    stripePaymentIntentId: pi.id,
+    stripeChargeId: null,
+    stripeRefundId: null,
+    originalPaymentId: null,
+    paymentMethod: 'stripe',
+    enrollmentIds,
+    metadata: {
+      scheduledPaymentId: String(scheduledPaymentId),
+      reconciliation: true,
+    },
+    paymentDate: new Date(),
+  };
+
+  await storage.createPayment(paymentPayload);
+  console.log(`[autopay-reconciliation] ledger backfill created for scheduled payment ${scheduledPaymentId}, PI ${pi.id}`);
+}
+
+function buildAutoPayReconciliationRepository(
+  db: Awaited<ReturnType<typeof getDb>>,
+): AutoPayReconciliationRepository<ProcessingScheduledPaymentLike> {
+  return {
+    async queryProcessingScheduledPayments(criteria) {
+      return await db
+        .select({
+          id: scheduledPayments.id,
+          amount: scheduledPayments.amount,
+          retryCount: scheduledPayments.retryCount,
+          status: scheduledPayments.status,
+          stripePaymentIntentId: scheduledPayments.stripePaymentIntentId,
+          updatedAt: scheduledPayments.updatedAt,
+        })
+        .from(scheduledPayments)
+        .where(
+          and(eq(scheduledPayments.status, criteria.status), lt(scheduledPayments.updatedAt, criteria.updatedBefore)),
+        );
+    },
+    async markScheduledPaymentCompleted(id, processedAt) {
+      await db
+        .update(scheduledPayments)
+        .set({
+          status: 'completed',
+          processedAt,
+          failureReason: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(scheduledPayments.id, id));
+    },
+    async markScheduledPaymentFailed(id, params) {
+      await db
+        .update(scheduledPayments)
+        .set({
+          status: 'failed',
+          failureReason: params.reason,
+          retryCount: params.retryCount,
+          updatedAt: new Date(),
+        })
+        .where(eq(scheduledPayments.id, id));
+    },
+    async markScheduledPaymentPending(id, params) {
+      await db
+        .update(scheduledPayments)
+        .set({
+          status: 'pending',
+          failureReason: params.reason,
+          retryCount: params.retryCount,
+          updatedAt: new Date(),
+        })
+        .where(eq(scheduledPayments.id, id));
+    },
+  };
+}
+
+/**
+ * Reconcile scheduled_payments stuck in `processing` against Stripe PaymentIntent status.
+ * Runs only from the singleton background worker (`ENABLE_BACKGROUND_JOBS=true`), same as reminder timers.
+ */
+export async function runAutoPayStuckProcessingReconciliation(now: Date = new Date()): Promise<AutoPayReconciliationResult[]> {
+  const db = await getDb();
+  const repository = buildAutoPayReconciliationRepository(db);
+  const stripeGateway = {
+    async getPaymentIntentStatus(paymentIntentId: string) {
+      const stripe = await getStripeClient();
+      const pi = await stripe.paymentIntents.retrieve(paymentIntentId);
+      return mapStripePaymentIntentStatusString(pi.status);
+    },
+  };
+
+  const results = await reconcileStuckAutoPayProcessingAttempts(repository, stripeGateway, now);
+
+  const succeeded = results.filter((r) => r.action === 'completed_from_stripe_truth');
+  for (const r of succeeded) {
+    try {
+      await applyReconciliationLedgerSideEffectsIfNeeded(r.paymentId);
+    } catch (err) {
+      console.error(`[autopay-reconciliation] ledger side effects failed for scheduled payment ${r.paymentId}:`, err);
+    }
+  }
+
+  if (results.length > 0) {
+    const summary = results.reduce<Record<string, number>>((acc, r) => {
+      acc[r.action] = (acc[r.action] ?? 0) + 1;
+      return acc;
+    }, {});
+    console.log(`[autopay-reconciliation] run complete (${results.length} rows):`, summary);
+  }
+
+  return results;
+}
+
+async function tickAutoPayReconciliation(): Promise<void> {
+  try {
+    await runAutoPayStuckProcessingReconciliation();
+  } catch (err) {
+    console.error('[autopay-reconciliation] scheduled tick failed:', err);
+  }
+}
+
+function startAutoPayReconciliationScheduler(): void {
+  if (autopayReconciliationInterval) {
+    console.log('ℹ️ AutoPay reconciliation scheduler already running; skipping duplicate start');
+    return;
+  }
+  console.log(
+    `🔁 Starting AutoPay stuck-processing reconciliation (every ${AUTOPAY_RECONCILIATION_INTERVAL_MS / 60_000} min, singleton in-process guard)`,
+  );
+  void tickAutoPayReconciliation();
+  autopayReconciliationInterval = setInterval(tickAutoPayReconciliation, AUTOPAY_RECONCILIATION_INTERVAL_MS);
+  autopayReconciliationInterval.unref?.();
+}
 
 // Days before/after due date to send reminders
 const REMINDER_DAYS = {
@@ -305,8 +553,8 @@ export async function processScheduledPaymentReminders(): Promise<ReminderResult
 }
 
 /**
- * Start the scheduled payment reminder job
- * Runs every 6 hours to check for payments needing reminders
+ * Start the scheduled payment reminder job (6h) and AutoPay stuck-processing reconciliation (hourly).
+ * In-process singleton guards prevent duplicate timers within one Node process; use ENABLE_BACKGROUND_JOBS on one worker only.
  */
 export function startScheduledPaymentReminderJob(): void {
   if (reminderInterval) {
@@ -350,13 +598,19 @@ export function startScheduledPaymentReminderJob(): void {
     });
   }, SIX_HOURS_MS);
   reminderInterval.unref?.();
-  
-  console.log('✅ Scheduled payment reminder job initialized - runs every 6 hours');
+
+  startAutoPayReconciliationScheduler();
+
+  console.log('✅ Scheduled payment reminder job initialized - reminders every 6 hours; AutoPay reconciliation hourly');
 }
 
 export function stopScheduledPaymentReminderJob(): void {
   if (reminderInterval) {
     clearInterval(reminderInterval);
     reminderInterval = null;
+  }
+  if (autopayReconciliationInterval) {
+    clearInterval(autopayReconciliationInterval);
+    autopayReconciliationInterval = null;
   }
 }

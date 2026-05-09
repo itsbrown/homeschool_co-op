@@ -1,6 +1,8 @@
+import { AUTOPAY_PROCESSING_STUCK_MINUTES } from "./autopay-observability";
 import { AUTOPAY_MAX_RETRY_ATTEMPTS } from "./autopay-policy";
 
-export const AUTOPAY_PROCESSING_STUCK_MINUTES = 30;
+export { AUTOPAY_PROCESSING_STUCK_MINUTES };
+export { buildAutoPayReconciliationLabels } from "./autopay-observability";
 
 export type StripePaymentIntentTruth =
   | "succeeded"
@@ -9,6 +11,28 @@ export type StripePaymentIntentTruth =
   | "requires_action"
   | "requires_confirmation"
   | "canceled";
+
+/** Maps Stripe PaymentIntent.status to the reconciliation truth union (no Stripe SDK import). */
+export function mapStripePaymentIntentStatusString(stripeStatus: string): StripePaymentIntentTruth {
+  switch (stripeStatus) {
+    case "succeeded":
+      return "succeeded";
+    case "processing":
+      return "processing";
+    case "requires_payment_method":
+      return "requires_payment_method";
+    case "requires_action":
+      return "requires_action";
+    case "requires_confirmation":
+      return "requires_confirmation";
+    case "canceled":
+      return "canceled";
+    case "requires_capture":
+      return "processing";
+    default:
+      return "requires_payment_method";
+  }
+}
 
 export interface ProcessingScheduledPaymentLike {
   id: number;
@@ -64,55 +88,59 @@ export async function reconcileStuckAutoPayProcessingAttempts<T extends Processi
   const results: AutoPayReconciliationResult[] = [];
 
   for (const payment of processingPayments) {
-    const retryCount = Number.isFinite(payment.retryCount)
-      ? Math.max(0, Math.floor(Number(payment.retryCount)))
-      : 0;
+    try {
+      const retryCount = Number.isFinite(payment.retryCount)
+        ? Math.max(0, Math.floor(Number(payment.retryCount)))
+        : 0;
 
-    if (!payment.stripePaymentIntentId) {
+      if (!payment.stripePaymentIntentId) {
+        const nextRetry = retryCount + 1;
+        if (nextRetry >= AUTOPAY_MAX_RETRY_ATTEMPTS) {
+          await repository.markScheduledPaymentFailed(payment.id, {
+            reason: "missing_payment_intent",
+            retryCount: nextRetry,
+          });
+          results.push({ paymentId: payment.id, action: "failed_retry_cap_reached" });
+        } else {
+          await repository.markScheduledPaymentPending(payment.id, {
+            reason: "missing_payment_intent",
+            retryCount: nextRetry,
+          });
+          results.push({ paymentId: payment.id, action: "failed_missing_payment_intent" });
+        }
+        continue;
+      }
+
+      const stripeStatus = await stripeGateway.getPaymentIntentStatus(payment.stripePaymentIntentId);
+      if (stripeStatus === "succeeded") {
+        await repository.markScheduledPaymentCompleted(payment.id, now);
+        results.push({ paymentId: payment.id, action: "completed_from_stripe_truth" });
+        continue;
+      }
+
+      if (stripeStatus === "processing") {
+        results.push({ paymentId: payment.id, action: "left_processing" });
+        continue;
+      }
+
       const nextRetry = retryCount + 1;
       if (nextRetry >= AUTOPAY_MAX_RETRY_ATTEMPTS) {
         await repository.markScheduledPaymentFailed(payment.id, {
-          reason: "missing_payment_intent",
+          reason: `stripe_${stripeStatus}`,
           retryCount: nextRetry,
         });
         results.push({ paymentId: payment.id, action: "failed_retry_cap_reached" });
-      } else {
-        await repository.markScheduledPaymentPending(payment.id, {
-          reason: "missing_payment_intent",
-          retryCount: nextRetry,
-        });
-        results.push({ paymentId: payment.id, action: "failed_missing_payment_intent" });
+        continue;
       }
-      continue;
-    }
 
-    const stripeStatus = await stripeGateway.getPaymentIntentStatus(payment.stripePaymentIntentId);
-    if (stripeStatus === "succeeded") {
-      await repository.markScheduledPaymentCompleted(payment.id, now);
-      results.push({ paymentId: payment.id, action: "completed_from_stripe_truth" });
-      continue;
-    }
-
-    if (stripeStatus === "processing") {
-      results.push({ paymentId: payment.id, action: "left_processing" });
-      continue;
-    }
-
-    const nextRetry = retryCount + 1;
-    if (nextRetry >= AUTOPAY_MAX_RETRY_ATTEMPTS) {
-      await repository.markScheduledPaymentFailed(payment.id, {
+      await repository.markScheduledPaymentPending(payment.id, {
         reason: `stripe_${stripeStatus}`,
         retryCount: nextRetry,
       });
-      results.push({ paymentId: payment.id, action: "failed_retry_cap_reached" });
-      continue;
+      results.push({ paymentId: payment.id, action: "moved_to_pending_for_retry" });
+    } catch (err) {
+      console.error(`[autopay-reconciliation] payment ${payment.id}:`, err);
     }
-
-    await repository.markScheduledPaymentPending(payment.id, {
-      reason: `stripe_${stripeStatus}`,
-      retryCount: nextRetry,
-    });
-    results.push({ paymentId: payment.id, action: "moved_to_pending_for_retry" });
   }
 
   return results;

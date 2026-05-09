@@ -1,16 +1,39 @@
 import { describe, expect, it, jest } from "@jest/globals";
+import { classifyProcessingBacklogSeverity } from "../services/autopay-observability";
 import {
   buildAutoPayReconciliationCriteria,
+  buildAutoPayReconciliationLabels,
+  mapStripePaymentIntentStatusString,
   reconcileStuckAutoPayProcessingAttempts,
 } from "../services/autopay-reconciliation";
 
 describe("autopay reconciliation", () => {
+  it("maps Stripe PaymentIntent status strings to reconciliation truth", () => {
+    expect(mapStripePaymentIntentStatusString("succeeded")).toBe("succeeded");
+    expect(mapStripePaymentIntentStatusString("processing")).toBe("processing");
+    expect(mapStripePaymentIntentStatusString("requires_capture")).toBe("processing");
+    expect(mapStripePaymentIntentStatusString("canceled")).toBe("canceled");
+    expect(mapStripePaymentIntentStatusString("unknown_future_status")).toBe("requires_payment_method");
+  });
+
   it("builds deterministic stuck-processing query criteria", () => {
     const now = new Date("2026-05-08T12:00:00.000Z");
     const criteria = buildAutoPayReconciliationCriteria(now);
 
     expect(criteria.status).toBe("processing");
     expect(criteria.updatedBefore.toISOString()).toBe("2026-05-08T11:30:00.000Z");
+  });
+
+  it("maps reconciliation results to low-cardinality metric labels", () => {
+    const labels = buildAutoPayReconciliationLabels("moved_to_pending_for_retry", "requires_payment_method");
+    expect(labels.autopay_subsystem).toBe("reconciliation");
+    expect(labels.reconcile_action).toBe("moved_to_pending_for_retry");
+    expect(labels.stripe_truth).toBe("requires_payment_method");
+  });
+
+  it("derives backlog alert tier from query cardinality (stuck rows)", () => {
+    expect(classifyProcessingBacklogSeverity(4)).toBe("ok");
+    expect(classifyProcessingBacklogSeverity(5)).toBe("warning");
   });
 
   it("marks succeeded processing attempts as completed from Stripe truth", async () => {
@@ -107,5 +130,34 @@ describe("autopay reconciliation", () => {
       retryCount: 1,
     });
     expect(stripeGateway.getPaymentIntentStatus).not.toHaveBeenCalled();
+  });
+
+  it("continues reconciling other rows when Stripe lookup throws for one payment", async () => {
+    const repository = {
+      queryProcessingScheduledPayments: jest.fn(async () => [
+        { id: 20, amount: 1000, status: "processing", retryCount: 0, stripePaymentIntentId: "pi_err" },
+        { id: 21, amount: 1000, status: "processing", retryCount: 0, stripePaymentIntentId: "pi_ok" },
+      ]),
+      markScheduledPaymentCompleted: jest.fn(async () => undefined),
+      markScheduledPaymentFailed: jest.fn(async () => undefined),
+      markScheduledPaymentPending: jest.fn(async () => undefined),
+    };
+    const stripeGateway = {
+      getPaymentIntentStatus: jest.fn(async (pi: string) => {
+        if (pi === "pi_err") {
+          throw new Error("stripe_timeout");
+        }
+        return "succeeded" as const;
+      }),
+    };
+
+    const result = await reconcileStuckAutoPayProcessingAttempts(
+      repository,
+      stripeGateway,
+      new Date("2026-05-08T12:00:00.000Z"),
+    );
+
+    expect(result).toEqual([{ paymentId: 21, action: "completed_from_stripe_truth" }]);
+    expect(repository.markScheduledPaymentCompleted).toHaveBeenCalledWith(21, expect.any(Date));
   });
 });
