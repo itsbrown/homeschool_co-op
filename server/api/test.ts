@@ -2392,4 +2392,108 @@ router.get('/membership-idempotency/enrollment/:parentId/:schoolId/:year', async
   }
 });
 
+/**
+ * POST /api/test/setup-reallocation-pair
+ * Seeds two program_enrollment rows under the same parent so the
+ * PaymentReallocationService can be exercised against the live dev Postgres
+ * (Task #201). The endpoint creates only ordinary domain rows via the same
+ * `storage` and `TestDatabase` helpers used by every other test endpoint —
+ * no schema mutation, no replication-role manipulation, no audit-pair seeding.
+ * Tests that need an audit anchor or FK backfill perform that setup directly
+ * from the test file via the shared DB connection.
+ *
+ * Returns: { sourceEnrollmentId, targetEnrollmentId, parentId, schoolId,
+ *            classId, childId }
+ */
+router.post('/setup-reallocation-pair', async (req: Request, res: Response) => {
+  try {
+    const sourcePaidCents = Number(req.body?.sourcePaidCents ?? 5000);
+    const sourceTotalCostCents = Number(req.body?.sourceTotalCostCents ?? sourcePaidCents);
+    const targetPaidCents = Number(req.body?.targetPaidCents ?? 0);
+    const targetTotalCostCents = Number(req.body?.targetTotalCostCents ?? 10000);
+    const uid = nanoid(8);
+    const testDb = new TestDatabase();
+
+    const admin = await testDb.createTestUser({
+      email: `re_admin_${uid}@test.com`,
+      name: 'Reallocation Test Admin',
+      role: 'schoolAdmin',
+    });
+    const school = await testDb.createTestSchool(admin.id, {
+      name: `Reallocation School ${uid}`,
+      registrationCode: `RE${uid.toUpperCase()}`,
+    });
+    await storage.updateUser(admin.id, { schoolId: school.id });
+
+    const parent = await testDb.createTestUser({
+      email: `re_parent_${uid}@test.com`,
+      name: 'Reallocation Test Parent',
+      role: 'parent',
+      schoolId: school.id,
+    });
+
+    const child = await testDb.createTestChild(parent.id, {
+      firstName: 'Reallocation',
+      lastName: 'Child',
+      birthdate: '2015-01-01',
+      gradeLevel: '3rd Grade',
+      schoolId: school.id,
+      parentEmail: `re_parent_${uid}@test.com`,
+    });
+
+    const category = await testDb.createTestCategory(school.id, { name: `Reallocation Cat ${uid}` });
+    const cls = await testDb.createTestClass(school.id, {
+      title: `Reallocation Class ${uid}`,
+      price: Math.max(sourceTotalCostCents, targetTotalCostCents),
+      status: 'upcoming',
+      categoryId: category.id,
+      category: `Reallocation Cat ${uid}`,
+    });
+
+    const buildEnrollment = (
+      totalCostCents: number,
+      totalPaidCents: number,
+    ): InsertProgramEnrollment => ({
+      childId: child.id,
+      classId: cls.id,
+      parentId: parent.id,
+      parentEmail: `re_parent_${uid}@test.com`,
+      schoolId: school.id,
+      status: 'enrolled',
+      paymentPlan: 'biweekly',
+      childName: 'Reallocation Child',
+      className: cls.title,
+      paymentType: 'v2_stripe',
+      classType: 'school_class',
+      price: totalCostCents,
+      totalCost: totalCostCents,
+      totalPaid: totalPaidCents,
+      remainingBalance: Math.max(0, totalCostCents - totalPaidCents),
+    });
+
+    const source = await storage.createProgramEnrollment(
+      buildEnrollment(sourceTotalCostCents, sourcePaidCents),
+    );
+    const target = await storage.createProgramEnrollment(
+      buildEnrollment(targetTotalCostCents, targetPaidCents),
+    );
+
+    return res.json({
+      success: true,
+      sourceEnrollmentId: source.id,
+      targetEnrollmentId: target.id,
+      parentId: parent.id,
+      schoolId: school.id,
+      classId: cls.id,
+      childId: child.id,
+    });
+  } catch (error) {
+    console.error('[Test] Error seeding reallocation pair:', error);
+    return res.status(500).json({
+      error: 'Failed to seed reallocation pair',
+      details: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
 export default router;

@@ -1,0 +1,13 @@
+9c011ff166805bfe1f5d9670d3558c0d4c1f67ea
+
+9c011ff166805bfe1f5d9670d3558c0d4c1f67ea
+853847024606hum <39889345-853847024606hum@users.noreply.replit.com>
+2026-05-09 05:34:43 +0000
+Task #201: Lock in reallocator math with automated tests (review #4 — script consumes shared planner)
+
+# Working-tree state on top of the SHA above:
+#   scripts/fix-allocator-data-corruption.ts has been REVERTED to its
+#   pre-#201 baseline per user direction (the previous commit's
+#   shared-planner import has been backed out). The mark_task_complete
+#   auto-commit will produce a new SHA on top; re-run `git rev-parse HEAD`
+#   post-merge for the final committed SHA.
