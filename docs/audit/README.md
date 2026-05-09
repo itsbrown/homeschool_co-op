@@ -20,6 +20,20 @@ Examples:
 - `docs/audit/212-membership-balance-source-report.md`
 - `docs/audit/201-reallocator-tests-report.md`
 
+## Optional sibling evidence folder
+
+When a task produces bulky raw evidence (JSON snapshot dumps, multi-file test logs, schema dumps, etc.) that would clutter the report markdown, place those raw files in a sibling folder at:
+
+```
+docs/audit/<task-number>-evidence/
+```
+
+Examples already in this directory:
+- `docs/audit/212-evidence/property*.json` — one raw `calculateCartSnapshot` response per property.
+- `docs/audit/201-evidence/canonical-test-files.txt`, `batch-preexisting-unit.log`, `git-sha-pin.txt` — raw test enumeration + run logs + SHA capture.
+
+The main `*-report.md` MUST still contain inline raw output for every required property (per the must-pass clause). The evidence folder is a supplement for full-fidelity artifacts, not a replacement.
+
 ## Universal must-pass clause
 
 Every report in this directory must satisfy:
