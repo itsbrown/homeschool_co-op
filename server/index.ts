@@ -287,20 +287,20 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
     // Background jobs should run only in local development or explicit singleton worker mode.
     if (shouldRunBackgroundJobs(currentEnv)) {
       const singletonRole = process.env.BACKGROUND_JOBS_ROLE || (currentEnv === 'development' ? 'local-dev' : 'singleton');
+      // Dynamically import background services to avoid side effects in production
+      const {
+        startScheduledPaymentReminderJob,
+        AUTOPAY_RECONCILIATION_INTERVAL_MS,
+      } = await import('./services/scheduled-payment-reminders.js');
       console.log(
         `🔧 Starting background services (role=${singletonRole}) — reminders ~6h, AutoPay stuck-processing reconciliation ~${Math.round(
           AUTOPAY_RECONCILIATION_INTERVAL_MS / 60_000,
         )}min; enable this process only on one worker when running multiple web replicas`,
       );
 
-      // Dynamically import background services to avoid side effects in production
       const { backupService } = await import('./services/backupService.js');
       const { MembershipStatusService } = await import('./services/membership-status-service.js');
       const { startEnrollmentReminderScheduler } = await import('./services/enrollmentReminderScheduler.js');
-      const {
-        startScheduledPaymentReminderJob,
-        AUTOPAY_RECONCILIATION_INTERVAL_MS,
-      } = await import('./services/scheduled-payment-reminders.js');
       const { storage } = await import('./storage.js');
       
       // Initialize and start backup service
