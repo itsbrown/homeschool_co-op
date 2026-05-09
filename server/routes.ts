@@ -2982,9 +2982,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const notificationsRouter = (await import("./api/notifications")).default;
   app.use("/api/notifications", supabaseAuth, notificationsRouter);
 
-  // Register billing routes
-  const billingRouter = (await import("./api/billing")).default;
-  app.use("/api/billing", billingRouter);
+  // Billing is mounted once in server/index.ts (avoid duplicate Express stacks).
 
   // Register payment history routes
   const paymentHistoryRouter = (await import("./api/payment-history")).default;
