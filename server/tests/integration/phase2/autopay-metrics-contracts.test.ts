@@ -7,6 +7,7 @@ import {
   AUTOPAY_ALERT_RETRY_EXHAUSTED_CRITICAL_BATCH,
   AUTOPAY_ALERT_RETRY_EXHAUSTED_WARN_BATCH,
   AUTOPAY_ALERT_SPIKE_BASELINE_MIN_SAMPLES,
+  AUTOPAY_ALERT_SPIKE_WARN_FACTOR,
   AUTOPAY_METRIC_LIFECYCLE_DECISIONS_TOTAL,
   AUTOPAY_METRIC_POLICY_SKIPS_TOTAL,
   AUTOPAY_METRIC_RECONCILIATION_ACTIONS_TOTAL,
@@ -91,6 +92,18 @@ describe("autopay metrics contracts / alert taxonomy", () => {
     expect(classifySpikeSeverity(60, 10, AUTOPAY_ALERT_SPIKE_BASELINE_MIN_SAMPLES)).toBe("critical");
   });
 
+  it("treats non-integer baseline sample counts with floor for cold-start guard", () => {
+    expect(classifySpikeSeverity(1_000_000, 10, 3.9)).toBe("ok");
+  });
+
+  it("uses warn spike factor as a strict lower bound on current interval count", () => {
+    const baseline = 10;
+    const warmed = AUTOPAY_ALERT_SPIKE_BASELINE_MIN_SAMPLES;
+    const boundary = baseline * AUTOPAY_ALERT_SPIKE_WARN_FACTOR;
+    expect(classifySpikeSeverity(boundary - 1, baseline, warmed)).toBe("ok");
+    expect(classifySpikeSeverity(boundary, baseline, warmed)).toBe("warning");
+  });
+
   it("aggregates policy + reconciliation retry-cap exhaustion for a single alert tier", () => {
     const policySkips = countPolicyRetryCapSkips([
       { action: "skip", reason: "retry_cap_reached" },
@@ -105,6 +118,13 @@ describe("autopay metrics contracts / alert taxonomy", () => {
     expect(reconFails).toBe(1);
     expect(classifyCombinedRetryExhaustionSeverity(policySkips, reconFails)).toBe("warning");
     expect(classifyCombinedRetryExhaustionSeverity(2, 0)).toBe("ok");
+  });
+
+  it("classifies cross-source retry exhaustion one step below warn and critical batch thresholds", () => {
+    const w = AUTOPAY_ALERT_RETRY_EXHAUSTED_WARN_BATCH;
+    const c = AUTOPAY_ALERT_RETRY_EXHAUSTED_CRITICAL_BATCH;
+    expect(classifyCombinedRetryExhaustionSeverity(w - 2, 1)).toBe("ok");
+    expect(classifyCombinedRetryExhaustionSeverity(c - 2, 1)).toBe("warning");
   });
 
   it("buckets retry attempts for metric cardinality without raw ids", () => {

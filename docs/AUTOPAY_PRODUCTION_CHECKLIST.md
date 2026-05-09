@@ -75,8 +75,9 @@ Production/staging containers should define at minimum (names only; rotate secre
 | `STRIPE_WEBHOOK_SECRET` | Verifies Stripe signatures on **`POST /api/stripe/webhook`** (`server/index.ts`, `server/webhook-handler.ts`). Must match the secret for that URL in the Stripe Dashboard. |
 | `SUPABASE_URL` | Required in **`NODE_ENV=production`** at startup (`server/index.ts`). |
 | `SUPABASE_SERVICE_ROLE_KEY` | Same; used for JWT verification paths in billing and admin flows. |
-| `ENABLE_BACKGROUND_JOBS` | When `true`, starts in-process jobs (reminders, membership, backups, **hourly AutoPay reconciliation**) in any environment except `test`. In production-like deploys, set **only on one worker**; leave unset/false on web/API replicas. See §10. |
+| `ENABLE_BACKGROUND_JOBS` | In **`development`**, background jobs run **by default**; this flag is ignored there. In **production/staging** (any `NODE_ENV` other than `development`/`test`), when **truthy**, starts in-process jobs (reminders, membership, backups, AutoPay reconciliation) on this process. Set **only on one worker**; leave unset/false on web/API replicas. See §10. |
 | `BACKGROUND_JOBS_ROLE` | Optional label for startup logs (`singleton` vs `local-dev`) to document deployment intent; does not change behavior. |
+| `AUTOPAY_RECONCILIATION_INTERVAL_MS` | Optional. Reconciliation tick interval in ms, resolved **once at process start** when `scheduled-payment-reminders` loads. Must be ≥ **60000** or value is ignored and the default (**1 hour**) is used. |
 
 Optional / feature-specific: `SUPABASE_ANON_KEY`, `BREVO_API_KEY`, Twilio-related vars, `OPENAI_API_KEY`, `REPLIT_*` for Replit-hosted Stripe connectors.
 
@@ -100,7 +101,9 @@ Current runtime behavior:
 - `production` / `staging`: any `NODE_ENV` other than `development` or `test` follows the production path — background jobs are **off unless** `ENABLE_BACKGROUND_JOBS=true` (e.g. `staging` and `production` both require the explicit opt-in).
 - Optional: set `BACKGROUND_JOBS_ROLE=singleton` for clearer startup logs and deployment intent.
 
-Background work started when enabled includes: backup rotation, membership status job, enrollment payment reminders, **scheduled payment email reminders (~6h)** and **AutoPay stuck-`processing` reconciliation against Stripe (~1h)** — see `server/services/scheduled-payment-reminders.ts` (`reconcileStuckAutoPayProcessingAttempts` via `runAutoPayStuckProcessingReconciliation`). Reconciliation does **not** run on web replicas when `ENABLE_BACKGROUND_JOBS` is unset; it runs only in-process with the singleton worker that enables it.
+Background work started when enabled includes: backup rotation, membership status job, enrollment payment reminders, **scheduled payment email reminders (~6h)** and **AutoPay stuck-`processing` reconciliation against Stripe** (default **~1h** tick; override with `AUTOPAY_RECONCILIATION_INTERVAL_MS`) — see `server/services/scheduled-payment-reminders.ts` (`reconcileStuckAutoPayProcessingAttempts` via `runAutoPayStuckProcessingReconciliation`). Reconciliation does **not** run on web replicas when `ENABLE_BACKGROUND_JOBS` is unset; it runs only in-process with the singleton worker that enables it.
+
+**Graceful shutdown:** platforms that send **SIGTERM** on drain stop interval-backed background work in `server/index.ts` (backups, membership job, enrollment reminders, scheduled-payment timers). **SIGINT** is not overridden so local Ctrl+C behavior stays normal.
 
 Operational choices:
 

@@ -1,9 +1,21 @@
 import type { AutoPayTerminalReason } from "./autopay-policy";
 import { AUTOPAY_MAX_RETRY_ATTEMPTS } from "./autopay-policy";
 
-/**
- * AutoPay metrics & alert tuning — single place operators adjust thresholds.
- * Label taxonomy stays low-cardinality: no user/parent/payment ids in label values.
+/*
+ * Operator reference (dashboards / alerts)
+ * ----------------------------------------
+ * Counters (stable names): AUTOPAY_METRIC_* exports — `autopay_policy_skips_total`,
+ * `autopay_lifecycle_decisions_total`, `autopay_reconciliation_actions_total`.
+ *
+ * Label keys: LABEL_AUTOPAY_* — subsystem, outcome, terminal_reason, reconcile_action, stripe_truth.
+ * Builders: buildAutoPayPolicySkipLabels, buildAutoPayLifecycleLabels, buildAutoPayReconciliationLabels;
+ * retry buckets: autopayRetryAttemptMetricBucket (no raw payment ids).
+ *
+ * Stuck-row age for reconciliation queries: AUTOPAY_PROCESSING_STUCK_MINUTES (keep aligned with ops runbooks).
+ *
+ * Batch alert tiers: classifyRetryExhaustedBatchSeverity, classifyCombinedRetryExhaustionSeverity,
+ * classifyProcessingBacklogSeverity, classifyTerminalDivergenceSeverity, classifySpikeSeverity
+ * — tune using AUTOPAY_ALERT_* and AUTOPAY_ALERT_SPIKE_* constants below.
  */
 
 // --- Processing staleness (must stay aligned with reconciliation query window) ---

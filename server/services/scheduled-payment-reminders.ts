@@ -50,8 +50,27 @@ export interface AutoPayExecutionResult {
 let reminderInterval: ReturnType<typeof setInterval> | null = null;
 let autopayReconciliationInterval: ReturnType<typeof setInterval> | null = null;
 
-/** Hourly: stuck `processing` rows are keyed off AUTOPAY_PROCESSING_STUCK_MINUTES (see autopay-observability). */
-export const AUTOPAY_RECONCILIATION_INTERVAL_MS = 60 * 60 * 1000;
+const DEFAULT_AUTOPAY_RECONCILIATION_INTERVAL_MS = 60 * 60 * 1000;
+const MIN_AUTOPAY_RECONCILIATION_INTERVAL_MS = 60 * 1000;
+
+/**
+ * Stuck `processing` row age uses `AUTOPAY_PROCESSING_STUCK_MINUTES` (see `autopay-observability`).
+ * Tick cadence is read once at module load from `AUTOPAY_RECONCILIATION_INTERVAL_MS` (milliseconds);
+ * invalid or below one minute falls back to the default (1 hour).
+ */
+function resolveAutopayReconciliationIntervalMs(): number {
+  const raw = process.env.AUTOPAY_RECONCILIATION_INTERVAL_MS;
+  if (raw === undefined || raw === "") {
+    return DEFAULT_AUTOPAY_RECONCILIATION_INTERVAL_MS;
+  }
+  const parsed = Number.parseInt(String(raw).trim(), 10);
+  if (!Number.isFinite(parsed) || parsed < MIN_AUTOPAY_RECONCILIATION_INTERVAL_MS) {
+    return DEFAULT_AUTOPAY_RECONCILIATION_INTERVAL_MS;
+  }
+  return parsed;
+}
+
+export const AUTOPAY_RECONCILIATION_INTERVAL_MS = resolveAutopayReconciliationIntervalMs();
 
 function resolveEnrollmentIdsForScheduledRow(row: { enrollmentId: number; metadata: unknown }): number[] {
   const meta = row.metadata as Record<string, unknown> | null | undefined;
@@ -601,7 +620,9 @@ export function startScheduledPaymentReminderJob(): void {
 
   startAutoPayReconciliationScheduler();
 
-  console.log('✅ Scheduled payment reminder job initialized - reminders every 6 hours; AutoPay reconciliation hourly');
+  console.log(
+    `✅ Scheduled payment reminder job initialized - reminders every 6 hours; AutoPay reconciliation every ${AUTOPAY_RECONCILIATION_INTERVAL_MS / 60_000} min`,
+  );
 }
 
 export function stopScheduledPaymentReminderJob(): void {
