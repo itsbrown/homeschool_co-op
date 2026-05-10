@@ -8,6 +8,7 @@ import { processMembershipStripeEvent } from './api/stripe-webhook';
 import { splitCentsEvenly } from './api/billing';
 import { enrollmentPoolCentsForBalanceIntent, parseMetadataMembershipAmountCents } from './lib/balance-payment-metadata';
 import { fulfillMembershipFromCartPaymentIntent } from './services/fulfill-membership-payment-intent';
+import { findProgramEnrollmentForCartItem } from './lib/cart-checkout-enrollment-match';
 
 // Stripe client will be lazily initialized within the webhook handler
 const RECENT_WEBHOOK_EVENTS_MAX = 1000;
@@ -28,6 +29,52 @@ function cleanupRecentWebhookEvents(now: number): void {
       recentWebhookEvents.delete(entries[i][0]);
     }
   }
+}
+
+/** Shared cart line-item → enrollment updates for checkout.session.completed and payment_intent.succeeded. */
+async function applyCartCheckoutItemsFromWebhook(
+  items: any[],
+  paymentIntent: Stripe.PaymentIntent
+): Promise<any[]> {
+  if (!Array.isArray(items) || items.length === 0) {
+    return [];
+  }
+
+  const amountPerItem = Math.round(paymentIntent.amount / items.length);
+  const updatedEnrollments: any[] = [];
+
+  for (const item of items) {
+    try {
+      const allEnrollments = await storage.getAllEnrollments();
+      const enrollment = findProgramEnrollmentForCartItem(allEnrollments as any, item);
+
+      if (enrollment) {
+        const currentAmount = enrollment.totalPaid || 0;
+        const newAmount = currentAmount + amountPerItem;
+        const remainingBalance = Math.max(0, (enrollment.totalCost || 0) - newAmount);
+
+        const updatedEnrollment = await storage.updateProgramEnrollment(enrollment.id, {
+          totalPaid: newAmount,
+          remainingBalance,
+          paymentStatus: remainingBalance <= 0 ? 'completed' : 'partial_payment',
+          status: 'enrolled',
+        });
+
+        if (updatedEnrollment) {
+          updatedEnrollments.push(updatedEnrollment);
+          console.log(
+            `✅ Updated enrollment ${enrollment.id} for ${item.childName} in ${item.className}: paid=${newAmount}, remaining=${remainingBalance}`
+          );
+        }
+      } else {
+        console.log(`❌ Enrollment not found for ${item.childName} in ${item.className}`);
+      }
+    } catch (error) {
+      console.error(`❌ Error updating enrollment for ${item.childName}:`, error);
+    }
+  }
+
+  return updatedEnrollments;
 }
 
 async function applyBalancePaymentToEnrollmentsOnly(
@@ -213,45 +260,9 @@ export const webhookHandler = async (req: Request, res: Response) => {
         if (itemsJson && parentEmail) {
           const items = JSON.parse(itemsJson);
           console.log('💰 Processing checkout payment enrollments:', items.length, 'items for', parentEmail);
-          
-          // Calculate payment per item
-          const amountPerItem = Math.round(paymentIntent.amount / items.length);
-          
-          // Update each enrollment in database
-          const updatedEnrollments = [];
-          for (const item of items) {
-            try {
-              // Get all program enrollments from database
-              const allEnrollments = await storage.getAllEnrollments();
-              const enrollment = allEnrollments.find((e: any) => 
-                e.childId === item.childId && (e.programId === item.classId || e.classId === item.classId)
-              );
-              
-              if (enrollment) {
-                const currentAmount = enrollment.totalPaid || 0;
-                const newAmount = currentAmount + amountPerItem;
-                const remainingBalance = Math.max(0, (enrollment.totalCost || 0) - newAmount);
-                
-                // Update program enrollment in database
-                const updatedEnrollment = await storage.updateProgramEnrollment(enrollment.id, {
-                  totalPaid: newAmount,
-                  remainingBalance: remainingBalance,
-                  paymentStatus: remainingBalance <= 0 ? 'completed' : 'deposit_paid',
-                  status: 'enrolled'
-                });
-                
-                if (updatedEnrollment) {
-                  updatedEnrollments.push(updatedEnrollment);
-                  console.log(`✅ Updated enrollment ${enrollment.id} for ${item.childName} in ${item.className}: paid=${newAmount}, remaining=${remainingBalance}`);
-                }
-              } else {
-                console.log(`❌ Enrollment not found for ${item.childName} in ${item.className}`);
-              }
-            } catch (error) {
-              console.error(`❌ Error updating enrollment for ${item.childName}:`, error);
-            }
-          }
-          
+
+          const updatedEnrollments = await applyCartCheckoutItemsFromWebhook(items, paymentIntent);
+
           console.log(`✅ Updated ${updatedEnrollments.length} enrollments for checkout session ${session.id}`);
           
           // Create payment record in database
@@ -597,60 +608,10 @@ export const webhookHandler = async (req: Request, res: Response) => {
           if (itemsJson && parentEmail) {
             const items = JSON.parse(itemsJson);
             console.log('💰 Processing cart payment enrollments:', items.length, 'items for', parentEmail);
-            
-            // Calculate payment per item
-            const amountPerItem = Math.round(paymentIntent.amount / items.length);
-            
-            // Update each enrollment in database.
-            //
-            // M2 fix: previously this matcher only checked programId/classId. Marketplace
-            // enrollments (which are ~88% of production rows) write to marketplaceClassId, so the
-            // matcher silently failed and the webhook logged "Enrollment not found" while the
-            // parent's card was charged. We now match by enrollmentId first (most precise; cart
-            // already passes it where available) and fall back to childId + any of the three
-            // class-reference columns matching either of the two class-reference columns from the
-            // cart item.
-            const updatedEnrollments = [];
-            for (const item of items) {
-              try {
-                const allEnrollments = await storage.getAllEnrollments();
 
-                const candidateClassIds = [item.classId, item.marketplaceClassId, item.programId]
-                  .filter((id: any) => typeof id === 'number' && id > 0);
+            // Enrollment matching is shared with checkout.session.completed (see findProgramEnrollmentForCartItem).
+            const updatedEnrollments = await applyCartCheckoutItemsFromWebhook(items, paymentIntent);
 
-                const enrollment = allEnrollments.find((e: any) => {
-                  if (item.enrollmentId && e.id === item.enrollmentId) return true;
-                  if (e.childId !== item.childId) return false;
-                  return candidateClassIds.some((cid: number) =>
-                    e.programId === cid || e.classId === cid || e.marketplaceClassId === cid
-                  );
-                });
-
-                if (enrollment) {
-                  const currentAmount = enrollment.totalPaid || 0;
-                  const newAmount = currentAmount + amountPerItem;
-                  const remainingBalance = Math.max(0, (enrollment.totalCost || 0) - newAmount);
-                  
-                  // Update program enrollment in database
-                  const updatedEnrollment = await storage.updateProgramEnrollment(enrollment.id, {
-                    totalPaid: newAmount,
-                    remainingBalance: remainingBalance,
-                    paymentStatus: remainingBalance <= 0 ? 'completed' : 'partial_payment',
-                    status: 'enrolled'
-                  });
-                  
-                  if (updatedEnrollment) {
-                    updatedEnrollments.push(updatedEnrollment);
-                    console.log(`✅ Updated enrollment ${enrollment.id} for ${item.childName} in ${item.className}: paid=${newAmount}, remaining=${remainingBalance}`);
-                  }
-                } else {
-                  console.log(`❌ Enrollment not found for ${item.childName} in ${item.className}`);
-                }
-              } catch (error) {
-                console.error(`❌ Error updating enrollment for ${item.childName}:`, error);
-              }
-            }
-            
             console.log(`✅ Updated ${updatedEnrollments.length} enrollments in database for payment ${paymentIntent.id}`);
             
             // Create payment record
