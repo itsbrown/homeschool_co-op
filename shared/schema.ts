@@ -1132,8 +1132,12 @@ export const paymentAllocations = pgTable("payment_allocations", {
   id: serial("id").primaryKey(),
   paymentHistoryId: integer("payment_history_id").notNull().references(() => stripePaymentHistory.id, { onDelete: 'cascade' }),
   
-  // Class enrollment - nullable to support membership-only allocations
-  enrollmentId: integer("enrollment_id").references(() => schoolClassEnrollments.id, { onDelete: 'cascade' }),
+  // Program enrollment - nullable to support membership-only allocations
+  // NOTE: this column references program_enrollments(id), NOT school_class_enrollments.
+  // Every write site (PaymentReallocationService, PaymentProcessorService,
+  // webhook-handler refund rollback) writes program_enrollments(id) values
+  // here. The original FK target was a copy/paste hazard surfaced by Task #246.
+  enrollmentId: integer("enrollment_id").references(() => programEnrollments.id, { onDelete: 'cascade' }),
   
   // Membership enrollment - nullable to support class-only allocations
   // One of enrollmentId or membershipEnrollmentId should be set
