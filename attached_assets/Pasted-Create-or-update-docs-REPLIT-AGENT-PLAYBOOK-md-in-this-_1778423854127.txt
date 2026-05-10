@@ -1,0 +1,35 @@
+Create or update docs/REPLIT_AGENT_PLAYBOOK.md in this repository with our non-negotiable engineering contract for all future tasks. The file must be concise (aim under ~200 lines), markdown, and suitable for both humans and agents.
+
+Include these sections with bullet rules (not essays):
+
+1. Source of truth: GitHub main; Replit pulls before publish; never treat Replit-only commits as canonical unless explicitly mirrored to GitHub.
+
+2. Scope discipline: one task = one concern; if a task says "tests only", do not modify production code or operational scripts—open a follow-up task instead. If reviewers contradict, STOP and ask for a single written scope decision rather than alternating implementations.
+
+3. Audit / proof artifacts (mandatory for payment + schema tasks):
+   - All proof MUST live under docs/audit/ (never rely on .local/ for merge-surviving evidence).
+   - Standard report path: docs/audit/<task>-<short-slug>-report.md
+   - Optional bulky artifacts: docs/audit/<task>-evidence/
+   - Must-pass close clause: no closure without raw command output, raw SQL/results, raw HTTP/webhook responses as applicable; include ISO-8601 timestamps for Sections involving replay; include git SHA pin (git rev-parse HEAD + git log -1) at top; dirty tree must be shown (git status -s) and cleaned before final evidence.
+   - Link docs/audit/README.md if it exists; if missing, create a minimal README describing the convention.
+
+4. Testing / CI realism:
+   - Prefer GitHub CI for full npm run test:server when too long for Replit shells.
+   - If Replit must prove tests: allow sharded jest runs ONLY if you also paste jest --listTests output and prove the shards partition the full set exactly (no omissions/overlap), all on the same SHA.
+
+5. Payments / Stripe webhooks:
+   - Idempotency must be enforced with DB uniqueness where applicable.
+   - Persistence failure must not return 200; must allow Stripe retries (5xx).
+   - Every intentional skip path must emit structured WARN logs including event id, type, reason, and triggering metadata key (or explicitly mark UNREACHABLE IN TEST with follow-up task id).
+
+6. Schema / Drizzle:
+   - Verify DB vs shared/schema.ts with psql \d and/or introspection logs in audit report.
+   - DDL + data backfill are separate tasks unless explicitly combined.
+   - db:push friction (drizzle-kit/zod) gets its own task; do not "paper over" with manual one-off DB edits without documenting in audit report.
+
+7. Dependency graph hygiene:
+   - Respect dependsOn; do not parallelize tasks that both touch shared/schema.ts or the same migration surface.
+
+8. Merge checklist (short): diff review scope, tests/audit report present, no unrelated files, secrets not committed.
+
+After writing the file, open a PR-style summary in chat: files changed, what was added, and a 5-line "how to use this doc" blurb I can paste into Replit project instructions.
