@@ -41,6 +41,7 @@ import {
   discounts, type Discount, type InsertDiscount,
   discountApplications, type DiscountApplication, type InsertDiscountApplication
 } from "@shared/schema";
+import { normalizeEmailForLookup } from '@shared/parent-identity';
 import { eq, inArray } from 'drizzle-orm';
 import { getDb } from './db';
 
@@ -57,6 +58,8 @@ export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
+  getUserBySupabaseId(supabaseId: string): Promise<User | undefined>;
+  getUserByAuth0Id(auth0Id: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: number, user: Partial<InsertUser>): Promise<User | undefined>;
   deleteUser(id: number): Promise<void>;
@@ -768,9 +771,23 @@ export class MemStorage implements IStorage {
   }
 
   async getUserByEmail(email: string): Promise<User | undefined> {
+    const key = normalizeEmailForLookup(email);
+    if (!key) return undefined;
     return Array.from(this.usersStore.values()).find(
-      (user) => user.email === email,
+      (user) => normalizeEmailForLookup(user.email) === key,
     );
+  }
+
+  async getUserBySupabaseId(supabaseId: string): Promise<User | undefined> {
+    const id = supabaseId?.trim();
+    if (!id) return undefined;
+    return Array.from(this.usersStore.values()).find((u) => u.supabaseId === id);
+  }
+
+  async getUserByAuth0Id(auth0Id: string): Promise<User | undefined> {
+    const id = auth0Id?.trim();
+    if (!id) return undefined;
+    return Array.from(this.usersStore.values()).find((u) => u.auth0Id === id);
   }
 
   async createUser(userData: InsertUser): Promise<User> {
@@ -1218,7 +1235,9 @@ export class MemStorage implements IStorage {
   }
 
   async getChildrenByParentEmail(parentEmail: string): Promise<Child[]> {
-    return Array.from(this.childrenStore.values()).filter(child => (child as any).parentEmail === parentEmail);
+    const parent = await this.getUserByEmail(parentEmail);
+    if (!parent) return [];
+    return this.getChildrenByParentId(parent.id);
   }
 
   async createChild(childData: InsertChild & { parentId: number }): Promise<Child> {
@@ -1572,13 +1591,14 @@ export class MemStorage implements IStorage {
 
       // Verify ownership by checking if the child belongs to the parent
       const child = await this.getChildById(enrollment.childId);
-      if (!child || child.parentUserId !== parentUserId) {
+      if (!child || child.parentId !== parentUserId) {
         errors.push(`Enrollment ${id} does not belong to this parent`);
         continue;
       }
 
       // Skip if enrollment has been paid
-      if (enrollment.amountPaid && enrollment.amountPaid > 0) {
+      const paid = enrollment.totalPaid ?? 0;
+      if (paid > 0) {
         skipped.push(id);
         continue;
       }
@@ -1609,7 +1629,7 @@ export class MemStorage implements IStorage {
     
     const uniqueCustomerIds = new Set(
       enrollments
-        .filter(e => e.parentEmail === parentEmail && activeStatuses.includes(e.status) && e.stripeCustomerId)
+        .filter(e => normalizeEmailForLookup(e.parentEmail) === normalizeEmailForLookup(parentEmail) && activeStatuses.includes(e.status) && e.stripeCustomerId)
         .map(e => e.stripeCustomerId!)
     );
     
@@ -1622,7 +1642,7 @@ export class MemStorage implements IStorage {
     
     return Array.from(this.programEnrollmentsStore.values())
       .filter(e => 
-        e.parentEmail === parentEmail && 
+        normalizeEmailForLookup(e.parentEmail) === normalizeEmailForLookup(parentEmail) && 
         activeStatuses.includes(e.status) && 
         e.stripeCustomerId !== null
       );
@@ -4471,7 +4491,7 @@ export class MemStorage implements IStorage {
           if (fs.existsSync(USERS_FILE)) {
             const fileContent = fs.readFileSync(USERS_FILE, 'utf8');
             const users = JSON.parse(fileContent);
-            const user = users.find((u: any) => u.email.toLowerCase() === email.toLowerCase());
+            const user = users.find((u: any) => normalizeEmailForLookup(u.email) === normalizeEmailForLookup(email));
             console.log('🔍 File storage lookup result for', email, ':', user ? 'Found' : 'Not found');
             return user;
           }
@@ -4481,6 +4501,24 @@ export class MemStorage implements IStorage {
           console.log('❌ File storage fallback failed:', fileError);
           return undefined;
         }
+      }
+    }
+
+    async getUserBySupabaseId(supabaseId: string): Promise<User | undefined> {
+      try {
+        return await this.dbStorage.getUserBySupabaseId(supabaseId);
+      } catch (error) {
+        console.error('❌ Database error in getUserBySupabaseId:', error);
+        return await this.memStorage.getUserBySupabaseId(supabaseId);
+      }
+    }
+
+    async getUserByAuth0Id(auth0Id: string): Promise<User | undefined> {
+      try {
+        return await this.dbStorage.getUserByAuth0Id(auth0Id);
+      } catch (error) {
+        console.error('❌ Database error in getUserByAuth0Id:', error);
+        return await this.memStorage.getUserByAuth0Id(auth0Id);
       }
     }
 
@@ -5082,14 +5120,24 @@ export class MemStorage implements IStorage {
     }
 
     async cancelPendingEnrollments(enrollmentIds: number[], parentUserId: number): Promise<{ cancelled: number[]; skipped: number[]; errors: string[] }> {
-      return this.dbStorage.cancelPendingEnrollments(enrollmentIds, parentUserId);
+      try {
+        return await this.dbStorage.cancelPendingEnrollments(enrollmentIds, parentUserId);
+      } catch (error) {
+        if (process.env.NODE_ENV === 'production') {
+          throw error;
+        }
+        console.error('❌ cancelPendingEnrollments DB error, using memStorage:', error);
+        return await this.memStorage.cancelPendingEnrollments(enrollmentIds, parentUserId);
+      }
     }
 
     async getStripeCustomerIdsByParentEmail(parentEmail: string): Promise<string[]> {
       try {
         const db = await getDb();
-        const { eq, and, inArray, isNotNull } = await import('drizzle-orm');
-        
+        const { and, inArray, isNotNull, sql } = await import('drizzle-orm');
+        const normalized = normalizeEmailForLookup(parentEmail);
+        if (!normalized) return [];
+
         // Get enrollments with Stripe customer IDs for active statuses
         const activeStatuses = ['pending_payment', 'enrolled', 'completed'] as const;
         const enrollments = await db.select({
@@ -5098,7 +5146,7 @@ export class MemStorage implements IStorage {
         .from(programEnrollments)
         .where(
           and(
-            eq(programEnrollments.parentEmail, parentEmail),
+            sql`lower(trim(${programEnrollments.parentEmail})) = ${normalized}`,
             isNotNull(programEnrollments.stripeCustomerId),
             inArray(programEnrollments.status, activeStatuses)
           )
@@ -5123,15 +5171,17 @@ export class MemStorage implements IStorage {
     async getStripeLinkedEnrollmentsByParentEmail(parentEmail: string): Promise<ProgramEnrollment[]> {
       try {
         const db = await getDb();
-        const { eq, and, inArray, isNotNull } = await import('drizzle-orm');
-        
+        const { and, inArray, isNotNull, sql } = await import('drizzle-orm');
+        const normalized = normalizeEmailForLookup(parentEmail);
+        if (!normalized) return [];
+
         // Get all enrollments with Stripe data for active statuses
         const activeStatuses = ['pending_payment', 'enrolled', 'completed'] as const;
         return await db.select()
           .from(programEnrollments)
           .where(
             and(
-              eq(programEnrollments.parentEmail, parentEmail),
+              sql`lower(trim(${programEnrollments.parentEmail})) = ${normalized}`,
               isNotNull(programEnrollments.stripeCustomerId),
               inArray(programEnrollments.status, activeStatuses)
             )

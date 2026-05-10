@@ -1,5 +1,10 @@
 import { describe, expect, it } from "@jest/globals";
 import {
+  classifyCombinedRetryExhaustionSeverity,
+  classifyTerminalDivergenceSeverity,
+  countPolicyRetryCapSkips,
+} from "../services/autopay-observability";
+import {
   AUTOPAY_MAX_RETRY_ATTEMPTS,
   AUTOPAY_STALE_ATTEMPT_DAYS,
   buildDueAutoPayQueryCriteria,
@@ -69,5 +74,27 @@ describe("autopay policy guards", () => {
     expect(criteria.dueOnOrBefore.toISOString()).toBe("2026-05-08T00:00:00.000Z");
     expect(criteria.dueOnOrAfter.toISOString()).toBe("2026-04-24T00:00:00.000Z");
     expect(AUTOPAY_STALE_ATTEMPT_DAYS).toBe(14);
+  });
+
+  it("classifies observability tiers from simulated policy run outcomes", () => {
+    const now = new Date("2026-05-08T12:00:00.000Z");
+    const candidates = [
+      { id: 1, retryCount: 3, dueDate: "2026-05-08T00:00:00.000Z", status: "pending" },
+      { id: 2, retryCount: 0, dueDate: "2026-04-01T00:00:00.000Z", status: "pending" },
+      { id: 3, retryCount: 0, dueDate: "2026-05-08T00:00:00.000Z", status: "pending" },
+      { id: 4, retryCount: 1, dueDate: "2026-05-08T00:00:00.000Z", status: "pending" },
+    ];
+    const runResults = candidates.map((c) => evaluateAutoPayPolicy(c, now));
+    const terminalCount = runResults.filter((d) => d.action === "skip").length;
+    expect(classifyTerminalDivergenceSeverity(terminalCount, candidates.length)).toBe("critical");
+  });
+
+  it("treats policy skip retry-cap as retry-exhaustion signal for batch alerting", () => {
+    const exhaustionSignals = countPolicyRetryCapSkips([
+      { action: "skip", reason: "retry_cap_reached" },
+      { action: "skip", reason: "stale_attempt" },
+    ]);
+    expect(exhaustionSignals).toBe(1);
+    expect(classifyCombinedRetryExhaustionSeverity(exhaustionSignals, 0)).toBe("ok");
   });
 });

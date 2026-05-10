@@ -1,5 +1,7 @@
 import { AUTOPAY_MAX_RETRY_ATTEMPTS } from "./autopay-policy";
 
+export { buildAutoPayLifecycleLabels } from "./autopay-observability";
+
 export type AutoPayStartDecision =
   | { action: "start_new_attempt" }
   | { action: "replay_existing_attempt"; paymentIntentId: string }

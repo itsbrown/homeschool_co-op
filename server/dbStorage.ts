@@ -1,4 +1,5 @@
 import { eq, and, desc, asc, like, or, sql, lt, gt, isNull, inArray } from 'drizzle-orm';
+import { normalizeEmailForLookup } from '@shared/parent-identity';
 import { getDb } from './db';
 import { IStorage } from './storage';
 import {
@@ -62,7 +63,29 @@ export class DatabaseStorage implements IStorage {
 
   async getUserByEmail(email: string): Promise<User | undefined> {
     const db = await getDb();
-    const [user] = await db.select().from(users).where(eq(users.email, email));
+    const normalized = normalizeEmailForLookup(email);
+    if (!normalized) return undefined;
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(sql`lower(trim(${users.email})) = ${normalized}`)
+      .limit(1);
+    return user;
+  }
+
+  async getUserBySupabaseId(supabaseId: string): Promise<User | undefined> {
+    const id = supabaseId?.trim();
+    if (!id) return undefined;
+    const db = await getDb();
+    const [user] = await db.select().from(users).where(eq(users.supabaseId, id)).limit(1);
+    return user;
+  }
+
+  async getUserByAuth0Id(auth0Id: string): Promise<User | undefined> {
+    const id = auth0Id?.trim();
+    if (!id) return undefined;
+    const db = await getDb();
+    const [user] = await db.select().from(users).where(eq(users.auth0Id, id)).limit(1);
     return user;
   }
 
@@ -892,13 +915,14 @@ export class DatabaseStorage implements IStorage {
     for (const enrollment of enrollmentsToCheck) {
       // Verify ownership by checking if the child belongs to the parent
       const child = await this.getChildById(enrollment.childId);
-      if (!child || child.parentUserId !== parentUserId) {
+      if (!child || child.parentId !== parentUserId) {
         errors.push(`Enrollment ${enrollment.id} does not belong to this parent`);
         continue;
       }
 
       // Skip if enrollment has been paid
-      if (enrollment.amountPaid && enrollment.amountPaid > 0) {
+      const paid = enrollment.totalPaid ?? 0;
+      if (paid > 0) {
         skipped.push(enrollment.id);
         continue;
       }
@@ -1250,11 +1274,9 @@ export class DatabaseStorage implements IStorage {
 
   async getChildrenByParentEmail(parentEmail: string): Promise<Child[]> {
     const db = await getDb();
-    // First, find the parent user by email
-    const [parent] = await db.select().from(users).where(eq(users.email, parentEmail));
+    const parent = await this.getUserByEmail(parentEmail);
     if (!parent) return [];
-    
-    // Then get children by parent ID
+
     return await db.select().from(children).where(eq(children.parentId, parent.id));
   }
 
@@ -1612,7 +1634,12 @@ export class DatabaseStorage implements IStorage {
 
   async getPaymentsByParentEmail(parentEmail: string): Promise<Payment[]> {
     const db = await getDb();
-    return await db.select().from(payments).where(eq(payments.parentEmail, parentEmail));
+    const normalized = normalizeEmailForLookup(parentEmail);
+    if (!normalized) return [];
+    return await db
+      .select()
+      .from(payments)
+      .where(sql`lower(trim(${payments.parentEmail})) = ${normalized}`);
   }
 
   async getPaymentByStripeId(stripePaymentIntentId: string): Promise<Payment | undefined> {
@@ -1686,10 +1713,12 @@ export class DatabaseStorage implements IStorage {
 
   async getScheduledPaymentsByParentEmail(parentEmail: string): Promise<ScheduledPayment[]> {
     const db = await getDb();
+    const normalized = normalizeEmailForLookup(parentEmail);
+    if (!normalized) return [];
     return await db
       .select()
       .from(scheduledPayments)
-      .where(eq(scheduledPayments.parentEmail, parentEmail))
+      .where(sql`lower(trim(${scheduledPayments.parentEmail})) = ${normalized}`)
       .orderBy(asc(scheduledPayments.scheduledDate));
   }
 

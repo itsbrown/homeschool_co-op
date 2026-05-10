@@ -287,13 +287,20 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
     // Background jobs should run only in local development or explicit singleton worker mode.
     if (shouldRunBackgroundJobs(currentEnv)) {
       const singletonRole = process.env.BACKGROUND_JOBS_ROLE || (currentEnv === 'development' ? 'local-dev' : 'singleton');
-      console.log(`🔧 Starting background services (role=${singletonRole})...`);
-      
       // Dynamically import background services to avoid side effects in production
+      const {
+        startScheduledPaymentReminderJob,
+        AUTOPAY_RECONCILIATION_INTERVAL_MS,
+      } = await import('./services/scheduled-payment-reminders.js');
+      console.log(
+        `🔧 Starting background services (role=${singletonRole}) — reminders ~6h, AutoPay stuck-processing reconciliation ~${Math.round(
+          AUTOPAY_RECONCILIATION_INTERVAL_MS / 60_000,
+        )}min; enable this process only on one worker when running multiple web replicas`,
+      );
+
       const { backupService } = await import('./services/backupService.js');
       const { MembershipStatusService } = await import('./services/membership-status-service.js');
       const { startEnrollmentReminderScheduler } = await import('./services/enrollmentReminderScheduler.js');
-      const { startScheduledPaymentReminderJob } = await import('./services/scheduled-payment-reminders.js');
       const { storage } = await import('./storage.js');
       
       // Initialize and start backup service
@@ -316,9 +323,27 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
       } catch (error) {
         console.warn('⚠️ Skipping notification initialization in local fallback mode:', (error as Error).message);
       }
+
+      // Graceful platform drain: stop interval-backed work so ticks do not fire during shutdown.
+      // SIGINT is intentionally not handled here so interactive dev Ctrl+C keeps default termination.
+      process.once('SIGTERM', () => {
+        void (async () => {
+          console.log('🛑 SIGTERM received — stopping background intervals');
+          const { backupService: backup } = await import('./services/backupService.js');
+          const { MembershipStatusService: MembershipSvc } = await import('./services/membership-status-service.js');
+          const { stopEnrollmentReminderScheduler } = await import('./services/enrollmentReminderScheduler.js');
+          const { stopScheduledPaymentReminderJob } = await import('./services/scheduled-payment-reminders.js');
+          backup.stopAutomaticBackups();
+          MembershipSvc.stopMembershipStatusJob();
+          stopEnrollmentReminderScheduler();
+          stopScheduledPaymentReminderJob();
+        })();
+      });
     } else {
       console.log('☁️ Background jobs disabled for this process');
-      console.log('💡 In production/staging, set ENABLE_BACKGROUND_JOBS=true only on one dedicated worker process');
+      console.log(
+        '💡 Production/staging (any NODE_ENV except development/test): set ENABLE_BACKGROUND_JOBS=true on exactly one worker with DATABASE_URL; leave it unset/false on web/API replicas so reconciliation and reminders are not double-scheduled',
+      );
     }
   });
 })();

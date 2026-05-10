@@ -1620,15 +1620,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'enrollmentIds array is required' });
       }
 
-      // Get parent user ID from JWT token and convert to number
-      const parentUserIdStr = req.auth?.userId;
-      if (!parentUserIdStr) {
-        return res.status(401).json({ error: 'User not authenticated' });
-      }
-      
-      const parentUserId = Number(parentUserIdStr);
-      if (isNaN(parentUserId)) {
-        return res.status(400).json({ error: 'Invalid user ID' });
+      // Get parent user ID from synced database profile (numeric). req.auth.userId is often a Supabase UUID string.
+      const parentUserId = req.auth?.dbUserId ?? req.user?.dbUser?.id;
+      if (typeof parentUserId !== 'number' || !Number.isFinite(parentUserId)) {
+        return res.status(401).json({
+          error: 'User profile not synced; cannot verify parent identity',
+        });
       }
 
       // Cancel the pending enrollments using the storage method

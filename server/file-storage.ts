@@ -16,6 +16,7 @@ import {
 } from '@shared/schema';
 import * as fileDb from './file-db';
 import { userStorage } from './users-storage';
+import { emailsMatch } from '@shared/parent-identity';
 import fs from 'fs';
 import path from 'path';
 
@@ -109,6 +110,20 @@ export class FileStorage implements IStorage {
   async getUserByEmail(email: string): Promise<User | undefined> {
     validateEmail(email);
     return userStorage.getUserByEmail(email);
+  }
+
+  async getUserBySupabaseId(supabaseId: string): Promise<User | undefined> {
+    const id = supabaseId?.trim();
+    if (!id) return undefined;
+    const users = await this.getUsers();
+    return users.find(u => u.supabaseId === id);
+  }
+
+  async getUserByAuth0Id(auth0Id: string): Promise<User | undefined> {
+    const id = auth0Id?.trim();
+    if (!id) return undefined;
+    const users = await this.getUsers();
+    return users.find(u => u.auth0Id === id);
   }
 
   // User creation method - replaced with file-based implementation
@@ -345,7 +360,7 @@ export class FileStorage implements IStorage {
 
   async getChildrenByParentEmail(parentEmail: string): Promise<Child[]> {
     const children = this.loadChildren();
-    return children.filter(child => (child as any).parentEmail === parentEmail);
+    return children.filter(child => emailsMatch((child as Child).parentEmail, parentEmail));
   }
 
   async createChild(child: InsertChild & { parentId: number }): Promise<Child> {

@@ -75,6 +75,9 @@ Production/staging containers should define at minimum (names only; rotate secre
 | `STRIPE_WEBHOOK_SECRET` | Verifies Stripe signatures on **`POST /api/stripe/webhook`** (`server/index.ts`, `server/webhook-handler.ts`). Must match the secret for that URL in the Stripe Dashboard. |
 | `SUPABASE_URL` | Required in **`NODE_ENV=production`** at startup (`server/index.ts`). |
 | `SUPABASE_SERVICE_ROLE_KEY` | Same; used for JWT verification paths in billing and admin flows. |
+| `ENABLE_BACKGROUND_JOBS` | In **`development`**, background jobs run **by default**; this flag is ignored there. In **production/staging** (any `NODE_ENV` other than `development`/`test`), when **truthy**, starts in-process jobs (reminders, membership, backups, AutoPay reconciliation) on this process. Set **only on one worker**; leave unset/false on web/API replicas. See §10. |
+| `BACKGROUND_JOBS_ROLE` | Optional label for startup logs (`singleton` vs `local-dev`) to document deployment intent; does not change behavior. |
+| `AUTOPAY_RECONCILIATION_INTERVAL_MS` | Optional. Reconciliation tick interval in ms, resolved **once at process start** when `scheduled-payment-reminders` loads. Must be ≥ **60000** or value is ignored and the default (**1 hour**) is used. |
 
 Optional / feature-specific: `SUPABASE_ANON_KEY`, `BREVO_API_KEY`, Twilio-related vars, `OPENAI_API_KEY`, `REPLIT_*` for Replit-hosted Stripe connectors.
 
@@ -93,10 +96,14 @@ Serve static SPA assets as your deploy already configures (many setups copy `dis
 The app starts several **in-process** timers in **development** (and guarded paths elsewhere): enrollment reminders (`server/services/enrollmentReminderScheduler.ts`), scheduled payment reminders (`server/services/scheduled-payment-reminders.ts`), membership jobs (`server/index.ts`). **Autoscale/multi-instance deployments** won’t reliably run exactly one singleton across replicas.
 
 Current runtime behavior:
-- `development`: background jobs run by default.
+- `development`: background jobs run by default (`BACKGROUND_JOBS_ROLE` defaults to `local-dev` in logs).
 - `test`: background jobs stay off.
-- `production`/`staging`: background jobs are **off by default** and only run when `ENABLE_BACKGROUND_JOBS=true`.
-- Optional: set `BACKGROUND_JOBS_ROLE=singleton` (or another label) for clearer startup logs and deployment intent.
+- `production` / `staging`: any `NODE_ENV` other than `development` or `test` follows the production path — background jobs are **off unless** `ENABLE_BACKGROUND_JOBS=true` (e.g. `staging` and `production` both require the explicit opt-in).
+- Optional: set `BACKGROUND_JOBS_ROLE=singleton` for clearer startup logs and deployment intent.
+
+Background work started when enabled includes: backup rotation, membership status job, enrollment payment reminders, **scheduled payment email reminders (~6h)** and **AutoPay stuck-`processing` reconciliation against Stripe** (default **~1h** tick; override with `AUTOPAY_RECONCILIATION_INTERVAL_MS`) — see `server/services/scheduled-payment-reminders.ts` (`reconcileStuckAutoPayProcessingAttempts` via `runAutoPayStuckProcessingReconciliation`). Reconciliation does **not** run on web replicas when `ENABLE_BACKGROUND_JOBS` is unset; it runs only in-process with the singleton worker that enables it.
+
+**Graceful shutdown:** platforms that send **SIGTERM** on drain stop interval-backed background work in `server/index.ts` (backups, membership job, enrollment reminders, scheduled-payment timers). **SIGINT** is not overridden so local Ctrl+C behavior stays normal.
 
 Operational choices:
 
@@ -118,4 +125,5 @@ Quick deploy checklist for singleton mode:
 | Raw webhook route + Stripe signature | `server/index.ts` (`POST /api/stripe/webhook`), `server/webhook-handler.ts` |
 | Stripe routes (PaymentIntents, checkout-adjacent) | `server/api/stripe.ts`, `server/api/billing.ts`, `server/api/stripe-webhook.ts` |
 | Scheduled payment HTTP API | `server/api/scheduled-payments.ts` |
+| Scheduled payment reminders + AutoPay reconciliation scheduler | `server/services/scheduled-payment-reminders.ts` (hourly stuck-`processing` vs Stripe, 6h email reminders); core logic `server/services/autopay-reconciliation.ts` |
 | Stored payments / idempotency lookup | `server/storage.ts`, webhook handler `getPaymentByStripeId`-style guards |
