@@ -4,6 +4,20 @@ Non-negotiable rules for ANY agent (Replit task agent, main agent, human contrib
 
 ---
 
+## 0. Task execution preamble (must follow on EVERY task)
+
+Before writing any code on any task in this repo:
+
+1. **Read `docs/REPLIT_AGENT_PLAYBOOK.md` and `docs/audit/README.md`** (if present). These are the contract. If you skip them you will be blocked at review.
+2. **Confirm scope.** List the allowed files / areas you intend to touch (paste the list in your first response). If anything is unclear, ASK before coding — do not guess.
+3. **If this task is audit-gated** (any payment or schema task per §3): plan the `docs/audit/<task>-<slug>-report.md` path FIRST. Collect raw evidence (command output, SQL results, webhook bodies, ISO-8601 timestamps, SHA pin) AS YOU GO. Do not retrofit evidence at the end — retrofitted evidence is invalid.
+4. **Keep changes minimal.** No unrelated formatting, no drive-by refactors, no "while I was in there" edits. Every line of the diff must trace back to the task brief.
+5. **If you discover a second bug class:** finish the current scope, then PROPOSE a new task for the discovery (per §2). Do not expand scope inline. Document the discovery in your task's "Out of scope" section.
+
+This preamble is ALWAYS in force, even if a task brief omits it. The preamble overrides any task-level shortcut.
+
+---
+
 ## 1. Source of truth
 
 - **GitHub `main` is the only canonical source.** Replit pulls from GitHub before publish.
