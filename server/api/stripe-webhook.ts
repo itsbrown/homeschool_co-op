@@ -2,10 +2,12 @@ import express from 'express';
 import Stripe from 'stripe';
 import { storage } from '../storage';
 import { getDb } from '../db';
-import { membershipEnrollments, users } from '../../shared/schema';
+import { membershipEnrollments } from '../../shared/schema';
 import { eq } from 'drizzle-orm';
 import { getStripeClient } from '../config/stripe';
-import { generateMemberId } from '../utils/membership';
+import { fulfillMembershipFromCartPaymentIntent } from '../services/fulfill-membership-payment-intent';
+import { parseMetadataMembershipAmountCents, enrollmentPoolCentsForBalanceIntent } from '../lib/balance-payment-metadata';
+import { splitCentsEvenly } from '../api/billing';
 
 const router = express.Router();
 
@@ -235,129 +237,12 @@ async function handleDirectPaymentSuccess(paymentIntent: any) {
   try {
     console.log('💳 Processing direct payment success:', paymentIntent.id);
     console.log('🔍 Payment metadata:', paymentIntent.metadata);
+
+    await fulfillMembershipFromCartPaymentIntent(paymentIntent);
     
     const parentEmail = paymentIntent.metadata.parentEmail;
     const enrollmentIds = paymentIntent.metadata.enrollmentIds;
     const paymentType = paymentIntent.metadata.paymentType;
-    
-    // Check for membership payment (metadata set at creation time, not updated)
-    const hasMembership = paymentIntent.metadata.hasMembership === 'true';
-    const membershipSchoolId = paymentIntent.metadata.membershipSchoolId ? parseInt(paymentIntent.metadata.membershipSchoolId) : null;
-    const membershipAmount = paymentIntent.metadata.membershipAmount ? parseInt(paymentIntent.metadata.membershipAmount) : 0;
-    const membershipYear = paymentIntent.metadata.membershipYear ? parseInt(paymentIntent.metadata.membershipYear) : new Date().getFullYear();
-    // Use membershipParentUserId (set by payment plan service) for security
-    const parentUserId = paymentIntent.metadata.membershipParentUserId ? parseInt(paymentIntent.metadata.membershipParentUserId) : null;
-    
-    // Check for membership discount info (set when discount was applied)
-    const membershipDiscountId = paymentIntent.metadata.membershipDiscountId ? parseInt(paymentIntent.metadata.membershipDiscountId) : null;
-    const membershipDiscountName = paymentIntent.metadata.membershipDiscountName || null;
-    const membershipOriginalAmount = paymentIntent.metadata.membershipOriginalAmount ? parseInt(paymentIntent.metadata.membershipOriginalAmount) : null;
-    const membershipDiscountAmount = paymentIntent.metadata.membershipDiscountAmount ? parseInt(paymentIntent.metadata.membershipDiscountAmount) : 0;
-    
-    // Handle membership payment - generate Member ID
-    if (hasMembership && parentUserId && membershipSchoolId) {
-      console.log('🎫 Processing membership payment:', {
-        parentUserId,
-        membershipSchoolId,
-        membershipAmount,
-        membershipYear
-      });
-      
-      try {
-        const db = await getDb();
-        
-        // Check if user already has a Member ID
-        const existingUser = await db
-          .select()
-          .from(users)
-          .where(eq(users.id, parentUserId))
-          .limit(1);
-        
-        if (existingUser.length > 0 && !existingUser[0].memberId) {
-          // Generate and assign new Member ID
-          const newMemberId = generateMemberId();
-          
-          await db
-            .update(users)
-            .set({ memberId: newMemberId })
-            .where(eq(users.id, parentUserId));
-          
-          console.log(`🎫 ✅ Generated Member ID ${newMemberId} for user ${parentUserId}`);
-          
-          // Create or update membership enrollment record
-          const startDate = new Date();
-          const expirationDate = new Date(startDate);
-          expirationDate.setFullYear(expirationDate.getFullYear() + 1);
-          
-          await storage.createMembershipEnrollment({
-            schoolId: membershipSchoolId,
-            parentUserId: parentUserId,
-            membershipYear: membershipYear,
-            membershipTier: 'basic',
-            amount: membershipAmount,
-            amountPaid: membershipAmount,
-            remainingBalance: 0,
-            status: 'enrolled',
-            stripeSubscriptionId: null,
-            stripeCustomerId: paymentIntent.customer || null,
-            startDate,
-            renewalDate: expirationDate,
-            dueDate: startDate,
-            expirationDate,
-            gracePeriodEnd: null,
-            paymentMethod: 'other', // Stripe payment via cart checkout
-            notes: `Stripe payment via cart checkout (${paymentIntent.id})${membershipDiscountName ? ` - Discount: ${membershipDiscountName}` : ''}`
-          });
-          
-          console.log(`🎫 ✅ Created membership enrollment for user ${parentUserId}`);
-          
-          // Track membership discount application if a discount was used
-          if (membershipDiscountId && membershipDiscountAmount > 0 && membershipSchoolId) {
-            try {
-              // SECURITY: Fetch discount using school-scoped query to ensure it belongs to this school
-              const schoolDiscounts = await storage.getDiscountsBySchoolId(membershipSchoolId);
-              const discount = schoolDiscounts.find(d => d.id === membershipDiscountId);
-              
-              if (!discount) {
-                console.error(`⚠️ Discount ${membershipDiscountId} not found for school ${membershipSchoolId} - skipping tracking`);
-              } else {
-                // ATOMIC: Try to increment usage counter with limit check (prevents race conditions)
-                const incrementSuccess = await storage.incrementDiscountUsageAtomic(membershipDiscountId);
-                
-                if (!incrementSuccess) {
-                  console.log(`⚠️ Discount ${membershipDiscountName} has reached usage limit - atomic increment failed, skipping discount application record`);
-                } else {
-                  // Create discount application record for membership (only if increment succeeded)
-                  await storage.createDiscountApplication({
-                    discountId: membershipDiscountId,
-                    parentEmail: parentEmail || '',
-                    childId: null,
-                    schoolEnrollmentId: null,
-                    programEnrollmentId: null,
-                    paymentId: paymentIntent.id,
-                    classId: null,
-                    originalAmount: membershipOriginalAmount || membershipAmount + membershipDiscountAmount,
-                    discountAmount: membershipDiscountAmount,
-                    finalAmount: membershipAmount,
-                    applicationMethod: 'automatic',
-                    appliedBy: null,
-                  });
-                  console.log(`🎫 ✅ Tracked membership discount usage: ${membershipDiscountName} (atomic increment succeeded)`);
-                }
-              }
-            } catch (discountTrackError) {
-              console.error('⚠️ Error tracking membership discount application:', discountTrackError);
-              // Don't fail - discount tracking is secondary to membership creation
-            }
-          }
-        } else if (existingUser.length > 0 && existingUser[0].memberId) {
-          console.log(`🎫 User ${parentUserId} already has Member ID: ${existingUser[0].memberId}`);
-        }
-      } catch (membershipError) {
-        console.error('❌ Error processing membership payment:', membershipError);
-        // Don't fail the whole payment - membership can be manually assigned
-      }
-    }
     
     if (!parentEmail || !enrollmentIds) {
       console.log('⚠️ Missing required metadata for direct payment:', { parentEmail, enrollmentIds, paymentType });
@@ -365,28 +250,29 @@ async function handleDirectPaymentSuccess(paymentIntent: any) {
     }
     
     const enrollmentIdList = JSON.parse(enrollmentIds);
-    const totalAmount = paymentIntent.amount;
-    
-    // Calculate per-enrollment amount, excluding membership fee
-    const enrollmentTotal = totalAmount - membershipAmount;
-    const perEnrollmentAmount = Math.round(enrollmentTotal / enrollmentIdList.length);
-    
-    console.log(`💰 Processing payment for ${enrollmentIdList.length} enrollments, ${perEnrollmentAmount} cents each`);
-    
-    // Collect enrollment data for payment record
+    const amountCents = typeof paymentIntent.amount === 'number' ? paymentIntent.amount : 0;
+    const membershipCents = parseMetadataMembershipAmountCents(paymentIntent.metadata);
+    const enrollmentTotal = enrollmentPoolCentsForBalanceIntent(amountCents, membershipCents);
+    const allocation = splitCentsEvenly(enrollmentTotal, enrollmentIdList.length);
+
+    console.log(
+      `💰 Processing payment for ${enrollmentIdList.length} enrollments, class pool ${enrollmentTotal}c (membership reserved ${membershipCents}c)`
+    );
+
     const enrollments = [];
-    
-    // Update each enrollment and collect data
-    for (const enrollmentId of enrollmentIdList) {
+
+    for (let i = 0; i < enrollmentIdList.length; i++) {
+      const enrollmentId = enrollmentIdList[i];
+      const perEnrollmentAmount = allocation[i];
       try {
         const enrollment = await storage.getProgramEnrollmentById(enrollmentId);
         if (enrollment) {
-          enrollments.push(enrollment); // Store for later use
-          
+          enrollments.push(enrollment);
+
           const currentPaid = enrollment.totalPaid || 0;
           const newTotalPaid = currentPaid + perEnrollmentAmount;
           const newBalance = Math.max(0, enrollment.totalCost - newTotalPaid);
-          
+
           await storage.updateProgramEnrollment(enrollment.id, {
             totalPaid: newTotalPaid,
             remainingBalance: newBalance,

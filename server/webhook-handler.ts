@@ -5,6 +5,9 @@ import { sendPaymentReceipt } from './lib/email-service';
 import { getStripeClient } from './config/stripe';
 import { createReceiptFromPayment } from './services/receiptService';
 import { processMembershipStripeEvent } from './api/stripe-webhook';
+import { splitCentsEvenly } from './api/billing';
+import { enrollmentPoolCentsForBalanceIntent, parseMetadataMembershipAmountCents } from './lib/balance-payment-metadata';
+import { fulfillMembershipFromCartPaymentIntent } from './services/fulfill-membership-payment-intent';
 
 // Stripe client will be lazily initialized within the webhook handler
 const RECENT_WEBHOOK_EVENTS_MAX = 1000;
@@ -40,8 +43,15 @@ async function applyBalancePaymentToEnrollmentsOnly(
     throw new Error('Payment intent amount must be a positive integer in cents');
   }
 
-  const amountPerEnrollment = Math.round(amountCents / enrollmentIds.length);
-  for (const enrollmentId of enrollmentIds) {
+  const membershipCents = parseMetadataMembershipAmountCents(
+    paymentIntent.metadata as Record<string, string | undefined>
+  );
+  const classPoolCents = enrollmentPoolCentsForBalanceIntent(amountCents, membershipCents);
+  const allocation = splitCentsEvenly(classPoolCents, enrollmentIds.length);
+
+  for (let i = 0; i < enrollmentIds.length; i++) {
+    const enrollmentId = enrollmentIds[i];
+    const amountPerEnrollment = allocation[i];
     const enrollment = await storage.getProgramEnrollmentById(enrollmentId);
     if (!enrollment) continue;
 
@@ -496,10 +506,10 @@ export const webhookHandler = async (req: Request, res: Response) => {
               // Apply enrollment effects only to avoid duplicate financial side effects on replay.
               await applyBalancePaymentToEnrollmentsOnly(paymentIntent, enrollmentIds);
             } else {
+              await fulfillMembershipFromCartPaymentIntent(paymentIntent);
               // Calculate payment amount in dollars (Stripe amount is in cents)
               const totalAmount = paymentIntent.amount / 100;
-              
-              // Import and call the processBalancePayment function
+
               const { processBalancePayment } = await import('./api/billing.js');
               await processBalancePayment(paymentIntent, parentEmail, enrollmentIds, totalAmount);
             }

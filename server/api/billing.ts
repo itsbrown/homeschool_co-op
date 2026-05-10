@@ -16,6 +16,10 @@ import {
   resolveIdempotentReplay,
   type IdempotencyRecord,
 } from '../services/idempotency-helper';
+import {
+  enrollmentPoolCentsForBalanceIntent,
+  parseMetadataMembershipAmountCents,
+} from '../lib/balance-payment-metadata';
 
 const router = Router();
 const PAY_BALANCE_IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1000;
@@ -193,11 +197,18 @@ export async function processBalancePayment(paymentIntent: Stripe.PaymentIntent,
       throw new Error('Payment intent amount must be a positive integer in cents');
     }
     
+    const membershipCents = parseMetadataMembershipAmountCents(
+      paymentIntent.metadata as Record<string, string | undefined>
+    );
+    const classPoolCents = enrollmentPoolCentsForBalanceIntent(currentPaymentAmount, membershipCents);
+
     console.log('💰 Processing balance payment with installment support:', {
       enrollmentIds,
       paymentPlan,
       currentPaymentAmount,
-      totalAmount
+      totalAmount,
+      membershipCentsReserved: membershipCents,
+      classPoolCents,
     });
     
     // Get all enrollments
@@ -214,8 +225,8 @@ export async function processBalancePayment(paymentIntent: Stripe.PaymentIntent,
       return;
     }
     
-    // Calculate payment per enrollment for this installment
-    const allocationByEnrollment = splitCentsEvenly(currentPaymentAmount, enrollments.length);
+    // Allocate only the class/enrollment portion; membership is reserved via metadata (payment plans / cart).
+    const allocationByEnrollment = splitCentsEvenly(classPoolCents, enrollments.length);
     
     // Update each enrollment
     for (let index = 0; index < enrollments.length; index++) {
