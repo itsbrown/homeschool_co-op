@@ -2425,6 +2425,53 @@ async function runMigrations() {
     }
   }
 
+  // Migration: refund_events (Task #222 persistence-claim contract).
+  // The Drizzle schema declares this table (shared/schema.ts §refundEvents)
+  // and the Stripe webhook handler relies on it to persist every
+  // charge.refunded / refund.updated / refund.failed event before
+  // applying side effects. Without the table, the webhook returns 5xx
+  // and refunds are silently dropped, breaking charge-refunded.test.ts
+  // and refund-event-persistence-regression.test.ts. Idempotent.
+  try {
+    console.log('Running migration: Ensuring refund_events table exists (Task #222)...');
+    const db = await getDb();
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS refund_events (
+        id SERIAL PRIMARY KEY,
+        stripe_event_id TEXT NOT NULL UNIQUE,
+        stripe_refund_id TEXT NOT NULL,
+        stripe_charge_id TEXT,
+        stripe_payment_intent_id TEXT,
+        event_type TEXT NOT NULL,
+        amount_cents INTEGER NOT NULL,
+        currency TEXT NOT NULL DEFAULT 'usd',
+        refund_status TEXT,
+        reason TEXT,
+        failure_reason TEXT,
+        original_payment_id INTEGER REFERENCES payments(id),
+        original_payment_history_id INTEGER REFERENCES stripe_payment_history(id),
+        processing_status TEXT NOT NULL DEFAULT 'persisted',
+        raw_event JSONB,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS refund_events_stripe_refund_id_idx
+        ON refund_events (stripe_refund_id)
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS refund_events_stripe_payment_intent_id_idx
+        ON refund_events (stripe_payment_intent_id)
+    `);
+    console.log('✅ Migration completed: refund_events table ensured');
+  } catch (refundEventsError) {
+    const errorMessage = refundEventsError instanceof Error
+      ? refundEventsError.message
+      : String(refundEventsError);
+    console.log('refund_events migration note:', errorMessage);
+  }
+
   // Add / repair effective_balance generated column — the single source of truth for what a family owes.
   // Replaces the unreliable remaining_balance field (which is set to 0 for deposit_only/stripe_managed
   // enrollments after a deposit, and for comped accounts — causing false positives in financial reports).

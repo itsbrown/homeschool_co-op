@@ -683,6 +683,67 @@ router.get('/program-enrollment/:id', async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * GET /api/test/effective-balance-drift
+ * Runs the canonical drift query from ARCHITECTURAL_PATTERNS.md §17 against
+ * program_enrollments and returns { total, drift }. Used by Task #224's
+ * end-to-end balance-sync regression test to assert drift = 0 after each
+ * payment-flow step (cart success, scheduled payment success, refund).
+ *
+ * Optional query params (?ids=1,2,3) narrow the check to a specific set of
+ * enrollment IDs so tests don't fail because of unrelated drift left over
+ * from other harness runs.
+ */
+router.get('/effective-balance-drift', async (req: Request, res: Response) => {
+  try {
+    const db = await getDb();
+    if (!db) {
+      return res.status(500).json({
+        error: 'effective-balance-drift requires Postgres; getDb() returned null.',
+      });
+    }
+    const idsParam = typeof req.query.ids === 'string' ? req.query.ids : '';
+    const ids = idsParam
+      .split(',')
+      .map((s) => Number(s.trim()))
+      .filter((n) => Number.isFinite(n) && n > 0);
+    const result = ids.length > 0
+      ? await db.execute(sql`
+          SELECT
+            COUNT(*)::int AS total,
+            COUNT(*) FILTER (
+              WHERE effective_balance IS DISTINCT FROM GREATEST(
+                0,
+                COALESCE(total_cost, 0) - COALESCE(total_paid, 0) - COALESCE(comp_amount_cents, 0)
+              )
+            )::int AS drift
+          FROM program_enrollments
+          WHERE id IN (${sql.raw(ids.map((n) => String(Math.trunc(n))).join(','))})
+        `)
+      : await db.execute(sql`
+          SELECT
+            COUNT(*)::int AS total,
+            COUNT(*) FILTER (
+              WHERE effective_balance IS DISTINCT FROM GREATEST(
+                0,
+                COALESCE(total_cost, 0) - COALESCE(total_paid, 0) - COALESCE(comp_amount_cents, 0)
+              )
+            )::int AS drift
+          FROM program_enrollments
+        `);
+    type DriftRow = { total: number | string; drift: number | string };
+    const resultObj = result as unknown as { rows?: DriftRow[] };
+    const rows: DriftRow[] = Array.isArray(resultObj.rows)
+      ? resultObj.rows
+      : ((result as unknown) as DriftRow[]);
+    const row: DriftRow = rows[0] ?? { total: 0, drift: 0 };
+    return res.json({ total: Number(row.total) || 0, drift: Number(row.drift) || 0 });
+  } catch (error) {
+    console.error('[Test] effective-balance-drift error:', error);
+    return res.status(500).json({ error: String(error) });
+  }
+});
+
 /** GET /api/test/stripe-payment/:paymentIntentId — returns the row or null. */
 router.get('/stripe-payment/:paymentIntentId', async (req: Request, res: Response) => {
   try {

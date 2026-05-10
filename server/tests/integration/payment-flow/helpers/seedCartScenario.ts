@@ -123,5 +123,30 @@ export async function getStripePaymentCount(
   return json.count;
 }
 
+export interface EffectiveBalanceDriftResult {
+  total: number;
+  drift: number;
+}
+
+/**
+ * Queries the canonical effective_balance drift check from
+ * ARCHITECTURAL_PATTERNS.md §17 against program_enrollments. When `ids` is
+ * supplied, the check is restricted to those enrollment rows so unrelated
+ * harness leftovers can't fail the assertion.
+ */
+export async function getEffectiveBalanceDrift(
+  ids?: number[],
+): Promise<EffectiveBalanceDriftResult> {
+  const qs = ids && ids.length > 0 ? `?ids=${ids.join(',')}` : '';
+  const res = await fetch(`${BASE_URL}/api/test/effective-balance-drift${qs}`, {
+    method: 'GET',
+    headers: HEADERS,
+  });
+  if (!res.ok) {
+    throw new Error(`effective-balance-drift failed (${res.status}): ${await res.text()}`);
+  }
+  return (await res.json()) as EffectiveBalanceDriftResult;
+}
+
 export const TEST_BASE_URL = BASE_URL;
 export const TEST_HEADERS = HEADERS;
