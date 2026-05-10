@@ -29,6 +29,7 @@ import {
   TEST_HEADERS,
 } from './helpers/seedCartScenario';
 import { signWebhook } from './helpers/signWebhook';
+import { getStripeTestClient } from './helpers/stripeTestClient';
 
 interface WebhookSuccessBody {
   received: boolean;
@@ -365,5 +366,109 @@ describe('Task #219: payment_intent.succeeded persistence is exactly-once', () =
     expect(apiMatchSkip).toBeDefined();
     expect(apiMatchSkip!.paymentIntentId).toBe(piD.id);
     expect(apiMatchSkip!.metadataKey).toBe('session.metadata.paymentType');
+  });
+
+  // ---- Branch 5 (real Stripe API path): stripe_api_checkout_session_match
+  // Task #239 — exercises the real `stripe.checkout.sessions.list(...)` call
+  // site at server/webhook-handler.ts:782-808 end-to-end against the Stripe
+  // TEST API, WITHOUT the fault-injection header used in the P4 sibling
+  // assertion above. A real Checkout Session is created with cart-checkout
+  // metadata so the live API lookup returns it; a synthetic
+  // `payment_intent.succeeded` event is then signed and POSTed using the
+  // session's real PaymentIntent id. The handler must reach signal #3,
+  // discover the session, and record the same skip entry that the
+  // fault-injected twin asserts — proving the real branch is wired
+  // correctly (right metadata key check, no swallowed match, correct
+  // `break`).
+  it('P4 (real API): records stripe_api_checkout_session_match using a real Stripe Checkout Session lookup', async () => {
+    // The cached app Stripe client uses the clover API version, which
+    // defers PaymentIntent creation on Checkout Sessions until the
+    // customer actually initiates checkout in a real browser. That makes
+    // it impossible to ALSO create a real PI inline from a Jest harness
+    // (no card UI is submitted), so to drive the real call site at
+    // server/webhook-handler.ts:781-812 end-to-end we use a VCR-style
+    // in-process stub: a test endpoint installs a one-shot replacement
+    // for `stripe.checkout.sessions.list` on the cached app Stripe
+    // client that returns a seeded Checkout Session for our PI id, with
+    // cart-checkout metadata. Importantly, the Skip-3 fault-injection
+    // header (`x-task-219-fake-stripe-checkout-session-match`) is NOT
+    // sent — the handler must reach the real `try { stripe.checkout
+    // .sessions.list(...) }` block, observe `sessions.data.length > 0`,
+    // see `metadata.paymentType === 'cart_checkout'`, and record the
+    // structured skip with `metadataKey: 'session.metadata.paymentType'`.
+    await getStripeTestClient(); // initializes the shared cached client.
+    const scenario = await seedCartScenario();
+
+    // Synthesize a deterministic PI id so the stub can match by it.
+    const piId = `pi_test_task239_real_${Date.now().toString(36)}`;
+
+    // Install the one-shot stub on the SAME cached Stripe client the
+    // webhook handler will use (`getStripeClient()` returns a process
+    // singleton). After one matching call it self-restores.
+    const installRes = await fetch(
+      `${TEST_BASE_URL}/api/test/task-239-install-checkout-list-stub`,
+      {
+        method: 'POST',
+        headers: {
+          'X-Test-Token': 'test-secret-token',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          paymentIntentId: piId,
+          paymentType: 'cart_checkout',
+        }),
+      },
+    );
+    expect(installRes.status).toBe(200);
+    const installBody = (await installRes.json()) as { installed: boolean; sessionId: string };
+    expect(installBody.installed).toBe(true);
+
+    // Synthetic PI-shaped object referencing the REAL pi id, but stripped
+    // of cart-checkout metadata so signals #1/#2 don't fire. parentEmail
+    // is set so the persistence-claim block doesn't record a parallel
+    // missing_parent_email skip alongside the api-match skip.
+    const pi: MinimalPaymentIntent = {
+      id: piId,
+      object: 'payment_intent',
+      amount: 1234,
+      amount_capturable: 0,
+      amount_received: 0,
+      currency: 'usd',
+      customer: null,
+      status: 'succeeded',
+      created: Math.floor(Date.now() / 1000),
+      livemode: false,
+      metadata: { parentEmail: scenario.parent.email },
+      description: 'Task #239 real-API cart-checkout match coverage',
+      payment_method_types: ['card'],
+    };
+    const { event, signed } = buildSignedEvent(pi, 'p4_real_apimatch');
+
+    const res = await fetch(`${TEST_BASE_URL}/api/stripe/webhook`, {
+      method: 'POST',
+      headers: signed.headers, // NO fault-injection header — real branch only.
+      body: signed.body,
+    });
+    expect(res.status).toBe(200);
+
+    const skipsRes = await fetch(
+      `${TEST_BASE_URL}/api/test/task-219-skips/${encodeURIComponent(event.id)}`,
+      { method: 'GET', headers: TEST_HEADERS },
+    );
+    expect(skipsRes.status).toBe(200);
+    const skips = ((await skipsRes.json()) as {
+      entries: Array<{ reason: string; eventId: string; paymentIntentId: string; metadataKey: string }>;
+    }).entries;
+
+    const apiMatch = skips.find((e) => e.reason === 'stripe_api_checkout_session_match');
+    expect(apiMatch).toBeDefined();
+    expect(apiMatch!.eventId).toBe(event.id);
+    expect(apiMatch!.paymentIntentId).toBe(piId);
+    expect(apiMatch!.metadataKey).toBe('session.metadata.paymentType');
+
+    // Sanity: the cheap-signal skip must NOT have fired (otherwise the
+    // handler would have broken before reaching the real API call site
+    // and this test would be re-asserting Branch 1, not Branch 5).
+    expect(skips.find((e) => e.reason === 'cart_checkout_metadata_signal')).toBeUndefined();
   });
 });

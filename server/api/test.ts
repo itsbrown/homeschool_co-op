@@ -927,6 +927,63 @@ router.post('/seed-checkout-owned-pi', async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * POST /api/test/task-239-install-checkout-list-stub
+ * Task #239: install a one-shot in-process VCR-style stub on the cached
+ * Stripe client's `checkout.sessions.list` method so the next call that
+ * matches `paymentIntentId` returns a seeded Checkout Session with
+ * cart-checkout metadata. Used by the cart-pi-persistence-regression
+ * "P4 (real API)" scenario to drive the real branch in
+ * `server/webhook-handler.ts:781-812` end-to-end without the
+ * `x-task-219-fake-stripe-checkout-session-match` fault-injection header.
+ *
+ * After being consumed once (or after the optional `ttlMs` window
+ * elapses), the stub forwards subsequent calls to the original SDK
+ * implementation and is cleaned up.
+ */
+router.post('/task-239-install-checkout-list-stub', async (req: Request, res: Response) => {
+  try {
+    const { paymentIntentId, sessionId, paymentType, ttlMs } = req.body ?? {};
+    if (!paymentIntentId || typeof paymentIntentId !== 'string') {
+      return res.status(400).json({ error: 'paymentIntentId (string) required' });
+    }
+    const { getStripeClient } = await import('../config/stripe');
+    const stripe = await getStripeClient();
+    const target = stripe.checkout.sessions as any;
+    const original = target.__task239_originalList ?? target.list.bind(stripe.checkout.sessions);
+    target.__task239_originalList = original;
+
+    const seededSession = {
+      id: sessionId ?? `cs_test_task239_${nanoid(8)}`,
+      object: 'checkout.session',
+      payment_intent: paymentIntentId,
+      metadata: { paymentType: paymentType ?? 'cart_checkout' },
+      status: 'complete',
+      mode: 'payment',
+    };
+    const installedAt = Date.now();
+    const ttl = typeof ttlMs === 'number' && ttlMs > 0 ? ttlMs : 30_000;
+    let consumed = false;
+
+    target.list = async (params: any) => {
+      const expired = Date.now() - installedAt > ttl;
+      const matches = params?.payment_intent === paymentIntentId;
+      if (!consumed && !expired && matches) {
+        consumed = true;
+        try { delete target.__task239_originalList; } catch {}
+        target.list = original;
+        return { object: 'list', data: [seededSession], has_more: false, url: '/v1/checkout/sessions' };
+      }
+      return original(params);
+    };
+
+    return res.json({ installed: true, paymentIntentId, sessionId: seededSession.id, ttlMs: ttl });
+  } catch (error) {
+    console.error('[Test] task-239-install-checkout-list-stub error:', error);
+    return res.status(500).json({ error: String(error) });
+  }
+});
+
 /** GET /api/test/stripe-payment-by-event/:eventId — Task #219 idempotency proof. */
 router.get('/stripe-payment-by-event/:eventId', async (req: Request, res: Response) => {
   try {
