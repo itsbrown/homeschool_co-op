@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": [
+    "shared/currency-utils.ts",
+    "server/config/stripe.ts",
+    "server/lib/payment-calculator.ts",
+    "server/services/idempotency-helper.ts",
+    "server/services/autopay-policy.ts",
+    "server/services/autopay-observability.ts",
+    "server/services/autopay-lifecycle.ts",
+    "server/services/autopay-reconciliation.ts"
+  ],
+  "exclude": ["node_modules", "build", "dist"]
+}
