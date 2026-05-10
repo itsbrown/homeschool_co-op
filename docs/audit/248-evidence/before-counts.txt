@@ -1,0 +1,25 @@
+ total_rows 
+------------
+          0
+(1 row)
+
+ null_rows 
+-----------
+         0
+(1 row)
+
+ not_null_rows 
+---------------
+             0
+(1 row)
+
+ null_membership_typed 
+-----------------------
+                     0
+(1 row)
+
+ null_payment_typed 
+--------------------
+                  0
+(1 row)
+

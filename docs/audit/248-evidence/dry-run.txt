@@ -1,0 +1,34 @@
+BEGIN
+CREATE TABLE
+INSERT 0 0
+
+=== Backfill classification (current transaction) ===
+ eligible_null_rows | unique_match_will_update | ambiguous_skip | unrecoverable_null 
+--------------------+--------------------------+----------------+--------------------
+                  0 |                        0 |              0 |                  0
+(1 row)
+
+
+=== Sample of proposed updates (up to 20) ===
+ allocation_id | prior_membership_enrollment_id | proposed_membership_enrollment_id 
+---------------+--------------------------------+-----------------------------------
+(0 rows)
+
+UPDATE 0
+
+=== Post-update verification ===
+ null_after | not_null_after 
+------------+----------------
+          0 |              0
+(1 row)
+
+
+=== FK validity check (must be 0) ===
+ dangling_fk_rows 
+------------------
+                0
+(1 row)
+
+
+*** DRY RUN: rolling back ***
+ROLLBACK

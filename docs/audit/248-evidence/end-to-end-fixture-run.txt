@@ -1,0 +1,217 @@
+Timing is off.
+BEGIN
+ALTER TABLE
+ALTER TABLE
+
+================================================================
+== Section A — Insert ambiguating fixture membership for parent 3
+================================================================
+ fixture_ambig_membership_id 
+-----------------------------
+                          37
+(1 row)
+
+INSERT 0 1
+
+================================================================
+== Section B — Insert 4 fixture payment_allocations rows
+================================================================
+ fixture_unique_match_1_id 
+---------------------------
+                         1
+(1 row)
+
+INSERT 0 1
+ fixture_unique_match_2_id 
+---------------------------
+                         2
+(1 row)
+
+INSERT 0 1
+ fixture_ambiguous_id 
+----------------------
+                    3
+(1 row)
+
+INSERT 0 1
+ fixture_unrecoverable_id 
+--------------------------
+                        4
+(1 row)
+
+INSERT 0 1
+ fixture_payment_type_id 
+-------------------------
+                       5
+(1 row)
+
+INSERT 0 1
+
+================================================================
+== Section 1 RECONCILIATION — Strict NULL baseline (per close gate)
+================================================================
+ total_rows | null_baseline | not_null_baseline 
+------------+---------------+-------------------
+          5 |             5 |                 0
+(1 row)
+
+
+-- Strict-baseline decomposition (every NULL row falls into exactly one of these):
+ eligible_for_backfill | membership_with_class_enrollment_out_of_scope | non_membership_type_out_of_scope | total_null 
+-----------------------+-----------------------------------------------+----------------------------------+------------
+                     4 |                                             0 |                                1 |          5
+(1 row)
+
+
+================================================================
+== Section 2 — Heuristic classification of the eligible subset
+================================================================
+       bucket       | rows 
+--------------------+------
+ AMBIGUOUS_SKIP     |    1
+ UNIQUE_MATCH       |    2
+ UNRECOVERABLE_NULL |    1
+(3 rows)
+
+
+-- Conservation check: unique + ambiguous + unrecoverable == eligible_for_backfill
+
+================================================================
+== Section 3 — Dry-run via the committed migration script
+================================================================
+CREATE TABLE
+INSERT 0 2
+-- 20-row sample of proposed updates:
+ allocation_id | proposed_membership_enrollment_id | payment_history_id | allocated_amount_cents |     created_at      
+---------------+-----------------------------------+--------------------+------------------------+---------------------
+             1 |                                17 |                 12 |                  17500 | 2026-01-15 12:00:00
+             2 |                                21 |                 18 |                  17500 | 2026-03-20 12:00:00
+(2 rows)
+
+
+================================================================
+== Section 4 Stage 1 — Canary (oldest unique-match row)
+================================================================
+SELECT 1
+CREATE TABLE
+INSERT 0 1
+UPDATE 1
+-- Canary row after update (JOIN back to membership):
+ allocation_id | allocation_type | allocated_amount_cents | membership_enrollment_id | parent_user_id | school_id | amount | membership_year 
+---------------+-----------------+------------------------+--------------------------+----------------+-----------+--------+-----------------
+             1 | membership      |                  17500 |                       17 |             10 |         1 |  17500 |            2026
+(1 row)
+
+-- NULL count after canary:
+ null_after_canary 
+-------------------
+                 4
+(1 row)
+
+
+================================================================
+== Section 4 Stage 2 — Full apply (remaining unique-match rows)
+================================================================
+INSERT 0 1
+ rows_updated_in_stage_2 
+-------------------------
+                       1
+(1 row)
+
+-- All applied rows (canary + stage 2) verified via JOIN:
+ allocation_id | allocation_type | allocated_amount_cents | membership_enrollment_id | parent_user_id | amount | membership_year 
+---------------+-----------------+------------------------+--------------------------+----------------+--------+-----------------
+             1 | membership      |                  17500 |                       17 |             10 |  17500 |            2026
+             2 | membership      |                  17500 |                       21 |              4 |  17500 |            2026
+(2 rows)
+
+
+-- Post-stage-2 reconciliation against Section 1 baseline:
+ null_after | not_null_after | expected_remaining_membership_null | non_membership_rows_intentionally_null 
+------------+----------------+------------------------------------+----------------------------------------
+          3 |              2 |                                  2 |                                      1
+(1 row)
+
+
+-- FK validity check (must be 0):
+ dangling_fk 
+-------------
+           0
+(1 row)
+
+
+================================================================
+== Section 5 — Rollback test against ACTUAL UPDATED ROWS
+================================================================
+-- Rollback snapshot rows (real ids that we just updated):
+ id | prior_membership_enrollment_id 
+----+--------------------------------
+  1 |                               
+  2 |                               
+(2 rows)
+
+-- State BEFORE rollback (should be NOT NULL for all snapshot rows):
+ id | membership_enrollment_id 
+----+--------------------------
+  1 |                       17
+  2 |                       21
+(2 rows)
+
+-- Apply rollback UPDATE (restores prior_membership_enrollment_id):
+ rows_rolled_back 
+------------------
+                2
+(1 row)
+
+-- State AFTER rollback (should be NULL again — restoration verified):
+ id | membership_enrollment_id 
+----+--------------------------
+  1 |                         
+  2 |                         
+(2 rows)
+
+-- Post-rollback NULL count (must equal Section 1 null_baseline):
+ null_after_rollback 
+---------------------
+                   5
+(1 row)
+
+
+================================================================
+== End — ROLLBACK transaction (undoes fixtures + ALTER)
+================================================================
+ROLLBACK
+
+-- Final dev-DB state confirmation (everything reverted):
+ payment_allocations_total 
+---------------------------
+                         0
+(1 row)
+
+ membership_enrollments_total 
+------------------------------
+                           19
+(1 row)
+
+                                               Table "public.payment_allocations"
+          Column          |            Type             | Collation | Nullable |                     Default                     
+--------------------------+-----------------------------+-----------+----------+-------------------------------------------------
+ id                       | integer                     |           | not null | nextval('payment_allocations_id_seq'::regclass)
+ payment_history_id       | integer                     |           | not null | 
+ enrollment_id            | integer                     |           | not null | 
+ allocated_amount_cents   | integer                     |           | not null | 
+ allocation_type          | text                        |           | not null | 'payment'::text
+ source_allocation_id     | integer                     |           |          | 
+ admin_comment            | text                        |           |          | 
+ metadata                 | jsonb                       |           |          | 
+ created_at               | timestamp without time zone |           | not null | now()
+ membership_enrollment_id | integer                     |           |          | 
+Indexes:
+    "payment_allocations_pkey" PRIMARY KEY, btree (id)
+    "idx_payment_allocations_enrollment_id" btree (enrollment_id)
+    "idx_payment_allocations_payment_history_id" btree (payment_history_id)
+Foreign-key constraints:
+    "payment_allocations_enrollment_id_fkey" FOREIGN KEY (enrollment_id) REFERENCES school_class_enrollments(id) ON DELETE CASCADE
+    "payment_allocations_membership_enrollment_id_fkey" FOREIGN KEY (membership_enrollment_id) REFERENCES membership_enrollments(id) ON DELETE CASCADE
+    "payment_allocations_payment_history_id_fkey" FOREIGN KEY (payment_history_id) REFERENCES stripe_payment_history(id) ON DELETE CASCADE
+

@@ -1,0 +1,15 @@
+BEGIN
+CREATE TABLE
+INSERT 0 2
+ snapshot_rows 
+---------------
+             2
+(1 row)
+
+UPDATE 0
+ROLLBACK
+         status         
+------------------------
+ rollback_demo_complete
+(1 row)
+
