@@ -1,0 +1,22 @@
+                                               Table "public.payment_allocations"
+          Column          |            Type             | Collation | Nullable |                     Default                     
+--------------------------+-----------------------------+-----------+----------+-------------------------------------------------
+ id                       | integer                     |           | not null | nextval('payment_allocations_id_seq'::regclass)
+ payment_history_id       | integer                     |           | not null | 
+ enrollment_id            | integer                     |           | not null | 
+ allocated_amount_cents   | integer                     |           | not null | 
+ allocation_type          | text                        |           | not null | 'payment'::text
+ source_allocation_id     | integer                     |           |          | 
+ admin_comment            | text                        |           |          | 
+ metadata                 | jsonb                       |           |          | 
+ created_at               | timestamp without time zone |           | not null | now()
+ membership_enrollment_id | integer                     |           |          | 
+Indexes:
+    "payment_allocations_pkey" PRIMARY KEY, btree (id)
+    "idx_payment_allocations_enrollment_id" btree (enrollment_id)
+    "idx_payment_allocations_payment_history_id" btree (payment_history_id)
+Foreign-key constraints:
+    "payment_allocations_enrollment_id_fkey" FOREIGN KEY (enrollment_id) REFERENCES school_class_enrollments(id) ON DELETE CASCADE
+    "payment_allocations_membership_enrollment_id_fkey" FOREIGN KEY (membership_enrollment_id) REFERENCES membership_enrollments(id) ON DELETE CASCADE
+    "payment_allocations_payment_history_id_fkey" FOREIGN KEY (payment_history_id) REFERENCES stripe_payment_history(id) ON DELETE CASCADE
+

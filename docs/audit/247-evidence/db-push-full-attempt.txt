@@ -1,0 +1,358 @@
+
+> rest-express@1.0.0 db:push
+> drizzle-kit push
+
+No config path provided, using default 'drizzle.config.ts'
+Reading config file '/home/runner/workspace/drizzle.config.ts'
+Using 'pg' driver for database querying
+[⣷] Pulling schema from database...
+[2K[1G[⣯] Pulling schema from database...
+[2K[1G[⣟] Pulling schema from database...
+[2K[1G[⡿] Pulling schema from database...
+[2K[1G[⢿] Pulling schema from database...
+[2K[1G[⣻] Pulling schema from database...
+[2K[1G[⣽] Pulling schema from database...
+[2K[1G[⣷] Pulling schema from database...
+[2K[1G[⣯] Pulling schema from database...
+[2K[1G[⣟] Pulling schema from database...
+[2K[1G[⡿] Pulling schema from database...
+[2K[1G[⢿] Pulling schema from database...
+[2K[1G[⣻] Pulling schema from database...
+[2K[1G[⣽] Pulling schema from database...
+[2K[1G[⣷] Pulling schema from database...
+[2K[1G[⣯] Pulling schema from database...
+[2K[1G[⣟] Pulling schema from database...
+[2K[1G[⡿] Pulling schema from database...
+[2K[1G[⢿] Pulling schema from database...
+[2K[1G[⣻] Pulling schema from database...
+[2K[1G[⣽] Pulling schema from database...
+[2K[1G[⣷] Pulling schema from database...
+[2K[1G[⣯] Pulling schema from database...
+[2K[1G[⣟] Pulling schema from database...
+[2K[1G[⡿] Pulling schema from database...
+[2K[1G[⢿] Pulling schema from database...
+[2K[1G[⣻] Pulling schema from database...
+[2K[1G[⣽] Pulling schema from database...
+[2K[1G[⣷] Pulling schema from database...
+[2K[1G[⣯] Pulling schema from database...
+[2K[1G[⣟] Pulling schema from database...
+[2K[1G[⡿] Pulling schema from database...
+[2K[1G[⢿] Pulling schema from database...
+[2K[1G[✓] Pulling schema from database...
+[?25l
+Is refund_events table created or renamed from another table?
+❯ + refund_events                                 create table
+  ~ custom_form_templates › refund_events         rename table
+  ~ daily_flow_templates › refund_events          rename table
+  ~ daily_flow_schedules › refund_events          rename table
+  ~ marketplace_class_enrollments › refund_events rename table
+  ~ scheduled_payments_backup › refund_events     rename table
+  ~ daily_flow_entries › refund_events            rename table[2K[1G[?25h+ refund_events table will be created
+[?25l
+Is saved_audiences table created or renamed from another table?
+❯ + saved_audiences                                 create table
+  ~ custom_form_templates › saved_audiences         rename table
+  ~ daily_flow_templates › saved_audiences          rename table
+  ~ daily_flow_schedules › saved_audiences          rename table
+  ~ marketplace_class_enrollments › saved_audiences rename table
+  ~ scheduled_payments_backup › saved_audiences     rename table
+  ~ daily_flow_entries › saved_audiences            rename table[2K[1G[?25h+ saved_audiences table will be created
+[?25l
+Is school_applications table created or renamed from another table?
+❯ + school_applications                                 create table
+  ~ custom_form_templates › school_applications         rename table
+  ~ daily_flow_templates › school_applications          rename table
+  ~ daily_flow_schedules › school_applications          rename table
+  ~ marketplace_class_enrollments › school_applications rename table
+  ~ scheduled_payments_backup › school_applications     rename table
+  ~ daily_flow_entries › school_applications            rename table[2K[1G[?25h+ school_applications table will be created
+[?25l
+Is staff_invitations table created or renamed from another table?
+❯ + staff_invitations                                 create table
+  ~ custom_form_templates › staff_invitations         rename table
+  ~ daily_flow_templates › staff_invitations          rename table
+  ~ daily_flow_schedules › staff_invitations          rename table
+  ~ marketplace_class_enrollments › staff_invitations rename table
+  ~ scheduled_payments_backup › staff_invitations     rename table
+  ~ daily_flow_entries › staff_invitations            rename table[2K[1G[?25h+ staff_invitations table will be created
+--- all table conflicts resolved ---
+
+[?25l
+Is location_id column in programs table created or renamed from another column?
+❯ + location_id            create column
+  ~ location › location_id rename column
+  ~ status › location_id   rename column[2K[1G
+[?25h+ location_id column will be created
+[?25l
+Is age_range column in programs table created or renamed from another column?
+❯ + age_range            create column
+  ~ location › age_range rename column
+  ~ status › age_range   rename column[2K[1G
+[?25h+ age_range column will be created
+[?25l
+Is grade_levels column in programs table created or renamed from another column?
+❯ + grade_levels            create column
+  ~ location › grade_levels rename column
+  ~ status › grade_levels   rename column[2K[1G
+[?25h+ grade_levels column will be created
+[?25l
+Is start_date column in programs table created or renamed from another column?
+❯ + start_date            create column
+  ~ location › start_date rename column
+  ~ status › start_date   rename column[2K[1G
+[?25h+ start_date column will be created
+[?25l
+Is end_date column in programs table created or renamed from another column?
+❯ + end_date            create column
+  ~ location › end_date rename column
+  ~ status › end_date   rename column[2K[1G
+[?25h+ end_date column will be created
+[?25l
+Is schedule_type column in programs table created or renamed from another column?
+❯ + schedule_type            create column
+  ~ location › schedule_type rename column
+  ~ status › schedule_type   rename column[2K[1G
+[?25h+ schedule_type column will be created
+[?25l
+Is schedule_details column in programs table created or renamed from another column?
+❯ + schedule_details            create column
+  ~ location › schedule_details rename column
+  ~ status › schedule_details   rename column[2K[1G
+[?25h+ schedule_details column will be created
+[?25l
+Is location_name column in programs table created or renamed from another column?
+❯ + location_name            create column
+  ~ location › location_name rename column
+  ~ status › location_name   rename column[2K[1G
+[?25h+ location_name column will be created
+[?25l
+Is location_address column in programs table created or renamed from another column?
+❯ + location_address            create column
+  ~ location › location_address rename column
+  ~ status › location_address   rename column[2K[1G
+[?25h+ location_address column will be created
+[?25l
+Is is_virtual column in programs table created or renamed from another column?
+❯ + is_virtual            create column
+  ~ location › is_virtual rename column
+  ~ status › is_virtual   rename column[2K[1G
+[?25h+ is_virtual column will be created
+[?25l
+Is meeting_url column in programs table created or renamed from another column?
+❯ + meeting_url            create column
+  ~ location › meeting_url rename column
+  ~ status › meeting_url   rename column[2K[1G
+[?25h+ meeting_url column will be created
+[?25l
+Is curriculum_id column in programs table created or renamed from another column?
+❯ + curriculum_id            create column
+  ~ location › curriculum_id rename column
+  ~ status › curriculum_id   rename column[2K[1G
+[?25h+ curriculum_id column will be created
+[?25l
+Is cover_image column in programs table created or renamed from another column?
+❯ + cover_image            create column
+  ~ location › cover_image rename column
+  ~ status › cover_image   rename column[2K[1G
+[?25h+ cover_image column will be created
+[?25l
+Is materials column in programs table created or renamed from another column?
+❯ + materials            create column
+  ~ location › materials rename column
+  ~ status › materials   rename column[2K[1G
+[?25h+ materials column will be created
+[?25l
+Is is_published column in programs table created or renamed from another column?
+❯ + is_published            create column
+  ~ location › is_published rename column
+  ~ status › is_published   rename column[2K[1G
+[?25h+ is_published column will be created
+--- all columns conflicts in programs table resolved ---
+
+[?25l
+Is parent_email column in stripe_subscription_schedules table created or renamed from another column?
+❯ + parent_email                          create column
+  ~ enrollment_id › parent_email          rename column
+  ~ stripe_subscription_id › parent_email rename column
+  ~ stripe_customer_id › parent_email     rename column
+  ~ phases › parent_email                 rename column[2K[1G
+[?25h+ parent_email column will be created
+[?25l
+Is enrollment_ids column in stripe_subscription_schedules table created or renamed from another column?
+❯ + enrollment_ids                          create column
+  ~ enrollment_id › enrollment_ids          rename column
+  ~ stripe_subscription_id › enrollment_ids rename column
+  ~ stripe_customer_id › enrollment_ids     rename column
+  ~ phases › enrollment_ids                 rename column[2K[1G
+[?25h+ enrollment_ids column will be created
+[?25l
+Is total_amount column in stripe_subscription_schedules table created or renamed from another column?
+❯ + total_amount                          create column
+  ~ enrollment_id › total_amount          rename column
+  ~ stripe_subscription_id › total_amount rename column
+  ~ stripe_customer_id › total_amount     rename column
+  ~ phases › total_amount                 rename column[2K[1G
+[?25h+ total_amount column will be created
+[?25l
+Is payment_plan column in stripe_subscription_schedules table created or renamed from another column?
+❯ + payment_plan                          create column
+  ~ enrollment_id › payment_plan          rename column
+  ~ stripe_subscription_id › payment_plan rename column
+  ~ stripe_customer_id › payment_plan     rename column
+  ~ phases › payment_plan                 rename column[2K[1G
+[?25h+ payment_plan column will be created
+[?25l
+Is current_phase column in stripe_subscription_schedules table created or renamed from another column?
+❯ + current_phase                          create column
+  ~ enrollment_id › current_phase          rename column
+  ~ stripe_subscription_id › current_phase rename column
+  ~ stripe_customer_id › current_phase     rename column
+  ~ phases › current_phase                 rename column[2K[1G
+[?25h+ current_phase column will be created
+[?25l
+Is total_phases column in stripe_subscription_schedules table created or renamed from another column?
+❯ + total_phases                          create column
+  ~ enrollment_id › total_phases          rename column
+  ~ stripe_subscription_id › total_phases rename column
+  ~ stripe_customer_id › total_phases     rename column
+  ~ phases › total_phases                 rename column[2K[1G
+[?25h+ total_phases column will be created
+[?25l
+Is next_payment_date column in stripe_subscription_schedules table created or renamed from another column?
+❯ + next_payment_date                          create column
+  ~ enrollment_id › next_payment_date          rename column
+  ~ stripe_subscription_id › next_payment_date rename column
+  ~ stripe_customer_id › next_payment_date     rename column
+  ~ phases › next_payment_date                 rename column[2K[1G
+[?25h+ next_payment_date column will be created
+[?25l
+Is last_payment_date column in stripe_subscription_schedules table created or renamed from another column?
+❯ + last_payment_date                          create column
+  ~ enrollment_id › last_payment_date          rename column
+  ~ stripe_subscription_id › last_payment_date rename column
+  ~ stripe_customer_id › last_payment_date     rename column
+  ~ phases › last_payment_date                 rename column[2K[1G
+[?25h+ last_payment_date column will be created
+[?25l
+Is completed_date column in stripe_subscription_schedules table created or renamed from another column?
+❯ + completed_date                          create column
+  ~ enrollment_id › completed_date          rename column
+  ~ stripe_subscription_id › completed_date rename column
+  ~ stripe_customer_id › completed_date     rename column
+  ~ phases › completed_date                 rename column[2K[1G
+[?25h+ completed_date column will be created
+[?25l
+Is metadata column in stripe_subscription_schedules table created or renamed from another column?
+❯ + metadata                          create column
+  ~ enrollment_id › metadata          rename column
+  ~ stripe_subscription_id › metadata rename column
+  ~ stripe_customer_id › metadata     rename column
+  ~ phases › metadata                 rename column[2K[1G
+[?25h+ metadata column will be created
+--- all columns conflicts in stripe_subscription_schedules table resolved ---
+
+[?25l
+Is previous_objectives column in week_plan_block_history table created or renamed from another column?
+❯ + previous_objectives                      create column
+  ~ week_plan_block_id › previous_objectives rename column
+  ~ previous_content › previous_objectives   rename column
+  ~ previous_materials › previous_objectives rename column
+  ~ previous_homework › previous_objectives  rename column
+  ~ change_reason › previous_objectives      rename column
+  ~ created_at › previous_objectives         rename column[2K[1G
+[?25h+ previous_objectives column will be created
+--- all columns conflicts in week_plan_block_history table resolved ---
+
+· You're about to add classes_legacy_program_id_unique unique constraint to the table, which contains 154 items. If this statement fails, you will receive an error from the database. Do you want to truncate classes table?
+
+[?25l❯ No, add the constraint without truncating the table
+  Yes, truncate the table[2K[1G[?25h[?25h· You're about to add discounts_code_unique unique constraint to the table, which contains 6 items. If this statement fails, you will receive an error from the database. Do you want to truncate discounts table?
+
+[?25l❯ No, add the constraint without truncating the table
+  Yes, truncate the table[2K[1G[?25h[?25h· You're about to add password_reset_tokens_token_unique unique constraint to the table, which contains 1 items. If this statement fails, you will receive an error from the database. Do you want to truncate password_reset_tokens table?
+
+[?25l❯ No, add the constraint without truncating the table
+  Yes, truncate the table[2K[1G[?25h[?25h· You're about to add role_invitations_token_unique unique constraint to the table, which contains 2 items. If this statement fails, you will receive an error from the database. Do you want to truncate role_invitations table?
+
+[?25l❯ No, add the constraint without truncating the table
+  Yes, truncate the table[2K[1G[?25h[?25h· You're about to add payments_stripe_payment_intent_id_unique unique constraint to the table, which contains 46 items. If this statement fails, you will receive an error from the database. Do you want to truncate payments table?
+
+[?25l❯ No, add the constraint without truncating the table
+  Yes, truncate the table[2K[1G[?25h[?25h· You're about to add schools_registration_code_unique unique constraint to the table, which contains 219 items. If this statement fails, you will receive an error from the database. Do you want to truncate schools table?
+
+[?25l❯ No, add the constraint without truncating the table
+  Yes, truncate the table[2K[1G[?25h[?25h· You're about to add stripe_payment_history_payment_intent_id_unique unique constraint to the table, which contains 21 items. If this statement fails, you will receive an error from the database. Do you want to truncate stripe_payment_history table?
+
+[?25l❯ No, add the constraint without truncating the table
+  Yes, truncate the table[2K[1G[?25h[?25h· You're about to add stripe_payment_history_stripe_event_id_unique unique constraint to the table, which contains 21 items. If this statement fails, you will receive an error from the database. Do you want to truncate stripe_payment_history table?
+
+[?25l❯ No, add the constraint without truncating the table
+  Yes, truncate the table[2K[1G[?25h[?25h· You're about to add stripe_payment_history_idempotency_key_unique unique constraint to the table, which contains 21 items. If this statement fails, you will receive an error from the database. Do you want to truncate stripe_payment_history table?
+
+[?25l❯ No, add the constraint without truncating the table
+  Yes, truncate the table[2K[1G[?25h[?25h Warning  Found data-loss statements:
+· You're about to delete scheduled_payments_backup table with 76 items
+· You're about to change title column type from varchar(255) to text with 154 items
+· You're about to change category column type from varchar(50) to text with 154 items
+· You're about to change category_name column type from varchar(100) to text with 154 items
+· You're about to change location column type from varchar(255) to text with 154 items
+· You're about to change instructor_name column type from varchar(255) to text with 154 items
+· You're about to change status column type from varchar(50) to text with 154 items
+· You're about to change start_date column type from timestamp to date with 154 items
+· You're about to change end_date column type from timestamp to date with 154 items
+· You're about to change title column type from varchar(255) to text with 7 items
+· You're about to change subject column type from varchar(100) to text with 7 items
+· You're about to change grade_level column type from varchar(50) to text with 7 items
+· You're about to change price column type from numeric(10, 2) to integer with 7 items
+· You're about to change created_at column type from timestamp with time zone to timestamp with 7 items
+· You're about to change updated_at column type from timestamp with time zone to timestamp with 7 items
+· You're about to change title column type from varchar(255) to text with 4 items
+· You're about to change start_date column type from timestamp with time zone to timestamp with 4 items
+· You're about to change end_date column type from timestamp with time zone to timestamp with 4 items
+· You're about to change event_type column type from varchar(20) to text with 4 items
+· You're about to change created_at column type from timestamp with time zone to timestamp with 4 items
+· You're about to change title column type from varchar(255) to text with 73 items
+· You're about to change subject column type from varchar(100) to text with 73 items
+· You're about to change grade_level column type from varchar(50) to text with 73 items
+· You're about to change status column type from varchar(20) to text with 73 items
+· You're about to change created_at column type from timestamp with time zone to timestamp with 73 items
+· You're about to change updated_at column type from timestamp with time zone to timestamp with 73 items
+· You're about to change title column type from varchar(255) to text with 1 items
+· You're about to change price column type from numeric(10, 2) to integer with 1 items
+· You're about to change revenue column type from numeric(10, 2) to integer with 1 items
+· You're about to change item_type column type from varchar(20) to text with 1 items
+· You're about to change created_at column type from timestamp with time zone to timestamp with 1 items
+· You're about to change start_date column type from date to timestamp with 19 items
+· You're about to change end_date column type from date to timestamp with 19 items
+· You're about to change used_at column type from boolean to timestamp with 2 items
+· You're about to change username column type from varchar(50) to text with 452 items
+· You're about to change password column type from varchar(255) to text with 452 items
+· You're about to change name column type from varchar(100) to text with 452 items
+· You're about to change email column type from varchar(100) to text with 452 items
+· You're about to change role column type from varchar(20) to role with 452 items
+· You're about to change subscription column type from varchar(20) to text with 452 items
+· You're about to change created_at column type from timestamp with time zone to timestamp with 452 items
+· You're about to change supabase_id column type from varchar(255) to text with 452 items
+· You're about to delete subject column in skeleton_blocks table with 37 items
+· You're about to delete emergency_contact_email column in users table with 452 items
+· You're about to delete custom_title column in week_plan_blocks table with 4 items
+· You're about to delete custom_description column in week_plan_blocks table with 4 items
+· You're about to delete content column in week_plan_blocks table with 4 items
+· You're about to delete materials column in week_plan_blocks table with 4 items
+· You're about to delete homework column in week_plan_blocks table with 4 items
+· You're about to delete ai_generated column in week_plan_blocks table with 4 items
+· You're about to delete ai_prompt column in week_plan_blocks table with 4 items
+· You're about to delete resources column in week_plan_blocks table with 4 items
+· You're about to delete start_date column in week_plans table with 3 items
+· You're about to delete end_date column in week_plans table with 3 items
+· You're about to delete theme column in week_plans table with 3 items
+· You're about to delete published_at column in week_plans table with 3 items
+· You're about to delete class_id column in weekly_skeletons table with 1 items
+· You're about to delete title column in weekly_skeletons table with 1 items
+· You're about to delete status column in weekly_skeletons table with 1 items
+
+THIS ACTION WILL CAUSE DATA LOSS AND CANNOT BE REVERTED
+
+Do you still want to push changes?
+[?25l❯ No, abort
+  Yes, I want to remove 1 table, remove 17 columns, truncate 8 tables [2K[1G[?25h[?25h[x] All changes were aborted

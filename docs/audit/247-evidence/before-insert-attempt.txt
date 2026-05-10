@@ -1,0 +1,3 @@
+ERROR:  column "membership_enrollment_id" of relation "payment_allocations" does not exist
+LINE 1: ...t_allocations (payment_history_id, enrollment_id, membership...
+                                                             ^

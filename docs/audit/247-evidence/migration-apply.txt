@@ -1,0 +1,5 @@
+BEGIN
+psql:server/migrations/247-add-payment-allocations-membership-enrollment-id.sql:25: NOTICE:  column "membership_enrollment_id" of relation "payment_allocations" already exists, skipping
+ALTER TABLE
+DO
+COMMIT

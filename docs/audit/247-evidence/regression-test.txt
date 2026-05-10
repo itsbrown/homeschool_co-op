@@ -1,0 +1,64 @@
+=== Anchors ===
+ membership_id | payment_history_id 
+---------------+--------------------
+            17 |                  3
+(1 row)
+
+
+=== Test 1: Insert with valid membership_enrollment_id (rolled back) ===
+Note: enrollment_id is currently NOT NULL with FK to school_class_enrollments (empty in dev — pre-existing #246 issue).
+To exercise the new column without coupling to that legacy FK, we drop those constraints inside the rolled-back txn.
+BEGIN
+ALTER TABLE
+ALTER TABLE
+ id | payment_history_id | enrollment_id | membership_enrollment_id | allocated_amount_cents | allocation_type 
+----+--------------------+---------------+--------------------------+------------------------+-----------------
+  1 |                  3 |               |                       17 |                   1234 | membership
+(1 row)
+
+INSERT 0 1
+
+=== Test 2: JOIN back through new column ===
+ allocation_id | allocated_amount_cents | membership_enrollment_id | parent_user_id | school_id 
+---------------+------------------------+--------------------------+----------------+-----------
+             1 |                   1234 |                       17 |             10 |         1
+(1 row)
+
+ROLLBACK
+
+=== Test 3: Invalid membership_enrollment_id rejected by FK ===
+BEGIN
+ALTER TABLE
+ALTER TABLE
+ERROR:  insert or update on table "payment_allocations" violates foreign key constraint "payment_allocations_membership_enrollment_id_fkey"
+DETAIL:  Key (membership_enrollment_id)=(999999999) is not present in table "membership_enrollments".
+ROLLBACK
+
+=== Final state: schema unchanged outside rollback, no rows persisted ===
+ payment_allocations_total 
+---------------------------
+                         0
+(1 row)
+
+                                               Table "public.payment_allocations"
+          Column          |            Type             | Collation | Nullable |                     Default                     
+--------------------------+-----------------------------+-----------+----------+-------------------------------------------------
+ id                       | integer                     |           | not null | nextval('payment_allocations_id_seq'::regclass)
+ payment_history_id       | integer                     |           | not null | 
+ enrollment_id            | integer                     |           | not null | 
+ allocated_amount_cents   | integer                     |           | not null | 
+ allocation_type          | text                        |           | not null | 'payment'::text
+ source_allocation_id     | integer                     |           |          | 
+ admin_comment            | text                        |           |          | 
+ metadata                 | jsonb                       |           |          | 
+ created_at               | timestamp without time zone |           | not null | now()
+ membership_enrollment_id | integer                     |           |          | 
+Indexes:
+    "payment_allocations_pkey" PRIMARY KEY, btree (id)
+    "idx_payment_allocations_enrollment_id" btree (enrollment_id)
+    "idx_payment_allocations_payment_history_id" btree (payment_history_id)
+Foreign-key constraints:
+    "payment_allocations_enrollment_id_fkey" FOREIGN KEY (enrollment_id) REFERENCES school_class_enrollments(id) ON DELETE CASCADE
+    "payment_allocations_membership_enrollment_id_fkey" FOREIGN KEY (membership_enrollment_id) REFERENCES membership_enrollments(id) ON DELETE CASCADE
+    "payment_allocations_payment_history_id_fkey" FOREIGN KEY (payment_history_id) REFERENCES stripe_payment_history(id) ON DELETE CASCADE
+
