@@ -1,5 +1,6 @@
 import { describe, expect, it } from "@jest/globals";
 import {
+  AUTOPAY_METRIC_NOTIFICATIONS_TOTAL,
   AUTOPAY_PROCESSING_STUCK_MINUTES,
   classifyRetryExhaustedBatchSeverity,
 } from "../services/autopay-observability";
@@ -32,5 +33,9 @@ describe("P1-B autopay epic contract (smoke)", () => {
   it("exports autopay-observability threshold and classifier", () => {
     expect(typeof AUTOPAY_PROCESSING_STUCK_MINUTES).toBe("number");
     expect(typeof classifyRetryExhaustedBatchSeverity).toBe("function");
+  });
+
+  it("exports notification metric name for dashboards", () => {
+    expect(AUTOPAY_METRIC_NOTIFICATIONS_TOTAL).toBe("autopay_notifications_total");
   });
 });

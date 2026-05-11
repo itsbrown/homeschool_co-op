@@ -53,13 +53,20 @@
 
 ### P1-B-06 — Pre-charge notifications (~policy window before charge)
 
-- **Intent:** In-app + email before an AutoPay charge in a defined window (e.g. ~20h).
-- **This tree:** Scheduled **payment reminders** (due-date buckets) and `sendScheduledPaymentReminder` in `server/services/scheduled-payment-reminders.ts` — **6h job cadence**, not a dedicated “T-minus 20h AutoPay” artifact. See **Residual gaps**.
+- **Done criterion:** In-app + email heads-up inside **20 hours** before the scheduled due time, **replay-safe** (dedupe via persisted notification content marker).
+- **Code locations:**
+  - `server/services/autopay-notifications.ts` — `AUTOPAY_PRECHARGE_WINDOW_HOURS`, `maybeEmitPreChargeNotification`, dedupe marker `AUTOPAY_DEDUPE:pre_charge:…`.
+  - `server/services/scheduled-payment-reminders.ts` — `processAutoPayExecutionPath` calls `maybeEmitPreChargeNotification` for each due candidate with parent context (after policy pass, before marking `process`).
+  - `server/tests/autopay-notifications.test.ts` — window + dedupe unit tests.
+- **Operational note:** Scheduler cadence is still **6h**; parents may receive the pre-charge notice on the first tick that falls inside the 20h window (not wall-clock exact minute).
 
 ### P1-B-07 — Credit-covered AutoPay skip notification
 
-- **Intent:** Notify when AutoPay skips because credits cover the obligation.
-- **This tree:** No dedicated `credit-covered` notification strings located under `server/services/` in a quick search — **may be absent or named differently**; treat as **follow-up** unless confirmed elsewhere.
+- **Done criterion:** When a due installment exists but **enrollment `remainingBalance` is already 0**, skip charging, cancel the scheduled row (same status path as other terminal skips), and notify the parent once (dedupe).
+- **Code locations:**
+  - `server/services/autopay-notifications.ts` — `maybeEmitCreditCoveredSkipNotification`.
+  - `server/services/scheduled-payment-reminders.ts` — balance check + `reason: 'credit_covered'` on `AutoPayExecutionResult`.
+  - `server/tests/integration/phase2/autopay-runtime-policy.test.ts` — credit-covered path integration test.
 
 ### P1-B-08 — Operational metrics and alerts
 
@@ -73,7 +80,7 @@
 
 ## Residual gaps
 
-- **B-06 timing:** Reminders follow the **6-hour** (and startup) job schedule; not wall-clock “exactly 20h before charge.”
-- **B-07:** Dedicated credit-covered skip notification path **not verified** in this snapshot — confirm product requirement vs implementation branch.
-- **B-08 live emission:** Metric helpers/tests exist; **external sink wiring** (Prometheus/Datadog) may still be required for production dashboards.
+- **B-06 timing precision:** Pre-charge uses a **20h window** but delivery is tied to the **scheduler tick** (e.g. 6h); not “exactly T−20h” wall clock.
+- **B-07 semantics:** “Credit-covered” is approximated as **`remainingBalance <= 0`** on the primary enrollment row; true credit-ledger coverage (P1-C) may refine this later.
+- **B-08 live emission:** Structured log line `[autopay_notifications_total]` carries label map; wire to Prometheus/Datadog in ops layer if needed.
 - **B-04/B-05 integration:** `decideAutoPayAttemptStart` **may not** be invoked from production AutoPay charge entrypoints in this repo snapshot — confirm `processAutoPayExecutionPath` / Stripe charge wiring uses lifecycle helpers end-to-end.

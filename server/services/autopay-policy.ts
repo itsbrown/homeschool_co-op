@@ -25,6 +25,13 @@ export interface AutoPayCandidateLike {
   scheduledDate?: Date | string | null;
   retryCount?: number | null;
   status?: string | null;
+  /** Present when loaded from `scheduled_payments` for AutoPay execution + notifications */
+  enrollmentId?: number | null;
+  parentId?: number | null;
+  parentEmail?: string | null;
+  amount?: number | null;
+  installmentNumber?: number | null;
+  totalInstallments?: number | null;
 }
 
 export interface DueAutoPayRepository<T extends AutoPayCandidateLike> {

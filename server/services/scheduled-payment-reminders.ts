@@ -31,6 +31,10 @@ import {
   type AutoPayReconciliationResult,
   type ProcessingScheduledPaymentLike,
 } from './autopay-reconciliation';
+import {
+  maybeEmitCreditCoveredSkipNotification,
+  maybeEmitPreChargeNotification,
+} from "./autopay-notifications";
 
 export interface ReminderResult {
   scheduledPaymentId: number;
@@ -44,7 +48,7 @@ export interface ReminderResult {
 export interface AutoPayExecutionResult {
   scheduledPaymentId: number;
   action: 'process' | 'skip';
-  reason?: 'retry_cap_reached' | 'stale_attempt';
+  reason?: 'retry_cap_reached' | 'stale_attempt' | 'credit_covered';
 }
 
 let reminderInterval: ReturnType<typeof setInterval> | null = null;
@@ -326,6 +330,12 @@ async function queryDueScheduledPayments(criteria: DueAutoPayQueryCriteria): Pro
       scheduledDate: scheduledPayments.scheduledDate,
       retryCount: scheduledPayments.retryCount,
       status: scheduledPayments.status,
+      enrollmentId: scheduledPayments.enrollmentId,
+      parentId: scheduledPayments.parentId,
+      parentEmail: scheduledPayments.parentEmail,
+      amount: scheduledPayments.amount,
+      installmentNumber: scheduledPayments.installmentNumber,
+      totalInstallments: scheduledPayments.totalInstallments,
     })
     .from(scheduledPayments)
     .where(
@@ -362,6 +372,75 @@ export async function processAutoPayExecutionPath(now: Date = new Date()): Promi
         reason: decision.reason,
       });
       continue;
+    }
+
+    const enrollmentId = candidate.enrollmentId ?? undefined;
+    const parentId = candidate.parentId ?? undefined;
+    const parentEmail = candidate.parentEmail ?? undefined;
+    const amountCents = candidate.amount ?? undefined;
+
+    if (
+      enrollmentId != null &&
+      parentId != null &&
+      parentEmail &&
+      amountCents != null &&
+      amountCents > 0
+    ) {
+      const enrollment = await storage.getProgramEnrollmentById(enrollmentId);
+      const remaining = enrollment?.remainingBalance != null ? Number(enrollment.remainingBalance) : null;
+      if (remaining != null && Number.isFinite(remaining) && remaining <= 0) {
+        const dueAt = new Date(candidate.scheduledDate ?? candidate.dueDate ?? now);
+        await maybeEmitCreditCoveredSkipNotification({
+          scheduledPaymentId: candidate.id,
+          parentId,
+          parentEmail,
+          amountCents,
+          dueAt,
+          now,
+        });
+        await storage.updateScheduledPaymentStatus(candidate.id, 'cancelled');
+        results.push({
+          scheduledPaymentId: candidate.id,
+          action: 'skip',
+          reason: 'credit_covered',
+        });
+        continue;
+      }
+    }
+
+    if (
+      parentId != null &&
+      parentEmail &&
+      amountCents != null &&
+      candidate.scheduledDate
+    ) {
+      const dueAt = new Date(candidate.scheduledDate);
+      let childName: string | undefined;
+      let className: string | undefined;
+      let schoolName: string | undefined;
+      if (enrollmentId != null) {
+        const labels = await resolvePaymentLabelsForEnrollment(enrollmentId);
+        childName = labels.childName;
+        className = labels.className;
+        const enr = await storage.getProgramEnrollmentById(enrollmentId);
+        if (enr?.schoolId) {
+          const school = await storage.getSchool(enr.schoolId);
+          schoolName = school?.name ?? undefined;
+        }
+      }
+      await maybeEmitPreChargeNotification({
+        scheduledPaymentId: candidate.id,
+        parentId,
+        parentEmail,
+        amountCents,
+        dueAt,
+        childName,
+        className,
+        schoolName,
+        installmentNumber: candidate.installmentNumber ?? undefined,
+        totalInstallments: candidate.totalInstallments ?? undefined,
+        now,
+      });
     }
 
     // Runtime processing path can proceed to actual charge execution.

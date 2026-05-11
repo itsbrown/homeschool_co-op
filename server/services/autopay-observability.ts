@@ -5,7 +5,7 @@ import { AUTOPAY_MAX_RETRY_ATTEMPTS } from "./autopay-policy";
  * Operator reference (dashboards / alerts)
  * ----------------------------------------
  * Counters (stable names): AUTOPAY_METRIC_* exports — `autopay_policy_skips_total`,
- * `autopay_lifecycle_decisions_total`, `autopay_reconciliation_actions_total`.
+ * `autopay_lifecycle_decisions_total`, `autopay_reconciliation_actions_total`, `autopay_notifications_total`.
  *
  * Label keys: LABEL_AUTOPAY_* — subsystem, outcome, terminal_reason, reconcile_action, stripe_truth.
  * Builders: buildAutoPayPolicySkipLabels, buildAutoPayLifecycleLabels, buildAutoPayReconciliationLabels;
@@ -138,6 +138,8 @@ export const AUTOPAY_METRIC_LIFECYCLE_DECISIONS_TOTAL = "autopay_lifecycle_decis
 
 export const AUTOPAY_METRIC_RECONCILIATION_ACTIONS_TOTAL = "autopay_reconciliation_actions_total";
 
+export const AUTOPAY_METRIC_NOTIFICATIONS_TOTAL = "autopay_notifications_total";
+
 // --- Label keys (stable; values must remain bounded / non-identifying) ---
 
 export const LABEL_AUTOPAY_SUBSYSTEM = "autopay_subsystem";
@@ -150,7 +152,11 @@ export const LABEL_AUTOPAY_RECONCILE_ACTION = "reconcile_action";
 
 export const LABEL_AUTOPAY_STRIPE_TRUTH = "stripe_truth";
 
-export type AutoPayMetricSubsystem = "policy" | "lifecycle" | "reconciliation";
+export const LABEL_AUTOPAY_NOTIFICATION_KIND = "notification_kind";
+
+export const LABEL_AUTOPAY_NOTIFICATION_OUTCOME = "notification_outcome";
+
+export type AutoPayMetricSubsystem = "policy" | "lifecycle" | "reconciliation" | "notifications";
 
 export function buildAutoPayPolicySkipLabels(reason: AutoPayTerminalReason): Record<string, string> {
   return {
@@ -198,6 +204,17 @@ export function buildAutoPayReconciliationLabels(
     labels[LABEL_AUTOPAY_STRIPE_TRUTH] = stripeTruth;
   }
   return labels;
+}
+
+export function buildAutoPayNotificationLabels(
+  kind: "pre_charge" | "credit_covered_skip",
+  outcome: "sent" | "duplicate" | "skipped",
+): Record<string, string> {
+  return {
+    [LABEL_AUTOPAY_SUBSYSTEM]: "notifications",
+    [LABEL_AUTOPAY_NOTIFICATION_KIND]: kind,
+    [LABEL_AUTOPAY_NOTIFICATION_OUTCOME]: outcome,
+  };
 }
 
 /**
