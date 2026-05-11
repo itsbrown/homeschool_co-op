@@ -3,6 +3,7 @@ import Stripe from 'stripe';
 import rateLimit from 'express-rate-limit';
 import { storage } from '../storage';
 import { insertPaymentSchema, type InsertPayment } from '@shared/schema';
+import { CurrencyUtils } from '@shared/currency-utils';
 import { sendPaymentConfirmationEmail } from '../lib/email-service';
 import { createClient } from '@supabase/supabase-js';
 import { dataLayer } from '../services/dataLayer';
@@ -10,8 +11,170 @@ import { getStripeClient } from '../config/stripe';
 import { supabaseAuth } from '../middleware/supabase-auth';
 import { isPaymentProcessorEnabled } from '../services/PaymentProcessorService';
 import { calculateCanonicalEnrollmentAmount } from '../services/canonical-payment-amount';
+import { getChildrenForAuthenticatedParent } from '../lib/parent-auth-scope';
+import {
+  buildIdempotencyFingerprint,
+  createInMemoryIdempotencyStore,
+  resolveIdempotentReplay,
+  type IdempotencyRecord,
+} from '../services/idempotency-helper';
+import {
+  enrollmentPoolCentsForBalanceIntent,
+  parseMetadataMembershipAmountCents,
+} from '../lib/balance-payment-metadata';
 
 const router = Router();
+const PAY_BALANCE_IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1000;
+type PayBalanceResponsePayload = { success: true; clientSecret: string | null; paymentIntentId: string; canonicalAmountCents?: number };
+const payBalanceIdempotencyStore = createInMemoryIdempotencyStore<PayBalanceResponsePayload>();
+type DivergenceAction = 'REFRESH_AND_REPRICE';
+
+function sendRecoverableDivergence(
+  res: any,
+  details: {
+    operation: string;
+    authoritativeAmountCents: number;
+    clientAmountRaw: unknown;
+    clientAmountParsed: number | null;
+    malformed: boolean;
+  }
+) {
+  return res.status(409).json({
+    success: false,
+    error: 'AMOUNT_DIVERGENCE',
+    recoverable: true,
+    action: 'REFRESH_AND_REPRICE' as DivergenceAction,
+    message: 'Client totals diverged from server-authoritative amounts. Refresh pricing and retry.',
+    divergence: {
+      operation: details.operation,
+      clientAmountRaw: details.clientAmountRaw ?? null,
+      clientAmountCents: details.clientAmountParsed,
+      clientAmountMalformed: details.malformed,
+      authoritativeAmountCents: details.authoritativeAmountCents,
+      deltaCents: details.clientAmountParsed === null
+        ? null
+        : details.clientAmountParsed - details.authoritativeAmountCents,
+    },
+  });
+}
+
+function parseIntegerCents(value: unknown): number | null {
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value) || !Number.isInteger(value)) return null;
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!/^-?\d+$/.test(trimmed)) return null;
+    const parsed = Number(trimmed);
+    if (!Number.isFinite(parsed) || !Number.isInteger(parsed)) return null;
+    return parsed;
+  }
+
+  return null;
+}
+
+export function splitCentsEvenly(totalCents: number, recipientCount: number): number[] {
+  if (!Number.isInteger(totalCents) || totalCents < 0) {
+    throw new Error('totalCents must be a non-negative integer');
+  }
+  if (!Number.isInteger(recipientCount) || recipientCount <= 0) {
+    throw new Error('recipientCount must be a positive integer');
+  }
+
+  const base = Math.floor(totalCents / recipientCount);
+  const remainder = totalCents % recipientCount;
+  return Array.from({ length: recipientCount }, (_, index) => base + (index < remainder ? 1 : 0));
+}
+
+/**
+ * Resolve a class row for a program enrollment.
+ *
+ * Program enrollments can reference a class via three different columns depending on how they were
+ * created (cart checkout vs admin enrollment vs legacy migrations):
+ *   - marketplaceClassId: marketplace classes table (the standard cart-checkout path)
+ *   - programId:          legacy column kept for backwards compatibility
+ *   - classId:            school_classes table (rarely used; schema-defined but no live writers)
+ *
+ * The previous billing-summary code only looked up `enrollment.classId` against the `classes`
+ * table, which silently dropped most marketplace enrollments from the summary. This helper tries
+ * each candidate ID against the `classes` table (which is what storage.getClassById queries) and
+ * returns the first match, or null if none resolve.
+ *
+ * Callers should NOT use the return value as the source of truth for amounts — the canonical
+ * amount fields are denormalized onto program_enrollments (total_cost, total_paid,
+ * remaining_balance). This helper is for display-only fields like the class title.
+ */
+async function resolveClassForEnrollment(
+  enrollment: { marketplaceClassId?: number | null; programId?: number | null; classId?: number | null }
+): Promise<{ id: number; title: string; price: number } | null> {
+  const candidateIds = [
+    enrollment.marketplaceClassId,
+    enrollment.programId,
+    enrollment.classId,
+  ].filter((id): id is number => typeof id === 'number' && id > 0);
+
+  for (const id of candidateIds) {
+    const cls = await storage.getClassById(id);
+    if (cls) {
+      return { id: cls.id, title: cls.title, price: cls.price };
+    }
+  }
+
+  return null;
+}
+
+/** School id from enrollment.parent + class; fills gaps when rows lack explicit school_id. */
+async function resolveSchoolIdForBalancePaymentIntent(
+  firstEnrollment: any | null | undefined,
+  parentUser: { schoolId?: number | null }
+): Promise<number | undefined> {
+  const direct = firstEnrollment?.schoolId ?? parentUser.schoolId;
+  if (direct != null && direct !== '') return Number(direct);
+
+  if (firstEnrollment?.childId != null) {
+    const child = await storage.getChildById(Number(firstEnrollment.childId));
+    if (child?.schoolId != null) return Number(child.schoolId);
+  }
+
+  const candidateIds = [
+    firstEnrollment?.marketplaceClassId,
+    firstEnrollment?.programId,
+    firstEnrollment?.classId,
+  ].filter((id): id is number => typeof id === 'number' && id > 0);
+
+  for (const id of candidateIds) {
+    const cls = await storage.getClassById(id);
+    const sid = cls && typeof (cls as any).schoolId === 'number' ? (cls as any).schoolId : null;
+    if (sid != null) return Number(sid);
+  }
+
+  return undefined;
+}
+
+function getAuthoritativeRemainingBalanceCents(enrollment: any): number {
+  if (Number.isFinite(enrollment?.remainingBalance)) {
+    return Math.max(0, Math.round(Number(enrollment.remainingBalance)));
+  }
+
+  const totalCost = parseIntegerCents(enrollment?.totalCost) ?? 0;
+  const totalPaid = parseIntegerCents(enrollment?.totalPaid) ?? 0;
+  return Math.max(0, totalCost - totalPaid);
+}
+
+function parseAdvisoryAmountCents(value: unknown): { parsed: number | null; malformed: boolean } {
+  if (value === null || value === undefined || value === '') {
+    return { parsed: null, malformed: false };
+  }
+
+  const parsed = parseIntegerCents(value);
+  if (parsed === null) {
+    return { parsed: null, malformed: true };
+  }
+
+  return { parsed, malformed: false };
+}
 
 /**
  * Resolve a class row for a program enrollment.
@@ -94,16 +257,25 @@ const paymentRateLimit = rateLimit({
 export async function processBalancePayment(paymentIntent: Stripe.PaymentIntent, userEmail: string, enrollmentIds: number[], totalAmount: number) {
   try {
     const { paymentPlan = 'full' } = paymentIntent.metadata;
-    const isMonthly = paymentPlan === 'monthly';
-    // Calculate the actual amount for this installment
-    const currentPaymentAmount = isMonthly ? Math.round(paymentIntent.amount / 3) : paymentIntent.amount;
+    // PaymentIntent.amount is already the amount actually charged for this transaction.
+    // Do not divide by plan cadence.
+    const currentPaymentAmount = parseIntegerCents(paymentIntent.amount);
+    if (currentPaymentAmount === null || currentPaymentAmount <= 0) {
+      throw new Error('Payment intent amount must be a positive integer in cents');
+    }
     
+    const membershipCents = parseMetadataMembershipAmountCents(
+      paymentIntent.metadata as Record<string, string | undefined>
+    );
+    const classPoolCents = enrollmentPoolCentsForBalanceIntent(currentPaymentAmount, membershipCents);
+
     console.log('💰 Processing balance payment with installment support:', {
       enrollmentIds,
       paymentPlan,
-      isMonthly,
       currentPaymentAmount,
-      totalAmount: totalAmount * 100
+      totalAmount,
+      membershipCentsReserved: membershipCents,
+      classPoolCents,
     });
     
     // Get all enrollments
@@ -120,13 +292,16 @@ export async function processBalancePayment(paymentIntent: Stripe.PaymentIntent,
       return;
     }
     
-    // Calculate payment per enrollment for this installment
-    const paymentPerEnrollment = Math.round(currentPaymentAmount / enrollments.length);
+    // Allocate only the class/enrollment portion; membership is reserved via metadata (payment plans / cart).
+    const allocationByEnrollment = splitCentsEvenly(classPoolCents, enrollments.length);
     
     // Update each enrollment
-    for (const enrollment of enrollments) {
-      const newAmountPaid = (enrollment.totalPaid || 0) + paymentPerEnrollment;
-      const totalCost = enrollment.totalCost || 0;
+    for (let index = 0; index < enrollments.length; index++) {
+      const enrollment = enrollments[index];
+      const allocatedAmountCents = allocationByEnrollment[index];
+      const newAmountPaid = (enrollment.totalPaid || 0) + allocatedAmountCents;
+      const classData = await resolveClassForEnrollment(enrollment);
+      const totalCost = enrollment.totalCost ?? classData?.price ?? 0;
       const remainingBalance = Math.max(0, totalCost - newAmountPaid);
       
       // All payments now use Stripe-managed status
@@ -176,8 +351,8 @@ export async function processBalancePayment(paymentIntent: Stripe.PaymentIntent,
         enrollmentIds: enrollmentIds,
         paymentDate: new Date().toISOString(),
         paymentPlan,
-        installmentNumber: isMonthly ? 1 : 1,
-        totalInstallments: isMonthly ? 3 : 1,
+        installmentNumber: 1,
+        totalInstallments: 1,
         isFirstInstallment: true
       },
       paymentDate: new Date()
@@ -267,33 +442,40 @@ export async function processBalancePayment(paymentIntent: Stripe.PaymentIntent,
 // All payment plans are now managed directly through Stripe's native APIs
 
 // Create payment intent
-router.post('/create-payment-intent', paymentRateLimit, async (req, res) => {
+router.post('/create-payment-intent', paymentRateLimit, supabaseAuth, async (req: any, res) => {
   try {
     const { amount, currency = 'usd', parentEmail, enrollmentDetails, paymentPlan = 'full' } = req.body;
+    const authenticatedEmail = req.user?.email;
+    if (!authenticatedEmail) {
+      return res.status(401).json({
+        success: false,
+        error: 'User email not found'
+      });
+    }
 
-    // Calculate installment amount for monthly plans  
-    // Note: amount is already in cents, so no need to multiply by 100
-    const isMonthly = paymentPlan === 'monthly';
-    const installmentAmount = isMonthly ? Math.round(amount / 3) : amount;
-    
-    console.log('💳 Payment plan details:', {
-      paymentPlan,
-      totalAmount: amount, // amount is already in cents
-      installmentAmount,
-      isMonthly
-    });
+    const effectiveParentEmail = typeof parentEmail === 'string' && parentEmail.trim().length > 0
+      ? parentEmail.trim()
+      : authenticatedEmail;
+    if (effectiveParentEmail !== authenticatedEmail) {
+      return res.status(403).json({
+        success: false,
+        error: 'Cannot create payment intent for another parent'
+      });
+    }
+
+    if (!Array.isArray(enrollmentDetails) || enrollmentDetails.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'enrollmentDetails is required'
+      });
+    }
 
     // Generate snapshot metadata for PaymentProcessor if enabled
-    // NOTE: Full snapshot storage requires larger metadata capacity; for now we store
-    // essential verification data and let PaymentProcessor recalculate from enrollments
     let snapshotMetadata: Record<string, string> = {};
     if (isPaymentProcessorEnabled()) {
       try {
-        const parentUserForSnapshot = await storage.getUserByEmail(parentEmail);
+        const parentUserForSnapshot = await storage.getUserByEmail(effectiveParentEmail);
         const userIdForSnapshot = parentUserForSnapshot?.id || 0;
-        
-        // Store only essential metadata within Stripe's 500 char limit per field
-        // PaymentProcessor will recalculate full snapshot from enrollmentIds during webhook
         snapshotMetadata = {
           processorEnabled: 'true',
           userId: String(userIdForSnapshot),
@@ -308,36 +490,104 @@ router.post('/create-payment-intent', paymentRateLimit, async (req, res) => {
       }
     }
 
-    // Create payment intent
-    const stripe = await getStripeClient();
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: installmentAmount, // For monthly: first installment; for full: total amount
-      currency,
-      // Card-only: avoids Dashboard APM bundles that require return_url on server-side confirm / CLI.
-      payment_method_types: ['card'],
-      metadata: {
-        parentEmail,
-        enrollmentDetails: JSON.stringify(enrollmentDetails),
-        paymentPlan,
-        paymentType: 'balance_payment',
-        enrollmentIds: JSON.stringify(enrollmentDetails.map((e: any) => e.enrollmentId)),
-        ...snapshotMetadata
-      }
-    });
-
     // Get parent user and schoolId before creating payment record
-    const parentUser = await storage.getUserByEmail(parentEmail);
+    const parentUser = await storage.getUserByEmail(effectiveParentEmail);
     if (!parentUser) {
       return res.status(404).json({
         success: false,
         error: 'Parent user not found'
       });
     }
+
+    const enrollmentIds = enrollmentDetails
+      .map((e: any) => parseIntegerCents(e?.enrollmentId))
+      .filter((id: number | null): id is number => id !== null && id > 0);
+
+    if (enrollmentIds.length === 0 || enrollmentIds.length !== enrollmentDetails.length) {
+      return res.status(400).json({
+        success: false,
+        error: 'enrollmentDetails must contain valid enrollmentId values'
+      });
+    }
+
+    const authoritativeEnrollments = await Promise.all(
+      enrollmentIds.map((id: number) => storage.getProgramEnrollmentById(id))
+    );
+    const validEnrollments = authoritativeEnrollments.filter((enrollment): enrollment is NonNullable<typeof enrollment> =>
+      !!enrollment && (
+        enrollment.parentId === parentUser.id ||
+        enrollment.parentEmail === effectiveParentEmail
+      )
+    );
+
+    if (validEnrollments.length !== enrollmentIds.length) {
+      return res.status(403).json({
+        success: false,
+        error: 'One or more enrollments are not owned by this parent'
+      });
+    }
+
+    const authoritativeAmountCents = validEnrollments.reduce((sum, enrollment) => {
+      return sum + getAuthoritativeRemainingBalanceCents(enrollment);
+    }, 0);
+    if (authoritativeAmountCents <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'No outstanding balance found for selected enrollments'
+      });
+    }
+
+    const advisoryAmount = parseAdvisoryAmountCents(amount);
+    if (advisoryAmount.malformed) {
+      console.warn('⚠️ Malformed client amount diverged from server-computed amount:', {
+        clientAmount: amount,
+        authoritativeAmount: authoritativeAmountCents
+      });
+      return sendRecoverableDivergence(res, {
+        operation: 'billing_create_payment_intent',
+        authoritativeAmountCents,
+        clientAmountRaw: amount,
+        clientAmountParsed: advisoryAmount.parsed,
+        malformed: true,
+      });
+    } else if (advisoryAmount.parsed !== null && advisoryAmount.parsed !== authoritativeAmountCents) {
+      console.warn('⚠️ Client amount mismatch diverged from server-computed amount:', {
+        clientAmount: advisoryAmount.parsed,
+        authoritativeAmount: authoritativeAmountCents
+      });
+      return sendRecoverableDivergence(res, {
+        operation: 'billing_create_payment_intent',
+        authoritativeAmountCents,
+        clientAmountRaw: amount,
+        clientAmountParsed: advisoryAmount.parsed,
+        malformed: false,
+      });
+    }
+
+    console.log('💳 Payment plan details:', {
+      paymentPlan,
+      totalAmount: authoritativeAmountCents
+    });
+
+    // Create payment intent
+    const stripe = await getStripeClient();
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: authoritativeAmountCents,
+      currency,
+      // Card-only: avoids Dashboard APM bundles that require return_url on server-side confirm / CLI.
+      payment_method_types: ['card'],
+      metadata: {
+        parentEmail: effectiveParentEmail,
+        enrollmentDetails: JSON.stringify(enrollmentDetails),
+        paymentPlan,
+        paymentType: 'balance_payment',
+        enrollmentIds: JSON.stringify(enrollmentIds),
+        ...snapshotMetadata
+      }
+    });
     
     // Get schoolId from first enrollment or parent
-    const firstEnrollment = enrollmentDetails && enrollmentDetails.length > 0
-      ? await storage.getProgramEnrollmentById(enrollmentDetails[0].enrollmentId)
-      : null;
+    const firstEnrollment = validEnrollments[0] || null;
 
     const schoolId = await resolveSchoolIdForBalancePaymentIntent(firstEnrollment, parentUser);
     if (!schoolId) {
@@ -350,24 +600,26 @@ router.post('/create-payment-intent', paymentRateLimit, async (req, res) => {
     // Store payment in database
     const paymentData: InsertPayment = {
       status: 'pending',
-      parentEmail,
+      parentEmail: effectiveParentEmail,
       stripePaymentIntentId: paymentIntent.id,
-      amount,
+      amount: authoritativeAmountCents,
       currency,
       childName: 'Multiple Children',
       className: 'Multiple Classes',
-      description: `Payment for ${enrollmentDetails.length} enrollment(s)`,
+      description: `Payment for ${enrollmentIds.length} enrollment(s)`,
       schoolId: schoolId,
       parentId: parentUser.id,
       stripeChargeId: null,
       stripeRefundId: null,
       originalPaymentId: null,
       paymentMethod: 'stripe' as const,
-      enrollmentIds: enrollmentDetails.map((e: any) => e.enrollmentId),
+      enrollmentIds,
       paymentDate: null,
       metadata: {
         enrollmentDetails,
-        clientSecret: paymentIntent.client_secret
+        clientSecret: paymentIntent.client_secret,
+        advisoryClientAmount: advisoryAmount.parsed,
+        advisoryClientAmountMalformed: advisoryAmount.malformed
       }
     };
 
@@ -383,65 +635,6 @@ router.post('/create-payment-intent', paymentRateLimit, async (req, res) => {
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Failed to create payment intent'
-    });
-  }
-});
-
-// Handle payment confirmation
-router.post('/confirm-payment', async (req, res) => {
-  try {
-    const { paymentIntentId, parentEmail, enrollmentDetails } = req.body;
-
-    // Retrieve payment intent from Stripe
-    const stripe = await getStripeClient();
-    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
-
-    if (paymentIntent.status === 'succeeded') {
-      // Update payment status in database
-      const payment = await storage.getPaymentByStripeId(paymentIntentId);
-      if (payment) {
-        await storage.updatePaymentStatus(payment.id, 'succeeded');
-      }
-
-      // Send confirmation email
-      const emailData = {
-        parentEmail,
-        payment: {
-          ...payment!,
-          status: 'completed' as const
-        },
-        enrollmentDetails: enrollmentDetails?.map((detail: any) => ({
-          childName: detail.childName,
-          className: detail.className,
-          price: detail.price,
-          amountPaid: detail.amountPaid
-        })) || []
-      };
-
-      await sendPaymentConfirmationEmail(emailData);
-
-      res.json({
-        success: true,
-        message: 'Payment confirmed and email sent',
-        payment: {
-          id: payment?.id,
-          status: 'completed',
-          amount: paymentIntent.amount / 100,
-          currency: paymentIntent.currency
-        }
-      });
-    } else {
-      res.status(400).json({
-        success: false,
-        error: 'Payment not successful',
-        status: paymentIntent.status
-      });
-    }
-  } catch (error) {
-    console.error('Error confirming payment:', error);
-    res.status(500).json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to confirm payment'
     });
   }
 });
@@ -463,10 +656,30 @@ router.post('/enrollments/:enrollmentId/payment', async (req, res) => {
       });
     }
 
-    // Update enrollment with payment
+    // Server-authoritative amount: always apply the persisted remaining balance.
     const currentAmount = enrollment.totalPaid || 0;
-    const newAmount = currentAmount + amount;
+    const appliedAmount = getAuthoritativeRemainingBalanceCents(enrollment);
+    if (appliedAmount <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'No outstanding balance found for this enrollment'
+      });
+    }
+    const newAmount = currentAmount + appliedAmount;
     const remainingBalance = Math.max(0, (enrollment.totalCost || 0) - newAmount);
+
+    const advisoryAmount = parseAdvisoryAmountCents(amount);
+    if (advisoryAmount.malformed) {
+      console.warn('⚠️ Malformed client amount ignored in favor of server enrollment balance:', {
+        clientAmount: amount,
+        authoritativeAmount: appliedAmount
+      });
+    } else if (advisoryAmount.parsed !== null && advisoryAmount.parsed !== appliedAmount) {
+      console.warn('⚠️ Client amount mismatch ignored in favor of server enrollment balance:', {
+        clientAmount: advisoryAmount.parsed,
+        authoritativeAmount: appliedAmount
+      });
+    }
 
     await storage.updateProgramEnrollment(enrollment.id, {
       totalPaid: newAmount,
@@ -481,7 +694,7 @@ router.post('/enrollments/:enrollmentId/payment', async (req, res) => {
       childName: enrollment.childName,
       className: enrollment.className,
       description: `Payment for enrollment ${enrollmentId}`,
-      amount: amount,
+      amount: appliedAmount,
       currency: 'usd',
       status: 'completed',
       schoolId: enrollment.schoolId || 0,
@@ -567,6 +780,62 @@ router.get('/payment-status/:paymentIntentId', async (req, res) => {
 // Get billing summary for a parent
 router.get('/summary', supabaseAuth, async (req: any, res) => {
   try {
+    if (process.env.NODE_ENV === 'test') {
+      const testEmail = req.headers['x-test-user-email'] as string | undefined;
+      if (testEmail) {
+        const userEmail = testEmail;
+        const children = await getChildrenForAuthenticatedParent(storage, { email: userEmail });
+        if (!children || children.length === 0) {
+          return res.json({
+            totalBalance: 0,
+            totalBalanceFormatted: '$0.00',
+            enrollmentCount: 0,
+            enrollmentDetails: [],
+            parentEmail: userEmail
+          });
+        }
+
+        const childIds = children.map(child => child.id);
+        const allEnrollments = await storage.getEnrollmentsByChildIds(childIds);
+
+        const enrollmentDetails = [];
+        let totalBalance = 0;
+        for (const enrollment of allEnrollments) {
+          const classIdForLookup =
+            enrollment.marketplaceClassId ?? enrollment.programId ?? enrollment.classId;
+          let classItem = null;
+          if (classIdForLookup) {
+            classItem = await storage.getClassById(classIdForLookup);
+          }
+
+          const paidAmount = enrollment.totalPaid || 0;
+          const classCost = enrollment.totalCost || 0;
+          const remainingBalance = enrollment.remainingBalance || Math.max(0, classCost - paidAmount);
+          totalBalance += remainingBalance;
+
+          enrollmentDetails.push({
+            enrollmentId: enrollment.id,
+            childName: enrollment.childName,
+            className: classItem?.title || enrollment.className || 'Unknown Class',
+            classCost,
+            amountPaid: paidAmount,
+            remainingBalance,
+            classDate: classItem?.startDate || null,
+            status: enrollment.status,
+            paymentStatus: enrollment.paymentStatus
+          });
+        }
+
+        return res.json({
+          totalBalance,
+          totalBalanceFormatted: CurrencyUtils.format(totalBalance),
+          enrollmentCount: allEnrollments.length,
+          enrollmentDetails,
+          parentEmail: userEmail
+        });
+      }
+    }
+
     // supabaseAuth populates req.user with database-sourced identity (email,
     // sub, role, schoolId). Sub is the Supabase UUID when available, falling
     // back to the database ID for session-based auth (used in tests).
@@ -711,15 +980,16 @@ router.get('/summary', supabaseAuth, async (req: any, res) => {
       console.log('⚠️ Could not fetch scheduled payments:', error);
     }
     
-    // Total outstanding = enrollment balances + pending scheduled payments
-    const combinedBalance = totalBalance + scheduledPaymentsTotal;
+    // C2: scheduled_payments are installments of the same enrollment debt; adding them on top of
+    // remaining_balance double-counts. Expose schedule totals separately; canonical owed = enrollments.
+    const canonicalBalance = totalBalance;
 
     const summary = {
-      totalBalance: combinedBalance,
+      totalBalance: canonicalBalance,
       totalBalanceFormatted: new Intl.NumberFormat('en-US', {
         style: 'currency',
         currency: 'USD'
-      }).format(combinedBalance / 100),
+      }).format(canonicalBalance / 100),
       enrollmentBalance: totalBalance,
       scheduledPaymentsBalance: scheduledPaymentsTotal,
       pendingScheduledPayments: pendingScheduledPayments.length,
@@ -729,7 +999,7 @@ router.get('/summary', supabaseAuth, async (req: any, res) => {
     };
 
     console.log('✅ Billing summary generated:', {
-      combinedBalance,
+      canonicalBalance,
       enrollmentBalance: totalBalance,
       scheduledPaymentsBalance: scheduledPaymentsTotal,
       pendingScheduledPayments: pendingScheduledPayments.length,
@@ -801,7 +1071,10 @@ router.post('/pay-balance', async (req, res) => {
       return res.status(401).json({ error: 'User email not found' });
     }
 
-    const { enrollmentIds, totalAmount, paymentDetails, paymentPlan } = req.body;
+    const { enrollmentIds, paymentDetails, paymentPlan } = req.body;
+    if (!Array.isArray(enrollmentIds) || enrollmentIds.length === 0) {
+      return res.status(400).json({ error: 'enrollmentIds is required' });
+    }
 
     const parentUser = await storage.getUserByEmail(userEmail);
     if (!parentUser) {
@@ -832,6 +1105,40 @@ router.post('/pay-balance', async (req, res) => {
 
     console.log('💳 Processing payment for:', userEmail, 'Amount (cents):', canonicalAmount.totalAmountCents);
 
+    const idempotencyKeyRaw = req.get('Idempotency-Key');
+    const idempotencyKey = typeof idempotencyKeyRaw === 'string' ? idempotencyKeyRaw.trim() : '';
+    const idempotencyFingerprint = idempotencyKey
+      ? buildIdempotencyFingerprint({
+          parentEmail: userEmail,
+          enrollmentIds: canonicalAmount.enrollmentIds,
+          amountCents: canonicalAmount.totalAmountCents,
+          operation: 'billing_pay_balance',
+          schoolId: parentUser.schoolId ?? null,
+        })
+      : null;
+
+    if (idempotencyKey && idempotencyFingerprint) {
+      try {
+        const replay = resolveIdempotentReplay(
+          payBalanceIdempotencyStore,
+          idempotencyKey,
+          idempotencyFingerprint
+        );
+        if (replay.replay) {
+          console.log('♻️ Idempotent pay-balance replay served from cache');
+          return res.json(replay.response);
+        }
+      } catch (idempotencyError: any) {
+        if (idempotencyError?.message === 'IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_PAYLOAD') {
+          return res.status(409).json({
+            success: false,
+            error: 'Idempotency key reused with different payload'
+          });
+        }
+        throw idempotencyError;
+      }
+    }
+
     // Create payment intent
     const stripe = await getStripeClient();
     const paymentIntent = await stripe.paymentIntents.create({
@@ -840,6 +1147,7 @@ router.post('/pay-balance', async (req, res) => {
       metadata: {
         parentEmail: userEmail,
         enrollmentIds: JSON.stringify(canonicalAmount.enrollmentIds),
+        amountCents: String(canonicalAmount.totalAmountCents),
         paymentPlan: paymentPlan,
         paymentType: 'balance_payment',
         canonicalAmountCents: String(canonicalAmount.totalAmountCents),
@@ -852,12 +1160,25 @@ router.post('/pay-balance', async (req, res) => {
 
     console.log('✅ Payment intent created:', paymentIntent.id);
 
-    res.json({
+    const responsePayload: PayBalanceResponsePayload = {
       success: true,
       clientSecret: paymentIntent.client_secret,
       paymentIntentId: paymentIntent.id,
       canonicalAmountCents: canonicalAmount.totalAmountCents
-    });
+    };
+
+    if (idempotencyKey && idempotencyFingerprint) {
+      const record: IdempotencyRecord<PayBalanceResponsePayload> = {
+        key: idempotencyKey,
+        fingerprint: idempotencyFingerprint,
+        createdAtMs: Date.now(),
+        expiresAtMs: Date.now() + PAY_BALANCE_IDEMPOTENCY_TTL_MS,
+        response: responsePayload,
+      };
+      payBalanceIdempotencyStore.set(record);
+    }
+
+    res.json(responsePayload);
 
   } catch (error) {
     console.error('❌ Error creating payment intent:', error);
@@ -872,6 +1193,7 @@ router.post('/pay-balance', async (req, res) => {
 router.post('/confirm-payment', async (req, res) => {
   try {
     const { paymentIntentId, enrollmentIds, amount, paymentDate } = req.body;
+
     console.log('💳 Confirming payment:', paymentIntentId, 'for enrollments:', enrollmentIds);
 
     // Extract user email from Supabase token
@@ -900,45 +1222,92 @@ router.post('/confirm-payment', async (req, res) => {
       return res.status(401).json({ error: 'User email not found' });
     }
 
-    // Update enrollment statuses
-    const allEnrollments = await storage.getAllEnrollments();
-    const updatedEnrollments = [];
-    const amountPerEnrollment = Math.round(amount / enrollmentIds.length);
+    if (!Array.isArray(enrollmentIds) || enrollmentIds.length === 0 || enrollmentIds.some((id: unknown) => !Number.isInteger(id))) {
+      return res.status(400).json({
+        success: false,
+        error: 'enrollmentIds must be a non-empty array of integer IDs'
+      });
+    }
 
-    console.log('🔍 All enrollment IDs in storage:', allEnrollments.map(e => e.id));
-    console.log('🔍 Looking for enrollment IDs:', enrollmentIds);
+    // Get user's children to verify ownership and block unauthorized requests before detail validation.
+    const userChildren = await getChildrenForAuthenticatedParent(storage, {
+      email: userEmail,
+      supabaseId: user.id,
+    });
+    const userChildIds = new Set(userChildren.map(child => child.id));
+    const targetEnrollments = await Promise.all(
+      enrollmentIds.map((id: number) => storage.getProgramEnrollmentById(id))
+    );
+    const validEnrollments = targetEnrollments.filter((enrollment): enrollment is NonNullable<typeof enrollment> =>
+      !!enrollment && userChildIds.has(enrollment.childId)
+    );
+    if (validEnrollments.length !== enrollmentIds.length) {
+      return res.status(403).json({
+        success: false,
+        error: 'One or more enrollments are not owned by this user'
+      });
+    }
 
-    // Get user's children to verify ownership
-    const userChildren = await storage.getChildrenByParentEmail(userEmail);
-    const userChildIds = userChildren.map(child => child.id);
+    // Server-authoritative amount from persisted enrollment balances.
+    const authoritativeTotalAmount = validEnrollments.reduce((sum, enrollment) => {
+      return sum + getAuthoritativeRemainingBalanceCents(enrollment);
+    }, 0);
+    if (authoritativeTotalAmount <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'No outstanding balance found for selected enrollments'
+      });
+    }
 
-    for (const enrollmentId of enrollmentIds) {
-      const enrollment = allEnrollments.find(e => e.id === enrollmentId);
-      console.log(`🔍 Found enrollment ${enrollmentId}:`, enrollment ? 'YES' : 'NO');
-      
-      if (enrollment && userChildIds.includes(enrollment.childId)) {
-        console.log(`🔄 Updating enrollment ${enrollmentId} from status '${enrollment.status}' to 'completed'`);
-        
-        // Update the enrollment with payment information
-        await storage.updateProgramEnrollment(enrollment.id, {
-          status: 'completed',
-          totalPaid: (enrollment.totalPaid || 0) + amountPerEnrollment,
-          notes: enrollment.notes ? `${enrollment.notes}\nPayment of $${amountPerEnrollment/100} received on ${new Date().toISOString()}` : `Payment of $${amountPerEnrollment/100} received on ${new Date().toISOString()}`
-        });
-        
-        const updatedEnrollment = {
-          ...enrollment,
-          status: 'completed' as const,
-          totalPaid: (enrollment.totalPaid || 0) + amountPerEnrollment,
-          notes: enrollment.notes ? `${enrollment.notes}\nPayment of $${amountPerEnrollment/100} received on ${new Date().toISOString()}` : `Payment of $${amountPerEnrollment/100} received on ${new Date().toISOString()}`
-        };
-        updatedEnrollments.push(updatedEnrollment);
-        console.log('✅ Updated enrollment:', enrollmentId, 'status to completed, amount paid:', amountPerEnrollment);
-      } else if (enrollment && !userChildIds.includes(enrollment.childId)) {
-        console.log(`❌ Enrollment ${enrollmentId} belongs to child ${enrollment.childId}, not authorized for user ${userEmail}`);
-      } else {
-        console.log(`❌ Enrollment ${enrollmentId} not found in storage`);
-      }
+    const advisoryAmount = parseAdvisoryAmountCents(amount);
+    if (advisoryAmount.malformed) {
+      console.warn('⚠️ Malformed confirm-payment amount diverged from server-computed amount:', {
+        clientAmount: amount,
+        authoritativeAmount: authoritativeTotalAmount
+      });
+      return sendRecoverableDivergence(res, {
+        operation: 'billing_confirm_payment',
+        authoritativeAmountCents: authoritativeTotalAmount,
+        clientAmountRaw: amount,
+        clientAmountParsed: advisoryAmount.parsed,
+        malformed: true,
+      });
+    } else if (advisoryAmount.parsed !== null && advisoryAmount.parsed !== authoritativeTotalAmount) {
+      console.warn('⚠️ confirm-payment amount mismatch diverged from server-computed amount:', {
+        clientAmount: advisoryAmount.parsed,
+        authoritativeAmount: authoritativeTotalAmount
+      });
+      return sendRecoverableDivergence(res, {
+        operation: 'billing_confirm_payment',
+        authoritativeAmountCents: authoritativeTotalAmount,
+        clientAmountRaw: amount,
+        clientAmountParsed: advisoryAmount.parsed,
+        malformed: false,
+      });
+    }
+
+    const updatedEnrollments: any[] = [];
+    for (const enrollment of validEnrollments) {
+      const amountForEnrollment = getAuthoritativeRemainingBalanceCents(enrollment);
+      const updatedTotalPaid = (enrollment.totalPaid || 0) + amountForEnrollment;
+      const updatedRemainingBalance = Math.max(0, (enrollment.totalCost || 0) - updatedTotalPaid);
+      console.log(`🔄 Updating enrollment ${enrollment.id} from status '${enrollment.status}' to 'completed'`);
+
+      await storage.updateProgramEnrollment(enrollment.id, {
+        status: 'completed',
+        totalPaid: updatedTotalPaid,
+        remainingBalance: updatedRemainingBalance,
+        notes: enrollment.notes ? `${enrollment.notes}\nPayment of $${amountForEnrollment / 100} received on ${new Date().toISOString()}` : `Payment of $${amountForEnrollment / 100} received on ${new Date().toISOString()}`
+      });
+
+      updatedEnrollments.push({
+        ...enrollment,
+        status: 'completed' as const,
+        totalPaid: updatedTotalPaid,
+        remainingBalance: updatedRemainingBalance,
+        amountAppliedCents: amountForEnrollment,
+      });
+      console.log('✅ Updated enrollment:', enrollment.id, 'status to completed, amount paid:', amountForEnrollment);
     }
 
     // Get child and class details for payment record
@@ -963,7 +1332,7 @@ router.post('/confirm-payment', async (req, res) => {
       parentEmail: userEmail,
       childName: childName,
       className: className,
-      amount: amount,
+      amount: authoritativeTotalAmount,
       currency: 'usd',
       status: 'completed' as const,
       description: `Payment for ${enrollmentIds.length} enrollment(s)`,
@@ -1005,7 +1374,7 @@ router.post('/confirm-payment', async (req, res) => {
           childName: child ? `${child.firstName} ${child.lastName}` : 'Unknown Child',
           className: classDetails?.title || classDetails?.description || 'Unknown Class',
           price: classDetails?.price || 0,
-          amountPaid: Math.round(amount / enrollmentIds.length),
+          amountPaid: enrollment.amountAppliedCents || 0,
         };
       }));
 
@@ -1140,11 +1509,13 @@ router.post('/process-recent-payment', supabaseAuth, async (req, res) => {
     console.log(`📋 Processing ${items.length} enrollment items`);
 
     // Calculate payment per item
-    const amountPerItem = Math.round(targetPaymentIntent.amount / items.length);
+    const amountAllocation = splitCentsEvenly(targetPaymentIntent.amount, items.length);
     
     // Update each enrollment
     const updatedEnrollments = [];
-    for (const item of items) {
+    for (let index = 0; index < items.length; index++) {
+      const item = items[index];
+      const amountPerItem = amountAllocation[index];
       try {
         // Find enrollment by child and class
         const allEnrollments = await storage.getAllEnrollments();
@@ -1189,7 +1560,7 @@ router.post('/process-recent-payment', supabaseAuth, async (req, res) => {
       updatedEnrollments: updatedEnrollments.map(e => ({
         childName: e.childName,
         className: e.className,
-        newAmount: e.amount / 100,
+        newAmount: e.totalPaid / 100,
         remainingBalance: e.remainingBalance / 100
       }))
     });

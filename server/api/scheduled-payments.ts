@@ -520,13 +520,14 @@ router.post('/pay', supabaseAuth, async (req: any, res) => {
       paymentMethodId,
       applyCredits: applyCreditsRaw,
       expectedChargeAmount,
+      description,
     } = req.body;
     // Default credits ON to match auto-pay behavior.
     const applyCredits = applyCreditsRaw !== false;
     const userEmail = req.user.email;
 
     console.log('💳 Processing scheduled payment:', {
-      paymentId, userEmail, applyCredits, expectedChargeAmount,
+      paymentId, userEmail, applyCredits, expectedChargeAmount, description,
       paymentMethodId: paymentMethodId ? '[provided]' : null,
     });
 
@@ -921,6 +922,7 @@ router.post('/pay', supabaseAuth, async (req: any, res) => {
         type: 'scheduled_payment',
         paymentType: 'scheduled_payment',
         scheduledPaymentId: paymentId.toString(),
+        amountCents: amountCents.toString(),
         parentEmail: userEmail,
         description: `Scheduled Payment ${scheduledPayment.installmentNumber}`,
         // CRITICAL: Include enrollmentIds so webhook can update balances

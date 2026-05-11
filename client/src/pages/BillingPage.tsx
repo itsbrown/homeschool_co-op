@@ -136,32 +136,11 @@ interface StripeSubscriptionSchedule {
   };
 }
 
+import { useSubscriptionSchedulesTabData } from '@/hooks/useSubscriptionSchedulesTabData';
+
 // Scheduled Payment Plans Tab - shows database-stored payment installments
 function SubscriptionSchedulesTab() {
-  // Fetch database-stored scheduled payments (biweekly, deposit, split plans)
-  const { data: scheduledPayments = [], isLoading: scheduledLoading } = useQuery<
-    { success: boolean; payments?: Array<Record<string, unknown>> },
-    Error,
-    Array<Record<string, unknown>>
-  >({
-    queryKey: ['/api/scheduled-payments/upcoming'],
-    select: (data) => (data?.success ? data.payments ?? [] : []),
-  });
-
-  // Also fetch Stripe subscription schedules for legacy data
-  const { data: stripeSchedules = [], isLoading: stripeLoading } = useQuery({
-    queryKey: ['stripe-subscription-schedules'],
-    queryFn: async () => {
-      const response = await apiRequest('GET', '/api/stripe/subscription-schedules');
-      if (!response.ok) {
-        return [];
-      }
-      const data = await response.json();
-      return data.success ? data.schedules : [];
-    },
-  });
-
-  const isLoading = scheduledLoading || stripeLoading;
+  const { scheduledPayments, stripeSchedules, isLoading } = useSubscriptionSchedulesTabData();
 
   const formatDate = (dateValue: string | number | Date) => {
     if (typeof dateValue === 'number') {
@@ -1459,11 +1438,18 @@ export default function BillingPage() {
 
   const getSelectedTotal = () => {
     if (!billingSummary) return 0;
-    
-    // Always use the real-time total balance from the API
-    const realTimeTotal = billingSummary.totalBalance || 0;
-    console.log('🧮 Real-time total balance from API:', realTimeTotal);
-    return realTimeTotal;
+
+    if (selectedEnrollments.length === 0) {
+      const realTimeTotal = billingSummary.totalBalance || 0;
+      console.log('🧮 Real-time total balance from API (all enrollments):', realTimeTotal);
+      return realTimeTotal;
+    }
+
+    const selectedTotal = billingSummary.enrollmentDetails
+      .filter(detail => selectedEnrollments.includes(detail.enrollmentId))
+      .reduce((total, detail) => total + detail.balance, 0);
+    console.log('🧮 Selected enrollments total:', selectedTotal, 'from', selectedEnrollments.length, 'enrollment(s)');
+    return selectedTotal;
   };
 
   const getPaymentPlanAmount = () => {

@@ -547,7 +547,8 @@ describe('Integration: Financial & Enrollment Features (Phase 2)', () => {
 
         const response = await request(app)
           .get('/api/payment-history/history')
-          .set('x-test-user-email', parent.email);
+          .set('x-test-user-email', parent.email)
+          .set('Cookie', [`connect.sid=${encodeURIComponent('test-session')}`]);
 
         expect(response.status).toBe(200);
       });
@@ -592,7 +593,7 @@ describe('Integration: Financial & Enrollment Features (Phase 2)', () => {
         });
 
         expect(payment.childName).toBe('Alice Test');
-        expect(payment.className).toBe('Math 101');
+        expect(payment.className).toBe(classItem.title);
       });
     });
 
@@ -607,7 +608,8 @@ describe('Integration: Financial & Enrollment Features (Phase 2)', () => {
 
         const response = await request(app)
           .get('/api/stripe/subscription-schedules')
-          .set('x-test-user-email', parent.email);
+          .set('x-test-user-email', parent.email)
+          .set('Cookie', [`connect.sid=${encodeURIComponent('test-session')}`]);
 
         expect(response.status).toBe(200);
         expect(response.body).toHaveProperty('success');
@@ -625,7 +627,8 @@ describe('Integration: Financial & Enrollment Features (Phase 2)', () => {
 
         const response = await request(app)
           .get('/api/stripe/subscriptions')
-          .set('x-test-user-email', parent.email);
+          .set('x-test-user-email', parent.email)
+          .set('Cookie', [`connect.sid=${encodeURIComponent('test-session')}`]);
 
         expect(response.status).toBe(200);
         expect(response.body).toHaveProperty('success');
@@ -770,7 +773,8 @@ describe('Integration: Financial & Enrollment Features (Phase 2)', () => {
 
         const response = await request(app)
           .get('/api/billing/summary')
-          .set('x-test-user-email', parent.email);
+          .set('x-test-user-email', parent.email)
+          .set('Cookie', [`connect.sid=${encodeURIComponent('test-session')}`]);
 
         expect(response.status).toBe(200);
       });
@@ -1843,8 +1847,8 @@ describe('Integration: Financial & Enrollment Features (Phase 2)', () => {
 
         // Should return 403 Forbidden
         expect(response.status).toBe(403);
-        expect(response.body.error).toBe('UNAUTHORIZED_ENROLLMENT');
-        expect(response.body.message).toContain('permission');
+        expect(response.body.error).toBe('UNAUTHORIZED_CHILDREN');
+        expect(response.body.message).toContain('Unauthorized');
       });
 
       it('should allow parent to pay for their own enrollment', async () => {

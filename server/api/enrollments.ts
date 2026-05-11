@@ -6,6 +6,7 @@ import { eq, inArray } from "drizzle-orm";
 import { getStripeClient } from "../config/stripe";
 import { StripePaymentPlanService } from "../services/stripe-payment-plans";
 import { generateMemberId } from "../utils/membership";
+import { getChildrenForAuthenticatedParent } from "../lib/parent-auth-scope";
 
 const router = express.Router();
 
@@ -316,7 +317,10 @@ router.post('/cancel-multiple', async (req: any, res) => {
     console.log(`🧹 BULK CANCEL REQUEST from ${userEmail}: ${enrollmentIds.length} enrollments`, enrollmentIds);
 
     // Get user's children to verify ownership
-    const userChildren = await storage.getChildrenByParentEmail(userEmail);
+    const userChildren = await getChildrenForAuthenticatedParent(storage, {
+      email: userEmail,
+      supabaseId: req.auth?.supabaseId,
+    });
     const userChildIds = userChildren.map((child: any) => child.id);
     
     if (userChildIds.length === 0) {

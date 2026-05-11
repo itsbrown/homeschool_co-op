@@ -1690,7 +1690,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       initialMembershipLoadedRef.current = false;
       lastProcessedEnrollmentsRef.current = '';
       // Also clear the query cache for enrollments
-      queryClient.setQueryData(['/api/parent/enrollments', null], []);
+      queryClient.setQueryData(['/api/parent/enrollments'], []);
     }
   }, [isAuthenticated, user, isLoading]);
 

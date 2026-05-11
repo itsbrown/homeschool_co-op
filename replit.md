@@ -6,6 +6,15 @@ The ASA Learning Platform is an adaptive learning application for the American S
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 
+## Git workflow
+Branching, keeping `main` clean, worktrees, and tracked `data/*.json` fixtures: **[docs/GIT_WORKFLOW.md](docs/GIT_WORKFLOW.md)**. Contributor entry point: **[CONTRIBUTING.md](CONTRIBUTING.md)**.
+
+## Debugging Guidelines
+- **Trace the entire request flow from endpoint to database before making fixes**, not just the layer where the problem appears to be. Follow the code path through: API route → storage interface → actual storage implementation (database or memory) to ensure all layers are using the correct data source.
+- **HybridStorage architecture**: `dbStorage` can be either DatabaseStorage or MemStorage (fallback). Use identity comparison (`this.dbStorage !== this.memStorage`) to detect real database availability.
+- **Watch for duplicate storage mechanisms**: Some API files may have their own in-memory Maps or caches that bypass the central storage system entirely. Check for module-level variables in API route files.
+- **Invitation-related bugs**: For any staff/role invitation issues, see **ARCHITECTURAL_PATTERNS.md Section 8** (Token-based Invitation Flow). Key rules: reuse tokens on resend (don't generate new), use public endpoints for unauthenticated access, and consolidate to role_invitations table.
+
 ## System Architecture
 The platform features a full-stack architecture designed for scalability, security, and user experience. It incorporates role-based access control, AI-driven content generation, a comprehensive payment system, and multi-tenant security.
 

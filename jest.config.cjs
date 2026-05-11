@@ -2,6 +2,8 @@ module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'jsdom',
   rootDir: '.',
+  // Nested git worktrees under the repo root confuse jest-haste-map (duplicate mocks).
+  modulePathIgnorePatterns: ['<rootDir>/.worktree-'],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/client/src/$1',
     '^@shared/(.*)$': '<rootDir>/shared/$1',

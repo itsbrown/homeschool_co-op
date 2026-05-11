@@ -14,6 +14,7 @@ import {
   type CachedSnapshot,
   type TrustRejectionReason,
 } from '../lib/snapshotTrustCache';
+import { calculateCanonicalAmounts } from '../services/canonical-amount-calculator';
 
 const router = Router();
 
@@ -903,104 +904,105 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
       });
     }
     
-    // Check for existing Stripe subscription for this user
+    // Check for existing Stripe subscription for this user (skipped in Jest: no Stripe keys)
     let existingSubscription: any = null;
     let hasActiveSubscription = false;
-    const stripe = await getStripeClient();
-    
-    try {
-      console.log('🔍 Checking for existing Stripe subscription for:', userEmail);
-      
-      // Search for customer in Stripe by email
-      const customers = await stripe.customers.search({
-        query: `email:'${userEmail}'`
-      });
-      
-      if (customers.data.length > 0) {
-        const customer = customers.data[0];
-        console.log('✅ Found Stripe customer:', customer.id);
-        
-        // Get active subscriptions for this customer
-        const subscriptions = await stripe.subscriptions.list({
-          customer: customer.id,
-          status: 'active',
-          limit: 1
+    if (process.env.NODE_ENV !== 'test' || process.env.ENABLE_STRIPE_PREFLIGHT_IN_TESTS === 'true') {
+      const stripe = await getStripeClient();
+
+      try {
+        console.log('🔍 Checking for existing Stripe subscription for:', userEmail);
+
+        // Search for customer in Stripe by email
+        const customers = await stripe.customers.search({
+          query: `email:'${userEmail}'`
         });
-        
-        if (subscriptions.data.length > 0) {
-          existingSubscription = subscriptions.data[0];
-          hasActiveSubscription = true;
-          console.log('✅ Found active subscription:', existingSubscription.id);
-          
-          // Update user's Stripe customer ID if not already set
-          if (parent.stripeCustomerId !== customer.id) {
-            await storage.updateUser(parent.id, { stripeCustomerId: customer.id });
-            console.log('✅ Updated user.stripeCustomerId to:', customer.id);
-          }
-          
-          // Update or create membership enrollment if subscription exists
-          if (parent.schoolId) {
-            const existingMemberships = await storage.getMembershipEnrollmentsByParentId(parent.id);
-            const currentYear = new Date().getFullYear();
-            const activeMembership = existingMemberships.find(m => 
-              m.membershipYear === currentYear && m.status === 'enrolled'
-            );
-            
-            if (!activeMembership) {
-              // Create active membership enrollment from Stripe subscription
-              const subData = existingSubscription as any;
-              
-              // Safely parse Stripe timestamps to dates
-              const safeStripeDate = (timestamp: number | undefined): Date => {
-                if (!timestamp || typeof timestamp !== 'number') {
-                  console.warn('⚠️ Invalid Stripe timestamp, using current date');
-                  return new Date();
-                }
-                const date = new Date(timestamp * 1000);
-                if (isNaN(date.getTime())) {
-                  console.warn('⚠️ Stripe timestamp resulted in invalid date:', timestamp);
-                  return new Date();
-                }
-                return date;
-              };
-              
-              const startDate = safeStripeDate(subData.current_period_start);
-              const endDate = safeStripeDate(subData.current_period_end);
-              
-              await storage.createMembershipEnrollment({
-                schoolId: parent.schoolId,
-                parentUserId: parent.id,
-                membershipYear: currentYear,
-                membershipTier: 'basic',
-                amount: 17500, // $175 in cents
-                amountPaid: 17500,
-                remainingBalance: 0,
-                totalAmount: 17500, // Total membership amount in cents
-                balanceDue: 0, // Fully paid via Stripe subscription
-                status: 'enrolled',
-                stripeSubscriptionId: existingSubscription.id,
-                stripeCustomerId: customer.id,
-                startDate,
-                renewalDate: endDate,
-                notes: 'Auto-synced from Stripe subscription',
-                paymentMethod: 'other',
-                dueDate: startDate,
-                endDate: endDate, // End date same as expiration date
-                expirationDate: endDate,
-                gracePeriodEnd: null
-              });
-              console.log('✅ Created active membership enrollment from Stripe subscription');
+
+        if (customers.data.length > 0) {
+          const customer = customers.data[0];
+          console.log('✅ Found Stripe customer:', customer.id);
+
+          // Get active subscriptions for this customer
+          const subscriptions = await stripe.subscriptions.list({
+            customer: customer.id,
+            status: 'active',
+            limit: 1
+          });
+
+          if (subscriptions.data.length > 0) {
+            existingSubscription = subscriptions.data[0];
+            hasActiveSubscription = true;
+            console.log('✅ Found active subscription:', existingSubscription.id);
+
+            // Update user's Stripe customer ID if not already set
+            if (parent.stripeCustomerId !== customer.id) {
+              await storage.updateUser(parent.id, { stripeCustomerId: customer.id });
+              console.log('✅ Updated user.stripeCustomerId to:', customer.id);
             }
+
+            // Update or create membership enrollment if subscription exists
+            if (parent.schoolId) {
+              const existingMemberships = await storage.getMembershipEnrollmentsByParentId(parent.id);
+              const currentYear = new Date().getFullYear();
+              const activeMembership = existingMemberships.find(m =>
+                m.membershipYear === currentYear && m.status === 'enrolled'
+              );
+
+              if (!activeMembership) {
+                // Create active membership enrollment from Stripe subscription
+                const subData = existingSubscription as any;
+
+                // Safely parse Stripe timestamps to dates
+                const safeStripeDate = (timestamp: number | undefined): Date => {
+                  if (!timestamp || typeof timestamp !== 'number') {
+                    console.warn('⚠️ Invalid Stripe timestamp, using current date');
+                    return new Date();
+                  }
+                  const date = new Date(timestamp * 1000);
+                  if (isNaN(date.getTime())) {
+                    console.warn('⚠️ Stripe timestamp resulted in invalid date:', timestamp);
+                    return new Date();
+                  }
+                  return date;
+                };
+
+                const startDate = safeStripeDate(subData.current_period_start);
+                const endDate = safeStripeDate(subData.current_period_end);
+
+                await storage.createMembershipEnrollment({
+                  schoolId: parent.schoolId,
+                  parentUserId: parent.id,
+                  membershipYear: currentYear,
+                  membershipTier: 'basic',
+                  amount: 17500, // $175 in cents
+                  amountPaid: 17500,
+                  remainingBalance: 0,
+                  status: 'enrolled',
+                  stripeSubscriptionId: existingSubscription.id,
+                  stripeCustomerId: customer.id,
+                  startDate,
+                  renewalDate: endDate,
+                  notes: 'Auto-synced from Stripe subscription',
+                  paymentMethod: 'other',
+                  dueDate: startDate,
+                  expirationDate: endDate,
+                  gracePeriodEnd: null
+                });
+                console.log('✅ Created active membership enrollment from Stripe subscription');
+              }
+            }
+          } else {
+            console.log('ℹ️ No active subscriptions found for customer:', customer.id);
           }
         } else {
-          console.log('ℹ️ No active subscriptions found for customer:', customer.id);
+          console.log('ℹ️ No Stripe customer found with email:', userEmail);
         }
-      } else {
-        console.log('ℹ️ No Stripe customer found with email:', userEmail);
+      } catch (stripeError: any) {
+        // Log error but don't fail the whole checkout - just proceed without Stripe sync
+        console.error('⚠️ Error checking Stripe subscription (non-blocking):', stripeError.message);
       }
-    } catch (stripeError: any) {
-      // Log error but don't fail the whole checkout - just proceed without Stripe sync
-      console.error('⚠️ Error checking Stripe subscription (non-blocking):', stripeError.message);
+    } else {
+      console.log('🧪 Test mode: skipping Stripe subscription preflight (ENABLE_STRIPE_PREFLIGHT_IN_TESTS not set)');
     }
     
     try {
@@ -1048,7 +1050,8 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
           (e.childId === item.childId &&
            ((item.classType === 'marketplace' && e.marketplaceClassId === item.marketplaceClassId) ||
             (item.classType !== 'marketplace' && e.classId === item.classId)) &&
-           e.status === 'pending_payment')
+           e.status === 'pending_payment' &&
+           (e.parentEmail === userEmail || e.parentId === parent.id))
         );
         
         if (enrollment) {
@@ -1372,6 +1375,13 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
           membershipYear: serverMembership.year,
           parentUserId: serverMembership.parentUserId,
           schoolId: serverMembership.schoolId
+        });
+      }
+
+      if (total !== undefined && total !== totalWithMembership) {
+        console.warn('⚠️ Client total mismatch ignored in favor of server-computed amount:', {
+          clientTotal: total,
+          authoritativeTotal: totalWithMembership
         });
       }
 

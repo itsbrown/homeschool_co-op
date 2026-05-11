@@ -24,6 +24,11 @@ import { recordTask222Skip } from './lib/task222SkipLog';
 import type { InsertRefundEvent, InsertPaymentAllocation } from '@shared/schema';
 import { AUTOPAY_MAX_RETRIES } from './services/auto-pay-scheduler';
 import { handleScheduledPaymentFailed } from './services/auto-pay-webhook-helpers';
+import { processMembershipStripeEvent } from './api/stripe-webhook';
+import { splitCentsEvenly } from './api/billing';
+import { enrollmentPoolCentsForBalanceIntent, parseMetadataMembershipAmountCents } from './lib/balance-payment-metadata';
+import { fulfillMembershipFromCartPaymentIntent } from './services/fulfill-membership-payment-intent';
+import { findProgramEnrollmentForCartItem } from './lib/cart-checkout-enrollment-match';
 
 // Stripe client will be lazily initialized within the webhook handler
 const RECENT_WEBHOOK_EVENTS_MAX = 1000;
@@ -43,6 +48,90 @@ function cleanupRecentWebhookEvents(now: number): void {
     for (let i = 0; i < toTrim; i++) {
       recentWebhookEvents.delete(entries[i][0]);
     }
+  }
+}
+
+/** Shared cart line-item → enrollment updates for checkout.session.completed and payment_intent.succeeded. */
+async function applyCartCheckoutItemsFromWebhook(
+  items: any[],
+  paymentIntent: Stripe.PaymentIntent
+): Promise<any[]> {
+  if (!Array.isArray(items) || items.length === 0) {
+    return [];
+  }
+
+  const amountPerItem = Math.round(paymentIntent.amount / items.length);
+  const updatedEnrollments: any[] = [];
+
+  for (const item of items) {
+    try {
+      const allEnrollments = await storage.getAllEnrollments();
+      const enrollment = findProgramEnrollmentForCartItem(allEnrollments as any, item);
+
+      if (enrollment) {
+        const currentAmount = enrollment.totalPaid || 0;
+        const newAmount = currentAmount + amountPerItem;
+        const remainingBalance = Math.max(0, (enrollment.totalCost || 0) - newAmount);
+
+        const updatedEnrollment = await storage.updateProgramEnrollment(enrollment.id, {
+          totalPaid: newAmount,
+          remainingBalance,
+          paymentStatus: remainingBalance <= 0 ? 'completed' : 'partial_payment',
+          status: 'enrolled',
+        });
+
+        if (updatedEnrollment) {
+          updatedEnrollments.push(updatedEnrollment);
+          console.log(
+            `✅ Updated enrollment ${enrollment.id} for ${item.childName} in ${item.className}: paid=${newAmount}, remaining=${remainingBalance}`
+          );
+        }
+      } else {
+        console.log(`❌ Enrollment not found for ${item.childName} in ${item.className}`);
+      }
+    } catch (error) {
+      console.error(`❌ Error updating enrollment for ${item.childName}:`, error);
+    }
+  }
+
+  return updatedEnrollments;
+}
+
+async function applyBalancePaymentToEnrollmentsOnly(
+  paymentIntent: Stripe.PaymentIntent,
+  enrollmentIds: number[],
+): Promise<void> {
+  if (!Array.isArray(enrollmentIds) || enrollmentIds.length === 0) {
+    return;
+  }
+
+  const amountCents = typeof paymentIntent.amount === 'number' ? paymentIntent.amount : 0;
+  if (!Number.isInteger(amountCents) || amountCents <= 0) {
+    throw new Error('Payment intent amount must be a positive integer in cents');
+  }
+
+  const membershipCents = parseMetadataMembershipAmountCents(
+    paymentIntent.metadata as Record<string, string | undefined>
+  );
+  const classPoolCents = enrollmentPoolCentsForBalanceIntent(amountCents, membershipCents);
+  const allocation = splitCentsEvenly(classPoolCents, enrollmentIds.length);
+
+  for (let i = 0; i < enrollmentIds.length; i++) {
+    const enrollmentId = enrollmentIds[i];
+    const amountPerEnrollment = allocation[i];
+    const enrollment = await storage.getProgramEnrollmentById(enrollmentId);
+    if (!enrollment) continue;
+
+    const currentAmountPaid = enrollment.totalPaid || 0;
+    const newAmountPaid = currentAmountPaid + amountPerEnrollment;
+    const remainingBalance = Math.max(0, (enrollment.totalCost || 0) - newAmountPaid);
+    await storage.updateProgramEnrollment(enrollment.id, {
+      totalPaid: newAmountPaid,
+      remainingBalance,
+      paymentStatus: 'stripe_managed',
+      paymentSystemVersion: 'v2_stripe',
+      status: 'enrolled',
+    });
   }
 }
 
@@ -494,37 +583,9 @@ export const webhookHandler = async (req: Request, res: Response) => {
           }
           
           // Update each class enrollment in database
-          // Use getEnrollmentByChildAndClass for targeted lookup (avoids full-table scan anti-pattern)
-          const updatedEnrollments = [];
-          for (const item of items) {
-            try {
-              const enrollment = await storage.getEnrollmentByChildAndClass(item.childId, item.classId);
-              
-              if (enrollment) {
-                const currentAmount = enrollment.totalPaid || 0;
-                const newAmount = currentAmount + amountPerItem;
-                const remainingBalance = Math.max(0, (enrollment.totalCost || 0) - newAmount);
-                
-                // Update program enrollment in database
-                const updatedEnrollment = await storage.updateProgramEnrollment(enrollment.id, {
-                  totalPaid: newAmount,
-                  remainingBalance: remainingBalance,
-                  paymentStatus: remainingBalance <= 0 ? 'completed' : 'deposit_paid',
-                  status: 'enrolled'
-                });
-                
-                if (updatedEnrollment) {
-                  updatedEnrollments.push(updatedEnrollment);
-                  console.log(`✅ Updated enrollment ${enrollment.id} for ${item.childName} in ${item.className}: paid=${newAmount}, remaining=${remainingBalance}`);
-                }
-              } else {
-                console.log(`❌ Enrollment not found for child=${item.childId} class=${item.classId} (${item.childName} / ${item.className})`);
-              }
-            } catch (error) {
-              console.error(`❌ Error updating enrollment for ${item.childName}:`, error);
-            }
-          }
-          
+          // Shared with payment_intent.succeeded — see applyCartCheckoutItemsFromWebhook above.
+          const updatedEnrollments = await applyCartCheckoutItemsFromWebhook(items, paymentIntent);
+
           console.log(`✅ Updated ${updatedEnrollments.length} enrollments for checkout session ${session.id}`);
           
           // Build all-children description for payment history
@@ -844,10 +905,12 @@ export const webhookHandler = async (req: Request, res: Response) => {
         // create-payment-intent pre-inserts pending payments before Stripe confirms.
         // Skipping here caused "charged but balance unchanged" incidents.
         const existingPayment = await storage.getPaymentByStripeId(paymentIntent.id);
+        let hadPreexistingPendingPayment = false;
         if (existingPayment) {
           if (existingPayment.status === 'pending') {
             console.log('ℹ️ Existing payment row is pending; continuing webhook processing:', paymentIntent.id);
             await storage.updatePaymentStatus(existingPayment.id, 'succeeded');
+            hadPreexistingPendingPayment = true;
           } else {
             console.log('⚠️ Payment already processed, skipping:', paymentIntent.id, 'status:', existingPayment.status);
             break;
@@ -1300,12 +1363,18 @@ export const webhookHandler = async (req: Request, res: Response) => {
           console.log('💰 Processing payment for enrollments:', enrollmentIds, 'payment type:', paymentType);
           
           if (enrollmentIds.length > 0 && parentEmail) {
-            // Calculate payment amount in dollars (Stripe amount is in cents)
-            const totalAmount = paymentIntent.amount / 100;
-            
-            // Import and call the processBalancePayment function
-            const { processBalancePayment } = await import('./api/billing.js');
-            await processBalancePayment(paymentIntent, parentEmail, enrollmentIds, totalAmount);
+            if (hadPreexistingPendingPayment) {
+              // Pre-existing pending payment records are authoritative for payment history.
+              // Apply enrollment effects only to avoid duplicate financial side effects on replay.
+              await applyBalancePaymentToEnrollmentsOnly(paymentIntent, enrollmentIds);
+            } else {
+              await fulfillMembershipFromCartPaymentIntent(paymentIntent);
+              // Calculate payment amount in dollars (Stripe amount is in cents)
+              const totalAmount = paymentIntent.amount / 100;
+
+              const { processBalancePayment } = await import('./api/billing.js');
+              await processBalancePayment(paymentIntent, parentEmail, enrollmentIds, totalAmount);
+            }
             
             console.log('✅ Balance payment processed via webhook for payment type:', paymentType);
           } else {
@@ -2125,13 +2194,13 @@ export const webhookHandler = async (req: Request, res: Response) => {
 
     default:
       console.log('📦 Unhandled event type:', event.type, '- responding with 200 OK');
-        // Return 200 OK for unhandled events to prevent retries
-        res.json({ received: true, event_type: event.type, handled: false });
-        // Mark as duplicate AFTER successful ack so retries are suppressed.
-        if (event?.id) {
-          recentWebhookEvents.set(event.id, now);
-        }
-        return;
+      // Return 200 OK for unhandled events to prevent retries
+      res.json({ received: true, event_type: event.type, handled: false });
+      // Mark as duplicate AFTER successful ack so retries are suppressed.
+      if (event?.id) {
+        recentWebhookEvents.set(event.id, now);
+      }
+      return;
     }
 
     // Task #219: enforce the persistence invariant before acknowledging.

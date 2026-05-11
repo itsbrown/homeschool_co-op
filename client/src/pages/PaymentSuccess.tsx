@@ -5,13 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { CheckCircle, Calendar, DollarSign, User, ArrowRight } from 'lucide-react';
 import ParentAppShell from '@/components/layout/ParentAppShell';
-import { useAuth } from '@/components/SupabaseProvider';
-import { apiRequest, queryClient } from '@/lib/queryClient';
+import { queryClient } from '@/lib/queryClient';
+import { refreshPostPaymentState } from '@/lib/postPaymentRefresh';
 
 export default function PaymentSuccess() {
   const [, navigate] = useLocation();
   const searchParams = useSearch();
-  const { user } = useAuth();
   const [paymentDetails, setPaymentDetails] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -32,9 +31,11 @@ export default function PaymentSuccess() {
       });
     }
 
-    // Invalidate queries to refresh billing data
-    queryClient.invalidateQueries({ queryKey: ['billing-summary'] });
-    queryClient.invalidateQueries({ queryKey: ['payment-history'] });
+    // Invalidate queries to refresh billing data via the centralized helper
+    // (covers billing-summary, payment-history, scheduled-payments and more).
+    refreshPostPaymentState(queryClient).catch((error) => {
+      console.error('Failed to refresh post-payment state:', error);
+    });
     queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments/upcoming'] });
     
     setIsLoading(false);

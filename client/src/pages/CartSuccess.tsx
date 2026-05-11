@@ -6,6 +6,7 @@ import { CheckCircle, ArrowRight, Calendar, CreditCard, Loader2, AlertCircle, Co
 import ParentAppShell from '@/components/layout/ParentAppShell';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
+import { refreshPostPaymentState } from '@/lib/postPaymentRefresh';
 import { useAuth } from '@/components/SupabaseProvider';
 import { useCart } from '@/contexts/CartContext';
 import { trackPurchase } from '@/lib/analytics';
@@ -20,6 +21,7 @@ export default function CartSuccess() {
   const [processedEnrollments, setProcessedEnrollments] = useState<number>(0);
   const [isCreditOnly, setIsCreditOnly] = useState(false);
   const [creditsApplied, setCreditsApplied] = useState(0);
+  const userCartStorageKey = user?.email ? `asa_cart_${user.email}` : 'asa_cart_guest';
 
   useEffect(() => {
     const processCheckoutSuccess = async () => {
@@ -97,7 +99,11 @@ export default function CartSuccess() {
           console.log('✅ Payment succeeded! PaymentIntent:', paymentIntent);
           
           // Get cart data to know how many items were purchased
-          let cartData = localStorage.getItem('cart') || sessionStorage.getItem('cart_backup');
+          let cartData =
+            localStorage.getItem(userCartStorageKey) ||
+            localStorage.getItem('asa_cart') ||
+            localStorage.getItem('cart') ||
+            sessionStorage.getItem('cart_backup');
           let itemCount = 1;
           let enrollmentIds: number[] = [];
           
@@ -184,6 +190,7 @@ export default function CartSuccess() {
           });
 
           // Clear ALL cart data
+          localStorage.removeItem(userCartStorageKey);
           localStorage.removeItem('cart');
           localStorage.removeItem('asa_cart');
           localStorage.removeItem('selectedPaymentPlan');
@@ -199,10 +206,8 @@ export default function CartSuccess() {
             // Continue anyway - cart already cleared in localStorage
           }
           
-          // Invalidate queries to refresh data
-          queryClient.invalidateQueries({ queryKey: ['/api/enrollments'] });
-          queryClient.invalidateQueries({ queryKey: ['billing-summary'] });
-          queryClient.invalidateQueries({ queryKey: ['payment-history'] });
+          // Refresh all payment/membership caches so "Pay now" state converges immediately.
+          await refreshPostPaymentState(queryClient);
           queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments/upcoming'] });
           
           console.log('✅ Cart cleared and queries invalidated');

@@ -5,23 +5,27 @@ import { ZodError } from "zod";
 import { formatZodError } from "../utils";
 import { MembershipService } from "../services/membership-service";
 import { MembershipCheckService } from "../services/membership-check-service";
+import { getChildrenForAuthenticatedParent } from "../lib/parent-auth-scope";
 
 // Get all enrollments for a parent's children
 export const getMyChildrenEnrollments = async (req: any, res: Response) => {
   try {
     // Check multiple possible locations for email in the Auth0 token
-    const userEmail = req.user?.email || req.auth?.payload?.email || req.user?.sub;
-    
+    const rawIdentity = req.user?.email || req.auth?.payload?.email || req.auth?.email;
+    const looksLikeEmail = typeof rawIdentity === 'string' && rawIdentity.includes('@');
+
     console.log('📚 Enrollments API - Auth0 user object:', JSON.stringify(req.user, null, 2));
-    console.log('📚 Enrollments API - Extracted email:', userEmail);
+    console.log('📚 Enrollments API - Extracted identity:', rawIdentity);
     
-    if (!userEmail) {
+    if (!rawIdentity && !req.auth?.supabaseId) {
       console.log('❌ Enrollments API - No email found in token');
       return res.status(401).json({ message: "Not authenticated" });
     }
 
-    // Get all of the parent's children using email instead of session userId
-    const children = await storage.getChildrenByParentEmail(userEmail);
+    const children = await getChildrenForAuthenticatedParent(storage, {
+      email: looksLikeEmail ? rawIdentity : undefined,
+      supabaseId: req.auth?.supabaseId || (typeof req.user?.id === 'string' ? req.user.id : undefined),
+    });
     
     if (!children || children.length === 0) {
       return res.json([]);

@@ -71,6 +71,7 @@ import {
   weekPlanBlockHistory, type WeekPlanBlockHistory, type InsertWeekPlanBlockHistory,
   emailLog, type EmailLog, type InsertEmailLog
 } from "@shared/schema";
+import { normalizeEmailForLookup } from '@shared/parent-identity';
 import { eq, inArray, or, ilike, and, sql } from 'drizzle-orm';
 import { getDb } from './db';
 
@@ -89,6 +90,8 @@ export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
+  getUserBySupabaseId(supabaseId: string): Promise<User | undefined>;
+  getUserByAuth0Id(auth0Id: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: number, user: Partial<InsertUser>): Promise<User | undefined>;
   deleteUser(id: number): Promise<void>;
@@ -910,6 +913,8 @@ export class MemStorage implements IStorage {
   private educatorClassAssignmentsStore: Map<number, EducatorClassAssignment>;
   private classSessionsStore: Map<number, ClassSession>;
   private schoolClassEnrollmentsStore: Map<number, SchoolClassEnrollment>;
+  private notificationsStore: Map<number, Notification>;
+  private notificationRecipientsStore: Map<number, NotificationRecipient>;
 
   private userIdCounter: number;
   private curriculumIdCounter: number;
@@ -935,6 +940,11 @@ export class MemStorage implements IStorage {
   private locationIdCounter: number;
   private educatorClassAssignmentIdCounter: number;
   private classSessionIdCounter: number;
+  private dailyFlowTemplateIdCounter: number;
+  private dailyFlowEntryIdCounter: number;
+  private dailyFlowScheduleIdCounter: number;
+  private notificationIdCounter: number;
+  private notificationRecipientIdCounter: number;
   private classEnrollments: any[];
 
   constructor() {
@@ -966,6 +976,8 @@ export class MemStorage implements IStorage {
     this.educatorClassAssignmentsStore = new Map();
     this.classSessionsStore = new Map();
     this.schoolClassEnrollmentsStore = new Map();
+    this.notificationsStore = new Map();
+    this.notificationRecipientsStore = new Map();
     this.classEnrollments = [];
 
     this.userIdCounter = 1;
@@ -992,6 +1004,11 @@ export class MemStorage implements IStorage {
     this.locationIdCounter = 1;
     this.educatorClassAssignmentIdCounter = 1;
     this.classSessionIdCounter = 1;
+    this.dailyFlowTemplateIdCounter = 1;
+    this.dailyFlowEntryIdCounter = 1;
+    this.dailyFlowScheduleIdCounter = 1;
+    this.notificationIdCounter = 1;
+    this.notificationRecipientIdCounter = 1;
 
     // Initialize with a default admin user
 
@@ -1118,6 +1135,8 @@ export class MemStorage implements IStorage {
     this.technicalIssuesStore.clear();
     this.adminNotificationsStore.clear();
     this.userNotificationsStore.clear();
+    this.notificationsStore.clear();
+    this.notificationRecipientsStore.clear();
     this.classEnrollments = [];
     
     // Reset ID counters
@@ -1156,9 +1175,23 @@ export class MemStorage implements IStorage {
   }
 
   async getUserByEmail(email: string): Promise<User | undefined> {
+    const key = normalizeEmailForLookup(email);
+    if (!key) return undefined;
     return Array.from(this.usersStore.values()).find(
-      (user) => user.email === email,
+      (user) => normalizeEmailForLookup(user.email) === key,
     );
+  }
+
+  async getUserBySupabaseId(supabaseId: string): Promise<User | undefined> {
+    const id = supabaseId?.trim();
+    if (!id) return undefined;
+    return Array.from(this.usersStore.values()).find((u) => u.supabaseId === id);
+  }
+
+  async getUserByAuth0Id(auth0Id: string): Promise<User | undefined> {
+    const id = auth0Id?.trim();
+    if (!id) return undefined;
+    return Array.from(this.usersStore.values()).find((u) => u.auth0Id === id);
   }
 
   async createUser(userData: InsertUser): Promise<User> {
@@ -1842,7 +1875,9 @@ export class MemStorage implements IStorage {
   }
 
   async getChildrenByParentEmail(parentEmail: string): Promise<Child[]> {
-    return Array.from(this.childrenStore.values()).filter(child => (child as any).parentEmail === parentEmail);
+    const parent = await this.getUserByEmail(parentEmail);
+    if (!parent) return [];
+    return this.getChildrenByParentId(parent.id);
   }
 
   async createChild(childData: InsertChild & { parentId: number }): Promise<Child> {
@@ -2230,13 +2265,14 @@ export class MemStorage implements IStorage {
 
       // Verify ownership by checking if the child belongs to the parent
       const child = await this.getChildById(enrollment.childId);
-      if (!child || child.parentUserId !== parentUserId) {
+      if (!child || child.parentId !== parentUserId) {
         errors.push(`Enrollment ${id} does not belong to this parent`);
         continue;
       }
 
       // Skip if enrollment has been paid
-      if (enrollment.amountPaid && enrollment.amountPaid > 0) {
+      const paid = enrollment.totalPaid ?? 0;
+      if (paid > 0) {
         skipped.push(id);
         continue;
       }
@@ -2267,7 +2303,7 @@ export class MemStorage implements IStorage {
     
     const uniqueCustomerIds = new Set(
       enrollments
-        .filter(e => e.parentEmail === parentEmail && activeStatuses.includes(e.status) && e.stripeCustomerId)
+        .filter(e => normalizeEmailForLookup(e.parentEmail) === normalizeEmailForLookup(parentEmail) && activeStatuses.includes(e.status) && e.stripeCustomerId)
         .map(e => e.stripeCustomerId!)
     );
     
@@ -2280,7 +2316,7 @@ export class MemStorage implements IStorage {
     
     return Array.from(this.programEnrollmentsStore.values())
       .filter(e => 
-        e.parentEmail === parentEmail && 
+        normalizeEmailForLookup(e.parentEmail) === normalizeEmailForLookup(parentEmail) && 
         activeStatuses.includes(e.status) && 
         e.stripeCustomerId !== null
       );
@@ -2622,11 +2658,27 @@ export class MemStorage implements IStorage {
   }
 
   async getAllEnrollments(): Promise<any[]> {
-    if (!this.classEnrollments) {
-      console.log(`📝 No classEnrollments array exists`);
-      return [];
+    const legacyEnrollments = this.classEnrollments || [];
+    const programEnrollments = Array.from(this.programEnrollmentsStore.values());
+
+    if (legacyEnrollments.length === 0) {
+      return programEnrollments;
     }
-    return this.classEnrollments;
+    if (programEnrollments.length === 0) {
+      return legacyEnrollments;
+    }
+
+    // Merge legacy + program enrollment sources while avoiding obvious duplicates.
+    const seen = new Set<string>();
+    const merged: any[] = [];
+    for (const enrollment of [...legacyEnrollments, ...programEnrollments]) {
+      const key = `${enrollment.id}:${enrollment.childId}:${enrollment.classId ?? enrollment.marketplaceClassId ?? 'na'}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        merged.push(enrollment);
+      }
+    }
+    return merged;
   }
 
   async getEnrollmentsByIds(enrollmentIds: number[]): Promise<any[]> {
@@ -4321,6 +4373,119 @@ export class MemStorage implements IStorage {
     return notification;
   }
 
+  async getNotificationById(id: number): Promise<Notification | undefined> {
+    return this.notificationsStore.get(id);
+  }
+
+  async getAllNotifications(): Promise<Notification[]> {
+    return Array.from(this.notificationsStore.values()).sort((a, b) => b.id - a.id);
+  }
+
+  async getNotificationsByUserId(userId: number, role?: string): Promise<Notification[]> {
+    const notifications = Array.from(this.notificationsStore.values()).filter((n: any) => {
+      const hasRecipient = Array.from(this.notificationRecipientsStore.values()).some(
+        (r) => r.notificationId === n.id && r.recipientId === userId
+      );
+      if (hasRecipient) return true;
+      if (!role) return (n.targetData as any)?.userIds?.includes(userId);
+      if ((n.targetData as any)?.userIds?.includes(userId)) return true;
+      const roles = (n.targetData as any)?.roles || [];
+      return roles.includes(role);
+    });
+
+    return notifications.map((n: any) => {
+      const inAppRecipient = Array.from(this.notificationRecipientsStore.values()).find(
+        (r) => r.notificationId === n.id && r.recipientId === userId && r.deliveryType === "in_app"
+      );
+      return { ...n, readAt: inAppRecipient?.readAt ?? null };
+    });
+  }
+
+  async createNotification(notification: InsertNotification): Promise<Notification> {
+    const created = {
+      id: this.notificationIdCounter++,
+      senderId: notification.senderId ?? null,
+      type: notification.type ?? 'in_app',
+      priority: notification.priority ?? 'normal',
+      subject: notification.subject,
+      content: notification.content,
+      targetType: notification.targetType,
+      targetData: notification.targetData ?? null,
+      scheduledFor: notification.scheduledFor ?? null,
+      expiresAt: notification.expiresAt ?? null,
+      status: notification.status ?? 'pending',
+      sentAt: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as Notification;
+
+    this.notificationsStore.set(created.id, created);
+
+    const userIds = ((notification.targetData as any)?.userIds || []) as number[];
+    for (const uid of userIds) {
+      await this.createNotificationRecipient({
+        notificationId: created.id,
+        recipientId: uid,
+        deliveryType: 'in_app',
+        status: 'pending',
+      } as any);
+    }
+
+    return created;
+  }
+
+  async updateNotification(id: number, notification: Partial<InsertNotification>): Promise<Notification | undefined> {
+    const existing = this.notificationsStore.get(id);
+    if (!existing) return undefined;
+    const updated = { ...existing, ...notification, updatedAt: new Date() } as Notification;
+    this.notificationsStore.set(id, updated);
+    return updated;
+  }
+
+  async deleteNotification(id: number): Promise<void> {
+    this.notificationsStore.delete(id);
+    for (const [rid, recipient] of this.notificationRecipientsStore.entries()) {
+      if (recipient.notificationId === id) this.notificationRecipientsStore.delete(rid);
+    }
+  }
+
+  async getNotificationRecipientById(id: number): Promise<NotificationRecipient | undefined> {
+    return this.notificationRecipientsStore.get(id);
+  }
+
+  async getNotificationRecipientsByNotificationId(notificationId: number): Promise<NotificationRecipient[]> {
+    return Array.from(this.notificationRecipientsStore.values()).filter((r) => r.notificationId === notificationId);
+  }
+
+  async getNotificationRecipientsByUserId(userId: number): Promise<NotificationRecipient[]> {
+    return Array.from(this.notificationRecipientsStore.values()).filter((r) => r.recipientId === userId);
+  }
+
+  async createNotificationRecipient(recipient: InsertNotificationRecipient): Promise<NotificationRecipient> {
+    const created = {
+      id: this.notificationRecipientIdCounter++,
+      notificationId: recipient.notificationId,
+      recipientId: recipient.recipientId,
+      deliveryType: recipient.deliveryType ?? 'in_app',
+      status: recipient.status ?? 'pending',
+      sentAt: recipient.sentAt ?? null,
+      readAt: recipient.readAt ?? null,
+      errorMessage: recipient.errorMessage ?? null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as NotificationRecipient;
+    this.notificationRecipientsStore.set(created.id, created);
+    return created;
+  }
+
+  async updateNotificationRecipient(id: number, recipient: Partial<InsertNotificationRecipient>): Promise<NotificationRecipient | undefined> {
+    const existing = this.notificationRecipientsStore.get(id);
+    if (!existing) return undefined;
+    const updated = { ...existing, ...recipient, updatedAt: new Date() } as NotificationRecipient;
+    this.notificationRecipientsStore.set(id, updated);
+    return updated;
+  }
+
   // Role invitation methods (implements both interface signatures)
   async createRoleInvitation(invitation: any): Promise<any> {
     // For in-memory storage, just return a mock invitation
@@ -5449,7 +5614,22 @@ import { DatabaseStorage } from "./dbStorage";
     }
 
     async getAllEnrollments(): Promise<ProgramEnrollment[]> {
-      return this.dbStorage.getAllEnrollments();
+      try {
+        const enrollments = await this.dbStorage.getAllEnrollments();
+        if (process.env.NODE_ENV !== 'production' && (!enrollments || enrollments.length === 0)) {
+          const fallback = await this.memStorage.getAllEnrollments();
+          if (fallback.length > 0) {
+            return fallback;
+          }
+        }
+        return enrollments;
+      } catch (error) {
+        if (process.env.NODE_ENV !== 'production') {
+          console.error('❌ Error getting enrollments from database, falling back to memStorage:', error);
+          return await this.memStorage.getAllEnrollments();
+        }
+        throw error;
+      }
     }
 
     async getEnrollmentsBySchoolId(schoolId: number): Promise<ProgramEnrollment[]> {
@@ -5572,7 +5752,7 @@ import { DatabaseStorage } from "./dbStorage";
           if (fs.existsSync(USERS_FILE)) {
             const fileContent = fs.readFileSync(USERS_FILE, 'utf8');
             const users = JSON.parse(fileContent);
-            const user = users.find((u: any) => u.email.toLowerCase() === email.toLowerCase());
+            const user = users.find((u: any) => normalizeEmailForLookup(u.email) === normalizeEmailForLookup(email));
             console.log('🔍 File storage lookup result for', email, ':', user ? 'Found' : 'Not found');
             return user;
           }
@@ -5582,6 +5762,24 @@ import { DatabaseStorage } from "./dbStorage";
           console.log('❌ File storage fallback failed:', fileError);
           return undefined;
         }
+      }
+    }
+
+    async getUserBySupabaseId(supabaseId: string): Promise<User | undefined> {
+      try {
+        return await this.dbStorage.getUserBySupabaseId(supabaseId);
+      } catch (error) {
+        console.error('❌ Database error in getUserBySupabaseId:', error);
+        return await this.memStorage.getUserBySupabaseId(supabaseId);
+      }
+    }
+
+    async getUserByAuth0Id(auth0Id: string): Promise<User | undefined> {
+      try {
+        return await this.dbStorage.getUserByAuth0Id(auth0Id);
+      } catch (error) {
+        console.error('❌ Database error in getUserByAuth0Id:', error);
+        return await this.memStorage.getUserByAuth0Id(auth0Id);
       }
     }
 
@@ -6013,8 +6211,15 @@ import { DatabaseStorage } from "./dbStorage";
     }
 
     async getChildById(id: number): Promise<Child | undefined> {
-      // Use dbStorage for child retrieval to get data from database
-      return this.dbStorage.getChildById(id);
+      try {
+        return await this.dbStorage.getChildById(id);
+      } catch (error) {
+        if (process.env.NODE_ENV === 'production') {
+          throw error;
+        }
+        console.error('❌ Database error in getChildById, falling back to memStorage:', error);
+        return await this.memStorage.getChildById(id);
+      }
     }
 
     async getChildByIdAndSchoolId(childId: number, schoolId: number): Promise<Child | undefined> {
@@ -6026,8 +6231,15 @@ import { DatabaseStorage } from "./dbStorage";
     }
 
     async getChildrenByParentId(parentId: number): Promise<Child[]> {
-      // Use dbStorage for children retrieval to get data from database
-      return this.dbStorage.getChildrenByParentId(parentId);
+      try {
+        return await this.dbStorage.getChildrenByParentId(parentId);
+      } catch (error) {
+        if (process.env.NODE_ENV === 'production') {
+          throw error;
+        }
+        console.error('❌ Database error in getChildrenByParentId, falling back to memStorage:', error);
+        return await this.memStorage.getChildrenByParentId(parentId);
+      }
     }
 
     async getChildrenByParentEmail(parentEmail: string): Promise<Child[]> {
@@ -6041,8 +6253,17 @@ import { DatabaseStorage } from "./dbStorage";
     }
 
     async getAllChildren(): Promise<Child[]> {
-      // Use dbStorage for children retrieval to get data from database
-      return this.dbStorage.getAllChildren();
+      try {
+        const children = await this.dbStorage.getAllChildren();
+        if (process.env.NODE_ENV !== 'production' && (!children || children.length === 0)) {
+          const fallback = await this.memStorage.getAllChildren();
+          if (fallback.length > 0) return fallback;
+        }
+        return children;
+      } catch (error) {
+        if (process.env.NODE_ENV === 'production') throw error;
+        return await this.memStorage.getAllChildren();
+      }
     }
 
     async createChild(child: InsertChild & { parentId: number }): Promise<Child> {
@@ -6098,23 +6319,48 @@ import { DatabaseStorage } from "./dbStorage";
     }
 
     async getEmergencyContactById(id: number): Promise<EmergencyContact | undefined> {
-      return this.dbStorage.getEmergencyContactById(id);
+      try {
+        return await this.dbStorage.getEmergencyContactById(id);
+      } catch (error) {
+        if (process.env.NODE_ENV === 'production') throw error;
+        return await this.memStorage.getEmergencyContactById(id);
+      }
     }
 
     async getEmergencyContactsByUserId(userId: number): Promise<EmergencyContact[]> {
-      return this.dbStorage.getEmergencyContactsByUserId(userId);
+      try {
+        return await this.dbStorage.getEmergencyContactsByUserId(userId);
+      } catch (error) {
+        if (process.env.NODE_ENV === 'production') throw error;
+        return await this.memStorage.getEmergencyContactsByUserId(userId);
+      }
     }
 
     async createEmergencyContact(contact: InsertEmergencyContact & { userId: number }): Promise<EmergencyContact> {
-      return this.dbStorage.createEmergencyContact(contact);
+      try {
+        return await this.dbStorage.createEmergencyContact(contact);
+      } catch (error) {
+        if (process.env.NODE_ENV === 'production') throw error;
+        return await this.memStorage.createEmergencyContact(contact);
+      }
     }
 
     async updateEmergencyContact(id: number, contact: Partial<InsertEmergencyContact>): Promise<EmergencyContact | undefined> {
-      return this.dbStorage.updateEmergencyContact(id, contact);
+      try {
+        return await this.dbStorage.updateEmergencyContact(id, contact);
+      } catch (error) {
+        if (process.env.NODE_ENV === 'production') throw error;
+        return await this.memStorage.updateEmergencyContact(id, contact);
+      }
     }
 
     async deleteEmergencyContact(id: number): Promise<void> {
-      return this.dbStorage.deleteEmergencyContact(id);
+      try {
+        return await this.dbStorage.deleteEmergencyContact(id);
+      } catch (error) {
+        if (process.env.NODE_ENV === 'production') throw error;
+        return await this.memStorage.deleteEmergencyContact(id);
+      }
     }
 
     async getProgramById(id: number): Promise<Program | undefined> {
@@ -6213,7 +6459,12 @@ import { DatabaseStorage } from "./dbStorage";
     }
 
     async getEnrollmentCountForClass(classId: number): Promise<number> {
-      return await this.dbStorage.getEnrollmentCountForClass(classId);
+      try {
+        return await this.dbStorage.getEnrollmentCountForClass(classId);
+      } catch (error) {
+        if (process.env.NODE_ENV === 'production') throw error;
+        return await this.memStorage.getEnrollmentCountForClass(classId);
+      }
     }
 
     async createProgramEnrollment(enrollment: InsertProgramEnrollment): Promise<ProgramEnrollment> {
@@ -6256,94 +6507,78 @@ import { DatabaseStorage } from "./dbStorage";
     }
 
     async cancelPendingEnrollments(enrollmentIds: number[], parentUserId: number): Promise<{ cancelled: number[]; skipped: number[]; errors: string[] }> {
-      return this.dbStorage.cancelPendingEnrollments(enrollmentIds, parentUserId);
+      try {
+        return await this.dbStorage.cancelPendingEnrollments(enrollmentIds, parentUserId);
+      } catch (error) {
+        if (process.env.NODE_ENV === 'production') {
+          throw error;
+        }
+        console.error('❌ cancelPendingEnrollments DB error, using memStorage:', error);
+        return await this.memStorage.cancelPendingEnrollments(enrollmentIds, parentUserId);
+      }
     }
 
     async getStripeCustomerIdsByParentEmail(parentEmail: string): Promise<string[]> {
-      const db = await getDb();
-      const { eq, and, inArray, isNotNull } = await import('drizzle-orm');
-      
-      const uniqueCustomerIds = new Set<string>();
-      
-      // Source 1: Program enrollments
-      const activeStatuses = ['pending_payment', 'enrolled', 'completed'] as const;
-      const enrollments = await db.select({
-        stripeCustomerId: programEnrollments.stripeCustomerId
-      })
-      .from(programEnrollments)
-      .where(
-        and(
-          eq(programEnrollments.parentEmail, parentEmail),
-          isNotNull(programEnrollments.stripeCustomerId),
-          inArray(programEnrollments.status, activeStatuses)
-        )
-      );
-      
-      enrollments.forEach(e => {
-        if (e.stripeCustomerId) uniqueCustomerIds.add(e.stripeCustomerId);
-      });
-      
-      // Source 2: Users table (primary Stripe customer ID)
-      const userResult = await db.select({
-        stripeCustomerId: users.stripeCustomerId
-      })
-      .from(users)
-      .where(
-        and(
-          eq(users.email, parentEmail),
-          isNotNull(users.stripeCustomerId)
-        )
-      )
-      .limit(1);
-      
-      if (userResult.length > 0 && userResult[0].stripeCustomerId) {
-        uniqueCustomerIds.add(userResult[0].stripeCustomerId);
-      }
-      
-      // Source 3: Membership enrollments (via user lookup)
-      // First get user ID, then query membership enrollments
-      const userForMembership = await db.select({ id: users.id })
-        .from(users)
-        .where(eq(users.email, parentEmail))
-        .limit(1);
-      
-      if (userForMembership.length > 0) {
-        const membershipEnrollmentResults = await db.select({
-          stripeCustomerId: membershipEnrollments.stripeCustomerId
-        })
-        .from(membershipEnrollments)
-        .where(
-          and(
-            eq(membershipEnrollments.parentUserId, userForMembership[0].id),
-            isNotNull(membershipEnrollments.stripeCustomerId)
-          )
-        );
-        
-        membershipEnrollmentResults.forEach(m => {
-          if (m.stripeCustomerId) uniqueCustomerIds.add(m.stripeCustomerId);
-        });
-      }
-      
-      console.log(`💳 Found ${uniqueCustomerIds.size} unique Stripe customer IDs for ${parentEmail}`);
-      
-      return Array.from(uniqueCustomerIds);
-    }
+      try {
+        const db = await getDb();
+        const { and, inArray, isNotNull, sql } = await import('drizzle-orm');
+        const normalized = normalizeEmailForLookup(parentEmail);
+        if (!normalized) return [];
 
-    async getStripeLinkedEnrollmentsByParentEmail(parentEmail: string): Promise<ProgramEnrollment[]> {
-      const db = await getDb();
-      const { eq, and, inArray, isNotNull } = await import('drizzle-orm');
-      
-      // Get all enrollments with Stripe data for active statuses
-      const activeStatuses = ['pending_payment', 'enrolled', 'completed'] as const;
-      return await db.select()
+        // Get enrollments with Stripe customer IDs for active statuses
+        const activeStatuses = ['pending_payment', 'enrolled', 'completed'] as const;
+        const enrollments = await db.select({
+          stripeCustomerId: programEnrollments.stripeCustomerId
+        })
         .from(programEnrollments)
         .where(
           and(
-            eq(programEnrollments.parentEmail, parentEmail),
+            sql`lower(trim(${programEnrollments.parentEmail})) = ${normalized}`,
             isNotNull(programEnrollments.stripeCustomerId),
             inArray(programEnrollments.status, activeStatuses)
           )
         );
+        
+        // Deduplicate customer IDs using Set
+        const uniqueCustomerIds = new Set(
+          enrollments
+            .map(e => e.stripeCustomerId)
+            .filter((id): id is string => id !== null)
+        );
+        
+        return Array.from(uniqueCustomerIds);
+      } catch (error) {
+        if (process.env.NODE_ENV === 'production') {
+          throw error;
+        }
+        return [];
+      }
+    }
+
+    async getStripeLinkedEnrollmentsByParentEmail(parentEmail: string): Promise<ProgramEnrollment[]> {
+      try {
+        const db = await getDb();
+        const { and, inArray, isNotNull, sql } = await import('drizzle-orm');
+        const normalized = normalizeEmailForLookup(parentEmail);
+        if (!normalized) return [];
+
+        // Get all enrollments with Stripe data for active statuses
+        const activeStatuses = ['pending_payment', 'enrolled', 'completed'] as const;
+        return await db.select()
+          .from(programEnrollments)
+          .where(
+            and(
+              sql`lower(trim(${programEnrollments.parentEmail})) = ${normalized}`,
+              isNotNull(programEnrollments.stripeCustomerId),
+              inArray(programEnrollments.status, activeStatuses)
+            )
+          );
+      } catch (error) {
+        if (process.env.NODE_ENV === 'production') {
+          throw error;
+        }
+        return [];
+      }
     }
 
     async getEnrollmentsByParentEmail(parentEmail: string): Promise<ProgramEnrollment[]> {
@@ -6484,15 +6719,30 @@ import { DatabaseStorage } from "./dbStorage";
     }
 
     async getClasses(options: { page: number; limit: number; search?: string; category?: string; status?: "published" | "draft" | "" }): Promise<Class[]> {
-      return this.dbStorage.getClasses(options);
+      try {
+        return await this.dbStorage.getClasses(options);
+      } catch (error) {
+        if (process.env.NODE_ENV === 'production') throw error;
+        return await this.memStorage.getClasses(options);
+      }
     }
 
     async getClassesCount(options: { search?: string; category?: string; status?: "published" | "draft" | "" }): Promise<number> {
-      return this.dbStorage.getClassesCount(options);
+      try {
+        return await this.dbStorage.getClassesCount(options);
+      } catch (error) {
+        if (process.env.NODE_ENV === 'production') throw error;
+        return await this.memStorage.getClassesCount(options);
+      }
     }
 
     async getAllClasses(): Promise<Class[]> {
-      return this.dbStorage.getAllClasses();
+      try {
+        return await this.dbStorage.getAllClasses();
+      } catch (error) {
+        if (process.env.NODE_ENV === 'production') throw error;
+        return await this.memStorage.getAllClasses();
+      }
     }
 
     async createClass(classData: InsertClass & { instructorId: number }): Promise<Class> {
@@ -6516,11 +6766,21 @@ import { DatabaseStorage } from "./dbStorage";
     }
 
     async updateClass(id: number, classData: Partial<InsertClass>): Promise<Class | undefined> {
-      return this.dbStorage.updateClass(id, classData);
+      try {
+        return await this.dbStorage.updateClass(id, classData);
+      } catch (error) {
+        if (process.env.NODE_ENV === 'production') throw error;
+        return await this.memStorage.updateClass(id, classData);
+      }
     }
 
     async deleteClass(id: number): Promise<void> {
-      return this.dbStorage.deleteClass(id);
+      try {
+        return await this.dbStorage.deleteClass(id);
+      } catch (error) {
+        if (process.env.NODE_ENV === 'production') throw error;
+        return await this.memStorage.deleteClass(id);
+      }
     }
 
     async getActiveRoleInvitation(tokenOrEmail: string): Promise<RoleInvitation | undefined> {
@@ -7102,27 +7362,57 @@ import { DatabaseStorage } from "./dbStorage";
 
       // Notification methods
       async getNotificationById(id: number): Promise<Notification | undefined> {
-        return this.dbStorage.getNotificationById(id);
+        try {
+          return await this.dbStorage.getNotificationById(id);
+        } catch (error) {
+          if (process.env.NODE_ENV === 'production') throw error;
+          return await this.memStorage.getNotificationById(id);
+        }
       }
 
       async getAllNotifications(): Promise<Notification[]> {
-        return this.dbStorage.getAllNotifications();
+        try {
+          return await this.dbStorage.getAllNotifications();
+        } catch (error) {
+          if (process.env.NODE_ENV === 'production') throw error;
+          return await this.memStorage.getAllNotifications();
+        }
       }
 
       async getNotificationsByUserId(userId: number, role?: string): Promise<Notification[]> {
-        return this.dbStorage.getNotificationsByUserId(userId, role);
+        try {
+          return await this.dbStorage.getNotificationsByUserId(userId, role);
+        } catch (error) {
+          if (process.env.NODE_ENV === 'production') throw error;
+          return await this.memStorage.getNotificationsByUserId(userId, role);
+        }
       }
 
       async createNotification(notification: InsertNotification): Promise<Notification> {
-        return this.dbStorage.createNotification(notification);
+        try {
+          return await this.dbStorage.createNotification(notification);
+        } catch (error) {
+          if (process.env.NODE_ENV === 'production') throw error;
+          return await this.memStorage.createNotification(notification);
+        }
       }
 
       async updateNotification(id: number, notification: Partial<InsertNotification>): Promise<Notification | undefined> {
-        return this.dbStorage.updateNotification(id, notification);
+        try {
+          return await this.dbStorage.updateNotification(id, notification);
+        } catch (error) {
+          if (process.env.NODE_ENV === 'production') throw error;
+          return await this.memStorage.updateNotification(id, notification);
+        }
       }
 
       async deleteNotification(id: number): Promise<void> {
-        return this.dbStorage.deleteNotification(id);
+        try {
+          return await this.dbStorage.deleteNotification(id);
+        } catch (error) {
+          if (process.env.NODE_ENV === 'production') throw error;
+          return await this.memStorage.deleteNotification(id);
+        }
       }
 
       // Announcement methods (school-scoped notifications)
@@ -7144,23 +7434,48 @@ import { DatabaseStorage } from "./dbStorage";
 
       // Notification recipient methods
       async getNotificationRecipientById(id: number): Promise<NotificationRecipient | undefined> {
-        return this.dbStorage.getNotificationRecipientById(id);
+        try {
+          return await this.dbStorage.getNotificationRecipientById(id);
+        } catch (error) {
+          if (process.env.NODE_ENV === 'production') throw error;
+          return await this.memStorage.getNotificationRecipientById(id);
+        }
       }
 
       async getNotificationRecipientsByNotificationId(notificationId: number): Promise<NotificationRecipient[]> {
-        return this.dbStorage.getNotificationRecipientsByNotificationId(notificationId);
+        try {
+          return await this.dbStorage.getNotificationRecipientsByNotificationId(notificationId);
+        } catch (error) {
+          if (process.env.NODE_ENV === 'production') throw error;
+          return await this.memStorage.getNotificationRecipientsByNotificationId(notificationId);
+        }
       }
 
       async getNotificationRecipientsByUserId(userId: number): Promise<NotificationRecipient[]> {
-        return this.dbStorage.getNotificationRecipientsByUserId(userId);
+        try {
+          return await this.dbStorage.getNotificationRecipientsByUserId(userId);
+        } catch (error) {
+          if (process.env.NODE_ENV === 'production') throw error;
+          return await this.memStorage.getNotificationRecipientsByUserId(userId);
+        }
       }
 
       async createNotificationRecipient(recipient: InsertNotificationRecipient): Promise<NotificationRecipient> {
-        return this.dbStorage.createNotificationRecipient(recipient);
+        try {
+          return await this.dbStorage.createNotificationRecipient(recipient);
+        } catch (error) {
+          if (process.env.NODE_ENV === 'production') throw error;
+          return await this.memStorage.createNotificationRecipient(recipient);
+        }
       }
 
       async updateNotificationRecipient(id: number, recipient: Partial<InsertNotificationRecipient>): Promise<NotificationRecipient | undefined> {
-        return this.dbStorage.updateNotificationRecipient(id, recipient);
+        try {
+          return await this.dbStorage.updateNotificationRecipient(id, recipient);
+        } catch (error) {
+          if (process.env.NODE_ENV === 'production') throw error;
+          return await this.memStorage.updateNotificationRecipient(id, recipient);
+        }
       }
 
       // Push Subscription methods
@@ -7194,7 +7509,12 @@ import { DatabaseStorage } from "./dbStorage";
       }
 
       async getAllDiscounts(): Promise<Discount[]> {
-        return this.dbStorage.getAllDiscounts();
+        try {
+          return await this.dbStorage.getAllDiscounts();
+        } catch (error) {
+          if (process.env.NODE_ENV === 'production') throw error;
+          return await this.memStorage.getAllDiscounts();
+        }
       }
 
       async getDiscountsBySchoolId(schoolId: number): Promise<Discount[]> {
@@ -7202,7 +7522,12 @@ import { DatabaseStorage } from "./dbStorage";
       }
 
       async createDiscount(discount: InsertDiscount): Promise<Discount> {
-        return this.dbStorage.createDiscount(discount);
+        try {
+          return await this.dbStorage.createDiscount(discount);
+        } catch (error) {
+          if (process.env.NODE_ENV === 'production') throw error;
+          return await this.memStorage.createDiscount(discount);
+        }
       }
 
       async updateDiscount(id: number, discount: Partial<InsertDiscount>): Promise<Discount | undefined> {
@@ -7252,27 +7577,69 @@ import { DatabaseStorage } from "./dbStorage";
 
       // Membership Enrollment methods
       async getMembershipEnrollmentById(id: number): Promise<MembershipEnrollment | undefined> {
-        return this.dbStorage.getMembershipEnrollmentById(id);
+        try {
+          return await this.dbStorage.getMembershipEnrollmentById(id);
+        } catch (error) {
+          if (process.env.NODE_ENV === 'production') {
+            throw error;
+          }
+          return await this.memStorage.getMembershipEnrollmentById(id);
+        }
       }
 
       async getMembershipEnrollmentsByParentId(parentUserId: number): Promise<MembershipEnrollment[]> {
-        return this.dbStorage.getMembershipEnrollmentsByParentId(parentUserId);
+        try {
+          return await this.dbStorage.getMembershipEnrollmentsByParentId(parentUserId);
+        } catch (error) {
+          if (process.env.NODE_ENV === 'production') {
+            throw error;
+          }
+          return await this.memStorage.getMembershipEnrollmentsByParentId(parentUserId);
+        }
       }
 
       async getMembershipEnrollmentsBySchoolId(schoolId: number): Promise<MembershipEnrollment[]> {
-        return this.dbStorage.getMembershipEnrollmentsBySchoolId(schoolId);
+        try {
+          return await this.dbStorage.getMembershipEnrollmentsBySchoolId(schoolId);
+        } catch (error) {
+          if (process.env.NODE_ENV === 'production') {
+            throw error;
+          }
+          return await this.memStorage.getMembershipEnrollmentsBySchoolId(schoolId);
+        }
       }
 
       async getMembershipEnrollmentByParentAndSchoolAndYear(parentUserId: number, schoolId: number, membershipYear: number): Promise<MembershipEnrollment | undefined> {
-        return this.dbStorage.getMembershipEnrollmentByParentAndSchoolAndYear(parentUserId, schoolId, membershipYear);
+        try {
+          return await this.dbStorage.getMembershipEnrollmentByParentAndSchoolAndYear(parentUserId, schoolId, membershipYear);
+        } catch (error) {
+          if (process.env.NODE_ENV === 'production') {
+            throw error;
+          }
+          return await this.memStorage.getMembershipEnrollmentByParentAndSchoolAndYear(parentUserId, schoolId, membershipYear);
+        }
       }
 
       async createMembershipEnrollment(enrollment: InsertMembershipEnrollment): Promise<MembershipEnrollment> {
-        return this.dbStorage.createMembershipEnrollment(enrollment);
+        try {
+          return await this.dbStorage.createMembershipEnrollment(enrollment);
+        } catch (error) {
+          if (process.env.NODE_ENV === 'production') {
+            throw error;
+          }
+          return await this.memStorage.createMembershipEnrollment(enrollment);
+        }
       }
 
       async updateMembershipEnrollment(id: number, enrollment: Partial<InsertMembershipEnrollment>): Promise<MembershipEnrollment | undefined> {
-        return this.dbStorage.updateMembershipEnrollment(id, enrollment);
+        try {
+          return await this.dbStorage.updateMembershipEnrollment(id, enrollment);
+        } catch (error) {
+          if (process.env.NODE_ENV === 'production') {
+            throw error;
+          }
+          return await this.memStorage.updateMembershipEnrollment(id, enrollment);
+        }
       }
 
       async deleteMembershipEnrollment(id: number): Promise<void> {

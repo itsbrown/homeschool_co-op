@@ -2,6 +2,8 @@ import { storage } from '../storage';
 import { MembershipService } from './membership-service';
 
 export class MembershipStatusService {
+  private static membershipStatusInterval: ReturnType<typeof setInterval> | null = null;
+
   /**
    * Updates all membership statuses based on current date and payment status
    */
@@ -187,14 +189,32 @@ export class MembershipStatusService {
    * Initialize membership status update job (run daily)
    */
   static initializeMembershipStatusJob(): void {
+    if (this.membershipStatusInterval) {
+      console.log('ℹ️ Membership status update job already running; skipping duplicate start');
+      return;
+    }
+
     // Run immediately
-    this.updateAllMembershipStatuses();
+    this.updateAllMembershipStatuses().catch((error) => {
+      console.error('❌ Initial membership status update failed:', error);
+    });
     
     // Then run every 24 hours
-    setInterval(() => {
-      this.updateAllMembershipStatuses();
+    this.membershipStatusInterval = setInterval(() => {
+      this.updateAllMembershipStatuses().catch((error) => {
+        console.error('❌ Scheduled membership status update failed:', error);
+      });
     }, 24 * 60 * 60 * 1000); // 24 hours in milliseconds
+    this.membershipStatusInterval.unref?.();
     
     console.log('✅ Membership status update job initialized - will run every 24 hours');
+  }
+
+  static stopMembershipStatusJob(): void {
+    if (this.membershipStatusInterval) {
+      clearInterval(this.membershipStatusInterval);
+      this.membershipStatusInterval = null;
+      console.log('🛑 Membership status update job stopped');
+    }
   }
 }

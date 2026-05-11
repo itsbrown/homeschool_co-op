@@ -48,6 +48,40 @@ export class SupabaseStorage implements IStorage {
     return data;
   }
 
+  async getUserBySupabaseId(supabaseId: string): Promise<DatabaseUser | undefined> {
+    const id = supabaseId?.trim();
+    if (!id) return undefined;
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('supabase_id', id)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Error fetching user by supabase id:', error);
+      return undefined;
+    }
+
+    return data ?? undefined;
+  }
+
+  async getUserByAuth0Id(auth0Id: string): Promise<DatabaseUser | undefined> {
+    const id = auth0Id?.trim();
+    if (!id) return undefined;
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('auth0_id', id)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Error fetching user by auth0 id:', error);
+      return undefined;
+    }
+
+    return data ?? undefined;
+  }
+
   async createUser(userData: any): Promise<any> {
     const { data, error } = await supabase
       .from('users')
