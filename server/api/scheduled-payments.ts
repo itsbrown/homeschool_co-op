@@ -15,14 +15,21 @@ router.get('/upcoming', supabaseAuth, async (req: any, res) => {
 
     // Get scheduled payments from local database
     const allScheduledPayments = await storage.getScheduledPaymentsByParentEmail(userEmail);
-    
-    // Filter for pending payments only (future installments)
-    const pendingPayments = allScheduledPayments.filter(p => p.status === 'pending');
-    
-    console.log(`📊 Found ${pendingPayments.length} pending scheduled payments for ${userEmail}`);
+
+    const filtered = allScheduledPayments.filter((p) => {
+      const s = String(p.status);
+      return s === 'pending' || s === 'failed' || s === 'overdue';
+    });
+
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    console.log(
+      `📊 Found ${filtered.length} actionable scheduled payments (pending/overdue/failed) for ${userEmail}`,
+    );
 
     // Get enrollment details for enrichment
-    const enrichedPayments = await Promise.all(pendingPayments.map(async (payment) => {
+    const enrichedPayments = await Promise.all(filtered.map(async (payment) => {
       let enrollmentDetails = null;
       if (payment.enrollmentId) {
         const enrollment = await storage.getEnrollmentById(payment.enrollmentId);
@@ -35,6 +42,13 @@ router.get('/upcoming', supabaseAuth, async (req: any, res) => {
       }
       
       const metadata = payment.metadata as any || {};
+      const due = new Date(payment.scheduledDate);
+      due.setHours(0, 0, 0, 0);
+      const rawStatus = String(payment.status);
+      const overdue =
+        rawStatus === 'overdue' ||
+        (rawStatus === 'pending' && due.getTime() < startOfToday.getTime());
+
       return {
         id: payment.id,
         amount: payment.amount,
@@ -46,7 +60,10 @@ router.get('/upcoming', supabaseAuth, async (req: any, res) => {
         totalInstallments: payment.totalInstallments,
         enrollmentId: payment.enrollmentId,
         className: enrollmentDetails?.className || 'Class',
-        childName: enrollmentDetails?.childName || ''
+        childName: enrollmentDetails?.childName || '',
+        retryCount: payment.retryCount ?? 0,
+        failureReason: payment.failureReason ?? null,
+        overdue,
       };
     }));
 
@@ -331,7 +348,8 @@ router.patch('/:id/paid', supabaseAuth, async (req: any, res) => {
         error: 'Payment does not belong to this user'
       });
     }
-    if (payment.status !== 'pending' && payment.status !== 'overdue') {
+    const st = String(payment.status);
+    if (st !== 'pending' && st !== 'overdue') {
       return res.status(400).json({
         success: false,
         error: `Payment is already ${payment.status}`

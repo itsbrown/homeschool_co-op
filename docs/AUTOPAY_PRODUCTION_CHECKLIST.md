@@ -125,5 +125,23 @@ Quick deploy checklist for singleton mode:
 | Raw webhook route + Stripe signature | `server/index.ts` (`POST /api/stripe/webhook`), `server/webhook-handler.ts` |
 | Stripe routes (PaymentIntents, checkout-adjacent) | `server/api/stripe.ts`, `server/api/billing.ts`, `server/api/stripe-webhook.ts` |
 | Scheduled payment HTTP API | `server/api/scheduled-payments.ts` |
-| Scheduled payment reminders + AutoPay reconciliation scheduler | `server/services/scheduled-payment-reminders.ts` (hourly stuck-`processing` vs Stripe, 6h email reminders); core logic `server/services/autopay-reconciliation.ts` |
+| Scheduled payment reminders + AutoPay reconciliation scheduler | `server/services/scheduled-payment-reminders.ts` (6h reminders + AutoPay execution path tick; hourly stuck-`processing` vs Stripe); reconciliation core `server/services/autopay-reconciliation.ts` |
 | Stored payments / idempotency lookup | `server/storage.ts`, webhook handler `getPaymentByStripeId`-style guards |
+
+### Scheduled-installment flow (how pieces connect)
+
+**Email / due selection (same module):** `server/services/scheduled-payment-reminders.ts`
+
+- **Reminders:** `processScheduledPaymentReminders()` — pending/overdue rows, cadence (7d / 3d / 1d / due / overdue), updates `reminderCount` and may set status `overdue`.
+- **Autopay policy path:** `processAutoPayExecutionPath()` — loads due candidates via `getDueAutoPayCandidates` (DB query from `queryDueScheduledPayments` + Drizzle on `scheduled_payments`), applies `evaluateAutoPayPolicy` from `autopay-policy.ts`, optional skip/cancel (e.g. credit-covered), pre-charge / skip notifications (`autopay-notifications.ts`), returns `AutoPayExecutionResult[]` (`process` vs `skip`). On this branch the 6h tick **logs** processable vs skipped counts; it does **not** create PaymentIntents by itself.
+- **Stuck `processing`:** `runAutoPayStuckProcessingReconciliation()` → `reconcileStuckAutoPayProcessingAttempts` in `autopay-reconciliation.ts` (maps Stripe PI status vs DB). Ledger backfill when Stripe shows success but no payment row is handled in this module (retrieve PI, side effects).
+
+**Reconciliation only (no PI create):** `server/services/autopay-reconciliation.ts` — `mapStripePaymentIntentStatusString`, `buildAutoPayReconciliationCriteria`, `reconcileStuckAutoPayProcessingAttempts`.
+
+**Parent-initiated scheduled pay (client secret path):** `server/api/scheduled-payments.ts` — e.g. POST flow that `paymentIntents.create` with `automatic_payment_methods`, metadata includes `type: 'scheduled_payment'` (webhook also accepts `paymentType`).
+
+**Worker off-session autopay (when present on a branch):** A dedicated service (e.g. `autopay-off-session-charge.ts`) may run after `processAutoPayExecutionPath` results to `paymentIntents.create` with `confirm: true`, `off_session: true`, `autoPayInitiated: true`, and Stripe idempotency keys. **Centralize metadata** for both parent and worker paths (e.g. `buildScheduledPaymentIntentMetadata` + `resolveEnrollmentIdsFromScheduledRow`) so `server/webhook-handler.ts` `scheduled_payment` branch stays aligned (`scheduledPaymentId`, `parentEmail`, `userId`, installments, credits/holds, `enrollmentIds`, etc.).
+
+**Other `paymentIntents.create` call sites** (`billing.ts`, `stripe.ts`, `stripe-payment-plans.ts`, `routes.ts`) are for balance/cart/plan flows; they are not the scheduled-installment webhook path unless they adopt the same metadata contract.
+
+**In-repo helper today:** `resolveEnrollmentIdsForScheduledRow` lives inline in `scheduled-payment-reminders.ts` (same job as a shared `resolveEnrollmentIdsFromScheduledRow` helper would do).

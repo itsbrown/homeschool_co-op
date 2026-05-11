@@ -4,6 +4,28 @@ This layout lets **multiple people or Cursor windows** work in parallel with **n
 
 **Paths (this clone):** under repo root, `homeschool_co-op/.worktree-autopay-scheduler`, `.worktree-autopay-tests`, `.worktree-autopay-client` (each is its own checkout; ignored by status via `.gitignore`).
 
+### Exact folders to open (this machine)
+
+These are **inside** your existing `homeschool_co-op` project, not a separate clone. Names start with **`.`** so Finder and some dialogs hide them unless you use “Go to folder.”
+
+| Track | Full path (paste into Cursor / Go to folder) |
+|--------|-----------------------------------------------|
+| Scheduler | `/Users/coreybrown/Projects/PLATFORM/Cursor Copy of Replit/homeschool_co-op/.worktree-autopay-scheduler` |
+| Tests | `/Users/coreybrown/Projects/PLATFORM/Cursor Copy of Replit/homeschool_co-op/.worktree-autopay-tests` |
+| Client | `/Users/coreybrown/Projects/PLATFORM/Cursor Copy of Replit/homeschool_co-op/.worktree-autopay-client` |
+
+**Cursor:** **File → Open Folder…** then press **Cmd+Shift+G** (Go to Folder), paste one path above, press Enter, then Open.
+
+**Terminal (if you use the `cursor` CLI):**
+
+```bash
+cursor "/Users/coreybrown/Projects/PLATFORM/Cursor Copy of Replit/homeschool_co-op/.worktree-autopay-scheduler"
+cursor "/Users/coreybrown/Projects/PLATFORM/Cursor Copy of Replit/homeschool_co-op/.worktree-autopay-tests"
+cursor "/Users/coreybrown/Projects/PLATFORM/Cursor Copy of Replit/homeschool_co-op/.worktree-autopay-client"
+```
+
+If you move the repo, replace the prefix up to `homeschool_co-op` with your new location; the last segment stays `.worktree-autopay-*`.
+
 ## Copy-paste agent charters (one per Cursor window)
 
 Open the matching folder, start a new agent chat, paste the block.
