@@ -3,6 +3,8 @@ const base = require('./jest.integration.config.cjs');
 /** Focused server tests for billing, webhooks, and autopay policy (fast CI signal). */
 module.exports = {
   ...base,
+  /** Avoid hanging workers when tests leave timers/handles open (CI noise). */
+  forceExit: true,
   testMatch: [
     '<rootDir>/server/tests/billing-cents-consistency.test.ts',
     '<rootDir>/server/tests/cart-checkout-enrollment-match.test.ts',

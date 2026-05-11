@@ -124,35 +124,11 @@ interface StripeSubscriptionSchedule {
   };
 }
 
+import { useSubscriptionSchedulesTabData } from '@/hooks/useSubscriptionSchedulesTabData';
+
 // Scheduled Payment Plans Tab - shows database-stored payment installments
 function SubscriptionSchedulesTab() {
-  // Fetch database-stored scheduled payments (biweekly, deposit, split plans)
-  const { data: scheduledPayments = [], isLoading: scheduledLoading } = useQuery({
-    queryKey: ['scheduled-payments-upcoming'],
-    queryFn: async () => {
-      const response = await apiRequest('GET', '/api/scheduled-payments/upcoming');
-      if (!response.ok) {
-        throw new Error('Failed to fetch scheduled payments');
-      }
-      const data = await response.json();
-      return data.success ? data.payments : [];
-    },
-  });
-
-  // Also fetch Stripe subscription schedules for legacy data
-  const { data: stripeSchedules = [], isLoading: stripeLoading } = useQuery({
-    queryKey: ['stripe-subscription-schedules'],
-    queryFn: async () => {
-      const response = await apiRequest('GET', '/api/stripe/subscription-schedules');
-      if (!response.ok) {
-        return [];
-      }
-      const data = await response.json();
-      return data.success ? data.schedules : [];
-    },
-  });
-
-  const isLoading = scheduledLoading || stripeLoading;
+  const { scheduledPayments, stripeSchedules, isLoading } = useSubscriptionSchedulesTabData();
 
   const formatDate = (dateValue: string | number | Date) => {
     if (typeof dateValue === 'number') {
