@@ -1,0 +1,29 @@
+Replit task: export everything needed to port the school “credits” + auto-pay (partial credits) stack to our GitHub / Cursor repo
+
+Context: Another clone of this app (Cursor / GitHub) does not have the credit ledger, credit_holds, FIFO apply, squeeze rule ($0.50 Stripe minimum), createCreditHolds, auto-pay scheduler, or webhook finalize/release helpers. We need a complete bundle from this Replit workspace so we can merge it there.
+
+Do this on this Repl:
+
+Search the codebase for: auto-pay-scheduler, auto-pay-webhook, manualPayCredits, createCreditHolds, getAvailableCredits, credit_holds, unified_credit, creditsAppliedCents, holdSessionId, asa-credit-system, /api/credits.
+
+Produce a file manifest (Markdown table): for each file, list full path from repo root, one-line purpose, and whether it is required for the port.
+
+Include all database migrations that create or alter: credits, credit_holds, unified_credit_usage_logs (or any names you use), indexes, and RLS/policies if any.
+
+Include Drizzle / schema definitions (e.g. shared/schema.ts or equivalent) for those tables and any relations.
+
+Include server code: scheduler, webhook helpers, storage/DAO methods, server/api/credits.ts (or routes), any Stripe paymentIntents.create paths that set creditsAppliedCents / holdSessionId metadata, and tests.
+
+Include Cursor skill if present: e.g. .agents/skills/asa-credit-system/SKILL.md (full path + full file).
+
+Output format (choose one, prefer both):
+
+A) A single zip or tarball attachment of every file in the manifest (preserve directories), or
+B) Paste each file in fenced code blocks grouped by path (only if small enough); otherwise zip.
+At the top of the manifest, add a “Port order” section: numbered steps (migrations → schema → storage → API → scheduler → webhooks → tests) and any env vars or Stripe Dashboard settings this feature assumes.
+
+Note the exact git commit (or Repl snapshot id) this export came from, so the other repo can label the PR “Port from Replit @ <commit>”.
+
+Constraints: Do not summarize behavior only—include real source and SQL. If something is generated (e.g. drizzle/meta), include it if migrations depend on it.
+
+That’s enough for a Replit agent to search, list, and package. If Replit can’t attach zips, ask it to print tar/zip commands you can run in the Replit shell and then download from the Files panel.

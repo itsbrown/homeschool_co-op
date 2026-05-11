@@ -36,3 +36,15 @@ id = "iUOnHjA1jBURKTekiUh_9"
 uri = "file://attached_assets/brevo-contacts.csv"
 type = "table"
 title = "Brevo Contacts Export (695 contacts)"
+
+[[outputs]]
+id = "CoPQwuGkahrGVbQ25g4Pd"
+uri = "file://docs/port/credits-autopay-bundle-c27d976a.tar.gz"
+type = "unspecified"
+title = "Credits + Auto-pay port bundle (c27d976a)"
+
+[[outputs]]
+id = "R6Ma4Oxxb2jFayaAheMsP"
+uri = "file://docs/port/credits-autopay-MANIFEST.md"
+type = "text"
+title = "Port manifest (file list + port order + env vars)"
