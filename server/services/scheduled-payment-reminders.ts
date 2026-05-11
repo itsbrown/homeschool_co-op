@@ -31,6 +31,13 @@ import {
   type AutoPayReconciliationResult,
   type ProcessingScheduledPaymentLike,
 } from './autopay-reconciliation';
+import {
+  maybeEmitCreditCoveredSkipNotification,
+  maybeEmitPreChargeNotification,
+} from "./autopay-notifications";
+import { resolveScheduledPaymentEnrollmentIds } from "../lib/scheduled-payment-intent-metadata";
+import { splitCentsEvenly } from "../api/billing";
+import { runAutoPayOffSessionChargesForResults } from "./autopay-off-session-charge";
 
 export interface ReminderResult {
   scheduledPaymentId: number;
@@ -44,7 +51,14 @@ export interface ReminderResult {
 export interface AutoPayExecutionResult {
   scheduledPaymentId: number;
   action: 'process' | 'skip';
-  reason?: 'retry_cap_reached' | 'stale_attempt';
+  reason?: 'retry_cap_reached' | 'stale_attempt' | 'credit_covered';
+  /** Present for `process` rows so the singleton worker can run off-session charges. */
+  parentId?: number;
+  parentEmail?: string;
+  amountCents?: number;
+  enrollmentId?: number;
+  installmentNumber?: number;
+  totalInstallments?: number;
 }
 
 let reminderInterval: ReturnType<typeof setInterval> | null = null;
@@ -71,15 +85,6 @@ function resolveAutopayReconciliationIntervalMs(): number {
 }
 
 export const AUTOPAY_RECONCILIATION_INTERVAL_MS = resolveAutopayReconciliationIntervalMs();
-
-function resolveEnrollmentIdsForScheduledRow(row: { enrollmentId: number; metadata: unknown }): number[] {
-  const meta = row.metadata as Record<string, unknown> | null | undefined;
-  const fromMeta = meta?.enrollmentIds;
-  if (Array.isArray(fromMeta) && fromMeta.length > 0) {
-    return fromMeta.filter((id): id is number => typeof id === 'number' && Number.isFinite(id));
-  }
-  return [row.enrollmentId];
-}
 
 async function resolvePaymentLabelsForEnrollment(enrollmentId: number): Promise<{ childName: string; className: string }> {
   const enrollment = await storage.getProgramEnrollmentById(enrollmentId);
@@ -143,15 +148,18 @@ async function applyReconciliationLedgerSideEffectsIfNeeded(scheduledPaymentId: 
     return;
   }
 
-  const enrollmentIds = resolveEnrollmentIdsForScheduledRow(row);
+  const enrollmentIds = resolveScheduledPaymentEnrollmentIds(row, pi.metadata as Record<string, string | undefined>);
   if (enrollmentIds.length === 0) {
     console.error(`[autopay-reconciliation] no enrollment ids for scheduled payment ${scheduledPaymentId}`);
     return;
   }
 
-  const shareCents = Math.round(Number(pi.amount) / enrollmentIds.length);
+  const amountCents = typeof pi.amount === "number" ? pi.amount : 0;
+  const shares = splitCentsEvenly(amountCents, enrollmentIds.length);
 
-  for (const enrollmentId of enrollmentIds) {
+  for (let i = 0; i < enrollmentIds.length; i++) {
+    const enrollmentId = enrollmentIds[i]!;
+    const shareCents = shares[i] ?? 0;
     const enrollment = await storage.getProgramEnrollmentById(enrollmentId);
     if (!enrollment) {
       console.error(`[autopay-reconciliation] enrollment ${enrollmentId} not found (scheduled ${scheduledPaymentId})`);
@@ -326,6 +334,12 @@ async function queryDueScheduledPayments(criteria: DueAutoPayQueryCriteria): Pro
       scheduledDate: scheduledPayments.scheduledDate,
       retryCount: scheduledPayments.retryCount,
       status: scheduledPayments.status,
+      enrollmentId: scheduledPayments.enrollmentId,
+      parentId: scheduledPayments.parentId,
+      parentEmail: scheduledPayments.parentEmail,
+      amount: scheduledPayments.amount,
+      installmentNumber: scheduledPayments.installmentNumber,
+      totalInstallments: scheduledPayments.totalInstallments,
     })
     .from(scheduledPayments)
     .where(
@@ -360,8 +374,81 @@ export async function processAutoPayExecutionPath(now: Date = new Date()): Promi
         scheduledPaymentId: candidate.id,
         action: 'skip',
         reason: decision.reason,
+        parentId: candidate.parentId ?? undefined,
+        parentEmail: candidate.parentEmail ?? undefined,
       });
       continue;
+    }
+
+    const enrollmentId = candidate.enrollmentId ?? undefined;
+    const parentId = candidate.parentId ?? undefined;
+    const parentEmail = candidate.parentEmail ?? undefined;
+    const amountCents = candidate.amount ?? undefined;
+
+    if (
+      enrollmentId != null &&
+      parentId != null &&
+      parentEmail &&
+      amountCents != null &&
+      amountCents > 0
+    ) {
+      const enrollment = await storage.getProgramEnrollmentById(enrollmentId);
+      const remaining = enrollment?.remainingBalance != null ? Number(enrollment.remainingBalance) : null;
+      if (remaining != null && Number.isFinite(remaining) && remaining <= 0) {
+        const dueAt = new Date(candidate.scheduledDate ?? candidate.dueDate ?? now);
+        await maybeEmitCreditCoveredSkipNotification({
+          scheduledPaymentId: candidate.id,
+          parentId,
+          parentEmail,
+          amountCents,
+          dueAt,
+          now,
+        });
+        await storage.updateScheduledPaymentStatus(candidate.id, 'cancelled');
+        results.push({
+          scheduledPaymentId: candidate.id,
+          action: 'skip',
+          reason: 'credit_covered',
+          parentId,
+          parentEmail,
+        });
+        continue;
+      }
+    }
+
+    if (
+      parentId != null &&
+      parentEmail &&
+      amountCents != null &&
+      candidate.scheduledDate
+    ) {
+      const dueAt = new Date(candidate.scheduledDate);
+      let childName: string | undefined;
+      let className: string | undefined;
+      let schoolName: string | undefined;
+      if (enrollmentId != null) {
+        const labels = await resolvePaymentLabelsForEnrollment(enrollmentId);
+        childName = labels.childName;
+        className = labels.className;
+        const enr = await storage.getProgramEnrollmentById(enrollmentId);
+        if (enr?.schoolId) {
+          const school = await storage.getSchool(enr.schoolId);
+          schoolName = school?.name ?? undefined;
+        }
+      }
+      await maybeEmitPreChargeNotification({
+        scheduledPaymentId: candidate.id,
+        parentId,
+        parentEmail,
+        amountCents,
+        dueAt,
+        childName,
+        className,
+        schoolName,
+        installmentNumber: candidate.installmentNumber ?? undefined,
+        totalInstallments: candidate.totalInstallments ?? undefined,
+        now,
+      });
     }
 
     // Runtime processing path can proceed to actual charge execution.
@@ -369,6 +456,12 @@ export async function processAutoPayExecutionPath(now: Date = new Date()): Promi
     results.push({
       scheduledPaymentId: candidate.id,
       action: 'process',
+      parentId: parentId ?? undefined,
+      parentEmail: parentEmail ?? undefined,
+      amountCents: amountCents ?? undefined,
+      enrollmentId: enrollmentId ?? undefined,
+      installmentNumber: candidate.installmentNumber ?? undefined,
+      totalInstallments: candidate.totalInstallments ?? undefined,
     });
   }
 
@@ -574,6 +667,9 @@ export async function processScheduledPaymentReminders(): Promise<ReminderResult
 /**
  * Start the scheduled payment reminder job (6h) and AutoPay stuck-processing reconciliation (hourly).
  * In-process singleton guards prevent duplicate timers within one Node process; use ENABLE_BACKGROUND_JOBS on one worker only.
+ *
+ * Off-session installment charges run only when AUTOPAY_OFF_SESSION_CHARGES is truthy on this process
+ * (same singleton as ENABLE_BACKGROUND_JOBS) so API replicas never initiate charges by default.
  */
 export function startScheduledPaymentReminderJob(): void {
   if (reminderInterval) {
@@ -588,11 +684,16 @@ export function startScheduledPaymentReminderJob(): void {
       console.log(`📧 Initial reminder check: ${results.filter(r => r.sent).length} reminders sent`);
     }
   });
-  processAutoPayExecutionPath().then(results => {
+  processAutoPayExecutionPath().then(async (results) => {
     if (results.length > 0) {
       const skipped = results.filter(r => r.action === 'skip').length;
       const processable = results.filter(r => r.action === 'process').length;
       console.log(`💳 Initial AutoPay execution check: ${processable} processable, ${skipped} terminal-skipped`);
+    }
+    try {
+      await runAutoPayOffSessionChargesForResults(results);
+    } catch (e) {
+      console.error('❌ AutoPay off-session charge batch failed:', e);
     }
   }).catch(error => {
     console.error('❌ Error during initial AutoPay execution path:', error);
@@ -606,11 +707,16 @@ export function startScheduledPaymentReminderJob(): void {
         console.log(`📧 Scheduled reminder check: ${results.filter(r => r.sent).length} reminders sent`);
       }
     });
-    processAutoPayExecutionPath().then(results => {
+    processAutoPayExecutionPath().then(async (results) => {
       if (results.length > 0) {
         const skipped = results.filter(r => r.action === 'skip').length;
         const processable = results.filter(r => r.action === 'process').length;
         console.log(`💳 Scheduled AutoPay execution check: ${processable} processable, ${skipped} terminal-skipped`);
+      }
+      try {
+        await runAutoPayOffSessionChargesForResults(results);
+      } catch (e) {
+        console.error('❌ AutoPay off-session charge batch failed:', e);
       }
     }).catch(error => {
       console.error('❌ Error during scheduled AutoPay execution path:', error);

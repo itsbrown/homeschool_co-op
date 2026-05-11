@@ -312,11 +312,12 @@ export function AdminClassesPage() {
                               </div>
                             </div>
                           ) : (
-                            // Data loaded - simplified rendering
                             <>
                               {console.log("Rendering class data:", classesData)}
                               <pre className="text-xs text-red-500">Debug: {JSON.stringify(classesData, null, 2)}</pre>
                               
+                              {classesData?.classes?.length ? (
+                              <>
                               <div className="rounded-md border">
                                 <Table>
                                   <TableHeader>
@@ -470,9 +471,8 @@ export function AdminClassesPage() {
                                   </PaginationItem>
                                 </PaginationContent>
                               </Pagination>
-                            </>
-                          ) : (
-                            // Empty state
+                              </>
+                              ) : (
                             <div className="flex h-[300px] flex-col items-center justify-center rounded-md border border-dashed p-8">
                               <div className="flex h-20 w-20 items-center justify-center rounded-full bg-muted">
                                 <Calendar className="h-10 w-10 text-muted-foreground" />
@@ -490,6 +490,8 @@ export function AdminClassesPage() {
                                 </Button>
                               </Link>
                             </div>
+                              )}
+                            </>
                           )}
                         </TabsContent>
                       </Tabs>

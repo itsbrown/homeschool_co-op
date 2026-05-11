@@ -1,4 +1,4 @@
-import { eq, and, desc, asc, like, or, sql, lt, gt, isNull, inArray } from 'drizzle-orm';
+import { eq, and, desc, asc, like, or, sql, lt, gt, lte, gte, isNull, inArray } from 'drizzle-orm';
 import { normalizeEmailForLookup } from '@shared/parent-identity';
 import { getDb } from './db';
 import { IStorage } from './storage';
@@ -41,7 +41,22 @@ import {
   StaffPosition, InsertStaffPosition, staffPositions,
   StaffInvitation, InsertStaffInvitation, staffInvitations,
   PasswordResetToken, InsertPasswordResetToken, passwordResetTokens,
-  RoleInvitation, InsertRoleInvitation, roleInvitations
+  RoleInvitation, InsertRoleInvitation, roleInvitations,
+  credits,
+  unifiedCreditUsageLogs,
+  creditHolds,
+  stripePaymentHistory,
+  type Credit,
+  type InsertCredit,
+  type CreditStatus,
+  type CreditType,
+  type UnifiedCreditUsageLog,
+  type InsertUnifiedCreditUsageLog,
+  type CreditHold,
+  type InsertCreditHold,
+  type CreditHoldStatus,
+  type StripePaymentHistory,
+  type InsertStripePaymentHistory,
 } from '../shared/schema';
 
 /**
@@ -2831,6 +2846,627 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(roleInvitations)
       .orderBy(desc(roleInvitations.createdAt));
+  }
+
+  async getParentsBySchoolId(schoolId: number): Promise<User[]> {
+    const db = await getDb();
+    const userIdRows = await db
+      .selectDistinct({ userId: users.id })
+      .from(users)
+      .innerJoin(userRoles, eq(users.id, userRoles.userId))
+      .where(
+        and(
+          eq(userRoles.schoolId, schoolId),
+          eq(users.isActive, true),
+          or(eq(userRoles.role, 'parent'), eq(userRoles.role, 'Parent'))
+        )
+      );
+    if (userIdRows.length === 0) return [];
+    const userIds = userIdRows.map((r: { userId: number }) => r.userId);
+    return db
+      .select()
+      .from(users)
+      .where(and(inArray(users.id, userIds), eq(users.isActive, true)));
+  }
+
+  async getCreditById(id: number): Promise<Credit | undefined> {
+    const db = await getDb();
+    const [credit] = await db.select().from(credits).where(eq(credits.id, id));
+    return credit;
+  }
+
+  async getCredits(filters: {
+    userId?: number;
+    schoolId?: number;
+    creditType?: CreditType;
+    status?: CreditStatus;
+    includeExpired?: boolean;
+  }): Promise<Credit[]> {
+    const db = await getDb();
+    const conditions = [];
+    if (filters.userId) conditions.push(eq(credits.userId, filters.userId));
+    if (filters.schoolId) conditions.push(eq(credits.schoolId, filters.schoolId));
+    if (filters.creditType) conditions.push(eq(credits.creditType, filters.creditType));
+    if (filters.status) conditions.push(eq(credits.status, filters.status));
+    if (!filters.includeExpired) {
+      const now = new Date();
+      conditions.push(or(isNull(credits.expiresAt), gt(credits.expiresAt, now)));
+    }
+    if (conditions.length === 0) {
+      return db.select().from(credits).orderBy(desc(credits.createdAt));
+    }
+    return db.select().from(credits).where(and(...conditions)).orderBy(desc(credits.createdAt));
+  }
+
+  async createCredit(credit: InsertCredit): Promise<Credit> {
+    const db = await getDb();
+    const [newCredit] = await db.insert(credits).values(credit).returning();
+    return newCredit;
+  }
+
+  async updateCredit(
+    id: number,
+    updates: Partial<InsertCredit> & {
+      usedAmountCents?: number;
+      status?: CreditStatus;
+      approvedBy?: number;
+      approvedAt?: Date;
+      expiresAt?: Date;
+    }
+  ): Promise<Credit | undefined> {
+    const db = await getDb();
+    const [updated] = await db
+      .update(credits)
+      .set({ ...updates, updatedAt: new Date() } as Record<string, unknown>)
+      .where(eq(credits.id, id))
+      .returning();
+    return updated;
+  }
+
+  async approveCredit(id: number, approvedBy: number): Promise<Credit | undefined> {
+    const db = await getDb();
+    const expiresAt = new Date();
+    expiresAt.setFullYear(expiresAt.getFullYear() + 1);
+    const [updated] = await db
+      .update(credits)
+      .set({
+        status: 'approved' as CreditStatus,
+        approvedBy,
+        approvedAt: new Date(),
+        expiresAt,
+        updatedAt: new Date(),
+      })
+      .where(eq(credits.id, id))
+      .returning();
+    return updated;
+  }
+
+  async rejectCredit(id: number, approvedBy: number, reason: string): Promise<Credit | undefined> {
+    const db = await getDb();
+    const [updated] = await db
+      .update(credits)
+      .set({
+        status: 'rejected' as CreditStatus,
+        approvedBy,
+        approvedAt: new Date(),
+        rejectionReason: reason,
+        updatedAt: new Date(),
+      })
+      .where(eq(credits.id, id))
+      .returning();
+    return updated;
+  }
+
+  async revokeCredit(id: number, reason: string): Promise<Credit | undefined> {
+    const db = await getDb();
+    const [updated] = await db
+      .update(credits)
+      .set({
+        status: 'revoked' as CreditStatus,
+        rejectionReason: reason,
+        updatedAt: new Date(),
+      })
+      .where(eq(credits.id, id))
+      .returning();
+    return updated;
+  }
+
+  async getAvailableCredits(userId: number): Promise<Credit[]> {
+    const db = await getDb();
+    const now = new Date();
+    return db
+      .select()
+      .from(credits)
+      .where(
+        and(
+          eq(credits.userId, userId),
+          or(eq(credits.status, 'approved'), eq(credits.status, 'partially_used')),
+          or(isNull(credits.expiresAt), gt(credits.expiresAt, now))
+        )
+      )
+      .orderBy(asc(credits.expiresAt));
+  }
+
+  async getTotalAvailableCredits(userId: number): Promise<number> {
+    const availableCredits = await this.getAvailableCredits(userId);
+    const totalUnused = availableCredits.reduce(
+      (total, credit) => total + (credit.creditAmountCents - credit.usedAmountCents),
+      0
+    );
+    const heldCredits = await this.getTotalHeldCreditsForUser(userId);
+    return Math.max(0, totalUnused - heldCredits);
+  }
+
+  async getPendingCredits(schoolId: number, creditType?: CreditType): Promise<Credit[]> {
+    const db = await getDb();
+    const conditions = [eq(credits.schoolId, schoolId), eq(credits.status, 'pending')];
+    if (creditType) conditions.push(eq(credits.creditType, creditType));
+    return db.select().from(credits).where(and(...conditions)).orderBy(asc(credits.createdAt));
+  }
+
+  async useCredits(
+    userId: number,
+    amountCents: number,
+    paymentHistoryId?: number,
+    description?: string
+  ): Promise<{ usedCredits: UnifiedCreditUsageLog[]; totalUsed: number }> {
+    const db = await getDb();
+    const availableCredits = await this.getAvailableCredits(userId);
+    let remainingAmount = amountCents;
+    const usedCredits: UnifiedCreditUsageLog[] = [];
+    for (const credit of availableCredits) {
+      if (remainingAmount <= 0) break;
+      const availableFromCredit = credit.creditAmountCents - credit.usedAmountCents;
+      const amountToUse = Math.min(availableFromCredit, remainingAmount);
+      if (amountToUse > 0) {
+        const [usageLog] = await db
+          .insert(unifiedCreditUsageLogs)
+          .values({
+            creditId: credit.id,
+            paymentHistoryId: paymentHistoryId || null,
+            amountCents: amountToUse,
+            description: description || null,
+          })
+          .returning();
+        usedCredits.push(usageLog);
+        const newUsedAmount = credit.usedAmountCents + amountToUse;
+        const newStatus: CreditStatus =
+          newUsedAmount >= credit.creditAmountCents ? 'used' : 'partially_used';
+        await db
+          .update(credits)
+          .set({ usedAmountCents: newUsedAmount, status: newStatus, updatedAt: new Date() })
+          .where(eq(credits.id, credit.id));
+        remainingAmount -= amountToUse;
+      }
+    }
+    const totalUsed = amountCents - remainingAmount;
+    return { usedCredits, totalUsed };
+  }
+
+  async restoreCredits(usageLogs: UnifiedCreditUsageLog[]): Promise<{ restoredCount: number; totalRestored: number }> {
+    const db = await getDb();
+    let totalRestored = 0;
+    let restoredCount = 0;
+    for (const log of usageLogs) {
+      try {
+        const [credit] = await db.select().from(credits).where(eq(credits.id, log.creditId));
+        if (credit) {
+          const newUsedAmount = Math.max(0, credit.usedAmountCents - log.amountCents);
+          const newStatus: CreditStatus =
+            newUsedAmount === 0
+              ? 'approved'
+              : newUsedAmount < credit.creditAmountCents
+                ? 'partially_used'
+                : 'used';
+          await db
+            .update(credits)
+            .set({ usedAmountCents: newUsedAmount, status: newStatus, updatedAt: new Date() })
+            .where(eq(credits.id, credit.id));
+          await db.delete(unifiedCreditUsageLogs).where(eq(unifiedCreditUsageLogs.id, log.id));
+          totalRestored += log.amountCents;
+          restoredCount++;
+        }
+      } catch {
+        /* continue */
+      }
+    }
+    return { restoredCount, totalRestored };
+  }
+
+  async completeCreditsOnlyPayment(params: {
+    holdSessionId: string;
+    scheduledPaymentId: number;
+    parentId: number;
+    enrollmentId: number | null;
+    schoolId: number | null;
+    creditsApplied: number;
+    originalAmount: number;
+    installmentNumber: number;
+    totalInstallments: number;
+    parentEmail: string;
+    childName: string | null;
+    className: string | null;
+    chargedBy?: 'auto_pay' | 'parent_manual' | 'parent_manual_saved_card' | 'admin_manual';
+    completionSource?: string;
+    description?: string;
+  }): Promise<void> {
+    const db = await getDb();
+    const {
+      holdSessionId,
+      scheduledPaymentId,
+      parentId,
+      enrollmentId,
+      schoolId,
+      creditsApplied,
+      originalAmount,
+      installmentNumber,
+      totalInstallments,
+      parentEmail,
+      childName,
+      className,
+    } = params;
+    const chargedBy = params.chargedBy ?? 'auto_pay';
+    const completionSource = params.completionSource ?? 'credits_only';
+    const initiator = chargedBy === 'auto_pay' ? 'Auto-pay' : 'Parent';
+    const description =
+      params.description ??
+      `${initiator} installment ${installmentNumber}/${totalInstallments} — fully covered by credits`;
+
+    await db.transaction(async (tx) => {
+      const pendingHolds = await tx
+        .select()
+        .from(creditHolds)
+        .where(and(eq(creditHolds.checkoutSessionId, holdSessionId), eq(creditHolds.status, 'pending')));
+
+      for (const hold of pendingHolds) {
+        const [credit] = await tx.select().from(credits).where(eq(credits.id, hold.creditId));
+        if (!credit) continue;
+        const newUsed = credit.usedAmountCents + hold.amountCents;
+        const newStatus: CreditStatus = newUsed >= credit.creditAmountCents ? 'used' : 'partially_used';
+        await tx
+          .update(credits)
+          .set({ usedAmountCents: newUsed, status: newStatus, updatedAt: new Date() })
+          .where(eq(credits.id, credit.id));
+        await tx.insert(unifiedCreditUsageLogs).values({
+          creditId: hold.creditId,
+          paymentHistoryId: null,
+          amountCents: hold.amountCents,
+          description,
+        });
+        await tx
+          .update(creditHolds)
+          .set({ status: 'finalized' as CreditHoldStatus, finalizedAt: new Date() })
+          .where(eq(creditHolds.id, hold.id));
+      }
+
+      await tx.insert(payments).values({
+        schoolId: schoolId ?? 1,
+        parentId,
+        parentEmail,
+        amount: 0,
+        currency: 'usd',
+        childName: childName ?? null,
+        className: className ?? null,
+        description,
+        status: 'completed',
+        stripePaymentIntentId: null,
+        stripeChargeId: null,
+        stripeRefundId: null,
+        paymentMethod: 'other',
+        enrollmentIds: enrollmentId ? [enrollmentId] : [],
+        originalPaymentId: null,
+        paymentDate: new Date(),
+        metadata: {
+          source: completionSource,
+          scheduledPaymentId,
+          creditsAppliedCents: creditsApplied,
+          originalAmountCents: originalAmount,
+          autoPayInitiated: chargedBy === 'auto_pay',
+          chargedBy,
+        },
+      });
+
+      if (enrollmentId) {
+        const [enrollment] = await tx
+          .select()
+          .from(programEnrollments)
+          .where(eq(programEnrollments.id, enrollmentId));
+        if (enrollment) {
+          const newTotalPaid = (enrollment.totalPaid || 0) + creditsApplied;
+          const newBalance = Math.max(0, (enrollment.totalCost || 0) - newTotalPaid);
+          await tx
+            .update(programEnrollments)
+            .set({
+              totalPaid: newTotalPaid,
+              remainingBalance: newBalance,
+              paymentStatus: newBalance <= 0 ? 'completed' : 'partial_payment',
+              updatedAt: new Date(),
+            })
+            .where(eq(programEnrollments.id, enrollmentId));
+        }
+      }
+
+      await tx
+        .update(scheduledPayments)
+        .set({
+          status: 'completed',
+          processedAt: new Date(),
+          completionSource,
+          chargedBy,
+          updatedAt: new Date(),
+        })
+        .where(eq(scheduledPayments.id, scheduledPaymentId));
+    });
+  }
+
+  async expireCredits(): Promise<number> {
+    const db = await getDb();
+    const now = new Date();
+    const result = await db
+      .update(credits)
+      .set({ status: 'expired' as CreditStatus, updatedAt: new Date() })
+      .where(
+        and(
+          or(eq(credits.status, 'approved'), eq(credits.status, 'partially_used')),
+          lt(credits.expiresAt, now)
+        )
+      )
+      .returning();
+    return result.length;
+  }
+
+  async getUnifiedCreditUsageLogById(id: number): Promise<UnifiedCreditUsageLog | undefined> {
+    const db = await getDb();
+    const [log] = await db.select().from(unifiedCreditUsageLogs).where(eq(unifiedCreditUsageLogs.id, id));
+    return log;
+  }
+
+  async getUnifiedCreditUsageLogsByCreditId(creditId: number): Promise<UnifiedCreditUsageLog[]> {
+    const db = await getDb();
+    return db
+      .select()
+      .from(unifiedCreditUsageLogs)
+      .where(eq(unifiedCreditUsageLogs.creditId, creditId))
+      .orderBy(desc(unifiedCreditUsageLogs.createdAt));
+  }
+
+  async getUnifiedCreditUsageLogsByPaymentHistoryId(paymentHistoryId: number): Promise<UnifiedCreditUsageLog[]> {
+    const db = await getDb();
+    return db
+      .select()
+      .from(unifiedCreditUsageLogs)
+      .where(eq(unifiedCreditUsageLogs.paymentHistoryId, paymentHistoryId))
+      .orderBy(desc(unifiedCreditUsageLogs.createdAt));
+  }
+
+  async getDoubleSpentCredits(schoolId?: number): Promise<Credit[]> {
+    const db = await getDb();
+    const conditions = [sql`${credits.usedAmountCents} > ${credits.creditAmountCents}`];
+    if (schoolId !== undefined) conditions.push(eq(credits.schoolId, schoolId));
+    return db.select().from(credits).where(and(...conditions));
+  }
+
+  async getMismatchedStatusCredits(schoolId?: number): Promise<Credit[]> {
+    const db = await getDb();
+    const schoolCondition = schoolId !== undefined ? eq(credits.schoolId, schoolId) : sql`1=1`;
+    return db
+      .select()
+      .from(credits)
+      .where(
+        and(
+          schoolCondition,
+          or(
+            and(eq(credits.status, 'used'), sql`${credits.usedAmountCents} != ${credits.creditAmountCents}`),
+            and(
+              eq(credits.status, 'partially_used'),
+              or(lte(credits.usedAmountCents, 0), gte(credits.usedAmountCents, credits.creditAmountCents))
+            ),
+            and(eq(credits.status, 'approved'), gt(credits.usedAmountCents, 0))
+          )
+        )
+      );
+  }
+
+  async getCompletedScheduledPaymentsWithCreditSource(schoolId?: number): Promise<ScheduledPayment[]> {
+    const db = await getDb();
+    const conditions = [eq(scheduledPayments.status, 'completed')];
+    if (schoolId !== undefined) conditions.push(eq(scheduledPayments.schoolId, schoolId));
+    const allCompleted = await db.select().from(scheduledPayments).where(and(...conditions));
+    return allCompleted.filter((sp: ScheduledPayment) => {
+      if (sp.stripePaymentIntentId && sp.stripePaymentIntentId.startsWith('credit_')) return true;
+      const meta = sp.metadata;
+      if (meta !== null && typeof meta === 'object' && !Array.isArray(meta)) {
+        const reservation = (meta as Record<string, unknown>).pendingCreditsReservation;
+        if (typeof reservation === 'number' && reservation > 0) return true;
+      }
+      return false;
+    });
+  }
+
+  async getUnifiedCreditUsageLogsByScheduledPaymentId(scheduledPaymentId: number): Promise<UnifiedCreditUsageLog[]> {
+    const db = await getDb();
+    return db
+      .select()
+      .from(unifiedCreditUsageLogs)
+      .where(like(unifiedCreditUsageLogs.description, `Scheduled payment ${scheduledPaymentId} -%`))
+      .orderBy(desc(unifiedCreditUsageLogs.createdAt));
+  }
+
+  async createUnifiedCreditUsageLog(log: InsertUnifiedCreditUsageLog): Promise<UnifiedCreditUsageLog> {
+    const db = await getDb();
+    const [newLog] = await db.insert(unifiedCreditUsageLogs).values(log).returning();
+    return newLog;
+  }
+
+  async saveStripePayment(payment: InsertStripePaymentHistory): Promise<StripePaymentHistory> {
+    const db = await getDb();
+    const [record] = await db.insert(stripePaymentHistory).values(payment).returning();
+    return record;
+  }
+
+  async getStripePaymentHistoryByUserId(userId: number): Promise<StripePaymentHistory[]> {
+    const db = await getDb();
+    return db.select().from(stripePaymentHistory).where(eq(stripePaymentHistory.userId, userId));
+  }
+
+  async getStripePaymentsBySubscription(subscriptionId: string): Promise<StripePaymentHistory[]> {
+    const db = await getDb();
+    return db.select().from(stripePaymentHistory).where(eq(stripePaymentHistory.subscriptionId, subscriptionId));
+  }
+
+  async getStripePaymentByIntentId(paymentIntentId: string): Promise<StripePaymentHistory | undefined> {
+    const db = await getDb();
+    const [record] = await db
+      .select()
+      .from(stripePaymentHistory)
+      .where(eq(stripePaymentHistory.paymentIntentId, paymentIntentId))
+      .limit(1);
+    return record;
+  }
+
+  async createCreditHolds(
+    userId: number,
+    amountCents: number,
+    checkoutSessionId: string,
+    description?: string,
+    expiresInMinutes: number = 30
+  ): Promise<{ holds: CreditHold[]; totalHeld: number }> {
+    const db = await getDb();
+    const holds: CreditHold[] = [];
+    let remainingAmount = amountCents;
+    const availableCredits = await db
+      .select()
+      .from(credits)
+      .where(
+        and(
+          eq(credits.userId, userId),
+          or(eq(credits.status, 'approved'), eq(credits.status, 'partially_used')),
+          or(gt(credits.expiresAt, new Date()), sql`${credits.expiresAt} IS NULL`)
+        )
+      )
+      .orderBy(asc(credits.expiresAt), asc(credits.createdAt));
+    const expiresAt = new Date(Date.now() + expiresInMinutes * 60 * 1000);
+    for (const credit of availableCredits) {
+      if (remainingAmount <= 0) break;
+      const existingHoldsResult = await db
+        .select({ total: sql<number>`COALESCE(SUM(${creditHolds.amountCents}), 0)` })
+        .from(creditHolds)
+        .where(and(eq(creditHolds.creditId, credit.id), eq(creditHolds.status, 'pending')));
+      const heldAmount = Number(existingHoldsResult[0]?.total || 0);
+      const availableAmount = credit.creditAmountCents - credit.usedAmountCents - heldAmount;
+      if (availableAmount <= 0) continue;
+      const holdAmount = Math.min(availableAmount, remainingAmount);
+      const [hold] = await db
+        .insert(creditHolds)
+        .values({
+          userId,
+          creditId: credit.id,
+          amountCents: holdAmount,
+          checkoutSessionId,
+          status: 'pending',
+          expiresAt,
+          description,
+        })
+        .returning();
+      holds.push(hold);
+      remainingAmount -= holdAmount;
+    }
+    const totalHeld = amountCents - remainingAmount;
+    return { holds, totalHeld };
+  }
+
+  async finalizeCreditHolds(
+    checkoutSessionId: string,
+    paymentHistoryId?: number,
+    description?: string
+  ): Promise<{ finalizedCount: number; totalFinalized: number; usageLogs: UnifiedCreditUsageLog[] }> {
+    const db = await getDb();
+    const usageLogs: UnifiedCreditUsageLog[] = [];
+    let totalFinalized = 0;
+    const pendingHolds = await db
+      .select()
+      .from(creditHolds)
+      .where(and(eq(creditHolds.checkoutSessionId, checkoutSessionId), eq(creditHolds.status, 'pending')));
+    for (const hold of pendingHolds) {
+      const [credit] = await db.select().from(credits).where(eq(credits.id, hold.creditId));
+      if (!credit) continue;
+      const newUsedAmount = credit.usedAmountCents + hold.amountCents;
+      const newStatus: CreditStatus = newUsedAmount >= credit.creditAmountCents ? 'used' : 'partially_used';
+      await db
+        .update(credits)
+        .set({ usedAmountCents: newUsedAmount, status: newStatus, updatedAt: new Date() })
+        .where(eq(credits.id, credit.id));
+      const [usageLog] = await db
+        .insert(unifiedCreditUsageLogs)
+        .values({
+          creditId: hold.creditId,
+          paymentHistoryId,
+          amountCents: hold.amountCents,
+          description: description || hold.description || `Credit applied from hold #${hold.id}`,
+        })
+        .returning();
+      usageLogs.push(usageLog);
+      await db
+        .update(creditHolds)
+        .set({ status: 'finalized' as CreditHoldStatus, finalizedAt: new Date() })
+        .where(eq(creditHolds.id, hold.id));
+      totalFinalized += hold.amountCents;
+    }
+    return { finalizedCount: pendingHolds.length, totalFinalized, usageLogs };
+  }
+
+  async releaseCreditHolds(checkoutSessionId: string): Promise<{ releasedCount: number; totalReleased: number }> {
+    const db = await getDb();
+    let totalReleased = 0;
+    const pendingHolds = await db
+      .select()
+      .from(creditHolds)
+      .where(and(eq(creditHolds.checkoutSessionId, checkoutSessionId), eq(creditHolds.status, 'pending')));
+    for (const hold of pendingHolds) {
+      await db
+        .update(creditHolds)
+        .set({ status: 'released' as CreditHoldStatus, releasedAt: new Date() })
+        .where(eq(creditHolds.id, hold.id));
+      totalReleased += hold.amountCents;
+    }
+    return { releasedCount: pendingHolds.length, totalReleased };
+  }
+
+  async getActiveHoldsForUser(userId: number): Promise<CreditHold[]> {
+    const db = await getDb();
+    return db
+      .select()
+      .from(creditHolds)
+      .where(
+        and(
+          eq(creditHolds.userId, userId),
+          eq(creditHolds.status, 'pending'),
+          gt(creditHolds.expiresAt, new Date())
+        )
+      )
+      .orderBy(asc(creditHolds.createdAt));
+  }
+
+  async getTotalHeldCreditsForUser(userId: number): Promise<number> {
+    const db = await getDb();
+    const result = await db
+      .select({ total: sql<number>`COALESCE(SUM(${creditHolds.amountCents}), 0)` })
+      .from(creditHolds)
+      .where(
+        and(eq(creditHolds.userId, userId), eq(creditHolds.status, 'pending'), gt(creditHolds.expiresAt, new Date()))
+      );
+    return Number(result[0]?.total || 0);
+  }
+
+  async expireStaleHolds(): Promise<number> {
+    const db = await getDb();
+    const now = new Date();
+    const expiredHolds = await db
+      .update(creditHolds)
+      .set({ status: 'expired' as CreditHoldStatus, releasedAt: now })
+      .where(and(eq(creditHolds.status, 'pending'), lt(creditHolds.expiresAt, now)))
+      .returning();
+    return expiredHolds.length;
   }
 
   // Notification data initialization from JSON files

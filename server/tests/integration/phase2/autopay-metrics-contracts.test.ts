@@ -9,15 +9,19 @@ import {
   AUTOPAY_ALERT_SPIKE_BASELINE_MIN_SAMPLES,
   AUTOPAY_ALERT_SPIKE_WARN_FACTOR,
   AUTOPAY_METRIC_LIFECYCLE_DECISIONS_TOTAL,
+  AUTOPAY_METRIC_OFF_SESSION_CHARGES_TOTAL,
   AUTOPAY_METRIC_POLICY_SKIPS_TOTAL,
   AUTOPAY_METRIC_RECONCILIATION_ACTIONS_TOTAL,
   AUTOPAY_PROCESSING_STUCK_MINUTES,
+  LABEL_AUTOPAY_CHARGE_OUTCOME,
+  LABEL_AUTOPAY_CHARGE_REASON,
   LABEL_AUTOPAY_OUTCOME,
   LABEL_AUTOPAY_RECONCILE_ACTION,
   LABEL_AUTOPAY_STRIPE_TRUTH,
   LABEL_AUTOPAY_SUBSYSTEM,
   LABEL_AUTOPAY_TERMINAL_REASON,
   autopayRetryAttemptMetricBucket,
+  buildAutoPayOffSessionChargeLabels,
   buildAutoPayPolicySkipLabels,
   buildAutoPayReconciliationLabels,
   classifyCombinedRetryExhaustionSeverity,
@@ -34,6 +38,7 @@ describe("autopay metrics contracts / alert taxonomy", () => {
     expect(AUTOPAY_METRIC_POLICY_SKIPS_TOTAL).toBe("autopay_policy_skips_total");
     expect(AUTOPAY_METRIC_LIFECYCLE_DECISIONS_TOTAL).toBe("autopay_lifecycle_decisions_total");
     expect(AUTOPAY_METRIC_RECONCILIATION_ACTIONS_TOTAL).toBe("autopay_reconciliation_actions_total");
+    expect(AUTOPAY_METRIC_OFF_SESSION_CHARGES_TOTAL).toBe("autopay_off_session_charges_total");
   });
 
   it("uses a bounded label-key set with no identifying dimensions in sample payloads", () => {
@@ -49,7 +54,11 @@ describe("autopay metrics contracts / alert taxonomy", () => {
     expect(Object.keys(reconLabels)).toEqual(
       expect.arrayContaining([LABEL_AUTOPAY_SUBSYSTEM, LABEL_AUTOPAY_RECONCILE_ACTION, LABEL_AUTOPAY_STRIPE_TRUTH]),
     );
-    const pairs = [...Object.entries(policyLabels), ...Object.entries(reconLabels)];
+    const chargeLabels = buildAutoPayOffSessionChargeLabels("skipped", "no_customer");
+    expect(Object.keys(chargeLabels)).toEqual(
+      expect.arrayContaining([LABEL_AUTOPAY_SUBSYSTEM, LABEL_AUTOPAY_CHARGE_OUTCOME, LABEL_AUTOPAY_CHARGE_REASON]),
+    );
+    const pairs = [...Object.entries(policyLabels), ...Object.entries(reconLabels), ...Object.entries(chargeLabels)];
     for (const [, v] of pairs) {
       expect(String(v).toLowerCase()).not.toMatch(/user|parent|email|payment_id|pi_[a-z]/i);
     }

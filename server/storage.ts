@@ -39,7 +39,16 @@ import {
   notifications, type Notification, type InsertNotification,
   notificationRecipients, type NotificationRecipient, type InsertNotificationRecipient,
   discounts, type Discount, type InsertDiscount,
-  discountApplications, type DiscountApplication, type InsertDiscountApplication
+  discountApplications, type DiscountApplication, type InsertDiscountApplication,
+  type Credit,
+  type InsertCredit,
+  type CreditType,
+  type CreditStatus,
+  type UnifiedCreditUsageLog,
+  type InsertUnifiedCreditUsageLog,
+  type CreditHold,
+  type InsertCreditHold,
+  type CreditHoldStatus,
 } from "@shared/schema";
 import { normalizeEmailForLookup } from '@shared/parent-identity';
 import { eq, inArray } from 'drizzle-orm';
@@ -256,7 +265,6 @@ export interface IStorage {
    * This method exists for backward compatibility only and will be removed in a future version.
    */
   getEnrollmentsByChildId(childId: number): Promise<any[]>;
-  getEnrollmentsByChildIds(childIds: number[]): Promise<any[]>;
   getEnrollmentsByClassId(classId: number): Promise<any[]>;
   
   /**
@@ -333,6 +341,7 @@ export interface IStorage {
   getAllScheduledPayments(): Promise<any[]>;
   updateScheduledPaymentStatus(id: number, status: string): Promise<any | undefined>;
   updateScheduledPaymentReminderCount(id: number, count: number): Promise<any | undefined>;
+  updateScheduledPayment(id: number, payment: Partial<InsertScheduledPayment>): Promise<ScheduledPayment | undefined>;
 
   // Refund methods
   createRefund(refund: InsertRefund): Promise<Refund>;
@@ -473,6 +482,85 @@ export interface IStorage {
   createPasswordResetToken(tokenData: InsertPasswordResetToken): Promise<PasswordResetToken>;
   markPasswordResetTokenAsUsed(token: string): Promise<void>;
   deleteExpiredPasswordResetTokens(): Promise<void>;
+
+  // Parents by school (credit admin)
+  getParentsBySchoolId(schoolId: number): Promise<User[]>;
+
+  // Unified credit ledger
+  getCreditById(id: number): Promise<Credit | undefined>;
+  getCredits(filters: {
+    userId?: number;
+    schoolId?: number;
+    creditType?: CreditType;
+    status?: CreditStatus;
+    includeExpired?: boolean;
+  }): Promise<Credit[]>;
+  createCredit(credit: InsertCredit): Promise<Credit>;
+  updateCredit(
+    id: number,
+    updates: Partial<InsertCredit> & {
+      usedAmountCents?: number;
+      status?: CreditStatus;
+      approvedBy?: number;
+      approvedAt?: Date;
+      expiresAt?: Date;
+    }
+  ): Promise<Credit | undefined>;
+  approveCredit(id: number, approvedBy: number): Promise<Credit | undefined>;
+  rejectCredit(id: number, approvedBy: number, reason: string): Promise<Credit | undefined>;
+  revokeCredit(id: number, reason: string): Promise<Credit | undefined>;
+  getAvailableCredits(userId: number): Promise<Credit[]>;
+  getTotalAvailableCredits(userId: number): Promise<number>;
+  getPendingCredits(schoolId: number, creditType?: CreditType): Promise<Credit[]>;
+  useCredits(
+    userId: number,
+    amountCents: number,
+    paymentHistoryId?: number,
+    description?: string
+  ): Promise<{ usedCredits: UnifiedCreditUsageLog[]; totalUsed: number }>;
+  restoreCredits(usageLogs: UnifiedCreditUsageLog[]): Promise<{ restoredCount: number; totalRestored: number }>;
+  completeCreditsOnlyPayment(params: {
+    holdSessionId: string;
+    scheduledPaymentId: number;
+    parentId: number;
+    enrollmentId: number | null;
+    schoolId: number | null;
+    creditsApplied: number;
+    originalAmount: number;
+    installmentNumber: number;
+    totalInstallments: number;
+    parentEmail: string;
+    childName: string | null;
+    className: string | null;
+    chargedBy?: 'auto_pay' | 'parent_manual' | 'parent_manual_saved_card' | 'admin_manual';
+    completionSource?: string;
+    description?: string;
+  }): Promise<void>;
+  expireCredits(): Promise<number>;
+  getUnifiedCreditUsageLogById(id: number): Promise<UnifiedCreditUsageLog | undefined>;
+  getUnifiedCreditUsageLogsByCreditId(creditId: number): Promise<UnifiedCreditUsageLog[]>;
+  getUnifiedCreditUsageLogsByPaymentHistoryId(paymentHistoryId: number): Promise<UnifiedCreditUsageLog[]>;
+  getDoubleSpentCredits(schoolId?: number): Promise<Credit[]>;
+  getMismatchedStatusCredits(schoolId?: number): Promise<Credit[]>;
+  getCompletedScheduledPaymentsWithCreditSource(schoolId?: number): Promise<ScheduledPayment[]>;
+  getUnifiedCreditUsageLogsByScheduledPaymentId(scheduledPaymentId: number): Promise<UnifiedCreditUsageLog[]>;
+  createUnifiedCreditUsageLog(log: InsertUnifiedCreditUsageLog): Promise<UnifiedCreditUsageLog>;
+  createCreditHolds(
+    userId: number,
+    amountCents: number,
+    checkoutSessionId: string,
+    description?: string,
+    expiresInMinutes?: number
+  ): Promise<{ holds: CreditHold[]; totalHeld: number }>;
+  finalizeCreditHolds(
+    checkoutSessionId: string,
+    paymentHistoryId?: number,
+    description?: string
+  ): Promise<{ finalizedCount: number; totalFinalized: number; usageLogs: UnifiedCreditUsageLog[] }>;
+  releaseCreditHolds(checkoutSessionId: string): Promise<{ releasedCount: number; totalReleased: number }>;
+  getActiveHoldsForUser(userId: number): Promise<CreditHold[]>;
+  getTotalHeldCreditsForUser(userId: number): Promise<number>;
+  expireStaleHolds(): Promise<number>;
 }
 
 export class MemStorage implements IStorage {
@@ -1827,14 +1915,6 @@ export class MemStorage implements IStorage {
       .filter(enrollment => enrollment.childId === childId);
     console.log(`📝 ENROLLMENT QUERY: Child ${childId} has ${enrollments.length} enrollments from programEnrollmentsStore`);
     console.log(`📝 Enrollments found:`, enrollments);
-    return enrollments;
-  }
-
-  async getEnrollmentsByChildIds(childIds: number[]): Promise<any[]> {
-    // Read from programEnrollmentsStore (the canonical source for all enrollments)
-    const enrollments = Array.from(this.programEnrollmentsStore.values())
-      .filter(enrollment => childIds.includes(enrollment.childId));
-    console.log(`📝 ENROLLMENT QUERY: Children ${childIds.join(', ')} have ${enrollments.length} enrollments from programEnrollmentsStore`);
     return enrollments;
   }
 
@@ -3202,6 +3282,18 @@ export class MemStorage implements IStorage {
     return updatedPayment;
   }
 
+  async updateScheduledPayment(
+    id: number,
+    payment: Partial<InsertScheduledPayment>
+  ): Promise<ScheduledPayment | undefined> {
+    const existing = this.scheduledPaymentsStore.get(id);
+    if (!existing) return undefined;
+    const updatedPayment = { ...existing, ...payment, updatedAt: new Date() } as ScheduledPayment;
+    this.scheduledPaymentsStore.set(id, updatedPayment);
+    await this.saveScheduledPaymentsToFile();
+    return updatedPayment;
+  }
+
   private async saveScheduledPaymentsToFile(): Promise<void> {
     try {
       const fs = await import('fs');
@@ -4189,6 +4281,168 @@ export class MemStorage implements IStorage {
 
   async deleteCategory(id: number): Promise<void> {
     return;
+  }
+
+  async getParentsBySchoolId(_schoolId: number): Promise<User[]> {
+    return [];
+  }
+
+  async getCreditById(_id: number): Promise<Credit | undefined> {
+    return undefined;
+  }
+
+  async getCredits(_filters: {
+    userId?: number;
+    schoolId?: number;
+    creditType?: CreditType;
+    status?: CreditStatus;
+    includeExpired?: boolean;
+  }): Promise<Credit[]> {
+    return [];
+  }
+
+  async createCredit(_credit: InsertCredit): Promise<Credit> {
+    throw new Error('Unified credits require PostgreSQL storage');
+  }
+
+  async updateCredit(
+    _id: number,
+    _updates: Partial<InsertCredit> & {
+      usedAmountCents?: number;
+      status?: CreditStatus;
+      approvedBy?: number;
+      approvedAt?: Date;
+      expiresAt?: Date;
+    }
+  ): Promise<Credit | undefined> {
+    return undefined;
+  }
+
+  async approveCredit(_id: number, _approvedBy: number): Promise<Credit | undefined> {
+    return undefined;
+  }
+
+  async rejectCredit(_id: number, _approvedBy: number, _reason: string): Promise<Credit | undefined> {
+    return undefined;
+  }
+
+  async revokeCredit(_id: number, _reason: string): Promise<Credit | undefined> {
+    return undefined;
+  }
+
+  async getAvailableCredits(_userId: number): Promise<Credit[]> {
+    return [];
+  }
+
+  async getTotalAvailableCredits(_userId: number): Promise<number> {
+    return 0;
+  }
+
+  async getPendingCredits(_schoolId: number, _creditType?: CreditType): Promise<Credit[]> {
+    return [];
+  }
+
+  async useCredits(
+    _userId: number,
+    _amountCents: number,
+    _paymentHistoryId?: number,
+    _description?: string
+  ): Promise<{ usedCredits: UnifiedCreditUsageLog[]; totalUsed: number }> {
+    return { usedCredits: [], totalUsed: 0 };
+  }
+
+  async restoreCredits(_usageLogs: UnifiedCreditUsageLog[]): Promise<{ restoredCount: number; totalRestored: number }> {
+    return { restoredCount: 0, totalRestored: 0 };
+  }
+
+  async completeCreditsOnlyPayment(_params: {
+    holdSessionId: string;
+    scheduledPaymentId: number;
+    parentId: number;
+    enrollmentId: number | null;
+    schoolId: number | null;
+    creditsApplied: number;
+    originalAmount: number;
+    installmentNumber: number;
+    totalInstallments: number;
+    parentEmail: string;
+    childName: string | null;
+    className: string | null;
+    chargedBy?: 'auto_pay' | 'parent_manual' | 'parent_manual_saved_card' | 'admin_manual';
+    completionSource?: string;
+    description?: string;
+  }): Promise<void> {
+    return;
+  }
+
+  async expireCredits(): Promise<number> {
+    return 0;
+  }
+
+  async getUnifiedCreditUsageLogById(_id: number): Promise<UnifiedCreditUsageLog | undefined> {
+    return undefined;
+  }
+
+  async getUnifiedCreditUsageLogsByCreditId(_creditId: number): Promise<UnifiedCreditUsageLog[]> {
+    return [];
+  }
+
+  async getUnifiedCreditUsageLogsByPaymentHistoryId(_paymentHistoryId: number): Promise<UnifiedCreditUsageLog[]> {
+    return [];
+  }
+
+  async getDoubleSpentCredits(_schoolId?: number): Promise<Credit[]> {
+    return [];
+  }
+
+  async getMismatchedStatusCredits(_schoolId?: number): Promise<Credit[]> {
+    return [];
+  }
+
+  async getCompletedScheduledPaymentsWithCreditSource(_schoolId?: number): Promise<ScheduledPayment[]> {
+    return [];
+  }
+
+  async getUnifiedCreditUsageLogsByScheduledPaymentId(_scheduledPaymentId: number): Promise<UnifiedCreditUsageLog[]> {
+    return [];
+  }
+
+  async createUnifiedCreditUsageLog(_log: InsertUnifiedCreditUsageLog): Promise<UnifiedCreditUsageLog> {
+    throw new Error('Unified credits require PostgreSQL storage');
+  }
+
+  async createCreditHolds(
+    _userId: number,
+    _amountCents: number,
+    _checkoutSessionId: string,
+    _description?: string,
+    _expiresInMinutes?: number
+  ): Promise<{ holds: CreditHold[]; totalHeld: number }> {
+    return { holds: [], totalHeld: 0 };
+  }
+
+  async finalizeCreditHolds(
+    _checkoutSessionId: string,
+    _paymentHistoryId?: number,
+    _description?: string
+  ): Promise<{ finalizedCount: number; totalFinalized: number; usageLogs: UnifiedCreditUsageLog[] }> {
+    return { finalizedCount: 0, totalFinalized: 0, usageLogs: [] };
+  }
+
+  async releaseCreditHolds(_checkoutSessionId: string): Promise<{ releasedCount: number; totalReleased: number }> {
+    return { releasedCount: 0, totalReleased: 0 };
+  }
+
+  async getActiveHoldsForUser(_userId: number): Promise<CreditHold[]> {
+    return [];
+  }
+
+  async getTotalHeldCreditsForUser(_userId: number): Promise<number> {
+    return 0;
+  }
+
+  async expireStaleHolds(): Promise<number> {
+    return 0;
   }
 }
 
@@ -5233,19 +5487,6 @@ export class MemStorage implements IStorage {
       }
     }
 
-    async getEnrollmentsByChildIds(childIds: number[]): Promise<any[]> {
-      try {
-        console.log('💾 DB storage unavailable, using memStorage fallback for getEnrollmentsByChildIds');
-        return await this.memStorage.getEnrollmentsByChildIds(childIds);
-      } catch (error) {
-        if (process.env.NODE_ENV === 'production') {
-          throw error;
-        }
-        console.log('❌ Error getting enrollments from database, falling back to memStorage:', error);
-        return await this.memStorage.getEnrollmentsByChildIds(childIds);
-      }
-    }
-
     async getEnrollmentsByClassId(classId: number): Promise<any[]> {
       try {
         console.log('💾 DB storage unavailable, using memStorage fallback for getEnrollmentsByClassId');
@@ -5591,6 +5832,13 @@ export class MemStorage implements IStorage {
         } catch (error) {
           return await this.memStorage.updateScheduledPaymentReminderCount(id, count);
         }
+      }
+
+      async updateScheduledPayment(
+        id: number,
+        payment: Partial<InsertScheduledPayment>
+      ): Promise<ScheduledPayment | undefined> {
+        return this.dbStorage.updateScheduledPayment(id, payment);
       }
 
       // Refund methods - use memStorage since database fallback is needed
@@ -6351,6 +6599,158 @@ export class MemStorage implements IStorage {
 
       async deleteSchoolDocument(id: number): Promise<void> {
         return this.dbStorage.deleteSchoolDocument(id);
+      }
+
+      async getParentsBySchoolId(schoolId: number): Promise<User[]> {
+        return this.dbStorage.getParentsBySchoolId(schoolId);
+      }
+
+      async getCreditById(id: number): Promise<Credit | undefined> {
+        return this.dbStorage.getCreditById(id);
+      }
+
+      async getCredits(filters: Parameters<DatabaseStorage['getCredits']>[0]): Promise<Credit[]> {
+        return this.dbStorage.getCredits(filters);
+      }
+
+      async createCredit(credit: InsertCredit): Promise<Credit> {
+        return this.dbStorage.createCredit(credit);
+      }
+
+      async updateCredit(
+        id: number,
+        updates: Parameters<DatabaseStorage['updateCredit']>[1]
+      ): Promise<Credit | undefined> {
+        return this.dbStorage.updateCredit(id, updates);
+      }
+
+      async approveCredit(id: number, approvedBy: number): Promise<Credit | undefined> {
+        return this.dbStorage.approveCredit(id, approvedBy);
+      }
+
+      async rejectCredit(id: number, approvedBy: number, reason: string): Promise<Credit | undefined> {
+        return this.dbStorage.rejectCredit(id, approvedBy, reason);
+      }
+
+      async revokeCredit(id: number, reason: string): Promise<Credit | undefined> {
+        return this.dbStorage.revokeCredit(id, reason);
+      }
+
+      async getAvailableCredits(userId: number): Promise<Credit[]> {
+        return this.dbStorage.getAvailableCredits(userId);
+      }
+
+      async getTotalAvailableCredits(userId: number): Promise<number> {
+        return this.dbStorage.getTotalAvailableCredits(userId);
+      }
+
+      async getPendingCredits(schoolId: number, creditType?: CreditType): Promise<Credit[]> {
+        return this.dbStorage.getPendingCredits(schoolId, creditType);
+      }
+
+      async useCredits(
+        userId: number,
+        amountCents: number,
+        paymentHistoryId?: number,
+        description?: string
+      ): Promise<{ usedCredits: UnifiedCreditUsageLog[]; totalUsed: number }> {
+        return this.dbStorage.useCredits(userId, amountCents, paymentHistoryId, description);
+      }
+
+      async restoreCredits(usageLogs: UnifiedCreditUsageLog[]): Promise<{ restoredCount: number; totalRestored: number }> {
+        return this.dbStorage.restoreCredits(usageLogs);
+      }
+
+      async completeCreditsOnlyPayment(
+        params: Parameters<DatabaseStorage['completeCreditsOnlyPayment']>[0]
+      ): Promise<void> {
+        return this.dbStorage.completeCreditsOnlyPayment(params);
+      }
+
+      async expireCredits(): Promise<number> {
+        return this.dbStorage.expireCredits();
+      }
+
+      async getUnifiedCreditUsageLogById(id: number): Promise<UnifiedCreditUsageLog | undefined> {
+        return this.dbStorage.getUnifiedCreditUsageLogById(id);
+      }
+
+      async getUnifiedCreditUsageLogsByCreditId(creditId: number): Promise<UnifiedCreditUsageLog[]> {
+        return this.dbStorage.getUnifiedCreditUsageLogsByCreditId(creditId);
+      }
+
+      async getUnifiedCreditUsageLogsByPaymentHistoryId(paymentHistoryId: number): Promise<UnifiedCreditUsageLog[]> {
+        return this.dbStorage.getUnifiedCreditUsageLogsByPaymentHistoryId(paymentHistoryId);
+      }
+
+      async getDoubleSpentCredits(schoolId?: number): Promise<Credit[]> {
+        return this.dbStorage.getDoubleSpentCredits(schoolId);
+      }
+
+      async getMismatchedStatusCredits(schoolId?: number): Promise<Credit[]> {
+        return this.dbStorage.getMismatchedStatusCredits(schoolId);
+      }
+
+      async getCompletedScheduledPaymentsWithCreditSource(schoolId?: number): Promise<ScheduledPayment[]> {
+        return this.dbStorage.getCompletedScheduledPaymentsWithCreditSource(schoolId);
+      }
+
+      async getUnifiedCreditUsageLogsByScheduledPaymentId(scheduledPaymentId: number): Promise<UnifiedCreditUsageLog[]> {
+        return this.dbStorage.getUnifiedCreditUsageLogsByScheduledPaymentId(scheduledPaymentId);
+      }
+
+      async createUnifiedCreditUsageLog(log: InsertUnifiedCreditUsageLog): Promise<UnifiedCreditUsageLog> {
+        return this.dbStorage.createUnifiedCreditUsageLog(log);
+      }
+
+      async createCreditHolds(
+        userId: number,
+        amountCents: number,
+        checkoutSessionId: string,
+        description?: string,
+        expiresInMinutes?: number
+      ): Promise<{ holds: CreditHold[]; totalHeld: number }> {
+        return this.dbStorage.createCreditHolds(userId, amountCents, checkoutSessionId, description, expiresInMinutes);
+      }
+
+      async finalizeCreditHolds(
+        checkoutSessionId: string,
+        paymentHistoryId?: number,
+        description?: string
+      ): Promise<{ finalizedCount: number; totalFinalized: number; usageLogs: UnifiedCreditUsageLog[] }> {
+        return this.dbStorage.finalizeCreditHolds(checkoutSessionId, paymentHistoryId, description);
+      }
+
+      async releaseCreditHolds(checkoutSessionId: string): Promise<{ releasedCount: number; totalReleased: number }> {
+        return this.dbStorage.releaseCreditHolds(checkoutSessionId);
+      }
+
+      async getActiveHoldsForUser(userId: number): Promise<CreditHold[]> {
+        return this.dbStorage.getActiveHoldsForUser(userId);
+      }
+
+      async getTotalHeldCreditsForUser(userId: number): Promise<number> {
+        return this.dbStorage.getTotalHeldCreditsForUser(userId);
+      }
+
+      async expireStaleHolds(): Promise<number> {
+        return this.dbStorage.expireStaleHolds();
+      }
+
+      async saveStripePayment(payment: InsertStripePaymentHistory): Promise<StripePaymentHistory> {
+        return this.dbStorage.saveStripePayment(payment);
+      }
+
+      async getStripePaymentHistoryByUserId(userId: number): Promise<StripePaymentHistory[]> {
+        return this.dbStorage.getStripePaymentHistoryByUserId(userId);
+      }
+
+      async getStripePaymentsBySubscription(subscriptionId: string): Promise<StripePaymentHistory[]> {
+        return this.dbStorage.getStripePaymentsBySubscription(subscriptionId);
+      }
+
+      async getStripePaymentByIntentId(paymentIntentId: string): Promise<StripePaymentHistory | undefined> {
+        return this.dbStorage.getStripePaymentByIntentId(paymentIntentId);
       }
 
       // Database initialization methods

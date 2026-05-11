@@ -15,6 +15,7 @@ module.exports = {
     '<rootDir>/server/tests/autopay-policy.test.ts',
     '<rootDir>/server/tests/reconciliation-autopay.test.ts',
     '<rootDir>/server/tests/scheduled-payment-due-query-source.test.ts',
+    '<rootDir>/server/tests/scheduled-payment-intent-metadata.test.ts',
     '<rootDir>/server/tests/payment-plan-policy-matrix.test.ts',
   ],
 };
