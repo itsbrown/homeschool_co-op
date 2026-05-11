@@ -227,8 +227,9 @@ export class StripePaymentPlanService {
         metadata: {
           enrollmentIds: data.enrollmentIds,
           paymentPlan: data.paymentPlan,
-          description: phase.description
-        }
+          description: phase.description,
+          autoPay: true,
+        },
       });
       scheduledPayments.push(scheduledPayment);
       console.log(`📅 Scheduled payment ${phase.installmentNumber}: ${CurrencyUtils.toDisplay(phase.amount)} due ${phase.dueDate.toLocaleDateString()}`);

@@ -5,7 +5,8 @@ import { AUTOPAY_MAX_RETRY_ATTEMPTS } from "./autopay-policy";
  * Operator reference (dashboards / alerts)
  * ----------------------------------------
  * Counters (stable names): AUTOPAY_METRIC_* exports — `autopay_policy_skips_total`,
- * `autopay_lifecycle_decisions_total`, `autopay_reconciliation_actions_total`, `autopay_notifications_total`.
+ * `autopay_lifecycle_decisions_total`, `autopay_reconciliation_actions_total`, `autopay_notifications_total`,
+ * `autopay_off_session_charges_total` (log/telemetry payloads; emit via `buildAutoPayOffSessionChargeLabels`).
  *
  * Label keys: LABEL_AUTOPAY_* — subsystem, outcome, terminal_reason, reconcile_action, stripe_truth.
  * Builders: buildAutoPayPolicySkipLabels, buildAutoPayLifecycleLabels, buildAutoPayReconciliationLabels;
@@ -140,6 +141,8 @@ export const AUTOPAY_METRIC_RECONCILIATION_ACTIONS_TOTAL = "autopay_reconciliati
 
 export const AUTOPAY_METRIC_NOTIFICATIONS_TOTAL = "autopay_notifications_total";
 
+export const AUTOPAY_METRIC_OFF_SESSION_CHARGES_TOTAL = "autopay_off_session_charges_total";
+
 // --- Label keys (stable; values must remain bounded / non-identifying) ---
 
 export const LABEL_AUTOPAY_SUBSYSTEM = "autopay_subsystem";
@@ -156,7 +159,11 @@ export const LABEL_AUTOPAY_NOTIFICATION_KIND = "notification_kind";
 
 export const LABEL_AUTOPAY_NOTIFICATION_OUTCOME = "notification_outcome";
 
-export type AutoPayMetricSubsystem = "policy" | "lifecycle" | "reconciliation" | "notifications";
+export const LABEL_AUTOPAY_CHARGE_OUTCOME = "charge_outcome";
+
+export const LABEL_AUTOPAY_CHARGE_REASON = "charge_reason";
+
+export type AutoPayMetricSubsystem = "policy" | "lifecycle" | "reconciliation" | "notifications" | "charges";
 
 export function buildAutoPayPolicySkipLabels(reason: AutoPayTerminalReason): Record<string, string> {
   return {
@@ -215,6 +222,21 @@ export function buildAutoPayNotificationLabels(
     [LABEL_AUTOPAY_NOTIFICATION_KIND]: kind,
     [LABEL_AUTOPAY_NOTIFICATION_OUTCOME]: outcome,
   };
+}
+
+/** Off-session charge attempts (singleton worker). `reason` must be a coarse bounded token (no PII). */
+export function buildAutoPayOffSessionChargeLabels(
+  outcome: "created" | "skipped" | "failed",
+  reason?: string,
+): Record<string, string> {
+  const labels: Record<string, string> = {
+    [LABEL_AUTOPAY_SUBSYSTEM]: "charges",
+    [LABEL_AUTOPAY_CHARGE_OUTCOME]: outcome,
+  };
+  if (reason !== undefined && reason !== "") {
+    labels[LABEL_AUTOPAY_CHARGE_REASON] = reason;
+  }
+  return labels;
 }
 
 /**

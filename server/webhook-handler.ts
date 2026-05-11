@@ -9,6 +9,7 @@ import { splitCentsEvenly } from './api/billing';
 import { enrollmentPoolCentsForBalanceIntent, parseMetadataMembershipAmountCents } from './lib/balance-payment-metadata';
 import { fulfillMembershipFromCartPaymentIntent } from './services/fulfill-membership-payment-intent';
 import { findProgramEnrollmentForCartItem } from './lib/cart-checkout-enrollment-match';
+import { resolveScheduledPaymentEnrollmentIds } from './lib/scheduled-payment-intent-metadata';
 
 // Stripe client will be lazily initialized within the webhook handler
 const RECENT_WEBHOOK_EVENTS_MAX = 1000;
@@ -399,21 +400,36 @@ export const webhookHandler = async (req: Request, res: Response) => {
               }
             }
 
-            const targetEnrollmentId = scheduledPayment.enrollmentId;
-            console.log('💰 Updating enrollment balance for scheduled payment...');
-            if (!targetEnrollmentId) {
-              console.error(`❌ Cannot process scheduled payment ${scheduledPaymentId}: no enrollmentId on row`);
+            const enrollmentIds = resolveScheduledPaymentEnrollmentIds(
+              scheduledPayment,
+              paymentIntent.metadata as Record<string, string | undefined>,
+            );
+            console.log('💰 Updating enrollment balance for scheduled payment...', { enrollmentIds });
+
+            const originalAmount =
+              parseInt(String(paymentIntent.metadata.originalAmountCents || '0'), 10) ||
+              paymentIntent.amount;
+            const totalPaymentAmount =
+              creditsAppliedCents > 0 ? originalAmount : paymentIntent.amount;
+            const totalCents = Number.isInteger(totalPaymentAmount)
+              ? totalPaymentAmount
+              : Math.round(Number(totalPaymentAmount)) || paymentIntent.amount;
+
+            if (enrollmentIds.length === 0) {
+              console.error(`❌ Cannot process scheduled payment ${scheduledPaymentId}: no enrollment ids`);
             } else {
+              const allocation = splitCentsEvenly(Math.max(0, totalCents), enrollmentIds.length);
               try {
-                const enrollment = await storage.getProgramEnrollmentById(targetEnrollmentId);
-                if (enrollment) {
+                for (let i = 0; i < enrollmentIds.length; i++) {
+                  const targetEnrollmentId = enrollmentIds[i];
+                  const shareCents = allocation[i] ?? 0;
+                  const enrollment = await storage.getProgramEnrollmentById(targetEnrollmentId);
+                  if (!enrollment) {
+                    console.error(`❌ Enrollment ${targetEnrollmentId} not found for scheduled payment`);
+                    continue;
+                  }
                   const currentAmountPaid = enrollment.totalPaid || 0;
-                  const originalAmount =
-                    parseInt(String(paymentIntent.metadata.originalAmountCents || '0'), 10) ||
-                    paymentIntent.amount;
-                  const totalPaymentAmount =
-                    creditsAppliedCents > 0 ? originalAmount : paymentIntent.amount;
-                  const newAmountPaid = currentAmountPaid + totalPaymentAmount;
+                  const newAmountPaid = currentAmountPaid + shareCents;
                   const newBalance = Math.max(0, (enrollment.totalCost || 0) - newAmountPaid);
                   const updatedEnrollment = await storage.updateProgramEnrollment(targetEnrollmentId, {
                     totalPaid: newAmountPaid,
@@ -422,28 +438,38 @@ export const webhookHandler = async (req: Request, res: Response) => {
                   });
                   if (updatedEnrollment) {
                     console.log(
-                      `✅ Updated enrollment ${targetEnrollmentId}: paid=${newAmountPaid}, balance=${newBalance}`
+                      `✅ Updated enrollment ${targetEnrollmentId}: paid=${newAmountPaid}, balance=${newBalance} (share ${shareCents}c)`,
                     );
                   }
-                } else {
-                  console.error(`❌ Enrollment ${targetEnrollmentId} not found for scheduled payment`);
                 }
               } catch (error) {
-                console.error(`❌ Error updating enrollment ${targetEnrollmentId}:`, error);
+                console.error(`❌ Error updating enrollments for scheduled payment ${scheduledPaymentId}:`, error);
               }
             }
-            
+
             // Create payment record for history in database
-            const enrollmentForLabel =
-              scheduledPayment.enrollmentId != null
-                ? await storage.getProgramEnrollmentById(scheduledPayment.enrollmentId)
-                : null;
-            const payerLine =
-              enrollmentForLabel != null
-                ? `${enrollmentForLabel.childName} - ${enrollmentForLabel.className}`
-                : `Installment ${scheduledPayment.installmentNumber} of ${scheduledPayment.totalInstallments}`;
-            const childNameForPayment = payerLine.includes(' - ') ? payerLine.split(' - ')[0]! : 'Child';
-            const classNameForPayment = payerLine.includes(' - ') ? payerLine.split(' - ')[1]! : payerLine;
+            let childNameForPayment = 'Child';
+            let classNameForPayment = 'Class';
+            let payerLine = `Installment ${scheduledPayment.installmentNumber} of ${scheduledPayment.totalInstallments}`;
+            if (enrollmentIds.length === 1) {
+              const enrollmentForLabel = await storage.getProgramEnrollmentById(enrollmentIds[0]!);
+              if (enrollmentForLabel) {
+                payerLine = `${enrollmentForLabel.childName} - ${enrollmentForLabel.className}`;
+                childNameForPayment = enrollmentForLabel.childName || childNameForPayment;
+                classNameForPayment = enrollmentForLabel.className || classNameForPayment;
+              }
+            } else if (enrollmentIds.length > 1) {
+              const parts: string[] = [];
+              for (const eid of enrollmentIds) {
+                const e = await storage.getProgramEnrollmentById(eid);
+                if (e?.childName && e?.className) {
+                  parts.push(`${e.childName} - ${e.className}`);
+                }
+              }
+              payerLine = parts.length > 0 ? parts.join('; ') : payerLine;
+              childNameForPayment = 'Multiple children';
+              classNameForPayment = `${enrollmentIds.length} enrollments`;
+            }
 
             // Get parent user to get schoolId
             const parentUser = await storage.getUserByEmail(parentEmail);
@@ -463,11 +489,12 @@ export const webhookHandler = async (req: Request, res: Response) => {
               stripeChargeId: null as string | null,
               stripeRefundId: null as string | null,
               originalPaymentId: null as number | null,
-              enrollmentIds: scheduledPayment.enrollmentId ? [scheduledPayment.enrollmentId] : [],
+              enrollmentIds,
               metadata: {
                 scheduledPaymentId: scheduledPaymentId,
                 installmentNumber: scheduledPayment.installmentNumber,
-                totalInstallments: scheduledPayment.totalInstallments
+                totalInstallments: scheduledPayment.totalInstallments,
+                enrollmentIds: JSON.stringify(enrollmentIds),
               },
               paymentDate: new Date()
             };
@@ -484,7 +511,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
               description: `Scheduled payment ${scheduledPayment.installmentNumber} of ${scheduledPayment.totalInstallments} - ${payment.className}`,
               childName: payment.childName,
               className: payment.className,
-              enrollmentIds: scheduledPayment.enrollmentId ? [scheduledPayment.enrollmentId] : []
+              enrollmentIds,
             });
             
             // Send email receipt for scheduled payment
