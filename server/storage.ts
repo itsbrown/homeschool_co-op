@@ -5838,7 +5838,14 @@ export class MemStorage implements IStorage {
         id: number,
         payment: Partial<InsertScheduledPayment>
       ): Promise<ScheduledPayment | undefined> {
-        return this.dbStorage.updateScheduledPayment(id, payment);
+        try {
+          if (this.dbStorage && typeof this.dbStorage.updateScheduledPayment === 'function') {
+            return await this.dbStorage.updateScheduledPayment(id, payment);
+          }
+          return await this.memStorage.updateScheduledPayment(id, payment);
+        } catch (error) {
+          return await this.memStorage.updateScheduledPayment(id, payment);
+        }
       }
 
       // Refund methods - use memStorage since database fallback is needed

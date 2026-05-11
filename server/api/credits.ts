@@ -33,6 +33,44 @@ const revokeCreditSchema = z.object({
   reason: z.string().optional(),
 });
 
+/**
+ * Current user's credits (no requireSchoolContext).
+ * Uses req.user.id from supabaseAuth so parents without active school role / enrollment
+ * can still see balances when credits exist in the DB.
+ */
+router.get('/me', async (req: any, res) => {
+  try {
+    const userId = req.user?.id;
+    if (userId == null || typeof userId !== 'number' || Number.isNaN(userId)) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const user = await storage.getUser(userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const userCredits = await storage.getCredits({ userId });
+    const availableCredits = await storage.getAvailableCredits(userId);
+    const totalAvailable = await storage.getTotalAvailableCredits(userId);
+
+    res.json({
+      user: {
+        id: user.id,
+        name: `${user.firstName} ${user.lastName}`,
+        email: user.email,
+      },
+      schoolId: user.schoolId ?? null,
+      credits: userCredits,
+      availableCredits,
+      totalAvailableCents: totalAvailable,
+    });
+  } catch (error: unknown) {
+    console.error('Error fetching /api/credits/me:', error);
+    res.status(500).json({ error: 'Failed to fetch credits' });
+  }
+});
+
 router.get('/summary', requireSchoolContext, async (req: any, res) => {
   try {
     const schoolId = parseInt(req.schoolId, 10);
