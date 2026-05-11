@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useSearch } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
@@ -44,7 +45,10 @@ import {
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { AlertCircle, CreditCard, DollarSign, Calendar, Check, Clock, FileText, Search } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertCircle, CreditCard, DollarSign, Calendar, Check, Clock, FileText, Search, Gift } from "lucide-react";
+import { useParentCredits } from "@/hooks/useParentCredits";
+import { computeCreditCoverageFifo } from "@/utils/creditInstallmentCoverage";
 
 interface Payment {
   id: string;
@@ -258,6 +262,9 @@ function ScheduledPaymentDialog({
     // Invalidate queries to refresh data
     queryClient.invalidateQueries({ queryKey: ['/api/payment-history'] });
     queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments'] });
+    queryClient.invalidateQueries({ queryKey: ['scheduled-payments-upcoming'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments/upcoming'] });
+    queryClient.invalidateQueries({ queryKey: ['parent-credits'] });
     onSuccess();
     onClose();
   };
@@ -359,6 +366,25 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
   // State for the Stripe payment dialog
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const [selectedPaymentForDialog, setSelectedPaymentForDialog] = useState<any>(null);
+
+  const searchString = useSearch();
+  const [activePaymentTab, setActivePaymentTab] = useState("all-payments");
+
+  useEffect(() => {
+    const raw = searchString.startsWith("?") ? searchString.slice(1) : searchString;
+    const params = new URLSearchParams(raw);
+    const tab = params.get("tab");
+    if (
+      tab === "upcoming" ||
+      tab === "overview" ||
+      tab === "all-payments" ||
+      tab === "stripe-payments"
+    ) {
+      setActivePaymentTab(tab);
+    }
+  }, [searchString]);
+
+  const { totalAvailableCents } = useParentCredits();
   
   // Get payment data for the parent (and optionally filtered by child)
   const { data: payments, isLoading, refetch } = useQuery({
@@ -503,14 +529,19 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
         amount: payment.amount,
         dueDate: new Date(payment.dueDate),
         status: payment.status,
-        childName: payment.enrollment?.childName || 'Child',
-        className: payment.enrollment?.className || 'Class',
-        description: payment.description || `Payment for ${payment.enrollment?.className || 'class'}`,
+        childName: payment.childName || payment.enrollment?.childName || 'Child',
+        className: payment.className || payment.enrollment?.className || 'Class',
+        description:
+          payment.description ||
+          `Payment for ${payment.className || payment.enrollment?.className || 'class'}`,
         enrollmentId: payment.enrollmentId,
         installmentNumber: payment.installmentNumber,
         totalInstallments: payment.totalInstallments,
         paymentPlan: payment.paymentPlan,
-        source: 'database' as const
+        source: 'database' as const,
+        retryCount: typeof payment.retryCount === 'number' ? payment.retryCount : 0,
+        failureReason: payment.failureReason ?? null,
+        overdue: payment.overdue === true,
       }));
     },
   });
@@ -686,7 +717,7 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
   
   return (
     <div className="space-y-6">
-      <Tabs defaultValue="all-payments" className="w-full">
+      <Tabs value={activePaymentTab} onValueChange={setActivePaymentTab} className="w-full">
         <TabsList className="w-full flex-col sm:flex-row justify-start h-auto">
           <TabsTrigger value="overview" className="w-full sm:w-auto sm:mr-2">Overview</TabsTrigger>
           <TabsTrigger value="all-payments" className="w-full sm:w-auto sm:mr-2">All Payments</TabsTrigger>
@@ -1041,11 +1072,22 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
                       source: 'database_scheduled',
                       installmentNumber: sp.installmentNumber,
                       totalInstallments: sp.totalInstallments,
-                      paymentPlan: sp.paymentPlan
+                      paymentPlan: sp.paymentPlan,
+                      retryCount: typeof sp.retryCount === 'number' ? sp.retryCount : 0,
+                      failureReason: sp.failureReason ?? null,
+                      overdue: sp.overdue === true,
                     }));
                   
                   const allUpcomingPayments = [...pendingPayments, ...scheduledPaymentItems, ...dbScheduledPaymentItems]
                     .sort((a, b) => new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime());
+
+                  const creditCoverageMap = computeCreditCoverageFifo(
+                    allUpcomingPayments.map((p: any) => ({
+                      key: `${p.source}-${p.id}`,
+                      amountCents: typeof p.amount === 'number' ? p.amount : 0,
+                    })),
+                    totalAvailableCents
+                  );
                   
                   return allUpcomingPayments.length === 0 ? (
                     <div className="text-center py-8 text-muted-foreground">
@@ -1055,16 +1097,43 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
                     </div>
                   ) : (
                     <div className="space-y-4">
-                      {allUpcomingPayments.map((payment: any) => (
+                      {totalAvailableCents > 0 && (
+                        <Alert className="border-emerald-200 bg-emerald-50">
+                          <Gift className="h-4 w-4 text-emerald-700" />
+                          <AlertDescription className="text-emerald-900">
+                            You have {formatCurrency(totalAvailableCents)} in credits — they apply earliest-due
+                            installments first (including autopay when enabled).
+                          </AlertDescription>
+                        </Alert>
+                      )}
+                      {allUpcomingPayments.map((payment: any) => {
+                        const rowKey = `${payment.source}-${payment.id}`;
+                        const cov = creditCoverageMap.get(rowKey);
+                        const urgent =
+                          payment.status === 'failed' ||
+                          payment.status === 'overdue' ||
+                          payment.overdue === true;
+                        const retryCount =
+                          typeof payment.retryCount === 'number' ? payment.retryCount : 0;
+                        const leftBorder =
+                          payment.source === 'database_scheduled'
+                            ? urgent
+                              ? 'border-l-4 border-l-red-500'
+                              : 'border-l-4 border-l-blue-500'
+                            : payment.source === 'stripe_scheduled'
+                              ? urgent
+                                ? 'border-l-4 border-l-red-500'
+                                : 'border-l-4 border-l-purple-500'
+                              : urgent
+                                ? 'border-l-4 border-l-red-500'
+                                : '';
+                        const fullyCovered =
+                          payment.source === 'database_scheduled' && cov?.fullyCovered === true;
+
+                        return (
                         <div 
-                          key={`${payment.source}-${payment.id}`} 
-                          className={`flex justify-between items-center p-4 border rounded-lg ${
-                            payment.source === 'database_scheduled' 
-                              ? 'border-l-4 border-l-blue-500' 
-                              : payment.source === 'stripe_scheduled'
-                              ? 'border-l-4 border-l-purple-500'
-                              : ''
-                          }`}
+                          key={rowKey} 
+                          className={`flex justify-between items-center p-4 border rounded-lg ${leftBorder}`}
                         >
                           <div className="flex items-center gap-4">
                             <div className={`h-10 w-10 rounded-full flex items-center justify-center ${
@@ -1077,7 +1146,7 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
                               <Calendar className="h-5 w-5" />
                             </div>
                             <div>
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2 flex-wrap">
                                 <h3 className="font-medium">{payment.description}</h3>
                                 {payment.source === 'database_scheduled' && (
                                   <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
@@ -1088,6 +1157,14 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
                                   <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-200">
                                     Stripe Managed
                                   </Badge>
+                                )}
+                                {urgent && (
+                                  <Badge variant="destructive">
+                                    {payment.status === 'failed' ? `Failed (retry ${retryCount})` : 'Overdue'}
+                                  </Badge>
+                                )}
+                                {fullyCovered && (
+                                  <Badge className="bg-emerald-600 hover:bg-emerald-600">Covered by credits</Badge>
                                 )}
                               </div>
                               <p className="text-sm text-muted-foreground">
@@ -1101,12 +1178,28 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
                                   Plan: {payment.paymentPlan}
                                 </p>
                               )}
+                              {payment.status === 'failed' && payment.failureReason && (
+                                <p className="text-sm text-red-600 mt-1">
+                                  Last attempt failed: {String(payment.failureReason)}
+                                </p>
+                              )}
+                              {cov && cov.creditAppliedCents > 0 && !cov.fullyCovered && (
+                                <p className="text-sm text-emerald-800 mt-1">
+                                  ~{formatCurrency(cov.creditAppliedCents)} of this row may be covered by credits;
+                                  pay the remainder with card if needed.
+                                </p>
+                              )}
                             </div>
                           </div>
-                        <div className="flex items-center gap-3">
+                        <div className="flex flex-col items-end gap-2">
                           <div className="text-right">
-                            <p className="font-medium">{formatCurrency(payment.amount)}</p>
+                            <p className={`font-medium ${urgent ? 'text-red-600' : ''}`}>{formatCurrency(payment.amount)}</p>
                           </div>
+                          {fullyCovered ? (
+                            <span className="text-xs text-emerald-700 font-medium text-right max-w-[10rem]">
+                              No card charge if credits settle this installment.
+                            </span>
+                          ) : (
                           <Button 
                             size="sm"
                             onClick={() => {
@@ -1127,9 +1220,11 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
                           >
                             Pay Now
                           </Button>
+                          )}
                         </div>
                       </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   );
                 })()

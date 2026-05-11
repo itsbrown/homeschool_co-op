@@ -1,4 +1,4 @@
-import React, { useState, useTransition } from 'react';
+import React, { useMemo, useState, useTransition } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/components/SupabaseProvider';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -9,13 +9,15 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { apiRequest, queryClient } from '@/lib/queryClient';
-import { CreditCard, AlertCircle, CheckCircle, DollarSign, Calendar, User, Loader2, History } from 'lucide-react';
+import { CreditCard, AlertCircle, CheckCircle, DollarSign, Calendar, User, Loader2, History, Gift } from 'lucide-react';
 import ParentAppShell from '@/components/layout/ParentAppShell';
 import { useLocation } from 'wouter';
 import { useCart } from '@/contexts/CartContext';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useRealTimeUpdates } from '@/hooks/useRealTimeUpdates';
 import { formatCurrency } from '@/utils/currency';
+import { computeCreditCoverageFifo } from '@/utils/creditInstallmentCoverage';
+import { useParentCredits } from '@/hooks/useParentCredits';
 import { stripePromise, STRIPE_PUBLISHABLE_KEY } from '@/config/stripe';
 
 // Stripe is initialized in config/stripe.ts with correct API version
@@ -498,6 +500,26 @@ function UpcomingPaymentsTab({
     },
   });
 
+  const { totalAvailableCents } = useParentCredits();
+
+  const sortedForCoverage = useMemo(() => {
+    if (!upcomingPayments?.length) return [];
+    return [...upcomingPayments].sort(
+      (a: any, b: any) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()
+    );
+  }, [upcomingPayments]);
+
+  const creditCoverageById = useMemo(() => {
+    const rows = sortedForCoverage.map((p: any) => ({
+      key: String(p.id),
+      amountCents: typeof p.amount === 'number' ? p.amount : 0,
+    }));
+    return computeCreditCoverageFifo(rows, totalAvailableCents);
+  }, [sortedForCoverage, totalAvailableCents]);
+
+  const isPaymentUrgent = (p: any) =>
+    p.status === 'failed' || p.status === 'overdue' || p.overdue === true;
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -599,13 +621,29 @@ function UpcomingPaymentsTab({
         <Calendar className="h-5 w-5 text-blue-600" />
         <h3 className="text-lg font-semibold">Upcoming Payment Plan Installments</h3>
       </div>
+
+      {totalAvailableCents > 0 && (
+        <Alert className="border-emerald-200 bg-emerald-50">
+          <Gift className="h-4 w-4 text-emerald-700" />
+          <AlertDescription className="text-emerald-900">
+            You have {formatCurrency(totalAvailableCents)} in credits — they will be applied automatically to your
+            earliest due installments (including autopay when enabled).
+          </AlertDescription>
+        </Alert>
+      )}
       
-      {upcomingPayments.map((payment: any) => (
-        <Card key={payment.id} className="border-l-4 border-l-blue-500">
+      {sortedForCoverage.map((payment: any) => {
+        const cov = creditCoverageById.get(String(payment.id));
+        const urgent = isPaymentUrgent(payment);
+        const borderClass = urgent ? 'border-l-red-500' : 'border-l-blue-500';
+        const retryCount = typeof payment.retryCount === 'number' ? payment.retryCount : 0;
+
+        return (
+        <Card key={payment.id} className={`border-l-4 ${borderClass}`}>
           <CardContent className="p-6">
             <div className="flex justify-between items-start">
               <div className="flex-1">
-                <div className="flex items-center gap-2 mb-2">
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
                   <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
                     Payment {payment.installmentNumber} of {payment.totalInstallments}
                   </Badge>
@@ -616,6 +654,14 @@ function UpcomingPaymentsTab({
                      payment.paymentPlan === 'deposit' ? 'Deposit Only' :
                      payment.paymentPlan || 'Payment Plan'}
                   </Badge>
+                  {urgent && (
+                    <Badge variant="destructive">
+                      {payment.status === 'failed' ? `Failed (retry ${retryCount})` : 'Overdue'}
+                    </Badge>
+                  )}
+                  {cov?.fullyCovered && (
+                    <Badge className="bg-emerald-600 hover:bg-emerald-600">Covered by credits</Badge>
+                  )}
                 </div>
                 
                 <h4 className="font-semibold text-lg mb-1">{payment.description}</h4>
@@ -626,11 +672,22 @@ function UpcomingPaymentsTab({
                   <span>•</span>
                   <span>Status: {payment.status}</span>
                 </div>
+                {payment.status === 'failed' && payment.failureReason && (
+                  <p className="text-sm text-red-600 mt-2">
+                    Last attempt failed: {String(payment.failureReason)}
+                  </p>
+                )}
+                {cov && cov.creditAppliedCents > 0 && !cov.fullyCovered && (
+                  <p className="text-sm text-emerald-800 mt-2">
+                    ~{formatCurrency(cov.creditAppliedCents)} of this installment may be covered by your available
+                    credits; the remainder can be paid by card.
+                  </p>
+                )}
               </div>
               
               <div className="flex flex-col gap-2">
                 <div className="text-right">
-                  <div className="text-2xl font-bold text-green-600">
+                  <div className={`text-2xl font-bold ${urgent ? 'text-red-600' : 'text-green-600'}`}>
                     {formatCurrency(payment.amount)}
                   </div>
                   <div className="text-sm text-gray-500">
@@ -638,6 +695,11 @@ function UpcomingPaymentsTab({
                   </div>
                 </div>
                 
+                {cov?.fullyCovered ? (
+                  <span className="text-sm text-emerald-700 font-medium text-right">
+                    No card charge needed if credits settle this installment.
+                  </span>
+                ) : (
                 <Button 
                   size="sm" 
                   className="bg-green-600 hover:bg-green-700"
@@ -646,11 +708,13 @@ function UpcomingPaymentsTab({
                 >
                   {isPending ? 'Processing...' : 'Pay Now'}
                 </Button>
+                )}
               </div>
             </div>
           </CardContent>
         </Card>
-      ))}
+        );
+      })}
       
       <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
         <div className="flex items-start gap-3">
@@ -680,6 +744,11 @@ function UpcomingPaymentsTab({
                 <SimplePaymentForm 
                   onSuccess={() => {
                     console.log('✅ Scheduled payment completed');
+                    
+                    void queryClient.invalidateQueries({ queryKey: ['scheduled-payments-upcoming'] });
+                    void queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments/upcoming'] });
+                    void queryClient.invalidateQueries({ queryKey: ['parent-credits'] });
+                    void refetchUpcoming();
                     
                     // Hide the payment form
                     setShowPayment(false);
