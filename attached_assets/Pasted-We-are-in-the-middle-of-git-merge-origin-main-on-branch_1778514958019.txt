@@ -1,0 +1,30 @@
+We are in the middle of `git merge origin/main` on branch `main`. Stripe-webhook.ts is already resolved and staged.
+
+Your job: resolve ALL remaining unmerged paths, stage them, verify, and complete the merge commit. Do NOT run `git merge --abort` unless you hit an unrecoverable error (then stop and report).
+
+## Unmerged files (resolve every one)
+- server/index.ts
+- server/webhook-handler.ts
+- server/api/billing.ts, server/api/stripe.ts, server/api/scheduled-payments.ts, server/api/enrollments.ts, server/api/parent.ts, server/api/notifications.ts
+- server/dbStorage.ts, server/storage.ts
+- server/services/scheduled-payment-reminders.ts
+- client/src/pages/BillingPage.tsx, CartSuccess.tsx, PaymentSuccess.tsx
+- package.json, replit.md
+- docs/AUTOPAY_PRODUCTION_CHECKLIST.md (both added — merge ALL unique content, dedupe headings)
+- server/tests/integration/phase2/financial-enrollment.test.ts
+
+## Rules
+1. Remove ALL conflict markers (`<<<<<<<`, `=======`, `>>>>>>>`) from every file — repo must grep clean.
+2. server/index.ts MUST keep: `import stripeWebhookRouter from "./api/stripe-webhook"` and `app.use("/api/stripe-webhooks", stripeWebhookRouter)` — server/api/stripe-webhook.ts is already staged from origin/main.
+3. Merge strategy: COMBINE both sides — do not blindly pick one entire file. Preserve (a) origin/main payment-lane behavior: canonical amounts, billing summary services, idempotency helpers, autopay services, and new tests; (b) HEAD/Replit behavior: durable webhook persistence, refund path, payment_allocations / membership fixes, task219 skip logging, and allocator-related behavior. When in doubt, keep BOTH safeguards rather than deleting one.
+4. After edits: `git add` each resolved file until `git diff --name-only --diff-filter=U` is empty.
+5. Run `npm run check` and `npm run test:payments`. If either fails, fix and re-run until green (or report the exact failure with file:line if blocked).
+6. Optional if time: run a subset of `npm run test:server` for webhook/billing files touched — do not block merge on full suite if Replit times out; note what was skipped in the commit message.
+7. Commit: `git commit -m "Merge origin/main: unify GitHub payment lanes with Replit safety work"`
+8. Do NOT `git push` unless I explicitly ask in a follow-up message.
+
+## Deliverable in chat when done
+- List of files you changed and one-line each what you merged (HEAD vs theirs vs combined).
+- Output of `git diff --name-only --diff-filter=U` (must be empty).
+- Confirmation `rg '^(<<<<<<<|=======|>>>>>>>)'` has no matches outside node_modules.
+- Result of `npm run check` and `npm run test:payments`.
