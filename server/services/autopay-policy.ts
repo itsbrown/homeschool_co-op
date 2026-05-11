@@ -1,3 +1,9 @@
+/**
+ * P1-B-01 (retry cap): AUTOPAY_MAX_RETRY_ATTEMPTS; isRetryCapReached; retryCountLessThan in buildDueAutoPayQueryCriteria.
+ * P1-B-02 (stale cutoff): AUTOPAY_STALE_ATTEMPT_DAYS; isStaleAttemptDate; dueOnOrAfter window in buildDueAutoPayQueryCriteria.
+ * P1-B-03 (due criteria / DB): DueAutoPayQueryCriteria; DueAutoPayRepository; buildDueAutoPayQueryCriteria; getDueAutoPayCandidates.
+ */
+
 export const AUTOPAY_MAX_RETRY_ATTEMPTS = 3;
 export const AUTOPAY_STALE_ATTEMPT_DAYS = 14;
 
