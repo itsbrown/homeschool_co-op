@@ -1,8 +1,11 @@
 import { Router } from 'express';
 import { storage } from '../storage';
-import Stripe from 'stripe';
 import { supabaseAuth } from '../middleware/supabase-auth';
 import { getStripeClient } from '../config/stripe';
+import {
+  buildScheduledPaymentIntentMetadata,
+  resolveEnrollmentIdsFromScheduledRow,
+} from '../lib/scheduled-payment-intent-metadata';
 
 const router = Router();
 
@@ -294,16 +297,25 @@ router.post('/pay', supabaseAuth, async (req: any, res) => {
       });
     }
 
+    const userId = typeof req.user?.id === 'number' ? req.user.id : null;
+    const enrollmentIds = resolveEnrollmentIdsFromScheduledRow({
+      enrollmentId: scheduledPayment.enrollmentId,
+      metadata: scheduledPayment.metadata,
+    });
     const paymentIntent = await stripe.paymentIntents.create({
       amount: amountCents,
       currency: 'usd',
-      metadata: {
-        type: 'scheduled_payment',
-        scheduledPaymentId: paymentId.toString(),
-        amountCents: amountCents.toString(),
+      metadata: buildScheduledPaymentIntentMetadata({
+        scheduledPaymentId: parseInt(String(paymentId), 10),
         parentEmail: userEmail,
-        description: description || `Scheduled Payment ${scheduledPayment.installmentNumber}`
-      },
+        parentUserId: userId,
+        installmentNumber: scheduledPayment.installmentNumber,
+        totalInstallments: scheduledPayment.totalInstallments,
+        enrollmentIds,
+        autoPayInitiated: false,
+        chargeAmountCents: amountCents,
+        description: description || `Scheduled Payment ${scheduledPayment.installmentNumber}`,
+      }),
       automatic_payment_methods: {
         enabled: true
       }

@@ -17,6 +17,7 @@ module.exports = {
     '<rootDir>/server/tests/scheduled-payment-auto-pay-webhook-helper.test.ts',
     '<rootDir>/server/tests/integration/scheduled-payment-stripe-webhook.test.ts',
     '<rootDir>/server/tests/scheduled-payment-due-query-source.test.ts',
+    '<rootDir>/server/tests/scheduled-payment-intent-metadata.test.ts',
     '<rootDir>/server/tests/payment-plan-policy-matrix.test.ts',
     '<rootDir>/server/tests/scheduled-payment-installment-variants.test.ts',
     '<rootDir>/server/tests/reconciliation-ledger-equivalence.test.ts',
