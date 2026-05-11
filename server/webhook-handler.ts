@@ -271,7 +271,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
           
           const payment = {
             schoolId: schoolIdForSession,
-            parentId: parentUserForSession?.id,
+            parentId: parentUserForSession?.id ?? null,
             parentEmail: parentEmail,
             childName: items[0]?.childName || 'Unknown',
             className: items.length > 1 ? `${items.length} classes` : (items[0]?.className || 'Unknown'),
@@ -280,6 +280,9 @@ export const webhookHandler = async (req: Request, res: Response) => {
             currency: paymentIntent.currency || 'usd',
             status: 'completed' as const,
             stripePaymentIntentId: paymentIntent.id,
+            stripeChargeId: null as string | null,
+            stripeRefundId: null as string | null,
+            originalPaymentId: null as number | null,
             enrollmentIds: updatedEnrollments.map((e: any) => e.id),
             metadata: {
               checkoutSessionId: session.id,
@@ -348,62 +351,119 @@ export const webhookHandler = async (req: Request, res: Response) => {
           const scheduledPayment = allScheduledPayments.find(p => p.id === parseInt(scheduledPaymentId));
           
           if (scheduledPayment) {
-            // Update the scheduled payment status to completed
-            await storage.updateScheduledPaymentStatus(parseInt(scheduledPaymentId), 'completed');
-            console.log(`✅ Marked scheduled payment ${scheduledPaymentId} as completed`);
-            
-            // UPDATE ENROLLMENT BALANCES - This was missing!
-            console.log('💰 Updating enrollment balances for scheduled payment...');
-            const enrollmentIds = scheduledPayment.enrollmentIds || [];
-            const paymentAmountPerEnrollment = Math.round(paymentIntent.amount / enrollmentIds.length);
-            
-            for (const enrollmentId of enrollmentIds) {
+            const spId = parseInt(scheduledPaymentId, 10);
+            const completionSrc =
+              paymentIntent.metadata.autoPayInitiated === 'true' ? 'stripe_autopay' : 'stripe_checkout';
+            await storage.updateScheduledPayment(spId, {
+              status: 'completed',
+              processedAt: new Date(),
+              completionSource: completionSrc,
+            });
+            console.log(`✅ Marked scheduled payment ${scheduledPaymentId} as completed (${completionSrc})`);
+
+            const creditsAppliedCents =
+              parseInt(String(paymentIntent.metadata.creditsAppliedCents || '0'), 10) || 0;
+            const userIdForCredits = parseInt(String(paymentIntent.metadata.userId || '0'), 10) || 0;
+            const creditHoldSessionId =
+              (paymentIntent.metadata.creditHoldSessionId as string) ||
+              (paymentIntent.metadata.holdSessionId as string) ||
+              '';
+
+            if (creditsAppliedCents > 0 && userIdForCredits > 0) {
               try {
-                // Get program enrollment from database
-                const enrollment = await storage.getProgramEnrollmentById(enrollmentId);
-                
+                if (creditHoldSessionId) {
+                  console.log(
+                    `💰 Finalizing credit hold ${creditHoldSessionId} for scheduled payment ${scheduledPaymentId}`
+                  );
+                  const { totalFinalized } = await storage.finalizeCreditHolds(
+                    creditHoldSessionId,
+                    undefined,
+                    `Scheduled payment ${scheduledPaymentId} — installment ${paymentIntent.metadata.installmentNumber}/${paymentIntent.metadata.totalInstallments}`
+                  );
+                  console.log(`💰 ✅ Finalized ${totalFinalized} cents via hold ${creditHoldSessionId}`);
+                } else {
+                  console.log(`💰 Consuming ${creditsAppliedCents} cents of credits for user ${userIdForCredits}`);
+                  const { totalUsed } = await storage.useCredits(
+                    userIdForCredits,
+                    creditsAppliedCents,
+                    undefined,
+                    `Scheduled payment ${scheduledPaymentId} — installment ${paymentIntent.metadata.installmentNumber}/${paymentIntent.metadata.totalInstallments}`
+                  );
+                  console.log(`💰 ✅ Consumed ${totalUsed} cents of credits`);
+                }
+              } catch (creditError) {
+                console.error(
+                  `❌ Failed to consume/finalize credits for scheduled payment ${scheduledPaymentId}:`,
+                  creditError
+                );
+              }
+            }
+
+            const targetEnrollmentId = scheduledPayment.enrollmentId;
+            console.log('💰 Updating enrollment balance for scheduled payment...');
+            if (!targetEnrollmentId) {
+              console.error(`❌ Cannot process scheduled payment ${scheduledPaymentId}: no enrollmentId on row`);
+            } else {
+              try {
+                const enrollment = await storage.getProgramEnrollmentById(targetEnrollmentId);
                 if (enrollment) {
                   const currentAmountPaid = enrollment.totalPaid || 0;
-                  const newAmountPaid = currentAmountPaid + paymentAmountPerEnrollment;
+                  const originalAmount =
+                    parseInt(String(paymentIntent.metadata.originalAmountCents || '0'), 10) ||
+                    paymentIntent.amount;
+                  const totalPaymentAmount =
+                    creditsAppliedCents > 0 ? originalAmount : paymentIntent.amount;
+                  const newAmountPaid = currentAmountPaid + totalPaymentAmount;
                   const newBalance = Math.max(0, (enrollment.totalCost || 0) - newAmountPaid);
-                  
-                  // Update program enrollment in database
-                  const updatedEnrollment = await storage.updateProgramEnrollment(enrollmentId, {
+                  const updatedEnrollment = await storage.updateProgramEnrollment(targetEnrollmentId, {
                     totalPaid: newAmountPaid,
                     remainingBalance: newBalance,
-                    paymentStatus: newBalance <= 0 ? 'completed' : 'partial_payment'
+                    paymentStatus: newBalance <= 0 ? 'completed' : 'partial_payment',
                   });
-                  
                   if (updatedEnrollment) {
-                    console.log(`✅ Updated enrollment ${enrollmentId}: paid=${newAmountPaid}, balance=${newBalance}`);
+                    console.log(
+                      `✅ Updated enrollment ${targetEnrollmentId}: paid=${newAmountPaid}, balance=${newBalance}`
+                    );
                   }
                 } else {
-                  console.error(`❌ Enrollment ${enrollmentId} not found for scheduled payment`);
+                  console.error(`❌ Enrollment ${targetEnrollmentId} not found for scheduled payment`);
                 }
               } catch (error) {
-                console.error(`❌ Error updating enrollment ${enrollmentId}:`, error);
+                console.error(`❌ Error updating enrollment ${targetEnrollmentId}:`, error);
               }
             }
             
             // Create payment record for history in database
-            const description = scheduledPayment.description || 'Payment';
-            
+            const enrollmentForLabel =
+              scheduledPayment.enrollmentId != null
+                ? await storage.getProgramEnrollmentById(scheduledPayment.enrollmentId)
+                : null;
+            const payerLine =
+              enrollmentForLabel != null
+                ? `${enrollmentForLabel.childName} - ${enrollmentForLabel.className}`
+                : `Installment ${scheduledPayment.installmentNumber} of ${scheduledPayment.totalInstallments}`;
+            const childNameForPayment = payerLine.includes(' - ') ? payerLine.split(' - ')[0]! : 'Child';
+            const classNameForPayment = payerLine.includes(' - ') ? payerLine.split(' - ')[1]! : payerLine;
+
             // Get parent user to get schoolId
             const parentUser = await storage.getUserByEmail(parentEmail);
             const schoolId = scheduledPayment.schoolId || parentUser?.schoolId || 1;
-            
+
             const payment = {
               schoolId,
-              parentId: parentUser?.id,
+              parentId: parentUser?.id ?? null,
               parentEmail: parentEmail,
-              childName: description.includes(' - ') ? description.split(' - ')[0] : 'Child',
-              className: description.includes(' - ') ? description.split(' - ')[1] : description,
+              childName: childNameForPayment,
+              className: classNameForPayment,
               description: `Scheduled payment ${scheduledPayment.installmentNumber} of ${scheduledPayment.totalInstallments}`,
               amount: paymentIntent.amount,
               currency: paymentIntent.currency || 'usd',
               status: 'completed' as const,
               stripePaymentIntentId: paymentIntent.id,
-              enrollmentIds: scheduledPayment.enrollmentIds || [],
+              stripeChargeId: null as string | null,
+              stripeRefundId: null as string | null,
+              originalPaymentId: null as number | null,
+              enrollmentIds: scheduledPayment.enrollmentId ? [scheduledPayment.enrollmentId] : [],
               metadata: {
                 scheduledPaymentId: scheduledPaymentId,
                 installmentNumber: scheduledPayment.installmentNumber,
@@ -424,7 +484,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
               description: `Scheduled payment ${scheduledPayment.installmentNumber} of ${scheduledPayment.totalInstallments} - ${payment.className}`,
               childName: payment.childName,
               className: payment.className,
-              enrollmentIds: scheduledPayment.enrollmentIds || []
+              enrollmentIds: scheduledPayment.enrollmentId ? [scheduledPayment.enrollmentId] : []
             });
             
             // Send email receipt for scheduled payment
@@ -486,7 +546,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
               dataLayer.broadcastPaymentComplete(parentEmail, {
                 amount: paymentIntent.amount,
                 paymentId: scheduledPaymentId,
-                description: scheduledPayment.description,
+                description: payerLine,
                 timestamp: new Date().toISOString()
               });
               
@@ -621,7 +681,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
             
             const payment = {
               schoolId: schoolIdForPayment,
-              parentId: parentUserForPayment?.id,
+              parentId: parentUserForPayment?.id ?? null,
               stripePaymentIntentId: paymentIntent.id,
               parentEmail: parentEmail,
               childName: items[0]?.childName || 'Unknown',
@@ -630,6 +690,9 @@ export const webhookHandler = async (req: Request, res: Response) => {
               amount: paymentIntent.amount,
               currency: paymentIntent.currency || 'usd',
               status: 'completed' as const,
+              stripeChargeId: null as string | null,
+              stripeRefundId: null as string | null,
+              originalPaymentId: null as number | null,
               enrollmentIds: updatedEnrollments.map((e: any) => e.id),
               metadata: {
                 itemCount: items.length
@@ -679,10 +742,37 @@ export const webhookHandler = async (req: Request, res: Response) => {
       }
       break;
 
-    case 'payment_intent.payment_failed':
+    case 'payment_intent.payment_failed': {
       const failedPayment = event.data.object as Stripe.PaymentIntent;
       console.log('❌ Payment failed:', failedPayment.id);
+      try {
+        const paymentType = failedPayment.metadata?.paymentType || failedPayment.metadata?.type;
+        if (paymentType === 'scheduled_payment' && failedPayment.metadata?.scheduledPaymentId) {
+          const scheduledPaymentId = parseInt(String(failedPayment.metadata.scheduledPaymentId), 10);
+          const parentEmail = String(failedPayment.metadata.parentEmail || '');
+          const creditHoldSessionId =
+            (failedPayment.metadata.creditHoldSessionId as string) ||
+            (failedPayment.metadata.holdSessionId as string) ||
+            undefined;
+          const lastPaymentErrorMessage =
+            failedPayment.last_payment_error?.message ||
+            (typeof failedPayment.metadata.lastPaymentErrorMessage === 'string'
+              ? failedPayment.metadata.lastPaymentErrorMessage
+              : undefined);
+          if (parentEmail && !Number.isNaN(scheduledPaymentId)) {
+            const { handleScheduledPaymentFailed } = await import('./services/auto-pay-webhook-helpers.js');
+            await handleScheduledPaymentFailed(scheduledPaymentId, {
+              parentEmail,
+              creditHoldSessionId,
+              lastPaymentErrorMessage,
+            });
+          }
+        }
+      } catch (e) {
+        console.error('❌ Error handling payment_intent.payment_failed:', e);
+      }
       break;
+    }
 
     case 'charge.refunded':
       const refundEvent = event.data.object as Stripe.Charge;
@@ -724,15 +814,26 @@ export const webhookHandler = async (req: Request, res: Response) => {
           break;
         }
         
+        const enrollmentIdsFromPayment: number[] = Array.isArray(originalPayment.enrollmentIds)
+          ? originalPayment.enrollmentIds.filter((id): id is number => typeof id === 'number')
+          : [];
+
         // Create refund payment record
         const refundPaymentData = {
-          stripePaymentIntentId: latestRefund.id,
+          schoolId: originalPayment.schoolId,
+          parentId: originalPayment.parentId,
           parentEmail: originalPayment.parentEmail,
           childName: originalPayment.childName,
           className: originalPayment.className,
+          description: `Refund for payment ${originalPayment.id}`,
           amount: -refundAmountCents, // Negative amount for refund
           currency: originalPayment.currency || 'usd',
           status: 'completed' as const,
+          stripePaymentIntentId: latestRefund.id,
+          stripeChargeId: null as string | null,
+          stripeRefundId: latestRefund.id,
+          originalPaymentId: originalPayment.id,
+          enrollmentIds: enrollmentIdsFromPayment,
           metadata: {
             paymentMethod: 'refund',
             originalPaymentId: originalPayment.id,
@@ -741,7 +842,8 @@ export const webhookHandler = async (req: Request, res: Response) => {
             stripeRefundStatus: latestRefund.status,
             refundType: 'stripe',
             processedViaWebhook: true
-          }
+          },
+          paymentDate: new Date()
         };
         
         const refundPayment = await storage.createPayment(refundPaymentData);
@@ -754,10 +856,10 @@ export const webhookHandler = async (req: Request, res: Response) => {
           // Find matching enrollments using enrollmentIds if available, otherwise match by details
           let matchingEnrollments = [];
           
-          if (originalPayment.enrollmentIds && Array.isArray(originalPayment.enrollmentIds)) {
+          if (enrollmentIdsFromPayment.length > 0) {
             // Use enrollmentIds from payment record for accurate matching
-            matchingEnrollments = allEnrollments.filter((enrollment: any) => 
-              originalPayment.enrollmentIds.includes(enrollment.id)
+            matchingEnrollments = allEnrollments.filter((enrollment: any) =>
+              enrollmentIdsFromPayment.includes(enrollment.id)
             );
             console.log(`🔍 Found ${matchingEnrollments.length} enrollments via enrollmentIds for refund`);
           } else {
@@ -775,7 +877,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
             let remainingRefund = refundAmountCents;
             
             for (const enrollment of matchingEnrollments) {
-              const currentAmountPaid = enrollment.totalPaid || enrollment.amountPaid || 0;
+              const currentAmountPaid = enrollment.totalPaid || 0;
               
               // For last enrollment, use all remaining refund to avoid rounding errors
               const refundForThisEnrollment = matchingEnrollments.indexOf(enrollment) === matchingEnrollments.length - 1
@@ -846,8 +948,8 @@ export const webhookHandler = async (req: Request, res: Response) => {
             paymentDate: formatDate(new Date().toISOString()),
             paymentMethod: 'Refund',
             amount: formatCurrency(refundAmountCents),
-            childName: originalPayment.childName,
-            className: originalPayment.className,
+            childName: originalPayment.childName ?? 'Student',
+            className: originalPayment.className ?? 'Class',
             notes: `Refund for payment ${originalPayment.id}. ${latestRefund.reason || 'Refund processed'}`
           });
           

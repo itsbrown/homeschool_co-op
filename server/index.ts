@@ -301,6 +301,9 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
       const { backupService } = await import('./services/backupService.js');
       const { MembershipStatusService } = await import('./services/membership-status-service.js');
       const { startEnrollmentReminderScheduler } = await import('./services/enrollmentReminderScheduler.js');
+      const { startCreditExpirationJob, stopCreditExpirationJob } = await import(
+        './services/creditExpirationService.js'
+      );
       const { storage } = await import('./storage.js');
       
       // Initialize and start backup service
@@ -312,6 +315,8 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
       
       // Start enrollment payment reminder scheduler
       startEnrollmentReminderScheduler();
+
+      startCreditExpirationJob();
       
       // Start scheduled payment reminder job (sends email reminders for upcoming/overdue payments)
       startScheduledPaymentReminderJob();
@@ -333,10 +338,12 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
           const { MembershipStatusService: MembershipSvc } = await import('./services/membership-status-service.js');
           const { stopEnrollmentReminderScheduler } = await import('./services/enrollmentReminderScheduler.js');
           const { stopScheduledPaymentReminderJob } = await import('./services/scheduled-payment-reminders.js');
+          const { stopCreditExpirationJob } = await import('./services/creditExpirationService.js');
           backup.stopAutomaticBackups();
           MembershipSvc.stopMembershipStatusJob();
           stopEnrollmentReminderScheduler();
           stopScheduledPaymentReminderJob();
+          stopCreditExpirationJob();
         })();
       });
     } else {

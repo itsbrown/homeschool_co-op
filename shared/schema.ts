@@ -762,6 +762,11 @@ export const scheduledPayments = pgTable("scheduled_payments", {
   
   // Metadata
   metadata: jsonb("metadata").default({}).notNull(),
+
+  /** Audit: how the installment was completed (e.g. stripe_autopay, credits_only). */
+  completionSource: text("completion_source"),
+  /** Who initiated the charge: auto_pay | parent_manual | admin_manual | null */
+  chargedBy: text("charged_by"),
   
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -777,6 +782,8 @@ export const insertScheduledPaymentSchema = createInsertSchema(scheduledPayments
     reminderCount: z.number().default(0),
     lastReminderSentAt: z.date().nullable().default(null),
     metadata: z.record(z.any()).default({}),
+    completionSource: z.string().nullable().default(null),
+    chargedBy: z.string().nullable().default(null),
   });
 export type InsertScheduledPayment = z.infer<typeof insertScheduledPaymentSchema>;
 export type ScheduledPayment = typeof scheduledPayments.$inferSelect;
@@ -2132,4 +2139,91 @@ export type PushSubscription = typeof pushSubscriptions.$inferSelect;
 // Push subscriptions relations
 export const pushSubscriptionsRelations = relations(pushSubscriptions, ({ one }) => ({
   user: one(users, { fields: [pushSubscriptions.userId], references: [users.id] }),
+}));
+
+// ==================== UNIFIED CREDIT LEDGER (option B: no legacy volunteer_credits / session FKs) ====================
+
+export const creditTypeEnum = ["volunteer", "referral", "achievement", "marketing", "manual", "fundraiser"] as const;
+export type CreditType = (typeof creditTypeEnum)[number];
+
+export const creditStatusEnum = ["pending", "approved", "rejected", "partially_used", "used", "expired", "revoked"] as const;
+export type CreditStatus = (typeof creditStatusEnum)[number];
+
+export const credits = pgTable("credits", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  schoolId: integer("school_id").notNull().references(() => schools.id, { onDelete: "cascade" }),
+  creditType: text("credit_type", { enum: creditTypeEnum }).notNull(),
+  sourceType: text("source_type"),
+  sourceId: integer("source_id"),
+  creditAmountCents: integer("credit_amount_cents").notNull(),
+  usedAmountCents: integer("used_amount_cents").default(0).notNull(),
+  status: text("status", { enum: creditStatusEnum }).notNull().default("pending"),
+  approvedBy: integer("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  rejectionReason: text("rejection_reason"),
+  expiresAt: timestamp("expires_at"),
+  title: text("title"),
+  description: text("description"),
+  metadata: jsonb("metadata"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertCreditSchema = createInsertSchema(credits)
+  .omit({ id: true, createdAt: true, updatedAt: true, approvedAt: true, usedAmountCents: true });
+export type InsertCredit = z.infer<typeof insertCreditSchema>;
+export type Credit = typeof credits.$inferSelect;
+
+export const creditsRelations = relations(credits, ({ one }) => ({
+  user: one(users, { fields: [credits.userId], references: [users.id] }),
+  school: one(schools, { fields: [credits.schoolId], references: [schools.id] }),
+  approver: one(users, { fields: [credits.approvedBy], references: [users.id] }),
+}));
+
+export const unifiedCreditUsageLogs = pgTable("unified_credit_usage_logs", {
+  id: serial("id").primaryKey(),
+  creditId: integer("credit_id").notNull().references(() => credits.id, { onDelete: "cascade" }),
+  paymentHistoryId: integer("payment_history_id").references(() => stripePaymentHistory.id),
+  amountCents: integer("amount_cents").notNull(),
+  description: text("description"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertUnifiedCreditUsageLogSchema = createInsertSchema(unifiedCreditUsageLogs)
+  .omit({ id: true, createdAt: true });
+export type InsertUnifiedCreditUsageLog = z.infer<typeof insertUnifiedCreditUsageLogSchema>;
+export type UnifiedCreditUsageLog = typeof unifiedCreditUsageLogs.$inferSelect;
+
+export const unifiedCreditUsageLogsRelations = relations(unifiedCreditUsageLogs, ({ one }) => ({
+  credit: one(credits, { fields: [unifiedCreditUsageLogs.creditId], references: [credits.id] }),
+  paymentHistory: one(stripePaymentHistory, { fields: [unifiedCreditUsageLogs.paymentHistoryId], references: [stripePaymentHistory.id] }),
+}));
+
+export const creditHoldStatusEnum = ["pending", "finalized", "released", "expired"] as const;
+export type CreditHoldStatus = (typeof creditHoldStatusEnum)[number];
+
+export const creditHolds = pgTable("credit_holds", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  creditId: integer("credit_id").notNull().references(() => credits.id, { onDelete: "cascade" }),
+  amountCents: integer("amount_cents").notNull(),
+  checkoutSessionId: text("checkout_session_id").notNull(),
+  status: text("status", { enum: creditHoldStatusEnum }).notNull().default("pending"),
+  expiresAt: timestamp("expires_at").notNull(),
+  finalizedAt: timestamp("finalized_at"),
+  releasedAt: timestamp("released_at"),
+  description: text("description"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertCreditHoldSchema = createInsertSchema(creditHolds)
+  .omit({ id: true, createdAt: true, finalizedAt: true, releasedAt: true });
+export type InsertCreditHold = z.infer<typeof insertCreditHoldSchema>;
+export type CreditHold = typeof creditHolds.$inferSelect;
+
+export const creditHoldsRelations = relations(creditHolds, ({ one }) => ({
+  user: one(users, { fields: [creditHolds.userId], references: [users.id] }),
+  credit: one(credits, { fields: [creditHolds.creditId], references: [credits.id] }),
 }));
