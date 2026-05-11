@@ -105,3 +105,35 @@ export async function getDueAutoPayCandidates<T extends AutoPayCandidateLike>(
   const criteria = buildDueAutoPayQueryCriteria(now);
   return repository.queryDueScheduledPayments(criteria);
 }
+
+/**
+ * When AUTOPAY_REQUIRE_METADATA_AUTO_PAY=true, only rows whose metadata contains
+ * `autoPay: true` are eligible; rows without it are emitted as skipped metrics.
+ * When the flag is false/unset, all candidates pass through (backward-compatible).
+ *
+ * Returns `{ eligible, skipped }` where `skipped` contains candidates filtered out.
+ */
+export function filterAutoPayCandidatesByMetadata<
+  T extends AutoPayCandidateLike & { metadata?: unknown },
+>(
+  candidates: T[],
+): { eligible: T[]; skipped: T[] } {
+  const requireFlag =
+    (process.env.AUTOPAY_REQUIRE_METADATA_AUTO_PAY ?? "").toLowerCase() === "true";
+
+  if (!requireFlag) {
+    return { eligible: candidates, skipped: [] };
+  }
+
+  const eligible: T[] = [];
+  const skipped: T[] = [];
+  for (const c of candidates) {
+    const meta = c.metadata as Record<string, unknown> | null | undefined;
+    if (meta?.autoPay === true) {
+      eligible.push(c);
+    } else {
+      skipped.push(c);
+    }
+  }
+  return { eligible, skipped };
+}
