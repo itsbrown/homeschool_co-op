@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, jsonb, timestamp, date, varchar, pgEnum, unique } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, jsonb, timestamp, date, varchar, pgEnum, unique, doublePrecision } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations } from "drizzle-orm";
@@ -1916,6 +1916,119 @@ export const dailyFlowSchedules = pgTable("daily_flow_schedules", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
+
+// Educator ↔ class linkage (Phase 1a Educator Dashboard)
+export const educatorClassAssignments = pgTable("educator_class_assignments", {
+  id: serial("id").primaryKey(),
+  educatorId: integer("educator_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  classId: integer("class_id").notNull().references(() => classes.id, { onDelete: "cascade" }),
+  schoolId: integer("school_id").notNull().references(() => schools.id, { onDelete: "cascade" }),
+  isPrimary: boolean("is_primary").notNull().default(true),
+  canStartSession: boolean("can_start_session").notNull().default(true),
+  validFrom: date("valid_from"),
+  validTo: date("valid_to"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export type EducatorClassAssignment = typeof educatorClassAssignments.$inferSelect;
+
+// Audit trail (admin / educator / system actions)
+export const auditLogs = pgTable("audit_logs", {
+  id: serial("id").primaryKey(),
+  actionType: text("action_type").notNull(),
+  severity: text("severity", { enum: ["info", "warn", "error"] }).notNull().default("info"),
+  actorId: integer("actor_id").references(() => users.id),
+  actorRole: text("actor_role"),
+  actorEmail: text("actor_email"),
+  targetType: text("target_type").notNull(),
+  targetId: text("target_id").notNull(),
+  schoolId: integer("school_id").references(() => schools.id),
+  requestId: text("request_id"),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  metadata: jsonb("metadata").notNull().default({}),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertAuditLogSchema = createInsertSchema(auditLogs).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
+export type AuditLog = typeof auditLogs.$inferSelect;
+
+// Scheduled / live class occurrences
+export const classSessions = pgTable("class_sessions", {
+  id: serial("id").primaryKey(),
+  classId: integer("class_id").notNull().references(() => classes.id, { onDelete: "cascade" }),
+  schoolId: integer("school_id").notNull().references(() => schools.id, { onDelete: "cascade" }),
+  educatorId: integer("educator_id").notNull().references(() => users.id),
+  substituteEducatorId: integer("substitute_educator_id").references(() => users.id),
+  scheduledDate: date("scheduled_date").notNull(),
+  scheduledStartTime: text("scheduled_start_time").notNull(),
+  scheduledEndTime: text("scheduled_end_time").notNull(),
+  actualStartTime: timestamp("actual_start_time"),
+  actualEndTime: timestamp("actual_end_time"),
+  status: text("status", {
+    enum: ["scheduled", "in_progress", "completed", "cancelled", "no_show"],
+  })
+    .notNull()
+    .default("scheduled"),
+  cancelledReason: text("cancelled_reason"),
+  notes: text("notes"),
+  dailyFlowEntryId: integer("daily_flow_entry_id").references(() => dailyFlowEntries.id),
+  checkInLatitude: doublePrecision("check_in_latitude"),
+  checkInLongitude: doublePrecision("check_in_longitude"),
+  checkInLocationVerified: boolean("check_in_location_verified"),
+  qrToken: text("qr_token"),
+  qrTokenExpiresAt: timestamp("qr_token_expires_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertClassSessionSchema = createInsertSchema(classSessions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertClassSession = z.infer<typeof insertClassSessionSchema>;
+export type ClassSession = typeof classSessions.$inferSelect;
+
+// Per-child attendance for a class session
+export const sessionAttendance = pgTable("session_attendance", {
+  id: serial("id").primaryKey(),
+  sessionId: integer("session_id")
+    .notNull()
+    .references(() => classSessions.id, { onDelete: "cascade" }),
+  childId: integer("child_id").notNull().references(() => children.id, { onDelete: "cascade" }),
+  schoolId: integer("school_id").notNull().references(() => schools.id, { onDelete: "cascade" }),
+  status: text("status", {
+    enum: ["present", "absent", "late", "excused", "early_departure"],
+  })
+    .notNull()
+    .default("present"),
+  checkInTime: timestamp("check_in_time"),
+  checkOutTime: timestamp("check_out_time"),
+  tardyMinutes: integer("tardy_minutes"),
+  earlyDepartureMinutes: integer("early_departure_minutes"),
+  excuseReason: text("excuse_reason"),
+  notes: text("notes"),
+  recordedBy: integer("recorded_by").notNull().references(() => users.id),
+  recordedAt: timestamp("recorded_at").defaultNow().notNull(),
+  locationVerified: boolean("location_verified"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertSessionAttendanceSchema = createInsertSchema(sessionAttendance).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  recordedAt: true,
+});
+export type InsertSessionAttendance = z.infer<typeof insertSessionAttendanceSchema>;
+export type SessionAttendance = typeof sessionAttendance.$inferSelect;
 
 // Define relationships for daily flow tables
 export const dailyFlowTemplateRelations = relations(dailyFlowTemplates, ({ one, many }) => ({
