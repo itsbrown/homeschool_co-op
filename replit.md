@@ -9,6 +9,13 @@ Preferred communication style: Simple, everyday language.
 ## Git workflow
 Branching, keeping `main` clean, worktrees, and tracked `data/*.json` fixtures: **[docs/GIT_WORKFLOW.md](docs/GIT_WORKFLOW.md)**. Contributor entry point: **[CONTRIBUTING.md](CONTRIBUTING.md)**.
 
+## Publish / Deploy Pre-Flight
+These rules are mandatory for the agent on any manual Publish or production deploy request. Do not skip steps, do not reorder them, and do not approve a publish if any step fails.
+
+1. **Follow the sync checklist in order.** Before any manual Publish or production deploy request, open and follow `docs/REPLIT_SYNC_CHECKLIST.md` end-to-end and in order: fetch, SHA match, align branch, `npm ci`, checks, smoke. No shortcuts.
+2. **Confirm the SHA matches `origin/main`.** Run `git rev-parse HEAD`, paste the output into the conversation, and explicitly confirm it matches `origin/main` before approving the publish. If it does not match, stop.
+3. **Stop and report blockers if the checklist cannot be completed.** If any step in `docs/REPLIT_SYNC_CHECKLIST.md` fails or cannot be run, do not publish. Report the specific blockers to the user and wait for direction.
+
 ## Debugging Guidelines
 - **Trace the entire request flow from endpoint to database before making fixes**, not just the layer where the problem appears to be. Follow the code path through: API route → storage interface → actual storage implementation (database or memory) to ensure all layers are using the correct data source.
 - **HybridStorage architecture**: `dbStorage` can be either DatabaseStorage or MemStorage (fallback). Use identity comparison (`this.dbStorage !== this.memStorage`) to detect real database availability.
