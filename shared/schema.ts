@@ -878,6 +878,35 @@ export const insertStripePaymentHistorySchema = createInsertSchema(stripePayment
 export type InsertStripePaymentHistory = z.infer<typeof insertStripePaymentHistorySchema>;
 export type StripePaymentHistory = typeof stripePaymentHistory.$inferSelect;
 
+/** Stripe refund webhook audit / idempotency (Task #222); see init-db migration */
+export const refundEvents = pgTable("refund_events", {
+  id: serial("id").primaryKey(),
+  stripeEventId: text("stripe_event_id").notNull().unique(),
+  stripeRefundId: text("stripe_refund_id").notNull(),
+  stripeChargeId: text("stripe_charge_id"),
+  stripePaymentIntentId: text("stripe_payment_intent_id"),
+  eventType: text("event_type").notNull(),
+  amountCents: integer("amount_cents").notNull(),
+  currency: text("currency").notNull().default("usd"),
+  refundStatus: text("refund_status"),
+  reason: text("reason"),
+  failureReason: text("failure_reason"),
+  originalPaymentId: integer("original_payment_id").references(() => payments.id),
+  originalPaymentHistoryId: integer("original_payment_history_id").references(() => stripePaymentHistory.id),
+  processingStatus: text("processing_status").notNull().default("persisted"),
+  rawEvent: jsonb("raw_event"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertRefundEventSchema = createInsertSchema(refundEvents).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertRefundEvent = z.infer<typeof insertRefundEventSchema>;
+export type RefundEvent = typeof refundEvents.$inferSelect;
+
 // Define emergency contact relations
 export const emergencyContactsRelations = relations(emergencyContacts, ({ one }) => ({
   user: one(users, { fields: [emergencyContacts.userId], references: [users.id] })
