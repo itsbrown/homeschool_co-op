@@ -8,3 +8,18 @@ dist
 server/public
 vite.config.ts.*
 *.tar.gz
+
+# Playwright
+/playwright-report/
+/test-results/
+/blob-report/
+/playwright/.cache/
+# Saved login session (contains tokens — never commit)
+/playwright/.auth/parent.json
+
+# Local Playwright / Supabase secrets (see .env.e2e.example)
+.env.e2e
+
+# Local dev secrets (see .env.example)
+.env
+.env.local

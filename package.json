@@ -11,6 +11,10 @@
     "check:payments": "tsc --noEmit -p tsconfig.payments.json",
     "test:payments": "NODE_ENV=test jest --config jest.payments.config.cjs",
     "test:server": "NODE_ENV=test jest --config jest.integration.config.cjs",
+    "test:e2e": "node scripts/run-playwright.mjs test",
+    "test:e2e:ui": "node scripts/run-playwright.mjs test --ui",
+    "test:e2e:headed": "node scripts/run-playwright.mjs test --headed",
+    "playwright:install": "node scripts/run-playwright.mjs install chromium",
     "db:push": "drizzle-kit push"
   },
   "dependencies": {
@@ -152,6 +156,7 @@
     "zod-validation-error": "^3.4.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "@replit/vite-plugin-cartographer": "^0.1.2",
     "@replit/vite-plugin-runtime-error-modal": "^0.0.3",
     "@tailwindcss/typography": "^0.5.15",
@@ -167,6 +172,7 @@
     "@types/ws": "^8.5.13",
     "@vitejs/plugin-react": "^4.3.2",
     "autoprefixer": "^10.4.20",
+    "dotenv": "^17.4.2",
     "drizzle-kit": "^0.30.4",
     "esbuild": "^0.25.0",
     "postcss": "^8.4.47",

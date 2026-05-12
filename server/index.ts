@@ -1,3 +1,5 @@
+// Load repo-root `.env` / `.env.local` first (local Mac/Linux; Replit/CI already set env).
+import "./local-env";
 // Load test environment configuration (conditionally based on NODE_ENV)
 import "./test-env-loader";
 
@@ -40,6 +42,7 @@ function parseBooleanEnv(value: string | undefined, defaultValue = false): boole
 
 function shouldRunBackgroundJobs(env: string): boolean {
   if (env === 'test') return false;
+  if (process.env.PLAYWRIGHT_WEB_SERVER === 'true') return false;
   if (env === 'development') return true;
 
   // Production/staging safety: background jobs run only with explicit singleton opt-in.
@@ -277,11 +280,15 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
   }
 
   const port = 5000;
-  server.listen({
+  const listenOpts: { port: number; host: string; reusePort?: boolean } = {
     port,
     host: "0.0.0.0",
-    reusePort: true,
-  }, async () => {
+  };
+  // SO_REUSEPORT is unsupported on some platforms/sandboxes; Playwright sets DISABLE_LISTEN_REUSE_PORT.
+  if (process.env.DISABLE_LISTEN_REUSE_PORT !== "true") {
+    listenOpts.reusePort = true;
+  }
+  server.listen(listenOpts, async () => {
     console.log(`serving on port ${port}`);
 
     // Background jobs should run only in local development or explicit singleton worker mode.

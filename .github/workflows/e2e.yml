@@ -1,0 +1,54 @@
+name: E2E
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # Nightly smoke on weekdays (UTC); adjust cron as you like.
+  schedule:
+    - cron: "0 12 * * 1-5"
+  workflow_dispatch:
+
+jobs:
+  playwright:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install chromium --with-deps
+
+      - name: Run Playwright
+        env:
+          # Optional: add these repo secrets to run `e2e/authenticated/**` in CI (real Supabase + parent user).
+          E2E_PARENT_EMAIL: ${{ secrets.E2E_PARENT_EMAIL }}
+          E2E_PARENT_PASSWORD: ${{ secrets.E2E_PARENT_PASSWORD }}
+          SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.E2E_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.E2E_SUPABASE_SERVICE_ROLE_KEY }}
+          VITE_SUPABASE_URL: ${{ secrets.E2E_VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.E2E_VITE_SUPABASE_ANON_KEY }}
+        run: CI=true npm run test:e2e
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: test-results/
