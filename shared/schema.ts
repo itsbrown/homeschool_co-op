@@ -1680,6 +1680,29 @@ export const emailLog = pgTable("email_log", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+/** Matches `membership_enrollments.status` values treated as in good standing for cart / access checks. */
+const ACTIVE_MEMBERSHIP_STATUSES = new Set<string>(["enrolled", "grace_period"]);
+
+export function isActiveMembership(status: string | null | undefined): boolean {
+  if (status == null || status === "") return false;
+  return ACTIVE_MEMBERSHIP_STATUSES.has(status);
+}
+
+/**
+ * Outstanding cents for an enrollment: max(0, totalCost - totalPaid - comp).
+ * Aligns with generated `effective_balance` semantics (see init-db / payment docs).
+ */
+export function computeEffectiveBalance(
+  totalCostCents: number,
+  totalPaidCents: number,
+  compAmountCents: number,
+): number {
+  const tc = Number.isFinite(totalCostCents) ? totalCostCents : 0;
+  const tp = Number.isFinite(totalPaidCents) ? totalPaidCents : 0;
+  const comp = Number.isFinite(compAmountCents) ? compAmountCents : 0;
+  return Math.max(0, tc - tp - comp);
+}
+
 // Relations for multi-location support
 export const locationsRelations = relations(locations, ({ one, many }) => ({
   school: one(schools, { fields: [locations.schoolId], references: [schools.id] }),
