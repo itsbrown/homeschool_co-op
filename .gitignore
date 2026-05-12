@@ -1,5 +1,6 @@
 node_modules
 .worktree-*/
+scratch/
 # Runtime timestamped JSON snapshots (new files only; does not remove existing tracked backups)
 data/backups/*-*-*T*.json
 dist
@@ -7,7 +8,3 @@ dist
 server/public
 vite.config.ts.*
 *.tar.gz
-
-# Backup files (may contain sensitive data)
-data/backups/
-data/backups/data/scheduled-payments.json

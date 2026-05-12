@@ -15,10 +15,20 @@ jest.mock('../../../storage', () => ({
   storage: {
     updateScheduledPaymentStatus: (...args: any[]) => mockUpdateScheduledPaymentStatus(...args),
     getAllScheduledPayments: (...args: any[]) => mockGetAllScheduledPayments(...args),
+    getProgramEnrollmentById: jest.fn(),
+    getNotificationsByUserId: jest.fn(async () => []),
+    createNotification: jest.fn(async () => ({ id: 1 })),
+    getSchool: jest.fn(async () => ({ name: 'Test School' })),
   },
 }));
 
 describe('Integration: AutoPay runtime policy enforcement', () => {
+  const storageMock = jest.requireMock('../../../storage').storage as {
+    getProgramEnrollmentById: jest.Mock;
+    getNotificationsByUserId: jest.Mock;
+    createNotification: jest.Mock;
+  };
+
   beforeEach(() => {
     mockWhere.mockReset();
     mockFrom.mockReset();
@@ -34,6 +44,13 @@ describe('Integration: AutoPay runtime policy enforcement', () => {
     mockGetAllScheduledPayments.mockImplementation(() => {
       throw new Error('AutoPay execution path must not use in-memory due filtering');
     });
+
+    storageMock.getProgramEnrollmentById.mockReset();
+    storageMock.getNotificationsByUserId.mockReset();
+    storageMock.createNotification.mockReset();
+    storageMock.getProgramEnrollmentById.mockResolvedValue(undefined);
+    storageMock.getNotificationsByUserId.mockResolvedValue([]);
+    storageMock.createNotification.mockResolvedValue({ id: 1 });
   });
 
   it('uses DB query due criteria and marks retry-cap/stale candidates as terminal', async () => {
@@ -59,5 +76,39 @@ describe('Integration: AutoPay runtime policy enforcement', () => {
     expect(mockUpdateScheduledPaymentStatus).toHaveBeenCalledTimes(2);
     expect(mockUpdateScheduledPaymentStatus).toHaveBeenCalledWith(1001, 'cancelled');
     expect(mockUpdateScheduledPaymentStatus).toHaveBeenCalledWith(1002, 'cancelled');
+  });
+
+  it('skips with credit_covered when enrollment balance is already zero', async () => {
+    storageMock.getProgramEnrollmentById.mockResolvedValue({
+      id: 501,
+      remainingBalance: 0,
+      totalCost: 10000,
+      totalPaid: 10000,
+      schoolId: 1,
+      childId: 1,
+      classId: 1,
+    });
+
+    mockWhere.mockResolvedValue([
+      {
+        id: 2001,
+        scheduledDate: new Date('2026-05-08T00:00:00.000Z'),
+        retryCount: 0,
+        status: 'pending',
+        enrollmentId: 501,
+        parentId: 77,
+        parentEmail: 'p@example.com',
+        amount: 2500,
+        installmentNumber: 1,
+        totalInstallments: 4,
+      },
+    ]);
+
+    const { processAutoPayExecutionPath } = await import('../../../services/scheduled-payment-reminders');
+    const results = await processAutoPayExecutionPath(new Date('2026-05-08T12:00:00.000Z'));
+
+    expect(results).toEqual([{ scheduledPaymentId: 2001, action: 'skip', reason: 'credit_covered' }]);
+    expect(mockUpdateScheduledPaymentStatus).toHaveBeenCalledWith(2001, 'cancelled');
+    expect(storageMock.createNotification).toHaveBeenCalled();
   });
 });

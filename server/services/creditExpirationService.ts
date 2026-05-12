@@ -1,87 +1,52 @@
 /**
- * Credit Expiration Service
- * 
- * Runs on a schedule to mark credits as expired when their expiresAt date has passed.
- * Uses the unified credit system that supports all credit types (volunteer, referral, etc.)
+ * Marks unified credits past expiresAt as expired and expires stale credit holds.
  */
 
 import { storage } from '../storage';
 
-const ONE_HOUR = 60 * 60 * 1000;
-const TWELVE_HOURS = 12 * ONE_HOUR;
+const TWELVE_HOURS = 12 * 60 * 60 * 1000;
 
-let expirationInterval: NodeJS.Timeout | null = null;
+let expirationInterval: ReturnType<typeof setInterval> | null = null;
 
-/**
- * Mark all expired credits in the database
- * Credits are considered expired when:
- * - expiresAt is not null AND has passed
- * - status is 'approved' or 'partially_used' (not already expired/used/rejected)
- */
 export async function expireCredits(): Promise<{ expiredCount: number; expiredHoldsCount: number }> {
-  try {
-    console.log('🕐 Running credit expiration check...');
-    
-    // Expire credits that have passed their expiration date
-    const expiredCount = await storage.expireCredits();
-    
-    if (expiredCount > 0) {
-      console.log(`✅ Marked ${expiredCount} credits as expired`);
-    } else {
-      console.log('✅ No credits needed expiration');
-    }
-    
-    // Also expire stale credit holds (abandoned checkouts)
-    let expiredHoldsCount = 0;
-    try {
-      expiredHoldsCount = await storage.expireStaleHolds();
-      
-      if (expiredHoldsCount > 0) {
-        console.log(`🔓 Released ${expiredHoldsCount} expired credit holds`);
-      }
-    } catch (holdsError: any) {
-      // Table might not exist yet - gracefully handle
-      if (holdsError.message?.includes('relation "credit_holds" does not exist')) {
-        console.log('⏭️ Skipping credit holds expiration - table not yet created');
-      } else {
-        throw holdsError;
-      }
-    }
-    
-    return { expiredCount, expiredHoldsCount };
-  } catch (error) {
-    console.error('❌ Error during credit expiration check:', error);
-    throw error;
+  console.log('🕐 Running credit expiration check...');
+  const expiredCount = await storage.expireCredits();
+  if (expiredCount > 0) {
+    console.log(`✅ Marked ${expiredCount} credits as expired`);
+  } else {
+    console.log('✅ No credits needed expiration');
   }
+
+  let expiredHoldsCount = 0;
+  try {
+    expiredHoldsCount = await storage.expireStaleHolds();
+    if (expiredHoldsCount > 0) {
+      console.log(`🔓 Released ${expiredHoldsCount} expired credit holds`);
+    }
+  } catch (holdsError: unknown) {
+    const msg = holdsError instanceof Error ? holdsError.message : String(holdsError);
+    if (msg.includes('relation "credit_holds" does not exist')) {
+      console.log('⏭️ Skipping credit holds expiration — table not yet created');
+    } else {
+      throw holdsError;
+    }
+  }
+
+  return { expiredCount, expiredHoldsCount };
 }
 
-/**
- * Start the credit expiration job that runs every 12 hours
- */
 export function startCreditExpirationJob(): void {
   if (expirationInterval) {
     console.log('⚠️ Credit expiration job already running');
     return;
   }
-  
   console.log('🚀 Starting credit expiration service (runs every 12 hours)');
-  
-  // Run immediately on startup
-  expireCredits().catch(err => 
-    console.error('Error in initial credit expiration run:', err)
-  );
-  
-  // Then run every 12 hours
+  expireCredits().catch((err) => console.error('Error in initial credit expiration run:', err));
   expirationInterval = setInterval(() => {
-    expireCredits().catch(err => 
-      console.error('Error in scheduled credit expiration run:', err)
-    );
+    expireCredits().catch((err) => console.error('Error in scheduled credit expiration run:', err));
   }, TWELVE_HOURS);
 }
 
-/**
- * Stop the credit expiration job
- */
 export function stopCreditExpirationJob(): void {
   if (expirationInterval) {
     clearInterval(expirationInterval);
@@ -89,9 +54,3 @@ export function stopCreditExpirationJob(): void {
     console.log('🛑 Credit expiration service stopped');
   }
 }
-
-export default {
-  expireCredits,
-  startCreditExpirationJob,
-  stopCreditExpirationJob
-};

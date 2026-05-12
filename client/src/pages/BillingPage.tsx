@@ -1,4 +1,4 @@
-import React, { useState, useTransition, useEffect } from 'react';
+import React, { useMemo, useState, useTransition } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/components/SupabaseProvider';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -9,18 +9,24 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { apiRequest, queryClient } from '@/lib/queryClient';
-import { CreditCard, AlertCircle, CheckCircle, DollarSign, Calendar, User, Users, Loader2, History, ChevronDown } from 'lucide-react';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { CreditCard, AlertCircle, CheckCircle, DollarSign, Calendar, User, Loader2, History, Gift } from 'lucide-react';
 import ParentAppShell from '@/components/layout/ParentAppShell';
 import { useLocation } from 'wouter';
 import { useCart } from '@/contexts/CartContext';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useRealTimeUpdates } from '@/hooks/useRealTimeUpdates';
 import { formatCurrency } from '@/utils/currency';
-import { stripePromise } from '@/config/stripe';
+import { computeCreditCoverageFifo } from '@/utils/creditInstallmentCoverage';
+import { useParentCredits } from '@/hooks/useParentCredits';
+import { stripePromise, STRIPE_PUBLISHABLE_KEY } from '@/config/stripe';
 
+// Stripe is initialized in config/stripe.ts with correct API version
+console.log('🔑 Stripe publishable key check:', STRIPE_PUBLISHABLE_KEY ? 'Present' : 'Missing');
+console.log('🔑 Stripe publishable key starts with:', STRIPE_PUBLISHABLE_KEY ? STRIPE_PUBLISHABLE_KEY.substring(0, 15) + '...' : 'N/A');
+
+// Simple payment form component
 function SimplePaymentForm({ onSuccess, onError }: { 
-  onSuccess: (paymentIntentId?: string) => void; 
+  onSuccess: () => void; 
   onError: (error: string) => void; 
 }) {
   const stripe = useStripe();
@@ -47,7 +53,7 @@ function SimplePaymentForm({ onSuccess, onError }: {
     if (error) {
       onError(error.message || 'Payment failed');
     } else if (paymentIntent && paymentIntent.status === 'succeeded') {
-      onSuccess(paymentIntent.id);
+      onSuccess();
     }
 
     setIsProcessing(false);
@@ -70,7 +76,7 @@ function SimplePaymentForm({ onSuccess, onError }: {
 interface PaymentHistoryItem {
   id: number;
   amount: number;
-  status: 'pending' | 'succeeded' | 'paid' | 'completed' | 'failed' | 'canceled';
+  status: 'pending' | 'succeeded' | 'failed' | 'canceled';
   createdAt: string;
   description: string | null;
   stripePaymentIntentId: string;
@@ -87,22 +93,6 @@ interface PaymentHistoryItem {
   source?: 'database' | 'stripe';
   childName?: string;
   programName?: string;
-  // Discount tracking fields
-  subtotalAmount?: number;
-  discountTotal?: number;
-  discountSnapshot?: {
-    subtotal: number;
-    discountTotal: number;
-    appliedDiscounts: Array<{
-      source: string;
-      discountId?: number;
-      code?: string;
-      name: string;
-      type: string;
-      value: number;
-      amount: number;
-    }>;
-  };
 }
 
 interface StripeSubscriptionSchedule {
@@ -241,7 +231,7 @@ function SubscriptionSchedulesTab() {
                 <h4 className="font-medium mb-3">Payment Schedule</h4>
                 <div className="space-y-3">
                   {(payments as any[]).map((payment: any) => (
-                    <div key={payment.id} className="flex justify-between items-start text-sm p-3 bg-muted/50 rounded-lg" data-testid={`scheduled-payment-${payment.id}`}>
+                    <div key={payment.id} className="flex justify-between items-center text-sm p-3 bg-muted/50 rounded-lg" data-testid={`scheduled-payment-${payment.id}`}>
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
                           <span className="font-medium">
@@ -257,23 +247,9 @@ function SubscriptionSchedulesTab() {
                         <p className="text-muted-foreground text-xs">
                           Due: {formatDate(payment.dueDate)}
                         </p>
-                        {payment.creditsThatWillApply != null && payment.creditsThatWillApply > 0 && (
-                          <p className="text-xs text-emerald-700 font-medium">
-                            {formatCurrency(payment.creditsThatWillApply)} credits will apply
-                            {' → '}
-                            net charge: {payment.estimatedNetCharge === 0
-                              ? 'Fully covered'
-                              : formatCurrency(payment.estimatedNetCharge)}
-                          </p>
-                        )}
                       </div>
                       <div className="text-right">
                         <span className="font-semibold">{formatCurrency(payment.amount)}</span>
-                        {payment.estimatedNetCharge != null && payment.estimatedNetCharge !== payment.amount && (
-                          <p className="text-xs text-emerald-600 font-medium">
-                            {payment.estimatedNetCharge === 0 ? 'No card charge' : `${formatCurrency(payment.estimatedNetCharge)} card charge`}
-                          </p>
-                        )}
                       </div>
                     </div>
                   ))}
@@ -418,7 +394,7 @@ function PaymentHistoryTab() {
                 <div className="flex items-center gap-2 flex-wrap">
                   <h3 className="font-medium">{payment.description || 'Payment'}</h3>
                   <Badge 
-                    variant={payment.status === 'succeeded' || payment.status === 'paid' || payment.status === 'completed' ? 'default' : 
+                    variant={payment.status === 'succeeded' ? 'default' : 
                             payment.status === 'pending' ? 'secondary' : 'destructive'}
                     data-testid={`badge-status-${payment.id}`}
                   >
@@ -469,49 +445,6 @@ function PaymentHistoryTab() {
                 </div>
               </div>
             </div>
-            
-            {/* Discount Breakdown Section - Collapsible */}
-            {payment.discountSnapshot && payment.discountSnapshot.discountTotal > 0 && (
-              <Collapsible className="mt-3 pt-3 border-t" data-testid={`discount-section-${payment.id}`}>
-                <CollapsibleTrigger className="flex items-center justify-between w-full text-sm font-medium text-green-700 hover:text-green-800 cursor-pointer">
-                  <span className="flex items-center gap-2">
-                    Discounts Applied
-                    <Badge variant="secondary" className="bg-green-100 text-green-800">
-                      -{formatCurrency(payment.discountSnapshot.discountTotal)}
-                    </Badge>
-                  </span>
-                  <ChevronDown className="h-4 w-4 transition-transform duration-200 [&[data-state=open]]:rotate-180" />
-                </CollapsibleTrigger>
-                <CollapsibleContent className="mt-2">
-                  <div className="space-y-1 bg-green-50 p-2 rounded-md">
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="text-gray-600">Subtotal</span>
-                      <span>{formatCurrency(payment.discountSnapshot.subtotal)}</span>
-                    </div>
-                    {payment.discountSnapshot.appliedDiscounts.map((discount: any, index: number) => (
-                      <div key={index} className="flex justify-between items-center text-sm text-green-700">
-                        <span className="flex items-center gap-1">
-                          <Badge variant="outline" className="text-xs bg-green-100 border-green-300">
-                            {discount.source === 'promo' ? 'Promo' : 
-                             discount.source === 'sibling' ? 'Sibling' :
-                             discount.source === 'free_after_threshold' ? 'Family' :
-                             discount.source === 'bundle' ? 'Bundle' :
-                             discount.source === 'automatic' ? 'Auto' : 'Discount'}
-                          </Badge>
-                          {discount.name}
-                          {discount.code && <span className="text-xs text-gray-500">({discount.code})</span>}
-                        </span>
-                        <span className="font-medium">-{formatCurrency(discount.amount)}</span>
-                      </div>
-                    ))}
-                    <div className="flex justify-between items-center text-sm font-semibold border-t border-green-200 pt-1 mt-1">
-                      <span>Total Savings</span>
-                      <span className="text-green-700">-{formatCurrency(payment.discountSnapshot.discountTotal)}</span>
-                    </div>
-                  </div>
-                </CollapsibleContent>
-              </Collapsible>
-            )}
           </Card>
         ))}
       </div>
@@ -539,34 +472,55 @@ function UpcomingPaymentsTab({
   const { toast } = useToast();
   const [, navigate] = useLocation();
   const [isPending, startTransition] = useTransition();
-  const [confirmingGroup, setConfirmingGroup] = useState<string | null>(null);
-  const [combinedPaymentIds, setCombinedPaymentIds] = useState<number[]>([]);
   
+  // Enable real-time updates for scheduled payments 
   const { isConnected } = useRealTimeUpdates();
 
-  const { data: groupedData, isLoading, refetch: refetchGrouped } = useQuery<
-    { success: boolean; groups?: Array<Record<string, unknown>> },
-    Error,
-    Array<Record<string, unknown>>
-  >({
-    queryKey: ['/api/scheduled-payments/grouped'],
+  const { data: upcomingPayments, isLoading, refetch: refetchUpcoming } = useQuery({
+    queryKey: ['scheduled-payments-upcoming'],
     staleTime: 0,
-    refetchInterval: 5000,
-    select: (data) => (data?.success ? data.groups ?? [] : []),
+    refetchInterval: 5000, // Refresh every 5 seconds
+    queryFn: async () => {
+      console.log('📅 Fetching upcoming scheduled payments from database...');
+      const response = await apiRequest('GET', '/api/scheduled-payments/upcoming');
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch scheduled payments');
+      }
+      
+      const data = await response.json();
+      console.log('📅 Scheduled payments response:', data);
+      
+      if (!data.success || !data.payments) {
+        return [];
+      }
+      
+      console.log('📅 Found upcoming payments:', data.payments.length);
+      return data.payments;
+    },
   });
 
-  const { data: upcomingPayments, isLoading: upcomingLoading } = useQuery<
-    { success: boolean; payments?: Array<Record<string, unknown>> },
-    Error,
-    Array<Record<string, unknown>>
-  >({
-    queryKey: ['/api/scheduled-payments/upcoming'],
-    staleTime: 0,
-    refetchInterval: 5000,
-    select: (data) => (data?.success ? data.payments ?? [] : []),
-  });
+  const { totalAvailableCents } = useParentCredits();
 
-  const formatCurrencyLocal = (amount: number) => {
+  const sortedForCoverage = useMemo(() => {
+    if (!upcomingPayments?.length) return [];
+    return [...upcomingPayments].sort(
+      (a: any, b: any) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()
+    );
+  }, [upcomingPayments]);
+
+  const creditCoverageById = useMemo(() => {
+    const rows = sortedForCoverage.map((p: any) => ({
+      key: String(p.id),
+      amountCents: typeof p.amount === 'number' ? p.amount : 0,
+    }));
+    return computeCreditCoverageFifo(rows, totalAvailableCents);
+  }, [sortedForCoverage, totalAvailableCents]);
+
+  const isPaymentUrgent = (p: any) =>
+    p.status === 'failed' || p.status === 'overdue' || p.overdue === true;
+
+  const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
@@ -582,31 +536,44 @@ function UpcomingPaymentsTab({
   };
 
   const handlePayScheduledPayment = async (payment: any) => {
-    if (isPending) return;
+    console.log('🔄 Pay Now clicked for scheduled payment:', payment.id);
+
+    if (isPending) {
+      console.log('⏳ Already processing, ignoring click');
+      return;
+    }
+
+    console.log('🚀 Starting scheduled payment process');
 
     startTransition(() => {
       (async () => {
         try {
+          console.log('📤 Sending scheduled payment request...');
+          
           const response = await apiRequest('POST', '/api/scheduled-payments/pay', {
             paymentId: payment.id,
             amount: payment.amount,
             description: payment.description
           });
 
+          console.log('📥 Scheduled payment response received:', response.status);
+
           if (!response.ok) {
             const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+            console.error('❌ Scheduled payment request failed:', errorData);
             throw new Error(`Payment request failed: ${errorData.message || response.statusText}`);
           }
 
           const data = await response.json();
+          console.log('✅ Scheduled payment response data:', data);
 
           if (data.clientSecret) {
+            console.log('🔑 Client secret received, showing payment form');
             setClientSecret(data.clientSecret);
             setCurrentPayment(payment);
-            setCombinedPaymentIds([]);
             setShowPayment(true);
-            setConfirmingGroup(null);
 
+            // Auto-scroll to payment form after a brief delay
             setTimeout(() => {
               const paymentSection = document.querySelector('[data-payment-form]');
               if (paymentSection) {
@@ -614,9 +581,11 @@ function UpcomingPaymentsTab({
               }
             }, 500);
           } else {
+            console.error('❌ No client secret in response:', data);
             throw new Error('No client secret received from server');
           }
         } catch (error: any) {
+          console.error('❌ Scheduled payment error:', error);
           toast({
             title: "Payment Error",
             description: error.message || "Failed to process payment. Please try again.",
@@ -627,131 +596,7 @@ function UpcomingPaymentsTab({
     });
   };
 
-  const handlePayAllDueDate = async (group: any) => {
-    if (isPending) return;
-
-    if (group.payments.length === 1) {
-      handlePayScheduledPayment(group.payments[0]);
-      return;
-    }
-
-    setConfirmingGroup(group.dueDate);
-  };
-
-  const handleConfirmCombinedPayment = async (group: any) => {
-    if (isPending) return;
-
-    startTransition(() => {
-      (async () => {
-        try {
-          const paymentIds = group.payments.map((p: any) => p.id);
-          
-          const response = await apiRequest('POST', '/api/scheduled-payments/pay-combined', {
-            scheduledPaymentIds: paymentIds
-          });
-
-          if (!response.ok) {
-            const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
-            throw new Error(errorData.error || errorData.message || response.statusText);
-          }
-
-          const data = await response.json();
-
-          if (data.clientSecret) {
-            setClientSecret(data.clientSecret);
-            setCurrentPayment({
-              amount: data.combinedAmount || group.totalAmount,
-              chargeAmount: data.chargeAmount,
-              paymentCount: data.paymentCount,
-              isCombined: true,
-              scheduledPaymentIds: paymentIds,
-              groupDueDate: group.dueDateFormatted,
-              payments: group.payments
-            });
-            setCombinedPaymentIds(paymentIds);
-            setShowPayment(true);
-            setConfirmingGroup(null);
-
-            setTimeout(() => {
-              const paymentSection = document.querySelector('[data-payment-form]');
-              if (paymentSection) {
-                paymentSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-              }
-            }, 500);
-          } else {
-            throw new Error('No client secret received from server');
-          }
-        } catch (error: any) {
-          toast({
-            title: "Payment Error",
-            description: error.message || "Failed to process combined payment. Please try again.",
-            variant: "destructive",
-          });
-        }
-      })();
-    });
-  };
-
-  const handlePaymentSuccess = async (paymentIntentId?: string) => {
-    if (combinedPaymentIds.length > 0 && currentPayment?.isCombined && paymentIntentId) {
-      try {
-        console.log('Confirming combined payment:', paymentIntentId);
-        const confirmResponse = await apiRequest('POST', '/api/scheduled-payments/confirm-combined', {
-          paymentIntentId
-        });
-        if (!confirmResponse.ok) {
-          console.error('Combined confirm failed, webhook will handle:', await confirmResponse.json().catch(() => ({})));
-        }
-      } catch (confirmError) {
-        console.error('Error confirming combined payment (webhook will handle):', confirmError);
-      }
-    } else if (paymentIntentId && !currentPayment?.isCombined && currentPayment?.id) {
-      try {
-        console.log('Confirming individual scheduled payment:', paymentIntentId);
-        const confirmResponse = await apiRequest('POST', `/api/scheduled-payments/${currentPayment.id}/confirm`, {
-          paymentIntentId
-        });
-        if (!confirmResponse.ok) {
-          console.error('Individual confirm failed, webhook will handle:', await confirmResponse.json().catch(() => ({})));
-        }
-      } catch (confirmError) {
-        console.error('Error confirming individual payment (webhook will handle):', confirmError);
-      }
-    }
-    
-    setShowPayment(false);
-    setClientSecret('');
-    setCurrentPayment(null);
-    setCombinedPaymentIds([]);
-    setConfirmingGroup(null);
-    
-    queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments/grouped'] });
-    queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments/upcoming'] });
-    queryClient.invalidateQueries({ queryKey: ['billing-summary'] });
-    queryClient.invalidateQueries({ queryKey: ['/api/payment-history/history'] });
-    
-    toast({
-      title: "Payment Successful!",
-      description: currentPayment?.isCombined
-        ? `Combined payment for ${currentPayment.paymentCount} installments has been processed.`
-        : "Your payment has been processed successfully.",
-    });
-  };
-
-  const handlePaymentError = (error: string) => {
-    toast({
-      title: "Payment Failed",
-      description: error || "Please try again.",
-      variant: "destructive",
-    });
-    setShowPayment(false);
-    setClientSecret('');
-    setCurrentPayment(null);
-    setCombinedPaymentIds([]);
-    setConfirmingGroup(null);
-  };
-
-  if (isLoading || upcomingLoading) {
+  if (isLoading) {
     return (
       <div className="text-center py-12">
         <Loader2 className="h-8 w-8 animate-spin text-blue-600 mx-auto mb-4" />
@@ -760,12 +605,7 @@ function UpcomingPaymentsTab({
     );
   }
 
-  const groups = groupedData || [];
-  const fallbackPayments = upcomingPayments || [];
-  const hasMultiplePaymentsInAnyGroup = groups.some((g: any) => g.paymentCount > 1);
-  const useGroupedView = groups.length > 0;
-
-  if (groups.length === 0 && fallbackPayments.length === 0) {
+  if (!upcomingPayments || upcomingPayments.length === 0) {
     return (
       <div className="text-center py-12">
         <Calendar className="h-12 w-12 text-gray-400 mx-auto mb-4" />
@@ -782,35 +622,84 @@ function UpcomingPaymentsTab({
         <h3 className="text-lg font-semibold">Upcoming Payment Plan Installments</h3>
       </div>
 
-      {hasMultiplePaymentsInAnyGroup && (
-        <Alert className="border-blue-200 bg-blue-50 mb-4">
-          <Users className="h-4 w-4 text-blue-600" />
-          <AlertDescription className="text-blue-700">
-            <strong>Family Payments Available!</strong> You have multiple payments due on the same date. 
-            Use "Pay All" to combine them into a single transaction.
+      {totalAvailableCents > 0 && (
+        <Alert className="border-emerald-200 bg-emerald-50">
+          <Gift className="h-4 w-4 text-emerald-700" />
+          <AlertDescription className="text-emerald-900">
+            You have {formatCurrency(totalAvailableCents)} in credits — they will be applied automatically to your
+            earliest due installments (including autopay when enabled).
           </AlertDescription>
         </Alert>
       )}
+      
+      {sortedForCoverage.map((payment: any) => {
+        const cov = creditCoverageById.get(String(payment.id));
+        const urgent = isPaymentUrgent(payment);
+        const borderClass = urgent ? 'border-l-red-500' : 'border-l-blue-500';
+        const retryCount = typeof payment.retryCount === 'number' ? payment.retryCount : 0;
 
-      {!useGroupedView && fallbackPayments.map((payment: any) => (
-        <Card key={payment.id} className="border-l-4 border-l-blue-500">
+        return (
+        <Card key={payment.id} className={`border-l-4 ${borderClass}`}>
           <CardContent className="p-6">
             <div className="flex justify-between items-start">
               <div className="flex-1">
-                <div className="flex items-center gap-2 mb-2">
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
                   <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
                     Payment {payment.installmentNumber} of {payment.totalInstallments}
                   </Badge>
+                  <Badge variant="secondary">
+                    {payment.paymentPlan === 'three_payments' ? '3-Payment Plan' : 
+                     payment.paymentPlan === 'biweekly' ? 'Biweekly Plan' :
+                     payment.paymentPlan === 'full' ? 'Pay in Full' :
+                     payment.paymentPlan === 'deposit' ? 'Deposit Only' :
+                     payment.paymentPlan || 'Payment Plan'}
+                  </Badge>
+                  {urgent && (
+                    <Badge variant="destructive">
+                      {payment.status === 'failed' ? `Failed (retry ${retryCount})` : 'Overdue'}
+                    </Badge>
+                  )}
+                  {cov?.fullyCovered && (
+                    <Badge className="bg-emerald-600 hover:bg-emerald-600">Covered by credits</Badge>
+                  )}
                 </div>
+                
                 <h4 className="font-semibold text-lg mb-1">{payment.description}</h4>
                 <p className="text-gray-600 text-sm mb-3">Due: {formatDate(payment.dueDate)}</p>
+                
+                <div className="flex items-center gap-4 text-sm text-gray-500">
+                  <span>Amount: {formatCurrency(payment.amount)}</span>
+                  <span>•</span>
+                  <span>Status: {payment.status}</span>
+                </div>
+                {payment.status === 'failed' && payment.failureReason && (
+                  <p className="text-sm text-red-600 mt-2">
+                    Last attempt failed: {String(payment.failureReason)}
+                  </p>
+                )}
+                {cov && cov.creditAppliedCents > 0 && !cov.fullyCovered && (
+                  <p className="text-sm text-emerald-800 mt-2">
+                    ~{formatCurrency(cov.creditAppliedCents)} of this installment may be covered by your available
+                    credits; the remainder can be paid by card.
+                  </p>
+                )}
               </div>
+              
               <div className="flex flex-col gap-2">
                 <div className="text-right">
-                  <div className="text-2xl font-bold text-green-600">
-                    {formatCurrencyLocal(payment.amount)}
+                  <div className={`text-2xl font-bold ${urgent ? 'text-red-600' : 'text-green-600'}`}>
+                    {formatCurrency(payment.amount)}
+                  </div>
+                  <div className="text-sm text-gray-500">
+                    Due {formatDate(payment.dueDate)}
                   </div>
                 </div>
+                
+                {cov?.fullyCovered ? (
+                  <span className="text-sm text-emerald-700 font-medium text-right">
+                    No card charge needed if credits settle this installment.
+                  </span>
+                ) : (
                 <Button 
                   size="sm" 
                   className="bg-green-600 hover:bg-green-700"
@@ -819,172 +708,13 @@ function UpcomingPaymentsTab({
                 >
                   {isPending ? 'Processing...' : 'Pay Now'}
                 </Button>
+                )}
               </div>
             </div>
           </CardContent>
         </Card>
-      ))}
-      
-      {useGroupedView && groups.map((group: any) => (
-        <Card key={group.dueDate} className="border-l-4 border-l-blue-500">
-          <CardHeader className="pb-3">
-            <div className="flex justify-between items-start">
-              <div>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Calendar className="h-4 w-4" />
-                  Due: {group.dueDateFormatted}
-                </CardTitle>
-                <CardDescription>
-                  {group.paymentCount} payment{group.paymentCount > 1 ? 's' : ''} due
-                </CardDescription>
-              </div>
-              <div className="text-right">
-                <div className="text-2xl font-bold text-green-600">
-                  {formatCurrencyLocal(group.totalAmount)}
-                </div>
-                {group.paymentCount > 1 && (
-                  <Badge variant="secondary" className="mt-1 bg-blue-100 text-blue-700">
-                    <Users className="h-3 w-3 mr-1" />
-                    Combined
-                  </Badge>
-                )}
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <div className="space-y-3">
-              {group.payments.map((payment: any) => (
-                <div key={payment.id} className="flex justify-between items-center text-sm p-3 bg-muted/50 rounded-lg">
-                  <div className="space-y-1 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-medium">
-                        {payment.childName && <span className="text-blue-600">{payment.childName}</span>}
-                        {payment.childName && payment.className && ' - '}
-                        {payment.className}
-                      </span>
-                      <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
-                        {payment.installmentNumber}/{payment.totalInstallments}
-                      </Badge>
-                    </div>
-                    <p className="text-muted-foreground text-xs">{payment.description}</p>
-                  </div>
-                  <div className="text-right ml-4">
-                    <span className="font-semibold">{formatCurrencyLocal(payment.amount)}</span>
-                    {group.paymentCount === 1 && (
-                      <div className="mt-1">
-                        <Button
-                          size="sm"
-                          className="bg-green-600 hover:bg-green-700 text-xs h-7"
-                          onClick={() => handlePayScheduledPayment(payment)}
-                          disabled={isPending}
-                        >
-                          {isPending ? 'Processing...' : 'Pay Now'}
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-            
-            {group.paymentCount > 1 && (
-              <div className="mt-4 pt-4 border-t">
-                {confirmingGroup === group.dueDate ? (
-                  <div className="space-y-4">
-                    <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                      <h4 className="font-medium text-green-900 mb-2">Confirm Combined Payment</h4>
-                      <p className="text-sm text-green-700 mb-3">
-                        You are about to pay {group.paymentCount} installments in a single transaction:
-                      </p>
-                      <div className="space-y-1 text-sm">
-                        {group.payments.map((p: any) => (
-                          <div key={p.id} className="flex justify-between">
-                            <span className="text-gray-700">
-                              {p.childName} - {p.className} (#{p.installmentNumber})
-                            </span>
-                            <span className="font-medium">{formatCurrencyLocal(p.amount)}</span>
-                          </div>
-                        ))}
-                        <Separator className="my-2" />
-                        <div className="flex justify-between font-semibold text-green-800">
-                          <span>Total</span>
-                          <span>{formatCurrencyLocal(group.totalAmount)}</span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        className="flex-1 bg-green-600 hover:bg-green-700"
-                        onClick={() => handleConfirmCombinedPayment(group)}
-                        disabled={isPending}
-                      >
-                        {isPending ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Processing...
-                          </>
-                        ) : (
-                          <>
-                            <CreditCard className="mr-2 h-4 w-4" />
-                            Confirm & Pay {formatCurrencyLocal(group.totalAmount)}
-                          </>
-                        )}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        onClick={() => setConfirmingGroup(null)}
-                        disabled={isPending}
-                      >
-                        Cancel
-                      </Button>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Or pay individually:
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      {group.payments.map((p: any) => (
-                        <Button
-                          key={p.id}
-                          size="sm"
-                          variant="outline"
-                          className="text-xs"
-                          onClick={() => handlePayScheduledPayment(p)}
-                          disabled={isPending}
-                        >
-                          Pay {p.childName} {formatCurrencyLocal(p.amount)}
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm text-muted-foreground">
-                      Pay all {group.paymentCount} installments at once
-                    </p>
-                    <Button 
-                      className="bg-green-600 hover:bg-green-700"
-                      onClick={() => handlePayAllDueDate(group)}
-                      disabled={isPending}
-                    >
-                      {isPending ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Processing...
-                        </>
-                      ) : (
-                        <>
-                          <Users className="mr-2 h-4 w-4" />
-                          Pay All Due {group.dueDateFormatted} ({formatCurrencyLocal(group.totalAmount)})
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      ))}
+        );
+      })}
       
       <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
         <div className="flex items-start gap-3">
@@ -993,47 +723,59 @@ function UpcomingPaymentsTab({
             <h4 className="font-medium text-blue-900 mb-1">Payment Reminders</h4>
             <p className="text-sm text-blue-700">
               We'll send you email reminders 7 days before each payment is due. 
-              You can pay early at any time using the buttons above.
+              You can pay early at any time using the "Pay Now" button above.
             </p>
           </div>
         </div>
       </div>
 
+      {/* Stripe Payment Form for scheduled payments */}
       {showPayment && clientSecret && (
         <div className="mt-8" data-payment-form>
-          <Card className="border-green-200 bg-green-50/30">
+          <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <CreditCard className="h-5 w-5 text-green-600" />
-                {currentPayment?.isCombined ? 'Complete Combined Payment' : 'Complete Payment'}
-              </CardTitle>
+              <CardTitle>Complete Payment</CardTitle>
               <CardDescription>
-                {currentPayment?.isCombined
-                  ? `Pay ${currentPayment.paymentCount} installments due ${currentPayment.groupDueDate} in a single transaction`
-                  : 'Process your scheduled payment securely with Stripe'}
+                Process your scheduled payment securely with Stripe
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {currentPayment?.isCombined && (
-                <div className="mb-4 p-3 bg-white rounded-lg border text-sm">
-                  <h4 className="font-medium mb-2">Payment Breakdown:</h4>
-                  {currentPayment.payments?.map((p: any) => (
-                    <div key={p.id} className="flex justify-between py-1">
-                      <span className="text-gray-600">{p.childName} - {p.className}</span>
-                      <span className="font-medium">{formatCurrencyLocal(p.amount)}</span>
-                    </div>
-                  ))}
-                  <Separator className="my-2" />
-                  <div className="flex justify-between font-semibold">
-                    <span>Total</span>
-                    <span>{formatCurrencyLocal(currentPayment.amount)}</span>
-                  </div>
-                </div>
-              )}
               <Elements stripe={stripePromise} options={{ clientSecret }}>
                 <SimplePaymentForm 
-                  onSuccess={handlePaymentSuccess}
-                  onError={handlePaymentError}
+                  onSuccess={() => {
+                    console.log('✅ Scheduled payment completed');
+                    
+                    void queryClient.invalidateQueries({ queryKey: ['scheduled-payments-upcoming'] });
+                    void queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments/upcoming'] });
+                    void queryClient.invalidateQueries({ queryKey: ['parent-credits'] });
+                    void refetchUpcoming();
+                    
+                    // Hide the payment form
+                    setShowPayment(false);
+                    setClientSecret('');
+                    setCurrentPayment(null);
+                    
+                    // Navigate to payment success page
+                    const successParams = new URLSearchParams({
+                      payment_intent: `scheduled_${Date.now()}`,
+                      amount: String(currentPayment?.amount || 0), // Use actual payment amount
+                      date: new Date().toISOString(),
+                      enrollments: JSON.stringify(currentPayment?.enrollmentIds || [])
+                    });
+                    
+                    navigate(`/payment-success?${successParams.toString()}`);
+                  }}
+                  onError={(error: string) => {
+                    console.error('❌ Scheduled payment failed:', error);
+                    toast({
+                      title: "Payment Failed",
+                      description: error || "Please try again.",
+                      variant: "destructive",
+                    });
+                    setShowPayment(false);
+                    setClientSecret('');
+                    setCurrentPayment(null);
+                  }}
                 />
               </Elements>
             </CardContent>
@@ -1312,53 +1054,11 @@ export default function BillingPage() {
   const { isConnected } = useRealTimeUpdates();
   const [selectedEnrollments, setSelectedEnrollments] = useState<number[]>([]);
   const [selectedPaymentOptions, setSelectedPaymentOptions] = useState<{[enrollmentId: number]: number}>({});
-  const [selectedPaymentPlan, setSelectedPaymentPlan] = useState<string>('full_payment');
+  const [selectedPaymentPlan, setSelectedPaymentPlan] = useState<string>('deposit_all');
   const [showPayment, setShowPayment] = useState(false);
   const [clientSecret, setClientSecret] = useState<string>('');
   const [currentPayment, setCurrentPayment] = useState<any>(null);
   const [isPending, startTransition] = useTransition();
-
-  useEffect(() => {
-    document.title = "Billing & Payments - American Seekers Academy";
-  }, []);
-
-  // Detect Stripe redirect completion (e.g., after 3D Secure verification)
-  // When Stripe redirects back, URL contains payment_intent and redirect_status params
-  useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const paymentIntent = urlParams.get('payment_intent');
-    const redirectStatus = urlParams.get('redirect_status');
-    
-    if (paymentIntent && redirectStatus) {
-      console.log('🔄 Detected Stripe redirect completion on BillingPage:', { paymentIntent, redirectStatus });
-      
-      // Invalidate all payment-related queries to refresh data
-      queryClient.invalidateQueries({ queryKey: ['/api/payment-history'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments/upcoming'] });
-      queryClient.invalidateQueries({ queryKey: ['billing-summary'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/enrollments'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/parent/memberships'] });
-      queryClient.invalidateQueries({ queryKey: ['stripe-subscription-schedules'] });
-      
-      // Show appropriate toast based on status
-      if (redirectStatus === 'succeeded') {
-        toast({
-          title: "Payment Successful",
-          description: "Your payment has been processed successfully.",
-        });
-      } else if (redirectStatus === 'failed') {
-        toast({
-          title: "Payment Failed",
-          description: "Your payment could not be processed. Please try again.",
-          variant: "destructive",
-        });
-      }
-      
-      // Clean up URL parameters to prevent re-triggering on refresh
-      const newUrl = window.location.pathname;
-      window.history.replaceState({}, '', newUrl);
-    }
-  }, [toast]);
 
   // Debug logging for state changes
   React.useEffect(() => {
@@ -1462,10 +1162,18 @@ export default function BillingPage() {
     const totalBalance = enrollmentsToCalculate.reduce((total, detail) => total + detail.balance, 0);
 
     switch (selectedPaymentPlan) {
+      case 'deposit_all':
+        // Pay 10% deposit for selected enrollments
+        return Math.round(totalBalance * 0.1);
+      case 'half_now':
+        // Pay 50% now, 50% later
+        return Math.round(totalBalance * 0.5);
       case 'full_payment':
+        // Pay everything
         return totalBalance;
-      case 'biweekly':
-        return totalBalance;
+      case 'three_payments':
+        // Split into 3 monthly payments - first payment amount
+        return Math.round(totalBalance / 3);
       default:
         return totalBalance;
     }
@@ -1481,10 +1189,14 @@ export default function BillingPage() {
     const totalBalance = enrollmentsToCalculate.reduce((total, detail) => total + detail.balance, 0);
 
     switch (selectedPaymentPlan) {
+      case 'deposit_all':
+        return `Pay 10% deposit (${formatCurrency(Math.round(totalBalance * 0.1))}) to secure selected enrollments. Remaining balance due before classes start.`;
+      case 'half_now':
+        return `Pay 50% now (${formatCurrency(Math.round(totalBalance * 0.5))}), remaining 50% in 30 days.`;
       case 'full_payment':
         return `Pay full amount now. No future payments needed.`;
-      case 'biweekly':
-        return `Pay in bi-weekly installments. First payment today, then every two weeks until the balance is paid.`;
+      case 'three_payments':
+        return `Split into 3 equal monthly payments of ${formatCurrency(Math.round(totalBalance / 3))} each.`;
       default:
         return '';
     }
@@ -1805,6 +1517,46 @@ export default function BillingPage() {
                       <input
                         type="radio"
                         name="paymentPlan"
+                        value="deposit_all"
+                        checked={selectedPaymentPlan === 'deposit_all'}
+                        onChange={(e) => setSelectedPaymentPlan(e.target.value)}
+                        className="mt-1"
+                      />
+                      <div className="flex-1">
+                        <div className="font-medium">Pay Deposits Only</div>
+                        <div className="text-sm text-muted-foreground mt-1">
+                          Pay 10% deposit for all enrollments - {formatCurrency(Math.round(getSelectedTotal() * 0.1))}
+                        </div>
+                        <div className="text-xs text-blue-600 mt-1">
+                          Secures all spots, remaining balance due before classes start
+                        </div>
+                      </div>
+                    </label>
+
+                    <label className="flex items-start space-x-3 cursor-pointer p-4 border rounded-lg hover:bg-gray-50">
+                      <input
+                        type="radio"
+                        name="paymentPlan"
+                        value="half_now"
+                        checked={selectedPaymentPlan === 'half_now'}
+                        onChange={(e) => setSelectedPaymentPlan(e.target.value)}
+                        className="mt-1"
+                      />
+                      <div className="flex-1">
+                        <div className="font-medium">Split Payment (50/50)</div>
+                        <div className="text-sm text-muted-foreground mt-1">
+                          Pay half now, half in 30 days - {formatCurrency(Math.round(getSelectedTotal() * 0.5))}
+                        </div>
+                        <div className="text-xs text-green-600 mt-1">
+                          No additional fees, automatic payment reminders
+                        </div>
+                      </div>
+                    </label>
+
+                    <label className="flex items-start space-x-3 cursor-pointer p-4 border rounded-lg hover:bg-gray-50">
+                      <input
+                        type="radio"
+                        name="paymentPlan"
                         value="full_payment"
                         checked={selectedPaymentPlan === 'full_payment'}
                         onChange={(e) => setSelectedPaymentPlan(e.target.value)}
@@ -1825,18 +1577,18 @@ export default function BillingPage() {
                       <input
                         type="radio"
                         name="paymentPlan"
-                        value="biweekly"
-                        checked={selectedPaymentPlan === 'biweekly'}
+                        value="three_payments"
+                        checked={selectedPaymentPlan === 'three_payments'}
                         onChange={(e) => setSelectedPaymentPlan(e.target.value)}
                         className="mt-1"
                       />
                       <div className="flex-1">
-                        <div className="font-medium">Bi-Weekly Payments</div>
+                        <div className="font-medium">Monthly Installments (3 payments)</div>
                         <div className="text-sm text-muted-foreground mt-1">
-                          Pay in installments every two weeks
+                          Three monthly payments of {formatCurrency(Math.round(getSelectedTotal() / 3))} each
                         </div>
                         <div className="text-xs text-blue-600 mt-1">
-                          First payment today, then automatic bi-weekly payments
+                          First payment today, then monthly auto-payments
                         </div>
                       </div>
                     </label>
@@ -1861,8 +1613,10 @@ export default function BillingPage() {
                         : `All ${billingSummary.enrollmentDetails.length} enrollments will be included`}
                     </p>
                     <p className="text-sm font-medium text-blue-600">
-                      Payment Plan: {selectedPaymentPlan === 'full_payment' ? 'Pay in Full' :
-                                   selectedPaymentPlan === 'biweekly' ? 'Bi-Weekly Payments' : 'Custom'}
+                      Payment Plan: {selectedPaymentPlan === 'deposit_all' ? 'Deposits Only' :
+                                   selectedPaymentPlan === 'half_now' ? 'Split Payment' :
+                                   selectedPaymentPlan === 'full_payment' ? 'Pay in Full' :
+                                   selectedPaymentPlan === 'three_payments' ? 'Monthly Installments' : 'Custom'}
                     </p>
                     {showPayment && (
                       <p className="text-sm text-green-600 font-medium">
@@ -1902,8 +1656,10 @@ export default function BillingPage() {
                     Secure Payment
                   </CardTitle>
                   <CardDescription>
-                    Complete your {selectedPaymentPlan === 'full_payment' ? 'full payment' :
-                                  selectedPaymentPlan === 'biweekly' ? 'first bi-weekly payment' : 'payment'} of {formatCurrency(getPaymentPlanAmount())}
+                    Complete your {selectedPaymentPlan === 'deposit_all' ? 'deposit payment' :
+                                  selectedPaymentPlan === 'half_now' ? 'first payment (50%)' :
+                                  selectedPaymentPlan === 'full_payment' ? 'full payment' :
+                                  selectedPaymentPlan === 'three_payments' ? 'first monthly payment' : 'payment'} of {formatCurrency(getPaymentPlanAmount())}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -1958,7 +1714,6 @@ export default function BillingPage() {
                           queryClient.invalidateQueries({ queryKey: ['stripe-subscription-schedules'] });
                           queryClient.invalidateQueries({ queryKey: ['/api/billing/summary'] });
                           queryClient.invalidateQueries({ queryKey: ['/api/enrollments'] });
-                          queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments/upcoming'] });
                           
                           console.log('✅ Payment success handling complete');
                         }}

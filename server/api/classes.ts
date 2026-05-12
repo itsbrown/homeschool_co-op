@@ -76,6 +76,19 @@ router.get('/', async (req, res) => {
       classes = classes.filter((c: any) => c.categoryId === categoryId);
     }
 
+    if (statusParam) {
+      classes = classes.filter((c: any) => c.status === statusParam || (statusParam === 'active' && c.status === 'published'));
+    }
+    if (typeof locationId === 'number' && !isNaN(locationId)) {
+      classes = classes.filter((c: any) => c.locationId === locationId);
+    }
+    if (locationIds.length > 0) {
+      classes = classes.filter((c: any) => locationIds.includes(c.locationId));
+    }
+    if (typeof categoryId === 'number' && !isNaN(categoryId)) {
+      classes = classes.filter((c: any) => c.categoryId === categoryId);
+    }
+
     // Additional filtering by categoryName if provided
     if (categoryName && classes.length > 0) {
       classes = classes.filter(c => c.categoryName === categoryName);

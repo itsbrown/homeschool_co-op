@@ -27,6 +27,7 @@ export function mapStripePaymentIntentStatusString(stripeStatus: string): Stripe
       return "requires_confirmation";
     case "canceled":
       return "canceled";
+    /** Uncaptured authorized funds — treat like in-flight processing until capture or cancel. */
     case "requires_capture":
       return "processing";
     default:

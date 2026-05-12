@@ -1,11 +1,10 @@
-import { eq, and, desc, asc, like, ilike, or, sql, lt, gt, gte, lte, isNull, inArray, not, Column } from 'drizzle-orm';
+import { eq, and, desc, asc, like, or, sql, lt, gt, lte, gte, isNull, inArray } from 'drizzle-orm';
 import { normalizeEmailForLookup } from '@shared/parent-identity';
 import { getDb } from './db';
 import { IStorage } from './storage';
 import {
   User, InsertUser, users,
   UserRole, userRoles,
-  DocumentView, InsertDocumentView, documentViews,
   Class, InsertClass, classes,
   KnowledgeBase, InsertKnowledgeBase, knowledgeBases,
   Curriculum, InsertCurriculum, curricula,
@@ -18,6 +17,9 @@ import {
   SchoolDocument, InsertSchoolDocument, schoolDocuments,
   PaymentReceipt, InsertPaymentReceipt, paymentReceipts,
   StripeSubscriptionSchedule, InsertStripeSubscriptionSchedule, stripeSubscriptionSchedules,
+  DailyFlowTemplate, InsertDailyFlowTemplate, dailyFlowTemplates,
+  DailyFlowEntry, InsertDailyFlowEntry, dailyFlowEntries,
+  DailyFlowSchedule, InsertDailyFlowSchedule, dailyFlowSchedules,
   MarketingLink, InsertMarketingLink, marketingLinks,
   Child, InsertChild, children,
   EmergencyContact, InsertEmergencyContact, emergencyContacts,
@@ -40,39 +42,21 @@ import {
   StaffInvitation, InsertStaffInvitation, staffInvitations,
   PasswordResetToken, InsertPasswordResetToken, passwordResetTokens,
   RoleInvitation, InsertRoleInvitation, roleInvitations,
-  EducatorClassAssignment, InsertEducatorClassAssignment, educatorClassAssignments,
-  ClassSession, InsertClassSession, classSessions,
-  EducatorSchedule, InsertEducatorSchedule, educatorSchedules,
-  AuditLog, InsertAuditLog, auditLogs,
-  SessionAttendance, InsertSessionAttendance, sessionAttendance,
-  ErrorLog, InsertErrorLog, errorLogs,
-  SignedWaiver, InsertSignedWaiver, signedWaivers,
-  SessionVolunteer, InsertSessionVolunteer, sessionVolunteers,
-  VolunteerCredit, InsertVolunteerCredit, volunteerCredits,
-  CreditUsageLog, InsertCreditUsageLog, creditUsageLogs,
-  Credit, InsertCredit, credits, CreditType, CreditStatus,
-  UnifiedCreditUsageLog, InsertUnifiedCreditUsageLog, unifiedCreditUsageLogs,
-  PaymentAllocation, InsertPaymentAllocation, paymentAllocations,
-  CreditHold, InsertCreditHold, creditHolds, CreditHoldStatus,
-  AssessmentType, InsertAssessmentType, assessmentTypes,
-  CurriculumBook, InsertCurriculumBook, curriculumBooks,
-  StudentAssessment, InsertStudentAssessment, studentAssessments,
-  FundraiserCampaign, InsertFundraiserCampaign, fundraiserCampaigns,
-  FundraiserProduct, InsertFundraiserProduct, fundraiserProducts,
-  FundraiserFamilyLink, InsertFundraiserFamilyLink, fundraiserFamilyLinks,
-  FundraiserOrder, InsertFundraiserOrder, fundraiserOrders,
-  FundraiserOrderItem, InsertFundraiserOrderItem, fundraiserOrderItems,
-  piiAccessLogs,
-  PaymentReminderLog, InsertPaymentReminderLog, paymentReminderLogs,
-  ChildGuardian, InsertChildGuardian, childGuardians,
-  WeeklySkeleton, InsertWeeklySkeleton, weeklySkeletons,
-  SkeletonBlock, InsertSkeletonBlock, skeletonBlocks,
-  WeekPlan, InsertWeekPlan, weekPlans,
-  WeekPlanBlock, InsertWeekPlanBlock, weekPlanBlocks,
-  WeekPlanBlockHistory, InsertWeekPlanBlockHistory, weekPlanBlockHistory,
-  StripePaymentHistory, InsertStripePaymentHistory, stripePaymentHistory,
-  EmailLog, InsertEmailLog, emailLog,
-  RefundEvent, InsertRefundEvent, refundEvents
+  credits,
+  unifiedCreditUsageLogs,
+  creditHolds,
+  stripePaymentHistory,
+  type Credit,
+  type InsertCredit,
+  type CreditStatus,
+  type CreditType,
+  type UnifiedCreditUsageLog,
+  type InsertUnifiedCreditUsageLog,
+  type CreditHold,
+  type InsertCreditHold,
+  type CreditHoldStatus,
+  type StripePaymentHistory,
+  type InsertStripePaymentHistory,
 } from '../shared/schema';
 
 /**
@@ -96,7 +80,6 @@ export class DatabaseStorage implements IStorage {
     const db = await getDb();
     const normalized = normalizeEmailForLookup(email);
     if (!normalized) return undefined;
-    // Case-insensitive email lookup to prevent duplicate parent accounts
     const [user] = await db
       .select()
       .from(users)
@@ -123,67 +106,20 @@ export class DatabaseStorage implements IStorage {
 
   async createUser(user: InsertUser): Promise<User> {
     const db = await getDb();
-    // Normalize email to lowercase to prevent case-sensitivity issues
-    const normalizedUser = {
-      ...user,
-      email: user.email?.toLowerCase()
-    };
-    const [newUser] = await db.insert(users).values(normalizedUser).returning();
+    const [newUser] = await db.insert(users).values(user).returning();
     return newUser;
   }
 
   async getAllUsers(): Promise<User[]> {
     const db = await getDb();
-    return await db.select().from(users).where(eq(users.isActive, true));
-  }
-
-  async searchUsers(params: { schoolId: number | null, query?: string, role?: User['role'], limit?: number, offset?: number }): Promise<{ users: User[]; total: number }> {
-    const db = await getDb();
-    const { schoolId, query, role, limit = 20, offset = 0 } = params;
-
-    const conditions = [eq(users.isActive, true)];
-
-    if (schoolId !== null) {
-      conditions.push(eq(users.schoolId, schoolId));
-    }
-
-    if (role) {
-      conditions.push(eq(users.role, role));
-    }
-
-    if (query && query.trim()) {
-      const pattern = `%${query.trim()}%`;
-      conditions.push(
-        or(
-          ilike(users.name, pattern),
-          ilike(users.firstName, pattern),
-          ilike(users.lastName, pattern),
-          ilike(users.email, pattern),
-        )!
-      );
-    }
-
-    const whereClause = and(...conditions);
-
-    const [countResult, results] = await Promise.all([
-      db.select({ count: sql`count(*)` }).from(users).where(whereClause),
-      db.select().from(users).where(whereClause).orderBy(asc(users.name)).limit(limit).offset(offset),
-    ]);
-
-    const total = Number(countResult[0]?.count ?? 0);
-    return { users: results, total };
+    return await db.select().from(users);
   }
 
   async updateUser(id: number, user: Partial<InsertUser>): Promise<User | undefined> {
     const db = await getDb();
-    // Normalize email to lowercase to prevent case-sensitivity issues
-    const normalizedUser = {
-      ...user,
-      ...(user.email && { email: user.email.toLowerCase() })
-    };
     const [updatedUser] = await db
       .update(users)
-      .set(normalizedUser)
+      .set(user)
       .where(eq(users.id, id))
       .returning();
     return updatedUser;
@@ -245,40 +181,10 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(schools).where(eq(schools.adminId, adminId));
   }
 
-  // School Feature Toggle methods
-  async getSchoolFeatures(schoolId: number): Promise<Record<string, boolean>> {
-    const db = await getDb();
-    const [school] = await db.select({ enabledFeatures: schools.enabledFeatures })
-      .from(schools)
-      .where(eq(schools.id, schoolId));
-    return (school?.enabledFeatures as Record<string, boolean>) || {};
-  }
-
-  async updateSchoolFeatures(schoolId: number, features: Record<string, boolean>): Promise<School | undefined> {
-    const db = await getDb();
-    const [updatedSchool] = await db
-      .update(schools)
-      .set({ enabledFeatures: features, updatedAt: new Date() })
-      .where(eq(schools.id, schoolId))
-      .returning();
-    return updatedSchool;
-  }
-
   // User Role methods
   async getUserRolesByUserId(userId: number): Promise<UserRole[]> {
     const db = await getDb();
     return await db.select().from(userRoles).where(eq(userRoles.userId, userId));
-  }
-
-  async createUserRole(data: { userId: number; role: string; schoolId?: number | null; isPrimary?: boolean }): Promise<UserRole> {
-    const db = await getDb();
-    const [created] = await db.insert(userRoles).values({
-      userId: data.userId,
-      role: data.role,
-      schoolId: data.schoolId ?? null,
-      isPrimary: data.isPrimary ?? false,
-    }).returning();
-    return created;
   }
 
   async deleteUserRolesByUserId(userId: number): Promise<void> {
@@ -286,207 +192,15 @@ export class DatabaseStorage implements IStorage {
     await db.delete(userRoles).where(eq(userRoles.userId, userId));
   }
 
-  async deleteUserLocationsByUserId(userId: number): Promise<void> {
-    const db = await getDb();
-    await db.delete(userLocations).where(eq(userLocations.userId, userId));
-  }
-
-  async deleteNotificationRecipientsByUserId(userId: number): Promise<void> {
-    const db = await getDb();
-    await db.delete(notificationRecipients).where(eq(notificationRecipients.recipientId, userId));
-  }
-
-  async deleteChildrenByParentId(parentId: number): Promise<void> {
-    const db = await getDb();
-    await db.delete(children).where(eq(children.parentId, parentId));
-  }
-
-  async deleteEnrollmentsByChildId(childId: number): Promise<void> {
-    const db = await getDb();
-    await db.delete(programEnrollments).where(eq(programEnrollments.childId, childId));
-  }
-
-  async deleteSchoolStudentsByChildId(childId: number): Promise<void> {
-    const db = await getDb();
-    await db.delete(schoolStudents).where(eq(schoolStudents.childId, childId));
-  }
-
-  async deleteDiscountApplicationsByChildId(childId: number): Promise<void> {
-    const db = await getDb();
-    await db.delete(discountApplications).where(eq(discountApplications.childId, childId));
-  }
-
-  async deleteEmergencyContactsByUserId(userId: number): Promise<void> {
-    const db = await getDb();
-    await db.delete(emergencyContacts).where(eq(emergencyContacts.userId, userId));
-  }
-
-  async deletePiiAccessLogsByUserId(userId: number): Promise<void> {
-    const db = await getDb();
-    await db.delete(piiAccessLogs).where(eq(piiAccessLogs.userId, userId));
-  }
-
-  async deleteCartsByParentId(parentId: number): Promise<void> {
-    // Carts table doesn't exist in schema - no-op
-  }
-
-  async deleteScheduledPaymentsByParentId(parentId: number): Promise<void> {
-    const db = await getDb();
-    await db.delete(scheduledPayments).where(eq(scheduledPayments.parentId, parentId));
-  }
-
-  async deleteEnrollmentsByParentId(parentId: number): Promise<void> {
-    const db = await getDb();
-    await db.delete(programEnrollments).where(eq(programEnrollments.parentId, parentId));
-  }
-
-  async deleteMembershipEnrollmentsByParentUserId(parentUserId: number): Promise<void> {
-    const db = await getDb();
-    await db.delete(membershipEnrollments).where(eq(membershipEnrollments.parentUserId, parentUserId));
-  }
-
-  async deleteMembershipAgreementsByParentUserId(parentUserId: number): Promise<void> {
-    const db = await getDb();
-    await db.delete(membershipAgreements).where(eq(membershipAgreements.parentUserId, parentUserId));
-  }
-
-  async deletePaymentReceiptsByParentUserId(parentUserId: number): Promise<void> {
-    const db = await getDb();
-    await db.delete(paymentReceipts).where(eq(paymentReceipts.parentUserId, parentUserId));
-  }
-
-  async deleteClassSessionsByEducatorId(educatorId: number): Promise<void> {
-    const db = await getDb();
-    await db.delete(classSessions).where(eq(classSessions.educatorId, educatorId));
-  }
-
-  async clearClassSessionsSubstituteEducatorId(educatorId: number): Promise<void> {
-    const db = await getDb();
-    await db.update(classSessions)
-      .set({ substituteEducatorId: null })
-      .where(eq(classSessions.substituteEducatorId, educatorId));
-  }
-
-  async clearClassesInstructorId(instructorId: number): Promise<void> {
-    const db = await getDb();
-    await db.update(classes)
-      .set({ instructorId: null })
-      .where(eq(classes.instructorId, instructorId));
-  }
-
-  async clearProgramsInstructorId(instructorId: number): Promise<void> {
-    const db = await getDb();
-    await db.update(programs)
-      .set({ instructorId: null })
-      .where(eq(programs.instructorId, instructorId));
-  }
-
-  async deleteEducatorSchedulesByEducatorId(educatorId: number): Promise<void> {
-    const db = await getDb();
-    await db.delete(educatorSchedules).where(eq(educatorSchedules.educatorId, educatorId));
-  }
-
-  async deleteEducatorClassAssignmentsByEducatorId(educatorId: number): Promise<void> {
-    const db = await getDb();
-    await db.delete(educatorClassAssignments).where(eq(educatorClassAssignments.educatorId, educatorId));
-  }
-
-  async nullifyUserReferencesForSoftDelete(userId: number): Promise<void> {
-    const db = await getDb();
-    const { customForms, customFormSubmissions } = await import('../shared/schema.js');
-    
-    // Nullify references in audit/history tables with nullable FK (preserve records, unlink user)
-    await db.update(auditLogs).set({ actorId: null }).where(eq(auditLogs.actorId, userId));
-    await db.update(errorLogs).set({ userId: null }).where(eq(errorLogs.userId, userId));
-    await db.update(errorLogs).set({ resolvedBy: null }).where(eq(errorLogs.resolvedBy, userId));
-    await db.update(customFormSubmissions).set({ submittedBy: null }).where(eq(customFormSubmissions.submittedBy, userId));
-    await db.update(discountApplications).set({ appliedBy: null }).where(eq(discountApplications.appliedBy, userId));
-    await db.update(volunteerCredits).set({ approvedBy: null }).where(eq(volunteerCredits.approvedBy, userId));
-    await db.update(credits).set({ approvedBy: null }).where(eq(credits.approvedBy, userId));
-    
-    // Delete records with NOT NULL user FK (these can't have null references)
-    // Note: This removes user-created content - consider reassigning to admin if content preservation needed
-    await db.delete(sessionAttendance).where(eq(sessionAttendance.recordedBy, userId));
-    await db.delete(sessionVolunteers).where(eq(sessionVolunteers.volunteerId, userId));
-    await db.delete(curricula).where(eq(curricula.authorId, userId));
-    await db.delete(lessons).where(eq(lessons.authorId, userId));
-    await db.delete(knowledgeBases).where(eq(knowledgeBases.authorId, userId));
-    await db.delete(activities).where(eq(activities.authorId, userId));
-    await db.delete(schoolDocuments).where(eq(schoolDocuments.uploadedBy, userId));
-    await db.delete(customForms).where(eq(customForms.createdBy, userId));
-    await db.delete(events).where(eq(events.organizerId, userId));
-    await db.delete(marketplaceItems).where(eq(marketplaceItems.sellerId, userId));
-    await db.delete(roleInvitations).where(eq(roleInvitations.invitedBy, userId));
-  }
-
-  async deletePushSubscriptionsByUserId(userId: number): Promise<void> {
-    const db = await getDb();
-    const { pushSubscriptions } = await import('../shared/schema.js');
-    await db.delete(pushSubscriptions).where(eq(pushSubscriptions.userId, userId));
-  }
-
-  async getParentsBySchoolId(schoolId: number): Promise<User[]> {
-    const db = await getDb();
-    // Get distinct user IDs that have parent role in this school
-    // Use user_roles.schoolId to find parents associated with this school
-    // (users.schoolId may be null or different for multi-role users)
-    // Filter out soft-deleted users (isActive=false)
-    const userIdRows = await db
-      .selectDistinct({ userId: users.id })
-      .from(users)
-      .innerJoin(userRoles, eq(users.id, userRoles.userId))
-      .where(
-        and(
-          eq(userRoles.schoolId, schoolId),
-          eq(users.isActive, true),
-          or(
-            eq(userRoles.role, 'parent'),
-            eq(userRoles.role, 'Parent')
-          )
-        )
-      );
-    
-    if (userIdRows.length === 0) {
-      return [];
-    }
-    
-    // Fetch full user records for those IDs (already filtered for isActive in query above)
-    const userIds: number[] = userIdRows.map((r: { userId: number }) => r.userId);
-    return await db
-      .select()
-      .from(users)
-      .where(and(inArray(users.id, userIds), eq(users.isActive, true)));
-  }
-
   // School Student methods
   async createSchoolStudent(schoolStudent: InsertSchoolStudent): Promise<SchoolStudent> {
     const db = await getDb();
-    
-    // Check for existing school_student record (application-level duplicate prevention)
-    const [existingRecord] = await db
-      .select()
-      .from(schoolStudents)
-      .where(
-        and(
-          eq(schoolStudents.childId, schoolStudent.childId),
-          eq(schoolStudents.schoolId, schoolStudent.schoolId)
-        )
-      );
-    
-    // If already exists, return the existing record (idempotent)
-    if (existingRecord) {
-      console.log(`⚠️ School student record already exists for child ${schoolStudent.childId} at school ${schoolStudent.schoolId}, returning existing record`);
-      return existingRecord;
-    }
-    
-    // Create new school_student record
-    const [newRecord] = await db.insert(schoolStudents).values({
+    const [newSchoolStudent] = await db.insert(schoolStudents).values({
       ...schoolStudent,
       createdAt: new Date(),
       updatedAt: new Date()
     }).returning();
-    
-    return newRecord;
+    return newSchoolStudent;
   }
 
   async updateSchoolStudent(id: number, schoolStudent: Partial<InsertSchoolStudent>): Promise<SchoolStudent | undefined> {
@@ -507,12 +221,6 @@ export class DatabaseStorage implements IStorage {
     await db.delete(schoolStudents).where(eq(schoolStudents.id, id));
   }
 
-  async getSchoolStudentById(id: number): Promise<SchoolStudent | undefined> {
-    const db = await getDb();
-    const [schoolStudent] = await db.select().from(schoolStudents).where(eq(schoolStudents.id, id));
-    return schoolStudent;
-  }
-
   async getSchoolStudentsBySchoolId(schoolId: number): Promise<SchoolStudent[]> {
     const db = await getDb();
     return await db.select().from(schoolStudents).where(eq(schoolStudents.schoolId, schoolId));
@@ -521,11 +229,6 @@ export class DatabaseStorage implements IStorage {
   async getSchoolStudentsByChildId(childId: number): Promise<SchoolStudent[]> {
     const db = await getDb();
     return await db.select().from(schoolStudents).where(eq(schoolStudents.childId, childId));
-  }
-
-  async getSchoolStudentsByLocationId(locationId: number): Promise<SchoolStudent[]> {
-    const db = await getDb();
-    return await db.select().from(schoolStudents).where(eq(schoolStudents.locationId, locationId));
   }
 
   // Curriculum methods
@@ -662,7 +365,7 @@ export class DatabaseStorage implements IStorage {
 
     // Apply sorting
     if (options.sortBy) {
-      const sortColumn = (classes[options.sortBy as keyof typeof classes] || classes.createdAt) as Column;
+      const sortColumn = classes[options.sortBy as keyof typeof classes] || classes.createdAt;
       query = query.orderBy(
         options.sortOrder === 'asc' 
           ? asc(sortColumn) 
@@ -719,16 +422,7 @@ export class DatabaseStorage implements IStorage {
 
   async createClass(classData: InsertClass & { instructorId: number }): Promise<Class> {
     const db = await getDb();
-    
-    // Get the next available ID to avoid sequence conflicts
-    // This is a workaround for out-of-sync database sequences
-    const maxIdResult = await db.select({ maxId: sql<number>`COALESCE(MAX(id), 0)` }).from(classes);
-    const nextId = (maxIdResult[0]?.maxId || 0) + 1;
-    
-    console.log(`📊 Creating class with explicit ID: ${nextId} (max existing: ${maxIdResult[0]?.maxId || 0})`);
-    
     const [newClass] = await db.insert(classes).values({
-      id: nextId,
       ...classData,
       createdAt: new Date(),
       updatedAt: new Date()
@@ -770,6 +464,26 @@ export class DatabaseStorage implements IStorage {
     
     if (relatedDiscounts.length > 0) {
       throw new Error(`Cannot delete class: has ${relatedDiscounts.length} discount application(s). Please remove discount applications first.`);
+    }
+    
+    // Check for related daily flow entries
+    const relatedFlowEntries = await db
+      .select()
+      .from(dailyFlowEntries)
+      .where(eq(dailyFlowEntries.classId, id));
+    
+    if (relatedFlowEntries.length > 0) {
+      throw new Error(`Cannot delete class: has ${relatedFlowEntries.length} daily flow entries. Please remove flow entries first.`);
+    }
+    
+    // Check for related daily flow schedules
+    const relatedFlowSchedules = await db
+      .select()
+      .from(dailyFlowSchedules)
+      .where(eq(dailyFlowSchedules.classId, id));
+    
+    if (relatedFlowSchedules.length > 0) {
+      throw new Error(`Cannot delete class: has ${relatedFlowSchedules.length} daily flow schedules. Please remove schedules first.`);
     }
     
     // If no related records, safe to delete
@@ -935,10 +649,8 @@ export class DatabaseStorage implements IStorage {
         materials: classes.materials,
         // Add location name from join
         locationNameFromTable: locations.name,
-        // Add category info from join
-        categoryIdFromTable: categories.id,
+        // Add category name from join
         categoryNameFromTable: categories.name,
-        categoryIsPublicFromTable: categories.isPublic,
       })
       .from(classes)
       .leftJoin(locations, eq(classes.locationId, locations.id))
@@ -950,8 +662,6 @@ export class DatabaseStorage implements IStorage {
       ...row,
       locationName: row.locationNameFromTable || row.location || null,
       categoryName: row.categoryNameFromTable || row.category || null,
-      categoryId: row.categoryIdFromTable ?? row.categoryId ?? null,
-      categoryIsPublic: row.categoryIdFromTable != null ? row.categoryIsPublicFromTable : null,
     }));
     
     console.log(`📊 Filtered classes for schoolId=${schoolIdNum}: ${mappedResults.length}`);
@@ -992,7 +702,7 @@ export class DatabaseStorage implements IStorage {
     return await query;
   }
 
-  async createKnowledgeBase(insertKnowledgeBase: InsertKnowledgeBase & { authorId: number }): Promise<KnowledgeBase> {
+  async createKnowledgeBase(insertKnowledgeBase: InsertKnowledgeBase): Promise<KnowledgeBase> {
     const db = await getDb();
     const [knowledgeBase] = await db
       .insert(knowledgeBases)
@@ -1062,28 +772,6 @@ export class DatabaseStorage implements IStorage {
     } catch (error) {
       console.error("Error fetching all enrollments from database:", error);
       return [];
-    }
-  }
-
-  async getEnrollmentsBySchoolId(schoolId: number): Promise<ProgramEnrollment[]> {
-    try {
-      const db = await getDb();
-      const result = await db.select().from(programEnrollments).where(eq(programEnrollments.schoolId, schoolId));
-      return result;
-    } catch (error) {
-      console.error("Error fetching enrollments by school ID from database:", error);
-      return [];
-    }
-  }
-
-  async getStripePaymentHistoryById(id: number): Promise<StripePaymentHistory | undefined> {
-    try {
-      const db = await getDb();
-      const result = await db.select().from(stripePaymentHistory).where(eq(stripePaymentHistory.id, id)).limit(1);
-      return result[0];
-    } catch (error) {
-      console.error("Error fetching stripe payment history by ID from database:", error);
-      return undefined;
     }
   }
 
@@ -1166,22 +854,6 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(programEnrollments).where(eq(programEnrollments.childId, childId));
   }
 
-  async getProgramEnrollmentsByChildIds(childIds: number[]): Promise<ProgramEnrollment[]> {
-    if (childIds.length === 0) return [];
-    const db = await getDb();
-    return await db.select().from(programEnrollments).where(inArray(programEnrollments.childId, childIds));
-  }
-
-  async getProgramEnrollmentsByClassId(classId: number): Promise<ProgramEnrollment[]> {
-    const db = await getDb();
-    return await db.select().from(programEnrollments).where(
-      or(
-        eq(programEnrollments.classId, classId),
-        eq(programEnrollments.marketplaceClassId, classId)
-      )
-    );
-  }
-
   async getEnrollmentCountForProgram(programId: number): Promise<number> {
     const db = await getDb();
     const enrollments = await db.select().from(programEnrollments)
@@ -1241,24 +913,6 @@ export class DatabaseStorage implements IStorage {
   async deleteProgramEnrollment(id: number): Promise<void> {
     const db = await getDb();
     await db.delete(programEnrollments).where(eq(programEnrollments.id, id));
-  }
-
-  async getEnrollmentByChildAndClass(childId: number, classId: number): Promise<ProgramEnrollment | undefined> {
-    const db = await getDb();
-    const [enrollment] = await db.select()
-      .from(programEnrollments)
-      .where(
-        and(
-          eq(programEnrollments.childId, childId),
-          or(
-            eq(programEnrollments.classId, classId),
-            eq(programEnrollments.programId, classId),
-            eq(programEnrollments.marketplaceClassId, classId)
-          )
-        )
-      )
-      .limit(1);
-    return enrollment;
   }
 
   async cancelPendingEnrollments(enrollmentIds: number[], parentUserId: number): Promise<{ cancelled: number[]; skipped: number[]; errors: string[] }> {
@@ -1483,36 +1137,16 @@ export class DatabaseStorage implements IStorage {
 
   async getPublishedSchoolDocuments(schoolId: number): Promise<SchoolDocument[]> {
     const db = await getDb();
-    const now = new Date();
     return await db
       .select()
       .from(schoolDocuments)
       .where(
         and(
           eq(schoolDocuments.schoolId, schoolId),
-          eq(schoolDocuments.isPublished, true),
-          eq(schoolDocuments.isArchived, false),
-          or(
-            isNull(schoolDocuments.expiresAt),
-            gt(schoolDocuments.expiresAt, now)
-          )
+          eq(schoolDocuments.isPublished, true)
         )
       )
       .orderBy(desc(schoolDocuments.createdAt));
-  }
-
-  async getSchoolDocumentByFileName(schoolId: number, fileName: string): Promise<SchoolDocument | undefined> {
-    const db = await getDb();
-    const [document] = await db
-      .select()
-      .from(schoolDocuments)
-      .where(
-        and(
-          eq(schoolDocuments.schoolId, schoolId),
-          eq(schoolDocuments.fileName, fileName)
-        )
-      );
-    return document;
   }
 
   async createSchoolDocument(documentData: InsertSchoolDocument): Promise<SchoolDocument> {
@@ -1544,43 +1178,6 @@ export class DatabaseStorage implements IStorage {
   async deleteSchoolDocument(id: number): Promise<void> {
     const db = await getDb();
     await db.delete(schoolDocuments).where(eq(schoolDocuments.id, id));
-  }
-
-  // Document Views (download tracking) methods
-  async createDocumentView(data: InsertDocumentView): Promise<DocumentView> {
-    const db = await getDb();
-    const [view] = await db
-      .insert(documentViews)
-      .values({ ...data, downloadedAt: new Date() })
-      .returning();
-    return view;
-  }
-
-  async getDocumentViews(documentId: number): Promise<(DocumentView & { userName: string; userEmail: string })[]> {
-    const db = await getDb();
-    const rows = await db
-      .select({
-        id: documentViews.id,
-        documentId: documentViews.documentId,
-        userId: documentViews.userId,
-        downloadedAt: documentViews.downloadedAt,
-        userName: users.name,
-        userEmail: users.email,
-      })
-      .from(documentViews)
-      .leftJoin(users, eq(documentViews.userId, users.id))
-      .where(eq(documentViews.documentId, documentId))
-      .orderBy(desc(documentViews.downloadedAt));
-    return rows as (DocumentView & { userName: string; userEmail: string })[];
-  }
-
-  async getDocumentViewCount(documentId: number): Promise<number> {
-    const db = await getDb();
-    const [{ count }] = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(documentViews)
-      .where(eq(documentViews.documentId, documentId));
-    return count;
   }
 
   // Payment Receipts methods
@@ -1649,67 +1246,21 @@ export class DatabaseStorage implements IStorage {
     return this.getChild(id);
   }
 
-  async getChildByIdAndSchoolId(childId: number, schoolId: number): Promise<Child | undefined> {
-    const db = await getDb();
-    const [child] = await db
-      .select()
-      .from(children)
-      .where(and(eq(children.id, childId), eq(children.schoolId, schoolId)));
-    return child;
-  }
-
-  async getChildrenBySchoolId(schoolId: number): Promise<Child[]> {
-    const db = await getDb();
-    return await db.select().from(children).where(eq(children.schoolId, schoolId));
-  }
-
   async getChildrenByParent(parentId: number): Promise<Child[]> {
     const db = await getDb();
     return await db.select().from(children).where(eq(children.parentId, parentId));
   }
 
-  // Alias for getChildrenByParent to maintain API compatibility
-  async getChildrenByParentId(parentId: number): Promise<Child[]> {
-    return this.getChildrenByParent(parentId);
-  }
-
   async createChild(child: InsertChild): Promise<Child> {
     const db = await getDb();
-    
-    // Normalize names for case-insensitive duplicate prevention
-    const normalizedFirstName = child.firstName.trim();
-    const normalizedLastName = child.lastName.trim();
-    
-    // First check if a child with the same parentId and name (case-insensitive) exists
-    const [existingChild] = await db
-      .select()
-      .from(children)
-      .where(
-        and(
-          eq(children.parentId, child.parentId),
-          sql`LOWER(${children.firstName}) = LOWER(${normalizedFirstName})`,
-          sql`LOWER(${children.lastName}) = LOWER(${normalizedLastName})`
-        )
-      );
-    
-    // If child already exists, return it (idempotent)
-    if (existingChild) {
-      console.log(`⚠️ Child "${normalizedFirstName} ${normalizedLastName}" already exists for parent ${child.parentId}, returning existing record`);
-      return existingChild;
-    }
-    
-    // Create new child record
     const [newChild] = await db
       .insert(children)
       .values({
         ...child,
-        firstName: normalizedFirstName,
-        lastName: normalizedLastName,
         createdAt: new Date(),
         updatedAt: new Date()
       })
       .returning();
-    
     return newChild;
   }
 
@@ -1731,44 +1282,6 @@ export class DatabaseStorage implements IStorage {
     await db.delete(children).where(eq(children.id, id));
   }
 
-  async getGuardiansByChildId(childId: number): Promise<ChildGuardian[]> {
-    const db = await getDb();
-    return await db.select().from(childGuardians).where(eq(childGuardians.childId, childId));
-  }
-
-  async getChildrenByGuardianUserId(guardianUserId: number): Promise<Child[]> {
-    const db = await getDb();
-    const guardianLinks = await db.select().from(childGuardians).where(eq(childGuardians.guardianUserId, guardianUserId));
-    if (guardianLinks.length === 0) return [];
-    const childIds = guardianLinks.map(g => g.childId);
-    return await db.select().from(children).where(inArray(children.id, childIds));
-  }
-
-  async addChildGuardian(guardian: InsertChildGuardian): Promise<ChildGuardian> {
-    const db = await getDb();
-    const [newGuardian] = await db.insert(childGuardians).values({
-      ...guardian,
-      createdAt: new Date()
-    }).returning();
-    return newGuardian;
-  }
-
-  async removeChildGuardian(id: number): Promise<void> {
-    const db = await getDb();
-    await db.delete(childGuardians).where(eq(childGuardians.id, id));
-  }
-
-  async getChildGuardianById(id: number): Promise<ChildGuardian | undefined> {
-    const db = await getDb();
-    const [guardian] = await db.select().from(childGuardians).where(eq(childGuardians.id, id));
-    return guardian;
-  }
-
-  async deleteGuardiansByChildId(childId: number): Promise<void> {
-    const db = await getDb();
-    await db.delete(childGuardians).where(eq(childGuardians.childId, childId));
-  }
-
   async getAllChildren(): Promise<Child[]> {
     const db = await getDb();
     return await db.select().from(children);
@@ -1776,25 +1289,10 @@ export class DatabaseStorage implements IStorage {
 
   async getChildrenByParentEmail(parentEmail: string): Promise<Child[]> {
     const db = await getDb();
-    // First, find the parent user by email (case-insensitive, normalized)
     const parent = await this.getUserByEmail(parentEmail);
     if (!parent) return [];
 
-    // Get children by parent ID (primary lookup)
-    const byParentId = await db.select().from(children).where(eq(children.parentId, parent.id));
-    if (byParentId.length > 0) return byParentId;
-
-    // Fallback: look up children by parentEmail field in case parent-child link is broken
-    // This catches cases where the stored email differs from the auth token email but
-    // the children table still has the correct parentEmail recorded.
-    console.warn(`⚠️ No children found by parentId (${parent.id}) for ${parentEmail} — falling back to parentEmail field lookup`);
-    const byParentEmail = await db.select().from(children).where(
-      sql`LOWER(${children.parentEmail}) = LOWER(${parentEmail})`
-    );
-    if (byParentEmail.length > 0) {
-      console.warn(`⚠️ Found ${byParentEmail.length} children via parentEmail fallback for ${parentEmail}`);
-    }
-    return byParentEmail;
+    return await db.select().from(children).where(eq(children.parentId, parent.id));
   }
 
   // Emergency Contact methods
@@ -1992,48 +1490,6 @@ export class DatabaseStorage implements IStorage {
       })
       .returning();
     return newEvent;
-  }
-
-  async updateEvent(id: number, eventData: Partial<InsertEvent>): Promise<Event | undefined> {
-    const db = await getDb();
-    const [updatedEvent] = await db
-      .update(events)
-      .set({
-        ...eventData,
-        updatedAt: new Date()
-      })
-      .where(eq(events.id, id))
-      .returning();
-    return updatedEvent;
-  }
-
-  async deleteEvent(id: number): Promise<void> {
-    const db = await getDb();
-    await db.delete(events).where(eq(events.id, id));
-  }
-
-  async getEventsBySchool(schoolId: number): Promise<Event[]> {
-    const db = await getDb();
-    return await db
-      .select()
-      .from(events)
-      .where(eq(events.schoolId, schoolId))
-      .orderBy(asc(events.startDate));
-  }
-
-  async getEventsBySchoolAndDateRange(schoolId: number, startDate: Date, endDate: Date): Promise<Event[]> {
-    const db = await getDb();
-    return await db
-      .select()
-      .from(events)
-      .where(
-        and(
-          eq(events.schoolId, schoolId),
-          gte(events.startDate, startDate),
-          lte(events.startDate, endDate)
-        )
-      )
-      .orderBy(asc(events.startDate));
   }
 
   // Marketplace Item methods
@@ -2295,61 +1751,6 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(scheduledPayments).orderBy(asc(scheduledPayments.scheduledDate));
   }
 
-  async getScheduledPaymentsBySchoolId(schoolId: number): Promise<ScheduledPayment[]> {
-    const db = await getDb();
-    return await db
-      .select()
-      .from(scheduledPayments)
-      .where(eq(scheduledPayments.schoolId, schoolId))
-      .orderBy(asc(scheduledPayments.scheduledDate));
-  }
-
-  async getUpcomingAutoPayScheduledPayments(windowStart: Date, windowEnd: Date): Promise<ScheduledPayment[]> {
-    const db = await getDb();
-    return await db
-      .select()
-      .from(scheduledPayments)
-      .where(
-        and(
-          eq(scheduledPayments.status, 'pending'),
-          gte(scheduledPayments.scheduledDate, windowStart),
-          lte(scheduledPayments.scheduledDate, windowEnd)
-        )
-      )
-      .orderBy(asc(scheduledPayments.scheduledDate));
-  }
-
-  async getDueScheduledPayments(asOfDate: Date, maxStaleDays: number): Promise<ScheduledPayment[]> {
-    const db = await getDb();
-    const cutoffDate = new Date(asOfDate.getTime() - maxStaleDays * 86400000);
-    return await db
-      .select()
-      .from(scheduledPayments)
-      .where(
-        and(
-          inArray(scheduledPayments.status, ['pending', 'overdue']),
-          lte(scheduledPayments.scheduledDate, asOfDate),
-          gte(scheduledPayments.scheduledDate, cutoffDate)
-        )
-      )
-      .orderBy(asc(scheduledPayments.scheduledDate));
-  }
-
-  async getStuckProcessingPayments(olderThanMinutes: number): Promise<ScheduledPayment[]> {
-    const db = await getDb();
-    const cutoffTime = new Date(Date.now() - olderThanMinutes * 60000);
-    return await db
-      .select()
-      .from(scheduledPayments)
-      .where(
-        and(
-          eq(scheduledPayments.status, 'processing'),
-          lt(scheduledPayments.updatedAt, cutoffTime)
-        )
-      )
-      .orderBy(asc(scheduledPayments.updatedAt));
-  }
-
   async updateScheduledPaymentStatus(
     id: number,
     status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'skipped'
@@ -2391,84 +1792,6 @@ export class DatabaseStorage implements IStorage {
       .where(eq(scheduledPayments.id, id))
       .returning();
     return updatedPayment;
-  }
-
-  async getAutoPayHistory(schoolId: number, filters: { startDate?: Date; endDate?: Date; status?: string }): Promise<{ records: any[]; summary: { totalChargedCents: number; totalFailedCents: number; chargedCount: number; failedCount: number; skippedCount: number } }> {
-    const db = await getDb();
-
-    const conditions: any[] = [
-      eq(scheduledPayments.schoolId, schoolId),
-      eq(scheduledPayments.chargedBy, 'auto_pay'),
-    ];
-
-    if (filters.startDate) {
-      conditions.push(gte(scheduledPayments.scheduledDate, filters.startDate));
-    }
-    if (filters.endDate) {
-      conditions.push(lte(scheduledPayments.scheduledDate, filters.endDate));
-    }
-    if (filters.status && filters.status !== 'all') {
-      conditions.push(eq(scheduledPayments.status, filters.status as any));
-    }
-
-    const rows = await db
-      .select({
-        id: scheduledPayments.id,
-        amount: scheduledPayments.amount,
-        status: scheduledPayments.status,
-        scheduledDate: scheduledPayments.scheduledDate,
-        processedAt: scheduledPayments.processedAt,
-        installmentNumber: scheduledPayments.installmentNumber,
-        totalInstallments: scheduledPayments.totalInstallments,
-        failureReason: scheduledPayments.failureReason,
-        retryCount: scheduledPayments.retryCount,
-        chargedBy: scheduledPayments.chargedBy,
-        stripePaymentIntentId: scheduledPayments.stripePaymentIntentId,
-        enrollmentId: scheduledPayments.enrollmentId,
-        parentEmail: scheduledPayments.parentEmail,
-        // Denormalized from enrollment
-        childName: programEnrollments.childName,
-        className: programEnrollments.className,
-        // From parent user
-        parentFirstName: users.firstName,
-        parentLastName: users.lastName,
-      })
-      .from(scheduledPayments)
-      .leftJoin(programEnrollments, eq(scheduledPayments.enrollmentId, programEnrollments.id))
-      .leftJoin(users, eq(scheduledPayments.parentId, users.id))
-      .where(and(...conditions))
-      .orderBy(desc(scheduledPayments.scheduledDate));
-
-    const totalChargedCents = rows.filter(r => r.status === 'completed').reduce((sum, r) => sum + (r.amount || 0), 0);
-    const totalFailedCents = rows.filter(r => r.status === 'failed').reduce((sum, r) => sum + (r.amount || 0), 0);
-    const chargedCount = rows.filter(r => r.status === 'completed').length;
-    const failedCount = rows.filter(r => r.status === 'failed').length;
-    const skippedCount = rows.filter(r => r.status === 'skipped').length;
-
-    return {
-      records: rows,
-      summary: { totalChargedCents, totalFailedCents, chargedCount, failedCount, skippedCount },
-    };
-  }
-
-  async deleteScheduledPayment(id: number): Promise<void> {
-    const db = await getDb();
-    await db.delete(scheduledPayments).where(eq(scheduledPayments.id, id));
-    console.log(`🗑️ Deleted scheduled payment ${id} from database`);
-  }
-
-  async deletePendingScheduledPaymentsByEnrollmentId(enrollmentId: number): Promise<number> {
-    const db = await getDb();
-    const result = await db.delete(scheduledPayments)
-      .where(
-        and(
-          eq(scheduledPayments.enrollmentId, enrollmentId),
-          eq(scheduledPayments.status, 'pending')
-        )
-      )
-      .returning({ id: scheduledPayments.id });
-    console.log(`🗑️ Deleted ${result.length} pending scheduled payments for enrollment ${enrollmentId}`);
-    return result.length;
   }
 
   // Refund methods
@@ -2575,6 +1898,196 @@ export class DatabaseStorage implements IStorage {
       .where(eq(stripeSubscriptionSchedules.id, id))
       .returning();
     return updatedSchedule;
+  }
+
+  // Daily Flow Template methods
+  async getDailyFlowTemplates(filters?: { schoolId?: number; gradeLevel?: string; subject?: string }): Promise<DailyFlowTemplate[]> {
+    const db = await getDb();
+    let query = db.select().from(dailyFlowTemplates);
+    const conditions = [];
+    
+    if (filters?.schoolId) {
+      conditions.push(eq(dailyFlowTemplates.schoolId, filters.schoolId));
+    }
+    if (filters?.gradeLevel) {
+      conditions.push(eq(dailyFlowTemplates.gradeLevel, filters.gradeLevel));
+    }
+    if (filters?.subject) {
+      conditions.push(eq(dailyFlowTemplates.subject, filters.subject));
+    }
+    
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions)) as any;
+    }
+    
+    return await query.orderBy(desc(dailyFlowTemplates.createdAt));
+  }
+
+  async getDailyFlowTemplateById(id: number): Promise<DailyFlowTemplate | undefined> {
+    const db = await getDb();
+    const [template] = await db.select().from(dailyFlowTemplates).where(eq(dailyFlowTemplates.id, id));
+    return template;
+  }
+
+  async createDailyFlowTemplate(template: InsertDailyFlowTemplate): Promise<DailyFlowTemplate> {
+    const db = await getDb();
+    const [newTemplate] = await db
+      .insert(dailyFlowTemplates)
+      .values({
+        ...template,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      })
+      .returning();
+    return newTemplate;
+  }
+
+  async updateDailyFlowTemplate(id: number, template: Partial<InsertDailyFlowTemplate>): Promise<DailyFlowTemplate | undefined> {
+    const db = await getDb();
+    const [updatedTemplate] = await db
+      .update(dailyFlowTemplates)
+      .set({
+        ...template,
+        updatedAt: new Date()
+      })
+      .where(eq(dailyFlowTemplates.id, id))
+      .returning();
+    return updatedTemplate;
+  }
+
+  async deleteDailyFlowTemplate(id: number): Promise<void> {
+    const db = await getDb();
+    await db.delete(dailyFlowTemplates).where(eq(dailyFlowTemplates.id, id));
+  }
+
+  // Daily Flow Entry methods
+  async getDailyFlowEntries(filters?: { classId?: number; startDate?: string; endDate?: string }): Promise<DailyFlowEntry[]> {
+    const db = await getDb();
+    let query = db.select().from(dailyFlowEntries);
+    const conditions = [];
+    
+    if (filters?.classId) {
+      conditions.push(eq(dailyFlowEntries.classId, filters.classId));
+    }
+    if (filters?.startDate) {
+      conditions.push(sql`${dailyFlowEntries.date} >= ${filters.startDate}`);
+    }
+    if (filters?.endDate) {
+      conditions.push(sql`${dailyFlowEntries.date} <= ${filters.endDate}`);
+    }
+    
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions)) as any;
+    }
+    
+    return await query.orderBy(desc(dailyFlowEntries.date));
+  }
+
+  async getDailyFlowEntryById(id: number): Promise<DailyFlowEntry | undefined> {
+    const db = await getDb();
+    const [entry] = await db.select().from(dailyFlowEntries).where(eq(dailyFlowEntries.id, id));
+    return entry;
+  }
+
+  async createDailyFlowEntry(entry: InsertDailyFlowEntry): Promise<DailyFlowEntry> {
+    const db = await getDb();
+    const [newEntry] = await db
+      .insert(dailyFlowEntries)
+      .values({
+        ...entry,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      })
+      .returning();
+    return newEntry;
+  }
+
+  async updateDailyFlowEntry(id: number, entry: Partial<InsertDailyFlowEntry>): Promise<DailyFlowEntry | undefined> {
+    const db = await getDb();
+    const [updatedEntry] = await db
+      .update(dailyFlowEntries)
+      .set({
+        ...entry,
+        updatedAt: new Date()
+      })
+      .where(eq(dailyFlowEntries.id, id))
+      .returning();
+    return updatedEntry;
+  }
+
+  async deleteDailyFlowEntry(id: number): Promise<void> {
+    const db = await getDb();
+    await db.delete(dailyFlowEntries).where(eq(dailyFlowEntries.id, id));
+  }
+
+  // Daily Flow Schedule methods
+  async getDailyFlowSchedules(filters?: { templateId?: number; classId?: number }): Promise<DailyFlowSchedule[]> {
+    const db = await getDb();
+    let query = db.select().from(dailyFlowSchedules);
+    const conditions = [];
+    
+    if (filters?.templateId) {
+      conditions.push(eq(dailyFlowSchedules.templateId, filters.templateId));
+    }
+    if (filters?.classId) {
+      conditions.push(eq(dailyFlowSchedules.classId, filters.classId));
+    }
+    
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions)) as any;
+    }
+    
+    return await query.orderBy(asc(dailyFlowSchedules.dayOfWeek), asc(dailyFlowSchedules.startTime));
+  }
+
+  async getDailyFlowScheduleById(id: number): Promise<DailyFlowSchedule | undefined> {
+    const db = await getDb();
+    const [schedule] = await db.select().from(dailyFlowSchedules).where(eq(dailyFlowSchedules.id, id));
+    return schedule;
+  }
+
+  async createDailyFlowSchedule(schedule: InsertDailyFlowSchedule): Promise<DailyFlowSchedule> {
+    const db = await getDb();
+    const [newSchedule] = await db
+      .insert(dailyFlowSchedules)
+      .values({
+        ...schedule,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      })
+      .returning();
+    return newSchedule;
+  }
+
+  async updateDailyFlowSchedule(id: number, schedule: Partial<InsertDailyFlowSchedule>): Promise<DailyFlowSchedule | undefined> {
+    const db = await getDb();
+    const [updatedSchedule] = await db
+      .update(dailyFlowSchedules)
+      .set({
+        ...schedule,
+        updatedAt: new Date()
+      })
+      .where(eq(dailyFlowSchedules.id, id))
+      .returning();
+    return updatedSchedule;
+  }
+
+  async deleteDailyFlowSchedule(id: number): Promise<void> {
+    const db = await getDb();
+    await db.delete(dailyFlowSchedules).where(eq(dailyFlowSchedules.id, id));
+  }
+
+  async getDailyFlowStats(filters?: { classId?: number; startDate?: string; endDate?: string }): Promise<{ totalEntries: number; completedEntries: number; completionRate: number }> {
+    const entries = await this.getDailyFlowEntries(filters);
+    const totalEntries = entries.length;
+    const completedEntries = entries.filter(e => e.isCompleted).length;
+    const completionRate = totalEntries > 0 ? (completedEntries / totalEntries) * 100 : 0;
+    
+    return {
+      totalEntries,
+      completedEntries,
+      completionRate
+    };
   }
 
   // Marketing Link methods
@@ -2715,15 +2228,6 @@ export class DatabaseStorage implements IStorage {
       .orderBy(asc(categories.name));
   }
 
-  async getHiddenCategoryIds(): Promise<number[]> {
-    const db = await getDb();
-    const rows = await db
-      .select({ id: categories.id })
-      .from(categories)
-      .where(and(eq(categories.isPublic, false), eq(categories.isActive, true)));
-    return rows.map(r => r.id);
-  }
-
   async getAllCategories(): Promise<Category[]> {
     const db = await getDb();
     return await db.select().from(categories).where(eq(categories.isActive, true));
@@ -2764,15 +2268,6 @@ export class DatabaseStorage implements IStorage {
   }
 
   // User Location methods
-  async getUserLocationById(id: number): Promise<UserLocation | undefined> {
-    const db = await getDb();
-    const [userLocation] = await db
-      .select()
-      .from(userLocations)
-      .where(eq(userLocations.id, id));
-    return userLocation;
-  }
-
   async getUserLocationsByUserId(userId: number): Promise<UserLocation[]> {
     const db = await getDb();
     return await db
@@ -2908,106 +2403,6 @@ export class DatabaseStorage implements IStorage {
     await db.delete(notifications).where(eq(notifications.id, id));
   }
 
-  // Announcement methods (school-scoped notifications)
-  async getAnnouncementsBySchool(schoolId: number): Promise<Notification[]> {
-    const db = await getDb();
-    return await db
-      .select()
-      .from(notifications)
-      .where(
-        and(
-          eq(notifications.schoolId, schoolId),
-          eq(notifications.isAnnouncement, true)
-        )
-      )
-      .orderBy(desc(notifications.createdAt));
-  }
-
-  async getSentNotificationsBySchool(schoolId: number): Promise<Notification[]> {
-    const db = await getDb();
-    // Primary arm: notifications properly tagged with schoolId and status=sent
-    const schoolNotifications = await db
-      .select()
-      .from(notifications)
-      .where(
-        and(
-          eq(notifications.schoolId, schoolId),
-          eq(notifications.status, 'sent')
-        )
-      );
-
-    // Legacy arm: notifications with schoolId=null but sent by an admin-role user of this school
-    // Restrict to admin-type roles only to avoid pulling unrelated notifications
-    const adminRoleNames = ['admin', 'schoolAdmin', 'school_admin', 'superAdmin', 'director'];
-    const allSchoolRoles = await db
-      .select()
-      .from(userRoles)
-      .where(eq(userRoles.schoolId, schoolId));
-    const adminUserIds = allSchoolRoles
-      .filter(r => adminRoleNames.some(name => r.role?.toLowerCase() === name.toLowerCase()))
-      .map(r => r.userId);
-
-    let legacyNotifications: Notification[] = [];
-    if (adminUserIds.length > 0) {
-      legacyNotifications = await db
-        .select()
-        .from(notifications)
-        .where(
-          and(
-            isNull(notifications.schoolId),
-            eq(notifications.status, 'sent'),
-            inArray(notifications.senderId, adminUserIds)
-          )
-        );
-    }
-
-    // Merge, deduplicate by id, sort by createdAt descending
-    const merged = [...schoolNotifications, ...legacyNotifications];
-    const seen = new Set<number>();
-    const unique = merged.filter(n => {
-      if (seen.has(n.id)) return false;
-      seen.add(n.id);
-      return true;
-    });
-    unique.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    return unique;
-  }
-
-  async getPinnedAnnouncementsBySchool(schoolId: number): Promise<Notification[]> {
-    const db = await getDb();
-    return await db
-      .select()
-      .from(notifications)
-      .where(
-        and(
-          eq(notifications.schoolId, schoolId),
-          eq(notifications.isAnnouncement, true),
-          eq(notifications.isPinned, true)
-        )
-      )
-      .orderBy(desc(notifications.createdAt));
-  }
-
-  async getActiveAnnouncementsForUser(userId: number, schoolId: number): Promise<Notification[]> {
-    const db = await getDb();
-    const now = new Date();
-    return await db
-      .select()
-      .from(notifications)
-      .where(
-        and(
-          eq(notifications.schoolId, schoolId),
-          eq(notifications.isAnnouncement, true),
-          eq(notifications.status, 'sent'),
-          or(
-            sql`${notifications.expiresAt} IS NULL`,
-            sql`${notifications.expiresAt} > ${now}`
-          )
-        )
-      )
-      .orderBy(desc(notifications.isPinned), desc(notifications.createdAt));
-  }
-
   // Notification recipient methods
   async getNotificationRecipientById(id: number): Promise<NotificationRecipient | undefined> {
     const db = await getDb();
@@ -3108,29 +2503,20 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Discount methods
-  private normalizeDiscount(discount: Discount): Discount {
-    return {
-      ...discount,
-      allowedMemberIds: discount.allowedMemberIds ?? [],
-    };
-  }
-
   async getDiscountById(id: number): Promise<Discount | undefined> {
     const db = await getDb();
     const [discount] = await db.select().from(discounts).where(eq(discounts.id, id));
-    return discount ? this.normalizeDiscount(discount) : undefined;
+    return discount;
   }
 
   async getAllDiscounts(): Promise<Discount[]> {
     const db = await getDb();
-    const rows = await db.select().from(discounts);
-    return rows.map(d => this.normalizeDiscount(d));
+    return await db.select().from(discounts);
   }
 
   async getDiscountsBySchoolId(schoolId: number): Promise<Discount[]> {
     const db = await getDb();
-    const rows = await db.select().from(discounts).where(eq(discounts.schoolId, schoolId));
-    return rows.map(d => this.normalizeDiscount(d));
+    return await db.select().from(discounts).where(eq(discounts.schoolId, schoolId));
   }
 
   async createDiscount(discount: InsertDiscount): Promise<Discount> {
@@ -3140,7 +2526,7 @@ export class DatabaseStorage implements IStorage {
       createdAt: new Date(),
       updatedAt: new Date()
     }).returning();
-    return this.normalizeDiscount(newDiscount);
+    return newDiscount;
   }
 
   async updateDiscount(id: number, discount: Partial<InsertDiscount>): Promise<Discount | undefined> {
@@ -3153,7 +2539,7 @@ export class DatabaseStorage implements IStorage {
       })
       .where(eq(discounts.id, id))
       .returning();
-    return updatedDiscount ? this.normalizeDiscount(updatedDiscount) : undefined;
+    return updatedDiscount;
   }
 
   /**
@@ -3210,11 +2596,6 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(discountApplications).where(eq(discountApplications.discountId, discountId));
   }
 
-  async getDiscountApplicationsByChild(childId: number): Promise<DiscountApplication[]> {
-    const db = await getDb();
-    return await db.select().from(discountApplications).where(eq(discountApplications.childId, childId));
-  }
-
   async createDiscountApplication(application: InsertDiscountApplication): Promise<DiscountApplication> {
     const db = await getDb();
     const [newApplication] = await db.insert(discountApplications).values({
@@ -3232,20 +2613,6 @@ export class DatabaseStorage implements IStorage {
       .where(eq(discountApplications.id, id))
       .returning();
     return updatedApplication;
-  }
-
-  async getDiscountUsageCountByUser(discountId: number, parentEmail: string): Promise<number> {
-    const db = await getDb();
-    const result = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(discountApplications)
-      .where(
-        and(
-          eq(discountApplications.discountId, discountId),
-          eq(discountApplications.parentEmail, parentEmail)
-        )
-      );
-    return result[0]?.count ?? 0;
   }
 
   // ============================================
@@ -3481,6 +2848,627 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(roleInvitations.createdAt));
   }
 
+  async getParentsBySchoolId(schoolId: number): Promise<User[]> {
+    const db = await getDb();
+    const userIdRows = await db
+      .selectDistinct({ userId: users.id })
+      .from(users)
+      .innerJoin(userRoles, eq(users.id, userRoles.userId))
+      .where(
+        and(
+          eq(userRoles.schoolId, schoolId),
+          eq(users.isActive, true),
+          or(eq(userRoles.role, 'parent'), eq(userRoles.role, 'Parent'))
+        )
+      );
+    if (userIdRows.length === 0) return [];
+    const userIds = userIdRows.map((r: { userId: number }) => r.userId);
+    return db
+      .select()
+      .from(users)
+      .where(and(inArray(users.id, userIds), eq(users.isActive, true)));
+  }
+
+  async getCreditById(id: number): Promise<Credit | undefined> {
+    const db = await getDb();
+    const [credit] = await db.select().from(credits).where(eq(credits.id, id));
+    return credit;
+  }
+
+  async getCredits(filters: {
+    userId?: number;
+    schoolId?: number;
+    creditType?: CreditType;
+    status?: CreditStatus;
+    includeExpired?: boolean;
+  }): Promise<Credit[]> {
+    const db = await getDb();
+    const conditions = [];
+    if (filters.userId) conditions.push(eq(credits.userId, filters.userId));
+    if (filters.schoolId) conditions.push(eq(credits.schoolId, filters.schoolId));
+    if (filters.creditType) conditions.push(eq(credits.creditType, filters.creditType));
+    if (filters.status) conditions.push(eq(credits.status, filters.status));
+    if (!filters.includeExpired) {
+      const now = new Date();
+      conditions.push(or(isNull(credits.expiresAt), gt(credits.expiresAt, now)));
+    }
+    if (conditions.length === 0) {
+      return db.select().from(credits).orderBy(desc(credits.createdAt));
+    }
+    return db.select().from(credits).where(and(...conditions)).orderBy(desc(credits.createdAt));
+  }
+
+  async createCredit(credit: InsertCredit): Promise<Credit> {
+    const db = await getDb();
+    const [newCredit] = await db.insert(credits).values(credit).returning();
+    return newCredit;
+  }
+
+  async updateCredit(
+    id: number,
+    updates: Partial<InsertCredit> & {
+      usedAmountCents?: number;
+      status?: CreditStatus;
+      approvedBy?: number;
+      approvedAt?: Date;
+      expiresAt?: Date;
+    }
+  ): Promise<Credit | undefined> {
+    const db = await getDb();
+    const [updated] = await db
+      .update(credits)
+      .set({ ...updates, updatedAt: new Date() } as Record<string, unknown>)
+      .where(eq(credits.id, id))
+      .returning();
+    return updated;
+  }
+
+  async approveCredit(id: number, approvedBy: number): Promise<Credit | undefined> {
+    const db = await getDb();
+    const expiresAt = new Date();
+    expiresAt.setFullYear(expiresAt.getFullYear() + 1);
+    const [updated] = await db
+      .update(credits)
+      .set({
+        status: 'approved' as CreditStatus,
+        approvedBy,
+        approvedAt: new Date(),
+        expiresAt,
+        updatedAt: new Date(),
+      })
+      .where(eq(credits.id, id))
+      .returning();
+    return updated;
+  }
+
+  async rejectCredit(id: number, approvedBy: number, reason: string): Promise<Credit | undefined> {
+    const db = await getDb();
+    const [updated] = await db
+      .update(credits)
+      .set({
+        status: 'rejected' as CreditStatus,
+        approvedBy,
+        approvedAt: new Date(),
+        rejectionReason: reason,
+        updatedAt: new Date(),
+      })
+      .where(eq(credits.id, id))
+      .returning();
+    return updated;
+  }
+
+  async revokeCredit(id: number, reason: string): Promise<Credit | undefined> {
+    const db = await getDb();
+    const [updated] = await db
+      .update(credits)
+      .set({
+        status: 'revoked' as CreditStatus,
+        rejectionReason: reason,
+        updatedAt: new Date(),
+      })
+      .where(eq(credits.id, id))
+      .returning();
+    return updated;
+  }
+
+  async getAvailableCredits(userId: number): Promise<Credit[]> {
+    const db = await getDb();
+    const now = new Date();
+    return db
+      .select()
+      .from(credits)
+      .where(
+        and(
+          eq(credits.userId, userId),
+          or(eq(credits.status, 'approved'), eq(credits.status, 'partially_used')),
+          or(isNull(credits.expiresAt), gt(credits.expiresAt, now))
+        )
+      )
+      .orderBy(asc(credits.expiresAt));
+  }
+
+  async getTotalAvailableCredits(userId: number): Promise<number> {
+    const availableCredits = await this.getAvailableCredits(userId);
+    const totalUnused = availableCredits.reduce(
+      (total, credit) => total + (credit.creditAmountCents - credit.usedAmountCents),
+      0
+    );
+    const heldCredits = await this.getTotalHeldCreditsForUser(userId);
+    return Math.max(0, totalUnused - heldCredits);
+  }
+
+  async getPendingCredits(schoolId: number, creditType?: CreditType): Promise<Credit[]> {
+    const db = await getDb();
+    const conditions = [eq(credits.schoolId, schoolId), eq(credits.status, 'pending')];
+    if (creditType) conditions.push(eq(credits.creditType, creditType));
+    return db.select().from(credits).where(and(...conditions)).orderBy(asc(credits.createdAt));
+  }
+
+  async useCredits(
+    userId: number,
+    amountCents: number,
+    paymentHistoryId?: number,
+    description?: string
+  ): Promise<{ usedCredits: UnifiedCreditUsageLog[]; totalUsed: number }> {
+    const db = await getDb();
+    const availableCredits = await this.getAvailableCredits(userId);
+    let remainingAmount = amountCents;
+    const usedCredits: UnifiedCreditUsageLog[] = [];
+    for (const credit of availableCredits) {
+      if (remainingAmount <= 0) break;
+      const availableFromCredit = credit.creditAmountCents - credit.usedAmountCents;
+      const amountToUse = Math.min(availableFromCredit, remainingAmount);
+      if (amountToUse > 0) {
+        const [usageLog] = await db
+          .insert(unifiedCreditUsageLogs)
+          .values({
+            creditId: credit.id,
+            paymentHistoryId: paymentHistoryId || null,
+            amountCents: amountToUse,
+            description: description || null,
+          })
+          .returning();
+        usedCredits.push(usageLog);
+        const newUsedAmount = credit.usedAmountCents + amountToUse;
+        const newStatus: CreditStatus =
+          newUsedAmount >= credit.creditAmountCents ? 'used' : 'partially_used';
+        await db
+          .update(credits)
+          .set({ usedAmountCents: newUsedAmount, status: newStatus, updatedAt: new Date() })
+          .where(eq(credits.id, credit.id));
+        remainingAmount -= amountToUse;
+      }
+    }
+    const totalUsed = amountCents - remainingAmount;
+    return { usedCredits, totalUsed };
+  }
+
+  async restoreCredits(usageLogs: UnifiedCreditUsageLog[]): Promise<{ restoredCount: number; totalRestored: number }> {
+    const db = await getDb();
+    let totalRestored = 0;
+    let restoredCount = 0;
+    for (const log of usageLogs) {
+      try {
+        const [credit] = await db.select().from(credits).where(eq(credits.id, log.creditId));
+        if (credit) {
+          const newUsedAmount = Math.max(0, credit.usedAmountCents - log.amountCents);
+          const newStatus: CreditStatus =
+            newUsedAmount === 0
+              ? 'approved'
+              : newUsedAmount < credit.creditAmountCents
+                ? 'partially_used'
+                : 'used';
+          await db
+            .update(credits)
+            .set({ usedAmountCents: newUsedAmount, status: newStatus, updatedAt: new Date() })
+            .where(eq(credits.id, credit.id));
+          await db.delete(unifiedCreditUsageLogs).where(eq(unifiedCreditUsageLogs.id, log.id));
+          totalRestored += log.amountCents;
+          restoredCount++;
+        }
+      } catch {
+        /* continue */
+      }
+    }
+    return { restoredCount, totalRestored };
+  }
+
+  async completeCreditsOnlyPayment(params: {
+    holdSessionId: string;
+    scheduledPaymentId: number;
+    parentId: number;
+    enrollmentId: number | null;
+    schoolId: number | null;
+    creditsApplied: number;
+    originalAmount: number;
+    installmentNumber: number;
+    totalInstallments: number;
+    parentEmail: string;
+    childName: string | null;
+    className: string | null;
+    chargedBy?: 'auto_pay' | 'parent_manual' | 'parent_manual_saved_card' | 'admin_manual';
+    completionSource?: string;
+    description?: string;
+  }): Promise<void> {
+    const db = await getDb();
+    const {
+      holdSessionId,
+      scheduledPaymentId,
+      parentId,
+      enrollmentId,
+      schoolId,
+      creditsApplied,
+      originalAmount,
+      installmentNumber,
+      totalInstallments,
+      parentEmail,
+      childName,
+      className,
+    } = params;
+    const chargedBy = params.chargedBy ?? 'auto_pay';
+    const completionSource = params.completionSource ?? 'credits_only';
+    const initiator = chargedBy === 'auto_pay' ? 'Auto-pay' : 'Parent';
+    const description =
+      params.description ??
+      `${initiator} installment ${installmentNumber}/${totalInstallments} — fully covered by credits`;
+
+    await db.transaction(async (tx) => {
+      const pendingHolds = await tx
+        .select()
+        .from(creditHolds)
+        .where(and(eq(creditHolds.checkoutSessionId, holdSessionId), eq(creditHolds.status, 'pending')));
+
+      for (const hold of pendingHolds) {
+        const [credit] = await tx.select().from(credits).where(eq(credits.id, hold.creditId));
+        if (!credit) continue;
+        const newUsed = credit.usedAmountCents + hold.amountCents;
+        const newStatus: CreditStatus = newUsed >= credit.creditAmountCents ? 'used' : 'partially_used';
+        await tx
+          .update(credits)
+          .set({ usedAmountCents: newUsed, status: newStatus, updatedAt: new Date() })
+          .where(eq(credits.id, credit.id));
+        await tx.insert(unifiedCreditUsageLogs).values({
+          creditId: hold.creditId,
+          paymentHistoryId: null,
+          amountCents: hold.amountCents,
+          description,
+        });
+        await tx
+          .update(creditHolds)
+          .set({ status: 'finalized' as CreditHoldStatus, finalizedAt: new Date() })
+          .where(eq(creditHolds.id, hold.id));
+      }
+
+      await tx.insert(payments).values({
+        schoolId: schoolId ?? 1,
+        parentId,
+        parentEmail,
+        amount: 0,
+        currency: 'usd',
+        childName: childName ?? null,
+        className: className ?? null,
+        description,
+        status: 'completed',
+        stripePaymentIntentId: null,
+        stripeChargeId: null,
+        stripeRefundId: null,
+        paymentMethod: 'other',
+        enrollmentIds: enrollmentId ? [enrollmentId] : [],
+        originalPaymentId: null,
+        paymentDate: new Date(),
+        metadata: {
+          source: completionSource,
+          scheduledPaymentId,
+          creditsAppliedCents: creditsApplied,
+          originalAmountCents: originalAmount,
+          autoPayInitiated: chargedBy === 'auto_pay',
+          chargedBy,
+        },
+      });
+
+      if (enrollmentId) {
+        const [enrollment] = await tx
+          .select()
+          .from(programEnrollments)
+          .where(eq(programEnrollments.id, enrollmentId));
+        if (enrollment) {
+          const newTotalPaid = (enrollment.totalPaid || 0) + creditsApplied;
+          const newBalance = Math.max(0, (enrollment.totalCost || 0) - newTotalPaid);
+          await tx
+            .update(programEnrollments)
+            .set({
+              totalPaid: newTotalPaid,
+              remainingBalance: newBalance,
+              paymentStatus: newBalance <= 0 ? 'completed' : 'partial_payment',
+              updatedAt: new Date(),
+            })
+            .where(eq(programEnrollments.id, enrollmentId));
+        }
+      }
+
+      await tx
+        .update(scheduledPayments)
+        .set({
+          status: 'completed',
+          processedAt: new Date(),
+          completionSource,
+          chargedBy,
+          updatedAt: new Date(),
+        })
+        .where(eq(scheduledPayments.id, scheduledPaymentId));
+    });
+  }
+
+  async expireCredits(): Promise<number> {
+    const db = await getDb();
+    const now = new Date();
+    const result = await db
+      .update(credits)
+      .set({ status: 'expired' as CreditStatus, updatedAt: new Date() })
+      .where(
+        and(
+          or(eq(credits.status, 'approved'), eq(credits.status, 'partially_used')),
+          lt(credits.expiresAt, now)
+        )
+      )
+      .returning();
+    return result.length;
+  }
+
+  async getUnifiedCreditUsageLogById(id: number): Promise<UnifiedCreditUsageLog | undefined> {
+    const db = await getDb();
+    const [log] = await db.select().from(unifiedCreditUsageLogs).where(eq(unifiedCreditUsageLogs.id, id));
+    return log;
+  }
+
+  async getUnifiedCreditUsageLogsByCreditId(creditId: number): Promise<UnifiedCreditUsageLog[]> {
+    const db = await getDb();
+    return db
+      .select()
+      .from(unifiedCreditUsageLogs)
+      .where(eq(unifiedCreditUsageLogs.creditId, creditId))
+      .orderBy(desc(unifiedCreditUsageLogs.createdAt));
+  }
+
+  async getUnifiedCreditUsageLogsByPaymentHistoryId(paymentHistoryId: number): Promise<UnifiedCreditUsageLog[]> {
+    const db = await getDb();
+    return db
+      .select()
+      .from(unifiedCreditUsageLogs)
+      .where(eq(unifiedCreditUsageLogs.paymentHistoryId, paymentHistoryId))
+      .orderBy(desc(unifiedCreditUsageLogs.createdAt));
+  }
+
+  async getDoubleSpentCredits(schoolId?: number): Promise<Credit[]> {
+    const db = await getDb();
+    const conditions = [sql`${credits.usedAmountCents} > ${credits.creditAmountCents}`];
+    if (schoolId !== undefined) conditions.push(eq(credits.schoolId, schoolId));
+    return db.select().from(credits).where(and(...conditions));
+  }
+
+  async getMismatchedStatusCredits(schoolId?: number): Promise<Credit[]> {
+    const db = await getDb();
+    const schoolCondition = schoolId !== undefined ? eq(credits.schoolId, schoolId) : sql`1=1`;
+    return db
+      .select()
+      .from(credits)
+      .where(
+        and(
+          schoolCondition,
+          or(
+            and(eq(credits.status, 'used'), sql`${credits.usedAmountCents} != ${credits.creditAmountCents}`),
+            and(
+              eq(credits.status, 'partially_used'),
+              or(lte(credits.usedAmountCents, 0), gte(credits.usedAmountCents, credits.creditAmountCents))
+            ),
+            and(eq(credits.status, 'approved'), gt(credits.usedAmountCents, 0))
+          )
+        )
+      );
+  }
+
+  async getCompletedScheduledPaymentsWithCreditSource(schoolId?: number): Promise<ScheduledPayment[]> {
+    const db = await getDb();
+    const conditions = [eq(scheduledPayments.status, 'completed')];
+    if (schoolId !== undefined) conditions.push(eq(scheduledPayments.schoolId, schoolId));
+    const allCompleted = await db.select().from(scheduledPayments).where(and(...conditions));
+    return allCompleted.filter((sp: ScheduledPayment) => {
+      if (sp.stripePaymentIntentId && sp.stripePaymentIntentId.startsWith('credit_')) return true;
+      const meta = sp.metadata;
+      if (meta !== null && typeof meta === 'object' && !Array.isArray(meta)) {
+        const reservation = (meta as Record<string, unknown>).pendingCreditsReservation;
+        if (typeof reservation === 'number' && reservation > 0) return true;
+      }
+      return false;
+    });
+  }
+
+  async getUnifiedCreditUsageLogsByScheduledPaymentId(scheduledPaymentId: number): Promise<UnifiedCreditUsageLog[]> {
+    const db = await getDb();
+    return db
+      .select()
+      .from(unifiedCreditUsageLogs)
+      .where(like(unifiedCreditUsageLogs.description, `Scheduled payment ${scheduledPaymentId} -%`))
+      .orderBy(desc(unifiedCreditUsageLogs.createdAt));
+  }
+
+  async createUnifiedCreditUsageLog(log: InsertUnifiedCreditUsageLog): Promise<UnifiedCreditUsageLog> {
+    const db = await getDb();
+    const [newLog] = await db.insert(unifiedCreditUsageLogs).values(log).returning();
+    return newLog;
+  }
+
+  async saveStripePayment(payment: InsertStripePaymentHistory): Promise<StripePaymentHistory> {
+    const db = await getDb();
+    const [record] = await db.insert(stripePaymentHistory).values(payment).returning();
+    return record;
+  }
+
+  async getStripePaymentHistoryByUserId(userId: number): Promise<StripePaymentHistory[]> {
+    const db = await getDb();
+    return db.select().from(stripePaymentHistory).where(eq(stripePaymentHistory.userId, userId));
+  }
+
+  async getStripePaymentsBySubscription(subscriptionId: string): Promise<StripePaymentHistory[]> {
+    const db = await getDb();
+    return db.select().from(stripePaymentHistory).where(eq(stripePaymentHistory.subscriptionId, subscriptionId));
+  }
+
+  async getStripePaymentByIntentId(paymentIntentId: string): Promise<StripePaymentHistory | undefined> {
+    const db = await getDb();
+    const [record] = await db
+      .select()
+      .from(stripePaymentHistory)
+      .where(eq(stripePaymentHistory.paymentIntentId, paymentIntentId))
+      .limit(1);
+    return record;
+  }
+
+  async createCreditHolds(
+    userId: number,
+    amountCents: number,
+    checkoutSessionId: string,
+    description?: string,
+    expiresInMinutes: number = 30
+  ): Promise<{ holds: CreditHold[]; totalHeld: number }> {
+    const db = await getDb();
+    const holds: CreditHold[] = [];
+    let remainingAmount = amountCents;
+    const availableCredits = await db
+      .select()
+      .from(credits)
+      .where(
+        and(
+          eq(credits.userId, userId),
+          or(eq(credits.status, 'approved'), eq(credits.status, 'partially_used')),
+          or(gt(credits.expiresAt, new Date()), sql`${credits.expiresAt} IS NULL`)
+        )
+      )
+      .orderBy(asc(credits.expiresAt), asc(credits.createdAt));
+    const expiresAt = new Date(Date.now() + expiresInMinutes * 60 * 1000);
+    for (const credit of availableCredits) {
+      if (remainingAmount <= 0) break;
+      const existingHoldsResult = await db
+        .select({ total: sql<number>`COALESCE(SUM(${creditHolds.amountCents}), 0)` })
+        .from(creditHolds)
+        .where(and(eq(creditHolds.creditId, credit.id), eq(creditHolds.status, 'pending')));
+      const heldAmount = Number(existingHoldsResult[0]?.total || 0);
+      const availableAmount = credit.creditAmountCents - credit.usedAmountCents - heldAmount;
+      if (availableAmount <= 0) continue;
+      const holdAmount = Math.min(availableAmount, remainingAmount);
+      const [hold] = await db
+        .insert(creditHolds)
+        .values({
+          userId,
+          creditId: credit.id,
+          amountCents: holdAmount,
+          checkoutSessionId,
+          status: 'pending',
+          expiresAt,
+          description,
+        })
+        .returning();
+      holds.push(hold);
+      remainingAmount -= holdAmount;
+    }
+    const totalHeld = amountCents - remainingAmount;
+    return { holds, totalHeld };
+  }
+
+  async finalizeCreditHolds(
+    checkoutSessionId: string,
+    paymentHistoryId?: number,
+    description?: string
+  ): Promise<{ finalizedCount: number; totalFinalized: number; usageLogs: UnifiedCreditUsageLog[] }> {
+    const db = await getDb();
+    const usageLogs: UnifiedCreditUsageLog[] = [];
+    let totalFinalized = 0;
+    const pendingHolds = await db
+      .select()
+      .from(creditHolds)
+      .where(and(eq(creditHolds.checkoutSessionId, checkoutSessionId), eq(creditHolds.status, 'pending')));
+    for (const hold of pendingHolds) {
+      const [credit] = await db.select().from(credits).where(eq(credits.id, hold.creditId));
+      if (!credit) continue;
+      const newUsedAmount = credit.usedAmountCents + hold.amountCents;
+      const newStatus: CreditStatus = newUsedAmount >= credit.creditAmountCents ? 'used' : 'partially_used';
+      await db
+        .update(credits)
+        .set({ usedAmountCents: newUsedAmount, status: newStatus, updatedAt: new Date() })
+        .where(eq(credits.id, credit.id));
+      const [usageLog] = await db
+        .insert(unifiedCreditUsageLogs)
+        .values({
+          creditId: hold.creditId,
+          paymentHistoryId,
+          amountCents: hold.amountCents,
+          description: description || hold.description || `Credit applied from hold #${hold.id}`,
+        })
+        .returning();
+      usageLogs.push(usageLog);
+      await db
+        .update(creditHolds)
+        .set({ status: 'finalized' as CreditHoldStatus, finalizedAt: new Date() })
+        .where(eq(creditHolds.id, hold.id));
+      totalFinalized += hold.amountCents;
+    }
+    return { finalizedCount: pendingHolds.length, totalFinalized, usageLogs };
+  }
+
+  async releaseCreditHolds(checkoutSessionId: string): Promise<{ releasedCount: number; totalReleased: number }> {
+    const db = await getDb();
+    let totalReleased = 0;
+    const pendingHolds = await db
+      .select()
+      .from(creditHolds)
+      .where(and(eq(creditHolds.checkoutSessionId, checkoutSessionId), eq(creditHolds.status, 'pending')));
+    for (const hold of pendingHolds) {
+      await db
+        .update(creditHolds)
+        .set({ status: 'released' as CreditHoldStatus, releasedAt: new Date() })
+        .where(eq(creditHolds.id, hold.id));
+      totalReleased += hold.amountCents;
+    }
+    return { releasedCount: pendingHolds.length, totalReleased };
+  }
+
+  async getActiveHoldsForUser(userId: number): Promise<CreditHold[]> {
+    const db = await getDb();
+    return db
+      .select()
+      .from(creditHolds)
+      .where(
+        and(
+          eq(creditHolds.userId, userId),
+          eq(creditHolds.status, 'pending'),
+          gt(creditHolds.expiresAt, new Date())
+        )
+      )
+      .orderBy(asc(creditHolds.createdAt));
+  }
+
+  async getTotalHeldCreditsForUser(userId: number): Promise<number> {
+    const db = await getDb();
+    const result = await db
+      .select({ total: sql<number>`COALESCE(SUM(${creditHolds.amountCents}), 0)` })
+      .from(creditHolds)
+      .where(
+        and(eq(creditHolds.userId, userId), eq(creditHolds.status, 'pending'), gt(creditHolds.expiresAt, new Date()))
+      );
+    return Number(result[0]?.total || 0);
+  }
+
+  async expireStaleHolds(): Promise<number> {
+    const db = await getDb();
+    const now = new Date();
+    const expiredHolds = await db
+      .update(creditHolds)
+      .set({ status: 'expired' as CreditHoldStatus, releasedAt: now })
+      .where(and(eq(creditHolds.status, 'pending'), lt(creditHolds.expiresAt, now)))
+      .returning();
+    return expiredHolds.length;
+  }
+
   // Notification data initialization from JSON files
   async initializeNotifications(): Promise<void> {
     const fs = await import('fs');
@@ -3603,2497 +3591,5 @@ export class DatabaseStorage implements IStorage {
       console.error('❌ FATAL: Notification seeding failed, transaction rolled back:', error);
       throw error; // Re-throw to prevent silent failures
     }
-  }
-
-  // ============================================
-  // Educator Class Assignment Methods (Phase 1a)
-  // ============================================
-
-  async getEducatorClassAssignmentById(id: number): Promise<EducatorClassAssignment | undefined> {
-    const db = await getDb();
-    const [assignment] = await db.select().from(educatorClassAssignments).where(eq(educatorClassAssignments.id, id));
-    return assignment;
-  }
-
-  async getEducatorClassAssignmentsByEducatorId(educatorId: number): Promise<EducatorClassAssignment[]> {
-    const db = await getDb();
-    return db.select().from(educatorClassAssignments).where(eq(educatorClassAssignments.educatorId, educatorId));
-  }
-
-  async getEducatorClassAssignmentsByClassId(classId: number): Promise<EducatorClassAssignment[]> {
-    const db = await getDb();
-    return db.select().from(educatorClassAssignments).where(eq(educatorClassAssignments.classId, classId));
-  }
-
-  async getEducatorClassAssignmentsBySchoolId(schoolId: number): Promise<EducatorClassAssignment[]> {
-    const db = await getDb();
-    return db.select().from(educatorClassAssignments).where(eq(educatorClassAssignments.schoolId, schoolId));
-  }
-
-  async getActiveEducatorAssignmentForClass(educatorId: number, classId: number): Promise<EducatorClassAssignment | undefined> {
-    const db = await getDb();
-    const today = new Date().toISOString().split('T')[0];
-    const [assignment] = await db.select().from(educatorClassAssignments)
-      .where(
-        and(
-          eq(educatorClassAssignments.educatorId, educatorId),
-          eq(educatorClassAssignments.classId, classId),
-          or(
-            isNull(educatorClassAssignments.validFrom),
-            sql`${educatorClassAssignments.validFrom} <= ${today}`
-          ),
-          or(
-            isNull(educatorClassAssignments.validTo),
-            sql`${educatorClassAssignments.validTo} >= ${today}`
-          )
-        )
-      );
-    return assignment;
-  }
-
-  async createEducatorClassAssignment(assignment: InsertEducatorClassAssignment): Promise<EducatorClassAssignment> {
-    const db = await getDb();
-    const [newAssignment] = await db.insert(educatorClassAssignments).values({
-      ...assignment,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    }).returning();
-    return newAssignment;
-  }
-
-  async updateEducatorClassAssignment(id: number, assignment: Partial<InsertEducatorClassAssignment>): Promise<EducatorClassAssignment | undefined> {
-    const db = await getDb();
-    const [updated] = await db
-      .update(educatorClassAssignments)
-      .set({ ...assignment, updatedAt: new Date() })
-      .where(eq(educatorClassAssignments.id, id))
-      .returning();
-    return updated;
-  }
-
-  async deleteEducatorClassAssignment(id: number): Promise<void> {
-    const db = await getDb();
-    await db.delete(educatorClassAssignments).where(eq(educatorClassAssignments.id, id));
-  }
-
-  // ============================================
-  // Class Session Methods (Phase 1a)
-  // ============================================
-
-  async getClassSessionById(id: number): Promise<ClassSession | undefined> {
-    const db = await getDb();
-    const [session] = await db.select().from(classSessions).where(eq(classSessions.id, id));
-    return session;
-  }
-
-  async getSessionByQrToken(token: string): Promise<ClassSession | undefined> {
-    const db = await getDb();
-    const [session] = await db.select().from(classSessions).where(eq(classSessions.qrToken, token));
-    return session;
-  }
-
-  async getTeacherClockInRecords(params: { schoolId: number; startDate?: string; endDate?: string; classId?: number }): Promise<Array<{ sessionId: number; scheduledDate: string; actualStartTime: string | null; actualEndTime: string | null; checkInLocationVerified: boolean | null; className: string; educatorName: string }>> {
-    const db = await getDb();
-    const { schoolId, startDate, endDate, classId } = params;
-    const conditions: any[] = [
-      eq(classSessions.schoolId, schoolId),
-      sql`${classSessions.actualStartTime} IS NOT NULL`,
-      sql`${classSessions.notes} LIKE '%[teacher-clockin]%'`,
-    ];
-    if (startDate) conditions.push(sql`${classSessions.scheduledDate} >= ${startDate}`);
-    if (endDate) conditions.push(sql`${classSessions.scheduledDate} <= ${endDate}`);
-    if (classId) conditions.push(eq(classSessions.classId, classId));
-
-    const results = await db
-      .select({
-        sessionId: classSessions.id,
-        scheduledDate: classSessions.scheduledDate,
-        actualStartTime: classSessions.actualStartTime,
-        actualEndTime: classSessions.actualEndTime,
-        checkInLocationVerified: classSessions.checkInLocationVerified,
-        classTitle: classes.title,
-        educatorFirstName: users.firstName,
-        educatorLastName: users.lastName,
-      })
-      .from(classSessions)
-      .leftJoin(classes, eq(classSessions.classId, classes.id))
-      .leftJoin(users, eq(classSessions.educatorId, users.id))
-      .where(and(...conditions))
-      .orderBy(sql`${classSessions.scheduledDate} DESC`);
-
-    return results.map((row: any) => ({
-      sessionId: row.sessionId,
-      scheduledDate: row.scheduledDate,
-      actualStartTime: row.actualStartTime ?? null,
-      actualEndTime: row.actualEndTime ?? null,
-      checkInLocationVerified: row.checkInLocationVerified ?? null,
-      className: row.classTitle ?? 'Unknown Class',
-      educatorName: [row.educatorFirstName, row.educatorLastName].filter(Boolean).join(' ') || 'Unknown',
-    }));
-  }
-
-  async getClassSessionsByClassId(classId: number): Promise<ClassSession[]> {
-    const db = await getDb();
-    return db.select().from(classSessions).where(eq(classSessions.classId, classId));
-  }
-
-  async getClassSessionsByEducatorId(educatorId: number): Promise<ClassSession[]> {
-    const db = await getDb();
-    return db.select().from(classSessions).where(eq(classSessions.educatorId, educatorId));
-  }
-
-  async getClassSessionsBySchoolId(schoolId: number): Promise<ClassSession[]> {
-    const db = await getDb();
-    return db.select().from(classSessions).where(eq(classSessions.schoolId, schoolId));
-  }
-
-  async getClassSessionsByDate(schoolId: number, date: string): Promise<ClassSession[]> {
-    const db = await getDb();
-    return db.select().from(classSessions)
-      .where(
-        and(
-          eq(classSessions.schoolId, schoolId),
-          eq(classSessions.scheduledDate, date)
-        )
-      );
-  }
-
-  async getClassSessionsByDateRange(schoolId: number, startDate: string, endDate: string): Promise<ClassSession[]> {
-    const db = await getDb();
-    return db.select().from(classSessions)
-      .where(
-        and(
-          eq(classSessions.schoolId, schoolId),
-          sql`${classSessions.scheduledDate} >= ${startDate}`,
-          sql`${classSessions.scheduledDate} <= ${endDate}`
-        )
-      );
-  }
-
-  async getActiveClassSession(educatorId: number): Promise<ClassSession | undefined> {
-    const db = await getDb();
-    const [session] = await db.select().from(classSessions)
-      .where(
-        and(
-          eq(classSessions.educatorId, educatorId),
-          eq(classSessions.status, 'in_progress')
-        )
-      );
-    return session;
-  }
-
-  async createClassSession(session: InsertClassSession): Promise<ClassSession> {
-    const db = await getDb();
-    const [newSession] = await db.insert(classSessions).values({
-      ...session,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    }).returning();
-    return newSession;
-  }
-
-  async updateClassSession(id: number, session: Partial<InsertClassSession>): Promise<ClassSession | undefined> {
-    const db = await getDb();
-    const [updated] = await db
-      .update(classSessions)
-      .set({ ...session, updatedAt: new Date() })
-      .where(eq(classSessions.id, id))
-      .returning();
-    return updated;
-  }
-
-  async deleteClassSession(id: number): Promise<void> {
-    const db = await getDb();
-    await db.delete(classSessions).where(eq(classSessions.id, id));
-  }
-
-  // Educator Schedule methods (Phase 1b)
-  async getEducatorScheduleById(id: number): Promise<EducatorSchedule | undefined> {
-    const db = await getDb();
-    const [schedule] = await db.select().from(educatorSchedules).where(eq(educatorSchedules.id, id));
-    return schedule;
-  }
-
-  async getEducatorSchedulesByEducatorId(educatorId: number): Promise<EducatorSchedule[]> {
-    const db = await getDb();
-    return db.select().from(educatorSchedules)
-      .where(eq(educatorSchedules.educatorId, educatorId))
-      .orderBy(asc(educatorSchedules.dayOfWeek), asc(educatorSchedules.startTime));
-  }
-
-  async getEducatorSchedulesByClassId(classId: number): Promise<EducatorSchedule[]> {
-    const db = await getDb();
-    return db.select().from(educatorSchedules)
-      .where(eq(educatorSchedules.classId, classId))
-      .orderBy(asc(educatorSchedules.dayOfWeek), asc(educatorSchedules.startTime));
-  }
-
-  async getEducatorSchedulesBySchoolId(schoolId: number): Promise<EducatorSchedule[]> {
-    const db = await getDb();
-    return db.select().from(educatorSchedules)
-      .where(eq(educatorSchedules.schoolId, schoolId))
-      .orderBy(asc(educatorSchedules.educatorId), asc(educatorSchedules.dayOfWeek), asc(educatorSchedules.startTime));
-  }
-
-  async getEducatorSchedulesByAssignmentId(assignmentId: number): Promise<EducatorSchedule[]> {
-    const db = await getDb();
-    return db.select().from(educatorSchedules)
-      .where(eq(educatorSchedules.assignmentId, assignmentId))
-      .orderBy(asc(educatorSchedules.dayOfWeek), asc(educatorSchedules.startTime));
-  }
-
-  async getEducatorSchedulesForWeek(educatorId: number, weekStartDate: string): Promise<EducatorSchedule[]> {
-    const db = await getDb();
-    const weekEnd = new Date(weekStartDate);
-    weekEnd.setDate(weekEnd.getDate() + 7);
-    const weekEndStr = weekEnd.toISOString().split('T')[0];
-    
-    return db.select().from(educatorSchedules)
-      .where(and(
-        eq(educatorSchedules.educatorId, educatorId),
-        eq(educatorSchedules.isActive, true),
-        or(
-          isNull(educatorSchedules.effectiveTo),
-          sql`${educatorSchedules.effectiveTo} >= ${weekStartDate}`
-        ),
-        sql`${educatorSchedules.effectiveFrom} <= ${weekEndStr}`
-      ))
-      .orderBy(asc(educatorSchedules.dayOfWeek), asc(educatorSchedules.startTime));
-  }
-
-  async createEducatorSchedule(schedule: InsertEducatorSchedule): Promise<EducatorSchedule> {
-    const db = await getDb();
-    const [newSchedule] = await db.insert(educatorSchedules).values(schedule).returning();
-    return newSchedule;
-  }
-
-  async updateEducatorSchedule(id: number, schedule: Partial<InsertEducatorSchedule>): Promise<EducatorSchedule | undefined> {
-    const db = await getDb();
-    const [updated] = await db.update(educatorSchedules)
-      .set({ ...schedule, updatedAt: new Date() })
-      .where(eq(educatorSchedules.id, id))
-      .returning();
-    return updated;
-  }
-
-  async deleteEducatorSchedule(id: number): Promise<void> {
-    const db = await getDb();
-    await db.delete(educatorSchedules).where(eq(educatorSchedules.id, id));
-  }
-
-  // Audit Log methods (Phase 1b)
-  async createAuditLog(log: InsertAuditLog): Promise<AuditLog> {
-    const db = await getDb();
-    const [newLog] = await db.insert(auditLogs).values(log).returning();
-    return newLog;
-  }
-
-  async getAuditLogsByTargetId(targetType: string, targetId: string): Promise<AuditLog[]> {
-    const db = await getDb();
-    return db.select().from(auditLogs)
-      .where(and(
-        eq(auditLogs.targetType, targetType),
-        eq(auditLogs.targetId, targetId)
-      ))
-      .orderBy(desc(auditLogs.createdAt));
-  }
-
-  async getAuditLogsByActorId(actorId: number): Promise<AuditLog[]> {
-    const db = await getDb();
-    return db.select().from(auditLogs)
-      .where(eq(auditLogs.actorId, actorId))
-      .orderBy(desc(auditLogs.createdAt));
-  }
-
-  async getAuditLogsBySchoolId(
-    schoolId: number, 
-    filters?: { actionType?: string; severity?: string; startDate?: string; endDate?: string }
-  ): Promise<AuditLog[]> {
-    const db = await getDb();
-    const conditions: any[] = [eq(auditLogs.schoolId, schoolId)];
-    
-    if (filters?.actionType) {
-      conditions.push(eq(auditLogs.actionType, filters.actionType));
-    }
-    if (filters?.severity) {
-      conditions.push(eq(auditLogs.severity, filters.severity));
-    }
-    if (filters?.startDate) {
-      conditions.push(sql`${auditLogs.createdAt} >= ${filters.startDate}`);
-    }
-    if (filters?.endDate) {
-      conditions.push(sql`${auditLogs.createdAt} <= ${filters.endDate}`);
-    }
-    
-    return db.select().from(auditLogs)
-      .where(and(...conditions))
-      .orderBy(desc(auditLogs.createdAt));
-  }
-
-  // Session Attendance methods (Phase 2)
-  async getAttendanceBySessionId(sessionId: number): Promise<SessionAttendance[]> {
-    const db = await getDb();
-    return db.select().from(sessionAttendance)
-      .where(eq(sessionAttendance.sessionId, sessionId));
-  }
-
-  async getAttendanceByChildId(childId: number): Promise<SessionAttendance[]> {
-    const db = await getDb();
-    return db.select().from(sessionAttendance)
-      .where(eq(sessionAttendance.childId, childId))
-      .orderBy(desc(sessionAttendance.recordedAt));
-  }
-
-  async getAttendanceBySchoolId(schoolId: number): Promise<SessionAttendance[]> {
-    const db = await getDb();
-    return db.select().from(sessionAttendance)
-      .where(eq(sessionAttendance.schoolId, schoolId))
-      .orderBy(desc(sessionAttendance.recordedAt));
-  }
-
-  async getAttendanceRecord(sessionId: number, childId: number): Promise<SessionAttendance | undefined> {
-    const db = await getDb();
-    const [record] = await db.select().from(sessionAttendance)
-      .where(and(
-        eq(sessionAttendance.sessionId, sessionId),
-        eq(sessionAttendance.childId, childId)
-      ))
-      .limit(1);
-    return record;
-  }
-
-  async createAttendance(attendance: InsertSessionAttendance): Promise<SessionAttendance> {
-    const db = await getDb();
-    const [newAttendance] = await db.insert(sessionAttendance)
-      .values(attendance)
-      .returning();
-    return newAttendance;
-  }
-
-  async updateAttendance(id: number, attendanceData: Partial<InsertSessionAttendance>): Promise<SessionAttendance | undefined> {
-    const db = await getDb();
-    const [updated] = await db.update(sessionAttendance)
-      .set({ ...attendanceData, updatedAt: new Date() })
-      .where(eq(sessionAttendance.id, id))
-      .returning();
-    return updated;
-  }
-
-  async deleteAttendance(id: number): Promise<void> {
-    const db = await getDb();
-    await db.delete(sessionAttendance).where(eq(sessionAttendance.id, id));
-  }
-
-  async upsertAttendance(attendance: InsertSessionAttendance): Promise<SessionAttendance> {
-    const existing = await this.getAttendanceRecord(attendance.sessionId, attendance.childId);
-    if (existing) {
-      const updated = await this.updateAttendance(existing.id, attendance);
-      return updated!;
-    }
-    return this.createAttendance(attendance);
-  }
-
-  // Error Log methods
-  async createErrorLog(errorLog: InsertErrorLog): Promise<ErrorLog> {
-    const db = await getDb();
-    const [newLog] = await db.insert(errorLogs).values(errorLog).returning();
-    return newLog;
-  }
-
-  async getErrorLogById(id: number): Promise<ErrorLog | undefined> {
-    const db = await getDb();
-    const [log] = await db.select().from(errorLogs).where(eq(errorLogs.id, id));
-    return log;
-  }
-
-  async getErrorLogs(filters?: {
-    severity?: string;
-    status?: string;
-    errorType?: string;
-    startDate?: Date;
-    endDate?: Date;
-    limit?: number;
-    offset?: number;
-  }): Promise<ErrorLog[]> {
-    const db = await getDb();
-    const conditions: any[] = [];
-
-    if (filters?.severity) {
-      conditions.push(eq(errorLogs.severity, filters.severity));
-    }
-    if (filters?.status) {
-      conditions.push(eq(errorLogs.status, filters.status));
-    }
-    if (filters?.errorType) {
-      conditions.push(eq(errorLogs.errorType, filters.errorType));
-    }
-    if (filters?.startDate) {
-      conditions.push(gte(errorLogs.createdAt, filters.startDate));
-    }
-    if (filters?.endDate) {
-      conditions.push(lte(errorLogs.createdAt, filters.endDate));
-    }
-
-    let query = db.select().from(errorLogs);
-    if (conditions.length > 0) {
-      query = query.where(and(...conditions)) as typeof query;
-    }
-    query = query.orderBy(desc(errorLogs.createdAt)) as typeof query;
-
-    if (filters?.limit) {
-      query = query.limit(filters.limit) as typeof query;
-    }
-    if (filters?.offset) {
-      query = query.offset(filters.offset) as typeof query;
-    }
-
-    return query;
-  }
-
-  async getErrorLogsCount(filters?: {
-    severity?: string;
-    status?: string;
-    errorType?: string;
-    startDate?: Date;
-    endDate?: Date;
-  }): Promise<number> {
-    const db = await getDb();
-    const conditions: any[] = [];
-
-    if (filters?.severity) {
-      conditions.push(eq(errorLogs.severity, filters.severity));
-    }
-    if (filters?.status) {
-      conditions.push(eq(errorLogs.status, filters.status));
-    }
-    if (filters?.errorType) {
-      conditions.push(eq(errorLogs.errorType, filters.errorType));
-    }
-    if (filters?.startDate) {
-      conditions.push(gte(errorLogs.createdAt, filters.startDate));
-    }
-    if (filters?.endDate) {
-      conditions.push(lte(errorLogs.createdAt, filters.endDate));
-    }
-
-    let query = db.select({ count: sql<number>`count(*)::int` }).from(errorLogs);
-    if (conditions.length > 0) {
-      query = query.where(and(...conditions)) as typeof query;
-    }
-
-    const [result] = await query;
-    return result?.count || 0;
-  }
-
-  async updateErrorLog(id: number, updates: Partial<InsertErrorLog>): Promise<ErrorLog | undefined> {
-    const db = await getDb();
-    const [updated] = await db.update(errorLogs)
-      .set({ ...updates, updatedAt: new Date() })
-      .where(eq(errorLogs.id, id))
-      .returning();
-    return updated;
-  }
-
-  async getUnnotifiedCriticalErrors(): Promise<ErrorLog[]> {
-    const db = await getDb();
-    return db.select().from(errorLogs)
-      .where(and(
-        eq(errorLogs.notificationSent, false),
-        or(
-          eq(errorLogs.severity, 'critical'),
-          eq(errorLogs.severity, 'high')
-        )
-      ))
-      .orderBy(desc(errorLogs.createdAt));
-  }
-
-  async markErrorsNotified(ids: number[]): Promise<void> {
-    if (ids.length === 0) return;
-    const db = await getDb();
-    await db.update(errorLogs)
-      .set({ notificationSent: true, notificationSentAt: new Date() })
-      .where(inArray(errorLogs.id, ids));
-  }
-
-  async getErrorsSummary(startDate: Date, endDate: Date): Promise<{
-    total: number;
-    bySeverity: Record<string, number>;
-    byType: Record<string, number>;
-    byStatus: Record<string, number>;
-  }> {
-    const db = await getDb();
-    
-    const logs = await db.select().from(errorLogs)
-      .where(and(
-        gte(errorLogs.createdAt, startDate),
-        lte(errorLogs.createdAt, endDate)
-      ));
-
-    const bySeverity: Record<string, number> = {};
-    const byType: Record<string, number> = {};
-    const byStatus: Record<string, number> = {};
-
-    for (const log of logs) {
-      bySeverity[log.severity] = (bySeverity[log.severity] || 0) + 1;
-      byType[log.errorType] = (byType[log.errorType] || 0) + 1;
-      byStatus[log.status] = (byStatus[log.status] || 0) + 1;
-    }
-
-    return {
-      total: logs.length,
-      bySeverity,
-      byType,
-      byStatus
-    };
-  }
-
-  async cleanupOldErrors(olderThan: Date): Promise<number> {
-    const db = await getDb();
-    const result = await db.delete(errorLogs)
-      .where(and(
-        lt(errorLogs.createdAt, olderThan),
-        or(
-          eq(errorLogs.status, 'resolved'),
-          eq(errorLogs.status, 'ignored')
-        )
-      ))
-      .returning({ id: errorLogs.id });
-    return result.length;
-  }
-
-  // Signed Waiver methods (Phase 2 - Volunteer)
-  async getSignedWaiverById(id: number): Promise<SignedWaiver | undefined> {
-    const db = await getDb();
-    const [waiver] = await db.select().from(signedWaivers).where(eq(signedWaivers.id, id));
-    return waiver;
-  }
-
-  async getSignedWaiversByUserId(userId: number): Promise<SignedWaiver[]> {
-    const db = await getDb();
-    return await db.select().from(signedWaivers).where(eq(signedWaivers.userId, userId));
-  }
-
-  async getSignedWaiverByUserAndDocument(userId: number, documentId: number): Promise<SignedWaiver | undefined> {
-    const db = await getDb();
-    const [waiver] = await db.select().from(signedWaivers)
-      .where(and(
-        eq(signedWaivers.userId, userId),
-        eq(signedWaivers.documentId, documentId)
-      ));
-    return waiver;
-  }
-
-  async getActiveSignedWaiver(userId: number, documentId: number): Promise<SignedWaiver | undefined> {
-    const db = await getDb();
-    const now = new Date();
-    const [waiver] = await db.select().from(signedWaivers)
-      .where(and(
-        eq(signedWaivers.userId, userId),
-        eq(signedWaivers.documentId, documentId),
-        or(
-          isNull(signedWaivers.expiresAt),
-          gt(signedWaivers.expiresAt, now)
-        )
-      ))
-      .orderBy(desc(signedWaivers.signedAt));
-    return waiver;
-  }
-
-  async createSignedWaiver(waiver: InsertSignedWaiver): Promise<SignedWaiver> {
-    const db = await getDb();
-    const [newWaiver] = await db.insert(signedWaivers).values(waiver).returning();
-    return newWaiver;
-  }
-
-  async updateSignedWaiver(id: number, waiver: Partial<InsertSignedWaiver>): Promise<SignedWaiver | undefined> {
-    const db = await getDb();
-    const [updated] = await db.update(signedWaivers).set(waiver).where(eq(signedWaivers.id, id)).returning();
-    return updated;
-  }
-
-  // Session Volunteer methods (Phase 2 - Volunteer)
-  async getSessionVolunteerById(id: number): Promise<SessionVolunteer | undefined> {
-    const db = await getDb();
-    const [volunteer] = await db.select().from(sessionVolunteers).where(eq(sessionVolunteers.id, id));
-    return volunteer;
-  }
-
-  async getSessionVolunteersBySessionId(sessionId: number): Promise<SessionVolunteer[]> {
-    const db = await getDb();
-    return await db.select().from(sessionVolunteers).where(eq(sessionVolunteers.sessionId, sessionId));
-  }
-
-  async getSessionVolunteersByVolunteerId(volunteerId: number): Promise<SessionVolunteer[]> {
-    const db = await getDb();
-    return await db.select().from(sessionVolunteers).where(eq(sessionVolunteers.volunteerId, volunteerId));
-  }
-
-  async createSessionVolunteer(volunteer: InsertSessionVolunteer): Promise<SessionVolunteer> {
-    const db = await getDb();
-    const [newVolunteer] = await db.insert(sessionVolunteers).values(volunteer).returning();
-    return newVolunteer;
-  }
-
-  async updateSessionVolunteer(id: number, volunteer: Partial<InsertSessionVolunteer>): Promise<SessionVolunteer | undefined> {
-    const db = await getDb();
-    const [updated] = await db.update(sessionVolunteers).set(volunteer).where(eq(sessionVolunteers.id, id)).returning();
-    return updated;
-  }
-
-  async deleteSessionVolunteer(id: number): Promise<void> {
-    const db = await getDb();
-    await db.delete(sessionVolunteers).where(eq(sessionVolunteers.id, id));
-  }
-
-  // ==================== VOLUNTEER CREDITS (Phase 3) ====================
-  
-  async getVolunteerCreditById(id: number): Promise<VolunteerCredit | undefined> {
-    const db = await getDb();
-    const [credit] = await db.select().from(volunteerCredits).where(eq(volunteerCredits.id, id));
-    return credit;
-  }
-
-  async getVolunteerCreditsByUserId(userId: number): Promise<VolunteerCredit[]> {
-    const db = await getDb();
-    return db.select().from(volunteerCredits)
-      .where(eq(volunteerCredits.userId, userId))
-      .orderBy(desc(volunteerCredits.createdAt));
-  }
-
-  async getVolunteerCreditsBySchoolId(schoolId: number): Promise<VolunteerCredit[]> {
-    const db = await getDb();
-    return db.select().from(volunteerCredits)
-      .where(eq(volunteerCredits.schoolId, schoolId))
-      .orderBy(desc(volunteerCredits.createdAt));
-  }
-
-  async getPendingVolunteerCredits(schoolId: number): Promise<VolunteerCredit[]> {
-    const db = await getDb();
-    return db.select().from(volunteerCredits)
-      .where(and(
-        eq(volunteerCredits.schoolId, schoolId),
-        eq(volunteerCredits.status, 'pending')
-      ))
-      .orderBy(asc(volunteerCredits.createdAt));
-  }
-
-  async getAvailableVolunteerCredits(userId: number): Promise<VolunteerCredit[]> {
-    const db = await getDb();
-    const now = new Date();
-    return db.select().from(volunteerCredits)
-      .where(and(
-        eq(volunteerCredits.userId, userId),
-        or(
-          eq(volunteerCredits.status, 'approved'),
-          eq(volunteerCredits.status, 'partially_used')
-        ),
-        or(
-          isNull(volunteerCredits.expiresAt),
-          gt(volunteerCredits.expiresAt, now)
-        )
-      ))
-      .orderBy(asc(volunteerCredits.expiresAt));
-  }
-
-  async createVolunteerCredit(credit: InsertVolunteerCredit): Promise<VolunteerCredit> {
-    const db = await getDb();
-    const [newCredit] = await db.insert(volunteerCredits).values(credit).returning();
-    return newCredit;
-  }
-
-  async updateVolunteerCredit(id: number, credit: Partial<InsertVolunteerCredit> & { usedAmountCents?: number }): Promise<VolunteerCredit | undefined> {
-    const db = await getDb();
-    const [updated] = await db.update(volunteerCredits)
-      .set({ ...credit as any, updatedAt: new Date() })
-      .where(eq(volunteerCredits.id, id))
-      .returning();
-    return updated;
-  }
-
-  async approveVolunteerCredit(id: number, approvedBy: number): Promise<VolunteerCredit | undefined> {
-    const db = await getDb();
-    // Calculate expiration date - 1 year from approval
-    const expiresAt = new Date();
-    expiresAt.setFullYear(expiresAt.getFullYear() + 1);
-    
-    const [updated] = await db.update(volunteerCredits)
-      .set({
-        status: 'approved',
-        approvedBy,
-        approvedAt: new Date(),
-        expiresAt,
-        updatedAt: new Date()
-      })
-      .where(eq(volunteerCredits.id, id))
-      .returning();
-    return updated;
-  }
-
-  async rejectVolunteerCredit(id: number, approvedBy: number, reason: string): Promise<VolunteerCredit | undefined> {
-    const db = await getDb();
-    const [updated] = await db.update(volunteerCredits)
-      .set({
-        status: 'rejected',
-        approvedBy,
-        approvedAt: new Date(),
-        rejectionReason: reason,
-        updatedAt: new Date()
-      })
-      .where(eq(volunteerCredits.id, id))
-      .returning();
-    return updated;
-  }
-
-  async useVolunteerCredits(
-    userId: number, 
-    amountCents: number, 
-    paymentHistoryId?: number, 
-    description?: string
-  ): Promise<{ usedCredits: CreditUsageLog[]; totalUsed: number }> {
-    const db = await getDb();
-    
-    // Get available credits ordered by expiration (FIFO - use soonest to expire first)
-    const availableCredits = await this.getAvailableVolunteerCredits(userId);
-    
-    let remainingAmount = amountCents;
-    const usedCredits: CreditUsageLog[] = [];
-    
-    for (const credit of availableCredits) {
-      if (remainingAmount <= 0) break;
-      
-      const availableFromCredit = credit.creditAmountCents - credit.usedAmountCents;
-      const amountToUse = Math.min(availableFromCredit, remainingAmount);
-      
-      if (amountToUse > 0) {
-        // Create usage log
-        const [usageLog] = await db.insert(creditUsageLogs)
-          .values({
-            creditId: credit.id,
-            paymentHistoryId: paymentHistoryId || null,
-            amountCents: amountToUse,
-            description: description || null
-          })
-          .returning();
-        
-        usedCredits.push(usageLog);
-        
-        // Update credit usage
-        const newUsedAmount = credit.usedAmountCents + amountToUse;
-        const newStatus = newUsedAmount >= credit.creditAmountCents ? 'used' : 'partially_used';
-        
-        await db.update(volunteerCredits)
-          .set({
-            usedAmountCents: newUsedAmount,
-            status: newStatus,
-            updatedAt: new Date()
-          })
-          .where(eq(volunteerCredits.id, credit.id));
-        
-        remainingAmount -= amountToUse;
-      }
-    }
-    
-    const totalUsed = amountCents - remainingAmount;
-    return { usedCredits, totalUsed };
-  }
-
-  // Credit Usage Log methods
-  async getCreditUsageLogById(id: number): Promise<CreditUsageLog | undefined> {
-    const db = await getDb();
-    const [log] = await db.select().from(creditUsageLogs).where(eq(creditUsageLogs.id, id));
-    return log;
-  }
-
-  async getCreditUsageLogsByCreditId(creditId: number): Promise<CreditUsageLog[]> {
-    const db = await getDb();
-    return db.select().from(creditUsageLogs)
-      .where(eq(creditUsageLogs.creditId, creditId))
-      .orderBy(desc(creditUsageLogs.createdAt));
-  }
-
-  async createCreditUsageLog(log: InsertCreditUsageLog): Promise<CreditUsageLog> {
-    const db = await getDb();
-    const [newLog] = await db.insert(creditUsageLogs).values(log).returning();
-    return newLog;
-  }
-
-  // ==================== UNIFIED CREDIT SYSTEM ====================
-  // Single ledger for all credit types: volunteer, referral, achievement, marketing, manual
-  
-  async getCreditById(id: number): Promise<Credit | undefined> {
-    const db = await getDb();
-    const [credit] = await db.select().from(credits).where(eq(credits.id, id));
-    return credit;
-  }
-
-  async getCredits(filters: {
-    userId?: number;
-    schoolId?: number;
-    creditType?: CreditType;
-    status?: CreditStatus;
-    includeExpired?: boolean;
-  }): Promise<Credit[]> {
-    const db = await getDb();
-    const conditions = [];
-    
-    if (filters.userId) {
-      conditions.push(eq(credits.userId, filters.userId));
-    }
-    if (filters.schoolId) {
-      conditions.push(eq(credits.schoolId, filters.schoolId));
-    }
-    if (filters.creditType) {
-      conditions.push(eq(credits.creditType, filters.creditType));
-    }
-    if (filters.status) {
-      conditions.push(eq(credits.status, filters.status));
-    }
-    if (!filters.includeExpired) {
-      const now = new Date();
-      conditions.push(or(
-        isNull(credits.expiresAt),
-        gt(credits.expiresAt, now)
-      ));
-    }
-    
-    if (conditions.length === 0) {
-      return db.select().from(credits).orderBy(desc(credits.createdAt));
-    }
-    
-    return db.select().from(credits)
-      .where(and(...conditions))
-      .orderBy(desc(credits.createdAt));
-  }
-
-  async createCredit(credit: InsertCredit): Promise<Credit> {
-    const db = await getDb();
-    const [newCredit] = await db.insert(credits).values(credit).returning();
-    return newCredit;
-  }
-
-  async updateCredit(
-    id: number, 
-    updates: Partial<InsertCredit> & { 
-      usedAmountCents?: number; 
-      status?: CreditStatus; 
-      approvedBy?: number; 
-      approvedAt?: Date;
-      expiresAt?: Date;
-    }
-  ): Promise<Credit | undefined> {
-    const db = await getDb();
-    const [updated] = await db.update(credits)
-      .set({ ...updates as any, updatedAt: new Date() })
-      .where(eq(credits.id, id))
-      .returning();
-    return updated;
-  }
-
-  async approveCredit(id: number, approvedBy: number): Promise<Credit | undefined> {
-    const db = await getDb();
-    // Calculate expiration date - 1 year from approval
-    const expiresAt = new Date();
-    expiresAt.setFullYear(expiresAt.getFullYear() + 1);
-    
-    const [updated] = await db.update(credits)
-      .set({
-        status: 'approved' as CreditStatus,
-        approvedBy,
-        approvedAt: new Date(),
-        expiresAt,
-        updatedAt: new Date()
-      })
-      .where(eq(credits.id, id))
-      .returning();
-    return updated;
-  }
-
-  async rejectCredit(id: number, approvedBy: number, reason: string): Promise<Credit | undefined> {
-    const db = await getDb();
-    const [updated] = await db.update(credits)
-      .set({
-        status: 'rejected' as CreditStatus,
-        approvedBy,
-        approvedAt: new Date(),
-        rejectionReason: reason,
-        updatedAt: new Date()
-      })
-      .where(eq(credits.id, id))
-      .returning();
-    return updated;
-  }
-
-  async revokeCredit(id: number, reason: string): Promise<Credit | undefined> {
-    const db = await getDb();
-    const [updated] = await db.update(credits)
-      .set({
-        status: 'revoked' as CreditStatus,
-        rejectionReason: reason,
-        updatedAt: new Date()
-      })
-      .where(eq(credits.id, id))
-      .returning();
-    return updated;
-  }
-
-  async getAvailableCredits(userId: number): Promise<Credit[]> {
-    const db = await getDb();
-    const now = new Date();
-    return db.select().from(credits)
-      .where(and(
-        eq(credits.userId, userId),
-        or(
-          eq(credits.status, 'approved'),
-          eq(credits.status, 'partially_used')
-        ),
-        or(
-          isNull(credits.expiresAt),
-          gt(credits.expiresAt, now)
-        )
-      ))
-      .orderBy(asc(credits.expiresAt)); // FIFO - use soonest to expire first
-  }
-
-  async getTotalAvailableCredits(userId: number): Promise<number> {
-    const availableCredits = await this.getAvailableCredits(userId);
-    const totalUnused = availableCredits.reduce((total, credit) => {
-      return total + (credit.creditAmountCents - credit.usedAmountCents);
-    }, 0);
-    
-    // Subtract held credits (reserved in active checkouts) from available balance
-    const heldCredits = await this.getTotalHeldCreditsForUser(userId);
-    return Math.max(0, totalUnused - heldCredits);
-  }
-
-  async getPendingCredits(schoolId: number, creditType?: CreditType): Promise<Credit[]> {
-    const db = await getDb();
-    const conditions = [
-      eq(credits.schoolId, schoolId),
-      eq(credits.status, 'pending')
-    ];
-    
-    if (creditType) {
-      conditions.push(eq(credits.creditType, creditType));
-    }
-    
-    return db.select().from(credits)
-      .where(and(...conditions))
-      .orderBy(asc(credits.createdAt));
-  }
-
-  async useCredits(
-    userId: number, 
-    amountCents: number, 
-    paymentHistoryId?: number, 
-    description?: string
-  ): Promise<{ usedCredits: UnifiedCreditUsageLog[]; totalUsed: number }> {
-    const db = await getDb();
-    
-    // Get available credits ordered by expiration (FIFO - use soonest to expire first)
-    const availableCredits = await this.getAvailableCredits(userId);
-    
-    let remainingAmount = amountCents;
-    const usedCredits: UnifiedCreditUsageLog[] = [];
-    
-    for (const credit of availableCredits) {
-      if (remainingAmount <= 0) break;
-      
-      const availableFromCredit = credit.creditAmountCents - credit.usedAmountCents;
-      const amountToUse = Math.min(availableFromCredit, remainingAmount);
-      
-      if (amountToUse > 0) {
-        // Create usage log
-        const [usageLog] = await db.insert(unifiedCreditUsageLogs)
-          .values({
-            creditId: credit.id,
-            paymentHistoryId: paymentHistoryId || null,
-            amountCents: amountToUse,
-            description: description || null
-          })
-          .returning();
-        
-        usedCredits.push(usageLog);
-        
-        // Update credit usage
-        const newUsedAmount = credit.usedAmountCents + amountToUse;
-        const newStatus: CreditStatus = newUsedAmount >= credit.creditAmountCents ? 'used' : 'partially_used';
-        
-        await db.update(credits)
-          .set({
-            usedAmountCents: newUsedAmount,
-            status: newStatus,
-            updatedAt: new Date()
-          })
-          .where(eq(credits.id, credit.id));
-        
-        remainingAmount -= amountToUse;
-      }
-    }
-    
-    const totalUsed = amountCents - remainingAmount;
-    return { usedCredits, totalUsed };
-  }
-
-  async restoreCredits(usageLogs: UnifiedCreditUsageLog[]): Promise<{ restoredCount: number; totalRestored: number }> {
-    const db = await getDb();
-    let totalRestored = 0;
-    let restoredCount = 0;
-    
-    console.log('🔄 Restoring credits from', usageLogs.length, 'usage logs');
-    
-    for (const log of usageLogs) {
-      try {
-        const [credit] = await db.select().from(credits).where(eq(credits.id, log.creditId));
-        
-        if (credit) {
-          const newUsedAmount = Math.max(0, credit.usedAmountCents - log.amountCents);
-          const newStatus: CreditStatus = newUsedAmount === 0 ? 'approved' : 
-                                          newUsedAmount < credit.creditAmountCents ? 'partially_used' : 'used';
-          
-          await db.update(credits)
-            .set({
-              usedAmountCents: newUsedAmount,
-              status: newStatus,
-              updatedAt: new Date()
-            })
-            .where(eq(credits.id, credit.id));
-          
-          await db.delete(unifiedCreditUsageLogs).where(eq(unifiedCreditUsageLogs.id, log.id));
-          
-          totalRestored += log.amountCents;
-          restoredCount++;
-          
-          console.log(`   ✅ Restored ${log.amountCents} cents to credit #${credit.id}`);
-        }
-      } catch (error) {
-        console.error(`   ❌ Failed to restore credit log #${log.id}:`, error);
-      }
-    }
-    
-    console.log(`🔄 Credit restoration complete: ${restoredCount} logs, $${(totalRestored / 100).toFixed(2)} restored`);
-    return { restoredCount, totalRestored };
-  }
-
-  async completeCreditsOnlyPayment(params: {
-    holdSessionId: string;
-    scheduledPaymentId: number;
-    parentId: number;
-    enrollmentId: number | null;
-    schoolId: number | null;
-    creditsApplied: number;
-    originalAmount: number;
-    installmentNumber: number;
-    totalInstallments: number;
-    parentEmail: string;
-    childName: string | null;
-    className: string | null;
-    chargedBy?: 'auto_pay' | 'parent_manual' | 'parent_manual_saved_card' | 'admin_manual';
-    completionSource?: string;
-    description?: string;
-  }): Promise<void> {
-    const db = await getDb();
-    const {
-      holdSessionId, scheduledPaymentId, parentId, enrollmentId, schoolId,
-      creditsApplied, originalAmount, installmentNumber, totalInstallments,
-      parentEmail, childName, className,
-    } = params;
-    const chargedBy = params.chargedBy ?? 'auto_pay';
-    const completionSource = params.completionSource ?? 'credits_only';
-    const initiator = chargedBy === 'auto_pay' ? 'Auto-pay' : 'Parent';
-    const description =
-      params.description
-      ?? `${initiator} installment ${installmentNumber}/${totalInstallments} — fully covered by credits`;
-
-    await db.transaction(async (tx) => {
-      const pendingHolds = await tx
-        .select()
-        .from(creditHolds)
-        .where(and(
-          eq(creditHolds.checkoutSessionId, holdSessionId),
-          eq(creditHolds.status, 'pending')
-        ));
-
-      for (const hold of pendingHolds) {
-        const [credit] = await tx.select().from(credits).where(eq(credits.id, hold.creditId));
-        if (!credit) continue;
-        const newUsed = credit.usedAmountCents + hold.amountCents;
-        const newStatus: CreditStatus = newUsed >= credit.creditAmountCents ? 'used' : 'partially_used';
-        await tx.update(credits)
-          .set({ usedAmountCents: newUsed, status: newStatus, updatedAt: new Date() })
-          .where(eq(credits.id, credit.id));
-        await tx.insert(unifiedCreditUsageLogs).values({
-          creditId: hold.creditId,
-          paymentHistoryId: null,
-          amountCents: hold.amountCents,
-          description,
-        });
-        await tx.update(creditHolds)
-          .set({ status: 'finalized' as CreditHoldStatus, finalizedAt: new Date() })
-          .where(eq(creditHolds.id, hold.id));
-      }
-
-      await tx.insert(payments).values({
-        schoolId: schoolId ?? 1,
-        parentId,
-        parentEmail,
-        amount: 0,
-        currency: 'usd',
-        childName: childName ?? null,
-        className: className ?? null,
-        description,
-        status: 'completed',
-        stripePaymentIntentId: null,
-        stripeChargeId: null,
-        stripeRefundId: null,
-        paymentMethod: 'other',
-        enrollmentIds: enrollmentId ? [enrollmentId] : [],
-        originalPaymentId: null,
-        paymentDate: new Date(),
-        metadata: {
-          source: completionSource,
-          scheduledPaymentId,
-          creditsAppliedCents: creditsApplied,
-          originalAmountCents: originalAmount,
-          autoPayInitiated: chargedBy === 'auto_pay',
-          chargedBy,
-        },
-      });
-
-      if (enrollmentId) {
-        const [enrollment] = await tx
-          .select()
-          .from(programEnrollments)
-          .where(eq(programEnrollments.id, enrollmentId));
-        if (enrollment) {
-          const newTotalPaid = (enrollment.totalPaid || 0) + creditsApplied;
-          const newBalance = Math.max(0, (enrollment.totalCost || 0) - newTotalPaid - (enrollment.compAmountCents ?? 0));
-          await tx.update(programEnrollments)
-            .set({
-              totalPaid: newTotalPaid,
-              remainingBalance: newBalance,
-              paymentStatus: newBalance <= 0 ? 'completed' : 'partial_payment',
-              updatedAt: new Date(),
-            })
-            .where(eq(programEnrollments.id, enrollmentId));
-        }
-      }
-
-      await tx.update(scheduledPayments)
-        .set({
-          status: 'completed',
-          processedAt: new Date(),
-          completionSource,
-          chargedBy,
-          updatedAt: new Date(),
-        })
-        .where(eq(scheduledPayments.id, scheduledPaymentId));
-    });
-  }
-
-  async expireCredits(): Promise<number> {
-    const db = await getDb();
-    const now = new Date();
-    
-    // Mark all approved or partially_used credits that have passed expiration as expired
-    const result = await db.update(credits)
-      .set({
-        status: 'expired' as CreditStatus,
-        updatedAt: new Date()
-      })
-      .where(and(
-        or(
-          eq(credits.status, 'approved'),
-          eq(credits.status, 'partially_used')
-        ),
-        lt(credits.expiresAt, now)
-      ))
-      .returning();
-    
-    return result.length;
-  }
-
-  // Unified Credit Usage Log methods
-  async getUnifiedCreditUsageLogById(id: number): Promise<UnifiedCreditUsageLog | undefined> {
-    const db = await getDb();
-    const [log] = await db.select().from(unifiedCreditUsageLogs).where(eq(unifiedCreditUsageLogs.id, id));
-    return log;
-  }
-
-  async getUnifiedCreditUsageLogsByCreditId(creditId: number): Promise<UnifiedCreditUsageLog[]> {
-    const db = await getDb();
-    return db.select().from(unifiedCreditUsageLogs)
-      .where(eq(unifiedCreditUsageLogs.creditId, creditId))
-      .orderBy(desc(unifiedCreditUsageLogs.createdAt));
-  }
-
-  async getUnifiedCreditUsageLogsByPaymentHistoryId(paymentHistoryId: number): Promise<UnifiedCreditUsageLog[]> {
-    const db = await getDb();
-    return db.select().from(unifiedCreditUsageLogs)
-      .where(eq(unifiedCreditUsageLogs.paymentHistoryId, paymentHistoryId))
-      .orderBy(desc(unifiedCreditUsageLogs.createdAt));
-  }
-
-  async getDoubleSpentCredits(schoolId?: number): Promise<Credit[]> {
-    const db = await getDb();
-    const conditions = [
-      sql`${credits.usedAmountCents} > ${credits.creditAmountCents}`,
-    ];
-    if (schoolId !== undefined) {
-      conditions.push(eq(credits.schoolId, schoolId));
-    }
-    return db.select().from(credits).where(and(...conditions));
-  }
-
-  async getMismatchedStatusCredits(schoolId?: number): Promise<Credit[]> {
-    const db = await getDb();
-    const schoolCondition = schoolId !== undefined ? eq(credits.schoolId, schoolId) : sql`1=1`;
-    return db.select().from(credits).where(
-      and(
-        schoolCondition,
-        or(
-          and(eq(credits.status, 'used'), sql`${credits.usedAmountCents} != ${credits.creditAmountCents}`),
-          and(eq(credits.status, 'partially_used'), or(lte(credits.usedAmountCents, 0), gte(credits.usedAmountCents, credits.creditAmountCents))),
-          and(eq(credits.status, 'approved'), gt(credits.usedAmountCents, 0))
-        )
-      )
-    );
-  }
-
-  async getCompletedScheduledPaymentsWithCreditSource(schoolId?: number): Promise<ScheduledPayment[]> {
-    const db = await getDb();
-    const conditions = [eq(scheduledPayments.status, 'completed')];
-    if (schoolId !== undefined) {
-      conditions.push(eq(scheduledPayments.schoolId, schoolId));
-    }
-    const allCompleted = await db.select().from(scheduledPayments)
-      .where(and(...conditions));
-    return allCompleted.filter(sp => {
-      if (sp.stripePaymentIntentId && sp.stripePaymentIntentId.startsWith('credit_')) {
-        return true;
-      }
-      const meta = sp.metadata;
-      if (meta !== null && typeof meta === 'object' && !Array.isArray(meta)) {
-        const reservation = (meta as Record<string, unknown>).pendingCreditsReservation;
-        if (typeof reservation === 'number' && reservation > 0) {
-          return true;
-        }
-      }
-      return false;
-    });
-  }
-
-  async getUnifiedCreditUsageLogsByScheduledPaymentId(scheduledPaymentId: number): Promise<UnifiedCreditUsageLog[]> {
-    const db = await getDb();
-    return db.select().from(unifiedCreditUsageLogs)
-      .where(like(unifiedCreditUsageLogs.description, `Scheduled payment ${scheduledPaymentId} -%`))
-      .orderBy(desc(unifiedCreditUsageLogs.createdAt));
-  }
-
-  async createUnifiedCreditUsageLog(log: InsertUnifiedCreditUsageLog): Promise<UnifiedCreditUsageLog> {
-    const db = await getDb();
-    const [newLog] = await db.insert(unifiedCreditUsageLogs).values(log).returning();
-    return newLog;
-  }
-
-  // ==================== PAYMENT ALLOCATIONS ====================
-  async getPaymentAllocationById(id: number): Promise<PaymentAllocation | undefined> {
-    const db = await getDb();
-    const [allocation] = await db.select().from(paymentAllocations).where(eq(paymentAllocations.id, id));
-    return allocation;
-  }
-
-  async getPaymentAllocationsByEnrollmentId(enrollmentId: number): Promise<PaymentAllocation[]> {
-    const db = await getDb();
-    return db.select().from(paymentAllocations)
-      .where(eq(paymentAllocations.enrollmentId, enrollmentId))
-      .orderBy(asc(paymentAllocations.createdAt));
-  }
-
-  async getPaymentAllocationsByMembershipEnrollmentId(membershipEnrollmentId: number): Promise<PaymentAllocation[]> {
-    const db = await getDb();
-    return db.select().from(paymentAllocations)
-      .where(eq(paymentAllocations.membershipEnrollmentId, membershipEnrollmentId))
-      .orderBy(asc(paymentAllocations.createdAt));
-  }
-
-  async getPaymentAllocationsByPaymentHistoryId(paymentHistoryId: number): Promise<PaymentAllocation[]> {
-    const db = await getDb();
-    return db.select().from(paymentAllocations)
-      .where(eq(paymentAllocations.paymentHistoryId, paymentHistoryId))
-      .orderBy(asc(paymentAllocations.createdAt));
-  }
-
-  async createPaymentAllocation(allocation: InsertPaymentAllocation): Promise<PaymentAllocation> {
-    const db = await getDb();
-    const [newAllocation] = await db.insert(paymentAllocations).values(allocation).returning();
-    return newAllocation;
-  }
-
-  async createPaymentAllocations(allocations: InsertPaymentAllocation[]): Promise<PaymentAllocation[]> {
-    if (allocations.length === 0) return [];
-    const db = await getDb();
-    return db.insert(paymentAllocations).values(allocations).returning();
-  }
-
-  async saveStripePayment(payment: InsertStripePaymentHistory): Promise<StripePaymentHistory> {
-    const db = await getDb();
-    const [record] = await db.insert(stripePaymentHistory).values(payment).returning();
-    return record;
-  }
-
-  async getStripePaymentHistoryByUserId(userId: number): Promise<StripePaymentHistory[]> {
-    const db = await getDb();
-    return db.select().from(stripePaymentHistory).where(eq(stripePaymentHistory.userId, userId));
-  }
-
-  async getStripePaymentsBySubscription(subscriptionId: string): Promise<StripePaymentHistory[]> {
-    const db = await getDb();
-    return db.select().from(stripePaymentHistory).where(eq(stripePaymentHistory.subscriptionId, subscriptionId));
-  }
-
-  async getStripePaymentByIntentId(paymentIntentId: string): Promise<StripePaymentHistory | undefined> {
-    const db = await getDb();
-    const [record] = await db.select().from(stripePaymentHistory).where(eq(stripePaymentHistory.paymentIntentId, paymentIntentId)).limit(1);
-    return record;
-  }
-
-  async getStripePaymentByEventId(stripeEventId: string): Promise<StripePaymentHistory | undefined> {
-    const db = await getDb();
-    const [record] = await db.select().from(stripePaymentHistory).where(eq(stripePaymentHistory.stripeEventId, stripeEventId)).limit(1);
-    return record;
-  }
-
-  async getPaymentByIdempotencyKey(idempotencyKey: string): Promise<StripePaymentHistory | undefined> {
-    const db = await getDb();
-    const [record] = await db.select().from(stripePaymentHistory).where(eq(stripePaymentHistory.idempotencyKey, idempotencyKey)).limit(1);
-    return record;
-  }
-
-  // Task #222 — Refund Event durability methods. saveRefundEvent intentionally
-  // lets the unique-violation (Postgres 23505) on stripe_event_id propagate so
-  // the webhook handler can claim/replay deterministically.
-  async saveRefundEvent(event: InsertRefundEvent): Promise<RefundEvent> {
-    const db = await getDb();
-    const [record] = await db.insert(refundEvents).values(event).returning();
-    return record;
-  }
-
-  async getRefundEventByEventId(stripeEventId: string): Promise<RefundEvent | undefined> {
-    const db = await getDb();
-    const [record] = await db.select().from(refundEvents).where(eq(refundEvents.stripeEventId, stripeEventId)).limit(1);
-    return record;
-  }
-
-  async updateRefundEvent(id: number, update: Partial<InsertRefundEvent>): Promise<RefundEvent | undefined> {
-    const db = await getDb();
-    const [record] = await db
-      .update(refundEvents)
-      .set({ ...update, updatedAt: new Date() })
-      .where(eq(refundEvents.id, id))
-      .returning();
-    return record;
-  }
-
-  async getTotalPaidForEnrollment(enrollmentId: number): Promise<number> {
-    const db = await getDb();
-    const result = await db.select({
-      total: sql<number>`COALESCE(SUM(${paymentAllocations.allocatedAmountCents}), 0)`
-    })
-    .from(paymentAllocations)
-    .where(eq(paymentAllocations.enrollmentId, enrollmentId));
-    return Number(result[0]?.total || 0);
-  }
-
-  async getTotalPaidForMembershipEnrollment(membershipEnrollmentId: number): Promise<number> {
-    const db = await getDb();
-    const result = await db.select({
-      total: sql<number>`COALESCE(SUM(${paymentAllocations.allocatedAmountCents}), 0)`
-    })
-    .from(paymentAllocations)
-    .where(eq(paymentAllocations.membershipEnrollmentId, membershipEnrollmentId));
-    return Number(result[0]?.total || 0);
-  }
-
-  // ==================== CREDIT HOLDS (Reserve-then-Finalize Pattern) ====================
-  
-  async createCreditHolds(
-    userId: number,
-    amountCents: number,
-    checkoutSessionId: string,
-    description?: string,
-    expiresInMinutes: number = 30
-  ): Promise<{ holds: CreditHold[]; totalHeld: number }> {
-    const db = await getDb();
-    const holds: CreditHold[] = [];
-    let remainingAmount = amountCents;
-    
-    console.log(`🔒 Creating credit holds for user ${userId}: ${amountCents} cents`);
-    
-    const availableCredits = await db.select().from(credits)
-      .where(and(
-        eq(credits.userId, userId),
-        or(
-          eq(credits.status, 'approved'),
-          eq(credits.status, 'partially_used')
-        ),
-        or(
-          gt(credits.expiresAt, new Date()),
-          sql`${credits.expiresAt} IS NULL`
-        )
-      ))
-      .orderBy(asc(credits.expiresAt), asc(credits.createdAt));
-    
-    const expiresAt = new Date(Date.now() + expiresInMinutes * 60 * 1000);
-    
-    for (const credit of availableCredits) {
-      if (remainingAmount <= 0) break;
-      
-      const existingHoldsResult = await db.select({
-        total: sql<number>`COALESCE(SUM(${creditHolds.amountCents}), 0)`
-      })
-      .from(creditHolds)
-      .where(and(
-        eq(creditHolds.creditId, credit.id),
-        eq(creditHolds.status, 'pending')
-      ));
-      
-      const heldAmount = Number(existingHoldsResult[0]?.total || 0);
-      const availableAmount = credit.creditAmountCents - credit.usedAmountCents - heldAmount;
-      
-      if (availableAmount <= 0) continue;
-      
-      const holdAmount = Math.min(availableAmount, remainingAmount);
-      
-      const [hold] = await db.insert(creditHolds).values({
-        userId,
-        creditId: credit.id,
-        amountCents: holdAmount,
-        checkoutSessionId,
-        status: 'pending',
-        expiresAt,
-        description
-      }).returning();
-      
-      holds.push(hold);
-      remainingAmount -= holdAmount;
-      
-      console.log(`   🔒 Held ${holdAmount} cents from credit #${credit.id}`);
-    }
-    
-    const totalHeld = amountCents - remainingAmount;
-    console.log(`🔒 Created ${holds.length} holds, total: ${totalHeld} cents`);
-    
-    return { holds, totalHeld };
-  }
-
-  async finalizeCreditHolds(
-    checkoutSessionId: string,
-    paymentHistoryId?: number,
-    description?: string
-  ): Promise<{ finalizedCount: number; totalFinalized: number; usageLogs: UnifiedCreditUsageLog[] }> {
-    const db = await getDb();
-    const usageLogs: UnifiedCreditUsageLog[] = [];
-    let totalFinalized = 0;
-    
-    console.log(`✅ Finalizing credit holds for session: ${checkoutSessionId}`);
-    
-    const pendingHolds = await db.select().from(creditHolds)
-      .where(and(
-        eq(creditHolds.checkoutSessionId, checkoutSessionId),
-        eq(creditHolds.status, 'pending')
-      ));
-    
-    for (const hold of pendingHolds) {
-      const [credit] = await db.select().from(credits).where(eq(credits.id, hold.creditId));
-      
-      if (!credit) {
-        console.error(`   ❌ Credit #${hold.creditId} not found for hold #${hold.id}`);
-        continue;
-      }
-      
-      const newUsedAmount = credit.usedAmountCents + hold.amountCents;
-      const newStatus: CreditStatus = newUsedAmount >= credit.creditAmountCents ? 'used' : 'partially_used';
-      
-      await db.update(credits)
-        .set({
-          usedAmountCents: newUsedAmount,
-          status: newStatus,
-          updatedAt: new Date()
-        })
-        .where(eq(credits.id, credit.id));
-      
-      const [usageLog] = await db.insert(unifiedCreditUsageLogs).values({
-        creditId: hold.creditId,
-        paymentHistoryId,
-        amountCents: hold.amountCents,
-        description: description || hold.description || `Credit applied from hold #${hold.id}`
-      }).returning();
-      
-      usageLogs.push(usageLog);
-      
-      await db.update(creditHolds)
-        .set({
-          status: 'finalized' as CreditHoldStatus,
-          finalizedAt: new Date()
-        })
-        .where(eq(creditHolds.id, hold.id));
-      
-      totalFinalized += hold.amountCents;
-      console.log(`   ✅ Finalized hold #${hold.id}: ${hold.amountCents} cents from credit #${credit.id}`);
-    }
-    
-    console.log(`✅ Finalized ${pendingHolds.length} holds, total: ${totalFinalized} cents`);
-    
-    return { finalizedCount: pendingHolds.length, totalFinalized, usageLogs };
-  }
-
-  async releaseCreditHolds(checkoutSessionId: string): Promise<{ releasedCount: number; totalReleased: number }> {
-    const db = await getDb();
-    let totalReleased = 0;
-    
-    console.log(`🔓 Releasing credit holds for session: ${checkoutSessionId}`);
-    
-    const pendingHolds = await db.select().from(creditHolds)
-      .where(and(
-        eq(creditHolds.checkoutSessionId, checkoutSessionId),
-        eq(creditHolds.status, 'pending')
-      ));
-    
-    for (const hold of pendingHolds) {
-      await db.update(creditHolds)
-        .set({
-          status: 'released' as CreditHoldStatus,
-          releasedAt: new Date()
-        })
-        .where(eq(creditHolds.id, hold.id));
-      
-      totalReleased += hold.amountCents;
-      console.log(`   🔓 Released hold #${hold.id}: ${hold.amountCents} cents`);
-    }
-    
-    console.log(`🔓 Released ${pendingHolds.length} holds, total: ${totalReleased} cents`);
-    
-    return { releasedCount: pendingHolds.length, totalReleased };
-  }
-
-  async getActiveHoldsForUser(userId: number): Promise<CreditHold[]> {
-    const db = await getDb();
-    return db.select().from(creditHolds)
-      .where(and(
-        eq(creditHolds.userId, userId),
-        eq(creditHolds.status, 'pending'),
-        gt(creditHolds.expiresAt, new Date())
-      ))
-      .orderBy(asc(creditHolds.createdAt));
-  }
-
-  async getTotalHeldCreditsForUser(userId: number): Promise<number> {
-    const db = await getDb();
-    const result = await db.select({
-      total: sql<number>`COALESCE(SUM(${creditHolds.amountCents}), 0)`
-    })
-    .from(creditHolds)
-    .where(and(
-      eq(creditHolds.userId, userId),
-      eq(creditHolds.status, 'pending'),
-      gt(creditHolds.expiresAt, new Date())
-    ));
-    return Number(result[0]?.total || 0);
-  }
-
-  async expireStaleHolds(): Promise<number> {
-    const db = await getDb();
-    const now = new Date();
-    
-    const expiredHolds = await db.update(creditHolds)
-      .set({
-        status: 'expired' as CreditHoldStatus,
-        releasedAt: now
-      })
-      .where(and(
-        eq(creditHolds.status, 'pending'),
-        lt(creditHolds.expiresAt, now)
-      ))
-      .returning();
-    
-    if (expiredHolds.length > 0) {
-      console.log(`🕐 Expired ${expiredHolds.length} stale credit holds`);
-    }
-    
-    return expiredHolds.length;
-  }
-
-  // ==================== ASSESSMENT TRACKING ====================
-  async getAssessmentTypeById(id: number): Promise<AssessmentType | undefined> {
-    const db = await getDb();
-    const [result] = await db.select().from(assessmentTypes).where(eq(assessmentTypes.id, id));
-    return result;
-  }
-
-  async getAssessmentTypesBySchoolId(schoolId: number): Promise<AssessmentType[]> {
-    const db = await getDb();
-    return db.select().from(assessmentTypes)
-      .where(eq(assessmentTypes.schoolId, schoolId))
-      .orderBy(asc(assessmentTypes.sortOrder));
-  }
-
-  async createAssessmentType(assessmentType: InsertAssessmentType): Promise<AssessmentType> {
-    const db = await getDb();
-    const [result] = await db.insert(assessmentTypes).values(assessmentType).returning();
-    return result;
-  }
-
-  async updateAssessmentType(id: number, assessmentType: Partial<InsertAssessmentType>): Promise<AssessmentType | undefined> {
-    const db = await getDb();
-    const [result] = await db.update(assessmentTypes)
-      .set({ ...assessmentType, updatedAt: new Date() })
-      .where(eq(assessmentTypes.id, id))
-      .returning();
-    return result;
-  }
-
-  async deleteAssessmentType(id: number): Promise<void> {
-    const db = await getDb();
-    await db.delete(assessmentTypes).where(eq(assessmentTypes.id, id));
-  }
-
-  async getCurriculumBookById(id: number): Promise<CurriculumBook | undefined> {
-    const db = await getDb();
-    const [result] = await db.select().from(curriculumBooks).where(eq(curriculumBooks.id, id));
-    return result;
-  }
-
-  async getCurriculumBooksByAssessmentTypeId(assessmentTypeId: number): Promise<CurriculumBook[]> {
-    const db = await getDb();
-    return db.select().from(curriculumBooks)
-      .where(eq(curriculumBooks.assessmentTypeId, assessmentTypeId))
-      .orderBy(asc(curriculumBooks.sortOrder));
-  }
-
-  async createCurriculumBook(book: InsertCurriculumBook): Promise<CurriculumBook> {
-    const db = await getDb();
-    const [result] = await db.insert(curriculumBooks).values(book).returning();
-    return result;
-  }
-
-  async updateCurriculumBook(id: number, book: Partial<InsertCurriculumBook>): Promise<CurriculumBook | undefined> {
-    const db = await getDb();
-    const [result] = await db.update(curriculumBooks)
-      .set({ ...book, updatedAt: new Date() })
-      .where(eq(curriculumBooks.id, id))
-      .returning();
-    return result;
-  }
-
-  async deleteCurriculumBook(id: number): Promise<void> {
-    const db = await getDb();
-    await db.delete(curriculumBooks).where(eq(curriculumBooks.id, id));
-  }
-
-  async getStudentAssessmentById(id: number): Promise<StudentAssessment | undefined> {
-    const db = await getDb();
-    const [result] = await db.select().from(studentAssessments).where(eq(studentAssessments.id, id));
-    return result;
-  }
-
-  async getStudentAssessmentsByChildId(childId: number): Promise<StudentAssessment[]> {
-    const db = await getDb();
-    return db.select().from(studentAssessments)
-      .where(eq(studentAssessments.childId, childId))
-      .orderBy(desc(studentAssessments.assessmentDate));
-  }
-
-  async getStudentAssessmentsBySchoolId(schoolId: number, filters?: { locationId?: number; assessmentTypeId?: number; childId?: number }): Promise<StudentAssessment[]> {
-    const db = await getDb();
-    const conditions = [eq(studentAssessments.schoolId, schoolId)];
-    
-    if (filters?.locationId) {
-      conditions.push(eq(studentAssessments.locationId, filters.locationId));
-    }
-    if (filters?.assessmentTypeId) {
-      conditions.push(eq(studentAssessments.assessmentTypeId, filters.assessmentTypeId));
-    }
-    if (filters?.childId) {
-      conditions.push(eq(studentAssessments.childId, filters.childId));
-    }
-    
-    return db.select().from(studentAssessments)
-      .where(and(...conditions))
-      .orderBy(desc(studentAssessments.assessmentDate));
-  }
-
-  async createStudentAssessment(assessment: InsertStudentAssessment): Promise<StudentAssessment> {
-    const db = await getDb();
-    const [result] = await db.insert(studentAssessments).values(assessment).returning();
-    return result;
-  }
-
-  async updateStudentAssessment(id: number, assessment: Partial<InsertStudentAssessment>): Promise<StudentAssessment | undefined> {
-    const db = await getDb();
-    const [result] = await db.update(studentAssessments)
-      .set({ ...assessment, updatedAt: new Date() })
-      .where(eq(studentAssessments.id, id))
-      .returning();
-    return result;
-  }
-
-  async deleteStudentAssessment(id: number): Promise<void> {
-    const db = await getDb();
-    await db.delete(studentAssessments).where(eq(studentAssessments.id, id));
-  }
-
-  // ==================== LEXILE METHODS ====================
-
-  async upsertChildLexileProfile(childId: number, data: { readingGradeLevel?: string; lexileRange?: string; bookList?: string }): Promise<Child | undefined> {
-    const db = await getDb();
-    const updateData: Partial<{ currentReadingGradeLevel: string; currentLexileRange: string; currentBookList: string; updatedAt: Date }> = {
-      updatedAt: new Date(),
-    };
-    if (data.readingGradeLevel !== undefined) updateData.currentReadingGradeLevel = data.readingGradeLevel;
-    if (data.lexileRange !== undefined) updateData.currentLexileRange = data.lexileRange;
-    if (data.bookList !== undefined) updateData.currentBookList = data.bookList;
-    const [result] = await db.update(children).set(updateData).where(eq(children.id, childId)).returning();
-    return result;
-  }
-
-  async insertLexileAssessmentWithProfile(childId: number, schoolId: number, assessmentTypeId: number, recordedBy: number, data: { readingGradeLevel?: string; lexileRange?: string; bookList?: string; notes?: string }): Promise<StudentAssessment> {
-    const db = await getDb();
-    const scoreValue = data.lexileRange || data.readingGradeLevel || 'Recorded';
-    const notesValue = [
-      data.readingGradeLevel ? `Grade Level: ${data.readingGradeLevel}` : null,
-      data.lexileRange ? `Lexile Range: ${data.lexileRange}` : null,
-      data.bookList ? `Books: ${data.bookList}` : null,
-      data.notes || null,
-    ].filter(Boolean).join(' | ') || null;
-
-    const result = await db.transaction(async (tx) => {
-      const updateData: Partial<{ currentReadingGradeLevel: string; currentLexileRange: string; currentBookList: string; updatedAt: Date }> = {
-        updatedAt: new Date(),
-      };
-      if (data.readingGradeLevel !== undefined) updateData.currentReadingGradeLevel = data.readingGradeLevel;
-      if (data.lexileRange !== undefined) updateData.currentLexileRange = data.lexileRange;
-      if (data.bookList !== undefined) updateData.currentBookList = data.bookList;
-      await tx.update(children).set(updateData).where(eq(children.id, childId));
-
-      const [assessment] = await tx.insert(studentAssessments).values({
-        childId,
-        schoolId,
-        assessmentTypeId,
-        recordedBy,
-        score: scoreValue,
-        assessmentDate: new Date(),
-        notes: notesValue,
-        source: 'manual_entry',
-      }).returning();
-      return assessment;
-    });
-    return result;
-  }
-
-  async getChildrenForSchool(schoolId: number): Promise<Array<{ id: number; firstName: string; lastName: string; gradeLevel: string; currentLexileRange?: string | null; currentReadingGradeLevel?: string | null; currentBookList?: string | null }>> {
-    const db = await getDb();
-    const results = await db.select({
-      id: children.id,
-      firstName: children.firstName,
-      lastName: children.lastName,
-      gradeLevel: children.gradeLevel,
-      currentLexileRange: children.currentLexileRange,
-      currentReadingGradeLevel: children.currentReadingGradeLevel,
-      currentBookList: children.currentBookList,
-    }).from(children)
-      .where(eq(children.schoolId, schoolId))
-      .orderBy(asc(children.firstName), asc(children.lastName));
-    return results;
-  }
-
-  async getLexileHistoryForChild(childId: number, assessmentTypeId: number): Promise<StudentAssessment[]> {
-    const db = await getDb();
-    return db.select().from(studentAssessments)
-      .where(and(eq(studentAssessments.childId, childId), eq(studentAssessments.assessmentTypeId, assessmentTypeId)))
-      .orderBy(desc(studentAssessments.assessmentDate));
-  }
-
-  private async ensureLexileAssessmentType(schoolId: number): Promise<number> {
-    const db = await getDb();
-    const [existing] = await db.select({ id: assessmentTypes.id }).from(assessmentTypes)
-      .where(and(eq(assessmentTypes.schoolId, schoolId), sql`lower(${assessmentTypes.name}) like '%lexile%'`))
-      .limit(1);
-    if (existing) return existing.id;
-    const [created] = await db.insert(assessmentTypes).values({
-      schoolId,
-      name: 'Lexile Reading Level',
-      description: 'Lexile measure of reading ability',
-      sortOrder: 100,
-      isActive: true,
-    }).returning({ id: assessmentTypes.id });
-    return created.id;
-  }
-
-  async recordLexileAssessment(childId: number, schoolId: number, recordedBy: number, data: { readingGradeLevel?: string; lexileRange?: string; bookList?: string; notes?: string }): Promise<StudentAssessment> {
-    const assessmentTypeId = await this.ensureLexileAssessmentType(schoolId);
-    return this.insertLexileAssessmentWithProfile(childId, schoolId, assessmentTypeId, recordedBy, data);
-  }
-
-  async getLexileHistoryForChildBySchool(childId: number, schoolId: number): Promise<StudentAssessment[]> {
-    const db = await getDb();
-    const [lexileType] = await db.select({ id: assessmentTypes.id }).from(assessmentTypes)
-      .where(and(eq(assessmentTypes.schoolId, schoolId), sql`lower(${assessmentTypes.name}) like '%lexile%'`))
-      .limit(1);
-    if (!lexileType) {
-      return [];
-    }
-    return db.select().from(studentAssessments)
-      .where(and(
-        eq(studentAssessments.childId, childId),
-        eq(studentAssessments.schoolId, schoolId),
-        eq(studentAssessments.assessmentTypeId, lexileType.id)
-      ))
-      .orderBy(desc(studentAssessments.assessmentDate));
-  }
-
-  async fuzzyMatchStudentsForSchool(schoolId: number, rawName: string): Promise<Array<{ id: number; name: string; gradeLevel: string }>> {
-    const db = await getDb();
-    const nameParts = rawName.trim().split(/\s+/);
-    const searchTerm = `%${rawName.replace(/\s+/g, '%')}%`;
-    const firstPart = `%${nameParts[0]}%`;
-    const lastPart = `%${nameParts[nameParts.length - 1]}%`;
-
-    const matched = await db.select({
-      id: children.id,
-      firstName: children.firstName,
-      lastName: children.lastName,
-      gradeLevel: children.gradeLevel,
-    }).from(children)
-      .where(and(
-        eq(children.schoolId, schoolId),
-        or(
-          sql`CONCAT(${children.firstName}, ' ', ${children.lastName}) ILIKE ${searchTerm}`,
-          sql`CONCAT(${children.lastName}, ' ', ${children.firstName}) ILIKE ${searchTerm}`,
-          sql`${children.firstName} ILIKE ${firstPart}`,
-          sql`${children.lastName} ILIKE ${lastPart}`
-        )
-      ))
-      .limit(5);
-
-    return matched.map(c => ({ id: c.id, name: `${c.firstName} ${c.lastName}`, gradeLevel: c.gradeLevel }));
-  }
-
-  async getChildByIdForSchool(childId: number, schoolId: number): Promise<Child | undefined> {
-    const db = await getDb();
-    const [result] = await db.select().from(children)
-      .where(and(eq(children.id, childId), eq(children.schoolId, schoolId)));
-    return result;
-  }
-
-  // ==================== FUNDRAISER SYSTEM ====================
-  async getFundraiserCampaignById(id: number): Promise<FundraiserCampaign | undefined> {
-    const db = await getDb();
-    const [campaign] = await db.select().from(fundraiserCampaigns).where(eq(fundraiserCampaigns.id, id));
-    return campaign;
-  }
-  
-  async getFundraiserCampaignsBySchoolId(schoolId: number): Promise<FundraiserCampaign[]> {
-    const db = await getDb();
-    return await db.select().from(fundraiserCampaigns).where(eq(fundraiserCampaigns.schoolId, schoolId));
-  }
-  
-  async getActiveFundraiserCampaignsBySchoolId(schoolId: number): Promise<FundraiserCampaign[]> {
-    const db = await getDb();
-    const now = new Date();
-    return await db.select().from(fundraiserCampaigns).where(
-      and(
-        eq(fundraiserCampaigns.schoolId, schoolId),
-        eq(fundraiserCampaigns.isActive, true),
-        lte(fundraiserCampaigns.startDate, now),
-        gte(fundraiserCampaigns.endDate, now)
-      )
-    );
-  }
-  
-  async createFundraiserCampaign(campaign: InsertFundraiserCampaign): Promise<FundraiserCampaign> {
-    const db = await getDb();
-    const [newCampaign] = await db.insert(fundraiserCampaigns).values({
-      ...campaign,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    }).returning();
-    return newCampaign;
-  }
-  
-  async updateFundraiserCampaign(id: number, campaign: Partial<InsertFundraiserCampaign>): Promise<FundraiserCampaign | undefined> {
-    const db = await getDb();
-    const [updated] = await db.update(fundraiserCampaigns)
-      .set({ ...campaign, updatedAt: new Date() })
-      .where(eq(fundraiserCampaigns.id, id))
-      .returning();
-    return updated;
-  }
-  
-  async deleteFundraiserCampaign(id: number): Promise<void> {
-    const db = await getDb();
-    await db.delete(fundraiserCampaigns).where(eq(fundraiserCampaigns.id, id));
-  }
-  
-  async getFundraiserProductById(id: number): Promise<FundraiserProduct | undefined> {
-    const db = await getDb();
-    const [product] = await db.select().from(fundraiserProducts).where(eq(fundraiserProducts.id, id));
-    return product;
-  }
-  
-  async getFundraiserProductsByCampaignId(campaignId: number): Promise<FundraiserProduct[]> {
-    const db = await getDb();
-    return await db.select().from(fundraiserProducts)
-      .where(eq(fundraiserProducts.campaignId, campaignId))
-      .orderBy(fundraiserProducts.sortOrder);
-  }
-  
-  async createFundraiserProduct(product: InsertFundraiserProduct): Promise<FundraiserProduct> {
-    const db = await getDb();
-    const [newProduct] = await db.insert(fundraiserProducts).values({
-      ...product,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    }).returning();
-    return newProduct;
-  }
-  
-  async updateFundraiserProduct(id: number, product: Partial<InsertFundraiserProduct>): Promise<FundraiserProduct | undefined> {
-    const db = await getDb();
-    const [updated] = await db.update(fundraiserProducts)
-      .set({ ...product, updatedAt: new Date() })
-      .where(eq(fundraiserProducts.id, id))
-      .returning();
-    return updated;
-  }
-  
-  async deleteFundraiserProduct(id: number): Promise<void> {
-    const db = await getDb();
-    await db.delete(fundraiserProducts).where(eq(fundraiserProducts.id, id));
-  }
-  
-  async getFundraiserFamilyLinkById(id: number): Promise<FundraiserFamilyLink | undefined> {
-    const db = await getDb();
-    const [link] = await db.select().from(fundraiserFamilyLinks).where(eq(fundraiserFamilyLinks.id, id));
-    return link;
-  }
-  
-  async getFundraiserFamilyLinkBySlug(campaignId: number, slug: string): Promise<FundraiserFamilyLink | undefined> {
-    const db = await getDb();
-    const [link] = await db.select().from(fundraiserFamilyLinks).where(
-      and(
-        eq(fundraiserFamilyLinks.campaignId, campaignId),
-        eq(fundraiserFamilyLinks.slug, slug)
-      )
-    );
-    return link;
-  }
-  
-  async getFundraiserFamilyLinksByUserId(userId: number): Promise<FundraiserFamilyLink[]> {
-    const db = await getDb();
-    return await db.select().from(fundraiserFamilyLinks).where(eq(fundraiserFamilyLinks.userId, userId));
-  }
-  
-  async getFundraiserFamilyLinksByCampaignId(campaignId: number): Promise<FundraiserFamilyLink[]> {
-    const db = await getDb();
-    return await db.select().from(fundraiserFamilyLinks).where(eq(fundraiserFamilyLinks.campaignId, campaignId));
-  }
-  
-  async createFundraiserFamilyLink(link: InsertFundraiserFamilyLink): Promise<FundraiserFamilyLink> {
-    const db = await getDb();
-    const [newLink] = await db.insert(fundraiserFamilyLinks).values({
-      ...link,
-      createdAt: new Date()
-    }).returning();
-    return newLink;
-  }
-  
-  async getOrCreateFundraiserFamilyLink(campaignId: number, userId: number, userName: string): Promise<FundraiserFamilyLink> {
-    const db = await getDb();
-    // Check if link already exists for this user and campaign
-    const [existing] = await db.select().from(fundraiserFamilyLinks).where(
-      and(
-        eq(fundraiserFamilyLinks.campaignId, campaignId),
-        eq(fundraiserFamilyLinks.userId, userId)
-      )
-    );
-    if (existing) return existing;
-    
-    // Generate slug from user name
-    const baseSlug = userName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-    let slug = baseSlug;
-    let counter = 1;
-    
-    // Ensure unique slug
-    while (true) {
-      const [existingSlug] = await db.select().from(fundraiserFamilyLinks).where(
-        and(
-          eq(fundraiserFamilyLinks.campaignId, campaignId),
-          eq(fundraiserFamilyLinks.slug, slug)
-        )
-      );
-      if (!existingSlug) break;
-      slug = `${baseSlug}-${counter++}`;
-    }
-    
-    const [newLink] = await db.insert(fundraiserFamilyLinks).values({
-      campaignId,
-      userId,
-      slug,
-      createdAt: new Date()
-    }).returning();
-    return newLink;
-  }
-  
-  async getFundraiserOrderById(id: number): Promise<FundraiserOrder | undefined> {
-    const db = await getDb();
-    const [order] = await db.select().from(fundraiserOrders).where(eq(fundraiserOrders.id, id));
-    return order;
-  }
-  
-  async getFundraiserOrdersByFamilyLinkId(familyLinkId: number): Promise<FundraiserOrder[]> {
-    const db = await getDb();
-    return await db.select().from(fundraiserOrders).where(eq(fundraiserOrders.familyLinkId, familyLinkId));
-  }
-  
-  async getFundraiserOrdersByCampaignId(campaignId: number): Promise<FundraiserOrder[]> {
-    const db = await getDb();
-    return await db.select().from(fundraiserOrders).where(eq(fundraiserOrders.campaignId, campaignId));
-  }
-  
-  async getFundraiserOrderByStripeSessionId(sessionId: string): Promise<FundraiserOrder | undefined> {
-    const db = await getDb();
-    const [order] = await db.select().from(fundraiserOrders).where(eq(fundraiserOrders.stripeSessionId, sessionId));
-    return order;
-  }
-  
-  async createFundraiserOrder(order: InsertFundraiserOrder): Promise<FundraiserOrder> {
-    const db = await getDb();
-    const [newOrder] = await db.insert(fundraiserOrders).values({
-      ...order,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    }).returning();
-    return newOrder;
-  }
-  
-  async updateFundraiserOrder(id: number, order: Partial<InsertFundraiserOrder>): Promise<FundraiserOrder | undefined> {
-    const db = await getDb();
-    const [updated] = await db.update(fundraiserOrders)
-      .set({ ...order, updatedAt: new Date() })
-      .where(eq(fundraiserOrders.id, id))
-      .returning();
-    return updated;
-  }
-  
-  async getFundraiserOrderItemsByOrderId(orderId: number): Promise<FundraiserOrderItem[]> {
-    const db = await getDb();
-    return await db.select().from(fundraiserOrderItems).where(eq(fundraiserOrderItems.orderId, orderId));
-  }
-  
-  async createFundraiserOrderItem(item: InsertFundraiserOrderItem): Promise<FundraiserOrderItem> {
-    const db = await getDb();
-    const [newItem] = await db.insert(fundraiserOrderItems).values(item).returning();
-    return newItem;
-  }
-  
-  async createFundraiserOrderItems(items: InsertFundraiserOrderItem[]): Promise<FundraiserOrderItem[]> {
-    const db = await getDb();
-    if (items.length === 0) return [];
-    return await db.insert(fundraiserOrderItems).values(items).returning();
-  }
-
-  // Payment Reminder Log methods
-  async createPaymentReminderLog(log: InsertPaymentReminderLog): Promise<PaymentReminderLog> {
-    const db = await getDb();
-    const [created] = await db.insert(paymentReminderLogs).values(log).returning();
-    return created;
-  }
-
-  async getPaymentReminderLogsBySchool(schoolId: number, limit: number = 100): Promise<PaymentReminderLog[]> {
-    const db = await getDb();
-    return await db
-      .select()
-      .from(paymentReminderLogs)
-      .where(eq(paymentReminderLogs.schoolId, schoolId))
-      .orderBy(desc(paymentReminderLogs.sentAt))
-      .limit(limit);
-  }
-
-  async createEmailLog(data: InsertEmailLog): Promise<EmailLog> {
-    const db = await getDb();
-    const [created] = await db.insert(emailLog).values(data).returning();
-    return created;
-  }
-
-  async getEmailLogs(limit: number = 200): Promise<EmailLog[]> {
-    const db = await getDb();
-    return await db
-      .select()
-      .from(emailLog)
-      .orderBy(desc(emailLog.sentAt))
-      .limit(limit);
-  }
-
-  /**
-   * Transactional soft-delete: Wraps all cleanup operations in a single atomic transaction.
-   * Best practice ordering: All FK cleanup happens first, then soft-delete (isActive=false) last.
-   * If any step fails, the entire transaction rolls back and the user remains active.
-   */
-  async softDeleteUserWithCleanup(userId: number): Promise<{ success: boolean; error?: string }> {
-    const db = await getDb();
-    const { customForms, customFormSubmissions, pushSubscriptions } = await import('../shared/schema.js');
-    
-    try {
-      await db.transaction(async (tx) => {
-        // ========== PHASE 1: Nullify nullable FK references (preserve audit trails) ==========
-        await tx.update(auditLogs).set({ actorId: null }).where(eq(auditLogs.actorId, userId));
-        await tx.update(errorLogs).set({ userId: null }).where(eq(errorLogs.userId, userId));
-        await tx.update(errorLogs).set({ resolvedBy: null }).where(eq(errorLogs.resolvedBy, userId));
-        await tx.update(customFormSubmissions).set({ submittedBy: null }).where(eq(customFormSubmissions.submittedBy, userId));
-        await tx.update(discountApplications).set({ appliedBy: null }).where(eq(discountApplications.appliedBy, userId));
-        await tx.update(volunteerCredits).set({ approvedBy: null }).where(eq(volunteerCredits.approvedBy, userId));
-        await tx.update(credits).set({ approvedBy: null }).where(eq(credits.approvedBy, userId));
-
-        // ========== PHASE 2: Delete records with NOT NULL user FKs (content/audit) ==========
-        await tx.delete(sessionAttendance).where(eq(sessionAttendance.recordedBy, userId));
-        await tx.delete(sessionVolunteers).where(eq(sessionVolunteers.volunteerId, userId));
-        await tx.delete(curricula).where(eq(curricula.authorId, userId));
-        await tx.delete(lessons).where(eq(lessons.authorId, userId));
-        await tx.delete(knowledgeBases).where(eq(knowledgeBases.authorId, userId));
-        await tx.delete(activities).where(eq(activities.authorId, userId));
-        await tx.delete(schoolDocuments).where(eq(schoolDocuments.uploadedBy, userId));
-        await tx.delete(customForms).where(eq(customForms.createdBy, userId));
-        await tx.delete(events).where(eq(events.organizerId, userId));
-        await tx.delete(marketplaceItems).where(eq(marketplaceItems.sellerId, userId));
-        await tx.delete(roleInvitations).where(eq(roleInvitations.invitedBy, userId));
-
-        // ========== PHASE 3: Delete operational records with NOT NULL user FKs ==========
-        await tx.delete(emergencyContacts).where(eq(emergencyContacts.userId, userId));
-        await tx.delete(piiAccessLogs).where(eq(piiAccessLogs.userId, userId));
-        await tx.delete(scheduledPayments).where(eq(scheduledPayments.parentId, userId));
-        await tx.delete(programEnrollments).where(eq(programEnrollments.parentId, userId));
-        await tx.delete(membershipAgreements).where(eq(membershipAgreements.parentUserId, userId));
-        await tx.delete(membershipEnrollments).where(eq(membershipEnrollments.parentUserId, userId));
-        await tx.delete(paymentReceipts).where(eq(paymentReceipts.parentUserId, userId));
-
-        // ========== PHASE 4: Clear/delete educator-related records ==========
-        await tx.update(classSessions).set({ substituteEducatorId: null }).where(eq(classSessions.substituteEducatorId, userId));
-        await tx.delete(classSessions).where(eq(classSessions.educatorId, userId));
-        await tx.delete(educatorSchedules).where(eq(educatorSchedules.educatorId, userId));
-        await tx.delete(educatorClassAssignments).where(eq(educatorClassAssignments.educatorId, userId));
-        await tx.update(classes).set({ instructorId: null }).where(eq(classes.instructorId, userId));
-        await tx.update(programs).set({ instructorId: null }).where(eq(programs.instructorId, userId));
-
-        // ========== PHASE 5: Cascade delete children and their dependencies ==========
-        const childRecords = await tx.select({ id: children.id }).from(children).where(eq(children.parentId, userId));
-        
-        for (const child of childRecords) {
-          await tx.delete(programEnrollments).where(eq(programEnrollments.childId, child.id));
-          await tx.delete(schoolStudents).where(eq(schoolStudents.childId, child.id));
-          await tx.delete(discountApplications).where(eq(discountApplications.childId, child.id));
-        }
-        
-        await tx.delete(children).where(eq(children.parentId, userId));
-
-        // ========== PHASE 5.5: Clear activeRoleId BEFORE deleting user_roles ==========
-        // This breaks the FK reference so user_roles can be deleted without constraint violation
-        await tx.update(users).set({ activeRoleId: null }).where(eq(users.id, userId));
-
-        // ========== PHASE 6: Delete access-related records ==========
-        await tx.delete(userRoles).where(eq(userRoles.userId, userId));
-        await tx.delete(schoolStaff).where(eq(schoolStaff.userId, userId));
-        await tx.delete(userLocations).where(eq(userLocations.userId, userId));
-        await tx.delete(notificationRecipients).where(eq(notificationRecipients.recipientId, userId));
-        await tx.delete(pushSubscriptions).where(eq(pushSubscriptions.userId, userId));
-
-        // ========== PHASE 7: FINAL STEP - Hard delete the user (completely remove from database) ==========
-        // Note: activeRoleId was already cleared in Phase 5.5, all FKs cleaned up
-        await tx.delete(users).where(eq(users.id, userId));
-      });
-      
-      return { success: true };
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error during hard-delete';
-      console.error(`❌ Transaction failed for hard-delete user ${userId}:`, errorMessage);
-      return { success: false, error: errorMessage };
-    }
-  }
-
-  // Payment Reminder Log methods
-  async createPaymentReminderLog(log: InsertPaymentReminderLog): Promise<PaymentReminderLog> {
-    const db = await getDb();
-    const [newLog] = await db.insert(paymentReminderLogs).values(log).returning();
-    return newLog;
-  }
-
-  async getPaymentReminderLogsBySchool(schoolId: number, limit: number = 100): Promise<PaymentReminderLog[]> {
-    const db = await getDb();
-    return await db.select()
-      .from(paymentReminderLogs)
-      .where(eq(paymentReminderLogs.schoolId, schoolId))
-      .orderBy(desc(paymentReminderLogs.sentAt))
-      .limit(limit);
-  }
-
-  // Schedule Builder - Weekly Skeletons
-  async getWeeklySkeletonsBySchool(schoolId: number): Promise<WeeklySkeleton[]> {
-    const db = await getDb();
-    return await db.select().from(weeklySkeletons).where(eq(weeklySkeletons.schoolId, schoolId));
-  }
-
-  async getWeeklySkeletonById(id: number): Promise<WeeklySkeleton | undefined> {
-    const db = await getDb();
-    const [skeleton] = await db.select().from(weeklySkeletons).where(eq(weeklySkeletons.id, id));
-    return skeleton;
-  }
-
-  async createWeeklySkeleton(skeleton: InsertWeeklySkeleton): Promise<WeeklySkeleton> {
-    const db = await getDb();
-    const [newSkeleton] = await db.insert(weeklySkeletons).values(skeleton).returning();
-    return newSkeleton;
-  }
-
-  async updateWeeklySkeleton(id: number, skeleton: Partial<InsertWeeklySkeleton>): Promise<WeeklySkeleton | undefined> {
-    const db = await getDb();
-    const [updated] = await db.update(weeklySkeletons).set({ ...skeleton, updatedAt: new Date() }).where(eq(weeklySkeletons.id, id)).returning();
-    return updated;
-  }
-
-  async deleteWeeklySkeleton(id: number): Promise<void> {
-    const db = await getDb();
-    await db.delete(weeklySkeletons).where(eq(weeklySkeletons.id, id));
-  }
-
-  // Schedule Builder - Skeleton Blocks
-  async getSkeletonBlocksBySkeletonId(skeletonId: number): Promise<SkeletonBlock[]> {
-    const db = await getDb();
-    return await db.select().from(skeletonBlocks)
-      .where(eq(skeletonBlocks.skeletonId, skeletonId))
-      .orderBy(asc(skeletonBlocks.sortOrder), asc(skeletonBlocks.startTime));
-  }
-
-  async getSkeletonBlockById(id: number): Promise<SkeletonBlock | undefined> {
-    const db = await getDb();
-    const [block] = await db.select().from(skeletonBlocks).where(eq(skeletonBlocks.id, id));
-    return block;
-  }
-
-  async createSkeletonBlock(block: InsertSkeletonBlock): Promise<SkeletonBlock> {
-    const db = await getDb();
-    const [newBlock] = await db.insert(skeletonBlocks).values(block).returning();
-    return newBlock;
-  }
-
-  async updateSkeletonBlock(id: number, block: Partial<InsertSkeletonBlock>): Promise<SkeletonBlock | undefined> {
-    const db = await getDb();
-    const [updated] = await db.update(skeletonBlocks).set({ ...block, updatedAt: new Date() }).where(eq(skeletonBlocks.id, id)).returning();
-    return updated;
-  }
-
-  async deleteSkeletonBlock(id: number): Promise<void> {
-    const db = await getDb();
-    await db.delete(skeletonBlocks).where(eq(skeletonBlocks.id, id));
-  }
-
-  async reorderSkeletonBlocks(skeletonId: number, blockIds: number[]): Promise<void> {
-    const db = await getDb();
-    for (let i = 0; i < blockIds.length; i++) {
-      await db.update(skeletonBlocks)
-        .set({ sortOrder: i, updatedAt: new Date() })
-        .where(and(eq(skeletonBlocks.id, blockIds[i]), eq(skeletonBlocks.skeletonId, skeletonId)));
-    }
-  }
-
-  async bulkReplaceSkeletonBlocks(skeletonId: number, blocks: Omit<InsertSkeletonBlock, 'skeletonId' | 'createdBy'>[], createdBy: number): Promise<SkeletonBlock[]> {
-    const db = await getDb();
-    return await db.transaction(async (tx) => {
-      await tx.delete(skeletonBlocks).where(eq(skeletonBlocks.skeletonId, skeletonId));
-      if (blocks.length === 0) return [];
-      const toInsert = blocks.map((b) => ({ ...b, skeletonId, createdBy }));
-      return await tx.insert(skeletonBlocks).values(toInsert).returning();
-    });
-  }
-
-  // Schedule Builder - Week Plans
-  async getWeekPlansBySkeletonId(skeletonId: number): Promise<WeekPlan[]> {
-    const db = await getDb();
-    return await db.select().from(weekPlans)
-      .where(eq(weekPlans.skeletonId, skeletonId))
-      .orderBy(asc(weekPlans.weekNumber));
-  }
-
-  async getWeekPlanById(id: number): Promise<WeekPlan | undefined> {
-    const db = await getDb();
-    const [plan] = await db.select().from(weekPlans).where(eq(weekPlans.id, id));
-    return plan;
-  }
-
-  async getPublishedWeekPlansBySchool(schoolId: number): Promise<WeekPlan[]> {
-    const db = await getDb();
-    return await db.select().from(weekPlans)
-      .where(and(eq(weekPlans.schoolId, schoolId), eq(weekPlans.status, 'published')))
-      .orderBy(asc(weekPlans.weekNumber));
-  }
-
-  async createWeekPlan(plan: InsertWeekPlan): Promise<WeekPlan> {
-    const db = await getDb();
-    const [newPlan] = await db.insert(weekPlans).values(plan).returning();
-    return newPlan;
-  }
-
-  async updateWeekPlan(id: number, plan: Partial<InsertWeekPlan>): Promise<WeekPlan | undefined> {
-    const db = await getDb();
-    const [updated] = await db.update(weekPlans).set({ ...plan, updatedAt: new Date() }).where(eq(weekPlans.id, id)).returning();
-    return updated;
-  }
-
-  async deleteWeekPlan(id: number): Promise<void> {
-    const db = await getDb();
-    await db.delete(weekPlans).where(eq(weekPlans.id, id));
-  }
-
-  async cloneWeekPlan(sourceWeekPlanId: number, newWeekNumber: number, newStartDate: string, createdBy: number): Promise<WeekPlan> {
-    const db = await getDb();
-    const [sourcePlan] = await db.select().from(weekPlans).where(eq(weekPlans.id, sourceWeekPlanId));
-    if (!sourcePlan) {
-      throw new Error(`Source week plan ${sourceWeekPlanId} not found`);
-    }
-    const [newPlan] = await db.insert(weekPlans).values({
-      skeletonId: sourcePlan.skeletonId,
-      sessionId: sourcePlan.sessionId,
-      schoolId: sourcePlan.schoolId,
-      weekNumber: newWeekNumber,
-      weekStartDate: newStartDate,
-      status: 'draft',
-      notes: sourcePlan.notes,
-      createdBy,
-    }).returning();
-
-    const sourceBlocks = await db.select().from(weekPlanBlocks).where(eq(weekPlanBlocks.weekPlanId, sourceWeekPlanId));
-    for (const block of sourceBlocks) {
-      await db.insert(weekPlanBlocks).values({
-        weekPlanId: newPlan.id,
-        skeletonBlockId: block.skeletonBlockId,
-        title: block.title,
-        description: block.description,
-        lessonLink: block.lessonLink,
-        attachments: block.attachments,
-        objectives: block.objectives,
-        groups: block.groups,
-        notes: block.notes,
-        isCompleted: false,
-        completedBy: null,
-        completedAt: null,
-        updatedBy: null,
-      });
-    }
-
-    return newPlan;
-  }
-
-  // Schedule Builder - Week Plan Blocks
-  async getWeekPlanBlocksByWeekPlanId(weekPlanId: number): Promise<WeekPlanBlock[]> {
-    const db = await getDb();
-    return await db.select().from(weekPlanBlocks).where(eq(weekPlanBlocks.weekPlanId, weekPlanId));
-  }
-
-  async getWeekPlanBlockById(id: number): Promise<WeekPlanBlock | undefined> {
-    const db = await getDb();
-    const [block] = await db.select().from(weekPlanBlocks).where(eq(weekPlanBlocks.id, id));
-    return block;
-  }
-
-  async createWeekPlanBlock(block: InsertWeekPlanBlock): Promise<WeekPlanBlock> {
-    const db = await getDb();
-    const [newBlock] = await db.insert(weekPlanBlocks).values(block).returning();
-    return newBlock;
-  }
-
-  async updateWeekPlanBlock(id: number, block: Partial<InsertWeekPlanBlock>, updatedBy: number): Promise<WeekPlanBlock | undefined> {
-    const db = await getDb();
-    const [currentBlock] = await db.select().from(weekPlanBlocks).where(eq(weekPlanBlocks.id, id));
-    if (currentBlock) {
-      await db.insert(weekPlanBlockHistory).values({
-        blockId: id,
-        previousTitle: currentBlock.title,
-        previousDescription: currentBlock.description,
-        previousGroups: currentBlock.groups,
-        previousAttachments: currentBlock.attachments,
-        previousObjectives: currentBlock.objectives,
-        changedBy: updatedBy,
-      });
-    }
-    const [updated] = await db.update(weekPlanBlocks).set({ ...block, updatedBy, updatedAt: new Date() }).where(eq(weekPlanBlocks.id, id)).returning();
-    return updated;
-  }
-
-  async deleteWeekPlanBlock(id: number): Promise<void> {
-    const db = await getDb();
-    await db.delete(weekPlanBlocks).where(eq(weekPlanBlocks.id, id));
-  }
-
-  async bulkUpdateWeekPlanBlocks(weekPlanId: number, updates: { dayOfWeek: number; startTime: string; data: Partial<InsertWeekPlanBlock> }[], updatedBy: number): Promise<void> {
-    const db = await getDb();
-    const plan = await this.getWeekPlanById(weekPlanId);
-    if (!plan) throw new Error(`Week plan ${weekPlanId} not found`);
-    const allSkeletonBlocks = await this.getSkeletonBlocksBySkeletonId(plan.skeletonId);
-    const existingBlocks = await this.getWeekPlanBlocksByWeekPlanId(weekPlanId);
-    for (const update of updates) {
-      const sb = allSkeletonBlocks.find(
-        (b) => b.dayOfWeek === update.dayOfWeek && b.startTime === update.startTime
-      );
-      if (!sb) continue;
-      const wb = existingBlocks.find((b) => b.skeletonBlockId === sb.id);
-      if (wb) {
-        await this.updateWeekPlanBlock(wb.id, update.data, updatedBy);
-      } else {
-        await db.insert(weekPlanBlocks).values({
-          weekPlanId,
-          skeletonBlockId: sb.id,
-          ...update.data,
-        });
-      }
-    }
-  }
-
-  async markBlockCompleted(id: number, completedBy: number): Promise<WeekPlanBlock | undefined> {
-    const db = await getDb();
-    const [updated] = await db.update(weekPlanBlocks).set({
-      isCompleted: true,
-      completedBy,
-      completedAt: new Date(),
-      updatedAt: new Date(),
-    }).where(eq(weekPlanBlocks.id, id)).returning();
-    return updated;
-  }
-
-  // Schedule Builder - Block History
-  async getBlockHistory(blockId: number): Promise<WeekPlanBlockHistory[]> {
-    const db = await getDb();
-    return await db.select().from(weekPlanBlockHistory)
-      .where(eq(weekPlanBlockHistory.blockId, blockId))
-      .orderBy(desc(weekPlanBlockHistory.changedAt));
-  }
-
-  // Retention Report
-  async getEnrollmentFamiliesByPeriod(schoolId: number, startDate: string, endDate: string): Promise<{ parentEmail: string; parentId: number; childName: string; className: string }[]> {
-    const db = await getDb();
-    const rows = await db
-      .select({
-        parentEmail: programEnrollments.parentEmail,
-        parentId: programEnrollments.parentId,
-        childName: programEnrollments.childName,
-        className: programEnrollments.className,
-      })
-      .from(programEnrollments)
-      .where(
-        and(
-          eq(programEnrollments.schoolId, schoolId),
-          sql`${programEnrollments.programStartDate} >= ${startDate}`,
-          sql`${programEnrollments.programStartDate} <= ${endDate}`,
-          not(inArray(programEnrollments.status, ['cancelled', 'withdrawn', 'failed']))
-        )
-      );
-    return rows;
   }
 }

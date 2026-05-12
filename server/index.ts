@@ -1,30 +1,32 @@
 // Load test environment configuration (conditionally based on NODE_ENV)
-// MUST be the first import so Stripe keys are set before any service initialises.
 import "./test-env-loader";
 
-import express from "express";
-import { createServer } from 'http';
-import path from 'path';
-import fs from 'fs';
-
-// Stripe webhook router is intentionally mounted from the lightweight entry
-// point (rather than only inside server/app-init.ts) so that webhook delivery
-// is reachable as soon as the HTTP server binds, even if the heavy app-init
-// bundle is still loading. The router itself is small and has no heavy
-// transitive imports.
+import express, { type Request, Response, NextFunction } from "express";
+import { registerRoutes } from "./routes";
+import fileUpload from "express-fileupload";
+import path from "path";
+import fileUploadRouter from './api/file-upload';
+import paymentHistoryRouter from './api/payment-history';
+import stripeRoutes from './api/stripe';
+import marketingLinksRouter from './api/marketing-links';
+import parentRouter from './api/parent';
+import billingRouter from './api/billing';
+import scheduledPaymentsRouter from './api/scheduled-payments';
+import schoolsRouter from "./api/schools";
+import studentsRouter from "./api/students";
+import schoolParentsRouter from "./api/school-parents";
+import educatorRouter from "./api/educator";
+import authRouter from "./api/auth";
+import paymentImport from "./api/payment-import";
+import accountImport from "./api/account-import";
+import dailyFlowsRoutes from "./api/daily-flows";
+import aiPricingRouter from "./api/ai-pricing";
+import stripeMigrationRouter from "./api/stripe-migration";
 import stripeWebhookRouter from "./api/stripe-webhook";
-
-// Inline log to avoid pulling server/vite.ts (and its Vite dependency) into
-// the entry-point bundle, which would add significant parse-time weight.
-function log(message: string): void {
-  const formattedTime = new Date().toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: true,
-  });
-  console.log(`${formattedTime} [express] ${message}`);
-}
+import adminEnrollmentPaymentRouter from "./api/admin-enrollment-payment";
+import membershipRouter from "./api/membership";
+import { webhookHandler } from "./webhook-handler";
+import userRolesRouter from "./api/user-roles";
 
 // 🔒 PRODUCTION SAFETY: Verify NODE_ENV is set and log startup environment
 const currentEnv = process.env.NODE_ENV || 'development';
@@ -47,6 +49,7 @@ function shouldRunBackgroundJobs(env: string): boolean {
 
 if (currentEnv === 'production') {
   console.log('✅ Production mode: Database fallbacks disabled, test authentication blocked');
+  // Verify critical production environment variables are set
   const requiredEnvVars = ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'];
   const missingVars = requiredEnvVars.filter(v => !process.env[v]);
   if (missingVars.length > 0) {
@@ -61,116 +64,293 @@ const app = express();
 export { app };
 export default app;
 
-// Lightweight health check — must respond instantly for deployment health probes.
-// This is intentionally registered before initializeApp() runs so it is always
-// reachable, even during the few seconds the heavy bundle is loading.
-app.get('/health', (_req, res) => res.json({ status: 'ok' }));
+// CRITICAL: Apply Stripe webhook handler BEFORE any global body parsers
+// This ensures webhook signature verification gets the raw buffer
+app.post('/api/stripe/webhook', express.raw({ type: 'application/json', limit: '5mb' }), webhookHandler);
 
-// Mount the Stripe webhook router immediately so payment event delivery does
-// not race the heavy app-init bundle. The router uses raw-body middleware
-// internally for signature verification.
+// Standard body parsers for most routes (AFTER webhook handler)
+// These are applied to all routes EXCEPT the webhook which is handled above
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: false, limit: '50mb' }));
+
+// Apply fileUpload middleware only to file upload routes
+app.use('/api/school-admin/contact-import', fileUpload({
+  useTempFiles: false,
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB max file size
+  abortOnLimit: true,
+  createParentPath: true,
+}));
+
+app.use('/api/school-admin/import-users', fileUpload({
+  useTempFiles: false,
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB max file size
+  abortOnLimit: true,
+  createParentPath: true,
+}));
+
+// Apply fileUpload middleware for school logo uploads
+app.use('/api/schools/upload-logo', fileUpload({
+  useTempFiles: false,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max file size for logos
+  abortOnLimit: true,
+  createParentPath: true,
+}));
+
+// Apply fileUpload middleware for school document uploads
+app.use('/api/schools/documents/upload', fileUpload({
+  useTempFiles: false,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max file size for documents
+  abortOnLimit: true,
+  createParentPath: true,
+}));
+
+// Serve static files from uploads directory
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+
+app.use((req, res, next) => {
+  const start = Date.now();
+  const path = req.path;
+  let capturedJsonResponse: Record<string, any> | undefined = undefined;
+
+  const originalResJson = res.json;
+  res.json = function (bodyJson, ...args) {
+    capturedJsonResponse = bodyJson;
+    return originalResJson.apply(res, [bodyJson, ...args]);
+  };
+
+  res.on("finish", () => {
+    const duration = Date.now() - start;
+    if (path.startsWith("/api")) {
+      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
+      if (capturedJsonResponse) {
+        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
+      }
+
+      if (logLine.length > 80) {
+        logLine = logLine.slice(0, 79) + "…";
+      }
+
+      console.log(logLine);
+    }
+  });
+
+  next();
+});
+
+// Register file upload routes
+app.use('/api/file-upload', fileUploadRouter);
+app.use('/api/school-admin/marketing-links', marketingLinksRouter);
+app.use('/api/school-parents', schoolParentsRouter);
+app.use('/api/payments', paymentHistoryRouter);
+app.use('/api/stripe', stripeRoutes);
+app.use("/api/billing", billingRouter);
+app.use("/api/scheduled-payments", scheduledPaymentsRouter);
+app.use("/api/ai-pricing", aiPricingRouter);
+app.use("/api/stripe-migration", stripeMigrationRouter);
 app.use("/api/stripe-webhooks", stripeWebhookRouter);
+app.use("/api/payment-import", paymentImport);
+app.use("/api/account-import", accountImport);
+app.use("/api/daily-flows", dailyFlowsRoutes);
+app.use("/api/user", userRolesRouter); // Multi-role management endpoints
 
-// In production: serve the Vite-compiled frontend immediately so that GET /
-// responds before initializeApp() finishes loading all API routes (~7s).
-// In development, setupVite() (called inside initializeApp) handles this.
-if (process.env.NODE_ENV === 'production') {
-  const publicDir = path.join(import.meta.dirname, 'public');
-  if (fs.existsSync(publicDir)) {
-    // Prevent stale index.html from caching across deployments.
-    // Fingerprinted asset chunks are safe to cache forever.
-    app.use((req, _res, next) => {
-      if (req.path === '/' || (!req.path.startsWith('/api') && !req.path.match(/\.\w+$/))) {
-        _res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-        _res.setHeader('Pragma', 'no-cache');
-        _res.setHeader('Expires', '0');
+// Test endpoints for development
+if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
+  // Manually trigger enrollment reminder check
+  app.post('/api/test/trigger-enrollment-reminders', async (req, res) => {
+    try {
+      const { processEnrollmentReminders, getPendingPaymentEnrollments } = await import('./services/enrollmentReminderScheduler');
+      
+      // Option to just get pending enrollments without sending (for preview)
+      if (req.query.preview === 'true') {
+        const pending = await getPendingPaymentEnrollments();
+        return res.json({ 
+          success: true, 
+          preview: true,
+          pendingEnrollments: pending.map(e => ({
+            enrollmentId: e.enrollmentId,
+            childName: e.childName,
+            className: e.className,
+            parentEmail: e.parentEmail,
+            reminderCount: e.reminderCount,
+            lastReminderSentAt: e.lastReminderSentAt,
+          }))
+        });
       }
-      next();
-    });
-    // Serve fingerprinted static assets (JS, CSS, images from dist/public/assets)
-    app.use(express.static(publicDir));
-    // SPA catch-all: serve index.html for all non-API, non-asset routes.
-    // API routes registered later by initializeApp() take precedence because
-    // Express matches in registration order — /api/* routes are added to the
-    // router by registerRoutes(), but this catch-all only fires for paths that
-    // have NOT already been handled. However, since this is a catch-all *use*
-    // that only skips /api and file-extension paths, we're safe.
-    app.use((req, res, next) => {
-      if (
-        req.path.startsWith('/api') ||
-        req.path.startsWith('/uploads') ||
-        req.path.match(/\.\w+$/)
-      ) {
-        next();
-      } else {
-        res.sendFile(path.join(publicDir, 'index.html'));
+      
+      // Force send reminders (bypasses throttle check for testing)
+      if (req.query.force === 'true') {
+        const { getDb } = await import('./db');
+        const db = await getDb();
+        const { schoolClassEnrollments } = await import('@shared/schema');
+        const { eq } = await import('drizzle-orm');
+        
+        // Reset reminder tracking to allow immediate send
+        await db.update(schoolClassEnrollments)
+          .set({ lastReminderSentAt: null, reminderCount: 0 })
+          .where(eq(schoolClassEnrollments.status, 'pending_payment'));
+        console.log('🔄 Reset reminder tracking for all pending_payment enrollments');
       }
-    });
-  }
+      
+      const stats = await processEnrollmentReminders();
+      res.json({ success: true, stats });
+    } catch (error: any) {
+      console.error('Error triggering enrollment reminders:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  app.post('/api/test/update-scheduled-payment', async (req, res) => {
+    try {
+      const { id, status } = req.body;
+      const { storage } = await import('./storage');
+      const payment = await storage.updateScheduledPaymentStatus(id, status);
+
+      if (status === 'paid') {
+        // Also create payment history record
+        const scheduledPayment = (await storage.getScheduledPaymentsByParentEmail('tester@testing321.com')).find(p => p.id === id);
+        if (scheduledPayment) {
+          const paymentRecord = {
+            id: Date.now(),
+            stripePaymentIntentId: `pi_test_dev_${id}`,
+            parentEmail: scheduledPayment.parentEmail,
+            childName: scheduledPayment.description?.split(' - ')[0] || 'Child',
+            className: scheduledPayment.description?.split(' - ')[1] || scheduledPayment.description || 'Unknown Class',
+            amount: scheduledPayment.amount,
+            currency: scheduledPayment.currency || 'usd',
+            status: 'completed' as const,
+            metadata: { testPayment: true, scheduledPaymentId: id },
+            createdAt: new Date(),
+            updatedAt: new Date()
+          };
+          await storage.createPayment(paymentRecord);
+          console.log('✅ Test: Created payment history record');
+        }
+      }
+
+      res.json({ success: true, payment });
+    } catch (error: any) {
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
 }
 
-const httpServer = createServer(app);
+(async () => {
+  // Import and apply auth middleware for admin routes
+  const { jwtCheck, requireRole } = await import("./middleware/auth0-auth");
+  
+  // Register admin enrollment payment routes with authentication
+  app.use('/api/admin/enrollments', jwtCheck, requireRole(['schoolAdmin', 'admin', 'superAdmin']), adminEnrollmentPaymentRouter);
+  
+  // Register membership admin routes with authentication
+  app.use('/api/admin/memberships', jwtCheck, requireRole(['schoolAdmin', 'admin', 'superAdmin']), membershipRouter);
+  
+  const server = await registerRoutes(app);
 
-const port = 5000;
-httpServer.listen({ port, host: "0.0.0.0", reusePort: true }, () => {
-  log(`serving on port ${port}`);
+  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+    const status = err.status || err.statusCode || 500;
+    const message = err.message || "Internal Server Error";
 
-  // Dynamically import the heavy initialisation bundle so esbuild emits it as a
-  // separate chunk (dist/app-init.js). The entry point therefore stays tiny and
-  // Node.js binds to port 5000 in milliseconds rather than seconds.
-  import('./app-init.js')
-    .then(m => m.initializeApp(app, httpServer))
-    .then(async () => {
-      // Background jobs should run only in local development or explicit singleton worker mode.
-      if (shouldRunBackgroundJobs(currentEnv)) {
-        const singletonRole = process.env.BACKGROUND_JOBS_ROLE || (currentEnv === 'development' ? 'local-dev' : 'singleton');
-        const {
-          startScheduledPaymentReminderJob,
-          AUTOPAY_RECONCILIATION_INTERVAL_MS,
-        } = await import('./services/scheduled-payment-reminders.js');
-        console.log(
-          `🔧 Starting background services (role=${singletonRole}) — reminders ~6h, AutoPay stuck-processing reconciliation ~${Math.round(
-            AUTOPAY_RECONCILIATION_INTERVAL_MS / 60_000,
-          )}min; enable this process only on one worker when running multiple web replicas`,
-        );
+    res.status(status).json({ message });
+    console.error('❌ Error handled:', err.message, err.stack);
+    // Don't throw the error again - this was causing the server to crash
+  });
 
-        const { backupService } = await import('./services/backupService.js');
-        const { MembershipStatusService } = await import('./services/membership-status-service.js');
-        const { startEnrollmentReminderScheduler } = await import('./services/enrollmentReminderScheduler.js');
-        const { storage } = await import('./storage.js');
+  // importantly only setup vite in development and after
+  // setting up all the other routes so the catch-all route
+  // doesn't interfere with the other routes
+  if (process.env.NODE_ENV === "test") {
+    // Jest imports app/server routes only; skip vite/static client wiring.
+  } else if (app.get("env") === "development") {
+    const { setupVite } = await import("./vite");
+    await setupVite(app, server);
+  } else {
+    const { serveStatic } = await import("./vite");
+    serveStatic(app);
+  }
 
-        await backupService.init();
-        backupService.startAutomaticBackups(24);
-        MembershipStatusService.initializeMembershipStatusJob();
-        startEnrollmentReminderScheduler();
-        startScheduledPaymentReminderJob();
+  // ALWAYS serve the app on port 5000
+  // this serves both the API and the client.
+  // It is the only port that is not firewalled.
+  if (process.env.NODE_ENV === "test") {
+    return;
+  }
 
-        try {
-          await storage.initializeNotifications();
-        } catch (error) {
-          console.warn('⚠️ Skipping notification initialization in local fallback mode:', (error as Error).message);
-        }
+  const port = 5000;
+  server.listen({
+    port,
+    host: "0.0.0.0",
+    reusePort: true,
+  }, async () => {
+    console.log(`serving on port ${port}`);
 
-        // Graceful platform drain: stop interval-backed work so ticks do not fire during shutdown.
-        process.once('SIGTERM', () => {
-          void (async () => {
-            console.log('🛑 SIGTERM received — stopping background intervals');
-            const { backupService: backup } = await import('./services/backupService.js');
-            const { MembershipStatusService: MembershipSvc } = await import('./services/membership-status-service.js');
-            const { stopEnrollmentReminderScheduler } = await import('./services/enrollmentReminderScheduler.js');
-            const { stopScheduledPaymentReminderJob } = await import('./services/scheduled-payment-reminders.js');
-            backup.stopAutomaticBackups();
-            MembershipSvc.stopMembershipStatusJob();
-            stopEnrollmentReminderScheduler();
-            stopScheduledPaymentReminderJob();
-          })();
-        });
-      } else {
-        console.log('☁️ Background jobs disabled for this process');
-        console.log(
-          '💡 Production/staging (any NODE_ENV except development/test): set ENABLE_BACKGROUND_JOBS=true on exactly one worker with DATABASE_URL; leave it unset/false on web/API replicas so reconciliation and reminders are not double-scheduled',
-        );
+    // Background jobs should run only in local development or explicit singleton worker mode.
+    if (shouldRunBackgroundJobs(currentEnv)) {
+      const singletonRole = process.env.BACKGROUND_JOBS_ROLE || (currentEnv === 'development' ? 'local-dev' : 'singleton');
+      // Dynamically import background services to avoid side effects in production
+      const {
+        startScheduledPaymentReminderJob,
+        AUTOPAY_RECONCILIATION_INTERVAL_MS,
+      } = await import('./services/scheduled-payment-reminders.js');
+      console.log(
+        `🔧 Starting background services (role=${singletonRole}) — reminders ~6h, AutoPay stuck-processing reconciliation ~${Math.round(
+          AUTOPAY_RECONCILIATION_INTERVAL_MS / 60_000,
+        )}min; enable this process only on one worker when running multiple web replicas`,
+      );
+
+      const { backupService } = await import('./services/backupService.js');
+      const { MembershipStatusService } = await import('./services/membership-status-service.js');
+      const { startEnrollmentReminderScheduler } = await import('./services/enrollmentReminderScheduler.js');
+      const { startCreditExpirationJob, stopCreditExpirationJob } = await import(
+        './services/creditExpirationService.js'
+      );
+      const { storage } = await import('./storage.js');
+      
+      // Initialize and start backup service
+      await backupService.init();
+      backupService.startAutomaticBackups(24); // Backup every 24 hours
+      
+      // Initialize membership status tracking service
+      MembershipStatusService.initializeMembershipStatusJob();
+      
+      // Start enrollment payment reminder scheduler
+      startEnrollmentReminderScheduler();
+
+      startCreditExpirationJob();
+      
+      // Start scheduled payment reminder job (sends email reminders for upcoming/overdue payments)
+      startScheduledPaymentReminderJob();
+      
+      // Load notifications and notification recipients from JSON into database.
+      // In local fallback mode, DB may be unavailable; do not crash server startup.
+      try {
+        await storage.initializeNotifications();
+      } catch (error) {
+        console.warn('⚠️ Skipping notification initialization in local fallback mode:', (error as Error).message);
       }
-    })
-    .catch(err => console.error('❌ initializeApp failed:', err));
-});
+
+      // Graceful platform drain: stop interval-backed work so ticks do not fire during shutdown.
+      // SIGINT is intentionally not handled here so interactive dev Ctrl+C keeps default termination.
+      process.once('SIGTERM', () => {
+        void (async () => {
+          console.log('🛑 SIGTERM received — stopping background intervals');
+          const { backupService: backup } = await import('./services/backupService.js');
+          const { MembershipStatusService: MembershipSvc } = await import('./services/membership-status-service.js');
+          const { stopEnrollmentReminderScheduler } = await import('./services/enrollmentReminderScheduler.js');
+          const { stopScheduledPaymentReminderJob } = await import('./services/scheduled-payment-reminders.js');
+          const { stopCreditExpirationJob } = await import('./services/creditExpirationService.js');
+          backup.stopAutomaticBackups();
+          MembershipSvc.stopMembershipStatusJob();
+          stopEnrollmentReminderScheduler();
+          stopScheduledPaymentReminderJob();
+          stopCreditExpirationJob();
+        })();
+      });
+    } else {
+      console.log('☁️ Background jobs disabled for this process');
+      console.log(
+        '💡 Production/staging (any NODE_ENV except development/test): set ENABLE_BACKGROUND_JOBS=true on exactly one worker with DATABASE_URL; leave it unset/false on web/API replicas so reconciliation and reminders are not double-scheduled',
+      );
+    }
+  });
+})();

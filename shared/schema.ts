@@ -1,12 +1,10 @@
-import { pgTable, text, serial, integer, boolean, jsonb, timestamp, date, varchar, pgEnum, unique, uniqueIndex, doublePrecision } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, jsonb, timestamp, date, varchar, pgEnum, unique } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
-import { relations, sql } from "drizzle-orm";
+import { relations } from "drizzle-orm";
 
-// Define the enum for user roles.
-// Exported so drizzle-kit picks it up during introspection and emits
-// `CREATE TYPE "role"` before any table that references it.
-export const roleEnum = pgEnum('role', ["student", "parent", "learner", "educator", "mentor", "teacher", "schoolAdmin", "director", "admin", "superAdmin"]);
+// Define the enum for user roles
+const roleEnum = pgEnum('role', ["student", "parent", "learner", "educator", "teacher", "schoolAdmin", "admin", "superAdmin"]);
 
 // Users table
 export const users = pgTable("users", {
@@ -24,7 +22,6 @@ export const users = pgTable("users", {
   subscription: text("subscription", { enum: ["free", "individual", "family", "educator", "institutional"] }).default("free").notNull(),
   permissions: jsonb("permissions").default({}).notNull(), // Custom permissions
   schoolId: integer("school_id"), // Link user to school
-  locationId: integer("location_id").references(() => locations.id), // Parent's home location (children auto-inherit)
   phone: text("phone"), // User's phone number
   emergencyContactFirstName: text("emergency_contact_first_name"), // Emergency contact first name
   emergencyContactLastName: text("emergency_contact_last_name"), // Emergency contact last name
@@ -35,8 +32,6 @@ export const users = pgTable("users", {
   activeRole: text("active_role"), // Currently active role for multi-role users (NULL means use primary role)
   activeRoleId: integer("active_role_id"), // ID of the currently active role from user_roles table (NULL means use primary role)
   stripeCustomerId: text("stripe_customer_id"), // Stripe customer ID for payments
-  autoPayEnabled: boolean("auto_pay_enabled").default(false).notNull(), // Whether parent has opted in to auto-pay for scheduled installments
-  stripeDefaultPaymentMethodId: text("stripe_default_payment_method_id"), // Saved Stripe payment method ID (pm_xxx) for auto-pay
   hasCompletedOnboarding: boolean("has_completed_onboarding").default(false), // Whether user has completed the onboarding tour
   memberId: text("member_id"), // System-generated or admin-assigned membership ID (e.g., ASA-2025-X7K9M2)
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -56,24 +51,10 @@ export const userRoles = pgTable("user_roles", {
   schoolId: integer("school_id"), // For tenant scoping - educators/admins must be tied to a school
   isPrimary: boolean("is_primary").default(false).notNull(), // Which role is the user's primary/default role
   createdAt: timestamp("created_at").defaultNow().notNull(),
-}, (t) => ({
-  // Two partial UNIQUE indexes replace the legacy expression index
-  // `idx_user_roles_unique_user_role` on (user_id, role, COALESCE(school_id, 0)).
-  // drizzle-kit could not parse the COALESCE expression (ZodError on introspection),
-  // which made `npm run db:push` unusable. Partial indexes preserve the original
-  // invariant: any (user_id, role, school_id) is unique when school_id is set, and
-  // any (user_id, role) is unique when school_id is NULL (so two NULL rows still
-  // collide). See docs/audit/242-schema-migration-fix-report.md.
-  uniqueUserRoleSchool: uniqueIndex("idx_user_roles_unique_user_role_school")
-    .on(t.userId, t.role, t.schoolId)
-    .where(sql`school_id IS NOT NULL`),
-  uniqueUserRoleNoSchool: uniqueIndex("idx_user_roles_unique_user_role_no_school")
-    .on(t.userId, t.role)
-    .where(sql`school_id IS NULL`),
-}));
+});
 
 // System roles that are always valid, plus custom staff positions validated at API layer
-export const systemRoles = ["student", "parent", "learner", "educator", "mentor", "teacher", "schoolAdmin", "director", "admin", "superAdmin"] as const;
+export const systemRoles = ["student", "parent", "learner", "educator", "teacher", "schoolAdmin", "admin", "superAdmin"] as const;
 export type SystemRole = typeof systemRoles[number];
 
 export const insertUserRoleSchema = createInsertSchema(userRoles).omit({ id: true, createdAt: true });
@@ -127,16 +108,6 @@ export const schools = pgTable("schools", {
   membershipAgreementTemplate: text("membership_agreement_template"), // The agreement text/HTML that members must sign
   membershipAgreementVersion: text("membership_agreement_version").default("1.0"), // Version of the current agreement
   membershipAgreementUpdatedAt: timestamp("membership_agreement_updated_at"), // When the agreement was last updated
-  
-  // Premium Feature Toggles (controlled by Super Admin)
-  enabledFeatures: jsonb("enabled_features").default({}).notNull(), // { financialReports: true, aiInsights: true, ... }
-  
-  // Geolocation & Attendance Configuration
-  latitude: doublePrecision("latitude"),
-  longitude: doublePrecision("longitude"),
-  geofenceRadiusMeters: integer("geofence_radius_meters").default(150),
-  absenteeismThresholdPercent: integer("absenteeism_threshold_percent").default(10),
-  timezone: text("timezone").default("America/New_York"),
 });
 
 export const insertSchoolSchema = createInsertSchema(schools)
@@ -175,9 +146,6 @@ export const insertSchoolSchema = createInsertSchema(schools)
     membershipAgreementTemplate: z.string().nullable().default(null),
     membershipAgreementVersion: z.string().default("1.0"),
     membershipAgreementUpdatedAt: z.date().nullable().default(null),
-    
-    // Premium Feature Toggles
-    enabledFeatures: z.record(z.string(), z.boolean()).default({}),
   });
 export type InsertSchool = z.infer<typeof insertSchoolSchema>;
 export type School = typeof schools.$inferSelect;
@@ -266,9 +234,6 @@ export const schoolStudents = pgTable("school_students", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
-// Note: unique constraint on (childId, schoolId) removed from schema to fix deployment.
-// Application-level duplicate checking is in place. Manually create index on production after deploy:
-// CREATE UNIQUE INDEX IF NOT EXISTS "unique_child_school" ON "school_students" (child_id, school_id);
 
 export const insertSchoolStudentSchema = createInsertSchema(schoolStudents)
   .omit({ id: true, createdAt: true, updatedAt: true })
@@ -402,7 +367,6 @@ export const insertSchoolClassSchema = createInsertSchema(schoolClasses)
     teacherId: z.number().nullable().default(null),
     semester: z.string().nullable().default(null),
     location: z.string().nullable().default(null),
-    locationId: z.number().nullable().default(null), // Multi-location support
     curriculumId: z.number().nullable().default(null),
   });
 export type InsertSchoolClass = z.infer<typeof insertSchoolClassSchema>;
@@ -498,15 +462,9 @@ export const children = pgTable("children", {
   emergencyContact: text("emergency_contact"),
   additionalLanguages: text("additional_languages"),
   notes: text("notes"),
-  currentLexileRange: text("current_lexile_range"),
-  currentReadingGradeLevel: text("current_reading_grade_level"),
-  currentBookList: text("current_book_list"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
-// Note: unique constraint on (parentId, firstName, lastName) removed from schema to fix deployment.
-// Application-level duplicate checking is in place. Manually create index on production after deploy:
-// CREATE UNIQUE INDEX IF NOT EXISTS "unique_parent_child" ON "children" (parent_id, lower(first_name), lower(last_name));
 
 export const insertChildSchema = createInsertSchema(children)
   .omit({ id: true, createdAt: true, updatedAt: true, parentId: true })
@@ -618,55 +576,12 @@ export const programEnrollments = pgTable("program_enrollments", {
   notes: text("notes"),
   metadata: jsonb("metadata").default({}).notNull(),
   
-  // Cancellation tracking (for soft-delete)
-  cancelledAt: timestamp("cancelled_at"),
-  cancelledBy: integer("cancelled_by").references(() => users.id),
-  cancellationReason: text("cancellation_reason"),
-  
-  // Comp/discount tracking (for admin-applied complimentary enrollments)
-  compPercentage: integer("comp_percentage"), // 0-100, percentage of total cost comped
-  compAmountCents: integer("comp_amount_cents"), // Calculated comp amount in cents
-  compReason: text("comp_reason"),
-  compBy: integer("comp_by").references(() => users.id),
-  compAt: timestamp("comp_at"),
-
-  // Effective balance — generated column (DB source of truth for what is owed)
-  // Formula: total_cost - total_paid - COALESCE(comp_amount_cents, 0)
-  // Always use this for read/display; use remainingBalance only when recording payments.
-  effectiveBalance: integer("effective_balance").generatedAlwaysAs(
-    sql`GREATEST(0, total_cost - total_paid - COALESCE(comp_amount_cents, 0))`,
-    { mode: 'stored' }
-  ),
-  
-  // Session enrollment tracking
-  sessionId: integer("session_id").references(() => sessions.id),
-  
-  // Proration tracking (for mid-session enrollments with reduced pricing)
-  proratedFromCents: integer("prorated_from_cents"), // Original full price before proration
-  proratePercentage: integer("prorate_percentage"), // 0-100, percentage of class remaining
-  prorateDate: timestamp("prorate_date"), // Date proration was calculated/applied
-  prorateBy: integer("prorate_by").references(() => users.id),
-  prorateReason: text("prorate_reason"),
-  
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-/**
- * Compute effective balance for in-memory / non-DB contexts.
- * Mirrors the DB-generated column: total_cost - total_paid - COALESCE(comp_amount_cents, 0)
- * Use this as the formula fallback whenever effectiveBalance (the generated column) is absent.
- */
-export function computeEffectiveBalance(
-  totalCost: number,
-  totalPaid: number,
-  compAmountCents?: number | null,
-): number {
-  return Math.max(0, totalCost - totalPaid - (compAmountCents ?? 0));
-}
-
 export const insertProgramEnrollmentSchema = createInsertSchema(programEnrollments)
-  .omit({ id: true, createdAt: true, updatedAt: true, effectiveBalance: true })
+  .omit({ id: true, createdAt: true, updatedAt: true })
   .extend({
     classType: z.enum(["school_class", "marketplace"]).default("school_class"),
     programId: z.number().nullable().default(null),
@@ -689,19 +604,6 @@ export const updateProgramEnrollmentSchema = insertProgramEnrollmentSchema.parti
   paymentStatus: z.enum(["pending", "deposit_paid", "partial_payment", "completed", "stripe_managed", "refunded"]).optional(),
   status: z.enum(["pending_payment", "pending_admin_approval", "enrolled", "waitlist", "cancelled", "completed", "withdrawn", "failed"]).optional(),
   totalPaid: z.number().optional(),
-  cancelledAt: z.date().nullable().optional(),
-  cancelledBy: z.number().nullable().optional(),
-  cancellationReason: z.string().nullable().optional(),
-  compPercentage: z.number().min(0).max(100).nullable().optional(),
-  compAmountCents: z.number().nullable().optional(),
-  compReason: z.string().nullable().optional(),
-  compBy: z.number().nullable().optional(),
-  compAt: z.date().nullable().optional(),
-  proratedFromCents: z.number().nullable().optional(),
-  proratePercentage: z.number().min(0).max(100).nullable().optional(),
-  prorateDate: z.date().nullable().optional(),
-  prorateBy: z.number().nullable().optional(),
-  prorateReason: z.string().nullable().optional(),
 });
 export type UpdateProgramEnrollment = z.infer<typeof updateProgramEnrollmentSchema>;
 
@@ -805,23 +707,6 @@ export const enrichedPaymentHistorySchema = z.object({
   // Future enhancement fields
   nextPaymentDate: z.string().nullable().optional(), // ISO date string
   source: z.enum(['database', 'stripe']).optional(), // Tag for Stripe-only payments
-  
-  // Discount tracking fields for payment history display
-  subtotalAmount: z.number().nullable().optional(), // Original subtotal before discounts (cents)
-  discountTotal: z.number().nullable().optional(), // Total discount applied (cents)
-  discountSnapshot: z.object({
-    subtotal: z.number(),
-    discountTotal: z.number(),
-    appliedDiscounts: z.array(z.object({
-      source: z.enum(['promo', 'sibling', 'free_after_threshold', 'automatic', 'bundle']),
-      discountId: z.number().optional(),
-      code: z.string().optional(),
-      name: z.string(),
-      type: z.string(),
-      value: z.number(),
-      amount: z.number(),
-    })),
-  }).nullable().optional(),
 });
 
 export type EnrichedPaymentHistory = z.infer<typeof enrichedPaymentHistorySchema>;
@@ -870,29 +755,22 @@ export const scheduledPayments = pgTable("scheduled_payments", {
   processedAt: timestamp("processed_at"),
   failureReason: text("failure_reason"),
   retryCount: integer("retry_count").default(0).notNull(),
-  chargedBy: text("charged_by"), // 'auto_pay' | 'parent_manual' | 'admin_manual' | null
   
   // Reminder tracking
   reminderCount: integer("reminder_count").default(0).notNull(),
   lastReminderSentAt: timestamp("last_reminder_sent_at"),
   
-  // Audit: how this payment was completed
-  // 'stripe_autopay'   — charged by the auto-pay scheduler
-  // 'stripe_checkout'  — paid via Stripe Checkout session (parent-initiated)
-  // 'manual_sync'      — marked complete by PaymentProcessorService (admin manual sync)
-  // 'reconciliation'   — marked complete by the reconciliation service
-  // 'recovery'         — confirmed succeeded by the crash-recovery path
-  completionSource: text("completion_source"),
-
   // Metadata
   metadata: jsonb("metadata").default({}).notNull(),
+
+  /** Audit: how the installment was completed (e.g. stripe_autopay, credits_only). */
+  completionSource: text("completion_source"),
+  /** Who initiated the charge: auto_pay | parent_manual | admin_manual | null */
+  chargedBy: text("charged_by"),
   
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-}, (table) => ({
-  uniqueEnrollmentSchedule: unique("scheduled_payments_enrollment_date_installment_unique")
-    .on(table.enrollmentId, table.scheduledDate, table.installmentNumber)
-}));
+});
 
 export const insertScheduledPaymentSchema = createInsertSchema(scheduledPayments)
   .omit({ id: true, createdAt: true, updatedAt: true })
@@ -901,11 +779,11 @@ export const insertScheduledPaymentSchema = createInsertSchema(scheduledPayments
     processedAt: z.date().nullable().default(null),
     failureReason: z.string().nullable().default(null),
     retryCount: z.number().default(0),
-    chargedBy: z.string().nullable().default(null),
-    completionSource: z.string().nullable().default(null),
     reminderCount: z.number().default(0),
     lastReminderSentAt: z.date().nullable().default(null),
     metadata: z.record(z.any()).default({}),
+    completionSource: z.string().nullable().default(null),
+    chargedBy: z.string().nullable().default(null),
   });
 export type InsertScheduledPayment = z.infer<typeof insertScheduledPaymentSchema>;
 export type ScheduledPayment = typeof scheduledPayments.$inferSelect;
@@ -935,9 +813,6 @@ export const refunds = pgTable("refunds", {
   // Stripe integration
   stripeRefundId: text("stripe_refund_id").unique(),
   
-  // Refund source: 'stripe' for automated Stripe refunds, 'manual' for admin-recorded manual refunds
-  source: text("source").default("stripe"),
-
   // Processing details
   processedBy: integer("processed_by").references(() => users.id), // Admin who processed
   processedAt: timestamp("processed_at"),
@@ -956,7 +831,6 @@ export const insertRefundSchema = createInsertSchema(refunds)
     enrollmentId: z.number().nullable().default(null),
     description: z.string().nullable().default(null),
     stripeRefundId: z.string().nullable().default(null),
-    source: z.string().nullable().default('stripe'),
     processedBy: z.number().nullable().default(null),
     processedAt: z.date().nullable().default(null),
     failureReason: z.string().nullable().default(null),
@@ -965,80 +839,6 @@ export const insertRefundSchema = createInsertSchema(refunds)
 export type InsertRefund = z.infer<typeof insertRefundSchema>;
 export type Refund = typeof refunds.$inferSelect;
 
-// Task #222 — Refund webhook event durability table.
-// Persists exactly one row per Stripe refund webhook event (charge.refunded,
-// refund.updated, refund.failed) keyed on a UNIQUE stripe_event_id. This is
-// the refund-side analog of Task #219's persistence-first claim on
-// stripe_payment_history for payment_intent.succeeded.
-//
-// Uniqueness on stripe_event_id is enforced at the DB layer so concurrent
-// Stripe deliveries of the same event race on the insert and only one wins —
-// the loser falls into the unique-violation branch and reuses the existing
-// row id. Application-level "if exists" checks are race-prone and are NOT
-// the source of truth for idempotency.
-export const refundEvents = pgTable("refund_events", {
-  id: serial("id").primaryKey(),
-
-  // Stripe identifiers — both required for cross-referencing
-  stripeEventId: text("stripe_event_id").notNull().unique(),
-  stripeRefundId: text("stripe_refund_id").notNull(),
-  stripeChargeId: text("stripe_charge_id"),
-  stripePaymentIntentId: text("stripe_payment_intent_id"),
-
-  // Event classification
-  eventType: text("event_type", {
-    enum: ["charge.refunded", "refund.updated", "refund.failed"],
-  }).notNull(),
-
-  // Refund snapshot (amounts in cents)
-  amountCents: integer("amount_cents").notNull(),
-  currency: text("currency").default("usd").notNull(),
-  refundStatus: text("refund_status"), // pending | succeeded | failed | canceled
-  reason: text("reason"),
-  failureReason: text("failure_reason"),
-
-  // Cross-references to the original payment, populated when resolvable.
-  // Either side may be null — the unified processor writes only to
-  // stripe_payment_history; the legacy `processBalancePayment` path writes
-  // to `payments`. Bug A is fixed by trying BOTH lookups.
-  originalPaymentId: integer("original_payment_id").references(() => payments.id),
-  originalPaymentHistoryId: integer("original_payment_history_id").references(() => stripePaymentHistory.id),
-
-  // Outcome of side-effect processing (for observability — not a constraint)
-  // 'persisted'      : row written, side effects deferred (skip branch)
-  // 'processed'      : row written, enrollment rollback + allocations applied
-  // 'failed_lookup'  : row written, no original payment found (skip branch)
-  // 'failed_processing' : row written, side effects raised an error → handler
-  //                       returned 5xx so Stripe retries the same event
-  processingStatus: text("processing_status", {
-    enum: ["persisted", "processed", "failed_lookup", "failed_processing"],
-  }).default("persisted").notNull(),
-
-  // Raw event payload for forensic replay / re-processing.
-  rawEvent: jsonb("raw_event"),
-
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
-
-export const insertRefundEventSchema = createInsertSchema(refundEvents)
-  .omit({ id: true, createdAt: true, updatedAt: true })
-  .extend({
-    stripeChargeId: z.string().nullable().default(null),
-    stripePaymentIntentId: z.string().nullable().default(null),
-    refundStatus: z.string().nullable().default(null),
-    reason: z.string().nullable().default(null),
-    failureReason: z.string().nullable().default(null),
-    originalPaymentId: z.number().nullable().default(null),
-    originalPaymentHistoryId: z.number().nullable().default(null),
-    rawEvent: z.any().nullable().default(null),
-    processingStatus: z
-      .enum(["persisted", "processed", "failed_lookup", "failed_processing"])
-      .default("persisted"),
-  });
-export type InsertRefundEvent = z.infer<typeof insertRefundEventSchema>;
-export type RefundEvent = typeof refundEvents.$inferSelect;
-
 // Stripe Payment History table - for syncing payment data from Stripe API
 export const stripePaymentHistory = pgTable("stripe_payment_history", {
   id: serial("id").primaryKey(),
@@ -1046,20 +846,12 @@ export const stripePaymentHistory = pgTable("stripe_payment_history", {
   
   // Stripe identifiers
   paymentIntentId: text("payment_intent_id").notNull().unique(), // Stripe payment_intent ID
-  // Task #219: stripe_event_id is the durable idempotency key for webhook events.
-  // Unique to guarantee race-safe single-row persistence on replay.
-  stripeEventId: text("stripe_event_id").unique(),
-  customerId: text("customer_id"), // Stripe customer ID (nullable for credit-only checkouts)
+  customerId: text("customer_id").notNull(), // Stripe customer ID
   subscriptionId: text("subscription_id"), // Stripe subscription ID if applicable
   
   // Payment details (amounts in cents)
   amount: integer("amount").notNull(),
   currency: text("currency").default("usd").notNull(),
-  
-  // Discount tracking for payment dashboards
-  subtotalAmount: integer("subtotal_amount"), // Original price before discounts (cents)
-  discountTotal: integer("discount_total"), // Total discount applied (cents)
-  discountSnapshot: jsonb("discount_snapshot"), // Immutable snapshot of discounts at payment time
   
   // Payment status from Stripe
   status: text("status", { 
@@ -1070,16 +862,8 @@ export const stripePaymentHistory = pgTable("stripe_payment_history", {
   paymentMethod: text("payment_method"), // card, bank_transfer, etc.
   description: text("description"),
   
-  // Unified payment processing fields (PaymentProcessorService)
-  idempotencyKey: text("idempotency_key").unique(), // Prevent duplicate processing
-  source: text("source", { 
-    enum: ["stripe", "manual", "payment_plan", "credit"] 
-  }), // Payment source type (credit = credit-only checkout with no Stripe payment)
-  snapshotJson: jsonb("snapshot_json"), // Canonical cart snapshot at payment time
-  snapshotChecksum: text("snapshot_checksum"), // HMAC checksum for integrity verification
-  
   // Timestamps
-  stripeCreatedAt: timestamp("stripe_created_at"), // When payment was created in Stripe (nullable for credit-only checkouts)
+  stripeCreatedAt: timestamp("stripe_created_at").notNull(), // When payment was created in Stripe
   createdAt: timestamp("created_at").defaultNow().notNull(), // When we synced it to our DB
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -1090,107 +874,9 @@ export const insertStripePaymentHistorySchema = createInsertSchema(stripePayment
     subscriptionId: z.string().nullable().default(null),
     paymentMethod: z.string().nullable().default(null),
     description: z.string().nullable().default(null),
-    subtotalAmount: z.number().nullable().default(null),
-    discountTotal: z.number().nullable().default(null),
-    discountSnapshot: z.any().nullable().default(null),
-    idempotencyKey: z.string().nullable().default(null),
-    stripeEventId: z.string().nullable().default(null),
-    source: z.enum(["stripe", "manual", "payment_plan", "credit"]).nullable().default(null),
-    snapshotJson: z.any().nullable().default(null),
-    snapshotChecksum: z.string().nullable().default(null),
   });
 export type InsertStripePaymentHistory = z.infer<typeof insertStripePaymentHistorySchema>;
 export type StripePaymentHistory = typeof stripePaymentHistory.$inferSelect;
-
-// Payment Discounts table - normalized discount breakdown per payment for reporting
-export const paymentDiscounts = pgTable("payment_discounts", {
-  id: serial("id").primaryKey(),
-  paymentHistoryId: integer("payment_history_id").notNull().references(() => stripePaymentHistory.id, { onDelete: 'cascade' }),
-  discountId: integer("discount_id").references(() => discounts.id), // Optional reference to discount record
-  
-  // Discount source type
-  source: text("source", {
-    enum: ["promo", "sibling", "free_after_threshold", "automatic", "bundle"]
-  }).notNull(),
-  
-  // Snapshot of discount details at time of payment (immutable)
-  codeSnapshot: text("code_snapshot"), // Promo code if applicable
-  nameSnapshot: text("name_snapshot"), // Discount name at time of payment
-  typeSnapshot: text("type_snapshot"), // percentage, fixed_amount, bundle
-  valueSnapshot: integer("value_snapshot"), // Discount value (percentage or fixed amount)
-  
-  // Amount applied (in cents)
-  amount: integer("amount").notNull(),
-  
-  // Link to specific enrollment if applicable
-  enrollmentId: integer("enrollment_id").references(() => schoolClassEnrollments.id),
-  
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-});
-
-export const insertPaymentDiscountSchema = createInsertSchema(paymentDiscounts)
-  .omit({ id: true, createdAt: true })
-  .extend({
-    discountId: z.number().nullable().default(null),
-    codeSnapshot: z.string().nullable().default(null),
-    nameSnapshot: z.string().nullable().default(null),
-    typeSnapshot: z.string().nullable().default(null),
-    valueSnapshot: z.number().nullable().default(null),
-    enrollmentId: z.number().nullable().default(null),
-  });
-export type InsertPaymentDiscount = z.infer<typeof insertPaymentDiscountSchema>;
-export type PaymentDiscount = typeof paymentDiscounts.$inferSelect;
-
-// Payment Allocations table - links payments to enrollments for deriving totals
-// This is the source of truth for "how much has been paid toward each enrollment"
-// Can link to either a class enrollment OR a membership enrollment (but not both)
-export const paymentAllocations = pgTable("payment_allocations", {
-  id: serial("id").primaryKey(),
-  paymentHistoryId: integer("payment_history_id").notNull().references(() => stripePaymentHistory.id, { onDelete: 'cascade' }),
-  
-  // Program enrollment - nullable to support membership-only allocations
-  // NOTE: this column references program_enrollments(id), NOT school_class_enrollments.
-  // Every write site (PaymentReallocationService, PaymentProcessorService,
-  // webhook-handler refund rollback) writes program_enrollments(id) values
-  // here. The original FK target was a copy/paste hazard surfaced by Task #246.
-  enrollmentId: integer("enrollment_id").references(() => programEnrollments.id, { onDelete: 'cascade' }),
-  
-  // Membership enrollment - nullable to support class-only allocations
-  // One of enrollmentId or membershipEnrollmentId should be set
-  membershipEnrollmentId: integer("membership_enrollment_id").references(() => membershipEnrollments.id, { onDelete: 'cascade' }),
-  
-  // Amount allocated to this enrollment (in cents)
-  // Positive for payments, negative for refunds
-  allocatedAmountCents: integer("allocated_amount_cents").notNull(),
-  
-  // Allocation type for audit trail
-  allocationType: text("allocation_type", {
-    enum: ["payment", "refund", "reallocation_out", "reallocation_in", "adjustment", "membership"]
-  }).notNull().default("payment"),
-  
-  // Optional reference to source allocation (for reallocations)
-  sourceAllocationId: integer("source_allocation_id"),
-  
-  // Admin comment for manual adjustments/reallocations
-  adminComment: text("admin_comment"),
-  
-  // Metadata for audit trail
-  metadata: jsonb("metadata"),
-  
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-});
-
-export const insertPaymentAllocationSchema = createInsertSchema(paymentAllocations)
-  .omit({ id: true, createdAt: true })
-  .extend({
-    enrollmentId: z.number().nullable().default(null),
-    membershipEnrollmentId: z.number().nullable().default(null),
-    sourceAllocationId: z.number().nullable().default(null),
-    adminComment: z.string().nullable().default(null),
-    metadata: z.any().nullable().default(null),
-  });
-export type InsertPaymentAllocation = z.infer<typeof insertPaymentAllocationSchema>;
-export type PaymentAllocation = typeof paymentAllocations.$inferSelect;
 
 // Define emergency contact relations
 export const emergencyContactsRelations = relations(emergencyContacts, ({ one }) => ({
@@ -1300,13 +986,10 @@ export const membershipEnrollments = pgTable("membership_enrollments", {
   amount: integer("amount").notNull(), // Total membership fee in cents
   amountPaid: integer("amount_paid").default(0).notNull(), // Amount paid so far in cents
   remainingBalance: integer("remaining_balance").notNull(), // Remaining balance in cents
-  totalAmount: integer("total_amount").notNull(), // Total membership amount in cents (required by database)
-  balanceDue: integer("balance_due").notNull(), // Balance still owed in cents (required by database)
   status: text("status", { 
     enum: ["pending_payment", "enrolled", "expired", "grace_period", "suspended"] 
   }).default("pending_payment").notNull(),
   dueDate: timestamp("due_date").notNull(), // When membership payment is due
-  endDate: timestamp("end_date").notNull(), // When membership period ends (same as expirationDate for consistency)
   expirationDate: timestamp("expiration_date").notNull(), // When membership expires
   gracePeriodEnd: timestamp("grace_period_end"), // End of grace period if applicable
   paymentMethod: text("payment_method", { 
@@ -1339,33 +1022,9 @@ export const insertMembershipEnrollmentSchema = createInsertSchema(membershipEnr
     stripeCustomerId: z.string().nullable().default(null),
     startDate: z.date().nullable().default(null),
     renewalDate: z.date().nullable().default(null),
-    endDate: z.date(), // Required field - when membership period ends
-    totalAmount: z.number(), // Required field - total membership amount in cents
-    balanceDue: z.number(), // Required field - balance still owed in cents
   });
 export type InsertMembershipEnrollment = z.infer<typeof insertMembershipEnrollmentSchema>;
 export type MembershipEnrollment = typeof membershipEnrollments.$inferSelect;
-
-/** 
- * Valid membership statuses that indicate a fully paid/active membership.
- * Use isActiveMembership() helper for consistent status checks across the codebase.
- * - 'enrolled': Membership is fully paid and active
- * - 'grace_period': Membership expired but still within grace period (counts as active)
- */
-export const VALID_PAID_MEMBERSHIP_STATUSES = ['enrolled', 'grace_period'] as const;
-
-/** Type for valid paid membership statuses */
-export type PaidMembershipStatus = typeof VALID_PAID_MEMBERSHIP_STATUSES[number];
-
-/** 
- * Check if a membership status indicates an active/paid membership.
- * Use this instead of checking status directly for consistency across the codebase.
- * @param status - The membership status to check
- * @returns true if the membership is considered active (enrolled or in grace period)
- */
-export function isActiveMembership(status: string | null | undefined): boolean {
-  return !!status && (VALID_PAID_MEMBERSHIP_STATUSES as readonly string[]).includes(status);
-}
 
 // Define membership enrollment relations
 export const membershipEnrollmentsRelations = relations(membershipEnrollments, ({ one }) => ({
@@ -1424,8 +1083,6 @@ export const schoolDocuments = pgTable("school_documents", {
   mimeType: text("mime_type").notNull(),
   isPublished: boolean("is_published").default(true).notNull(),
   visibleToAll: boolean("visible_to_all").default(true).notNull(),
-  expiresAt: timestamp("expires_at"),
-  isArchived: boolean("is_archived").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -1442,31 +1099,15 @@ export const insertSchoolDocumentSchema = createInsertSchema(schoolDocuments)
     mimeType: z.string().min(1),
     isPublished: z.boolean().default(true),
     visibleToAll: z.boolean().default(true),
-    expiresAt: z.union([z.string(), z.date()]).nullable().optional(),
-    isArchived: z.boolean().default(false),
   });
 export type InsertSchoolDocument = z.infer<typeof insertSchoolDocumentSchema>;
 export type SchoolDocument = typeof schoolDocuments.$inferSelect;
 
 // Define school document relations
-export const schoolDocumentsRelations = relations(schoolDocuments, ({ one, many }) => ({
+export const schoolDocumentsRelations = relations(schoolDocuments, ({ one }) => ({
   school: one(schools, { fields: [schoolDocuments.schoolId], references: [schools.id] }),
-  uploader: one(users, { fields: [schoolDocuments.uploadedBy], references: [users.id] }),
-  views: many(documentViews),
+  uploader: one(users, { fields: [schoolDocuments.uploadedBy], references: [users.id] })
 }));
-
-// Document Views (download tracking) table
-export const documentViews = pgTable("document_views", {
-  id: serial("id").primaryKey(),
-  documentId: integer("document_id").notNull().references(() => schoolDocuments.id, { onDelete: 'cascade' }),
-  userId: integer("user_id").notNull().references(() => users.id),
-  downloadedAt: timestamp("downloaded_at").defaultNow().notNull(),
-});
-
-export const insertDocumentViewSchema = createInsertSchema(documentViews)
-  .omit({ id: true, downloadedAt: true });
-export type InsertDocumentView = z.infer<typeof insertDocumentViewSchema>;
-export type DocumentView = typeof documentViews.$inferSelect;
 
 // Payment Receipts table - automatically generated when payments are made
 export const paymentReceipts = pgTable("payment_receipts", {
@@ -1585,7 +1226,7 @@ export const insertRoleInvitationSchema = createInsertSchema(roleInvitations).om
 export type InsertRoleInvitation = z.infer<typeof insertRoleInvitationSchema>;
 export type RoleInvitation = typeof roleInvitations.$inferSelect;
 
-// Events table (extended for school calendar)
+// Events table
 export const events = pgTable("events", {
   id: serial("id").primaryKey(),
   title: text("title").notNull(),
@@ -1594,15 +1235,11 @@ export const events = pgTable("events", {
   endDate: timestamp("end_date").notNull(),
   location: text("location"),
   organizerId: integer("organizer_id").notNull().references(() => users.id),
-  schoolId: integer("school_id").references(() => schools.id),
-  eventType: text("event_type", { enum: ["class", "meeting", "workshop", "camp", "holiday", "deadline", "special", "other"] }).notNull(),
-  color: text("color"),
-  isAllDay: boolean("is_all_day").default(false),
+  eventType: text("event_type", { enum: ["class", "meeting", "workshop", "camp", "other"] }).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-export const insertEventSchema = createInsertSchema(events).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertEventSchema = createInsertSchema(events).omit({ id: true, createdAt: true, organizerId: true });
 export type InsertEvent = z.infer<typeof insertEventSchema>;
 export type Event = typeof events.$inferSelect;
 
@@ -1614,8 +1251,7 @@ export const roleInvitationsRelations = relations(roleInvitations, ({ one }) => 
 
 // Define event relations
 export const eventsRelations = relations(events, ({ one }) => ({
-  organizer: one(users, { fields: [events.organizerId], references: [users.id] }),
-  school: one(schools, { fields: [events.schoolId], references: [schools.id] })
+  organizer: one(users, { fields: [events.organizerId], references: [users.id] })
 }));
 
 // MarketplaceItems table
@@ -1785,15 +1421,6 @@ export const classes = pgTable("classes", {
   curriculumId: integer("curriculum_id").references(() => curricula.id),
   coverImage: text("cover_image"),
   materials: jsonb("materials"),
-  
-  // Volunteer waiver - document that volunteers must sign before assisting
-  volunteerWaiverId: integer("volunteer_waiver_id").references(() => schoolDocuments.id),
-  
-  // Prorate option - when enabled, mid-session enrollments auto-calculate reduced pricing
-  prorateEnabled: boolean("prorate_enabled").default(false).notNull(),
-  
-  // Session linkage - which enrollment session this class belongs to
-  sessionId: integer("session_id"),
 });
 
 export const insertClassSchema = createInsertSchema(classes)
@@ -1839,7 +1466,6 @@ export const insertClassSchema = createInsertSchema(classes)
     totalDiscounted: z.number().optional(),
     totalCollected: z.number().optional(),
     isAdminOnly: z.boolean().optional(),
-    prorateEnabled: z.boolean().optional().default(false),
     
     // Marketplace specific fields (optional)
     ageRange: z.string().optional(),
@@ -1852,12 +1478,6 @@ export const insertClassSchema = createInsertSchema(classes)
     curriculumId: z.number().optional(),
     coverImage: z.string().optional(),
     materials: z.any().optional(),
-    
-    // Volunteer waiver (optional)
-    volunteerWaiverId: z.number().nullable().optional(),
-    
-    // Session linkage (optional)
-    sessionId: z.number().nullable().optional(),
   });
 export type InsertClass = z.infer<typeof insertClassSchema>;
 export type Class = typeof classes.$inferSelect;
@@ -1866,40 +1486,6 @@ export type Class = typeof classes.$inferSelect;
 export const classesRelations = relations(classes, ({ one }) => ({
   instructor: one(users, { fields: [classes.instructorId], references: [users.id] }),
   curriculum: one(curricula, { fields: [classes.curriculumId], references: [curricula.id] }),
-}));
-
-// Sessions - top-level grouping for enrollment periods (Winter, Spring, Fall)
-export const sessions = pgTable("sessions", {
-  id: serial("id").primaryKey(),
-  schoolId: integer("school_id").notNull().references(() => schools.id),
-  name: text("name").notNull(),
-  description: text("description"),
-  startDate: date("start_date").notNull(),
-  endDate: date("end_date").notNull(),
-  status: text("status", { enum: ["upcoming", "active", "completed", "cancelled"] }).default("upcoming").notNull(),
-  enrollmentOpen: boolean("enrollment_open").default(false).notNull(),
-  halfDayPrice: integer("half_day_price"),
-  fullDayPrice: integer("full_day_price"),
-  halfDayStartTime: text("half_day_start_time"),
-  halfDayEndTime: text("half_day_end_time"),
-  fullDayStartTime: text("full_day_start_time"),
-  fullDayEndTime: text("full_day_end_time"),
-  halfDayDays: text("half_day_days").array(),
-  fullDayDays: text("full_day_days").array(),
-  halfDayCapacity: integer("half_day_capacity"),
-  fullDayCapacity: integer("full_day_capacity"),
-  sortOrder: integer("sort_order").default(0).notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
-
-export const insertSessionSchema = createInsertSchema(sessions)
-  .omit({ id: true, createdAt: true, updatedAt: true });
-export type InsertSession = z.infer<typeof insertSessionSchema>;
-export type Session = typeof sessions.$inferSelect;
-
-export const sessionsRelations = relations(sessions, ({ one }) => ({
-  school: one(schools, { fields: [sessions.schoolId], references: [schools.id] }),
 }));
 
 // Class Inclusions - tracks which classes are included in other classes (e.g., Full Day includes Woodshop, Art, Music)
@@ -1995,7 +1581,6 @@ export const userLocations = pgTable("user_locations", {
   canManageClasses: boolean("can_manage_classes").default(false).notNull(),
   canManageStudents: boolean("can_manage_students").default(false).notNull(),
   canSendNotifications: boolean("can_send_notifications").default(false).notNull(),
-  canViewParentContacts: boolean("can_view_parent_contacts").default(false).notNull(),
   isActive: boolean("is_active").default(true).notNull(),
   assignedAt: timestamp("assigned_at").defaultNow().notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -2014,7 +1599,6 @@ export const categories = pgTable("categories", {
   name: text("name").notNull(), // e.g., "Early Childhood", "High School", "Kindergarten"
   description: text("description"), // Optional description of the category
   isActive: boolean("is_active").default(true).notNull(),
-  isPublic: boolean("is_public").default(true).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => ({
@@ -2026,16 +1610,14 @@ export const insertCategorySchema = createInsertSchema(categories)
   .omit({ id: true, createdAt: true, updatedAt: true })
   .extend({
     description: z.string().nullable().default(null),
-    isPublic: z.boolean().default(true).optional(),
   });
 export type InsertCategory = z.infer<typeof insertCategorySchema>;
 export type Category = typeof categories.$inferSelect;
 
-// Notifications table for enhanced messaging system (extended for announcements)
+// Notifications table for enhanced messaging system
 export const notifications = pgTable("notifications", {
   id: serial("id").primaryKey(),
   senderId: integer("sender_id").notNull().references(() => users.id),
-  schoolId: integer("school_id").references(() => schools.id),
   type: text("type", { 
     enum: ["email", "in_app", "sms", "both", "all"] 
   }).notNull().default("both"),
@@ -2045,20 +1627,15 @@ export const notifications = pgTable("notifications", {
   subject: text("subject").notNull(),
   content: text("content").notNull(),
   targetType: text("target_type", { 
-    enum: ["individual", "role", "location", "all", "all_parents", "enrolled_parents", "unenrolled_parents", "class_specific", "missed_payments"] 
+    enum: ["individual", "role", "location", "all"] 
   }).notNull(),
-  targetData: jsonb("target_data").notNull(),
-  targetClassId: integer("target_class_id").references(() => schoolClasses.id),
-  targetUserIds: integer("target_user_ids").array(),
-  isAnnouncement: boolean("is_announcement").default(false),
-  isPinned: boolean("is_pinned").default(false),
+  targetData: jsonb("target_data").notNull(), // Store recipient info as JSON
   scheduledFor: timestamp("scheduled_for"),
   sentAt: timestamp("sent_at"),
-  expiresAt: timestamp("expires_at"),
   status: text("status", { 
     enum: ["draft", "scheduled", "sending", "sent", "failed"] 
   }).default("draft").notNull(),
-  deliveryStats: jsonb("delivery_stats").default({}),
+  deliveryStats: jsonb("delivery_stats").default({}), // Track delivery results
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -2067,7 +1644,6 @@ export const insertNotificationSchema = createInsertSchema(notifications)
   .omit({ id: true, createdAt: true, updatedAt: true, sentAt: true })
   .extend({
     scheduledFor: z.string().nullable().transform((str) => str ? new Date(str) : null),
-    expiresAt: z.string().nullable().optional().transform((str) => str ? new Date(str) : null),
   });
 export type InsertNotification = z.infer<typeof insertNotificationSchema>;
 export type Notification = typeof notifications.$inferSelect;
@@ -2109,8 +1685,6 @@ export const userLocationsRelations = relations(userLocations, ({ one }) => ({
 
 export const notificationsRelations = relations(notifications, ({ one, many }) => ({
   sender: one(users, { fields: [notifications.senderId], references: [users.id] }),
-  school: one(schools, { fields: [notifications.schoolId], references: [schools.id] }),
-  targetClass: one(schoolClasses, { fields: [notifications.targetClassId], references: [schoolClasses.id] }),
   recipients: many(notificationRecipients),
 }));
 
@@ -2121,20 +1695,6 @@ export const notificationRecipientsRelations = relations(notificationRecipients,
 
 // Legacy payment tables are now defined earlier in the schema with comprehensive financial tracking
 // See programEnrollments, payments, scheduledPayments, and refunds tables above
-
-// Saved audiences for announcement targeting
-export const savedAudiences = pgTable("saved_audiences", {
-  id: serial("id").primaryKey(),
-  schoolId: integer("school_id").references(() => schools.id).notNull(),
-  name: text("name").notNull(),
-  targetType: text("target_type").notNull(),
-  targetClassId: integer("target_class_id").references(() => schoolClasses.id),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-});
-
-export const insertSavedAudienceSchema = createInsertSchema(savedAudiences).omit({ id: true, createdAt: true });
-export type InsertSavedAudience = z.infer<typeof insertSavedAudienceSchema>;
-export type SavedAudience = typeof savedAudiences.$inferSelect;
 
 // Discounts table for managing school discounts
 export const discounts = pgTable("discounts", {
@@ -2160,9 +1720,6 @@ export const discounts = pgTable("discounts", {
   // Role-based discount eligibility
   requiredRoles: text("required_roles").array(), // Roles required for discount (e.g., ["parent", "educator"])
   roleMatchLogic: text("role_match_logic", { enum: ["and", "or"] }).default("or"), // "and" = user must have ALL roles, "or" = user must have ANY role
-  
-  // Member ID-targeted discount eligibility
-  allowedMemberIds: text("allowed_member_ids").array(), // Specific member IDs that can use this discount (e.g., ["ASA-2025-X7K9M2"])
   
   // Bundle discount rules (optional)
   bundleRule: jsonb("bundle_rule").$type<{
@@ -2250,8 +1807,6 @@ export const bundleRuleSchema = z.object({
 export type BundleRule = z.infer<typeof bundleRuleSchema>;
 
 // Discount schemas for validation
-const memberIdRegex = /^ASA-\d{4}-[A-Z0-9]{6}$/i;
-
 export const insertDiscountSchema = createInsertSchema(discounts)
   .omit({ id: true, createdAt: true, updatedAt: true, currentUsageCount: true })
   .extend({
@@ -2262,10 +1817,6 @@ export const insertDiscountSchema = createInsertSchema(discounts)
     value: z.number().transform(value => Math.round(value * 100)),
     // Bundle rule validation
     bundleRule: bundleRuleSchema.optional(),
-    // Validate each member ID matches the expected format
-    allowedMemberIds: z.array(
-      z.string().regex(memberIdRegex, 'Member ID must match format ASA-YYYY-XXXXXX (e.g., ASA-2025-X7K9M2)')
-    ).optional().nullable(),
   });
 
 export const insertDiscountApplicationSchema = createInsertSchema(discountApplications)
@@ -2276,146 +1827,95 @@ export type Discount = typeof discounts.$inferSelect;
 export type InsertDiscountApplication = z.infer<typeof insertDiscountApplicationSchema>;
 export type DiscountApplication = typeof discountApplications.$inferSelect;
 
-// Schedule Builder Tables
-// Weekly Skeletons - Reusable weekly schedule structure per grade level
-export const weeklySkeletons = pgTable("weekly_skeletons", {
+// Daily Flow Tables
+// Daily Flow Templates - Reusable templates for scheduling
+export const dailyFlowTemplates = pgTable("daily_flow_templates", {
   id: serial("id").primaryKey(),
-  schoolId: integer("school_id").notNull().references(() => schools.id),
-  sessionId: integer("session_id").references(() => sessions.id),
   name: text("name").notNull(),
   description: text("description"),
-  gradeLevel: text("grade_level").notNull(),
-  operatingDays: text("operating_days").array().notNull(),
-  isActive: boolean("is_active").default(true).notNull(),
-  createdBy: integer("created_by").notNull().references(() => users.id),
-  updatedBy: integer("updated_by").references(() => users.id),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
-
-// Skeleton Blocks - Time blocks within a weekly skeleton
-export const skeletonBlocks = pgTable("skeleton_blocks", {
-  id: serial("id").primaryKey(),
-  skeletonId: integer("skeleton_id").notNull().references(() => weeklySkeletons.id, { onDelete: 'cascade' }),
-  dayOfWeek: integer("day_of_week").notNull(),
-  startTime: text("start_time").notNull(),
-  endTime: text("end_time").notNull(),
-  blockType: text("block_type", { enum: ["anchor", "curriculum", "flexible"] }).notNull(),
-  defaultTitle: text("default_title").notNull(),
-  defaultDescription: text("default_description"),
-  subjectArea: text("subject_area"),
-  sortOrder: integer("sort_order").default(0).notNull(),
-  createdBy: integer("created_by").notNull().references(() => users.id),
-  updatedBy: integer("updated_by").references(() => users.id),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
-
-// Week Plans - A specific week's schedule based on a skeleton
-export const weekPlans = pgTable("week_plans", {
-  id: serial("id").primaryKey(),
-  skeletonId: integer("skeleton_id").notNull().references(() => weeklySkeletons.id, { onDelete: 'cascade' }),
-  sessionId: integer("session_id").references(() => sessions.id),
   schoolId: integer("school_id").notNull().references(() => schools.id),
-  weekNumber: integer("week_number").notNull(),
-  weekStartDate: date("week_start_date").notNull(),
-  status: text("status", { enum: ["draft", "published", "completed"] }).default("draft").notNull(),
-  notes: text("notes"),
-  createdBy: integer("created_by").notNull().references(() => users.id),
-  updatedBy: integer("updated_by").references(() => users.id),
+  gradeLevel: text("grade_level").notNull(),
+  subject: text("subject").notNull(),
+  createdBy: text("created_by").notNull(), // Email of creator
+  isActive: boolean("is_active").default(true).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-// Week Plan Blocks - Individual block content for a specific week
-export const weekPlanBlocks = pgTable("week_plan_blocks", {
+// Daily Flow Entries - Individual scheduled activities
+export const dailyFlowEntries = pgTable("daily_flow_entries", {
   id: serial("id").primaryKey(),
-  weekPlanId: integer("week_plan_id").notNull().references(() => weekPlans.id, { onDelete: 'cascade' }),
-  skeletonBlockId: integer("skeleton_block_id").notNull().references(() => skeletonBlocks.id),
-  title: text("title"),
-  description: text("description"),
+  templateId: integer("template_id").references(() => dailyFlowTemplates.id),
+  classId: integer("class_id").notNull().references(() => classes.id),
+  date: date("date").notNull(), // YYYY-MM-DD
+  startTime: text("start_time").notNull(), // HH:MM format
+  endTime: text("end_time").notNull(), // HH:MM format
+  subject: text("subject").notNull(),
+  lessonTitle: text("lesson_title").notNull(),
+  lessonDescription: text("lesson_description"),
   lessonLink: text("lesson_link"),
-  attachments: jsonb("attachments").default([]),
-  objectives: jsonb("objectives").default([]),
-  groups: jsonb("groups").default([]),
+  materials: jsonb("materials").default([]), // Array of strings
+  objectives: jsonb("objectives").default([]), // Array of strings
   isCompleted: boolean("is_completed").default(false).notNull(),
-  completedBy: integer("completed_by").references(() => users.id),
+  completedBy: text("completed_by"), // Email of who completed it
   completedAt: timestamp("completed_at"),
   notes: text("notes"),
-  updatedBy: integer("updated_by").references(() => users.id),
+  createdBy: text("created_by").notNull(), // Email of creator
+  lastModifiedBy: text("last_modified_by"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-// Week Plan Block History - Version tracking for block edits
-export const weekPlanBlockHistory = pgTable("week_plan_block_history", {
+// Daily Flow Schedules - Recurring patterns for automatic scheduling
+export const dailyFlowSchedules = pgTable("daily_flow_schedules", {
   id: serial("id").primaryKey(),
-  blockId: integer("block_id").notNull().references(() => weekPlanBlocks.id, { onDelete: 'cascade' }),
-  previousTitle: text("previous_title"),
-  previousDescription: text("previous_description"),
-  previousGroups: jsonb("previous_groups"),
-  previousAttachments: jsonb("previous_attachments"),
-  previousObjectives: jsonb("previous_objectives"),
-  changedBy: integer("changed_by").notNull().references(() => users.id),
-  changedAt: timestamp("changed_at").defaultNow().notNull(),
+  templateId: integer("template_id").notNull().references(() => dailyFlowTemplates.id),
+  classId: integer("class_id").notNull().references(() => classes.id),
+  dayOfWeek: integer("day_of_week").notNull(), // 0 = Sunday, 6 = Saturday
+  startTime: text("start_time").notNull(), // HH:MM format
+  endTime: text("end_time").notNull(), // HH:MM format
+  subject: text("subject").notNull(),
+  lessonTitle: text("lesson_title").notNull(),
+  lessonDescription: text("lesson_description"),
+  lessonLink: text("lesson_link"),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-// Schedule Builder Relations
-export const weeklySkeletonRelations = relations(weeklySkeletons, ({ one, many }) => ({
-  school: one(schools, { fields: [weeklySkeletons.schoolId], references: [schools.id] }),
-  session: one(sessions, { fields: [weeklySkeletons.sessionId], references: [sessions.id] }),
-  creator: one(users, { fields: [weeklySkeletons.createdBy], references: [users.id] }),
-  blocks: many(skeletonBlocks),
-  weekPlans: many(weekPlans),
+// Define relationships for daily flow tables
+export const dailyFlowTemplateRelations = relations(dailyFlowTemplates, ({ one, many }) => ({
+  school: one(schools, { fields: [dailyFlowTemplates.schoolId], references: [schools.id] }),
+  entries: many(dailyFlowEntries),
+  schedules: many(dailyFlowSchedules),
 }));
 
-export const skeletonBlockRelations = relations(skeletonBlocks, ({ one }) => ({
-  skeleton: one(weeklySkeletons, { fields: [skeletonBlocks.skeletonId], references: [weeklySkeletons.id] }),
-  creator: one(users, { fields: [skeletonBlocks.createdBy], references: [users.id] }),
+export const dailyFlowEntryRelations = relations(dailyFlowEntries, ({ one }) => ({
+  template: one(dailyFlowTemplates, { fields: [dailyFlowEntries.templateId], references: [dailyFlowTemplates.id] }),
+  class: one(classes, { fields: [dailyFlowEntries.classId], references: [classes.id] }),
 }));
 
-export const weekPlanRelations = relations(weekPlans, ({ one, many }) => ({
-  skeleton: one(weeklySkeletons, { fields: [weekPlans.skeletonId], references: [weeklySkeletons.id] }),
-  session: one(sessions, { fields: [weekPlans.sessionId], references: [sessions.id] }),
-  school: one(schools, { fields: [weekPlans.schoolId], references: [schools.id] }),
-  creator: one(users, { fields: [weekPlans.createdBy], references: [users.id] }),
-  blocks: many(weekPlanBlocks),
+export const dailyFlowScheduleRelations = relations(dailyFlowSchedules, ({ one }) => ({
+  template: one(dailyFlowTemplates, { fields: [dailyFlowSchedules.templateId], references: [dailyFlowTemplates.id] }),
+  class: one(classes, { fields: [dailyFlowSchedules.classId], references: [classes.id] }),
 }));
 
-export const weekPlanBlockRelations = relations(weekPlanBlocks, ({ one, many }) => ({
-  weekPlan: one(weekPlans, { fields: [weekPlanBlocks.weekPlanId], references: [weekPlans.id] }),
-  skeletonBlock: one(skeletonBlocks, { fields: [weekPlanBlocks.skeletonBlockId], references: [skeletonBlocks.id] }),
-  completedByUser: one(users, { fields: [weekPlanBlocks.completedBy], references: [users.id] }),
-  history: many(weekPlanBlockHistory),
-}));
-
-export const weekPlanBlockHistoryRelations = relations(weekPlanBlockHistory, ({ one }) => ({
-  block: one(weekPlanBlocks, { fields: [weekPlanBlockHistory.blockId], references: [weekPlanBlocks.id] }),
-  changedByUser: one(users, { fields: [weekPlanBlockHistory.changedBy], references: [users.id] }),
-}));
-
-// Schedule Builder schemas for validation
-export const insertWeeklySkeletonSchema = createInsertSchema(weeklySkeletons)
+// Daily Flow schemas for validation
+export const insertDailyFlowTemplateSchema = createInsertSchema(dailyFlowTemplates)
   .omit({ id: true, createdAt: true, updatedAt: true });
-export const insertSkeletonBlockSchema = createInsertSchema(skeletonBlocks)
-  .omit({ id: true, createdAt: true, updatedAt: true });
-export const insertWeekPlanSchema = createInsertSchema(weekPlans)
-  .omit({ id: true, createdAt: true, updatedAt: true });
-export const insertWeekPlanBlockSchema = createInsertSchema(weekPlanBlocks)
-  .omit({ id: true, createdAt: true, updatedAt: true });
-export const insertWeekPlanBlockHistorySchema = createInsertSchema(weekPlanBlockHistory)
-  .omit({ id: true });
 
-export type InsertWeeklySkeleton = z.infer<typeof insertWeeklySkeletonSchema>;
-export type WeeklySkeleton = typeof weeklySkeletons.$inferSelect;
-export type InsertSkeletonBlock = z.infer<typeof insertSkeletonBlockSchema>;
-export type SkeletonBlock = typeof skeletonBlocks.$inferSelect;
-export type InsertWeekPlan = z.infer<typeof insertWeekPlanSchema>;
-export type WeekPlan = typeof weekPlans.$inferSelect;
-export type InsertWeekPlanBlock = z.infer<typeof insertWeekPlanBlockSchema>;
-export type WeekPlanBlock = typeof weekPlanBlocks.$inferSelect;
-export type InsertWeekPlanBlockHistory = z.infer<typeof insertWeekPlanBlockHistorySchema>;
-export type WeekPlanBlockHistory = typeof weekPlanBlockHistory.$inferSelect;
+export const insertDailyFlowEntrySchema = createInsertSchema(dailyFlowEntries)
+  .omit({ id: true, createdAt: true, updatedAt: true });
+
+export const insertDailyFlowScheduleSchema = createInsertSchema(dailyFlowSchedules)
+  .omit({ id: true, createdAt: true, updatedAt: true });
+
+export type InsertDailyFlowTemplate = z.infer<typeof insertDailyFlowTemplateSchema>;
+export type DailyFlowTemplate = typeof dailyFlowTemplates.$inferSelect;
+export type InsertDailyFlowEntry = z.infer<typeof insertDailyFlowEntrySchema>;
+export type DailyFlowEntry = typeof dailyFlowEntries.$inferSelect;
+export type InsertDailyFlowSchedule = z.infer<typeof insertDailyFlowScheduleSchema>;
+export type DailyFlowSchedule = typeof dailyFlowSchedules.$inferSelect;
 
 // Custom Forms - Form Builder System
 export const customForms = pgTable("custom_forms", {
@@ -2618,89 +2118,6 @@ export type CustomFormField = typeof customFormFields.$inferSelect;
 export type InsertCustomFormSubmission = z.infer<typeof insertCustomFormSubmissionSchema>;
 export type CustomFormSubmission = typeof customFormSubmissions.$inferSelect;
 
-// ==========================================
-// EDUCATOR DASHBOARD TABLES (Phase 1a)
-// ==========================================
-
-// Educator Class Assignments - Links educators to classes with permissions
-export const educatorClassAssignments = pgTable("educator_class_assignments", {
-  id: serial("id").primaryKey(),
-  educatorId: integer("educator_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
-  classId: integer("class_id").notNull().references(() => classes.id, { onDelete: 'cascade' }),
-  schoolId: integer("school_id").notNull().references(() => schools.id, { onDelete: 'cascade' }),
-  isPrimary: boolean("is_primary").default(true).notNull(), // Primary teacher vs assistant
-  canStartSession: boolean("can_start_session").default(true).notNull(), // Permission to start/end sessions
-  validFrom: date("valid_from"), // For substitutes: when assignment starts
-  validTo: date("valid_to"), // For substitutes: when assignment ends (null = permanent)
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
-
-export const insertEducatorClassAssignmentSchema = createInsertSchema(educatorClassAssignments)
-  .omit({ id: true, createdAt: true, updatedAt: true });
-export type InsertEducatorClassAssignment = z.infer<typeof insertEducatorClassAssignmentSchema>;
-export type EducatorClassAssignment = typeof educatorClassAssignments.$inferSelect;
-
-// Class Sessions - Tracks individual class session instances
-export const classSessions = pgTable("class_sessions", {
-  id: serial("id").primaryKey(),
-  classId: integer("class_id").notNull().references(() => classes.id, { onDelete: 'cascade' }),
-  schoolId: integer("school_id").notNull().references(() => schools.id, { onDelete: 'cascade' }),
-  educatorId: integer("educator_id").notNull().references(() => users.id), // Who started the session
-  substituteEducatorId: integer("substitute_educator_id").references(() => users.id), // If covered by substitute
-  
-  // Scheduled times (set by admin via educator_schedules in Phase 1b)
-  scheduledDate: date("scheduled_date").notNull(),
-  scheduledStartTime: text("scheduled_start_time").notNull(), // HH:MM format
-  scheduledEndTime: text("scheduled_end_time").notNull(), // HH:MM format
-  
-  // Actual times (recorded when educator checks in/out)
-  actualStartTime: timestamp("actual_start_time"), // When educator clicked "Start Class"
-  actualEndTime: timestamp("actual_end_time"), // When educator clicked "End Class"
-  
-  // Session status
-  status: text("status", { 
-    enum: ["scheduled", "in_progress", "completed", "cancelled", "no_show"] 
-  }).default("scheduled").notNull(),
-  cancelledReason: text("cancelled_reason"), // If cancelled, why
-  
-  // Session content
-  notes: text("notes"), // Educator notes about the session
-  dailyFlowEntryId: integer("daily_flow_entry_id"), // Legacy field - no longer FK referenced
-  
-  // QR Code Check-in
-  qrToken: text("qr_token"),
-  qrTokenExpiresAt: timestamp("qr_token_expires_at"),
-  
-  // Educator check-in geolocation
-  checkInLatitude: doublePrecision("check_in_latitude"),
-  checkInLongitude: doublePrecision("check_in_longitude"),
-  checkInLocationVerified: boolean("check_in_location_verified"),
-  
-  // Metadata
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
-
-export const insertClassSessionSchema = createInsertSchema(classSessions)
-  .omit({ id: true, createdAt: true, updatedAt: true });
-export type InsertClassSession = z.infer<typeof insertClassSessionSchema>;
-export type ClassSession = typeof classSessions.$inferSelect;
-
-// Relations for educator dashboard tables
-export const educatorClassAssignmentsRelations = relations(educatorClassAssignments, ({ one }) => ({
-  educator: one(users, { fields: [educatorClassAssignments.educatorId], references: [users.id] }),
-  class: one(classes, { fields: [educatorClassAssignments.classId], references: [classes.id] }),
-  school: one(schools, { fields: [educatorClassAssignments.schoolId], references: [schools.id] }),
-}));
-
-export const classSessionsRelations = relations(classSessions, ({ one }) => ({
-  class: one(classes, { fields: [classSessions.classId], references: [classes.id] }),
-  school: one(schools, { fields: [classSessions.schoolId], references: [schools.id] }),
-  educator: one(users, { fields: [classSessions.educatorId], references: [users.id] }),
-  substituteEducator: one(users, { fields: [classSessions.substituteEducatorId], references: [users.id] }),
-}));
-
 // Push Subscriptions table for web push notifications
 export const pushSubscriptions = pgTable("push_subscriptions", {
   id: serial("id").primaryKey(),
@@ -2724,418 +2141,32 @@ export const pushSubscriptionsRelations = relations(pushSubscriptions, ({ one })
   user: one(users, { fields: [pushSubscriptions.userId], references: [users.id] }),
 }));
 
-// ===== PHASE 1B: Educator Schedules & Audit Logs =====
-
-// Educator Schedules - Admin-set time blocks for educators per class
-export const educatorSchedules = pgTable("educator_schedules", {
-  id: serial("id").primaryKey(),
-  
-  // Links to assignment (enforces permission scope)
-  assignmentId: integer("assignment_id").notNull().references(() => educatorClassAssignments.id, { onDelete: 'cascade' }),
-  
-  // Denormalized for query efficiency
-  educatorId: integer("educator_id").notNull().references(() => users.id),
-  classId: integer("class_id").notNull().references(() => classes.id),
-  schoolId: integer("school_id").notNull().references(() => schools.id),
-  
-  // Schedule type: recurring (weekly), one_time (specific date), adhoc (flexible)
-  scheduleType: text("schedule_type", { enum: ["recurring", "one_time", "adhoc"] }).default("recurring").notNull(),
-  
-  // For recurring schedules (0=Sunday, 1=Monday, ..., 6=Saturday)
-  dayOfWeek: integer("day_of_week"),
-  
-  // For one-time schedules
-  scheduledDate: text("scheduled_date"), // YYYY-MM-DD format
-  
-  // Time range (stored as HH:MM format in 24-hour time)
-  startTime: text("start_time").notNull(),
-  endTime: text("end_time").notNull(),
-  
-  // Effective date range (when this schedule is valid)
-  effectiveFrom: text("effective_from").notNull(), // YYYY-MM-DD
-  effectiveTo: text("effective_to"), // YYYY-MM-DD, null = indefinite
-  
-  // Status and metadata
-  isActive: boolean("is_active").default(true).notNull(),
-  timezone: text("timezone").default("America/New_York").notNull(),
-  notes: text("notes"),
-  
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
-
-export const insertEducatorScheduleSchema = createInsertSchema(educatorSchedules)
-  .omit({ id: true, createdAt: true, updatedAt: true });
-export type InsertEducatorSchedule = z.infer<typeof insertEducatorScheduleSchema>;
-export type EducatorSchedule = typeof educatorSchedules.$inferSelect;
-
-// Educator Schedules relations
-export const educatorSchedulesRelations = relations(educatorSchedules, ({ one }) => ({
-  assignment: one(educatorClassAssignments, { fields: [educatorSchedules.assignmentId], references: [educatorClassAssignments.id] }),
-  educator: one(users, { fields: [educatorSchedules.educatorId], references: [users.id] }),
-  class: one(classes, { fields: [educatorSchedules.classId], references: [classes.id] }),
-  school: one(schools, { fields: [educatorSchedules.schoolId], references: [schools.id] }),
-}));
-
-// Audit Logs - Tracks all actions for compliance and debugging
-export const auditLogs = pgTable("audit_logs", {
-  id: serial("id").primaryKey(),
-  
-  // Action details
-  actionType: text("action_type").notNull(), // e.g., 'session_start', 'session_end', 'schedule_create', 'schedule_update'
-  severity: text("severity", { enum: ["info", "warn", "error"] }).default("info").notNull(),
-  
-  // Actor (who performed the action)
-  actorId: integer("actor_id").references(() => users.id),
-  actorRole: text("actor_role"), // Role at time of action (for historical accuracy)
-  actorEmail: text("actor_email"), // Email for reference even if user deleted
-  
-  // Target (what was affected)
-  targetType: text("target_type").notNull(), // e.g., 'class_session', 'educator_schedule', 'user'
-  targetId: text("target_id").notNull(), // ID of the target (text to support various ID formats)
-  
-  // Context
-  schoolId: integer("school_id").references(() => schools.id),
-  requestId: text("request_id"), // For correlating related logs
-  
-  // Request metadata
-  ipAddress: text("ip_address"),
-  userAgent: text("user_agent"),
-  
-  // Detailed metadata (before/after state, additional context)
-  metadata: jsonb("metadata").default({}).notNull(), // { context, before, after, diff, error }
-  
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-});
-
-export const insertAuditLogSchema = createInsertSchema(auditLogs)
-  .omit({ id: true, createdAt: true });
-export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
-export type AuditLog = typeof auditLogs.$inferSelect;
-
-// Audit Logs relations
-export const auditLogsRelations = relations(auditLogs, ({ one }) => ({
-  actor: one(users, { fields: [auditLogs.actorId], references: [users.id] }),
-  school: one(schools, { fields: [auditLogs.schoolId], references: [schools.id] }),
-}));
-
-// ==========================================
-// PHASE 2: ATTENDANCE TRACKING
-// ==========================================
-
-// Session Attendance - Tracks student attendance per class session
-export const sessionAttendance = pgTable("session_attendance", {
-  id: serial("id").primaryKey(),
-  sessionId: integer("session_id").notNull().references(() => classSessions.id, { onDelete: 'cascade' }),
-  childId: integer("child_id").notNull().references(() => children.id, { onDelete: 'cascade' }),
-  schoolId: integer("school_id").notNull().references(() => schools.id, { onDelete: 'cascade' }),
-  
-  // Attendance status
-  status: text("status", { 
-    enum: ["present", "absent", "late", "excused", "early_departure"] 
-  }).default("present").notNull(),
-  
-  // Timestamps
-  checkInTime: timestamp("check_in_time"),
-  checkOutTime: timestamp("check_out_time"),
-  
-  // Geolocation (captured at check-in)
-  checkInLatitude: doublePrecision("check_in_latitude"),
-  checkInLongitude: doublePrecision("check_in_longitude"),
-  locationVerified: boolean("location_verified"),
-  
-  // Additional info
-  tardyMinutes: integer("tardy_minutes"),
-  earlyDepartureMinutes: integer("early_departure_minutes"),
-  excuseReason: text("excuse_reason"),
-  notes: text("notes"),
-  
-  // Who recorded the attendance
-  recordedBy: integer("recorded_by").notNull().references(() => users.id),
-  recordedAt: timestamp("recorded_at").defaultNow().notNull(),
-  
-  // Tracking
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-}, (table) => ({
-  uniqueSessionChild: unique().on(table.sessionId, table.childId),
-}));
-
-export const insertSessionAttendanceSchema = createInsertSchema(sessionAttendance)
-  .omit({ id: true, createdAt: true, updatedAt: true, recordedAt: true });
-export type InsertSessionAttendance = z.infer<typeof insertSessionAttendanceSchema>;
-export type SessionAttendance = typeof sessionAttendance.$inferSelect;
-
-// Session Attendance relations
-export const sessionAttendanceRelations = relations(sessionAttendance, ({ one }) => ({
-  session: one(classSessions, { fields: [sessionAttendance.sessionId], references: [classSessions.id] }),
-  child: one(children, { fields: [sessionAttendance.childId], references: [children.id] }),
-  school: one(schools, { fields: [sessionAttendance.schoolId], references: [schools.id] }),
-  recorder: one(users, { fields: [sessionAttendance.recordedBy], references: [users.id] }),
-}));
-
-// ==========================================
-// ERROR TRACKING & TELEMETRY
-// ==========================================
-
-// Error Logs - Track application errors for debugging and monitoring
-export const errorLogs = pgTable("error_logs", {
-  id: serial("id").primaryKey(),
-  
-  // Error identification
-  errorType: text("error_type", { 
-    enum: ["frontend", "backend", "api", "database", "auth", "payment", "unknown"] 
-  }).default("unknown").notNull(),
-  severity: text("severity", { 
-    enum: ["low", "medium", "high", "critical"] 
-  }).default("medium").notNull(),
-  
-  // Error details
-  message: text("message").notNull(),
-  stackTrace: text("stack_trace"),
-  errorCode: text("error_code"), // HTTP status code or custom error code
-  
-  // Context
-  url: text("url"), // URL where error occurred
-  route: text("route"), // API route or page route
-  method: text("method"), // HTTP method (GET, POST, etc.)
-  
-  // User context (if authenticated)
-  userId: integer("user_id").references(() => users.id),
-  userEmail: text("user_email"),
-  schoolId: integer("school_id").references(() => schools.id),
-  
-  // Request metadata
-  ipAddress: text("ip_address"),
-  userAgent: text("user_agent"),
-  requestBody: jsonb("request_body"), // Sanitized request body (no PII)
-  
-  // Additional context
-  metadata: jsonb("metadata").default({}).notNull(), // { componentStack, breadcrumbs, custom data }
-  
-  // Resolution tracking
-  status: text("status", { 
-    enum: ["new", "acknowledged", "investigating", "resolved", "ignored"] 
-  }).default("new").notNull(),
-  resolvedBy: integer("resolved_by").references(() => users.id),
-  resolvedAt: timestamp("resolved_at"),
-  resolutionNotes: text("resolution_notes"),
-  
-  // Notification tracking
-  notificationSent: boolean("notification_sent").default(false).notNull(),
-  notificationSentAt: timestamp("notification_sent_at"),
-  
-  // Timestamps
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
-
-export const insertErrorLogSchema = createInsertSchema(errorLogs)
-  .omit({ id: true, createdAt: true, updatedAt: true, resolvedAt: true, notificationSentAt: true });
-export type InsertErrorLog = z.infer<typeof insertErrorLogSchema>;
-export type ErrorLog = typeof errorLogs.$inferSelect;
-
-// Error Logs relations
-export const errorLogsRelations = relations(errorLogs, ({ one }) => ({
-  user: one(users, { fields: [errorLogs.userId], references: [users.id] }),
-  school: one(schools, { fields: [errorLogs.schoolId], references: [schools.id] }),
-  resolver: one(users, { fields: [errorLogs.resolvedBy], references: [users.id] }),
-}));
-
-// ==================== VOLUNTEER MANAGEMENT (Phase 2) ====================
-
-// Signed Waivers - Tracks one-time volunteer waiver signatures
-export const signedWaivers = pgTable("signed_waivers", {
-  id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
-  schoolId: integer("school_id").notNull().references(() => schools.id, { onDelete: 'cascade' }),
-  documentId: integer("document_id").notNull().references(() => schoolDocuments.id), // The waiver document
-  
-  // Signature details
-  signedAt: timestamp("signed_at").defaultNow().notNull(),
-  signatoryName: text("signatory_name").notNull(), // Legal name as signed
-  
-  // Signature image storage (object storage)
-  signatureUrl: text("signature_url"),
-  signatureMimeType: text("signature_mime_type"),
-  signatureSizeBytes: integer("signature_size_bytes"),
-  signatureUploadedAt: timestamp("signature_uploaded_at"),
-  
-  // Metadata for audit
-  ipAddress: text("ip_address"),
-  userAgent: text("user_agent"),
-  
-  // Expiration (waivers may need to be re-signed annually)
-  expiresAt: timestamp("expires_at"),
-  
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-});
-
-export const insertSignedWaiverSchema = createInsertSchema(signedWaivers)
-  .omit({ id: true, createdAt: true, signedAt: true });
-export type InsertSignedWaiver = z.infer<typeof insertSignedWaiverSchema>;
-export type SignedWaiver = typeof signedWaivers.$inferSelect;
-
-export const signedWaiversRelations = relations(signedWaivers, ({ one }) => ({
-  user: one(users, { fields: [signedWaivers.userId], references: [users.id] }),
-  school: one(schools, { fields: [signedWaivers.schoolId], references: [schools.id] }),
-  document: one(schoolDocuments, { fields: [signedWaivers.documentId], references: [schoolDocuments.id] }),
-}));
-
-// Session Volunteers - Tracks which volunteers/aides assisted in a class session
-export const sessionVolunteers = pgTable("session_volunteers", {
-  id: serial("id").primaryKey(),
-  sessionId: integer("session_id").notNull().references(() => classSessions.id, { onDelete: 'cascade' }),
-  volunteerId: integer("volunteer_id").notNull().references(() => users.id),
-  schoolId: integer("school_id").notNull().references(() => schools.id),
-  
-  // Role for this session
-  role: text("role", { enum: ["aide", "volunteer", "substitute"] }).notNull().default("volunteer"),
-  
-  // Time tracking for volunteer hours
-  checkInTime: timestamp("check_in_time"),
-  checkOutTime: timestamp("check_out_time"),
-  actualMinutes: integer("actual_minutes"), // Calculated when they check out
-  
-  // Waiver reference - must have signed waiver before volunteering
-  signedWaiverId: integer("signed_waiver_id").references(() => signedWaivers.id),
-  
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-});
-
-export const insertSessionVolunteerSchema = createInsertSchema(sessionVolunteers)
-  .omit({ id: true, createdAt: true });
-export type InsertSessionVolunteer = z.infer<typeof insertSessionVolunteerSchema>;
-export type SessionVolunteer = typeof sessionVolunteers.$inferSelect;
-
-export const sessionVolunteersRelations = relations(sessionVolunteers, ({ one }) => ({
-  session: one(classSessions, { fields: [sessionVolunteers.sessionId], references: [classSessions.id] }),
-  volunteer: one(users, { fields: [sessionVolunteers.volunteerId], references: [users.id] }),
-  school: one(schools, { fields: [sessionVolunteers.schoolId], references: [schools.id] }),
-  signedWaiver: one(signedWaivers, { fields: [sessionVolunteers.signedWaiverId], references: [signedWaivers.id] }),
-}));
-
-// Volunteer Credits - Credits earned by volunteering that can be applied to account balances
-// Rate: $20/hr, non-cashable, 1-year expiration from approval date
-export const volunteerCredits = pgTable("volunteer_credits", {
-  id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
-  schoolId: integer("school_id").notNull().references(() => schools.id, { onDelete: 'cascade' }),
-  
-  // Source of the credit
-  sessionId: integer("session_id").references(() => classSessions.id), // Optional - credits can be manually added
-  sessionVolunteerId: integer("session_volunteer_id").references(() => sessionVolunteers.id),
-  
-  // Hours and credit calculation ($20/hr rate)
-  minutesWorked: integer("minutes_worked").notNull(),
-  creditAmountCents: integer("credit_amount_cents").notNull(), // Calculated: Math.floor(minutes/60) * 2000 cents
-  
-  // Status workflow: pending -> approved/rejected
-  status: text("status", { enum: ["pending", "approved", "rejected", "partially_used", "used", "expired"] }).notNull().default("pending"),
-  
-  // Admin approval tracking
-  approvedBy: integer("approved_by").references(() => users.id),
-  approvedAt: timestamp("approved_at"),
-  rejectionReason: text("rejection_reason"),
-  
-  // Usage tracking
-  usedAmountCents: integer("used_amount_cents").default(0).notNull(), // Amount already applied to payments
-  
-  // Expiration - 1 year from approval date
-  expiresAt: timestamp("expires_at"),
-  
-  // Notes
-  notes: text("notes"), // Admin notes or description of the volunteer work
-  
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
-
-export const insertVolunteerCreditSchema = createInsertSchema(volunteerCredits)
-  .omit({ id: true, createdAt: true, updatedAt: true, approvedAt: true, usedAmountCents: true });
-export type InsertVolunteerCredit = z.infer<typeof insertVolunteerCreditSchema>;
-export type VolunteerCredit = typeof volunteerCredits.$inferSelect;
-
-export const volunteerCreditsRelations = relations(volunteerCredits, ({ one }) => ({
-  user: one(users, { fields: [volunteerCredits.userId], references: [users.id] }),
-  school: one(schools, { fields: [volunteerCredits.schoolId], references: [schools.id] }),
-  session: one(classSessions, { fields: [volunteerCredits.sessionId], references: [classSessions.id] }),
-  sessionVolunteer: one(sessionVolunteers, { fields: [volunteerCredits.sessionVolunteerId], references: [sessionVolunteers.id] }),
-  approver: one(users, { fields: [volunteerCredits.approvedBy], references: [users.id] }),
-}));
-
-// Credit Usage Log - Tracks when credits are applied to payments
-export const creditUsageLogs = pgTable("credit_usage_logs", {
-  id: serial("id").primaryKey(),
-  creditId: integer("credit_id").notNull().references(() => volunteerCredits.id, { onDelete: 'cascade' }),
-  paymentHistoryId: integer("payment_history_id").references(() => stripePaymentHistory.id), // May be null if payment failed
-  
-  amountCents: integer("amount_cents").notNull(), // Amount of credit applied
-  description: text("description"), // What the credit was applied to
-  
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-});
-
-export const insertCreditUsageLogSchema = createInsertSchema(creditUsageLogs)
-  .omit({ id: true, createdAt: true });
-export type InsertCreditUsageLog = z.infer<typeof insertCreditUsageLogSchema>;
-export type CreditUsageLog = typeof creditUsageLogs.$inferSelect;
-
-export const creditUsageLogsRelations = relations(creditUsageLogs, ({ one }) => ({
-  credit: one(volunteerCredits, { fields: [creditUsageLogs.creditId], references: [volunteerCredits.id] }),
-  paymentHistory: one(stripePaymentHistory, { fields: [creditUsageLogs.paymentHistoryId], references: [stripePaymentHistory.id] }),
-}));
-
-// ==================== UNIFIED CREDIT SYSTEM ====================
-// Single ledger for all credit types: volunteer, referral, achievement, marketing, manual
-// Designed for extensibility - new credit types can be added without schema changes
+// ==================== UNIFIED CREDIT LEDGER (option B: no legacy volunteer_credits / session FKs) ====================
 
 export const creditTypeEnum = ["volunteer", "referral", "achievement", "marketing", "manual", "fundraiser"] as const;
-export type CreditType = typeof creditTypeEnum[number];
+export type CreditType = (typeof creditTypeEnum)[number];
 
 export const creditStatusEnum = ["pending", "approved", "rejected", "partially_used", "used", "expired", "revoked"] as const;
-export type CreditStatus = typeof creditStatusEnum[number];
+export type CreditStatus = (typeof creditStatusEnum)[number];
 
 export const credits = pgTable("credits", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
-  schoolId: integer("school_id").notNull().references(() => schools.id, { onDelete: 'cascade' }),
-  
-  // Credit type for filtering and extensibility
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  schoolId: integer("school_id").notNull().references(() => schools.id, { onDelete: "cascade" }),
   creditType: text("credit_type", { enum: creditTypeEnum }).notNull(),
-  
-  // Source tracking - links to origin record (session_volunteer, referral, achievement, etc.)
-  sourceType: text("source_type"), // 'session_volunteer', 'referral_signup', 'course_completion', 'manual_grant', etc.
-  sourceId: integer("source_id"), // FK to source record (polymorphic)
-  
-  // Credit amount
+  sourceType: text("source_type"),
+  sourceId: integer("source_id"),
   creditAmountCents: integer("credit_amount_cents").notNull(),
   usedAmountCents: integer("used_amount_cents").default(0).notNull(),
-  
-  // Status workflow: pending → approved/rejected → partially_used/used/expired/revoked
   status: text("status", { enum: creditStatusEnum }).notNull().default("pending"),
-  
-  // Admin approval tracking
   approvedBy: integer("approved_by").references(() => users.id),
   approvedAt: timestamp("approved_at"),
   rejectionReason: text("rejection_reason"),
-  
-  // Expiration - set on approval (e.g., 1 year from approval date)
   expiresAt: timestamp("expires_at"),
-  
-  // Display info
-  title: text("title"), // Human-readable title, e.g., "Volunteer Credit - Art Class Session"
-  description: text("description"), // Detailed description
-  
-  // Type-specific data stored as JSONB for flexibility
-  // For volunteer: { minutesWorked, hourlyRateCents, sessionId, sessionVolunteerId }
-  // For referral: { referredUserId, referralCode }
-  // For achievement: { achievementType, courseId, studentId }
+  title: text("title"),
+  description: text("description"),
   metadata: jsonb("metadata"),
-  
-  // Admin notes
   notes: text("notes"),
-  
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -3151,15 +2182,12 @@ export const creditsRelations = relations(credits, ({ one }) => ({
   approver: one(users, { fields: [credits.approvedBy], references: [users.id] }),
 }));
 
-// Unified Credit Usage Log - Tracks when any credit type is applied to payments
 export const unifiedCreditUsageLogs = pgTable("unified_credit_usage_logs", {
   id: serial("id").primaryKey(),
-  creditId: integer("credit_id").notNull().references(() => credits.id, { onDelete: 'cascade' }),
+  creditId: integer("credit_id").notNull().references(() => credits.id, { onDelete: "cascade" }),
   paymentHistoryId: integer("payment_history_id").references(() => stripePaymentHistory.id),
-  
   amountCents: integer("amount_cents").notNull(),
   description: text("description"),
-  
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -3173,30 +2201,20 @@ export const unifiedCreditUsageLogsRelations = relations(unifiedCreditUsageLogs,
   paymentHistory: one(stripePaymentHistory, { fields: [unifiedCreditUsageLogs.paymentHistoryId], references: [stripePaymentHistory.id] }),
 }));
 
-// ==================== CREDIT HOLDS ====================
-// Reserve-then-finalize pattern: credits are held (reserved) during checkout,
-// then finalized (converted to usage) on success or released on failure/expiration
-
 export const creditHoldStatusEnum = ["pending", "finalized", "released", "expired"] as const;
-export type CreditHoldStatus = typeof creditHoldStatusEnum[number];
+export type CreditHoldStatus = (typeof creditHoldStatusEnum)[number];
 
 export const creditHolds = pgTable("credit_holds", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
-  creditId: integer("credit_id").notNull().references(() => credits.id, { onDelete: 'cascade' }),
-  
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  creditId: integer("credit_id").notNull().references(() => credits.id, { onDelete: "cascade" }),
   amountCents: integer("amount_cents").notNull(),
-  
   checkoutSessionId: text("checkout_session_id").notNull(),
-  
   status: text("status", { enum: creditHoldStatusEnum }).notNull().default("pending"),
-  
   expiresAt: timestamp("expires_at").notNull(),
   finalizedAt: timestamp("finalized_at"),
   releasedAt: timestamp("released_at"),
-  
   description: text("description"),
-  
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -3209,425 +2227,3 @@ export const creditHoldsRelations = relations(creditHolds, ({ one }) => ({
   user: one(users, { fields: [creditHolds.userId], references: [users.id] }),
   credit: one(credits, { fields: [creditHolds.creditId], references: [credits.id] }),
 }));
-
-// ==================== ASSESSMENT & STUDENT PROGRESS TRACKING ====================
-
-// Score format options for different assessment types
-export const scoreFormatEnum = ["numeric", "fraction", "level", "percentage", "letter_grade"] as const;
-export type ScoreFormat = typeof scoreFormatEnum[number];
-
-// Assessment category for grouping
-export const assessmentCategoryEnum = ["reading", "math", "phonics", "writing", "science", "history", "custom"] as const;
-export type AssessmentCategory = typeof assessmentCategoryEnum[number];
-
-// Assessment Types - defines different assessment tools like McCall-Crabbs, Phonograms, Math Levels
-export const assessmentTypes = pgTable("assessment_types", {
-  id: serial("id").primaryKey(),
-  schoolId: integer("school_id").notNull().references(() => schools.id),
-  name: text("name").notNull(),
-  description: text("description"),
-  category: text("category", { enum: assessmentCategoryEnum }).notNull().default("custom"),
-  scoreFormat: text("score_format", { enum: scoreFormatEnum }).notNull().default("numeric"),
-  maxScore: integer("max_score"),
-  levelOptions: text("level_options").array(),
-  hasCurriculumBooks: boolean("has_curriculum_books").default(false).notNull(),
-  isActive: boolean("is_active").default(true).notNull(),
-  sortOrder: integer("sort_order").default(0).notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-}, (table) => ({
-  uniqueSchoolAssessmentType: unique("assessment_types_school_id_name_unique").on(table.schoolId, table.name)
-}));
-
-export const insertAssessmentTypeSchema = createInsertSchema(assessmentTypes)
-  .omit({ id: true, createdAt: true, updatedAt: true })
-  .extend({
-    description: z.string().nullable().default(null),
-    maxScore: z.number().nullable().default(null),
-    levelOptions: z.array(z.string()).nullable().default(null),
-  });
-export type InsertAssessmentType = z.infer<typeof insertAssessmentTypeSchema>;
-export type AssessmentType = typeof assessmentTypes.$inferSelect;
-
-// Curriculum Books - for structured curricula like McCall-Crabbs Books A, B, C, D, E, F
-export const curriculumBooks = pgTable("curriculum_books", {
-  id: serial("id").primaryKey(),
-  assessmentTypeId: integer("assessment_type_id").notNull().references(() => assessmentTypes.id, { onDelete: 'cascade' }),
-  name: text("name").notNull(),
-  description: text("description"),
-  totalLessons: integer("total_lessons"),
-  sortOrder: integer("sort_order").default(0).notNull(),
-  isActive: boolean("is_active").default(true).notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
-
-export const insertCurriculumBookSchema = createInsertSchema(curriculumBooks)
-  .omit({ id: true, createdAt: true, updatedAt: true })
-  .extend({
-    description: z.string().nullable().default(null),
-    totalLessons: z.number().nullable().default(null),
-  });
-export type InsertCurriculumBook = z.infer<typeof insertCurriculumBookSchema>;
-export type CurriculumBook = typeof curriculumBooks.$inferSelect;
-
-// Assessment source enum - tracks whether entry was manual or from in-app testing
-export const assessmentSourceEnum = pgEnum("assessment_source", ["manual_entry", "in_app"]);
-
-// Student Assessments - individual assessment records with location support
-export const studentAssessments = pgTable("student_assessments", {
-  id: serial("id").primaryKey(),
-  schoolId: integer("school_id").notNull().references(() => schools.id),
-  locationId: integer("location_id").references(() => locations.id),
-  childId: integer("child_id").notNull().references(() => children.id, { onDelete: 'cascade' }),
-  assessmentTypeId: integer("assessment_type_id").notNull().references(() => assessmentTypes.id),
-  curriculumBookId: integer("curriculum_book_id").references(() => curriculumBooks.id),
-  assessmentDate: timestamp("assessment_date").notNull(),
-  score: text("score").notNull(),
-  lesson: integer("lesson"),
-  notes: text("notes"),
-  source: assessmentSourceEnum("source").default("manual_entry").notNull(),
-  lexileScore: integer("lexile_score"),
-  sessionId: integer("session_id"),
-  recordedBy: integer("recorded_by").notNull().references(() => users.id),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
-
-// Assessment Sessions - for future in-app testing, tracks complete test sessions
-export const assessmentSessions = pgTable("assessment_sessions", {
-  id: serial("id").primaryKey(),
-  schoolId: integer("school_id").notNull().references(() => schools.id),
-  childId: integer("child_id").notNull().references(() => children.id, { onDelete: 'cascade' }),
-  assessmentTypeId: integer("assessment_type_id").notNull().references(() => assessmentTypes.id),
-  startedAt: timestamp("started_at").notNull(),
-  completedAt: timestamp("completed_at"),
-  status: text("status").notNull().default("in_progress"),
-  totalQuestions: integer("total_questions"),
-  correctAnswers: integer("correct_answers"),
-  timeSpentSeconds: integer("time_spent_seconds"),
-  metadata: jsonb("metadata"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
-
-export const insertStudentAssessmentSchema = createInsertSchema(studentAssessments)
-  .omit({ id: true, createdAt: true, updatedAt: true })
-  .extend({
-    locationId: z.number().nullable().default(null),
-    curriculumBookId: z.number().nullable().default(null),
-    lesson: z.number().nullable().default(null),
-    notes: z.string().nullable().default(null),
-    source: z.enum(["manual_entry", "in_app"]).default("manual_entry"),
-    lexileScore: z.number().nullable().default(null),
-    sessionId: z.number().nullable().default(null),
-    assessmentDate: z.union([z.string(), z.date()]).transform((val) => typeof val === 'string' ? new Date(val) : val),
-  });
-export type InsertStudentAssessment = z.infer<typeof insertStudentAssessmentSchema>;
-export type StudentAssessment = typeof studentAssessments.$inferSelect;
-
-export const insertAssessmentSessionSchema = createInsertSchema(assessmentSessions)
-  .omit({ id: true, createdAt: true, updatedAt: true })
-  .extend({
-    completedAt: z.union([z.string(), z.date(), z.null()]).transform((val) => val === null ? null : typeof val === 'string' ? new Date(val) : val).nullable().default(null),
-    startedAt: z.union([z.string(), z.date()]).transform((val) => typeof val === 'string' ? new Date(val) : val),
-    totalQuestions: z.number().nullable().default(null),
-    correctAnswers: z.number().nullable().default(null),
-    timeSpentSeconds: z.number().nullable().default(null),
-    metadata: z.any().nullable().default(null),
-  });
-export type InsertAssessmentSession = z.infer<typeof insertAssessmentSessionSchema>;
-export type AssessmentSession = typeof assessmentSessions.$inferSelect;
-
-// Relations for assessment tables
-export const assessmentTypesRelations = relations(assessmentTypes, ({ one, many }) => ({
-  school: one(schools, { fields: [assessmentTypes.schoolId], references: [schools.id] }),
-  curriculumBooks: many(curriculumBooks),
-  studentAssessments: many(studentAssessments),
-}));
-
-export const curriculumBooksRelations = relations(curriculumBooks, ({ one, many }) => ({
-  assessmentType: one(assessmentTypes, { fields: [curriculumBooks.assessmentTypeId], references: [assessmentTypes.id] }),
-  studentAssessments: many(studentAssessments),
-}));
-
-export const studentAssessmentsRelations = relations(studentAssessments, ({ one }) => ({
-  school: one(schools, { fields: [studentAssessments.schoolId], references: [schools.id] }),
-  location: one(locations, { fields: [studentAssessments.locationId], references: [locations.id] }),
-  child: one(children, { fields: [studentAssessments.childId], references: [children.id] }),
-  assessmentType: one(assessmentTypes, { fields: [studentAssessments.assessmentTypeId], references: [assessmentTypes.id] }),
-  curriculumBook: one(curriculumBooks, { fields: [studentAssessments.curriculumBookId], references: [curriculumBooks.id] }),
-  recorder: one(users, { fields: [studentAssessments.recordedBy], references: [users.id] }),
-  session: one(assessmentSessions, { fields: [studentAssessments.sessionId], references: [assessmentSessions.id] }),
-}));
-
-export const assessmentSessionsRelations = relations(assessmentSessions, ({ one, many }) => ({
-  school: one(schools, { fields: [assessmentSessions.schoolId], references: [schools.id] }),
-  child: one(children, { fields: [assessmentSessions.childId], references: [children.id] }),
-  assessmentType: one(assessmentTypes, { fields: [assessmentSessions.assessmentTypeId], references: [assessmentTypes.id] }),
-  assessments: many(studentAssessments),
-}));
-
-// ==================== FUNDRAISER SYSTEM ====================
-// Campaigns, products, family links, and order tracking with automatic credit generation
-
-export const fundraiserCampaigns = pgTable("fundraiser_campaigns", {
-  id: serial("id").primaryKey(),
-  schoolId: integer("school_id").notNull().references(() => schools.id, { onDelete: 'cascade' }),
-  name: text("name").notNull(),
-  description: text("description"),
-  startDate: timestamp("start_date").notNull(),
-  endDate: timestamp("end_date").notNull(),
-  isActive: boolean("is_active").default(true).notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
-
-export const insertFundraiserCampaignSchema = createInsertSchema(fundraiserCampaigns)
-  .omit({ id: true, createdAt: true, updatedAt: true })
-  .extend({
-    description: z.string().nullable().default(null),
-    startDate: z.union([z.string(), z.date()]).transform((val) => typeof val === 'string' ? new Date(val) : val),
-    endDate: z.union([z.string(), z.date()]).transform((val) => typeof val === 'string' ? new Date(val) : val),
-  });
-export type InsertFundraiserCampaign = z.infer<typeof insertFundraiserCampaignSchema>;
-export type FundraiserCampaign = typeof fundraiserCampaigns.$inferSelect;
-
-export const fundraiserProducts = pgTable("fundraiser_products", {
-  id: serial("id").primaryKey(),
-  campaignId: integer("campaign_id").notNull().references(() => fundraiserCampaigns.id, { onDelete: 'cascade' }),
-  name: text("name").notNull(),
-  description: text("description"),
-  imageUrl: text("image_url"),
-  priceCents: integer("price_cents").notNull(),
-  creditAmountCents: integer("credit_amount_cents").notNull(),
-  stockQuantity: integer("stock_quantity"),
-  isActive: boolean("is_active").default(true).notNull(),
-  sortOrder: integer("sort_order").default(0).notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
-
-export const insertFundraiserProductSchema = createInsertSchema(fundraiserProducts)
-  .omit({ id: true, createdAt: true, updatedAt: true })
-  .extend({
-    description: z.string().nullable().default(null),
-    imageUrl: z.string().nullable().default(null),
-    stockQuantity: z.number().nullable().default(null),
-  });
-export type InsertFundraiserProduct = z.infer<typeof insertFundraiserProductSchema>;
-export type FundraiserProduct = typeof fundraiserProducts.$inferSelect;
-
-export const fundraiserFamilyLinks = pgTable("fundraiser_family_links", {
-  id: serial("id").primaryKey(),
-  campaignId: integer("campaign_id").notNull().references(() => fundraiserCampaigns.id, { onDelete: 'cascade' }),
-  userId: integer("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
-  slug: text("slug").notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-}, (table) => ({
-  uniqueSlugPerCampaign: unique().on(table.campaignId, table.slug),
-}));
-
-export const insertFundraiserFamilyLinkSchema = createInsertSchema(fundraiserFamilyLinks)
-  .omit({ id: true, createdAt: true });
-export type InsertFundraiserFamilyLink = z.infer<typeof insertFundraiserFamilyLinkSchema>;
-export type FundraiserFamilyLink = typeof fundraiserFamilyLinks.$inferSelect;
-
-export const fundraiserOrderStatusEnum = ["pending", "paid", "fulfilled", "cancelled", "refunded"] as const;
-export type FundraiserOrderStatus = typeof fundraiserOrderStatusEnum[number];
-
-export const fundraiserOrders = pgTable("fundraiser_orders", {
-  id: serial("id").primaryKey(),
-  campaignId: integer("campaign_id").notNull().references(() => fundraiserCampaigns.id),
-  familyLinkId: integer("family_link_id").references(() => fundraiserFamilyLinks.id),
-  sellerUserId: integer("seller_user_id").references(() => users.id),
-  
-  customerName: text("customer_name").notNull(),
-  customerEmail: text("customer_email").notNull(),
-  customerPhone: text("customer_phone"),
-  
-  totalCents: integer("total_cents").notNull(),
-  creditEarnedCents: integer("credit_earned_cents").notNull(),
-  
-  status: text("status", { enum: fundraiserOrderStatusEnum }).default("pending").notNull(),
-  stripePaymentIntentId: text("stripe_payment_intent_id"),
-  stripeSessionId: text("stripe_session_id"),
-  
-  creditId: integer("credit_id").references(() => credits.id),
-  
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
-
-export const insertFundraiserOrderSchema = createInsertSchema(fundraiserOrders)
-  .omit({ id: true, createdAt: true, updatedAt: true })
-  .extend({
-    customerPhone: z.string().nullable().default(null),
-    familyLinkId: z.number().nullable().default(null),
-    sellerUserId: z.number().nullable().default(null),
-    stripePaymentIntentId: z.string().nullable().default(null),
-    stripeSessionId: z.string().nullable().default(null),
-    creditId: z.number().nullable().default(null),
-  });
-export type InsertFundraiserOrder = z.infer<typeof insertFundraiserOrderSchema>;
-export type FundraiserOrder = typeof fundraiserOrders.$inferSelect;
-
-export const fundraiserOrderItems = pgTable("fundraiser_order_items", {
-  id: serial("id").primaryKey(),
-  orderId: integer("order_id").notNull().references(() => fundraiserOrders.id, { onDelete: 'cascade' }),
-  productId: integer("product_id").notNull().references(() => fundraiserProducts.id),
-  quantity: integer("quantity").notNull(),
-  priceCents: integer("price_cents").notNull(),
-  creditAmountCents: integer("credit_amount_cents").notNull(),
-});
-
-export const insertFundraiserOrderItemSchema = createInsertSchema(fundraiserOrderItems)
-  .omit({ id: true });
-export type InsertFundraiserOrderItem = z.infer<typeof insertFundraiserOrderItemSchema>;
-export type FundraiserOrderItem = typeof fundraiserOrderItems.$inferSelect;
-
-// Fundraiser relations
-export const fundraiserCampaignsRelations = relations(fundraiserCampaigns, ({ one, many }) => ({
-  school: one(schools, { fields: [fundraiserCampaigns.schoolId], references: [schools.id] }),
-  products: many(fundraiserProducts),
-  familyLinks: many(fundraiserFamilyLinks),
-  orders: many(fundraiserOrders),
-}));
-
-export const fundraiserProductsRelations = relations(fundraiserProducts, ({ one }) => ({
-  campaign: one(fundraiserCampaigns, { fields: [fundraiserProducts.campaignId], references: [fundraiserCampaigns.id] }),
-}));
-
-export const fundraiserFamilyLinksRelations = relations(fundraiserFamilyLinks, ({ one, many }) => ({
-  campaign: one(fundraiserCampaigns, { fields: [fundraiserFamilyLinks.campaignId], references: [fundraiserCampaigns.id] }),
-  user: one(users, { fields: [fundraiserFamilyLinks.userId], references: [users.id] }),
-  orders: many(fundraiserOrders),
-}));
-
-export const fundraiserOrdersRelations = relations(fundraiserOrders, ({ one, many }) => ({
-  campaign: one(fundraiserCampaigns, { fields: [fundraiserOrders.campaignId], references: [fundraiserCampaigns.id] }),
-  familyLink: one(fundraiserFamilyLinks, { fields: [fundraiserOrders.familyLinkId], references: [fundraiserFamilyLinks.id] }),
-  seller: one(users, { fields: [fundraiserOrders.sellerUserId], references: [users.id] }),
-  credit: one(credits, { fields: [fundraiserOrders.creditId], references: [credits.id] }),
-  items: many(fundraiserOrderItems),
-}));
-
-export const fundraiserOrderItemsRelations = relations(fundraiserOrderItems, ({ one }) => ({
-  order: one(fundraiserOrders, { fields: [fundraiserOrderItems.orderId], references: [fundraiserOrders.id] }),
-  product: one(fundraiserProducts, { fields: [fundraiserOrderItems.productId], references: [fundraiserProducts.id] }),
-}));
-
-// PII Access Logs - Audit trail for accessing sensitive parent contact information
-export const piiAccessLogs = pgTable("pii_access_logs", {
-  id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull().references(() => users.id),
-  locationId: integer("location_id").references(() => locations.id),
-  schoolId: integer("school_id").references(() => schools.id),
-  accessType: text("access_type", {
-    enum: ["view_parent_contacts", "export_parent_contacts", "view_student_details", "view_enrollment_details"]
-  }).notNull(),
-  resourceType: text("resource_type", {
-    enum: ["enrollment", "student", "parent", "location"]
-  }).notNull(),
-  resourceIds: integer("resource_ids").array(), // IDs of records accessed
-  recordCount: integer("record_count").notNull().default(0), // Number of records accessed
-  ipAddress: text("ip_address"),
-  userAgent: text("user_agent"),
-  requestPath: text("request_path"),
-  accessedAt: timestamp("accessed_at").defaultNow().notNull(),
-});
-
-export const insertPiiAccessLogSchema = createInsertSchema(piiAccessLogs)
-  .omit({ id: true, accessedAt: true })
-  .extend({
-    resourceIds: z.array(z.number()).nullable().default(null),
-    ipAddress: z.string().nullable().default(null),
-    userAgent: z.string().nullable().default(null),
-    requestPath: z.string().nullable().default(null),
-  });
-export type InsertPiiAccessLog = z.infer<typeof insertPiiAccessLogSchema>;
-export type PiiAccessLog = typeof piiAccessLogs.$inferSelect;
-
-// PII Access Logs relations
-export const piiAccessLogsRelations = relations(piiAccessLogs, ({ one }) => ({
-  user: one(users, { fields: [piiAccessLogs.userId], references: [users.id] }),
-  location: one(locations, { fields: [piiAccessLogs.locationId], references: [locations.id] }),
-  school: one(schools, { fields: [piiAccessLogs.schoolId], references: [schools.id] }),
-}));
-
-// Payment Reminder Logs - Track all payment reminders sent (automatic and manual)
-export const paymentReminderLogs = pgTable("payment_reminder_logs", {
-  id: serial("id").primaryKey(),
-  schoolId: integer("school_id").notNull().references(() => schools.id),
-  scheduledPaymentId: integer("scheduled_payment_id").references(() => scheduledPayments.id),
-  parentEmail: text("parent_email").notNull(),
-  parentName: text("parent_name"),
-  childName: text("child_name"),
-  className: text("class_name"),
-  amountCents: integer("amount_cents"),
-  reminderType: text("reminder_type", {
-    enum: ["7_days_before", "3_days_before", "1_day_before", "due_today", "1_day_overdue", "7_days_overdue", "manual", "summary"]
-  }).notNull(),
-  status: text("status", {
-    enum: ["sent", "failed", "pending"]
-  }).default("pending").notNull(),
-  isManual: boolean("is_manual").default(false).notNull(),
-  sentBy: integer("sent_by").references(() => users.id),
-  errorMessage: text("error_message"),
-  sentAt: timestamp("sent_at").defaultNow().notNull(),
-});
-
-export const insertPaymentReminderLogSchema = createInsertSchema(paymentReminderLogs)
-  .omit({ id: true, sentAt: true });
-export type InsertPaymentReminderLog = z.infer<typeof insertPaymentReminderLogSchema>;
-export type PaymentReminderLog = typeof paymentReminderLogs.$inferSelect;
-
-export const paymentReminderLogsRelations = relations(paymentReminderLogs, ({ one }) => ({
-  school: one(schools, { fields: [paymentReminderLogs.schoolId], references: [schools.id] }),
-  scheduledPayment: one(scheduledPayments, { fields: [paymentReminderLogs.scheduledPaymentId], references: [scheduledPayments.id] }),
-  sentByUser: one(users, { fields: [paymentReminderLogs.sentBy], references: [users.id] }),
-}));
-
-export const childGuardians = pgTable("child_guardians", {
-  id: serial("id").primaryKey(),
-  childId: integer("child_id").notNull().references(() => children.id, { onDelete: 'cascade' }),
-  guardianUserId: integer("guardian_user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
-  relationship: text("relationship", {
-    enum: ["mother", "father", "stepmother", "stepfather", "grandmother", "grandfather", "aunt", "uncle", "legal_guardian", "other"]
-  }).notNull(),
-  isPrimary: boolean("is_primary").default(false).notNull(),
-  addedBy: integer("added_by").references(() => users.id),
-  notes: text("notes"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-});
-
-export const insertChildGuardianSchema = createInsertSchema(childGuardians)
-  .omit({ id: true, createdAt: true });
-export type InsertChildGuardian = z.infer<typeof insertChildGuardianSchema>;
-export type ChildGuardian = typeof childGuardians.$inferSelect;
-
-export const childGuardiansRelations = relations(childGuardians, ({ one }) => ({
-  child: one(children, { fields: [childGuardians.childId], references: [children.id] }),
-  guardian: one(users, { fields: [childGuardians.guardianUserId], references: [users.id] }),
-  addedByUser: one(users, { fields: [childGuardians.addedBy], references: [users.id] }),
-}));
-
-// Email Log table - tracks every email send attempt (success or failure)
-export const emailLog = pgTable("email_log", {
-  id: serial("id").primaryKey(),
-  recipientEmail: text("recipient_email").notNull(),
-  type: text("type").notNull(),
-  subject: text("subject"),
-  status: text("status", { enum: ["sent", "failed", "timeout"] }).notNull(),
-  error: text("error"),
-  sentAt: timestamp("sent_at").defaultNow().notNull(),
-});
-
-export const insertEmailLogSchema = createInsertSchema(emailLog)
-  .omit({ id: true, sentAt: true })
-  .extend({
-    subject: z.string().nullable().default(null),
-    error: z.string().nullable().default(null),
-  });
-export type InsertEmailLog = z.infer<typeof insertEmailLogSchema>;
-export type EmailLog = typeof emailLog.$inferSelect;

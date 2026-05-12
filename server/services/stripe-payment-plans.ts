@@ -2,7 +2,7 @@ import Stripe from 'stripe';
 import { IStorage } from '../storage';
 import { CurrencyUtils } from '../../shared/currency-utils';
 import { InsertScheduledPayment } from '@shared/schema';
-import { calculatePaymentSchedule, calculateCheckoutBiweeklySchedule, PaymentFrequency } from '../lib/payment-calculator';
+import { calculatePaymentSchedule, PaymentFrequency } from '../lib/payment-calculator';
 import { getStripeClient } from '../config/stripe';
 
 const isTestMode = process.env.NODE_ENV === 'test';
@@ -14,7 +14,7 @@ export interface PaymentPlanData {
   parentEmail: string;
   enrollmentIds: number[];
   totalAmount: number; // In cents
-  paymentPlan: 'deposit' | 'biweekly' | 'full';
+  paymentPlan: 'deposit' | 'split' | 'biweekly' | 'full';
   paymentFrequency?: PaymentFrequency; // Optional: for date-based payment schedules
   // Membership data (optional) - derived server-side from authenticated user
   membership?: {
@@ -28,39 +28,6 @@ export interface PaymentPlanData {
     originalAmount?: number;
     discountAmount?: number;
   };
-  // Discount tracking for payment dashboards
-  discountSnapshot?: {
-    subtotal: number; // Original subtotal before discounts (cents)
-    discountTotal: number; // Total discount applied (cents)
-    appliedDiscounts: Array<{
-      source: 'promo' | 'sibling' | 'free_after_threshold' | 'automatic' | 'bundle';
-      discountId?: number;
-      code?: string;
-      name: string;
-      type: string;
-      value: number;
-      amount: number; // Discount amount in cents
-    }>;
-  };
-  // Credits applied to this payment (in cents) - unified credit system
-  creditsAppliedCents?: number;
-  // Credit allocation breakdown for payment history tracking
-  creditAllocation?: {
-    enrollmentCredits: number;
-    membershipCredits: number;
-  };
-  // SNAPSHOT-PINNED biweekly plan (#186). When set, the first PaymentIntent
-  // amount is forced to `firstPaymentAmount` exactly so the parent is
-  // charged what they were quoted on screen — eliminating any drift
-  // between the snapshot's biweekly schedule and the recompute that
-  // happens inside buildPaymentPhases. Future installment dueDates are
-  // still derived from the (now cart-wide) date range.
-  cachedBiweeklyPlan?: {
-    firstPaymentAmount: number; // cents — pins firstPhase.amount
-    numberOfPayments: number;
-    totalAmount: number;
-    finalPaymentAmount: number;
-  } | null;
 }
 
 export interface PaymentPhase {
@@ -102,142 +69,41 @@ export class StripePaymentPlanService {
     const customer = await this.getOrCreateCustomer(data.parentEmail);
     console.log('👤 Customer ready:', customer.id);
 
+    // Get enrollment data for date-based scheduling if needed
     let programStartDate: Date | null = null;
     let programEndDate: Date | null = null;
-
+    
     if (data.paymentFrequency && data.paymentFrequency !== 'one_time' && data.enrollmentIds.length > 0) {
-      // CART-WIDE DATE RANGE (#186) — earliest start / latest end across
-      // ALL enrollments in the cart. The previous "first enrollment only"
-      // lookup disagreed with calculatePaymentPlans (which iterates every
-      // line) whenever the first enrollment's class had already ended but
-      // other classes ran later — sizing the PaymentIntent off a
-      // collapsed schedule (often a single full-amount phase) while the
-      // parent had been shown a multi-installment biweekly plan.
-      for (const enrollmentId of data.enrollmentIds) {
-        try {
-          const enrollment = await this.storage.getProgramEnrollmentById(enrollmentId);
-          if (!enrollment) continue;
-
-          let lineStart: Date | null = null;
-          let lineEnd: Date | null = null;
-
-          if (enrollment.programStartDate && enrollment.programEndDate) {
-            const parsedStart = new Date(enrollment.programStartDate);
-            const parsedEnd = new Date(enrollment.programEndDate);
-            if (!isNaN(parsedStart.getTime()) && !isNaN(parsedEnd.getTime())) {
-              lineStart = parsedStart;
-              lineEnd = parsedEnd;
-            }
-          }
-
-          if (!lineStart || !lineEnd) {
-            const classId = enrollment.marketplaceClassId || enrollment.classId || enrollment.programId;
-            if (classId) {
-              try {
-                const classData = await this.storage.getClassById(classId) as any;
-                if (classData) {
-                  let cStart = classData.startDate ? new Date(classData.startDate) : null;
-                  let cEnd = classData.endDate ? new Date(classData.endDate) : null;
-
-                  const variantId = enrollment.variantId;
-                  if (variantId && classData.priceVariants) {
-                    try {
-                      const variants = typeof classData.priceVariants === 'string'
-                        ? JSON.parse(classData.priceVariants)
-                        : classData.priceVariants;
-                      const variant = Array.isArray(variants)
-                        ? variants.find((v: any) => v.id === variantId)
-                        : null;
-                      if (variant) {
-                        if (variant.startDate) cStart = new Date(variant.startDate);
-                        if (variant.endDate) cEnd = new Date(variant.endDate);
-                      }
-                    } catch (e) {
-                      console.warn('Could not parse price variants for date fallback:', e);
-                    }
-                  }
-
-                  if (cStart && !isNaN(cStart.getTime())) lineStart = lineStart || cStart;
-                  if (cEnd && !isNaN(cEnd.getTime())) lineEnd = lineEnd || cEnd;
-                }
-              } catch (e) {
-                console.warn('⚠️ Could not fetch class for date fallback:', e);
-              }
-            }
-          }
-
-          if (lineStart && (!programStartDate || lineStart < programStartDate)) {
-            programStartDate = lineStart;
-          }
-          if (lineEnd && (!programEndDate || lineEnd > programEndDate)) {
-            programEndDate = lineEnd;
-          }
-        } catch (e) {
-          console.warn(`⚠️ Could not resolve dates for enrollment ${enrollmentId}:`, e);
+      const firstEnrollment = await this.storage.getEnrollmentById(data.enrollmentIds[0]);
+      if (firstEnrollment?.programStartDate && firstEnrollment?.programEndDate) {
+        const parsedStartDate = new Date(firstEnrollment.programStartDate);
+        const parsedEndDate = new Date(firstEnrollment.programEndDate);
+        
+        // Only use dates if they are valid (not NaN)
+        if (!isNaN(parsedStartDate.getTime()) && !isNaN(parsedEndDate.getTime())) {
+          programStartDate = parsedStartDate;
+          programEndDate = parsedEndDate;
+          console.log('📅 Using enrollment dates for payment schedule:', {
+            startDate: programStartDate.toLocaleDateString(),
+            endDate: programEndDate.toLocaleDateString()
+          });
+        } else {
+          console.warn('⚠️ Invalid enrollment dates, using default payment schedule:', {
+            rawStartDate: firstEnrollment.programStartDate,
+            rawEndDate: firstEnrollment.programEndDate
+          });
         }
-      }
-
-      if (programStartDate && programEndDate) {
-        console.log('📅 Cart-wide date range for payment schedule:', {
-          startDate: programStartDate.toLocaleDateString(),
-          endDate: programEndDate.toLocaleDateString(),
-          enrollmentCount: data.enrollmentIds.length,
-        });
       }
     }
 
     // Build payment phases based on plan type and frequency
-    let phases = this.buildPaymentPhases(
-      data.paymentPlan,
-      data.totalAmount,
+    const phases = this.buildPaymentPhases(
+      data.paymentPlan, 
+      data.totalAmount, 
       data.paymentFrequency,
       programStartDate,
       programEndDate
     );
-
-    // SNAPSHOT-PINNED OVERRIDE (#186) — when the trust path supplied a
-    // cached biweekly plan, force the first phase amount (and the final
-    // phase amount, which absorbs rounding remainder) to the exact
-    // figures the parent was quoted on screen. We keep the recomputed
-    // phase dates / count so future scheduled payments still work, but
-    // re-distribute amounts so the schedule sums to data.totalAmount
-    // using the cached firstPaymentAmount as the per-installment amount.
-    if (
-      data.cachedBiweeklyPlan &&
-      data.paymentPlan === 'biweekly' &&
-      phases.length > 1
-    ) {
-      const cached = data.cachedBiweeklyPlan;
-      const installmentCount = phases.length;
-      const middleAmount = cached.firstPaymentAmount;
-      // Final installment absorbs any remainder so the plan still sums
-      // to data.totalAmount.
-      const middlesSum = middleAmount * (installmentCount - 1);
-      const finalAmount = data.totalAmount - middlesSum;
-      // Defensive: if the recompute produced a wildly different shape
-      // (e.g. installmentCount drift > 1 from cached), fall back to the
-      // recomputed phases rather than emit a negative final amount.
-      if (finalAmount >= STRIPE_MINIMUM_AMOUNT) {
-        phases = phases.map((p, i) => ({
-          ...p,
-          amount: i === installmentCount - 1 ? finalAmount : middleAmount,
-        }));
-        console.log('🔓 [#186] Pinned biweekly phases to cached snapshot:', {
-          cachedFirstPaymentAmount: middleAmount,
-          installmentCount,
-          finalAmount,
-          totalSum: middlesSum + finalAmount,
-        });
-      } else {
-        console.warn('⚠️ [#186] Cached biweekly plan does not fit recomputed schedule shape, falling back to recompute', {
-          cachedFirstPaymentAmount: cached.firstPaymentAmount,
-          cachedNumberOfPayments: cached.numberOfPayments,
-          recomputedInstallmentCount: installmentCount,
-          recomputedTotalAmount: data.totalAmount,
-        });
-      }
-    }
-
     console.log('📅 Built phases:', phases.length);
 
     // Create immediate PaymentIntent for the first payment
@@ -246,13 +112,6 @@ export class StripePaymentPlanService {
     
     if (isTestMode) {
       // Mock payment intent for test environment
-      const testFuturePhases = phases.slice(1).map(p => ({
-        amount: p.amount,
-        dueDate: p.dueDate.toISOString(),
-        installmentNumber: p.installmentNumber,
-        description: p.description
-      }));
-      
       paymentIntent = {
         id: `pi_test_${Date.now()}_${Math.random().toString(36).substring(7)}`,
         object: 'payment_intent',
@@ -265,13 +124,11 @@ export class StripePaymentPlanService {
           enrollmentIds: JSON.stringify(data.enrollmentIds),
           parentEmail: data.parentEmail,
           paymentPlan: data.paymentPlan,
-          paymentFrequency: data.paymentFrequency || 'one_time',
           totalAmount: data.totalAmount.toString(),
           installmentNumber: '1',
           totalInstallments: phases.length.toString(),
-          futurePhases: JSON.stringify(testFuturePhases),
           createdBy: 'asa_payment_system',
-          version: 'v3_post_confirmation_scheduling'
+          version: 'v2_stripe_simplified'
         },
         status: 'requires_payment_method',
         created: Math.floor(Date.now() / 1000)
@@ -280,24 +137,15 @@ export class StripePaymentPlanService {
     } else {
       const stripe = await getStripeClient();
       // Build metadata including membership if present
-      // Store phases for scheduled payment creation at confirmation time
-      const futurePhases = phases.slice(1).map(p => ({
-        amount: p.amount,
-        dueDate: p.dueDate.toISOString().split('T')[0],
-        installmentNumber: p.installmentNumber
-      }));
-      
       const paymentMetadata: Record<string, string> = {
         enrollmentIds: JSON.stringify(data.enrollmentIds),
         parentEmail: data.parentEmail,
         paymentPlan: data.paymentPlan,
-        paymentFrequency: data.paymentFrequency || 'one_time',
         totalAmount: data.totalAmount.toString(),
         installmentNumber: '1',
         totalInstallments: phases.length.toString(),
-        futurePhases: JSON.stringify(futurePhases),
         createdBy: 'asa_payment_system',
-        version: 'v3_post_confirmation_scheduling'
+        version: 'v2_stripe_simplified'
       };
       
       // Add membership metadata if present (derived server-side, not from client)
@@ -326,33 +174,6 @@ export class StripePaymentPlanService {
         });
       }
       
-      // Add discount snapshot metadata if present
-      if (data.discountSnapshot) {
-        paymentMetadata.discountSnapshot = JSON.stringify(data.discountSnapshot);
-        paymentMetadata.subtotalAmount = data.discountSnapshot.subtotal.toString();
-        paymentMetadata.discountTotal = data.discountSnapshot.discountTotal.toString();
-        console.log('💰 Adding discount snapshot to payment metadata:', {
-          subtotal: data.discountSnapshot.subtotal,
-          discountTotal: data.discountSnapshot.discountTotal,
-          discountsCount: data.discountSnapshot.appliedDiscounts.length
-        });
-      }
-      
-      // Add credits metadata if applied (unified credit system)
-      if (data.creditsAppliedCents && data.creditsAppliedCents > 0) {
-        paymentMetadata.creditsAppliedCents = data.creditsAppliedCents.toString();
-        
-        // Also store credit allocation breakdown if available
-        if (data.creditAllocation) {
-          paymentMetadata.creditAllocation = JSON.stringify(data.creditAllocation);
-        }
-        
-        console.log('💰 Adding credits to payment metadata:', {
-          creditsAppliedCents: data.creditsAppliedCents,
-          creditAllocation: data.creditAllocation
-        });
-      }
-      
       paymentIntent = await stripe.paymentIntents.create({
         amount: firstPhase.amount,
         currency: 'usd',
@@ -367,207 +188,62 @@ export class StripePaymentPlanService {
 
     console.log('💳 PaymentIntent created for first payment:', paymentIntent.id, CurrencyUtils.toDisplay(firstPhase.amount));
 
-    // Update enrollments with PaymentIntent reference
-    await this.updateEnrollmentsWithPaymentIntent(data.enrollmentIds, paymentIntent.id, customer.id, data.paymentPlan);
-
-    // NOTE: Scheduled payments are now created AFTER payment confirmation (not here)
-    // This prevents orphaned scheduled payments when users change plans or abandon checkout
-    // The phases data is stored in PaymentIntent metadata for use at confirmation time
-    console.log('✅ PaymentIntent created successfully. Scheduled payments will be created after payment confirmation.');
-    console.log('📅 Future phases to be scheduled after confirmation:', phases.length - 1);
-
-    return {
-      paymentIntent,
-      scheduledPayments: [] // Empty - will be created at confirmation time
-    };
-  }
-
-  /**
-   * Create scheduled payments from PaymentIntent metadata after payment confirmation.
-   * This method is called by the confirm endpoint after verifying payment success.
-   * Includes idempotency check to prevent duplicate scheduled payments.
-   */
-  async createScheduledPaymentsFromConfirmedPayment(
-    paymentIntentId: string,
-    metadata: Record<string, string>
-  ): Promise<{ created: number; skipped: boolean }> {
-    console.log('📅 Creating scheduled payments from confirmed payment:', paymentIntentId);
-    
-    // Parse metadata
-    const enrollmentIds: number[] = JSON.parse(metadata.enrollmentIds || '[]');
-    const parentEmail = metadata.parentEmail;
-    const paymentPlan = metadata.paymentPlan;
-    const futurePhases = JSON.parse(metadata.futurePhases || '[]') as Array<{
-      amount: number;
-      dueDate: string;
-      installmentNumber: number;
-    }>;
-    const totalInstallments = parseInt(metadata.totalInstallments || '1', 10);
-    
-    // Parse discount snapshot for audit trail in scheduled payments
-    const discountSnapshot = metadata.discountSnapshot ? JSON.parse(metadata.discountSnapshot) : null;
-    const creditsAppliedCents = metadata.creditsAppliedCents ? parseInt(metadata.creditsAppliedCents, 10) : 0;
-    
-    if (!enrollmentIds.length || !parentEmail) {
-      console.log('⚠️ Missing enrollment IDs or parent email in metadata, skipping scheduled payment creation');
-      return { created: 0, skipped: true };
-    }
-    
-    if (futurePhases.length === 0) {
-      console.log('✅ No future phases to schedule (full payment or single installment)');
-      return { created: 0, skipped: false };
-    }
-    
-    // Idempotency check: Check if scheduled payments already exist for ANY enrollment in the cart
-    // This prevents duplicates when processing retries or when one enrollment already has payments
-    // Note: Excludes 'failed' status to allow legitimate retry flows for failed payments
-    for (const enrollmentId of enrollmentIds) {
-      const existingPayments = await this.storage.getScheduledPaymentsByEnrollmentId(enrollmentId);
-      // Check for pending/scheduled payments only - failed payments can be retried
-      const activePayments = existingPayments.filter(p => 
-        p.status === 'pending' || p.status === 'scheduled'
-      );
-      
-      if (activePayments.length > 0) {
-        console.log(`⏭️ Scheduled payments already exist for enrollment ${enrollmentId} (${activePayments.length} pending/scheduled). Skipping creation for all enrollments.`);
-        return { created: 0, skipped: true };
-      }
-    }
-    
-    // Get parent user and enrollment data
-    const parentUser = await this.storage.getUserByEmail(parentEmail);
+    // Get parent user and enrollment data for scheduled payment records
+    const parentUser = await this.storage.getUserByEmail(data.parentEmail);
     if (!parentUser) {
-      console.error(`❌ Parent user not found: ${parentEmail}`);
-      return { created: 0, skipped: true };
+      throw new Error(`Parent user not found: ${data.parentEmail}`);
     }
     
-    const firstEnrollmentData = await this.storage.getProgramEnrollmentById(enrollmentIds[0]);
+    const firstEnrollmentData = await this.storage.getEnrollmentById(data.enrollmentIds[0]);
     if (!firstEnrollmentData) {
-      console.error(`❌ Enrollment not found: ${enrollmentIds[0]}`);
-      return { created: 0, skipped: true };
+      throw new Error(`Enrollment not found: ${data.enrollmentIds[0]}`);
     }
     
     const schoolId = firstEnrollmentData.schoolId || parentUser.schoolId;
     if (!schoolId) {
-      console.error(`❌ No valid school ID found for parent ${parentEmail}`);
-      return { created: 0, skipped: true };
+      throw new Error(`Cannot create scheduled payment: No valid school ID found for parent ${data.parentEmail}`);
     }
-    
-    // Fetch all enrollment data to calculate cost-weighted proportions
-    const enrollmentDataList: Array<{ id: number; totalCost: number }> = [];
-    let totalEnrollmentCost = 0;
-    
-    for (const enrollmentId of enrollmentIds) {
-      const enrollmentData = await this.storage.getProgramEnrollmentById(enrollmentId);
-      if (enrollmentData) {
-        const cost = enrollmentData.totalCost || 0;
-        enrollmentDataList.push({ id: enrollmentId, totalCost: cost });
-        totalEnrollmentCost += cost;
-      }
-    }
-    
-    const enrollmentCount = enrollmentIds.length;
-    const enrollmentProportions = enrollmentDataList.map(e => ({
-      id: e.id,
-      proportion: totalEnrollmentCost > 0 ? e.totalCost / totalEnrollmentCost : 1 / enrollmentCount,
-      totalCost: e.totalCost
-    }));
-    
-    console.log('📊 Enrollment cost proportions:', enrollmentProportions.map(e => ({
-      id: e.id,
-      totalCost: CurrencyUtils.toDisplay(e.totalCost),
-      proportion: `${(e.proportion * 100).toFixed(1)}%`
-    })));
-    
-    // Create scheduled payments for each future phase
-    let createdCount = 0;
-    
-    // Log discount info if present
-    if (discountSnapshot) {
-      const promoDiscount = discountSnapshot.appliedDiscounts?.find((d: any) => d.source === 'promo');
-      console.log('🎟️ Discount snapshot for scheduled payments:', {
-        promoCode: promoDiscount?.code || null,
-        promoDiscountId: promoDiscount?.discountId || null,
-        promoDiscountAmount: promoDiscount?.amount || 0,
-        subtotal: discountSnapshot.subtotal,
-        discountTotal: discountSnapshot.discountTotal,
-        totalDiscounts: discountSnapshot.appliedDiscounts?.length || 0
+
+    // Create scheduled payments for remaining phases (if any)
+    const scheduledPayments = [];
+    for (let i = 1; i < phases.length; i++) {
+      const phase = phases[i];
+      const scheduledPayment = await this.storage.createScheduledPayment({
+        schoolId: schoolId,
+        enrollmentId: data.enrollmentIds[0], // Use first enrollment as primary reference
+        parentId: parentUser.id,
+        parentEmail: data.parentEmail,
+        amount: phase.amount,
+        currency: 'usd',
+        scheduledDate: phase.dueDate,
+        frequency: 'one_time' as const,
+        installmentNumber: phase.installmentNumber,
+        totalInstallments: phases.length,
+        status: 'pending' as const,
+        stripePaymentIntentId: null,
+        processedAt: null,
+        failureReason: null,
+        retryCount: 0,
+        metadata: {
+          enrollmentIds: data.enrollmentIds,
+          paymentPlan: data.paymentPlan,
+          description: phase.description,
+          autoPay: true,
+        },
       });
+      scheduledPayments.push(scheduledPayment);
+      console.log(`📅 Scheduled payment ${phase.installmentNumber}: ${CurrencyUtils.toDisplay(phase.amount)} due ${phase.dueDate.toLocaleDateString()}`);
     }
-    if (creditsAppliedCents > 0) {
-      console.log('💰 Credits applied to original payment:', creditsAppliedCents);
-    }
-    
-    for (const phase of futurePhases) {
-      const phaseDate = new Date(phase.dueDate);
-      let allocatedAmount = 0;
-      
-      for (let j = 0; j < enrollmentProportions.length; j++) {
-        const enrollment = enrollmentProportions[j];
-        let enrollmentAmount: number;
-        
-        if (j === enrollmentProportions.length - 1) {
-          enrollmentAmount = phase.amount - allocatedAmount;
-        } else {
-          enrollmentAmount = Math.round(phase.amount * enrollment.proportion);
-          allocatedAmount += enrollmentAmount;
-        }
-        
-        await this.storage.createScheduledPayment({
-          schoolId: schoolId,
-          enrollmentId: enrollment.id,
-          parentId: parentUser.id,
-          parentEmail: parentEmail,
-          amount: enrollmentAmount,
-          currency: 'usd',
-          scheduledDate: phaseDate,
-          frequency: 'one_time' as const,
-          installmentNumber: phase.installmentNumber,
-          totalInstallments: totalInstallments,
-          status: 'pending' as const,
-          stripePaymentIntentId: paymentIntentId,
-          processedAt: null,
-          failureReason: null,
-          retryCount: 0,
-          metadata: {
-            enrollmentIds: enrollmentIds,
-            paymentPlan: paymentPlan,
-            description: phase.description,
-            enrollmentIndex: j,
-            totalEnrollments: enrollmentCount,
-            isProportionalSplit: enrollmentCount > 1,
-            proportion: enrollment.proportion,
-            enrollmentTotalCost: enrollment.totalCost,
-            createdFromConfirmation: true,
-            // Promo code and discount audit trail
-            ...(discountSnapshot && {
-              discountSnapshot: discountSnapshot,
-              appliedPromoCode: discountSnapshot.appliedDiscounts?.find((d: any) => d.source === 'promo')?.code || null,
-              promoDiscountId: discountSnapshot.appliedDiscounts?.find((d: any) => d.source === 'promo')?.discountId || null,
-              promoDiscountAmount: discountSnapshot.appliedDiscounts?.find((d: any) => d.source === 'promo')?.amount || 0,
-              subtotalBeforeDiscounts: discountSnapshot.subtotal,
-              totalDiscountAmount: discountSnapshot.discountTotal
-            }),
-            // Credits audit trail
-            ...(creditsAppliedCents > 0 && {
-              creditsAppliedCents: creditsAppliedCents
-            })
-          }
-        });
-        createdCount++;
-        
-        if (enrollmentCount > 1) {
-          console.log(`📅 Scheduled payment ${phase.installmentNumber} for enrollment ${enrollment.id}: ${CurrencyUtils.toDisplay(enrollmentAmount)} due ${phaseDate.toLocaleDateString()}`);
-        }
-      }
-      
-      if (enrollmentCount === 1) {
-        console.log(`📅 Scheduled payment ${phase.installmentNumber}: ${CurrencyUtils.toDisplay(phase.amount)} due ${phaseDate.toLocaleDateString()}`);
-      }
-    }
-    
-    console.log(`✅ Created ${createdCount} scheduled payments from confirmed payment ${paymentIntentId}`);
-    return { created: createdCount, skipped: false };
+
+    // Update enrollments with PaymentIntent reference
+    await this.updateEnrollmentsWithPaymentIntent(data.enrollmentIds, paymentIntent.id, customer.id, data.paymentPlan);
+
+    console.log('✅ Payment plan created successfully with PaymentIntent and', scheduledPayments.length, 'scheduled payments');
+
+    return {
+      paymentIntent,
+      scheduledPayments
+    };
   }
 
   /**
@@ -632,31 +308,18 @@ export class StripePaymentPlanService {
   ): PaymentPhase[] {
     console.log('🏗️ Building payment phases for plan:', plan, 'frequency:', frequency, 'amount:', CurrencyUtils.toDisplay(totalAmount));
 
+    // Use date-based calculator if frequency is provided and dates are available
     if (frequency && frequency !== 'one_time' && startDate && endDate) {
-      const now = new Date();
+      console.log('📅 Using date-based payment calculator with enrollment dates');
+      const schedule = calculatePaymentSchedule(totalAmount, startDate, endDate, frequency);
       
-      console.log('📅 Using shared checkout biweekly schedule calculator', {
-        classStartDate: startDate.toLocaleDateString(),
-        endDate: endDate.toLocaleDateString()
-      });
-      
-      const schedule = calculateCheckoutBiweeklySchedule(totalAmount, startDate, endDate);
-      
-      if (schedule.numberOfPayments === 1) {
-        console.log('📅 Class duration too short for installment plan, collecting full payment today');
-        return [{
-          amount: totalAmount,
-          dueDate: now,
-          installmentNumber: 1,
-          description: 'Full Payment (class duration too short for installments)'
-        }];
-      }
-      
+      // Validate that all computed payments meet Stripe's minimum
       const hasPaymentBelowMinimum = 
         schedule.paymentAmount < STRIPE_MINIMUM_AMOUNT || 
         schedule.finalPaymentAmount < STRIPE_MINIMUM_AMOUNT;
       
       if (hasPaymentBelowMinimum) {
+        // If any date-based payment would be below minimum, fall back to full payment
         console.warn(
           `⚠️ Date-based ${frequency} payment plan not viable for amount ${CurrencyUtils.toDisplay(totalAmount)} ` +
           `(${schedule.numberOfPayments} payments of ${CurrencyUtils.toDisplay(schedule.paymentAmount)} each would violate Stripe's $0.50 minimum) - ` +
@@ -664,7 +327,7 @@ export class StripePaymentPlanService {
         );
         return [{
           amount: totalAmount,
-          dueDate: now,
+          dueDate: new Date(),
           installmentNumber: 1,
           description: 'Full Payment (amount below minimum for payment plans)'
         }];
@@ -720,6 +383,40 @@ export class StripePaymentPlanService {
             dueDate: add30Days(now),
             installmentNumber: 2,
             description: 'Balance Payment'
+          }
+        ];
+
+      case 'split':
+        // 50% now, 50% in 30 days
+        // Ensure ALL payments meet Stripe's minimum
+        const calculatedFirstHalf = Math.round(totalAmount * 0.5);
+        const firstHalf = Math.max(calculatedFirstHalf, STRIPE_MINIMUM_AMOUNT);
+        const secondHalf = totalAmount - firstHalf;
+        
+        // Check if total amount is too small for split payments
+        if (totalAmount < STRIPE_MINIMUM_AMOUNT * 2 || secondHalf < STRIPE_MINIMUM_AMOUNT) {
+          // If total is less than $1.00 or second payment would be below minimum, use full payment
+          console.warn(`⚠️ Split plan not viable for amount ${CurrencyUtils.toDisplay(totalAmount)} - using full payment instead`);
+          return [{
+            amount: totalAmount, // Use exact total, validation already ensures it's >= $0.50
+            dueDate: now,
+            installmentNumber: 1,
+            description: 'Full Payment (amount below minimum for payment plans)'
+          }];
+        }
+        
+        return [
+          {
+            amount: firstHalf,
+            dueDate: now,
+            installmentNumber: 1,
+            description: 'First Payment (50%)'
+          },
+          {
+            amount: secondHalf,
+            dueDate: add30Days(now),
+            installmentNumber: 2,
+            description: 'Second Payment (50%)'
           }
         ];
 
@@ -787,37 +484,6 @@ export class StripePaymentPlanService {
           }
         ];
 
-      case 'split':
-        // 50% now, 50% in 30 days (2 equal installments)
-        const calculatedFirstHalf = Math.round(totalAmount * 0.5);
-        const firstHalfAmount = Math.max(calculatedFirstHalf, STRIPE_MINIMUM_AMOUNT);
-        const secondHalfAmount = totalAmount - firstHalfAmount;
-
-        if (totalAmount < STRIPE_MINIMUM_AMOUNT * 2 || secondHalfAmount < STRIPE_MINIMUM_AMOUNT) {
-          console.warn(`⚠️ Split plan not viable for amount ${CurrencyUtils.toDisplay(totalAmount)} - using full payment instead`);
-          return [{
-            amount: totalAmount,
-            dueDate: now,
-            installmentNumber: 1,
-            description: 'Full Payment (amount below minimum for payment plans)'
-          }];
-        }
-
-        return [
-          {
-            amount: firstHalfAmount,
-            dueDate: now,
-            installmentNumber: 1,
-            description: 'First Payment (50%)'
-          },
-          {
-            amount: secondHalfAmount,
-            dueDate: add30Days(now),
-            installmentNumber: 2,
-            description: 'Second Payment (50%)'
-          }
-        ];
-
       default:
         throw new Error(`Unsupported payment plan: ${plan}`);
     }
@@ -835,18 +501,17 @@ export class StripePaymentPlanService {
     console.log('🔄 Updating enrollments with PaymentIntent references:', enrollmentIds);
 
     for (const enrollmentId of enrollmentIds) {
-      const existingEnrollment = await this.storage.getProgramEnrollmentById(enrollmentId);
+      const existingEnrollment = await this.storage.getEnrollmentById(enrollmentId);
       if (existingEnrollment) {
         await this.storage.updateEnrollment(enrollmentId, {
+          ...existingEnrollment,
           stripeCustomerId: customerId,
           paymentSystemVersion: 'v2_stripe_simplified',
           paymentStatus: paymentPlan === 'full' ? 'pending' : 'partial_payment',
           migrationDate: new Date(),
           // Store payment plan info in metadata
           metadata: {
-            ...(existingEnrollment.metadata && typeof existingEnrollment.metadata === 'object'
-              ? (existingEnrollment.metadata as Record<string, unknown>)
-              : {}),
+            ...existingEnrollment.metadata,
             paymentPlan,
             initialPaymentIntentId: paymentIntentId,
             stripeCustomerId: customerId
@@ -878,12 +543,13 @@ export class StripePaymentPlanService {
     // Update enrollment balances
     const enrollmentIds = scheduledPayment.enrollmentIds;
     for (const enrollmentId of enrollmentIds) {
-      const enrollment = await this.storage.getProgramEnrollmentById(enrollmentId);
+      const enrollment = await this.storage.getEnrollmentById(enrollmentId);
       if (enrollment) {
         const newPaidAmount = (enrollment.totalPaid || 0) + scheduledPayment.amount;
         const newBalance = Math.max(0, (enrollment.totalCost || 0) - newPaidAmount);
 
         await this.storage.updateEnrollment(enrollmentId, {
+          ...enrollment,
           totalPaid: newPaidAmount,
           remainingBalance: newBalance,
           paymentStatus: newBalance === 0 ? 'completed' : 'partial_payment',

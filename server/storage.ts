@@ -16,7 +16,6 @@ import {
   paymentReceipts, type PaymentReceipt, type InsertPaymentReceipt,
   stripeSubscriptionSchedules, type StripeSubscriptionSchedule, type InsertStripeSubscriptionSchedule,
   stripePaymentHistory, type StripePaymentHistory, type InsertStripePaymentHistory,
-  refundEvents, type RefundEvent, type InsertRefundEvent,
   classes, type Class, type InsertClass,
   activities, type Activity, type InsertActivity,
   roleInvitations, type RoleInvitation, type InsertRoleInvitation,
@@ -34,57 +33,35 @@ import {
   schoolStaff, type SchoolStaff, type InsertSchoolStaff,
   userLocations, type UserLocation, type InsertUserLocation,
   locations, type Location, type InsertLocation,
+  dailyFlowTemplates, type DailyFlowTemplate, type InsertDailyFlowTemplate,
+  dailyFlowEntries, type DailyFlowEntry, type InsertDailyFlowEntry,
+  dailyFlowSchedules, type DailyFlowSchedule, type InsertDailyFlowSchedule,
   notifications, type Notification, type InsertNotification,
   notificationRecipients, type NotificationRecipient, type InsertNotificationRecipient,
   discounts, type Discount, type InsertDiscount,
   discountApplications, type DiscountApplication, type InsertDiscountApplication,
-  educatorClassAssignments, type EducatorClassAssignment, type InsertEducatorClassAssignment,
-  classSessions, type ClassSession, type InsertClassSession,
-  educatorSchedules, type EducatorSchedule, type InsertEducatorSchedule,
-  auditLogs, type AuditLog, type InsertAuditLog,
-  schoolClassEnrollments, type SchoolClassEnrollment, type InsertSchoolClassEnrollment,
-  sessionAttendance, type SessionAttendance, type InsertSessionAttendance,
-  errorLogs, type ErrorLog, type InsertErrorLog,
-  paymentDiscounts, type PaymentDiscount, type InsertPaymentDiscount,
-  signedWaivers, type SignedWaiver, type InsertSignedWaiver,
-  sessionVolunteers, type SessionVolunteer, type InsertSessionVolunteer,
-  volunteerCredits, type VolunteerCredit, type InsertVolunteerCredit,
-  creditUsageLogs, type CreditUsageLog, type InsertCreditUsageLog,
-  credits, type Credit, type InsertCredit, type CreditType, type CreditStatus,
-  unifiedCreditUsageLogs, type UnifiedCreditUsageLog, type InsertUnifiedCreditUsageLog,
-  paymentAllocations, type PaymentAllocation, type InsertPaymentAllocation,
-  creditHolds, type CreditHold, type InsertCreditHold, type CreditHoldStatus,
-  assessmentTypes, type AssessmentType, type InsertAssessmentType,
-  curriculumBooks, type CurriculumBook, type InsertCurriculumBook,
-  studentAssessments, type StudentAssessment, type InsertStudentAssessment,
-  fundraiserCampaigns, type FundraiserCampaign, type InsertFundraiserCampaign,
-  fundraiserProducts, type FundraiserProduct, type InsertFundraiserProduct,
-  fundraiserFamilyLinks, type FundraiserFamilyLink, type InsertFundraiserFamilyLink,
-  fundraiserOrders, type FundraiserOrder, type InsertFundraiserOrder,
-  fundraiserOrderItems, type FundraiserOrderItem, type InsertFundraiserOrderItem,
-  paymentReminderLogs, type PaymentReminderLog, type InsertPaymentReminderLog,
-  childGuardians, type ChildGuardian, type InsertChildGuardian,
-  weeklySkeletons, type WeeklySkeleton, type InsertWeeklySkeleton,
-  skeletonBlocks, type SkeletonBlock, type InsertSkeletonBlock,
-  weekPlans, type WeekPlan, type InsertWeekPlan,
-  weekPlanBlocks, type WeekPlanBlock, type InsertWeekPlanBlock,
-  weekPlanBlockHistory, type WeekPlanBlockHistory, type InsertWeekPlanBlockHistory,
-  emailLog, type EmailLog, type InsertEmailLog
+  type Credit,
+  type InsertCredit,
+  type CreditType,
+  type CreditStatus,
+  type UnifiedCreditUsageLog,
+  type InsertUnifiedCreditUsageLog,
+  type CreditHold,
+  type InsertCreditHold,
+  type CreditHoldStatus,
 } from "@shared/schema";
 import { normalizeEmailForLookup } from '@shared/parent-identity';
-import { eq, inArray, or, ilike, and, sql } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { getDb } from './db';
 
 export interface IStorage {
   // Methods for backup
   getAllUsers(): Promise<User[]>;
-  searchUsers(params: { schoolId: number | null, query?: string, role?: User['role'], limit?: number, offset?: number }): Promise<{ users: User[]; total: number }>;
   getAllCurricula(): Promise<Curriculum[]>;
   getAllKnowledgeBases(): Promise<KnowledgeBase[]>;
   getAllActivities(): Promise<Activity[]>;
   getAllPayments(): Promise<Payment[]>;
   getAllEnrollments(): Promise<ProgramEnrollment[]>;
-  getEnrollmentsBySchoolId(schoolId: number): Promise<ProgramEnrollment[]>;
 
   // User methods
   getUser(id: number): Promise<User | undefined>;
@@ -103,49 +80,10 @@ export interface IStorage {
   updateSchool(id: number, school: Partial<InsertSchool>): Promise<School | undefined>;
   getAllSchools(): Promise<School[]>;
   getSchoolsByAdminId(adminId: number): Promise<School[]>;
-  
-  // School Feature Toggle methods
-  getSchoolFeatures(schoolId: number): Promise<Record<string, boolean>>;
-  updateSchoolFeatures(schoolId: number, features: Record<string, boolean>): Promise<School | undefined>;
 
   // User Role methods
   getUserRolesByUserId(userId: number): Promise<UserRole[]>;
-  createUserRole(data: { userId: number; role: string; schoolId?: number | null; isPrimary?: boolean }): Promise<UserRole>;
   deleteUserRolesByUserId(userId: number): Promise<void>;
-  getParentsBySchoolId(schoolId: number): Promise<User[]>;
-
-  // User cleanup methods (for deletion)
-  deleteUserLocationsByUserId(userId: number): Promise<void>;
-  deleteNotificationRecipientsByUserId(userId: number): Promise<void>;
-  
-  // Cascade delete methods (for parent deletion)
-  deleteChildrenByParentId(parentId: number): Promise<void>;
-  deleteEnrollmentsByChildId(childId: number): Promise<void>;
-  deleteSchoolStudentsByChildId(childId: number): Promise<void>;
-  deleteDiscountApplicationsByChildId(childId: number): Promise<void>;
-  
-  // Additional user cleanup methods (for complete deletion)
-  deleteEmergencyContactsByUserId(userId: number): Promise<void>;
-  deletePiiAccessLogsByUserId(userId: number): Promise<void>;
-  deleteCartsByParentId(parentId: number): Promise<void>;
-  deleteScheduledPaymentsByParentId(parentId: number): Promise<void>;
-  deleteEnrollmentsByParentId(parentId: number): Promise<void>;
-  deleteMembershipEnrollmentsByParentUserId(parentUserId: number): Promise<void>;
-  deleteMembershipAgreementsByParentUserId(parentUserId: number): Promise<void>;
-  deletePaymentReceiptsByParentUserId(parentUserId: number): Promise<void>;
-  deleteClassSessionsByEducatorId(educatorId: number): Promise<void>;
-  clearClassSessionsSubstituteEducatorId(educatorId: number): Promise<void>;
-  clearClassesInstructorId(instructorId: number): Promise<void>;
-  clearProgramsInstructorId(instructorId: number): Promise<void>;
-  deleteEducatorSchedulesByEducatorId(educatorId: number): Promise<void>;
-  deleteEducatorClassAssignmentsByEducatorId(educatorId: number): Promise<void>;
-  
-  // Soft-delete support methods
-  nullifyUserReferencesForSoftDelete(userId: number): Promise<void>;
-  deletePushSubscriptionsByUserId(userId: number): Promise<void>;
-  
-  // Transactional soft-delete (best practice: atomic operation with proper ordering)
-  softDeleteUserWithCleanup(userId: number): Promise<{ success: boolean; error?: string }>;
 
   // Location methods
   getLocationsBySchool(schoolId: number): Promise<Location[]>;
@@ -177,10 +115,6 @@ export interface IStorage {
   getUpcomingEvents(userId: number): Promise<Event[]>;
   getAllEvents(userId: number): Promise<Event[]>;
   createEvent(event: InsertEvent): Promise<Event>;
-  updateEvent(id: number, event: Partial<InsertEvent>): Promise<Event | undefined>;
-  deleteEvent(id: number): Promise<void>;
-  getEventsBySchool(schoolId: number): Promise<Event[]>;
-  getEventsBySchoolAndDateRange(schoolId: number, startDate: Date, endDate: Date): Promise<Event[]>;
 
   // Marketplace methods
   getMarketplaceItem(id: number): Promise<MarketplaceItem | undefined>;
@@ -214,12 +148,6 @@ export interface IStorage {
   updateNotification(id: number, notification: Partial<InsertNotification>): Promise<Notification | undefined>;
   deleteNotification(id: number): Promise<void>;
   
-  // Announcement methods (school-scoped notifications)
-  getAnnouncementsBySchool(schoolId: number): Promise<Notification[]>;
-  getSentNotificationsBySchool(schoolId: number): Promise<Notification[]>;
-  getPinnedAnnouncementsBySchool(schoolId: number): Promise<Notification[]>;
-  getActiveAnnouncementsForUser(userId: number, schoolId: number): Promise<Notification[]>;
-  
   // Notification recipient methods
   getNotificationRecipientById(id: number): Promise<NotificationRecipient | undefined>;
   getNotificationRecipientsByNotificationId(notificationId: number): Promise<NotificationRecipient[]>;
@@ -238,29 +166,19 @@ export interface IStorage {
   getKnowledgeBasesByAuthor(authorId: number): Promise<KnowledgeBase[]>;
   getKnowledgeBasesBySubject(subject: string): Promise<KnowledgeBase[]>;
   getPublicKnowledgeBases(limit?: number): Promise<KnowledgeBase[]>;
-  createKnowledgeBase(knowledgeBase: InsertKnowledgeBase & { authorId: number }): Promise<KnowledgeBase>;
+  createKnowledgeBase(knowledgeBase: InsertKnowledgeBase): Promise<KnowledgeBase>;
   updateKnowledgeBase(id: number, knowledgeBase: Partial<KnowledgeBase>): Promise<KnowledgeBase | undefined>;
   incrementDownloadCount(id: number): Promise<KnowledgeBase | undefined>;
   addPurchaser(id: number, userId: number): Promise<KnowledgeBase | undefined>;
 
   // Child methods
   getChildById(id: number): Promise<Child | undefined>;
-  getChildByIdAndSchoolId(childId: number, schoolId: number): Promise<Child | undefined>;
-  getChildrenBySchoolId(schoolId: number): Promise<Child[]>;
   getChildrenByParentId(parentId: number): Promise<Child[]>;
   getChildrenByParentEmail(parentEmail: string): Promise<Child[]>;
   getAllChildren(): Promise<Child[]>;
   createChild(child: InsertChild & { parentId: number }): Promise<Child>;
   updateChild(id: number, child: Partial<InsertChild>): Promise<Child | undefined>;
   deleteChild(id: number): Promise<void>;
-
-  // Child Guardian methods
-  getGuardiansByChildId(childId: number): Promise<ChildGuardian[]>;
-  getChildrenByGuardianUserId(guardianUserId: number): Promise<Child[]>;
-  addChildGuardian(guardian: InsertChildGuardian): Promise<ChildGuardian>;
-  removeChildGuardian(id: number): Promise<void>;
-  getChildGuardianById(id: number): Promise<ChildGuardian | undefined>;
-  deleteGuardiansByChildId(childId: number): Promise<void>;
 
   // Role invitation methods
   createRoleInvitation(invitation: any): Promise<any>;
@@ -298,8 +216,6 @@ export interface IStorage {
   cancelPendingEnrollments(enrollmentIds: number[], parentUserId: number): Promise<{ cancelled: number[]; skipped: number[]; errors: string[] }>;
   getStripeCustomerIdsByParentEmail(parentEmail: string): Promise<string[]>;
   getStripeLinkedEnrollmentsByParentEmail(parentEmail: string): Promise<ProgramEnrollment[]>;
-  getEnrollmentsByParentEmail(parentEmail: string): Promise<ProgramEnrollment[]>;
-  getEnrollmentByChildAndClass(childId: number, classId: number): Promise<ProgramEnrollment | undefined>;
 
   // Membership Enrollment methods
   getMembershipEnrollmentById(id: number): Promise<MembershipEnrollment | undefined>;
@@ -324,15 +240,9 @@ export interface IStorage {
   getSchoolDocumentById(id: number): Promise<SchoolDocument | undefined>;
   getSchoolDocumentsBySchoolId(schoolId: number): Promise<SchoolDocument[]>;
   getPublishedSchoolDocuments(schoolId: number): Promise<SchoolDocument[]>;
-  getSchoolDocumentByFileName(schoolId: number, fileName: string): Promise<SchoolDocument | undefined>;
   createSchoolDocument(document: InsertSchoolDocument): Promise<SchoolDocument>;
   updateSchoolDocument(id: number, document: Partial<InsertSchoolDocument>): Promise<SchoolDocument | undefined>;
   deleteSchoolDocument(id: number): Promise<void>;
-
-  // Document Views (download tracking) methods
-  createDocumentView(data: { documentId: number; userId: number }): Promise<any>;
-  getDocumentViews(documentId: number): Promise<any[]>;
-  getDocumentViewCount(documentId: number): Promise<number>;
 
   // Payment Receipts methods
   getPaymentReceiptById(id: number): Promise<PaymentReceipt | undefined>;
@@ -342,19 +252,43 @@ export interface IStorage {
   createPaymentReceipt(receipt: InsertPaymentReceipt): Promise<PaymentReceipt>;
   updatePaymentReceiptStatus(id: number, status: 'generated' | 'downloaded' | 'emailed'): Promise<PaymentReceipt | undefined>;
 
-  /** @deprecated Use createProgramEnrollment() with createEnrollmentData() factory instead */
+  // Class Enrollment methods (DEPRECATED - Use Program Enrollment methods above)
+  /**
+   * @deprecated Use createProgramEnrollment() with createEnrollmentData() factory from @shared/enrollment-factory instead
+   * This method exists for backward compatibility only and will be removed in a future version.
+   * See replit.md "Storage Layer Patterns" for correct usage.
+   */
   createEnrollment(enrollment: any): Promise<any>;
-  /** @deprecated Use getEnrollmentsByChildIds() (plural, expects array) instead */
+  
+  /**
+   * @deprecated Use getEnrollmentsByChildIds() (note: plural 'Ids', expects array) instead
+   * This method exists for backward compatibility only and will be removed in a future version.
+   */
   getEnrollmentsByChildId(childId: number): Promise<any[]>;
-  getEnrollmentsByChildIds(childIds: number[]): Promise<any[]>;
   getEnrollmentsByClassId(classId: number): Promise<any[]>;
-  /** @deprecated Use getProgramEnrollmentById() instead */
+  
+  /**
+   * @deprecated Use getProgramEnrollmentById() instead
+   * This method exists for backward compatibility only and will be removed in a future version.
+   */
   getEnrollmentById(id: number): Promise<any>;
-  /** @deprecated Use updateProgramEnrollment(id, updates) instead */
+  
+  /**
+   * @deprecated Use updateProgramEnrollment(id, updates) instead
+   * This method exists for backward compatibility only and will be removed in a future version.
+   */
   updateEnrollment(enrollment: any): Promise<any>;
-  /** @deprecated Use deleteProgramEnrollment() instead */
+  
+  /**
+   * @deprecated Use deleteProgramEnrollment() instead
+   * This method exists for backward compatibility only and will be removed in a future version.
+   */
   deleteEnrollment(id: number): Promise<void>;
-  /** @deprecated Use deleteProgramEnrollment() instead */
+  
+  /**
+   * @deprecated Use deleteProgramEnrollment() instead
+   * This method exists for backward compatibility only and will be removed in a future version.
+   */
   removeEnrollment(enrollmentId: number): Promise<boolean>;
 
   // Class methods
@@ -395,40 +329,19 @@ export interface IStorage {
   getPaymentByStripeId(stripePaymentIntentId: string): Promise<Payment | undefined>;
   updatePaymentStatus(id: number, status: 'pending' | 'succeeded' | 'failed' | 'canceled'): Promise<Payment | undefined>;
 
-  // Task #222 — Refund Event durability methods
-  saveRefundEvent(event: InsertRefundEvent): Promise<RefundEvent>;
-  getRefundEventByEventId(stripeEventId: string): Promise<RefundEvent | undefined>;
-  updateRefundEvent(id: number, update: Partial<InsertRefundEvent>): Promise<RefundEvent | undefined>;
-
   // Stripe Payment History methods
   saveStripePayment(payment: InsertStripePaymentHistory): Promise<StripePaymentHistory>;
-  getStripePaymentByEventId(stripeEventId: string): Promise<StripePaymentHistory | undefined>;
-  getStripePaymentHistoryById(id: number): Promise<StripePaymentHistory | undefined>;
   getStripePaymentHistoryByUserId(userId: number): Promise<StripePaymentHistory[]>;
   getStripePaymentsBySubscription(subscriptionId: string): Promise<StripePaymentHistory[]>;
   getStripePaymentByIntentId(paymentIntentId: string): Promise<StripePaymentHistory | undefined>;
-  getPaymentByIdempotencyKey(idempotencyKey: string): Promise<StripePaymentHistory | undefined>;
-  
-  // Payment Discounts methods (for discount tracking/analytics)
-  createPaymentDiscount(discount: InsertPaymentDiscount): Promise<PaymentDiscount>;
-  getPaymentDiscountsByPaymentHistoryId(paymentHistoryId: number): Promise<PaymentDiscount[]>;
 
   // Scheduled Payment methods
   createScheduledPayment(payment: any): Promise<any>;
-  getScheduledPaymentById(id: number): Promise<any | undefined>;
   getScheduledPaymentsByParentEmail(parentEmail: string): Promise<any[]>;
-  getScheduledPaymentsByEnrollmentId(enrollmentId: number): Promise<any[]>;
   getAllScheduledPayments(): Promise<any[]>;
-  getScheduledPaymentsBySchoolId(schoolId: number): Promise<any[]>;
-  getUpcomingAutoPayScheduledPayments(windowStart: Date, windowEnd: Date): Promise<any[]>;
-  getDueScheduledPayments(asOfDate: Date, maxStaleDays: number): Promise<any[]>;
-  getStuckProcessingPayments(olderThanMinutes: number): Promise<any[]>;
-  updateScheduledPayment(id: number, payment: Partial<InsertScheduledPayment>): Promise<any | undefined>;
   updateScheduledPaymentStatus(id: number, status: string): Promise<any | undefined>;
   updateScheduledPaymentReminderCount(id: number, count: number): Promise<any | undefined>;
-  getAutoPayHistory(schoolId: number, filters: { startDate?: Date; endDate?: Date; status?: string }): Promise<{ records: any[]; summary: { totalChargedCents: number; totalFailedCents: number; chargedCount: number; failedCount: number; skippedCount: number } }>;
-  deleteScheduledPayment(id: number): Promise<void>;
-  deletePendingScheduledPaymentsByEnrollmentId(enrollmentId: number): Promise<number>;
+  updateScheduledPayment(id: number, payment: Partial<InsertScheduledPayment>): Promise<ScheduledPayment | undefined>;
 
   // Refund methods
   createRefund(refund: InsertRefund): Promise<Refund>;
@@ -469,10 +382,6 @@ export interface IStorage {
   updateSchoolStudent(id: number, schoolStudent: Partial<InsertSchoolStudent>): Promise<SchoolStudent | undefined>;
   deleteSchoolStudent(id: number): Promise<void>;
 
-  // School Class Enrollment methods
-  getSchoolClassEnrollmentsByClassId(classId: number): Promise<SchoolClassEnrollment[]>;
-  getSchoolClassEnrollmentsByStudentId(studentId: number): Promise<SchoolClassEnrollment[]>;
-
   // School Staff methods
   getSchoolStaffById(id: number): Promise<SchoolStaff | undefined>;
   getAllSchoolStaff(): Promise<SchoolStaff[]>;
@@ -504,7 +413,6 @@ export interface IStorage {
   // Category methods
   getCategoryById(id: number): Promise<any>;
   getCategoriesBySchoolId(schoolId: number): Promise<any[]>;
-  getHiddenCategoryIds(): Promise<number[]>;
   createCategory(category: any): Promise<any>;
   updateCategory(id: number, category: any): Promise<any>;
   deleteCategory(id: number): Promise<void>;
@@ -523,11 +431,33 @@ export interface IStorage {
   getAllDiscountApplications(): Promise<DiscountApplication[]>;
   getDiscountApplicationsBySchoolId(schoolId: number): Promise<DiscountApplication[]>;
   getDiscountApplicationsByDiscountId(discountId: number): Promise<DiscountApplication[]>;
-  getDiscountApplicationsByChild(childId: number): Promise<DiscountApplication[]>;
   createDiscountApplication(application: InsertDiscountApplication): Promise<DiscountApplication>;
   updateDiscountApplication(id: number, application: Partial<InsertDiscountApplication>): Promise<DiscountApplication | undefined>;
-  getDiscountUsageCountByUser(discountId: number, parentEmail: string): Promise<number>;
 
+  // Daily Flow Template methods
+  getDailyFlowTemplates(filters?: { schoolId?: number; gradeLevel?: string; subject?: string }): Promise<DailyFlowTemplate[]>;
+  getDailyFlowTemplateById(id: number): Promise<DailyFlowTemplate | undefined>;
+  createDailyFlowTemplate(template: InsertDailyFlowTemplate): Promise<DailyFlowTemplate>;
+  updateDailyFlowTemplate(id: number, template: Partial<InsertDailyFlowTemplate>): Promise<DailyFlowTemplate | undefined>;
+  deleteDailyFlowTemplate(id: number): Promise<void>;
+
+  // Daily Flow Entry methods
+  getDailyFlowEntries(filters?: { classId?: number; startDate?: string; endDate?: string }): Promise<DailyFlowEntry[]>;
+  getDailyFlowEntryById(id: number): Promise<DailyFlowEntry | undefined>;
+  createDailyFlowEntry(entry: InsertDailyFlowEntry): Promise<DailyFlowEntry>;
+  updateDailyFlowEntry(id: number, entry: Partial<InsertDailyFlowEntry>): Promise<DailyFlowEntry | undefined>;
+  deleteDailyFlowEntry(id: number): Promise<void>;
+
+  // Daily Flow Schedule methods
+  getDailyFlowSchedules(filters?: { templateId?: number; classId?: number }): Promise<DailyFlowSchedule[]>;
+  getDailyFlowScheduleById(id: number): Promise<DailyFlowSchedule | undefined>;
+  createDailyFlowSchedule(schedule: InsertDailyFlowSchedule): Promise<DailyFlowSchedule>;
+  updateDailyFlowSchedule(id: number, schedule: Partial<InsertDailyFlowSchedule>): Promise<DailyFlowSchedule | undefined>;
+  deleteDailyFlowSchedule(id: number): Promise<void>;
+
+  // Daily Flow utility methods
+  generateDailyFlowEntriesFromTemplate(params: { templateId: number; classId: number; startDate: string; endDate: string; createdBy: string }): Promise<DailyFlowEntry[]>;
+  getDailyFlowStats(filters?: { classId?: number; startDate?: string; endDate?: string }): Promise<{ totalEntries: number; completedEntries: number; completionRate: number }>;
 
   // Staff Position methods
   getAllStaffPositions(): Promise<StaffPosition[]>;
@@ -553,124 +483,10 @@ export interface IStorage {
   markPasswordResetTokenAsUsed(token: string): Promise<void>;
   deleteExpiredPasswordResetTokens(): Promise<void>;
 
-  // Educator Class Assignment methods (Phase 1a)
-  getEducatorClassAssignmentById(id: number): Promise<EducatorClassAssignment | undefined>;
-  getEducatorClassAssignmentsByEducatorId(educatorId: number): Promise<EducatorClassAssignment[]>;
-  getEducatorClassAssignmentsByClassId(classId: number): Promise<EducatorClassAssignment[]>;
-  getEducatorClassAssignmentsBySchoolId(schoolId: number): Promise<EducatorClassAssignment[]>;
-  getActiveEducatorAssignmentForClass(educatorId: number, classId: number): Promise<EducatorClassAssignment | undefined>;
-  createEducatorClassAssignment(assignment: InsertEducatorClassAssignment): Promise<EducatorClassAssignment>;
-  updateEducatorClassAssignment(id: number, assignment: Partial<InsertEducatorClassAssignment>): Promise<EducatorClassAssignment | undefined>;
-  deleteEducatorClassAssignment(id: number): Promise<void>;
+  // Parents by school (credit admin)
+  getParentsBySchoolId(schoolId: number): Promise<User[]>;
 
-  // Class Session methods (Phase 1a)
-  getClassSessionById(id: number): Promise<ClassSession | undefined>;
-  getSessionByQrToken(token: string): Promise<ClassSession | undefined>;
-  getTeacherClockInRecords(params: { schoolId: number; startDate?: string; endDate?: string; classId?: number }): Promise<Array<{ sessionId: number; scheduledDate: string; actualStartTime: string | null; actualEndTime: string | null; checkInLocationVerified: boolean | null; className: string; educatorName: string }>>;
-  getClassSessionsByClassId(classId: number): Promise<ClassSession[]>;
-  getClassSessionsByEducatorId(educatorId: number): Promise<ClassSession[]>;
-  getClassSessionsBySchoolId(schoolId: number): Promise<ClassSession[]>;
-  getClassSessionsByDate(schoolId: number, date: string): Promise<ClassSession[]>;
-  getClassSessionsByDateRange(schoolId: number, startDate: string, endDate: string): Promise<ClassSession[]>;
-  getActiveClassSession(educatorId: number): Promise<ClassSession | undefined>;
-  createClassSession(session: InsertClassSession): Promise<ClassSession>;
-  updateClassSession(id: number, session: Partial<InsertClassSession>): Promise<ClassSession | undefined>;
-  deleteClassSession(id: number): Promise<void>;
-
-  // Educator Schedule methods (Phase 1b)
-  getEducatorScheduleById(id: number): Promise<EducatorSchedule | undefined>;
-  getEducatorSchedulesByEducatorId(educatorId: number): Promise<EducatorSchedule[]>;
-  getEducatorSchedulesByClassId(classId: number): Promise<EducatorSchedule[]>;
-  getEducatorSchedulesBySchoolId(schoolId: number): Promise<EducatorSchedule[]>;
-  getEducatorSchedulesByAssignmentId(assignmentId: number): Promise<EducatorSchedule[]>;
-  getEducatorSchedulesForWeek(educatorId: number, weekStartDate: string): Promise<EducatorSchedule[]>;
-  createEducatorSchedule(schedule: InsertEducatorSchedule): Promise<EducatorSchedule>;
-  updateEducatorSchedule(id: number, schedule: Partial<InsertEducatorSchedule>): Promise<EducatorSchedule | undefined>;
-  deleteEducatorSchedule(id: number): Promise<void>;
-
-  // Audit Log methods (Phase 1b)
-  createAuditLog(log: InsertAuditLog): Promise<AuditLog>;
-  getAuditLogsByTargetId(targetType: string, targetId: string): Promise<AuditLog[]>;
-  getAuditLogsByActorId(actorId: number): Promise<AuditLog[]>;
-  getAuditLogsBySchoolId(schoolId: number, filters?: { actionType?: string; severity?: string; startDate?: string; endDate?: string }): Promise<AuditLog[]>;
-  
-  // Session Attendance methods (Phase 2)
-  getAttendanceBySessionId(sessionId: number): Promise<SessionAttendance[]>;
-  getAttendanceByChildId(childId: number): Promise<SessionAttendance[]>;
-  getAttendanceBySchoolId(schoolId: number): Promise<SessionAttendance[]>;
-  getAttendanceRecord(sessionId: number, childId: number): Promise<SessionAttendance | undefined>;
-  createAttendance(attendance: InsertSessionAttendance): Promise<SessionAttendance>;
-  updateAttendance(id: number, attendance: Partial<InsertSessionAttendance>): Promise<SessionAttendance | undefined>;
-  deleteAttendance(id: number): Promise<void>;
-  upsertAttendance(attendance: InsertSessionAttendance): Promise<SessionAttendance>;
-
-  // Error Log methods
-  createErrorLog(errorLog: InsertErrorLog): Promise<ErrorLog>;
-  getErrorLogById(id: number): Promise<ErrorLog | undefined>;
-  getErrorLogs(filters?: { 
-    severity?: string; 
-    status?: string; 
-    errorType?: string;
-    startDate?: Date;
-    endDate?: Date;
-    limit?: number;
-    offset?: number;
-  }): Promise<ErrorLog[]>;
-  getErrorLogsCount(filters?: { 
-    severity?: string; 
-    status?: string; 
-    errorType?: string;
-    startDate?: Date;
-    endDate?: Date;
-  }): Promise<number>;
-  updateErrorLog(id: number, updates: Partial<InsertErrorLog>): Promise<ErrorLog | undefined>;
-  getUnnotifiedCriticalErrors(): Promise<ErrorLog[]>;
-  markErrorsNotified(ids: number[]): Promise<void>;
-  getErrorsSummary(startDate: Date, endDate: Date): Promise<{
-    total: number;
-    bySeverity: Record<string, number>;
-    byType: Record<string, number>;
-    byStatus: Record<string, number>;
-  }>;
-  cleanupOldErrors(olderThan: Date): Promise<number>;
-
-  // Signed Waiver methods (Phase 2 - Volunteer)
-  getSignedWaiverById(id: number): Promise<SignedWaiver | undefined>;
-  getSignedWaiversByUserId(userId: number): Promise<SignedWaiver[]>;
-  getSignedWaiverByUserAndDocument(userId: number, documentId: number): Promise<SignedWaiver | undefined>;
-  getActiveSignedWaiver(userId: number, documentId: number): Promise<SignedWaiver | undefined>;
-  createSignedWaiver(waiver: InsertSignedWaiver): Promise<SignedWaiver>;
-  updateSignedWaiver(id: number, waiver: Partial<InsertSignedWaiver>): Promise<SignedWaiver | undefined>;
-
-  // Session Volunteer methods (Phase 2 - Volunteer)
-  getSessionVolunteerById(id: number): Promise<SessionVolunteer | undefined>;
-  getSessionVolunteersBySessionId(sessionId: number): Promise<SessionVolunteer[]>;
-  getSessionVolunteersByVolunteerId(volunteerId: number): Promise<SessionVolunteer[]>;
-  createSessionVolunteer(volunteer: InsertSessionVolunteer): Promise<SessionVolunteer>;
-  updateSessionVolunteer(id: number, volunteer: Partial<InsertSessionVolunteer>): Promise<SessionVolunteer | undefined>;
-  deleteSessionVolunteer(id: number): Promise<void>;
-
-  // Volunteer Credits methods (Phase 3 - Volunteer)
-  getVolunteerCreditById(id: number): Promise<VolunteerCredit | undefined>;
-  getVolunteerCreditsByUserId(userId: number): Promise<VolunteerCredit[]>;
-  getVolunteerCreditsBySchoolId(schoolId: number): Promise<VolunteerCredit[]>;
-  getPendingVolunteerCredits(schoolId: number): Promise<VolunteerCredit[]>;
-  getAvailableVolunteerCredits(userId: number): Promise<VolunteerCredit[]>;
-  createVolunteerCredit(credit: InsertVolunteerCredit): Promise<VolunteerCredit>;
-  updateVolunteerCredit(id: number, credit: Partial<InsertVolunteerCredit> & { usedAmountCents?: number }): Promise<VolunteerCredit | undefined>;
-  approveVolunteerCredit(id: number, approvedBy: number): Promise<VolunteerCredit | undefined>;
-  rejectVolunteerCredit(id: number, approvedBy: number, reason: string): Promise<VolunteerCredit | undefined>;
-  useVolunteerCredits(userId: number, amountCents: number, paymentHistoryId?: number, description?: string): Promise<{ usedCredits: CreditUsageLog[]; totalUsed: number }>;
-  
-  // Credit Usage Log methods (legacy)
-  getCreditUsageLogById(id: number): Promise<CreditUsageLog | undefined>;
-  getCreditUsageLogsByCreditId(creditId: number): Promise<CreditUsageLog[]>;
-  createCreditUsageLog(log: InsertCreditUsageLog): Promise<CreditUsageLog>;
-
-  // ==================== UNIFIED CREDIT SYSTEM ====================
-  // Single ledger for all credit types: volunteer, referral, achievement, marketing, manual
-  
-  // Credit CRUD
+  // Unified credit ledger
   getCreditById(id: number): Promise<Credit | undefined>;
   getCredits(filters: {
     userId?: number;
@@ -680,34 +496,29 @@ export interface IStorage {
     includeExpired?: boolean;
   }): Promise<Credit[]>;
   createCredit(credit: InsertCredit): Promise<Credit>;
-  updateCredit(id: number, updates: Partial<InsertCredit> & { usedAmountCents?: number; status?: CreditStatus; approvedBy?: number; approvedAt?: Date; expiresAt?: Date }): Promise<Credit | undefined>;
-  
-  // Credit status management
+  updateCredit(
+    id: number,
+    updates: Partial<InsertCredit> & {
+      usedAmountCents?: number;
+      status?: CreditStatus;
+      approvedBy?: number;
+      approvedAt?: Date;
+      expiresAt?: Date;
+    }
+  ): Promise<Credit | undefined>;
   approveCredit(id: number, approvedBy: number): Promise<Credit | undefined>;
   rejectCredit(id: number, approvedBy: number, reason: string): Promise<Credit | undefined>;
   revokeCredit(id: number, reason: string): Promise<Credit | undefined>;
-  
-  // Available credits for checkout (approved, not expired, has remaining balance)
   getAvailableCredits(userId: number): Promise<Credit[]>;
   getTotalAvailableCredits(userId: number): Promise<number>;
-  
-  // Pending credits for admin approval
   getPendingCredits(schoolId: number, creditType?: CreditType): Promise<Credit[]>;
-  
-  // Credit consumption (FIFO by expiration date)
-  useCredits(userId: number, amountCents: number, paymentHistoryId?: number, description?: string): Promise<{ usedCredits: UnifiedCreditUsageLog[]; totalUsed: number }>;
-  
-  // Credit restoration (rollback on failed checkout) - DEPRECATED: Use credit holds pattern instead
+  useCredits(
+    userId: number,
+    amountCents: number,
+    paymentHistoryId?: number,
+    description?: string
+  ): Promise<{ usedCredits: UnifiedCreditUsageLog[]; totalUsed: number }>;
   restoreCredits(usageLogs: UnifiedCreditUsageLog[]): Promise<{ restoredCount: number; totalRestored: number }>;
-  
-  // Credit expiration management
-  expireCredits(): Promise<number>; // Returns count of expired credits
-  
-  // ==================== CREDIT HOLDS (Reserve-then-Finalize Pattern) ====================
-  // Hold credits before payment processing, finalize after success, release on failure
-  createCreditHolds(userId: number, amountCents: number, checkoutSessionId: string, description?: string, expiresInMinutes?: number): Promise<{ holds: CreditHold[]; totalHeld: number }>;
-  finalizeCreditHolds(checkoutSessionId: string, paymentHistoryId?: number, description?: string): Promise<{ finalizedCount: number; totalFinalized: number; usageLogs: UnifiedCreditUsageLog[] }>;
-  releaseCreditHolds(checkoutSessionId: string): Promise<{ releasedCount: number; totalReleased: number }>;
   completeCreditsOnlyPayment(params: {
     holdSessionId: string;
     scheduledPaymentId: number;
@@ -721,167 +532,35 @@ export interface IStorage {
     parentEmail: string;
     childName: string | null;
     className: string | null;
-    /**
-     * Audit field: who initiated the credits-only completion. Defaults to
-     * 'auto_pay' for backwards compatibility with the auto-pay scheduler;
-     * the parent-initiated Pay Now flow passes 'parent_manual'.
-     */
     chargedBy?: 'auto_pay' | 'parent_manual' | 'parent_manual_saved_card' | 'admin_manual';
-    /**
-     * Optional override for `completion_source`. Defaults to 'credits_only'.
-     */
     completionSource?: string;
-    /**
-     * Optional override for the human-readable description recorded on the
-     * payment row and credit-usage log. Defaults to the auto-pay phrasing.
-     */
     description?: string;
   }): Promise<void>;
-  getActiveHoldsForUser(userId: number): Promise<CreditHold[]>;
-  getTotalHeldCreditsForUser(userId: number): Promise<number>;
-  expireStaleHolds(): Promise<number>;
-  
-  // Unified Credit Usage Log methods
+  expireCredits(): Promise<number>;
   getUnifiedCreditUsageLogById(id: number): Promise<UnifiedCreditUsageLog | undefined>;
   getUnifiedCreditUsageLogsByCreditId(creditId: number): Promise<UnifiedCreditUsageLog[]>;
   getUnifiedCreditUsageLogsByPaymentHistoryId(paymentHistoryId: number): Promise<UnifiedCreditUsageLog[]>;
-  createUnifiedCreditUsageLog(log: InsertUnifiedCreditUsageLog): Promise<UnifiedCreditUsageLog>;
-
-  // Credit integrity check methods (used by reconciliation job)
   getDoubleSpentCredits(schoolId?: number): Promise<Credit[]>;
   getMismatchedStatusCredits(schoolId?: number): Promise<Credit[]>;
   getCompletedScheduledPaymentsWithCreditSource(schoolId?: number): Promise<ScheduledPayment[]>;
   getUnifiedCreditUsageLogsByScheduledPaymentId(scheduledPaymentId: number): Promise<UnifiedCreditUsageLog[]>;
-
-  // ==================== PAYMENT ALLOCATIONS ====================
-  // Source of truth for linking payments to enrollments
-  
-  getPaymentAllocationById(id: number): Promise<PaymentAllocation | undefined>;
-  getPaymentAllocationsByEnrollmentId(enrollmentId: number): Promise<PaymentAllocation[]>;
-  getPaymentAllocationsByMembershipEnrollmentId(membershipEnrollmentId: number): Promise<PaymentAllocation[]>;
-  getPaymentAllocationsByPaymentHistoryId(paymentHistoryId: number): Promise<PaymentAllocation[]>;
-  createPaymentAllocation(allocation: InsertPaymentAllocation): Promise<PaymentAllocation>;
-  createPaymentAllocations(allocations: InsertPaymentAllocation[]): Promise<PaymentAllocation[]>;
-  getTotalPaidForEnrollment(enrollmentId: number): Promise<number>;
-  getTotalPaidForMembershipEnrollment(membershipEnrollmentId: number): Promise<number>;
-  
-  // ==================== ASSESSMENT TRACKING ====================
-  // Assessment Types
-  getAssessmentTypeById(id: number): Promise<AssessmentType | undefined>;
-  getAssessmentTypesBySchoolId(schoolId: number): Promise<AssessmentType[]>;
-  createAssessmentType(assessmentType: InsertAssessmentType): Promise<AssessmentType>;
-  updateAssessmentType(id: number, assessmentType: Partial<InsertAssessmentType>): Promise<AssessmentType | undefined>;
-  deleteAssessmentType(id: number): Promise<void>;
-  
-  // Curriculum Books
-  getCurriculumBookById(id: number): Promise<CurriculumBook | undefined>;
-  getCurriculumBooksByAssessmentTypeId(assessmentTypeId: number): Promise<CurriculumBook[]>;
-  createCurriculumBook(book: InsertCurriculumBook): Promise<CurriculumBook>;
-  updateCurriculumBook(id: number, book: Partial<InsertCurriculumBook>): Promise<CurriculumBook | undefined>;
-  deleteCurriculumBook(id: number): Promise<void>;
-  
-  // Student Assessments
-  getStudentAssessmentById(id: number): Promise<StudentAssessment | undefined>;
-  getStudentAssessmentsByChildId(childId: number): Promise<StudentAssessment[]>;
-  getStudentAssessmentsBySchoolId(schoolId: number, filters?: { locationId?: number; assessmentTypeId?: number; childId?: number }): Promise<StudentAssessment[]>;
-  createStudentAssessment(assessment: InsertStudentAssessment): Promise<StudentAssessment>;
-  updateStudentAssessment(id: number, assessment: Partial<InsertStudentAssessment>): Promise<StudentAssessment | undefined>;
-  deleteStudentAssessment(id: number): Promise<void>;
-
-  // Lexile methods
-  upsertChildLexileProfile(childId: number, data: { readingGradeLevel?: string; lexileRange?: string; bookList?: string }): Promise<Child | undefined>;
-  insertLexileAssessmentWithProfile(childId: number, schoolId: number, assessmentTypeId: number, recordedBy: number, data: { readingGradeLevel?: string; lexileRange?: string; bookList?: string; notes?: string }): Promise<StudentAssessment>;
-  recordLexileAssessment(childId: number, schoolId: number, recordedBy: number, data: { readingGradeLevel?: string; lexileRange?: string; bookList?: string; notes?: string }): Promise<StudentAssessment>;
-  getChildrenForSchool(schoolId: number): Promise<Array<{ id: number; firstName: string; lastName: string; gradeLevel: string; currentLexileRange?: string | null; currentReadingGradeLevel?: string | null; currentBookList?: string | null }>>;
-  getLexileHistoryForChild(childId: number, assessmentTypeId: number): Promise<StudentAssessment[]>;
-  getLexileHistoryForChildBySchool(childId: number, schoolId: number): Promise<StudentAssessment[]>;
-  fuzzyMatchStudentsForSchool(schoolId: number, rawName: string): Promise<Array<{ id: number; name: string; gradeLevel: string }>>;
-  getChildByIdForSchool(childId: number, schoolId: number): Promise<Child | undefined>;
-  
-  // ==================== FUNDRAISER SYSTEM ====================
-  // Campaigns
-  getFundraiserCampaignById(id: number): Promise<FundraiserCampaign | undefined>;
-  getFundraiserCampaignsBySchoolId(schoolId: number): Promise<FundraiserCampaign[]>;
-  getActiveFundraiserCampaignsBySchoolId(schoolId: number): Promise<FundraiserCampaign[]>;
-  createFundraiserCampaign(campaign: InsertFundraiserCampaign): Promise<FundraiserCampaign>;
-  updateFundraiserCampaign(id: number, campaign: Partial<InsertFundraiserCampaign>): Promise<FundraiserCampaign | undefined>;
-  deleteFundraiserCampaign(id: number): Promise<void>;
-  
-  // Products
-  getFundraiserProductById(id: number): Promise<FundraiserProduct | undefined>;
-  getFundraiserProductsByCampaignId(campaignId: number): Promise<FundraiserProduct[]>;
-  createFundraiserProduct(product: InsertFundraiserProduct): Promise<FundraiserProduct>;
-  updateFundraiserProduct(id: number, product: Partial<InsertFundraiserProduct>): Promise<FundraiserProduct | undefined>;
-  deleteFundraiserProduct(id: number): Promise<void>;
-  
-  // Family Links
-  getFundraiserFamilyLinkById(id: number): Promise<FundraiserFamilyLink | undefined>;
-  getFundraiserFamilyLinkBySlug(campaignId: number, slug: string): Promise<FundraiserFamilyLink | undefined>;
-  getFundraiserFamilyLinksByUserId(userId: number): Promise<FundraiserFamilyLink[]>;
-  getFundraiserFamilyLinksByCampaignId(campaignId: number): Promise<FundraiserFamilyLink[]>;
-  createFundraiserFamilyLink(link: InsertFundraiserFamilyLink): Promise<FundraiserFamilyLink>;
-  getOrCreateFundraiserFamilyLink(campaignId: number, userId: number, userName: string): Promise<FundraiserFamilyLink>;
-  
-  // Orders
-  getFundraiserOrderById(id: number): Promise<FundraiserOrder | undefined>;
-  getFundraiserOrdersByFamilyLinkId(familyLinkId: number): Promise<FundraiserOrder[]>;
-  getFundraiserOrdersByCampaignId(campaignId: number): Promise<FundraiserOrder[]>;
-  getFundraiserOrderByStripeSessionId(sessionId: string): Promise<FundraiserOrder | undefined>;
-  createFundraiserOrder(order: InsertFundraiserOrder): Promise<FundraiserOrder>;
-  updateFundraiserOrder(id: number, order: Partial<InsertFundraiserOrder>): Promise<FundraiserOrder | undefined>;
-  
-  // Order Items
-  getFundraiserOrderItemsByOrderId(orderId: number): Promise<FundraiserOrderItem[]>;
-  createFundraiserOrderItem(item: InsertFundraiserOrderItem): Promise<FundraiserOrderItem>;
-  createFundraiserOrderItems(items: InsertFundraiserOrderItem[]): Promise<FundraiserOrderItem[]>;
-  
-  // Payment Reminder Log methods
-  createPaymentReminderLog(log: InsertPaymentReminderLog): Promise<PaymentReminderLog>;
-  getPaymentReminderLogsBySchool(schoolId: number, limit?: number): Promise<PaymentReminderLog[]>;
-
-  // Schedule Builder - Weekly Skeletons
-  getWeeklySkeletonsBySchool(schoolId: number): Promise<WeeklySkeleton[]>;
-  getWeeklySkeletonById(id: number): Promise<WeeklySkeleton | undefined>;
-  createWeeklySkeleton(skeleton: InsertWeeklySkeleton): Promise<WeeklySkeleton>;
-  updateWeeklySkeleton(id: number, skeleton: Partial<InsertWeeklySkeleton>): Promise<WeeklySkeleton | undefined>;
-  deleteWeeklySkeleton(id: number): Promise<void>;
-
-  // Schedule Builder - Skeleton Blocks
-  getSkeletonBlocksBySkeletonId(skeletonId: number): Promise<SkeletonBlock[]>;
-  getSkeletonBlockById(id: number): Promise<SkeletonBlock | undefined>;
-  createSkeletonBlock(block: InsertSkeletonBlock): Promise<SkeletonBlock>;
-  updateSkeletonBlock(id: number, block: Partial<InsertSkeletonBlock>): Promise<SkeletonBlock | undefined>;
-  deleteSkeletonBlock(id: number): Promise<void>;
-  reorderSkeletonBlocks(skeletonId: number, blockIds: number[]): Promise<void>;
-  bulkReplaceSkeletonBlocks(skeletonId: number, blocks: Omit<InsertSkeletonBlock, 'skeletonId' | 'createdBy'>[], createdBy: number): Promise<SkeletonBlock[]>;
-
-  // Schedule Builder - Week Plans
-  getWeekPlansBySkeletonId(skeletonId: number): Promise<WeekPlan[]>;
-  getWeekPlanById(id: number): Promise<WeekPlan | undefined>;
-  getPublishedWeekPlansBySchool(schoolId: number): Promise<WeekPlan[]>;
-  createWeekPlan(plan: InsertWeekPlan): Promise<WeekPlan>;
-  updateWeekPlan(id: number, plan: Partial<InsertWeekPlan>): Promise<WeekPlan | undefined>;
-  deleteWeekPlan(id: number): Promise<void>;
-  cloneWeekPlan(sourceWeekPlanId: number, newWeekNumber: number, newStartDate: string, createdBy: number): Promise<WeekPlan>;
-
-  // Schedule Builder - Week Plan Blocks
-  getWeekPlanBlocksByWeekPlanId(weekPlanId: number): Promise<WeekPlanBlock[]>;
-  getWeekPlanBlockById(id: number): Promise<WeekPlanBlock | undefined>;
-  createWeekPlanBlock(block: InsertWeekPlanBlock): Promise<WeekPlanBlock>;
-  updateWeekPlanBlock(id: number, block: Partial<InsertWeekPlanBlock>, updatedBy: number): Promise<WeekPlanBlock | undefined>;
-  deleteWeekPlanBlock(id: number): Promise<void>;
-  markBlockCompleted(id: number, completedBy: number): Promise<WeekPlanBlock | undefined>;
-  bulkUpdateWeekPlanBlocks(weekPlanId: number, updates: { dayOfWeek: number; startTime: string; data: Partial<InsertWeekPlanBlock> }[], updatedBy: number): Promise<void>;
-
-  // Schedule Builder - Block History
-  getBlockHistory(blockId: number): Promise<WeekPlanBlockHistory[]>;
-
-  // Retention Report
-  getEnrollmentFamiliesByPeriod(schoolId: number, startDate: string, endDate: string): Promise<{ parentEmail: string; parentId: number; childName: string; className: string }[]>;
-
-  // Email Log
-  createEmailLog(data: InsertEmailLog): Promise<EmailLog>;
-  getEmailLogs(limit: number): Promise<EmailLog[]>;
+  createUnifiedCreditUsageLog(log: InsertUnifiedCreditUsageLog): Promise<UnifiedCreditUsageLog>;
+  createCreditHolds(
+    userId: number,
+    amountCents: number,
+    checkoutSessionId: string,
+    description?: string,
+    expiresInMinutes?: number
+  ): Promise<{ holds: CreditHold[]; totalHeld: number }>;
+  finalizeCreditHolds(
+    checkoutSessionId: string,
+    paymentHistoryId?: number,
+    description?: string
+  ): Promise<{ finalizedCount: number; totalFinalized: number; usageLogs: UnifiedCreditUsageLog[] }>;
+  releaseCreditHolds(checkoutSessionId: string): Promise<{ releasedCount: number; totalReleased: number }>;
+  getActiveHoldsForUser(userId: number): Promise<CreditHold[]>;
+  getTotalHeldCreditsForUser(userId: number): Promise<number>;
+  expireStaleHolds(): Promise<number>;
 }
 
 export class MemStorage implements IStorage {
@@ -907,12 +586,12 @@ export class MemStorage implements IStorage {
   private paymentsStore: Map<number, Payment>;
   private refundsStore: Map<number, Refund>;
   private schoolsStore: Map<number, School>;
+  private dailyFlowTemplatesStore: Map<number, DailyFlowTemplate>;
+  private dailyFlowEntriesStore: Map<number, DailyFlowEntry>;
+  private dailyFlowSchedulesStore: Map<number, DailyFlowSchedule>;
   private technicalIssuesStore: Map<string, any>;
   private adminNotificationsStore: Map<string, any>;
   private userNotificationsStore: Map<string, any>;
-  private educatorClassAssignmentsStore: Map<number, EducatorClassAssignment>;
-  private classSessionsStore: Map<number, ClassSession>;
-  private schoolClassEnrollmentsStore: Map<number, SchoolClassEnrollment>;
   private notificationsStore: Map<number, Notification>;
   private notificationRecipientsStore: Map<number, NotificationRecipient>;
 
@@ -938,8 +617,6 @@ export class MemStorage implements IStorage {
   private schoolStudentIdCounter: number;
   private userLocationIdCounter: number;
   private locationIdCounter: number;
-  private educatorClassAssignmentIdCounter: number;
-  private classSessionIdCounter: number;
   private dailyFlowTemplateIdCounter: number;
   private dailyFlowEntryIdCounter: number;
   private dailyFlowScheduleIdCounter: number;
@@ -970,12 +647,12 @@ export class MemStorage implements IStorage {
     this.paymentsStore = new Map();
     this.refundsStore = new Map();
     this.schoolsStore = new Map();
+    this.dailyFlowTemplatesStore = new Map();
+    this.dailyFlowEntriesStore = new Map();
+    this.dailyFlowSchedulesStore = new Map();
     this.technicalIssuesStore = new Map();
     this.adminNotificationsStore = new Map();
     this.userNotificationsStore = new Map();
-    this.educatorClassAssignmentsStore = new Map();
-    this.classSessionsStore = new Map();
-    this.schoolClassEnrollmentsStore = new Map();
     this.notificationsStore = new Map();
     this.notificationRecipientsStore = new Map();
     this.classEnrollments = [];
@@ -1002,8 +679,6 @@ export class MemStorage implements IStorage {
     this.schoolStudentIdCounter = 1;
     this.userLocationIdCounter = 1;
     this.locationIdCounter = 1;
-    this.educatorClassAssignmentIdCounter = 1;
-    this.classSessionIdCounter = 1;
     this.dailyFlowTemplateIdCounter = 1;
     this.dailyFlowEntryIdCounter = 1;
     this.dailyFlowScheduleIdCounter = 1;
@@ -1039,6 +714,9 @@ export class MemStorage implements IStorage {
     // Locations and user locations are now in database - no longer loading from JSON files
     // this.initializeUserLocations().catch(console.error);
     // this.initializeLocations().catch(console.error);
+    this.initializeDailyFlowTemplates().catch(console.error);
+    this.initializeDailyFlowEntries().catch(console.error);
+    this.initializeDailyFlowSchedules().catch(console.error);
 
     this.createUser({
       username: "admin",
@@ -1132,6 +810,9 @@ export class MemStorage implements IStorage {
     this.paymentsStore.clear();
     this.refundsStore.clear();
     this.schoolsStore.clear();
+    this.dailyFlowTemplatesStore.clear();
+    this.dailyFlowEntriesStore.clear();
+    this.dailyFlowSchedulesStore.clear();
     this.technicalIssuesStore.clear();
     this.adminNotificationsStore.clear();
     this.userNotificationsStore.clear();
@@ -1161,6 +842,9 @@ export class MemStorage implements IStorage {
     this.schoolStudentIdCounter = 1;
     this.userLocationIdCounter = 1;
     this.locationIdCounter = 1;
+    this.dailyFlowTemplateIdCounter = 1;
+    this.dailyFlowEntryIdCounter = 1;
+    this.dailyFlowScheduleIdCounter = 1;
   }
 
   // User methods
@@ -1253,43 +937,6 @@ export class MemStorage implements IStorage {
     return Array.from(this.usersStore.values());
   }
 
-  async searchUsers(params: { schoolId: number | null, query?: string, role?: User['role'], limit?: number, offset?: number }): Promise<{ users: User[]; total: number }> {
-    const db = await getDb();
-    const { schoolId, query, role, limit = 20, offset = 0 } = params;
-
-    const conditions = [eq(users.isActive, true)];
-
-    if (schoolId !== null) {
-      conditions.push(eq(users.schoolId, schoolId));
-    }
-
-    if (role) {
-      conditions.push(eq(users.role, role));
-    }
-
-    if (query && query.trim()) {
-      const pattern = `%${query.trim()}%`;
-      conditions.push(
-        or(
-          ilike(users.name, pattern),
-          ilike(users.firstName, pattern),
-          ilike(users.lastName, pattern),
-          ilike(users.email, pattern),
-        )
-      );
-    }
-
-    const whereClause = and(...conditions);
-
-    const [countResult, results] = await Promise.all([
-      db.select({ count: sql`count(*)` }).from(users).where(whereClause),
-      db.select().from(users).where(whereClause).orderBy(users.name).limit(limit).offset(offset),
-    ]);
-
-    const total = Number(countResult[0]?.count ?? 0);
-    return { users: results, total };
-  }
-
   // School methods
   async getSchool(id: number): Promise<School | undefined> {
     return this.schoolsStore.get(id);
@@ -1351,165 +998,12 @@ export class MemStorage implements IStorage {
     );
   }
 
-  async getSchoolFeatures(schoolId: number): Promise<Record<string, boolean>> {
-    const school = this.schoolsStore.get(schoolId);
-    return (school?.enabledFeatures as Record<string, boolean>) || {};
-  }
-
-  async updateSchoolFeatures(schoolId: number, features: Record<string, boolean>): Promise<School | undefined> {
-    const school = this.schoolsStore.get(schoolId);
-    if (!school) return undefined;
-    const updatedSchool = { ...school, enabledFeatures: features, updatedAt: new Date() };
-    this.schoolsStore.set(schoolId, updatedSchool);
-    return updatedSchool;
-  }
-
   async getUserRolesByUserId(userId: number): Promise<UserRole[]> {
     return [];
   }
 
-  async createUserRole(data: { userId: number; role: string; schoolId?: number | null; isPrimary?: boolean }): Promise<UserRole> {
-    // MemStorage doesn't track user roles - return a stub
-    return {
-      id: Date.now(),
-      userId: data.userId,
-      role: data.role,
-      schoolId: data.schoolId ?? null,
-      isPrimary: data.isPrimary ?? false,
-      createdAt: new Date(),
-    } as UserRole;
-  }
-
   async deleteUserRolesByUserId(userId: number): Promise<void> {
     // MemStorage doesn't track user roles - no-op
-  }
-
-  async getParentsBySchoolId(schoolId: number): Promise<User[]> {
-    // MemStorage doesn't track user roles - return empty
-    return [];
-  }
-
-  async deleteUserLocationsByUserId(userId: number): Promise<void> {
-    // MemStorage doesn't track user locations - no-op
-  }
-
-  async deleteNotificationRecipientsByUserId(userId: number): Promise<void> {
-    // MemStorage doesn't track notification recipients - no-op
-  }
-
-  async deleteChildrenByParentId(parentId: number): Promise<void> {
-    // Delete all children where parentId matches
-    for (const [id, child] of this.childrenStore.entries()) {
-      if (child.parentId === parentId) {
-        this.childrenStore.delete(id);
-      }
-    }
-  }
-
-  async deleteEnrollmentsByChildId(childId: number): Promise<void> {
-    // Delete all program enrollments for this child
-    for (const [id, enrollment] of this.programEnrollmentsStore.entries()) {
-      if (enrollment.childId === childId) {
-        this.programEnrollmentsStore.delete(id);
-      }
-    }
-  }
-
-  async deleteSchoolStudentsByChildId(childId: number): Promise<void> {
-    // Delete all school student records for this child
-    for (const [id, schoolStudent] of this.schoolStudentsStore.entries()) {
-      if (schoolStudent.childId === childId) {
-        this.schoolStudentsStore.delete(id);
-      }
-    }
-  }
-
-  async deleteDiscountApplicationsByChildId(childId: number): Promise<void> {
-    // MemStorage doesn't track discount applications - no-op
-  }
-
-  async deleteEmergencyContactsByUserId(userId: number): Promise<void> {
-    // MemStorage doesn't track emergency contacts - no-op
-  }
-
-  async deletePiiAccessLogsByUserId(userId: number): Promise<void> {
-    // MemStorage doesn't track PII access logs - no-op
-  }
-
-  async deleteCartsByParentId(parentId: number): Promise<void> {
-    // MemStorage doesn't track carts - no-op
-  }
-
-  async deleteScheduledPaymentsByParentId(parentId: number): Promise<void> {
-    // MemStorage doesn't track scheduled payments - no-op
-  }
-
-  async deleteEnrollmentsByParentId(parentId: number): Promise<void> {
-    // MemStorage doesn't track enrollments - no-op
-  }
-
-  async deleteMembershipEnrollmentsByParentUserId(parentUserId: number): Promise<void> {
-    // MemStorage doesn't track membership enrollments - no-op
-  }
-
-  async deleteMembershipAgreementsByParentUserId(parentUserId: number): Promise<void> {
-    // MemStorage doesn't track membership agreements - no-op
-  }
-
-  async deletePaymentReceiptsByParentUserId(parentUserId: number): Promise<void> {
-    // MemStorage doesn't track payment receipts - no-op
-  }
-
-  async deleteClassSessionsByEducatorId(educatorId: number): Promise<void> {
-    // MemStorage doesn't track class sessions - no-op
-  }
-
-  async clearClassSessionsSubstituteEducatorId(educatorId: number): Promise<void> {
-    // MemStorage doesn't track class sessions - no-op
-  }
-
-  async clearClassesInstructorId(instructorId: number): Promise<void> {
-    // MemStorage - set instructorId to null for matching classes
-    for (const [id, cls] of this.classesStore.entries()) {
-      if (cls.instructorId === instructorId) {
-        this.classesStore.set(id, { ...cls, instructorId: null });
-      }
-    }
-  }
-
-  async clearProgramsInstructorId(instructorId: number): Promise<void> {
-    // MemStorage - set instructorId to null for matching programs
-    for (const [id, prog] of this.programsStore.entries()) {
-      if (prog.instructorId === instructorId) {
-        this.programsStore.set(id, { ...prog, instructorId: null });
-      }
-    }
-  }
-
-  async deleteEducatorSchedulesByEducatorId(educatorId: number): Promise<void> {
-    // MemStorage doesn't track educator schedules - no-op
-  }
-
-  async deleteEducatorClassAssignmentsByEducatorId(educatorId: number): Promise<void> {
-    // MemStorage doesn't track educator class assignments - no-op
-  }
-
-  async nullifyUserReferencesForSoftDelete(userId: number): Promise<void> {
-    // MemStorage doesn't have complex FK relationships - no-op
-  }
-
-  async deletePushSubscriptionsByUserId(userId: number): Promise<void> {
-    // MemStorage doesn't track push subscriptions - no-op
-  }
-
-  async softDeleteUserWithCleanup(userId: number): Promise<{ success: boolean; error?: string }> {
-    // MemStorage simple soft-delete: just set isActive=false
-    const user = this.users.get(userId);
-    if (!user) {
-      return { success: false, error: 'User not found' };
-    }
-    this.users.set(userId, { ...user, isActive: false, activeRoleId: null });
-    return { success: true };
   }
 
   async getLocationsBySchool(schoolId: number): Promise<Location[]> {
@@ -1644,48 +1138,12 @@ export class MemStorage implements IStorage {
       ...insertEvent, 
       id, 
       createdAt: now,
-      updatedAt: now,
       organizerId: insertEvent.organizerId,
       description: insertEvent.description || null,
-      location: insertEvent.location || null,
-      schoolId: insertEvent.schoolId || null,
-      color: insertEvent.color || null,
-      isAllDay: insertEvent.isAllDay || false
+      location: insertEvent.location || null
     };
     this.eventsStore.set(id, event);
     return event;
-  }
-
-  async updateEvent(id: number, updateData: Partial<InsertEvent>): Promise<Event | undefined> {
-    const event = this.eventsStore.get(id);
-    if (!event) return undefined;
-    const updatedEvent: Event = {
-      ...event,
-      ...updateData,
-      updatedAt: new Date()
-    };
-    this.eventsStore.set(id, updatedEvent);
-    return updatedEvent;
-  }
-
-  async deleteEvent(id: number): Promise<void> {
-    this.eventsStore.delete(id);
-  }
-
-  async getEventsBySchool(schoolId: number): Promise<Event[]> {
-    return Array.from(this.eventsStore.values())
-      .filter(event => event.schoolId === schoolId)
-      .sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
-  }
-
-  async getEventsBySchoolAndDateRange(schoolId: number, startDate: Date, endDate: Date): Promise<Event[]> {
-    return Array.from(this.eventsStore.values())
-      .filter(event => 
-        event.schoolId === schoolId &&
-        event.startDate >= startDate &&
-        event.startDate <= endDate
-      )
-      .sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
   }
 
   // Marketplace methods
@@ -1860,16 +1318,6 @@ export class MemStorage implements IStorage {
     return this.childrenStore.get(id);
   }
 
-  async getChildByIdAndSchoolId(childId: number, schoolId: number): Promise<Child | undefined> {
-    const child = this.childrenStore.get(childId);
-    if (!child || child.schoolId !== schoolId) return undefined;
-    return child;
-  }
-
-  async getChildrenBySchoolId(schoolId: number): Promise<Child[]> {
-    return Array.from(this.childrenStore.values()).filter(child => child.schoolId === schoolId);
-  }
-
   async getChildrenByParentId(parentId: number): Promise<Child[]> {
     return Array.from(this.childrenStore.values()).filter(child => child.parentId === parentId);
   }
@@ -1924,30 +1372,6 @@ export class MemStorage implements IStorage {
 
     // Save to persistent storage
     await this.saveChildrenToDisk();
-  }
-
-  async getGuardiansByChildId(childId: number): Promise<ChildGuardian[]> {
-    return [];
-  }
-
-  async getChildrenByGuardianUserId(guardianUserId: number): Promise<Child[]> {
-    return [];
-  }
-
-  async addChildGuardian(guardian: InsertChildGuardian): Promise<ChildGuardian> {
-    throw new Error('Guardian management requires database storage');
-  }
-
-  async removeChildGuardian(id: number): Promise<void> {
-    // No-op in memory storage
-  }
-
-  async getChildGuardianById(id: number): Promise<ChildGuardian | undefined> {
-    return undefined;
-  }
-
-  async deleteGuardiansByChildId(childId: number): Promise<void> {
-    // No-op in memory storage
   }
 
   private async saveChildrenToDisk(): Promise<void> {
@@ -2227,19 +1651,9 @@ export class MemStorage implements IStorage {
     const enrollment = this.programEnrollmentsStore.get(id);
     if (!enrollment) return undefined;
 
-    // Strip generated columns / immutable fields so callers spreading a full
-    // enrollment row can't reintroduce them (mirrors DB-storage hardening).
-    const {
-      effectiveBalance: _ignoredEffectiveBalance,
-      id: _ignoredId,
-      createdAt: _ignoredCreatedAt,
-      ...safeUpdate
-    } = (updateData ?? {}) as Partial<InsertProgramEnrollment> &
-      Partial<Pick<ProgramEnrollment, 'effectiveBalance' | 'id' | 'createdAt'>>;
-
     const updatedEnrollment: ProgramEnrollment = {
       ...enrollment,
-      ...safeUpdate,
+      ...updateData,
       updatedAt: new Date()
     };
 
@@ -2320,21 +1734,6 @@ export class MemStorage implements IStorage {
         activeStatuses.includes(e.status) && 
         e.stripeCustomerId !== null
       );
-  }
-
-  async getEnrollmentsByParentEmail(parentEmail: string): Promise<ProgramEnrollment[]> {
-    return Array.from(this.programEnrollmentsStore.values())
-      .filter(e => e.parentEmail === parentEmail);
-  }
-
-  async getEnrollmentsBySchoolId(schoolId: number): Promise<ProgramEnrollment[]> {
-    return Array.from(this.programEnrollmentsStore.values())
-      .filter(e => e.schoolId === schoolId);
-  }
-
-  async getEnrollmentByChildAndClass(childId: number, classId: number): Promise<ProgramEnrollment | undefined> {
-    return Array.from(this.programEnrollmentsStore.values())
-      .find(e => e.childId === childId && (e.classId === classId || e.programId === classId || e.marketplaceClassId === classId));
   }
 
   // Membership Enrollment methods
@@ -2519,14 +1918,6 @@ export class MemStorage implements IStorage {
     return enrollments;
   }
 
-  async getEnrollmentsByChildIds(childIds: number[]): Promise<any[]> {
-    // Read from programEnrollmentsStore (the canonical source for all enrollments)
-    const enrollments = Array.from(this.programEnrollmentsStore.values())
-      .filter(enrollment => childIds.includes(enrollment.childId));
-    console.log(`📝 ENROLLMENT QUERY: Children ${childIds.join(', ')} have ${enrollments.length} enrollments from programEnrollmentsStore`);
-    return enrollments;
-  }
-
   async getEnrollmentsByClassId(classId: number): Promise<any[]> {
     // Read from programEnrollmentsStore (the canonical source for all enrollments)
     const enrollments = Array.from(this.programEnrollmentsStore.values())
@@ -2574,15 +1965,7 @@ export class MemStorage implements IStorage {
       return null;
     }
 
-    // Strip generated columns / immutable fields so callers spreading an
-    // existing enrollment row can't reintroduce them (mirrors DB hardening).
-    const {
-      effectiveBalance: _ignoredEffectiveBalance,
-      id: _ignoredId,
-      createdAt: _ignoredCreatedAt,
-      ...safeUpdate
-    } = (updateData ?? {}) as Record<string, unknown>;
-    const updatedEnrollment = { ...this.classEnrollments[index], ...safeUpdate };
+    const updatedEnrollment = { ...this.classEnrollments[index], ...updateData };
     this.classEnrollments[index] = updatedEnrollment;
 
     console.log(`✅ ENROLLMENT UPDATED: ID ${updatedEnrollment.id}, Status: ${updatedEnrollment.status}`);
@@ -3710,12 +3093,6 @@ export class MemStorage implements IStorage {
   }
 
   // Stripe Payment History methods implementation
-  async getStripePaymentHistoryById(id: number): Promise<StripePaymentHistory | undefined> {
-    const db = await getDb();
-    const result = await db.select().from(stripePaymentHistory).where(eq(stripePaymentHistory.id, id)).limit(1);
-    return result[0];
-  }
-
   async saveStripePayment(payment: InsertStripePaymentHistory): Promise<StripePaymentHistory> {
     const db = await getDb();
     
@@ -3745,31 +3122,6 @@ export class MemStorage implements IStorage {
     const db = await getDb();
     const result = await db.select().from(stripePaymentHistory).where(eq(stripePaymentHistory.paymentIntentId, paymentIntentId)).limit(1);
     return result[0];
-  }
-
-  async getStripePaymentByEventId(stripeEventId: string): Promise<StripePaymentHistory | undefined> {
-    const db = await getDb();
-    const result = await db.select().from(stripePaymentHistory).where(eq(stripePaymentHistory.stripeEventId, stripeEventId)).limit(1);
-    return result[0];
-  }
-
-  async getPaymentByIdempotencyKey(idempotencyKey: string): Promise<StripePaymentHistory | undefined> {
-    const db = await getDb();
-    const result = await db.select().from(stripePaymentHistory).where(eq(stripePaymentHistory.idempotencyKey, idempotencyKey)).limit(1);
-    return result[0];
-  }
-
-  // Payment Discounts methods implementation
-  async createPaymentDiscount(discount: InsertPaymentDiscount): Promise<PaymentDiscount> {
-    const db = await getDb();
-    const result = await db.insert(paymentDiscounts).values(discount).returning();
-    return result[0];
-  }
-  
-  async getPaymentDiscountsByPaymentHistoryId(paymentHistoryId: number): Promise<PaymentDiscount[]> {
-    const db = await getDb();
-    const result = await db.select().from(paymentDiscounts).where(eq(paymentDiscounts.paymentHistoryId, paymentHistoryId));
-    return result;
   }
 
   private async initializePayments() {
@@ -3815,7 +3167,6 @@ export class MemStorage implements IStorage {
       enrollmentId: refund.enrollmentId || null,
       description: refund.description || null,
       stripeRefundId: refund.stripeRefundId || null,
-      source: refund.source || 'stripe',
       processedBy: refund.processedBy || null,
       processedAt: refund.processedAt || null,
       failureReason: refund.failureReason || null,
@@ -3879,10 +3230,6 @@ export class MemStorage implements IStorage {
     return newScheduledPayment;
   }
 
-  async getScheduledPaymentById(id: number): Promise<ScheduledPayment | undefined> {
-    return this.scheduledPaymentsStore.get(id);
-  }
-
   async getScheduledPaymentsByParentEmail(parentEmail: string): Promise<ScheduledPayment[]> {
     // Debug: check if scheduled payments are loaded
     console.log('🔍 MemStorage: scheduledPaymentsStore size:', this.scheduledPaymentsStore.size);
@@ -3899,29 +3246,20 @@ export class MemStorage implements IStorage {
     return filteredPayments;
   }
 
-  async getScheduledPaymentsByEnrollmentId(enrollmentId: number): Promise<ScheduledPayment[]> {
-    const allPayments = Array.from(this.scheduledPaymentsStore.values());
-    return allPayments.filter(payment => payment.enrollmentId === enrollmentId);
-  }
-
   async updateScheduledPaymentStatus(id: number, status: 'pending' | 'paid' | 'overdue' | 'cancelled'): Promise<ScheduledPayment | undefined> {
-    return this.updateScheduledPayment(id, { status } as any);
-  }
-
-  async updateScheduledPayment(id: number, fields: Partial<InsertScheduledPayment>): Promise<ScheduledPayment | undefined> {
     const payment = this.scheduledPaymentsStore.get(id);
     if (!payment) return undefined;
 
     const updatedPayment: ScheduledPayment = {
       ...payment,
-      ...fields,
+      status,
       updatedAt: new Date()
-    } as ScheduledPayment;
+    };
     this.scheduledPaymentsStore.set(id, updatedPayment);
     
     // Save to file for persistence
     await this.saveScheduledPaymentsToFile();
-    console.log(`💾 Saved scheduled payment ${id} update to file`);
+    console.log(`💾 Saved scheduled payment ${id} status update to file`);
     
     return updatedPayment;
   }
@@ -3944,42 +3282,16 @@ export class MemStorage implements IStorage {
     return updatedPayment;
   }
 
-  async getScheduledPaymentsBySchoolId(schoolId: number): Promise<ScheduledPayment[]> {
-    return Array.from(this.scheduledPaymentsStore.values()).filter(
-      (p) => p.schoolId === schoolId
-    );
-  }
-
-  async getUpcomingAutoPayScheduledPayments(windowStart: Date, windowEnd: Date): Promise<ScheduledPayment[]> {
-    return Array.from(this.scheduledPaymentsStore.values()).filter((p) => {
-      if (p.status !== 'pending') return false;
-      const d = new Date(p.scheduledDate);
-      return d >= windowStart && d <= windowEnd;
-    });
-  }
-
-  async deleteScheduledPayment(id: number): Promise<void> {
-    const payment = this.scheduledPaymentsStore.get(id);
-    if (payment) {
-      this.scheduledPaymentsStore.delete(id);
-      await this.saveScheduledPaymentsToFile();
-      console.log(`🗑️ Deleted scheduled payment ${id}`);
-    }
-  }
-
-  async deletePendingScheduledPaymentsByEnrollmentId(enrollmentId: number): Promise<number> {
-    let deletedCount = 0;
-    for (const [id, payment] of this.scheduledPaymentsStore.entries()) {
-      if (payment.enrollmentId === enrollmentId && payment.status === 'pending') {
-        this.scheduledPaymentsStore.delete(id);
-        deletedCount++;
-      }
-    }
-    if (deletedCount > 0) {
-      await this.saveScheduledPaymentsToFile();
-      console.log(`🗑️ Deleted ${deletedCount} pending scheduled payments for enrollment ${enrollmentId}`);
-    }
-    return deletedCount;
+  async updateScheduledPayment(
+    id: number,
+    payment: Partial<InsertScheduledPayment>
+  ): Promise<ScheduledPayment | undefined> {
+    const existing = this.scheduledPaymentsStore.get(id);
+    if (!existing) return undefined;
+    const updatedPayment = { ...existing, ...payment, updatedAt: new Date() } as ScheduledPayment;
+    this.scheduledPaymentsStore.set(id, updatedPayment);
+    await this.saveScheduledPaymentsToFile();
+    return updatedPayment;
   }
 
   private async saveScheduledPaymentsToFile(): Promise<void> {
@@ -4095,19 +3407,6 @@ export class MemStorage implements IStorage {
   async deleteSchoolStudent(id: number): Promise<void> {
     this.schoolStudentsStore.delete(id);
     await this.saveSchoolStudentsToDisk();
-  }
-
-  // School Class Enrollment methods
-  async getSchoolClassEnrollmentsByClassId(classId: number): Promise<SchoolClassEnrollment[]> {
-    return Array.from(this.schoolClassEnrollmentsStore.values()).filter(
-      enrollment => enrollment.classId === classId
-    );
-  }
-
-  async getSchoolClassEnrollmentsByStudentId(studentId: number): Promise<SchoolClassEnrollment[]> {
-    return Array.from(this.schoolClassEnrollmentsStore.values()).filter(
-      enrollment => enrollment.studentId === studentId
-    );
   }
 
   private async saveSchoolStudentsToDisk(): Promise<void> {
@@ -4336,6 +3635,405 @@ export class MemStorage implements IStorage {
     } catch (error) {
       console.error('❌ Error saving locations to disk:', error);
     }
+  }
+
+  // Daily Flow data initialization methods
+  private async initializeDailyFlowTemplates(): Promise<void> {
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+      const templatesFilePath = path.join(process.cwd(), 'data', 'daily-flow-templates.json');
+
+      if (fs.existsSync(templatesFilePath)) {
+        const templatesData = JSON.parse(fs.readFileSync(templatesFilePath, 'utf-8'));
+        console.log(`📋 Loading ${templatesData.length} daily flow templates from daily-flow-templates.json`);
+
+        for (const template of templatesData) {
+          const record: DailyFlowTemplate = {
+            ...template,
+            createdAt: new Date(template.createdAt),
+            updatedAt: new Date(template.updatedAt)
+          };
+          this.dailyFlowTemplatesStore.set(template.id, record);
+          this.dailyFlowTemplateIdCounter = Math.max(this.dailyFlowTemplateIdCounter, template.id + 1);
+        }
+
+        console.log(`✅ Successfully loaded ${templatesData.length} daily flow templates into storage`);
+      } else {
+        console.log('📋 No daily-flow-templates.json found, starting with empty templates');
+      }
+    } catch (error) {
+      console.error('❌ Error loading daily flow templates from JSON:', error);
+    }
+  }
+
+  private async initializeDailyFlowEntries(): Promise<void> {
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+      const entriesFilePath = path.join(process.cwd(), 'data', 'daily-flow-entries.json');
+
+      if (fs.existsSync(entriesFilePath)) {
+        const entriesData = JSON.parse(fs.readFileSync(entriesFilePath, 'utf-8'));
+        console.log(`📊 Loading ${entriesData.length} daily flow entries from daily-flow-entries.json`);
+
+        for (const entry of entriesData) {
+          const record: DailyFlowEntry = {
+            ...entry,
+            date: new Date(entry.date),
+            createdAt: new Date(entry.createdAt),
+            updatedAt: new Date(entry.updatedAt),
+            completedActivities: entry.completedActivities || []
+          };
+          this.dailyFlowEntriesStore.set(entry.id, record);
+          this.dailyFlowEntryIdCounter = Math.max(this.dailyFlowEntryIdCounter, entry.id + 1);
+        }
+
+        console.log(`✅ Successfully loaded ${entriesData.length} daily flow entries into storage`);
+      } else {
+        console.log('📊 No daily-flow-entries.json found, starting with empty entries');
+      }
+    } catch (error) {
+      console.error('❌ Error loading daily flow entries from JSON:', error);
+    }
+  }
+
+  private async initializeDailyFlowSchedules(): Promise<void> {
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+      const schedulesFilePath = path.join(process.cwd(), 'data', 'daily-flow-schedules.json');
+
+      if (fs.existsSync(schedulesFilePath)) {
+        const schedulesData = JSON.parse(fs.readFileSync(schedulesFilePath, 'utf-8'));
+        console.log(`🗓️ Loading ${schedulesData.length} daily flow schedules from daily-flow-schedules.json`);
+
+        for (const schedule of schedulesData) {
+          const record: DailyFlowSchedule = {
+            ...schedule,
+            startDate: new Date(schedule.startDate),
+            endDate: schedule.endDate ? new Date(schedule.endDate) : null,
+            createdAt: new Date(schedule.createdAt),
+            updatedAt: new Date(schedule.updatedAt)
+          };
+          this.dailyFlowSchedulesStore.set(schedule.id, record);
+          this.dailyFlowScheduleIdCounter = Math.max(this.dailyFlowScheduleIdCounter, schedule.id + 1);
+        }
+
+        console.log(`✅ Successfully loaded ${schedulesData.length} daily flow schedules into storage`);
+      } else {
+        console.log('🗓️ No daily-flow-schedules.json found, starting with empty schedules');
+      }
+    } catch (error) {
+      console.error('❌ Error loading daily flow schedules from JSON:', error);
+    }
+  }
+
+  // Daily Flow Template methods
+  async getDailyFlowTemplates(filters?: { schoolId?: number; gradeLevel?: string; subject?: string }): Promise<DailyFlowTemplate[]> {
+    let templates = Array.from(this.dailyFlowTemplatesStore.values());
+    
+    if (filters) {
+      if (filters.schoolId) {
+        templates = templates.filter(t => t.schoolId === filters.schoolId);
+      }
+      if (filters.gradeLevel) {
+        templates = templates.filter(t => t.gradeLevel === filters.gradeLevel);
+      }
+      if (filters.subject) {
+        templates = templates.filter(t => t.subject === filters.subject);
+      }
+    }
+    
+    return templates;
+  }
+
+  async getDailyFlowTemplateById(id: number): Promise<DailyFlowTemplate | undefined> {
+    return this.dailyFlowTemplatesStore.get(id);
+  }
+
+  async createDailyFlowTemplate(template: InsertDailyFlowTemplate): Promise<DailyFlowTemplate> {
+    const id = this.dailyFlowTemplateIdCounter++;
+    const now = new Date();
+    const newTemplate: DailyFlowTemplate = {
+      id,
+      ...template,
+      isActive: template.isActive ?? true,
+      description: template.description || null,
+      createdAt: now,
+      updatedAt: now
+    };
+
+    this.dailyFlowTemplatesStore.set(id, newTemplate);
+    await this.saveDailyFlowTemplatesToDisk();
+    return newTemplate;
+  }
+
+  async updateDailyFlowTemplate(id: number, template: Partial<InsertDailyFlowTemplate>): Promise<DailyFlowTemplate | undefined> {
+    const existingTemplate = this.dailyFlowTemplatesStore.get(id);
+    if (!existingTemplate) return undefined;
+
+    const updatedTemplate: DailyFlowTemplate = {
+      ...existingTemplate,
+      ...template,
+      updatedAt: new Date()
+    };
+
+    this.dailyFlowTemplatesStore.set(id, updatedTemplate);
+    await this.saveDailyFlowTemplatesToDisk();
+    return updatedTemplate;
+  }
+
+  async deleteDailyFlowTemplate(id: number): Promise<void> {
+    this.dailyFlowTemplatesStore.delete(id);
+    await this.saveDailyFlowTemplatesToDisk();
+  }
+
+  private async saveDailyFlowTemplatesToDisk(): Promise<void> {
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+      const templatesFilePath = path.join(process.cwd(), 'data', 'daily-flow-templates.json');
+
+      const dataDir = path.dirname(templatesFilePath);
+      if (!fs.existsSync(dataDir)) {
+        fs.mkdirSync(dataDir, { recursive: true });
+      }
+
+      const templates = Array.from(this.dailyFlowTemplatesStore.values());
+      fs.writeFileSync(templatesFilePath, JSON.stringify(templates, null, 2));
+      console.log(`💾 Successfully saved ${templates.length} daily flow templates to disk`);
+    } catch (error) {
+      console.error('❌ Error saving daily flow templates to disk:', error);
+    }
+  }
+
+  // Daily Flow Entry methods
+  async getDailyFlowEntries(filters?: { classId?: number; startDate?: string; endDate?: string }): Promise<DailyFlowEntry[]> {
+    let entries = Array.from(this.dailyFlowEntriesStore.values());
+    
+    if (filters) {
+      if (filters.classId) {
+        entries = entries.filter(e => e.classId === filters.classId);
+      }
+      if (filters.startDate) {
+        entries = entries.filter(e => e.date >= filters.startDate!);
+      }
+      if (filters.endDate) {
+        entries = entries.filter(e => e.date <= filters.endDate!);
+      }
+    }
+    
+    return entries.sort((a, b) => a.date.localeCompare(b.date));
+  }
+
+  async getDailyFlowEntryById(id: number): Promise<DailyFlowEntry | undefined> {
+    return this.dailyFlowEntriesStore.get(id);
+  }
+
+  async createDailyFlowEntry(entry: InsertDailyFlowEntry): Promise<DailyFlowEntry> {
+    const id = this.dailyFlowEntryIdCounter++;
+    const now = new Date();
+    const newEntry: DailyFlowEntry = {
+      id,
+      ...entry,
+      materials: entry.materials ?? {},
+      notes: entry.notes || null,
+      templateId: entry.templateId || null,
+      isCompleted: entry.isCompleted ?? false,
+      completedAt: entry.completedAt || null,
+      completedBy: entry.completedBy || null,
+      lastModifiedBy: entry.lastModifiedBy || null,
+      lessonDescription: entry.lessonDescription || null,
+      createdAt: now,
+      updatedAt: now
+    };
+
+    this.dailyFlowEntriesStore.set(id, newEntry);
+    await this.saveDailyFlowEntriesToDisk();
+    return newEntry;
+  }
+
+  async updateDailyFlowEntry(id: number, entry: Partial<InsertDailyFlowEntry>): Promise<DailyFlowEntry | undefined> {
+    const existingEntry = this.dailyFlowEntriesStore.get(id);
+    if (!existingEntry) return undefined;
+
+    const updatedEntry: DailyFlowEntry = {
+      ...existingEntry,
+      ...entry,
+      updatedAt: new Date()
+    };
+
+    this.dailyFlowEntriesStore.set(id, updatedEntry);
+    await this.saveDailyFlowEntriesToDisk();
+    return updatedEntry;
+  }
+
+  async deleteDailyFlowEntry(id: number): Promise<void> {
+    this.dailyFlowEntriesStore.delete(id);
+    await this.saveDailyFlowEntriesToDisk();
+  }
+
+  private async saveDailyFlowEntriesToDisk(): Promise<void> {
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+      const entriesFilePath = path.join(process.cwd(), 'data', 'daily-flow-entries.json');
+
+      const dataDir = path.dirname(entriesFilePath);
+      if (!fs.existsSync(dataDir)) {
+        fs.mkdirSync(dataDir, { recursive: true });
+      }
+
+      const entries = Array.from(this.dailyFlowEntriesStore.values());
+      fs.writeFileSync(entriesFilePath, JSON.stringify(entries, null, 2));
+      console.log(`💾 Successfully saved ${entries.length} daily flow entries to disk`);
+    } catch (error) {
+      console.error('❌ Error saving daily flow entries to disk:', error);
+    }
+  }
+
+  // Daily Flow Schedule methods
+  async getDailyFlowSchedules(filters?: { templateId?: number; classId?: number }): Promise<DailyFlowSchedule[]> {
+    let schedules = Array.from(this.dailyFlowSchedulesStore.values());
+    
+    if (filters) {
+      if (filters.templateId) {
+        schedules = schedules.filter(s => s.templateId === filters.templateId);
+      }
+      if (filters.classId) {
+        schedules = schedules.filter(s => s.classId === filters.classId);
+      }
+    }
+    
+    return schedules;
+  }
+
+  async getDailyFlowScheduleById(id: number): Promise<DailyFlowSchedule | undefined> {
+    return this.dailyFlowSchedulesStore.get(id);
+  }
+
+  async createDailyFlowSchedule(schedule: InsertDailyFlowSchedule): Promise<DailyFlowSchedule> {
+    const id = this.dailyFlowScheduleIdCounter++;
+    const now = new Date();
+    const newSchedule: DailyFlowSchedule = {
+      id,
+      ...schedule,
+      isActive: schedule.isActive ?? true,
+      lessonDescription: schedule.lessonDescription || null,
+      lessonLink: schedule.lessonLink || null,
+      createdAt: now,
+      updatedAt: now
+    };
+
+    this.dailyFlowSchedulesStore.set(id, newSchedule);
+    await this.saveDailyFlowSchedulesToDisk();
+    return newSchedule;
+  }
+
+  async updateDailyFlowSchedule(id: number, schedule: Partial<InsertDailyFlowSchedule>): Promise<DailyFlowSchedule | undefined> {
+    const existingSchedule = this.dailyFlowSchedulesStore.get(id);
+    if (!existingSchedule) return undefined;
+
+    const updatedSchedule: DailyFlowSchedule = {
+      ...existingSchedule,
+      ...schedule,
+      updatedAt: new Date()
+    };
+
+    this.dailyFlowSchedulesStore.set(id, updatedSchedule);
+    await this.saveDailyFlowSchedulesToDisk();
+    return updatedSchedule;
+  }
+
+  async deleteDailyFlowSchedule(id: number): Promise<void> {
+    this.dailyFlowSchedulesStore.delete(id);
+    await this.saveDailyFlowSchedulesToDisk();
+  }
+
+  private async saveDailyFlowSchedulesToDisk(): Promise<void> {
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+      const schedulesFilePath = path.join(process.cwd(), 'data', 'daily-flow-schedules.json');
+
+      const dataDir = path.dirname(schedulesFilePath);
+      if (!fs.existsSync(dataDir)) {
+        fs.mkdirSync(dataDir, { recursive: true });
+      }
+
+      const schedules = Array.from(this.dailyFlowSchedulesStore.values());
+      fs.writeFileSync(schedulesFilePath, JSON.stringify(schedules, null, 2));
+      console.log(`💾 Successfully saved ${schedules.length} daily flow schedules to disk`);
+    } catch (error) {
+      console.error('❌ Error saving daily flow schedules to disk:', error);
+    }
+  }
+
+  // Daily Flow utility methods
+  async generateDailyFlowEntriesFromTemplate(params: { 
+    templateId: number; 
+    classId: number; 
+    startDate: string; 
+    endDate: string; 
+    createdBy: string 
+  }): Promise<DailyFlowEntry[]> {
+    const template = await this.getDailyFlowTemplateById(params.templateId);
+    if (!template) {
+      throw new Error(`Template with ID ${params.templateId} not found`);
+    }
+
+    const start = new Date(params.startDate);
+    const end = new Date(params.endDate);
+    const entries: DailyFlowEntry[] = [];
+
+    // Generate entries for each day in the date range
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      // Skip weekends if template is weekdays only
+      if (template.daysOfWeek && template.daysOfWeek.length > 0) {
+        const dayOfWeek = d.getDay(); // 0 = Sunday, 1 = Monday, etc.
+        const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+        if (!template.daysOfWeek.includes(dayNames[dayOfWeek])) {
+          continue;
+        }
+      }
+
+      const entry: InsertDailyFlowEntry = {
+        templateId: template.id,
+        classId: params.classId,
+        date: d.toISOString().split('T')[0], // YYYY-MM-DD format
+        title: template.name,
+        activities: template.activities || [],
+        resources: template.resources || [],
+        notes: '',
+        isCompleted: false,
+        completedAt: null,
+        completedBy: null,
+        createdBy: params.createdBy
+      };
+
+      const newEntry = await this.createDailyFlowEntry(entry);
+      entries.push(newEntry);
+    }
+
+    return entries;
+  }
+
+  async getDailyFlowStats(filters?: { 
+    classId?: number; 
+    startDate?: string; 
+    endDate?: string 
+  }): Promise<{ totalEntries: number; completedEntries: number; completionRate: number }> {
+    const entries = await this.getDailyFlowEntries(filters);
+    const totalEntries = entries.length;
+    const completedEntries = entries.filter(e => e.isCompleted).length;
+    const completionRate = totalEntries > 0 ? (completedEntries / totalEntries) * 100 : 0;
+
+    return {
+      totalEntries,
+      completedEntries,
+      completionRate: Math.round(completionRate * 100) / 100 // Round to 2 decimal places
+    };
   }
 
   // Technical Support methods
@@ -4572,10 +4270,6 @@ export class MemStorage implements IStorage {
     return [];
   }
 
-  async getHiddenCategoryIds(): Promise<number[]> {
-    return [];
-  }
-
   async createCategory(category: any): Promise<any> {
     const id = Date.now();
     return { ...category, id };
@@ -4589,865 +4283,170 @@ export class MemStorage implements IStorage {
     return;
   }
 
-  // Educator Class Assignment methods (Phase 1a)
-  async getEducatorClassAssignmentById(id: number): Promise<EducatorClassAssignment | undefined> {
-    return this.educatorClassAssignmentsStore.get(id);
+  async getParentsBySchoolId(_schoolId: number): Promise<User[]> {
+    return [];
   }
 
-  async getEducatorClassAssignmentsByEducatorId(educatorId: number): Promise<EducatorClassAssignment[]> {
-    return Array.from(this.educatorClassAssignmentsStore.values())
-      .filter(a => a.educatorId === educatorId);
-  }
-
-  async getEducatorClassAssignmentsByClassId(classId: number): Promise<EducatorClassAssignment[]> {
-    return Array.from(this.educatorClassAssignmentsStore.values())
-      .filter(a => a.classId === classId);
-  }
-
-  async getEducatorClassAssignmentsBySchoolId(schoolId: number): Promise<EducatorClassAssignment[]> {
-    return Array.from(this.educatorClassAssignmentsStore.values())
-      .filter(a => a.schoolId === schoolId);
-  }
-
-  async getActiveEducatorAssignmentForClass(educatorId: number, classId: number): Promise<EducatorClassAssignment | undefined> {
-    const today = new Date().toISOString().split('T')[0];
-    return Array.from(this.educatorClassAssignmentsStore.values())
-      .find(a => 
-        a.educatorId === educatorId && 
-        a.classId === classId &&
-        (!a.validFrom || a.validFrom <= today) &&
-        (!a.validTo || a.validTo >= today)
-      );
-  }
-
-  async createEducatorClassAssignment(assignment: InsertEducatorClassAssignment): Promise<EducatorClassAssignment> {
-    const id = this.educatorClassAssignmentIdCounter++;
-    const newAssignment: EducatorClassAssignment = {
-      ...assignment,
-      id,
-      isPrimary: assignment.isPrimary ?? true,
-      canStartSession: assignment.canStartSession ?? true,
-      validFrom: assignment.validFrom ?? null,
-      validTo: assignment.validTo ?? null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    this.educatorClassAssignmentsStore.set(id, newAssignment);
-    return newAssignment;
-  }
-
-  async updateEducatorClassAssignment(id: number, assignment: Partial<InsertEducatorClassAssignment>): Promise<EducatorClassAssignment | undefined> {
-    const existing = this.educatorClassAssignmentsStore.get(id);
-    if (!existing) return undefined;
-    const updated = { ...existing, ...assignment, updatedAt: new Date() };
-    this.educatorClassAssignmentsStore.set(id, updated);
-    return updated;
-  }
-
-  async deleteEducatorClassAssignment(id: number): Promise<void> {
-    this.educatorClassAssignmentsStore.delete(id);
-  }
-
-  // Class Session methods (Phase 1a)
-  async getClassSessionById(id: number): Promise<ClassSession | undefined> {
-    return this.classSessionsStore.get(id);
-  }
-
-  async getSessionByQrToken(token: string): Promise<ClassSession | undefined> {
-    return Array.from(this.classSessionsStore.values()).find(s => s.qrToken === token);
-  }
-
-  async getTeacherClockInRecords(params: { schoolId: number; startDate?: string; endDate?: string; classId?: number }): Promise<Array<{ sessionId: number; scheduledDate: string; actualStartTime: string | null; actualEndTime: string | null; checkInLocationVerified: boolean | null; className: string; educatorName: string }>> {
-    const { schoolId, startDate, endDate, classId } = params;
-    return Array.from(this.classSessionsStore.values())
-      .filter(s =>
-        s.schoolId === schoolId &&
-        s.actualStartTime != null &&
-        s.notes?.includes('[teacher-clockin]') &&
-        (!classId || s.classId === classId) &&
-        (!startDate || s.scheduledDate >= startDate) &&
-        (!endDate || s.scheduledDate <= endDate)
-      )
-      .map(s => {
-        const cls = this.classesStore.get(s.classId);
-        const educator = s.educatorId ? this.usersStore.get(s.educatorId) : undefined;
-        return {
-          sessionId: s.id,
-          scheduledDate: s.scheduledDate,
-          actualStartTime: s.actualStartTime ?? null,
-          actualEndTime: s.actualEndTime ?? null,
-          checkInLocationVerified: s.checkInLocationVerified ?? null,
-          className: (cls as any)?.title ?? 'Unknown Class',
-          educatorName: educator ? `${educator.firstName} ${educator.lastName}` : 'Unknown',
-        };
-      });
-  }
-
-  async getClassSessionsByClassId(classId: number): Promise<ClassSession[]> {
-    return Array.from(this.classSessionsStore.values())
-      .filter(s => s.classId === classId);
-  }
-
-  async getClassSessionsByEducatorId(educatorId: number): Promise<ClassSession[]> {
-    return Array.from(this.classSessionsStore.values())
-      .filter(s => s.educatorId === educatorId);
-  }
-
-  async getClassSessionsBySchoolId(schoolId: number): Promise<ClassSession[]> {
-    return Array.from(this.classSessionsStore.values())
-      .filter(s => s.schoolId === schoolId);
-  }
-
-  async getClassSessionsByDate(schoolId: number, date: string): Promise<ClassSession[]> {
-    return Array.from(this.classSessionsStore.values())
-      .filter(s => s.schoolId === schoolId && s.scheduledDate === date);
-  }
-
-  async getClassSessionsByDateRange(schoolId: number, startDate: string, endDate: string): Promise<ClassSession[]> {
-    return Array.from(this.classSessionsStore.values())
-      .filter(s => 
-        s.schoolId === schoolId && 
-        s.scheduledDate >= startDate && 
-        s.scheduledDate <= endDate
-      );
-  }
-
-  async getActiveClassSession(educatorId: number): Promise<ClassSession | undefined> {
-    return Array.from(this.classSessionsStore.values())
-      .find(s => s.educatorId === educatorId && s.status === 'in_progress');
-  }
-
-  async createClassSession(session: InsertClassSession): Promise<ClassSession> {
-    const id = this.classSessionIdCounter++;
-    const newSession: ClassSession = {
-      ...session,
-      id,
-      substituteEducatorId: session.substituteEducatorId ?? null,
-      actualStartTime: session.actualStartTime ?? null,
-      actualEndTime: session.actualEndTime ?? null,
-      status: session.status ?? 'scheduled',
-      cancelledReason: session.cancelledReason ?? null,
-      notes: session.notes ?? null,
-      dailyFlowEntryId: session.dailyFlowEntryId ?? null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    this.classSessionsStore.set(id, newSession);
-    return newSession;
-  }
-
-  async updateClassSession(id: number, session: Partial<InsertClassSession>): Promise<ClassSession | undefined> {
-    const existing = this.classSessionsStore.get(id);
-    if (!existing) return undefined;
-    const updated = { ...existing, ...session, updatedAt: new Date() };
-    this.classSessionsStore.set(id, updated);
-    return updated;
-  }
-
-  async deleteClassSession(id: number): Promise<void> {
-    this.classSessionsStore.delete(id);
-  }
-
-  // Educator Schedule methods (Phase 1b) - stub implementations
-  private educatorSchedulesStore = new Map<number, EducatorSchedule>();
-  private educatorScheduleIdCounter = 1;
-  private auditLogsStore = new Map<number, AuditLog>();
-  private auditLogIdCounter = 1;
-
-  async getEducatorScheduleById(id: number): Promise<EducatorSchedule | undefined> {
-    return this.educatorSchedulesStore.get(id);
-  }
-
-  async getEducatorSchedulesByEducatorId(educatorId: number): Promise<EducatorSchedule[]> {
-    return Array.from(this.educatorSchedulesStore.values()).filter(s => s.educatorId === educatorId);
-  }
-
-  async getEducatorSchedulesByClassId(classId: number): Promise<EducatorSchedule[]> {
-    return Array.from(this.educatorSchedulesStore.values()).filter(s => s.classId === classId);
-  }
-
-  async getEducatorSchedulesBySchoolId(schoolId: number): Promise<EducatorSchedule[]> {
-    return Array.from(this.educatorSchedulesStore.values()).filter(s => s.schoolId === schoolId);
-  }
-
-  async getEducatorSchedulesByAssignmentId(assignmentId: number): Promise<EducatorSchedule[]> {
-    return Array.from(this.educatorSchedulesStore.values()).filter(s => s.assignmentId === assignmentId);
-  }
-
-  async getEducatorSchedulesForWeek(educatorId: number, weekStartDate: string): Promise<EducatorSchedule[]> {
-    const weekEnd = new Date(weekStartDate);
-    weekEnd.setDate(weekEnd.getDate() + 7);
-    const weekEndStr = weekEnd.toISOString().split('T')[0];
-    
-    return Array.from(this.educatorSchedulesStore.values()).filter(s => {
-      if (s.educatorId !== educatorId || !s.isActive) return false;
-      if (s.scheduleType === 'recurring') {
-        return (!s.effectiveTo || s.effectiveTo >= weekStartDate) && s.effectiveFrom <= weekEndStr;
-      }
-      return s.scheduledDate && s.scheduledDate >= weekStartDate && s.scheduledDate <= weekEndStr;
-    });
-  }
-
-  async createEducatorSchedule(schedule: InsertEducatorSchedule): Promise<EducatorSchedule> {
-    const id = this.educatorScheduleIdCounter++;
-    const newSchedule: EducatorSchedule = {
-      id,
-      ...schedule,
-      isActive: schedule.isActive ?? true,
-      timezone: schedule.timezone ?? 'America/New_York',
-      scheduleType: schedule.scheduleType ?? 'recurring',
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    this.educatorSchedulesStore.set(id, newSchedule);
-    return newSchedule;
-  }
-
-  async updateEducatorSchedule(id: number, schedule: Partial<InsertEducatorSchedule>): Promise<EducatorSchedule | undefined> {
-    const existing = this.educatorSchedulesStore.get(id);
-    if (!existing) return undefined;
-    const updated = { ...existing, ...schedule, updatedAt: new Date() };
-    this.educatorSchedulesStore.set(id, updated);
-    return updated;
-  }
-
-  async deleteEducatorSchedule(id: number): Promise<void> {
-    this.educatorSchedulesStore.delete(id);
-  }
-
-  // Audit Log methods (Phase 1b)
-  async createAuditLog(log: InsertAuditLog): Promise<AuditLog> {
-    const id = this.auditLogIdCounter++;
-    const newLog: AuditLog = {
-      id,
-      ...log,
-      severity: log.severity ?? 'info',
-      metadata: log.metadata ?? {},
-      createdAt: new Date(),
-    };
-    this.auditLogsStore.set(id, newLog);
-    return newLog;
-  }
-
-  async getAuditLogsByTargetId(targetType: string, targetId: string): Promise<AuditLog[]> {
-    return Array.from(this.auditLogsStore.values())
-      .filter(l => l.targetType === targetType && l.targetId === targetId)
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-  }
-
-  async getAuditLogsByActorId(actorId: number): Promise<AuditLog[]> {
-    return Array.from(this.auditLogsStore.values())
-      .filter(l => l.actorId === actorId)
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-  }
-
-  async getAuditLogsBySchoolId(schoolId: number, filters?: { actionType?: string; severity?: string; startDate?: string; endDate?: string }): Promise<AuditLog[]> {
-    return Array.from(this.auditLogsStore.values())
-      .filter(l => {
-        if (l.schoolId !== schoolId) return false;
-        if (filters?.actionType && l.actionType !== filters.actionType) return false;
-        if (filters?.severity && l.severity !== filters.severity) return false;
-        if (filters?.startDate && l.createdAt < new Date(filters.startDate)) return false;
-        if (filters?.endDate && l.createdAt > new Date(filters.endDate)) return false;
-        return true;
-      })
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-  }
-
-  // Session Attendance methods (Phase 2)
-  private sessionAttendanceStore = new Map<number, SessionAttendance>();
-  private sessionAttendanceIdCounter = 1;
-
-  async getAttendanceBySessionId(sessionId: number): Promise<SessionAttendance[]> {
-    return Array.from(this.sessionAttendanceStore.values())
-      .filter(a => a.sessionId === sessionId);
-  }
-
-  async getAttendanceByChildId(childId: number): Promise<SessionAttendance[]> {
-    return Array.from(this.sessionAttendanceStore.values())
-      .filter(a => a.childId === childId)
-      .sort((a, b) => b.recordedAt.getTime() - a.recordedAt.getTime());
-  }
-
-  async getAttendanceBySchoolId(schoolId: number): Promise<SessionAttendance[]> {
-    return Array.from(this.sessionAttendanceStore.values())
-      .filter(a => a.schoolId === schoolId)
-      .sort((a, b) => b.recordedAt.getTime() - a.recordedAt.getTime());
-  }
-
-  async getAttendanceRecord(sessionId: number, childId: number): Promise<SessionAttendance | undefined> {
-    return Array.from(this.sessionAttendanceStore.values())
-      .find(a => a.sessionId === sessionId && a.childId === childId);
-  }
-
-  async createAttendance(attendance: InsertSessionAttendance): Promise<SessionAttendance> {
-    const id = this.sessionAttendanceIdCounter++;
-    const newAttendance: SessionAttendance = {
-      id,
-      ...attendance,
-      status: attendance.status ?? 'present',
-      checkInTime: attendance.checkInTime ?? null,
-      checkOutTime: attendance.checkOutTime ?? null,
-      tardyMinutes: attendance.tardyMinutes ?? null,
-      earlyDepartureMinutes: attendance.earlyDepartureMinutes ?? null,
-      excuseReason: attendance.excuseReason ?? null,
-      notes: attendance.notes ?? null,
-      recordedAt: new Date(),
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    this.sessionAttendanceStore.set(id, newAttendance);
-    return newAttendance;
-  }
-
-  async updateAttendance(id: number, attendance: Partial<InsertSessionAttendance>): Promise<SessionAttendance | undefined> {
-    const existing = this.sessionAttendanceStore.get(id);
-    if (!existing) return undefined;
-    const updated = { ...existing, ...attendance, updatedAt: new Date() };
-    this.sessionAttendanceStore.set(id, updated);
-    return updated;
-  }
-
-  async deleteAttendance(id: number): Promise<void> {
-    this.sessionAttendanceStore.delete(id);
-  }
-
-  async upsertAttendance(attendance: InsertSessionAttendance): Promise<SessionAttendance> {
-    const existing = await this.getAttendanceRecord(attendance.sessionId, attendance.childId);
-    if (existing) {
-      const updated = await this.updateAttendance(existing.id, attendance);
-      return updated!;
-    }
-    return this.createAttendance(attendance);
-  }
-
-  // Error Log methods (stub implementations - DB storage is used in production)
-  private errorLogsStore: Map<number, ErrorLog> = new Map();
-  private errorLogIdCounter: number = 1;
-
-  async createErrorLog(errorLog: InsertErrorLog): Promise<ErrorLog> {
-    const id = this.errorLogIdCounter++;
-    const newLog: ErrorLog = {
-      id,
-      ...errorLog,
-      errorType: errorLog.errorType ?? 'unknown',
-      severity: errorLog.severity ?? 'medium',
-      status: errorLog.status ?? 'new',
-      metadata: errorLog.metadata ?? {},
-      notificationSent: errorLog.notificationSent ?? false,
-      stackTrace: errorLog.stackTrace ?? null,
-      errorCode: errorLog.errorCode ?? null,
-      url: errorLog.url ?? null,
-      route: errorLog.route ?? null,
-      method: errorLog.method ?? null,
-      userId: errorLog.userId ?? null,
-      userEmail: errorLog.userEmail ?? null,
-      schoolId: errorLog.schoolId ?? null,
-      ipAddress: errorLog.ipAddress ?? null,
-      userAgent: errorLog.userAgent ?? null,
-      requestBody: errorLog.requestBody ?? null,
-      resolvedBy: errorLog.resolvedBy ?? null,
-      resolvedAt: null,
-      resolutionNotes: errorLog.resolutionNotes ?? null,
-      notificationSentAt: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    this.errorLogsStore.set(id, newLog);
-    return newLog;
-  }
-
-  async getErrorLogById(id: number): Promise<ErrorLog | undefined> {
-    return this.errorLogsStore.get(id);
-  }
-
-  async getErrorLogs(filters?: { 
-    severity?: string; 
-    status?: string; 
-    errorType?: string;
-    startDate?: Date;
-    endDate?: Date;
-    limit?: number;
-    offset?: number;
-  }): Promise<ErrorLog[]> {
-    let logs = Array.from(this.errorLogsStore.values());
-    if (filters?.severity) logs = logs.filter(l => l.severity === filters.severity);
-    if (filters?.status) logs = logs.filter(l => l.status === filters.status);
-    if (filters?.errorType) logs = logs.filter(l => l.errorType === filters.errorType);
-    if (filters?.startDate) logs = logs.filter(l => l.createdAt >= filters.startDate!);
-    if (filters?.endDate) logs = logs.filter(l => l.createdAt <= filters.endDate!);
-    logs.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-    if (filters?.offset) logs = logs.slice(filters.offset);
-    if (filters?.limit) logs = logs.slice(0, filters.limit);
-    return logs;
-  }
-
-  async getErrorLogsCount(filters?: { 
-    severity?: string; 
-    status?: string; 
-    errorType?: string;
-    startDate?: Date;
-    endDate?: Date;
-  }): Promise<number> {
-    const logs = await this.getErrorLogs(filters);
-    return logs.length;
-  }
-
-  async updateErrorLog(id: number, updates: Partial<InsertErrorLog>): Promise<ErrorLog | undefined> {
-    const existing = this.errorLogsStore.get(id);
-    if (!existing) return undefined;
-    const updated = { ...existing, ...updates, updatedAt: new Date() };
-    this.errorLogsStore.set(id, updated);
-    return updated;
-  }
-
-  async getUnnotifiedCriticalErrors(): Promise<ErrorLog[]> {
-    return Array.from(this.errorLogsStore.values())
-      .filter(l => !l.notificationSent && (l.severity === 'critical' || l.severity === 'high'));
-  }
-
-  async markErrorsNotified(ids: number[]): Promise<void> {
-    for (const id of ids) {
-      const log = this.errorLogsStore.get(id);
-      if (log) {
-        this.errorLogsStore.set(id, { ...log, notificationSent: true, notificationSentAt: new Date() });
-      }
-    }
-  }
-
-  async getErrorsSummary(startDate: Date, endDate: Date): Promise<{
-    total: number;
-    bySeverity: Record<string, number>;
-    byType: Record<string, number>;
-    byStatus: Record<string, number>;
-  }> {
-    const logs = Array.from(this.errorLogsStore.values())
-      .filter(l => l.createdAt >= startDate && l.createdAt <= endDate);
-    
-    const bySeverity: Record<string, number> = {};
-    const byType: Record<string, number> = {};
-    const byStatus: Record<string, number> = {};
-
-    for (const log of logs) {
-      bySeverity[log.severity] = (bySeverity[log.severity] || 0) + 1;
-      byType[log.errorType] = (byType[log.errorType] || 0) + 1;
-      byStatus[log.status] = (byStatus[log.status] || 0) + 1;
-    }
-
-    return { total: logs.length, bySeverity, byType, byStatus };
-  }
-
-  async cleanupOldErrors(olderThan: Date): Promise<number> {
-    let count = 0;
-    for (const [id, log] of this.errorLogsStore.entries()) {
-      if (log.createdAt < olderThan && (log.status === 'resolved' || log.status === 'ignored')) {
-        this.errorLogsStore.delete(id);
-        count++;
-      }
-    }
-    return count;
-  }
-
-  // ==================== PAYMENT ALLOCATIONS ====================
-  private paymentAllocationsStore: Map<number, PaymentAllocation> = new Map();
-  private paymentAllocationIdCounter: number = 1;
-
-  async getPaymentAllocationById(id: number): Promise<PaymentAllocation | undefined> {
-    return this.paymentAllocationsStore.get(id);
-  }
-
-  async getPaymentAllocationsByEnrollmentId(enrollmentId: number): Promise<PaymentAllocation[]> {
-    return Array.from(this.paymentAllocationsStore.values())
-      .filter(a => a.enrollmentId === enrollmentId);
-  }
-
-  async getPaymentAllocationsByMembershipEnrollmentId(membershipEnrollmentId: number): Promise<PaymentAllocation[]> {
-    return Array.from(this.paymentAllocationsStore.values())
-      .filter(a => a.membershipEnrollmentId === membershipEnrollmentId);
-  }
-
-  async getPaymentAllocationsByPaymentHistoryId(paymentHistoryId: number): Promise<PaymentAllocation[]> {
-    return Array.from(this.paymentAllocationsStore.values())
-      .filter(a => a.paymentHistoryId === paymentHistoryId);
-  }
-
-  async createPaymentAllocation(allocation: InsertPaymentAllocation): Promise<PaymentAllocation> {
-    const id = this.paymentAllocationIdCounter++;
-    const newAllocation: PaymentAllocation = {
-      ...allocation,
-      id,
-      enrollmentId: allocation.enrollmentId || null,
-      membershipEnrollmentId: allocation.membershipEnrollmentId || null,
-      allocationType: allocation.allocationType || 'payment',
-      sourceAllocationId: allocation.sourceAllocationId || null,
-      adminComment: allocation.adminComment || null,
-      metadata: allocation.metadata || null,
-      createdAt: new Date(),
-    };
-    this.paymentAllocationsStore.set(id, newAllocation);
-    return newAllocation;
-  }
-
-  async createPaymentAllocations(allocations: InsertPaymentAllocation[]): Promise<PaymentAllocation[]> {
-    const results: PaymentAllocation[] = [];
-    for (const allocation of allocations) {
-      results.push(await this.createPaymentAllocation(allocation));
-    }
-    return results;
-  }
-
-  async getTotalPaidForEnrollment(enrollmentId: number): Promise<number> {
-    const allocations = await this.getPaymentAllocationsByEnrollmentId(enrollmentId);
-    return allocations.reduce((sum, a) => sum + a.allocatedAmountCents, 0);
-  }
-
-  async getTotalPaidForMembershipEnrollment(membershipEnrollmentId: number): Promise<number> {
-    const allocations = await this.getPaymentAllocationsByMembershipEnrollmentId(membershipEnrollmentId);
-    return allocations.reduce((sum, a) => sum + a.allocatedAmountCents, 0);
-  }
-
-  // ==================== ASSESSMENT TRACKING ====================
-  private assessmentTypesStore: Map<number, AssessmentType> = new Map();
-  private assessmentTypeIdCounter: number = 1;
-  private curriculumBooksStore: Map<number, CurriculumBook> = new Map();
-  private curriculumBookIdCounter: number = 1;
-  private studentAssessmentsStore: Map<number, StudentAssessment> = new Map();
-  private studentAssessmentIdCounter: number = 1;
-
-  async getAssessmentTypeById(id: number): Promise<AssessmentType | undefined> {
-    return this.assessmentTypesStore.get(id);
-  }
-
-  async getAssessmentTypesBySchoolId(schoolId: number): Promise<AssessmentType[]> {
-    return Array.from(this.assessmentTypesStore.values())
-      .filter(t => t.schoolId === schoolId)
-      .sort((a, b) => a.sortOrder - b.sortOrder);
-  }
-
-  async createAssessmentType(assessmentType: InsertAssessmentType): Promise<AssessmentType> {
-    const id = this.assessmentTypeIdCounter++;
-    const newType: AssessmentType = {
-      ...assessmentType,
-      id,
-      description: assessmentType.description ?? null,
-      maxScore: assessmentType.maxScore ?? null,
-      levelOptions: assessmentType.levelOptions ?? null,
-      hasCurriculumBooks: assessmentType.hasCurriculumBooks ?? false,
-      isActive: assessmentType.isActive ?? true,
-      sortOrder: assessmentType.sortOrder ?? 0,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    this.assessmentTypesStore.set(id, newType);
-    return newType;
-  }
-
-  async updateAssessmentType(id: number, assessmentType: Partial<InsertAssessmentType>): Promise<AssessmentType | undefined> {
-    const existing = this.assessmentTypesStore.get(id);
-    if (!existing) return undefined;
-    const updated: AssessmentType = { ...existing, ...assessmentType, updatedAt: new Date() };
-    this.assessmentTypesStore.set(id, updated);
-    return updated;
-  }
-
-  async deleteAssessmentType(id: number): Promise<void> {
-    this.assessmentTypesStore.delete(id);
-  }
-
-  async getCurriculumBookById(id: number): Promise<CurriculumBook | undefined> {
-    return this.curriculumBooksStore.get(id);
-  }
-
-  async getCurriculumBooksByAssessmentTypeId(assessmentTypeId: number): Promise<CurriculumBook[]> {
-    return Array.from(this.curriculumBooksStore.values())
-      .filter(b => b.assessmentTypeId === assessmentTypeId)
-      .sort((a, b) => a.sortOrder - b.sortOrder);
-  }
-
-  async createCurriculumBook(book: InsertCurriculumBook): Promise<CurriculumBook> {
-    const id = this.curriculumBookIdCounter++;
-    const newBook: CurriculumBook = {
-      ...book,
-      id,
-      description: book.description ?? null,
-      totalLessons: book.totalLessons ?? null,
-      sortOrder: book.sortOrder ?? 0,
-      isActive: book.isActive ?? true,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    this.curriculumBooksStore.set(id, newBook);
-    return newBook;
-  }
-
-  async updateCurriculumBook(id: number, book: Partial<InsertCurriculumBook>): Promise<CurriculumBook | undefined> {
-    const existing = this.curriculumBooksStore.get(id);
-    if (!existing) return undefined;
-    const updated: CurriculumBook = { ...existing, ...book, updatedAt: new Date() };
-    this.curriculumBooksStore.set(id, updated);
-    return updated;
-  }
-
-  async deleteCurriculumBook(id: number): Promise<void> {
-    this.curriculumBooksStore.delete(id);
-  }
-
-  async getStudentAssessmentById(id: number): Promise<StudentAssessment | undefined> {
-    return this.studentAssessmentsStore.get(id);
-  }
-
-  async getStudentAssessmentsByChildId(childId: number): Promise<StudentAssessment[]> {
-    return Array.from(this.studentAssessmentsStore.values())
-      .filter(a => a.childId === childId)
-      .sort((a, b) => b.assessmentDate.getTime() - a.assessmentDate.getTime());
-  }
-
-  async getStudentAssessmentsBySchoolId(schoolId: number, filters?: { locationId?: number; assessmentTypeId?: number; childId?: number }): Promise<StudentAssessment[]> {
-    return Array.from(this.studentAssessmentsStore.values())
-      .filter(a => {
-        if (a.schoolId !== schoolId) return false;
-        if (filters?.locationId && a.locationId !== filters.locationId) return false;
-        if (filters?.assessmentTypeId && a.assessmentTypeId !== filters.assessmentTypeId) return false;
-        if (filters?.childId && a.childId !== filters.childId) return false;
-        return true;
-      })
-      .sort((a, b) => b.assessmentDate.getTime() - a.assessmentDate.getTime());
-  }
-
-  async createStudentAssessment(assessment: InsertStudentAssessment): Promise<StudentAssessment> {
-    const id = this.studentAssessmentIdCounter++;
-    const newAssessment: StudentAssessment = {
-      ...assessment,
-      id,
-      locationId: assessment.locationId ?? null,
-      curriculumBookId: assessment.curriculumBookId ?? null,
-      lesson: assessment.lesson ?? null,
-      notes: assessment.notes ?? null,
-      assessmentDate: assessment.assessmentDate instanceof Date ? assessment.assessmentDate : new Date(assessment.assessmentDate),
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    this.studentAssessmentsStore.set(id, newAssessment);
-    return newAssessment;
-  }
-
-  async updateStudentAssessment(id: number, assessment: Partial<InsertStudentAssessment>): Promise<StudentAssessment | undefined> {
-    const existing = this.studentAssessmentsStore.get(id);
-    if (!existing) return undefined;
-    const updated: StudentAssessment = { 
-      ...existing, 
-      ...assessment,
-      assessmentDate: assessment.assessmentDate 
-        ? (assessment.assessmentDate instanceof Date ? assessment.assessmentDate : new Date(assessment.assessmentDate))
-        : existing.assessmentDate,
-      updatedAt: new Date() 
-    };
-    this.studentAssessmentsStore.set(id, updated);
-    return updated;
-  }
-
-  async deleteStudentAssessment(id: number): Promise<void> {
-    this.studentAssessmentsStore.delete(id);
-  }
-
-  async upsertChildLexileProfile(childId: number, data: { readingGradeLevel?: string; lexileRange?: string; bookList?: string }): Promise<Child | undefined> {
+  async getCreditById(_id: number): Promise<Credit | undefined> {
     return undefined;
   }
 
-  async insertLexileAssessmentWithProfile(childId: number, schoolId: number, assessmentTypeId: number, recordedBy: number, data: { readingGradeLevel?: string; lexileRange?: string; bookList?: string; notes?: string }): Promise<StudentAssessment> {
-    const assessment = await this.createStudentAssessment({
-      childId,
-      schoolId,
-      assessmentTypeId,
-      recordedBy,
-      score: data.lexileRange || data.readingGradeLevel || 'Recorded',
-      assessmentDate: new Date(),
-      notes: data.notes || null,
-      source: 'manual_entry',
-      sessionId: null,
-      locationId: null,
-      lesson: null,
-      curriculumBookId: null,
-      lexileScore: null,
-    });
-    return assessment;
+  async getCredits(_filters: {
+    userId?: number;
+    schoolId?: number;
+    creditType?: CreditType;
+    status?: CreditStatus;
+    includeExpired?: boolean;
+  }): Promise<Credit[]> {
+    return [];
   }
 
-  async getChildrenForSchool(schoolId: number): Promise<Array<{ id: number; firstName: string; lastName: string; gradeLevel: string; currentLexileRange?: string | null; currentReadingGradeLevel?: string | null; currentBookList?: string | null }>> {
-    return Array.from(this.childrenStore.values())
-      .filter(c => c.schoolId === schoolId)
-      .map(c => ({ id: c.id, firstName: c.firstName, lastName: c.lastName, gradeLevel: c.gradeLevel, currentLexileRange: c.currentLexileRange, currentReadingGradeLevel: c.currentReadingGradeLevel, currentBookList: c.currentBookList }));
+  async createCredit(_credit: InsertCredit): Promise<Credit> {
+    throw new Error('Unified credits require PostgreSQL storage');
   }
 
-  async getLexileHistoryForChild(childId: number, assessmentTypeId: number): Promise<StudentAssessment[]> {
-    return Array.from(this.studentAssessmentsStore.values())
-      .filter(a => a.childId === childId && a.assessmentTypeId === assessmentTypeId)
-      .sort((a, b) => b.assessmentDate.getTime() - a.assessmentDate.getTime());
-  }
-
-  async recordLexileAssessment(childId: number, schoolId: number, recordedBy: number, data: { readingGradeLevel?: string; lexileRange?: string; bookList?: string; notes?: string }): Promise<StudentAssessment> {
-    const existingType = Array.from(this.assessmentTypesStore.values())
-      .find(t => t.schoolId === schoolId && t.name.toLowerCase().includes('lexile'));
-    let assessmentTypeId: number;
-    if (existingType) {
-      assessmentTypeId = existingType.id;
-    } else {
-      const newType = await this.createAssessmentType({
-        schoolId,
-        name: 'Lexile Reading Level',
-        description: 'Lexile measure of reading ability',
-        sortOrder: 100,
-        isActive: true,
-      });
-      assessmentTypeId = newType.id;
+  async updateCredit(
+    _id: number,
+    _updates: Partial<InsertCredit> & {
+      usedAmountCents?: number;
+      status?: CreditStatus;
+      approvedBy?: number;
+      approvedAt?: Date;
+      expiresAt?: Date;
     }
-    return this.insertLexileAssessmentWithProfile(childId, schoolId, assessmentTypeId, recordedBy, data);
-  }
-
-  async getLexileHistoryForChildBySchool(childId: number, schoolId: number): Promise<StudentAssessment[]> {
-    const lexileType = Array.from(this.assessmentTypesStore.values())
-      .find(t => t.schoolId === schoolId && t.name.toLowerCase().includes('lexile'));
-    if (!lexileType) return [];
-    return Array.from(this.studentAssessmentsStore.values())
-      .filter(a => a.childId === childId && a.schoolId === schoolId && a.assessmentTypeId === lexileType.id)
-      .sort((a, b) => b.assessmentDate.getTime() - a.assessmentDate.getTime());
-  }
-
-  async fuzzyMatchStudentsForSchool(schoolId: number, rawName: string): Promise<Array<{ id: number; name: string; gradeLevel: string }>> {
-    const lower = rawName.toLowerCase();
-    return Array.from(this.childrenStore.values())
-      .filter(c => c.schoolId === schoolId && (
-        `${c.firstName} ${c.lastName}`.toLowerCase().includes(lower) ||
-        `${c.lastName} ${c.firstName}`.toLowerCase().includes(lower)
-      ))
-      .map(c => ({ id: c.id, name: `${c.firstName} ${c.lastName}`, gradeLevel: c.gradeLevel }))
-      .slice(0, 5);
-  }
-
-  async getChildByIdForSchool(childId: number, schoolId: number): Promise<Child | undefined> {
-    const child = this.childrenStore.get(childId);
-    return child?.schoolId === schoolId ? child : undefined;
-  }
-
-  // ==================== FUNDRAISER SYSTEM (MemStorage stubs) ====================
-  async getFundraiserCampaignById(id: number): Promise<FundraiserCampaign | undefined> { return undefined; }
-  async getFundraiserCampaignsBySchoolId(schoolId: number): Promise<FundraiserCampaign[]> { return []; }
-  async getActiveFundraiserCampaignsBySchoolId(schoolId: number): Promise<FundraiserCampaign[]> { return []; }
-  async createFundraiserCampaign(campaign: InsertFundraiserCampaign): Promise<FundraiserCampaign> { throw new Error('Not implemented'); }
-  async updateFundraiserCampaign(id: number, campaign: Partial<InsertFundraiserCampaign>): Promise<FundraiserCampaign | undefined> { return undefined; }
-  async deleteFundraiserCampaign(id: number): Promise<void> {}
-  async getFundraiserProductById(id: number): Promise<FundraiserProduct | undefined> { return undefined; }
-  async getFundraiserProductsByCampaignId(campaignId: number): Promise<FundraiserProduct[]> { return []; }
-  async createFundraiserProduct(product: InsertFundraiserProduct): Promise<FundraiserProduct> { throw new Error('Not implemented'); }
-  async updateFundraiserProduct(id: number, product: Partial<InsertFundraiserProduct>): Promise<FundraiserProduct | undefined> { return undefined; }
-  async deleteFundraiserProduct(id: number): Promise<void> {}
-  async getFundraiserFamilyLinkById(id: number): Promise<FundraiserFamilyLink | undefined> { return undefined; }
-  async getFundraiserFamilyLinkBySlug(campaignId: number, slug: string): Promise<FundraiserFamilyLink | undefined> { return undefined; }
-  async getFundraiserFamilyLinksByUserId(userId: number): Promise<FundraiserFamilyLink[]> { return []; }
-  async getFundraiserFamilyLinksByCampaignId(campaignId: number): Promise<FundraiserFamilyLink[]> { return []; }
-  async createFundraiserFamilyLink(link: InsertFundraiserFamilyLink): Promise<FundraiserFamilyLink> { throw new Error('Not implemented'); }
-  async getOrCreateFundraiserFamilyLink(campaignId: number, userId: number, userName: string): Promise<FundraiserFamilyLink> { throw new Error('Not implemented'); }
-  async getFundraiserOrderById(id: number): Promise<FundraiserOrder | undefined> { return undefined; }
-  async getFundraiserOrdersByFamilyLinkId(familyLinkId: number): Promise<FundraiserOrder[]> { return []; }
-  async getFundraiserOrdersByCampaignId(campaignId: number): Promise<FundraiserOrder[]> { return []; }
-  async getFundraiserOrderByStripeSessionId(sessionId: string): Promise<FundraiserOrder | undefined> { return undefined; }
-  async createFundraiserOrder(order: InsertFundraiserOrder): Promise<FundraiserOrder> { throw new Error('Not implemented'); }
-  async updateFundraiserOrder(id: number, order: Partial<InsertFundraiserOrder>): Promise<FundraiserOrder | undefined> { return undefined; }
-  async getFundraiserOrderItemsByOrderId(orderId: number): Promise<FundraiserOrderItem[]> { return []; }
-  async createFundraiserOrderItem(item: InsertFundraiserOrderItem): Promise<FundraiserOrderItem> { throw new Error('Not implemented'); }
-  async createFundraiserOrderItems(items: InsertFundraiserOrderItem[]): Promise<FundraiserOrderItem[]> { return []; }
-  
-  // Payment Reminder Log methods
-  async createPaymentReminderLog(log: InsertPaymentReminderLog): Promise<PaymentReminderLog> { throw new Error('Not implemented'); }
-  async getPaymentReminderLogsBySchool(schoolId: number, limit: number = 100): Promise<PaymentReminderLog[]> { return []; }
-
-  // Retention Report
-  async getEnrollmentFamiliesByPeriod(_schoolId: number, _startDate: string, _endDate: string): Promise<{ parentEmail: string; parentId: number; childName: string; className: string }[]> { return []; }
-
-  // School Documents (stubs - real implementation in DatabaseStorage)
-  async getSchoolDocumentByFileName(_schoolId: number, _fileName: string): Promise<SchoolDocument | undefined> { return undefined; }
-
-  // Email Log (stubs - real implementation in DatabaseStorage)
-  async createEmailLog(_data: InsertEmailLog): Promise<EmailLog> { throw new Error('Not implemented'); }
-  async getEmailLogs(_limit: number): Promise<EmailLog[]> { return []; }
-
-  // Credit integrity check methods (stubs - real implementation in DatabaseStorage)
-  async getUnifiedCreditUsageLogsByPaymentHistoryId(_paymentHistoryId: number): Promise<UnifiedCreditUsageLog[]> { return []; }
-  async getDoubleSpentCredits(_schoolId?: number): Promise<Credit[]> { return []; }
-  async getMismatchedStatusCredits(_schoolId?: number): Promise<Credit[]> { return []; }
-  async getCompletedScheduledPaymentsWithCreditSource(_schoolId?: number): Promise<ScheduledPayment[]> { return []; }
-  async getUnifiedCreditUsageLogsByScheduledPaymentId(_scheduledPaymentId: number): Promise<UnifiedCreditUsageLog[]> { return []; }
-
-  // Task #222 — Refund event durability stubs (MemStorage is dev/test only;
-  // the webhook handler refuses to ack 200 unless DatabaseStorage is active,
-  // so these throw to make any silent in-mem persistence loud).
-  private refundEventsStore: Map<number, RefundEvent> = new Map();
-  private refundEventIdCounter = 1;
-  async saveRefundEvent(event: InsertRefundEvent): Promise<RefundEvent> {
-    for (const existing of this.refundEventsStore.values()) {
-      if (existing.stripeEventId === event.stripeEventId) {
-        const err: Error & { code?: string } = new Error(
-          'duplicate key value violates unique constraint',
-        );
-        err.code = '23505';
-        throw err;
-      }
-    }
-    const id = this.refundEventIdCounter++;
-    const now = new Date();
-    const row: RefundEvent = {
-      id,
-      stripeEventId: event.stripeEventId,
-      stripeRefundId: event.stripeRefundId,
-      stripeChargeId: event.stripeChargeId ?? null,
-      stripePaymentIntentId: event.stripePaymentIntentId ?? null,
-      eventType: event.eventType,
-      amountCents: event.amountCents,
-      currency: event.currency ?? 'usd',
-      refundStatus: event.refundStatus ?? null,
-      reason: event.reason ?? null,
-      failureReason: event.failureReason ?? null,
-      originalPaymentId: event.originalPaymentId ?? null,
-      originalPaymentHistoryId: event.originalPaymentHistoryId ?? null,
-      processingStatus: event.processingStatus ?? 'persisted',
-      rawEvent: event.rawEvent ?? null,
-      createdAt: now,
-      updatedAt: now,
-    };
-    this.refundEventsStore.set(id, row);
-    return row;
-  }
-  async getRefundEventByEventId(stripeEventId: string): Promise<RefundEvent | undefined> {
-    for (const e of this.refundEventsStore.values()) if (e.stripeEventId === stripeEventId) return e;
+  ): Promise<Credit | undefined> {
     return undefined;
   }
-  async updateRefundEvent(id: number, update: Partial<InsertRefundEvent>): Promise<RefundEvent | undefined> {
-    const existing = this.refundEventsStore.get(id);
-    if (!existing) return undefined;
-    const merged: RefundEvent = {
-      ...existing,
-      stripeChargeId: update.stripeChargeId ?? existing.stripeChargeId,
-      stripePaymentIntentId:
-        update.stripePaymentIntentId ?? existing.stripePaymentIntentId,
-      eventType: update.eventType ?? existing.eventType,
-      amountCents: update.amountCents ?? existing.amountCents,
-      currency: update.currency ?? existing.currency,
-      refundStatus: update.refundStatus ?? existing.refundStatus,
-      reason: update.reason ?? existing.reason,
-      failureReason: update.failureReason ?? existing.failureReason,
-      originalPaymentId: update.originalPaymentId ?? existing.originalPaymentId,
-      originalPaymentHistoryId:
-        update.originalPaymentHistoryId ?? existing.originalPaymentHistoryId,
-      processingStatus: update.processingStatus ?? existing.processingStatus,
-      rawEvent: update.rawEvent ?? existing.rawEvent,
-      updatedAt: new Date(),
-    };
-    this.refundEventsStore.set(id, merged);
-    return merged;
+
+  async approveCredit(_id: number, _approvedBy: number): Promise<Credit | undefined> {
+    return undefined;
+  }
+
+  async rejectCredit(_id: number, _approvedBy: number, _reason: string): Promise<Credit | undefined> {
+    return undefined;
+  }
+
+  async revokeCredit(_id: number, _reason: string): Promise<Credit | undefined> {
+    return undefined;
+  }
+
+  async getAvailableCredits(_userId: number): Promise<Credit[]> {
+    return [];
+  }
+
+  async getTotalAvailableCredits(_userId: number): Promise<number> {
+    return 0;
+  }
+
+  async getPendingCredits(_schoolId: number, _creditType?: CreditType): Promise<Credit[]> {
+    return [];
+  }
+
+  async useCredits(
+    _userId: number,
+    _amountCents: number,
+    _paymentHistoryId?: number,
+    _description?: string
+  ): Promise<{ usedCredits: UnifiedCreditUsageLog[]; totalUsed: number }> {
+    return { usedCredits: [], totalUsed: 0 };
+  }
+
+  async restoreCredits(_usageLogs: UnifiedCreditUsageLog[]): Promise<{ restoredCount: number; totalRestored: number }> {
+    return { restoredCount: 0, totalRestored: 0 };
+  }
+
+  async completeCreditsOnlyPayment(_params: {
+    holdSessionId: string;
+    scheduledPaymentId: number;
+    parentId: number;
+    enrollmentId: number | null;
+    schoolId: number | null;
+    creditsApplied: number;
+    originalAmount: number;
+    installmentNumber: number;
+    totalInstallments: number;
+    parentEmail: string;
+    childName: string | null;
+    className: string | null;
+    chargedBy?: 'auto_pay' | 'parent_manual' | 'parent_manual_saved_card' | 'admin_manual';
+    completionSource?: string;
+    description?: string;
+  }): Promise<void> {
+    return;
+  }
+
+  async expireCredits(): Promise<number> {
+    return 0;
+  }
+
+  async getUnifiedCreditUsageLogById(_id: number): Promise<UnifiedCreditUsageLog | undefined> {
+    return undefined;
+  }
+
+  async getUnifiedCreditUsageLogsByCreditId(_creditId: number): Promise<UnifiedCreditUsageLog[]> {
+    return [];
+  }
+
+  async getUnifiedCreditUsageLogsByPaymentHistoryId(_paymentHistoryId: number): Promise<UnifiedCreditUsageLog[]> {
+    return [];
+  }
+
+  async getDoubleSpentCredits(_schoolId?: number): Promise<Credit[]> {
+    return [];
+  }
+
+  async getMismatchedStatusCredits(_schoolId?: number): Promise<Credit[]> {
+    return [];
+  }
+
+  async getCompletedScheduledPaymentsWithCreditSource(_schoolId?: number): Promise<ScheduledPayment[]> {
+    return [];
+  }
+
+  async getUnifiedCreditUsageLogsByScheduledPaymentId(_scheduledPaymentId: number): Promise<UnifiedCreditUsageLog[]> {
+    return [];
+  }
+
+  async createUnifiedCreditUsageLog(_log: InsertUnifiedCreditUsageLog): Promise<UnifiedCreditUsageLog> {
+    throw new Error('Unified credits require PostgreSQL storage');
+  }
+
+  async createCreditHolds(
+    _userId: number,
+    _amountCents: number,
+    _checkoutSessionId: string,
+    _description?: string,
+    _expiresInMinutes?: number
+  ): Promise<{ holds: CreditHold[]; totalHeld: number }> {
+    return { holds: [], totalHeld: 0 };
+  }
+
+  async finalizeCreditHolds(
+    _checkoutSessionId: string,
+    _paymentHistoryId?: number,
+    _description?: string
+  ): Promise<{ finalizedCount: number; totalFinalized: number; usageLogs: UnifiedCreditUsageLog[] }> {
+    return { finalizedCount: 0, totalFinalized: 0, usageLogs: [] };
+  }
+
+  async releaseCreditHolds(_checkoutSessionId: string): Promise<{ releasedCount: number; totalReleased: number }> {
+    return { releasedCount: 0, totalReleased: 0 };
+  }
+
+  async getActiveHoldsForUser(_userId: number): Promise<CreditHold[]> {
+    return [];
+  }
+
+  async getTotalHeldCreditsForUser(_userId: number): Promise<number> {
+    return 0;
+  }
+
+  async expireStaleHolds(): Promise<number> {
+    return 0;
   }
 }
 
-import { DatabaseStorage } from "./dbStorage";
+  import { DatabaseStorage } from "./dbStorage";
   import { supabaseStorage, SupabaseStorage } from './supabase-storage';
 
   // Create a shared MemStorage instance to ensure consistency
@@ -5553,10 +4552,6 @@ import { DatabaseStorage } from "./dbStorage";
       }
     }
 
-    async searchUsers(params: { schoolId: number | null, query?: string, role?: User['role'], limit?: number, offset?: number }): Promise<{ users: User[]; total: number }> {
-      return this.dbStorage.searchUsers(params);
-    }
-
     async getAllUsers(): Promise<User[]> {
       try {
         return await this.dbStorage.getAllUsers();
@@ -5605,12 +4600,18 @@ import { DatabaseStorage } from "./dbStorage";
     }
 
     async getAllPayments(): Promise<Payment[]> {
-      // Use database storage exclusively - consistent with createPayment
-      if (this.dbStorage && typeof this.dbStorage.getAllPayments === 'function') {
-        return await this.dbStorage.getAllPayments();
+      try {
+        // Prefer dbStorage, but fallback to fileStorage (memStorage instance) if unavailable
+        if (this.dbStorage && typeof this.dbStorage.getAllPayments === 'function') {
+          return await this.dbStorage.getAllPayments();
+        } else {
+          console.log('💾 DB storage unavailable or method missing, using file storage fallback for getAllPayments');
+          return await this.fileStorage.getAllPayments();
+        }
+      } catch (error) {
+        console.error('❌ Error getting all payments, falling back to file storage:', error);
+        return await this.fileStorage.getAllPayments();
       }
-      console.error('❌ Database storage not available for getAllPayments');
-      return [];
     }
 
     async getAllEnrollments(): Promise<ProgramEnrollment[]> {
@@ -5630,14 +4631,6 @@ import { DatabaseStorage } from "./dbStorage";
         }
         throw error;
       }
-    }
-
-    async getEnrollmentsBySchoolId(schoolId: number): Promise<ProgramEnrollment[]> {
-      return this.dbStorage.getEnrollmentsBySchoolId(schoolId);
-    }
-
-    async getStripePaymentHistoryById(id: number): Promise<StripePaymentHistory | undefined> {
-      return this.dbStorage.getStripePaymentHistoryById(id);
     }
 
     async getUser(id: number): Promise<User | undefined> {
@@ -5864,9 +4857,36 @@ import { DatabaseStorage } from "./dbStorage";
     }
 
     async deleteUser(id: number): Promise<void> {
-      // Database is authoritative for user deletion - no fallback to file storage
-      // If database fails due to FK constraints, the error must be surfaced
-      await this.dbStorage.deleteUser(id);
+      try {
+        // Try database storage first
+        return await this.dbStorage.deleteUser(id);
+      } catch (error) {
+        console.log('💾 Database unavailable, using file storage for user deletion');
+        // Fall back to memory storage and file persistence
+        this.memStorage.deleteUser(id);
+        
+        // Also remove from file storage
+        try {
+          const fs = await import('fs');
+          const path = await import('path');
+          const DATA_DIR = path.join(process.cwd(), 'data');
+          const USERS_FILE = path.join(DATA_DIR, 'users.json');
+
+          if (fs.existsSync(USERS_FILE)) {
+            const fileContent = fs.readFileSync(USERS_FILE, 'utf8');
+            let users = JSON.parse(fileContent);
+            
+            // Remove user from file
+            users = users.filter((u: any) => u.id !== id);
+            
+            // Write back to file
+            fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
+            console.log(`💾 Deleted user from file: ID ${id}`);
+          }
+        } catch (fileError) {
+          console.log('❌ Failed to delete user from file:', fileError);
+        }
+      }
     }
 
     // School methods - use database storage with fallback to memory
@@ -5918,22 +4938,6 @@ import { DatabaseStorage } from "./dbStorage";
       }
     }
 
-    async getSchoolFeatures(schoolId: number): Promise<Record<string, boolean>> {
-      try {
-        return await this.dbStorage.getSchoolFeatures(schoolId);
-      } catch (error) {
-        return this.memStorage.getSchoolFeatures(schoolId);
-      }
-    }
-
-    async updateSchoolFeatures(schoolId: number, features: Record<string, boolean>): Promise<School | undefined> {
-      try {
-        return await this.dbStorage.updateSchoolFeatures(schoolId, features);
-      } catch (error) {
-        return this.memStorage.updateSchoolFeatures(schoolId, features);
-      }
-    }
-
     async getUserRolesByUserId(userId: number): Promise<UserRole[]> {
       try {
         return await this.dbStorage.getUserRolesByUserId(userId);
@@ -5942,116 +4946,8 @@ import { DatabaseStorage } from "./dbStorage";
       }
     }
 
-    async createUserRole(data: { userId: number; role: string; schoolId?: number | null; isPrimary?: boolean }): Promise<UserRole> {
-      try {
-        return await this.dbStorage.createUserRole(data);
-      } catch (error) {
-        return this.memStorage.createUserRole(data);
-      }
-    }
-
     async deleteUserRolesByUserId(userId: number): Promise<void> {
       return this.dbStorage.deleteUserRolesByUserId(userId);
-    }
-
-    async deleteUserLocationsByUserId(userId: number): Promise<void> {
-      return this.dbStorage.deleteUserLocationsByUserId(userId);
-    }
-
-    async deleteNotificationRecipientsByUserId(userId: number): Promise<void> {
-      return this.dbStorage.deleteNotificationRecipientsByUserId(userId);
-    }
-
-    async deleteChildrenByParentId(parentId: number): Promise<void> {
-      return this.dbStorage.deleteChildrenByParentId(parentId);
-    }
-
-    async deleteEnrollmentsByChildId(childId: number): Promise<void> {
-      return this.dbStorage.deleteEnrollmentsByChildId(childId);
-    }
-
-    async deleteSchoolStudentsByChildId(childId: number): Promise<void> {
-      return this.dbStorage.deleteSchoolStudentsByChildId(childId);
-    }
-
-    async deleteDiscountApplicationsByChildId(childId: number): Promise<void> {
-      return this.dbStorage.deleteDiscountApplicationsByChildId(childId);
-    }
-
-    async deleteEmergencyContactsByUserId(userId: number): Promise<void> {
-      return this.dbStorage.deleteEmergencyContactsByUserId(userId);
-    }
-
-    async deletePiiAccessLogsByUserId(userId: number): Promise<void> {
-      return this.dbStorage.deletePiiAccessLogsByUserId(userId);
-    }
-
-    async deleteCartsByParentId(parentId: number): Promise<void> {
-      return this.dbStorage.deleteCartsByParentId(parentId);
-    }
-
-    async deleteScheduledPaymentsByParentId(parentId: number): Promise<void> {
-      return this.dbStorage.deleteScheduledPaymentsByParentId(parentId);
-    }
-
-    async deleteEnrollmentsByParentId(parentId: number): Promise<void> {
-      return this.dbStorage.deleteEnrollmentsByParentId(parentId);
-    }
-
-    async deleteMembershipEnrollmentsByParentUserId(parentUserId: number): Promise<void> {
-      return this.dbStorage.deleteMembershipEnrollmentsByParentUserId(parentUserId);
-    }
-
-    async deleteMembershipAgreementsByParentUserId(parentUserId: number): Promise<void> {
-      return this.dbStorage.deleteMembershipAgreementsByParentUserId(parentUserId);
-    }
-
-    async deletePaymentReceiptsByParentUserId(parentUserId: number): Promise<void> {
-      return this.dbStorage.deletePaymentReceiptsByParentUserId(parentUserId);
-    }
-
-    async deleteClassSessionsByEducatorId(educatorId: number): Promise<void> {
-      return this.dbStorage.deleteClassSessionsByEducatorId(educatorId);
-    }
-
-    async clearClassSessionsSubstituteEducatorId(educatorId: number): Promise<void> {
-      return this.dbStorage.clearClassSessionsSubstituteEducatorId(educatorId);
-    }
-
-    async clearClassesInstructorId(instructorId: number): Promise<void> {
-      return this.dbStorage.clearClassesInstructorId(instructorId);
-    }
-
-    async clearProgramsInstructorId(instructorId: number): Promise<void> {
-      return this.dbStorage.clearProgramsInstructorId(instructorId);
-    }
-
-    async deleteEducatorSchedulesByEducatorId(educatorId: number): Promise<void> {
-      return this.dbStorage.deleteEducatorSchedulesByEducatorId(educatorId);
-    }
-
-    async deleteEducatorClassAssignmentsByEducatorId(educatorId: number): Promise<void> {
-      return this.dbStorage.deleteEducatorClassAssignmentsByEducatorId(educatorId);
-    }
-
-    async nullifyUserReferencesForSoftDelete(userId: number): Promise<void> {
-      return this.dbStorage.nullifyUserReferencesForSoftDelete(userId);
-    }
-
-    async deletePushSubscriptionsByUserId(userId: number): Promise<void> {
-      return this.dbStorage.deletePushSubscriptionsByUserId(userId);
-    }
-
-    async softDeleteUserWithCleanup(userId: number): Promise<{ success: boolean; error?: string }> {
-      return this.dbStorage.softDeleteUserWithCleanup(userId);
-    }
-
-    async getParentsBySchoolId(schoolId: number): Promise<User[]> {
-      try {
-        return await this.dbStorage.getParentsBySchoolId(schoolId);
-      } catch (error) {
-        return this.memStorage.getParentsBySchoolId(schoolId);
-      }
     }
 
     async getLocationsBySchool(schoolId: number): Promise<Location[]> {
@@ -6118,22 +5014,6 @@ import { DatabaseStorage } from "./dbStorage";
       return this.dbStorage.createEvent(event);
     }
 
-    async updateEvent(id: number, event: Partial<InsertEvent>): Promise<Event | undefined> {
-      return this.dbStorage.updateEvent(id, event);
-    }
-
-    async deleteEvent(id: number): Promise<void> {
-      return this.dbStorage.deleteEvent(id);
-    }
-
-    async getEventsBySchool(schoolId: number): Promise<Event[]> {
-      return this.dbStorage.getEventsBySchool(schoolId);
-    }
-
-    async getEventsBySchoolAndDateRange(schoolId: number, startDate: Date, endDate: Date): Promise<Event[]> {
-      return this.dbStorage.getEventsBySchoolAndDateRange(schoolId, startDate, endDate);
-    }
-
     async getMarketplaceItem(id: number): Promise<MarketplaceItem | undefined> {
       return this.dbStorage.getMarketplaceItem(id);
     }
@@ -6194,7 +5074,7 @@ import { DatabaseStorage } from "./dbStorage";
       return this.dbStorage.getPublicKnowledgeBases(limit);
     }
 
-    async createKnowledgeBase(knowledgeBase: InsertKnowledgeBase & { authorId: number }): Promise<KnowledgeBase> {
+    async createKnowledgeBase(knowledgeBase: InsertKnowledgeBase): Promise<KnowledgeBase> {
       return this.dbStorage.createKnowledgeBase(knowledgeBase);
     }
 
@@ -6220,14 +5100,6 @@ import { DatabaseStorage } from "./dbStorage";
         console.error('❌ Database error in getChildById, falling back to memStorage:', error);
         return await this.memStorage.getChildById(id);
       }
-    }
-
-    async getChildByIdAndSchoolId(childId: number, schoolId: number): Promise<Child | undefined> {
-      return this.dbStorage.getChildByIdAndSchoolId(childId, schoolId);
-    }
-
-    async getChildrenBySchoolId(schoolId: number): Promise<Child[]> {
-      return this.dbStorage.getChildrenBySchoolId(schoolId);
     }
 
     async getChildrenByParentId(parentId: number): Promise<Child[]> {
@@ -6290,29 +5162,6 @@ import { DatabaseStorage } from "./dbStorage";
       }
     }
 
-    async getGuardiansByChildId(childId: number): Promise<ChildGuardian[]> {
-      return this.dbStorage.getGuardiansByChildId(childId);
-    }
-
-    async getChildrenByGuardianUserId(guardianUserId: number): Promise<Child[]> {
-      return this.dbStorage.getChildrenByGuardianUserId(guardianUserId);
-    }
-
-    async addChildGuardian(guardian: InsertChildGuardian): Promise<ChildGuardian> {
-      return this.dbStorage.addChildGuardian(guardian);
-    }
-
-    async removeChildGuardian(id: number): Promise<void> {
-      return this.dbStorage.removeChildGuardian(id);
-    }
-
-    async getChildGuardianById(id: number): Promise<ChildGuardian | undefined> {
-      return this.dbStorage.getChildGuardianById(id);
-    }
-
-    async deleteGuardiansByChildId(childId: number): Promise<void> {
-      return this.dbStorage.deleteGuardiansByChildId(childId);
-    }
 
     async revokeRoleInvitation(id: number): Promise<void> {
       return this.dbStorage.revokeRoleInvitation(id);
@@ -6468,41 +5317,59 @@ import { DatabaseStorage } from "./dbStorage";
     }
 
     async createProgramEnrollment(enrollment: InsertProgramEnrollment): Promise<ProgramEnrollment> {
-      if (!this.dbStorage || typeof this.dbStorage.createProgramEnrollment !== 'function') {
-        console.error('🚨 SILENT-FALLBACK-AVERTED: createProgramEnrollment called but DB storage unavailable or method missing. Refusing to fall back to memStorage (Task #216).');
-        throw new Error('Database storage is required for createProgramEnrollment (no in-memory fallback)');
-      }
       try {
-        return await this.dbStorage.createProgramEnrollment(enrollment);
+        if (this.dbStorage && typeof this.dbStorage.createProgramEnrollment === 'function') {
+          return await this.dbStorage.createProgramEnrollment(enrollment);
+        } else {
+          if (process.env.NODE_ENV === 'production') {
+            throw new Error('Database storage is required in production environment');
+          }
+          console.log('💾 DB storage unavailable or method missing, using memStorage fallback for createProgramEnrollment');
+          return await this.memStorage.createProgramEnrollment(enrollment);
+        }
       } catch (error) {
-        console.error('🚨 SILENT-FALLBACK-AVERTED: createProgramEnrollment failed against Postgres. Surfacing the real error instead of falling back to memStorage (Task #216).', error);
-        throw error;
+        if (process.env.NODE_ENV === 'production') {
+          throw error;
+        }
+        console.error('❌ Error creating program enrollment in database, falling back to memStorage:', error);
+        return await this.memStorage.createProgramEnrollment(enrollment);
       }
     }
 
     async updateProgramEnrollment(id: number, enrollment: Partial<InsertProgramEnrollment>): Promise<ProgramEnrollment | undefined> {
-      if (!this.dbStorage || typeof this.dbStorage.updateProgramEnrollment !== 'function') {
-        console.error('🚨 SILENT-FALLBACK-AVERTED: updateProgramEnrollment called but DB storage unavailable or method missing. Refusing to fall back to memStorage (Task #216).');
-        throw new Error('Database storage is required for updateProgramEnrollment (no in-memory fallback)');
-      }
       try {
-        return await this.dbStorage.updateProgramEnrollment(id, enrollment);
+        if (this.dbStorage && typeof this.dbStorage.updateProgramEnrollment === 'function') {
+          return await this.dbStorage.updateProgramEnrollment(id, enrollment);
+        } else {
+          if (process.env.NODE_ENV === 'production') {
+            throw new Error('Database storage is required in production environment');
+          }
+          console.log('💾 DB storage unavailable or method missing, using memStorage fallback for updateProgramEnrollment');
+          return await this.memStorage.updateProgramEnrollment(id, enrollment);
+        }
       } catch (error) {
-        console.error('🚨 SILENT-FALLBACK-AVERTED: updateProgramEnrollment failed against Postgres. Surfacing the real error instead of falling back to memStorage (Task #216).', error);
-        throw error;
+        if (process.env.NODE_ENV === 'production') {
+          throw error;
+        }
+        console.error('❌ Error updating program enrollment in database, falling back to memStorage:', error);
+        return await this.memStorage.updateProgramEnrollment(id, enrollment);
       }
     }
 
     async deleteProgramEnrollment(id: number): Promise<void> {
-      if (!this.dbStorage || typeof this.dbStorage.deleteProgramEnrollment !== 'function') {
-        console.error('🚨 SILENT-FALLBACK-AVERTED: deleteProgramEnrollment called but DB storage unavailable or method missing. Refusing to fall back to memStorage (Task #216).');
-        throw new Error('Database storage is required for deleteProgramEnrollment (no in-memory fallback)');
-      }
       try {
-        return await this.dbStorage.deleteProgramEnrollment(id);
+        if (this.dbStorage && typeof this.dbStorage.deleteProgramEnrollment === 'function') {
+          return await this.dbStorage.deleteProgramEnrollment(id);
+        } else {
+          console.log('💾 DB storage unavailable, using memStorage fallback for deleteProgramEnrollment');
+          return await this.memStorage.deleteProgramEnrollment(id);
+        }
       } catch (error) {
-        console.error('🚨 SILENT-FALLBACK-AVERTED: deleteProgramEnrollment failed against Postgres. Surfacing the real error instead of falling back to memStorage (Task #216).', error);
-        throw error;
+        if (process.env.NODE_ENV === 'production') {
+          throw error;
+        }
+        console.log('❌ Error deleting program enrollment from database, falling back to memStorage:', error);
+        return await this.memStorage.deleteProgramEnrollment(id);
       }
     }
 
@@ -6581,36 +5448,24 @@ import { DatabaseStorage } from "./dbStorage";
       }
     }
 
-    async getEnrollmentsByParentEmail(parentEmail: string): Promise<ProgramEnrollment[]> {
-      const db = await getDb();
-      const { eq } = await import('drizzle-orm');
-      return await db.select()
-        .from(programEnrollments)
-        .where(eq(programEnrollments.parentEmail, parentEmail));
-    }
-
-    async getEnrollmentByChildAndClass(childId: number, classId: number): Promise<ProgramEnrollment | undefined> {
-      try {
-        if (this.dbStorage instanceof DatabaseStorage) {
-          return await this.dbStorage.getEnrollmentByChildAndClass(childId, classId);
-        }
-        return await this.memStorage.getEnrollmentByChildAndClass(childId, classId);
-      } catch (error) {
-        return await this.memStorage.getEnrollmentByChildAndClass(childId, classId);
-      }
-    }
-
     async createEnrollment(enrollment: any): Promise<any> {
-      // All enrollments now stored in unified program_enrollments table
-      if (!this.dbStorage || typeof this.dbStorage.createProgramEnrollment !== 'function') {
-        console.error('🚨 SILENT-FALLBACK-AVERTED: createEnrollment called but DB storage unavailable or method missing. Refusing to fall back to memStorage (Task #216).');
-        throw new Error('Database storage is required for createEnrollment (no in-memory fallback)');
-      }
       try {
-        return await this.dbStorage.createProgramEnrollment(enrollment);
+        // All enrollments now stored in unified program_enrollments table
+        if (this.dbStorage && typeof this.dbStorage.createProgramEnrollment === 'function') {
+          return await this.dbStorage.createProgramEnrollment(enrollment);
+        } else {
+          if (process.env.NODE_ENV === 'production') {
+            throw new Error('Database storage is required in production environment');
+          }
+          console.log('💾 DB storage unavailable or method missing, using memStorage fallback for createEnrollment');
+          return await this.memStorage.createEnrollment(enrollment);
+        }
       } catch (error) {
-        console.error('🚨 SILENT-FALLBACK-AVERTED: createEnrollment failed against Postgres. Surfacing the real error instead of falling back to memStorage (Task #216).', error);
-        throw error;
+        if (process.env.NODE_ENV === 'production') {
+          throw error;
+        }
+        console.error('❌ Error creating enrollment in database, falling back to memStorage:', error);
+        return await this.memStorage.createEnrollment(enrollment);
       }
     }
 
@@ -6632,31 +5487,10 @@ import { DatabaseStorage } from "./dbStorage";
       }
     }
 
-    async getEnrollmentsByChildIds(childIds: number[]): Promise<any[]> {
-      try {
-        if (this.dbStorage && typeof this.dbStorage.getProgramEnrollmentsByChildIds === 'function') {
-          return await this.dbStorage.getProgramEnrollmentsByChildIds(childIds);
-        } else {
-          console.log('💾 DB storage unavailable, using memStorage fallback for getEnrollmentsByChildIds');
-          return await this.memStorage.getEnrollmentsByChildIds(childIds);
-        }
-      } catch (error) {
-        if (process.env.NODE_ENV === 'production') {
-          throw error;
-        }
-        console.log('❌ Error getting enrollments from database, falling back to memStorage:', error);
-        return await this.memStorage.getEnrollmentsByChildIds(childIds);
-      }
-    }
-
     async getEnrollmentsByClassId(classId: number): Promise<any[]> {
       try {
-        if (this.dbStorage && typeof this.dbStorage.getProgramEnrollmentsByClassId === 'function') {
-          return await this.dbStorage.getProgramEnrollmentsByClassId(classId);
-        } else {
-          console.log('💾 DB storage unavailable, using memStorage fallback for getEnrollmentsByClassId');
-          return await this.memStorage.getEnrollmentsByClassId(classId);
-        }
+        console.log('💾 DB storage unavailable, using memStorage fallback for getEnrollmentsByClassId');
+        return await this.memStorage.getEnrollmentsByClassId(classId);
       } catch (error) {
         if (process.env.NODE_ENV === 'production') {
           throw error;
@@ -6685,18 +5519,27 @@ import { DatabaseStorage } from "./dbStorage";
     }
 
     async updateEnrollment(idOrEnrollment: any, updates?: any): Promise<any> {
-      // Handle both calling signatures
-      const id = typeof idOrEnrollment === 'number' ? idOrEnrollment : idOrEnrollment.id;
-      const data = typeof idOrEnrollment === 'number' ? updates : idOrEnrollment;
-      if (!this.dbStorage || typeof this.dbStorage.updateProgramEnrollment !== 'function') {
-        console.error('🚨 SILENT-FALLBACK-AVERTED: updateEnrollment called but DB storage unavailable or method missing. Refusing to fall back to memStorage (Task #216).');
-        throw new Error('Database storage is required for updateEnrollment (no in-memory fallback)');
-      }
       try {
-        return await this.dbStorage.updateProgramEnrollment(id, data);
+        // Handle both calling signatures
+        const id = typeof idOrEnrollment === 'number' ? idOrEnrollment : idOrEnrollment.id;
+        const data = typeof idOrEnrollment === 'number' ? updates : idOrEnrollment;
+        if (this.dbStorage && typeof this.dbStorage.updateProgramEnrollment === 'function') {
+          return await this.dbStorage.updateProgramEnrollment(id, data);
+        } else {
+          if (process.env.NODE_ENV === 'production') {
+            throw new Error('Database storage is required in production environment');
+          }
+          console.log('💾 DB storage unavailable or method missing, using memStorage fallback for updateEnrollment');
+          return await this.memStorage.updateEnrollment(id, data);
+        }
       } catch (error) {
-        console.error('🚨 SILENT-FALLBACK-AVERTED: updateEnrollment failed against Postgres. Surfacing the real error instead of falling back to memStorage (Task #216).', error);
-        throw error;
+        if (process.env.NODE_ENV === 'production') {
+          throw error;
+        }
+        console.error('❌ Error updating enrollment in database, falling back to memStorage:', error);
+        const id = typeof idOrEnrollment === 'number' ? idOrEnrollment : idOrEnrollment.id;
+        const data = typeof idOrEnrollment === 'number' ? updates : idOrEnrollment;
+        return await this.memStorage.updateEnrollment(id, data);
       }
     }
 
@@ -6884,33 +5727,28 @@ import { DatabaseStorage } from "./dbStorage";
       return this.memStorage.getLinkAnalyticsBySchoolId(schoolId, startDate, endDate);
     }
 
-      // Payment methods implementation - use dbStorage exclusively for consistency
+      // Payment methods implementation - use memStorage since database is failing
       async createPayment(payment: InsertPayment): Promise<Payment> {
-        // Use database storage exclusively - no fallback to avoid ID mismatches
-        if (this.dbStorage && typeof this.dbStorage.createPayment === 'function') {
-          const result = await this.dbStorage.createPayment(payment);
-          console.log('💾 Payment created in database:', result.id);
-          return result;
+        try {
+          // Prefer dbStorage, but fallback to fileStorage (memStorage instance) if unavailable
+          if (this.dbStorage && typeof this.dbStorage.createPayment === 'function') {
+            return await this.dbStorage.createPayment(payment);
+          } else {
+            console.log('💾 DB storage unavailable or method missing, using file storage fallback for createPayment');
+            return await this.fileStorage.createPayment(payment);
+          }
+        } catch (error) {
+          console.error('❌ Error creating payment, falling back to file storage:', error);
+          return await this.fileStorage.createPayment(payment);
         }
-        throw new Error('Database storage not available for createPayment');
       }
 
       async getPaymentsByParentEmail(parentEmail: string): Promise<Payment[]> {
-        // Use database storage exclusively - consistent with createPayment
-        if (this.dbStorage && typeof this.dbStorage.getPaymentsByParentEmail === 'function') {
-          return await this.dbStorage.getPaymentsByParentEmail(parentEmail);
-        }
-        console.error('❌ Database storage not available for getPaymentsByParentEmail');
-        return [];
+        return this.memStorage.getPaymentsByParentEmail(parentEmail);
       }
 
       async getPaymentByStripeId(stripePaymentIntentId: string): Promise<Payment | undefined> {
-        // Use database storage exclusively - consistent with createPayment
-        if (this.dbStorage && typeof this.dbStorage.getPaymentByStripeId === 'function') {
-          return await this.dbStorage.getPaymentByStripeId(stripePaymentIntentId);
-        }
-        console.error('❌ Database storage not available for getPaymentByStripeId');
-        return undefined;
+        return this.memStorage.getPaymentByStripeId(stripePaymentIntentId);
       }
 
       async updatePaymentStatus(id: number, status: 'pending' | 'succeeded' | 'failed' | 'canceled'): Promise<Payment | undefined> {
@@ -6926,17 +5764,7 @@ import { DatabaseStorage } from "./dbStorage";
           default:
             internalStatus = status;
         }
-        
-        // Use database storage exclusively - consistent with createPayment
-        if (this.dbStorage && typeof this.dbStorage.updatePaymentStatus === 'function') {
-          const result = await this.dbStorage.updatePaymentStatus(id, internalStatus);
-          if (result) {
-            console.log('💾 Payment status updated in database:', id, status);
-          }
-          return result;
-        }
-        console.error('❌ Database storage not available for updatePaymentStatus');
-        return undefined;
+        return this.memStorage.updatePaymentStatus(id, internalStatus);
       }
 
       async removeEnrollment(enrollmentId: number): Promise<boolean> {
@@ -6969,18 +5797,6 @@ import { DatabaseStorage } from "./dbStorage";
         }
       }
 
-      async getScheduledPaymentById(id: number): Promise<ScheduledPayment | undefined> {
-        try {
-          if (this.dbStorage && typeof this.dbStorage.getScheduledPaymentById === 'function') {
-            return await this.dbStorage.getScheduledPaymentById(id);
-          } else {
-            return await this.fileStorage.getScheduledPaymentById(id);
-          }
-        } catch (error) {
-          return await this.fileStorage.getScheduledPaymentById(id);
-        }
-      }
-
       async getScheduledPaymentsByParentEmail(parentEmail: string): Promise<ScheduledPayment[]> {
         try {
           if (this.dbStorage && typeof this.dbStorage.getScheduledPaymentsByParentEmail === 'function') {
@@ -6991,18 +5807,6 @@ import { DatabaseStorage } from "./dbStorage";
           }
         } catch (error) {
           return await this.fileStorage.getScheduledPaymentsByParentEmail(parentEmail);
-        }
-      }
-
-      async getScheduledPaymentsByEnrollmentId(enrollmentId: number): Promise<ScheduledPayment[]> {
-        try {
-          if (this.dbStorage && typeof this.dbStorage.getScheduledPaymentsByEnrollmentId === 'function') {
-            return await this.dbStorage.getScheduledPaymentsByEnrollmentId(enrollmentId);
-          } else {
-            return await this.fileStorage.getScheduledPaymentsByEnrollmentId(enrollmentId);
-          }
-        } catch (error) {
-          return await this.fileStorage.getScheduledPaymentsByEnrollmentId(enrollmentId);
         }
       }
 
@@ -7018,25 +5822,6 @@ import { DatabaseStorage } from "./dbStorage";
         }
       }
 
-      async updateScheduledPayment(id: number, payment: Partial<InsertScheduledPayment>): Promise<ScheduledPayment | undefined> {
-        try {
-          if (this.dbStorage && typeof this.dbStorage.updateScheduledPayment === 'function') {
-            return await this.dbStorage.updateScheduledPayment(id, payment);
-          } else {
-            // Fallback: use MemStorage full-field update
-            return await this.memStorage.updateScheduledPayment(id, payment);
-          }
-        } catch (error) {
-          console.error('Failed to update scheduled payment:', error);
-          // On DB error, fall back to memStorage
-          try {
-            return await this.memStorage.updateScheduledPayment(id, payment);
-          } catch {
-            return undefined;
-          }
-        }
-      }
-
       async updateScheduledPaymentReminderCount(id: number, count: number): Promise<ScheduledPayment | undefined> {
         try {
           if (this.dbStorage && typeof this.dbStorage.updateScheduledPaymentReminderCount === 'function') {
@@ -7049,40 +5834,17 @@ import { DatabaseStorage } from "./dbStorage";
         }
       }
 
-      async getAutoPayHistory(schoolId: number, filters: { startDate?: Date; endDate?: Date; status?: string }): Promise<{ records: any[]; summary: { totalChargedCents: number; totalFailedCents: number; chargedCount: number; failedCount: number; skippedCount: number } }> {
+      async updateScheduledPayment(
+        id: number,
+        payment: Partial<InsertScheduledPayment>
+      ): Promise<ScheduledPayment | undefined> {
         try {
-          if (this.dbStorage && typeof this.dbStorage.getAutoPayHistory === 'function') {
-            return await this.dbStorage.getAutoPayHistory(schoolId, filters);
+          if (this.dbStorage && typeof this.dbStorage.updateScheduledPayment === 'function') {
+            return await this.dbStorage.updateScheduledPayment(id, payment);
           }
+          return await this.memStorage.updateScheduledPayment(id, payment);
         } catch (error) {
-          // fall through to empty response
-        }
-        return { records: [], summary: { totalChargedCents: 0, totalFailedCents: 0, chargedCount: 0, failedCount: 0, skippedCount: 0 } };
-      }
-
-      async deleteScheduledPayment(id: number): Promise<void> {
-        try {
-          if (this.dbStorage && typeof this.dbStorage.deleteScheduledPayment === 'function') {
-            return await this.dbStorage.deleteScheduledPayment(id);
-          } else {
-            return await this.memStorage.deleteScheduledPayment(id);
-          }
-        } catch (error) {
-          console.error('Failed to delete scheduled payment from DB, trying memStorage:', error);
-          return await this.memStorage.deleteScheduledPayment(id);
-        }
-      }
-
-      async deletePendingScheduledPaymentsByEnrollmentId(enrollmentId: number): Promise<number> {
-        try {
-          if (this.dbStorage && typeof (this.dbStorage as any).deletePendingScheduledPaymentsByEnrollmentId === 'function') {
-            return await (this.dbStorage as any).deletePendingScheduledPaymentsByEnrollmentId(enrollmentId);
-          } else {
-            return await this.memStorage.deletePendingScheduledPaymentsByEnrollmentId(enrollmentId);
-          }
-        } catch (error) {
-          console.error('Failed to delete pending scheduled payments from DB, trying memStorage:', error);
-          return await this.memStorage.deletePendingScheduledPaymentsByEnrollmentId(enrollmentId);
+          return await this.memStorage.updateScheduledPayment(id, payment);
         }
       }
 
@@ -7113,12 +5875,8 @@ import { DatabaseStorage } from "./dbStorage";
 
       // School Student methods - Migrated to database storage
       async getSchoolStudentById(id: number): Promise<SchoolStudent | undefined> {
-        try {
-          return await this.dbStorage.getSchoolStudentById(id);
-        } catch (error) {
-          console.error("Error fetching school student by ID from database:", error);
-          return this.memStorage.getSchoolStudentById(id);
-        }
+        // dbStorage doesn't have getById, so use memStorage as fallback
+        return this.memStorage.getSchoolStudentById(id);
       }
 
       async getAllSchoolStudents(): Promise<SchoolStudent[]> {
@@ -7131,7 +5889,8 @@ import { DatabaseStorage } from "./dbStorage";
       }
 
       async getSchoolStudentsByLocationId(locationId: number): Promise<SchoolStudent[]> {
-        return this.dbStorage.getSchoolStudentsByLocationId(locationId);
+        // dbStorage doesn't have this method yet, use memStorage as fallback
+        return this.memStorage.getSchoolStudentsByLocationId(locationId);
       }
 
       async getSchoolStudentByChildId(childId: number): Promise<SchoolStudent | undefined> {
@@ -7154,29 +5913,6 @@ import { DatabaseStorage } from "./dbStorage";
 
       async deleteSchoolStudent(id: number): Promise<void> {
         return this.dbStorage.deleteSchoolStudent(id);
-      }
-
-      // School Class Enrollment methods - Database storage
-      async getSchoolClassEnrollmentsByClassId(classId: number): Promise<SchoolClassEnrollment[]> {
-        try {
-          const db = await getDb();
-          const result = await db.select().from(schoolClassEnrollments).where(eq(schoolClassEnrollments.classId, classId));
-          return result;
-        } catch (error) {
-          console.error("Error fetching school class enrollments by class ID:", error);
-          return this.memStorage.getSchoolClassEnrollmentsByClassId(classId);
-        }
-      }
-
-      async getSchoolClassEnrollmentsByStudentId(studentId: number): Promise<SchoolClassEnrollment[]> {
-        try {
-          const db = await getDb();
-          const result = await db.select().from(schoolClassEnrollments).where(eq(schoolClassEnrollments.studentId, studentId));
-          return result;
-        } catch (error) {
-          console.error("Error fetching school class enrollments by student ID:", error);
-          return this.memStorage.getSchoolClassEnrollmentsByStudentId(studentId);
-        }
       }
 
       // School Staff methods - Database storage
@@ -7222,7 +5958,7 @@ import { DatabaseStorage } from "./dbStorage";
 
       // User Location methods
       async getUserLocationById(id: number): Promise<UserLocation | undefined> {
-        return this.dbStorage.getUserLocationById(id);
+        return this.memStorage.getUserLocationById(id);
       }
 
       async getUserLocationsByUserId(userId: number): Promise<UserLocation[]> {
@@ -7311,14 +6047,6 @@ import { DatabaseStorage } from "./dbStorage";
         }
       }
 
-      async getHiddenCategoryIds(): Promise<number[]> {
-        try {
-          return await this.dbStorage.getHiddenCategoryIds();
-        } catch (error) {
-          return this.memStorage.getHiddenCategoryIds();
-        }
-      }
-
       async createCategory(category: any): Promise<any> {
         try {
           return await this.dbStorage.createCategory(category);
@@ -7341,6 +6069,78 @@ import { DatabaseStorage } from "./dbStorage";
         } catch (error) {
           return this.memStorage.deleteCategory(id);
         }
+      }
+
+      // Daily Flow Template methods
+      async getDailyFlowTemplates(filters?: { schoolId?: number; gradeLevel?: string; subject?: string }): Promise<DailyFlowTemplate[]> {
+        return this.dbStorage.getDailyFlowTemplates(filters);
+      }
+
+      async getDailyFlowTemplateById(id: number): Promise<DailyFlowTemplate | undefined> {
+        return this.dbStorage.getDailyFlowTemplateById(id);
+      }
+
+      async createDailyFlowTemplate(template: InsertDailyFlowTemplate): Promise<DailyFlowTemplate> {
+        return this.dbStorage.createDailyFlowTemplate(template);
+      }
+
+      async updateDailyFlowTemplate(id: number, template: Partial<InsertDailyFlowTemplate>): Promise<DailyFlowTemplate | undefined> {
+        return this.dbStorage.updateDailyFlowTemplate(id, template);
+      }
+
+      async deleteDailyFlowTemplate(id: number): Promise<void> {
+        return this.dbStorage.deleteDailyFlowTemplate(id);
+      }
+
+      // Daily Flow Entry methods
+      async getDailyFlowEntries(filters?: { classId?: number; startDate?: string; endDate?: string }): Promise<DailyFlowEntry[]> {
+        return this.dbStorage.getDailyFlowEntries(filters);
+      }
+
+      async getDailyFlowEntryById(id: number): Promise<DailyFlowEntry | undefined> {
+        return this.dbStorage.getDailyFlowEntryById(id);
+      }
+
+      async createDailyFlowEntry(entry: InsertDailyFlowEntry): Promise<DailyFlowEntry> {
+        return this.dbStorage.createDailyFlowEntry(entry);
+      }
+
+      async updateDailyFlowEntry(id: number, entry: Partial<InsertDailyFlowEntry>): Promise<DailyFlowEntry | undefined> {
+        return this.dbStorage.updateDailyFlowEntry(id, entry);
+      }
+
+      async deleteDailyFlowEntry(id: number): Promise<void> {
+        return this.dbStorage.deleteDailyFlowEntry(id);
+      }
+
+      // Daily Flow Schedule methods
+      async getDailyFlowSchedules(filters?: { templateId?: number; classId?: number }): Promise<DailyFlowSchedule[]> {
+        return this.dbStorage.getDailyFlowSchedules(filters);
+      }
+
+      async getDailyFlowScheduleById(id: number): Promise<DailyFlowSchedule | undefined> {
+        return this.dbStorage.getDailyFlowScheduleById(id);
+      }
+
+      async createDailyFlowSchedule(schedule: InsertDailyFlowSchedule): Promise<DailyFlowSchedule> {
+        return this.dbStorage.createDailyFlowSchedule(schedule);
+      }
+
+      async updateDailyFlowSchedule(id: number, schedule: Partial<InsertDailyFlowSchedule>): Promise<DailyFlowSchedule | undefined> {
+        return this.dbStorage.updateDailyFlowSchedule(id, schedule);
+      }
+
+      async deleteDailyFlowSchedule(id: number): Promise<void> {
+        return this.dbStorage.deleteDailyFlowSchedule(id);
+      }
+
+      // Daily Flow utility methods
+      async generateDailyFlowEntriesFromTemplate(params: { templateId: number; classId: number; startDate: string; endDate: string; createdBy: string }): Promise<DailyFlowEntry[]> {
+        return this.memStorage.generateDailyFlowEntriesFromTemplate(params);
+      }
+
+      async getDailyFlowStats(filters?: { classId?: number; startDate?: string; endDate?: string }): Promise<{ totalEntries: number; completedEntries: number; completionRate: number }> {
+        return this.dbStorage.getDailyFlowStats(filters);
       }
 
       // Technical Support methods
@@ -7413,23 +6213,6 @@ import { DatabaseStorage } from "./dbStorage";
           if (process.env.NODE_ENV === 'production') throw error;
           return await this.memStorage.deleteNotification(id);
         }
-      }
-
-      // Announcement methods (school-scoped notifications)
-      async getAnnouncementsBySchool(schoolId: number): Promise<Notification[]> {
-        return this.dbStorage.getAnnouncementsBySchool(schoolId);
-      }
-
-      async getSentNotificationsBySchool(schoolId: number): Promise<Notification[]> {
-        return this.dbStorage.getSentNotificationsBySchool(schoolId);
-      }
-
-      async getPinnedAnnouncementsBySchool(schoolId: number): Promise<Notification[]> {
-        return this.dbStorage.getPinnedAnnouncementsBySchool(schoolId);
-      }
-
-      async getActiveAnnouncementsForUser(userId: number, schoolId: number): Promise<Notification[]> {
-        return this.dbStorage.getActiveAnnouncementsForUser(userId, schoolId);
       }
 
       // Notification recipient methods
@@ -7559,20 +6342,12 @@ import { DatabaseStorage } from "./dbStorage";
         return this.dbStorage.getDiscountApplicationsByDiscountId(discountId);
       }
 
-      async getDiscountApplicationsByChild(childId: number): Promise<DiscountApplication[]> {
-        return this.dbStorage.getDiscountApplicationsByChild(childId);
-      }
-
       async createDiscountApplication(application: InsertDiscountApplication): Promise<DiscountApplication> {
         return this.dbStorage.createDiscountApplication(application);
       }
 
       async updateDiscountApplication(id: number, application: Partial<InsertDiscountApplication>): Promise<DiscountApplication | undefined> {
         return this.dbStorage.updateDiscountApplication(id, application);
-      }
-
-      async getDiscountUsageCountByUser(discountId: number, parentEmail: string): Promise<number> {
-        return this.dbStorage.getDiscountUsageCountByUser(discountId, parentEmail);
       }
 
       // Membership Enrollment methods
@@ -7709,66 +6484,6 @@ import { DatabaseStorage } from "./dbStorage";
         }
       }
 
-      async getScheduledPaymentsBySchoolId(schoolId: number): Promise<any[]> {
-        try {
-          if (this.dbStorage && typeof this.dbStorage.getScheduledPaymentsBySchoolId === 'function') {
-            return await this.dbStorage.getScheduledPaymentsBySchoolId(schoolId);
-          }
-          const all = await this.memStorage.getAllScheduledPayments();
-          return all.filter((p: any) => p.schoolId === schoolId);
-        } catch (error) {
-          console.error('❌ Error in getScheduledPaymentsBySchoolId:', error);
-          return [];
-        }
-      }
-
-      async getUpcomingAutoPayScheduledPayments(windowStart: Date, windowEnd: Date): Promise<any[]> {
-        try {
-          if (this.dbStorage && typeof this.dbStorage.getUpcomingAutoPayScheduledPayments === 'function') {
-            return await this.dbStorage.getUpcomingAutoPayScheduledPayments(windowStart, windowEnd);
-          }
-          return await this.memStorage.getUpcomingAutoPayScheduledPayments(windowStart, windowEnd);
-        } catch (error) {
-          console.error('❌ Error in getUpcomingAutoPayScheduledPayments:', error);
-          return [];
-        }
-      }
-
-      async getDueScheduledPayments(asOfDate: Date, maxStaleDays: number): Promise<any[]> {
-        try {
-          if (this.dbStorage && typeof this.dbStorage.getDueScheduledPayments === 'function') {
-            return await this.dbStorage.getDueScheduledPayments(asOfDate, maxStaleDays);
-          }
-          const all = await this.memStorage.getAllScheduledPayments();
-          const cutoff = new Date(asOfDate.getTime() - maxStaleDays * 86400000);
-          return all.filter((p: any) => {
-            if (p.status !== 'pending') return false;
-            const d = new Date(p.scheduledDate);
-            return d <= asOfDate && d >= cutoff;
-          });
-        } catch (error) {
-          console.error('❌ Error in getDueScheduledPayments:', error);
-          return [];
-        }
-      }
-
-      async getStuckProcessingPayments(olderThanMinutes: number): Promise<any[]> {
-        try {
-          if (this.dbStorage && typeof this.dbStorage.getStuckProcessingPayments === 'function') {
-            return await this.dbStorage.getStuckProcessingPayments(olderThanMinutes);
-          }
-          const all = await this.memStorage.getAllScheduledPayments();
-          const cutoff = new Date(Date.now() - olderThanMinutes * 60000);
-          return all.filter((p: any) => {
-            if (p.status !== 'processing') return false;
-            return p.updatedAt && new Date(p.updatedAt) < cutoff;
-          });
-        } catch (error) {
-          console.error('❌ Error in getStuckProcessingPayments:', error);
-          return [];
-        }
-      }
-
       async createStripeSubscriptionSchedule(schedule: InsertStripeSubscriptionSchedule): Promise<StripeSubscriptionSchedule> {
         return this.dbStorage.createStripeSubscriptionSchedule(schedule);
       }
@@ -7881,10 +6596,6 @@ import { DatabaseStorage } from "./dbStorage";
         return this.dbStorage.getPublishedSchoolDocuments(schoolId);
       }
 
-      async getSchoolDocumentByFileName(schoolId: number, fileName: string): Promise<SchoolDocument | undefined> {
-        return this.dbStorage.getSchoolDocumentByFileName(schoolId, fileName);
-      }
-
       async createSchoolDocument(document: InsertSchoolDocument): Promise<SchoolDocument> {
         return this.dbStorage.createSchoolDocument(document);
       }
@@ -7897,365 +6608,15 @@ import { DatabaseStorage } from "./dbStorage";
         return this.dbStorage.deleteSchoolDocument(id);
       }
 
-      // Document Views (download tracking) methods
-      async createDocumentView(data: { documentId: number; userId: number }): Promise<any> {
-        return (this.dbStorage as any).createDocumentView(data);
+      async getParentsBySchoolId(schoolId: number): Promise<User[]> {
+        return this.dbStorage.getParentsBySchoolId(schoolId);
       }
 
-      async getDocumentViews(documentId: number): Promise<any[]> {
-        return (this.dbStorage as any).getDocumentViews(documentId);
-      }
-
-      async getDocumentViewCount(documentId: number): Promise<number> {
-        return (this.dbStorage as any).getDocumentViewCount(documentId);
-      }
-
-      // Database initialization methods
-      async initializeNotifications(): Promise<void> {
-        return this.dbStorage.initializeNotifications();
-      }
-
-      // Educator Class Assignment methods (Phase 1a)
-      async getEducatorClassAssignmentById(id: number): Promise<EducatorClassAssignment | undefined> {
-        return this.dbStorage.getEducatorClassAssignmentById(id);
-      }
-
-      async getEducatorClassAssignmentsByEducatorId(educatorId: number): Promise<EducatorClassAssignment[]> {
-        return this.dbStorage.getEducatorClassAssignmentsByEducatorId(educatorId);
-      }
-
-      async getEducatorClassAssignmentsByClassId(classId: number): Promise<EducatorClassAssignment[]> {
-        return this.dbStorage.getEducatorClassAssignmentsByClassId(classId);
-      }
-
-      async getEducatorClassAssignmentsBySchoolId(schoolId: number): Promise<EducatorClassAssignment[]> {
-        return this.dbStorage.getEducatorClassAssignmentsBySchoolId(schoolId);
-      }
-
-      async getActiveEducatorAssignmentForClass(educatorId: number, classId: number): Promise<EducatorClassAssignment | undefined> {
-        return this.dbStorage.getActiveEducatorAssignmentForClass(educatorId, classId);
-      }
-
-      async createEducatorClassAssignment(assignment: InsertEducatorClassAssignment): Promise<EducatorClassAssignment> {
-        return this.dbStorage.createEducatorClassAssignment(assignment);
-      }
-
-      async updateEducatorClassAssignment(id: number, assignment: Partial<InsertEducatorClassAssignment>): Promise<EducatorClassAssignment | undefined> {
-        return this.dbStorage.updateEducatorClassAssignment(id, assignment);
-      }
-
-      async deleteEducatorClassAssignment(id: number): Promise<void> {
-        return this.dbStorage.deleteEducatorClassAssignment(id);
-      }
-
-      // Class Session methods (Phase 1a)
-      async getClassSessionById(id: number): Promise<ClassSession | undefined> {
-        return this.dbStorage.getClassSessionById(id);
-      }
-
-      async getSessionByQrToken(token: string): Promise<ClassSession | undefined> {
-        return this.dbStorage.getSessionByQrToken(token);
-      }
-
-      async getTeacherClockInRecords(params: { schoolId: number; startDate?: string; endDate?: string; classId?: number }): Promise<Array<{ sessionId: number; scheduledDate: string; actualStartTime: string | null; actualEndTime: string | null; checkInLocationVerified: boolean | null; className: string; educatorName: string }>> {
-        return this.dbStorage.getTeacherClockInRecords(params);
-      }
-
-      async getClassSessionsByClassId(classId: number): Promise<ClassSession[]> {
-        return this.dbStorage.getClassSessionsByClassId(classId);
-      }
-
-      async getClassSessionsByEducatorId(educatorId: number): Promise<ClassSession[]> {
-        return this.dbStorage.getClassSessionsByEducatorId(educatorId);
-      }
-
-      async getClassSessionsBySchoolId(schoolId: number): Promise<ClassSession[]> {
-        return this.dbStorage.getClassSessionsBySchoolId(schoolId);
-      }
-
-      async getClassSessionsByDate(schoolId: number, date: string): Promise<ClassSession[]> {
-        return this.dbStorage.getClassSessionsByDate(schoolId, date);
-      }
-
-      async getClassSessionsByDateRange(schoolId: number, startDate: string, endDate: string): Promise<ClassSession[]> {
-        return this.dbStorage.getClassSessionsByDateRange(schoolId, startDate, endDate);
-      }
-
-      async getActiveClassSession(educatorId: number): Promise<ClassSession | undefined> {
-        return this.dbStorage.getActiveClassSession(educatorId);
-      }
-
-      async createClassSession(session: InsertClassSession): Promise<ClassSession> {
-        return this.dbStorage.createClassSession(session);
-      }
-
-      async updateClassSession(id: number, session: Partial<InsertClassSession>): Promise<ClassSession | undefined> {
-        return this.dbStorage.updateClassSession(id, session);
-      }
-
-      async deleteClassSession(id: number): Promise<void> {
-        return this.dbStorage.deleteClassSession(id);
-      }
-
-      // Educator Schedule methods (Phase 1b)
-      async getEducatorScheduleById(id: number): Promise<EducatorSchedule | undefined> {
-        return this.dbStorage.getEducatorScheduleById(id);
-      }
-
-      async getEducatorSchedulesByEducatorId(educatorId: number): Promise<EducatorSchedule[]> {
-        return this.dbStorage.getEducatorSchedulesByEducatorId(educatorId);
-      }
-
-      async getEducatorSchedulesByClassId(classId: number): Promise<EducatorSchedule[]> {
-        return this.dbStorage.getEducatorSchedulesByClassId(classId);
-      }
-
-      async getEducatorSchedulesBySchoolId(schoolId: number): Promise<EducatorSchedule[]> {
-        return this.dbStorage.getEducatorSchedulesBySchoolId(schoolId);
-      }
-
-      async getEducatorSchedulesByAssignmentId(assignmentId: number): Promise<EducatorSchedule[]> {
-        return this.dbStorage.getEducatorSchedulesByAssignmentId(assignmentId);
-      }
-
-      async getEducatorSchedulesForWeek(educatorId: number, weekStartDate: string): Promise<EducatorSchedule[]> {
-        return this.dbStorage.getEducatorSchedulesForWeek(educatorId, weekStartDate);
-      }
-
-      async createEducatorSchedule(schedule: InsertEducatorSchedule): Promise<EducatorSchedule> {
-        return this.dbStorage.createEducatorSchedule(schedule);
-      }
-
-      async updateEducatorSchedule(id: number, schedule: Partial<InsertEducatorSchedule>): Promise<EducatorSchedule | undefined> {
-        return this.dbStorage.updateEducatorSchedule(id, schedule);
-      }
-
-      async deleteEducatorSchedule(id: number): Promise<void> {
-        return this.dbStorage.deleteEducatorSchedule(id);
-      }
-
-      // Audit Log methods (Phase 1b)
-      async createAuditLog(log: InsertAuditLog): Promise<AuditLog> {
-        return this.dbStorage.createAuditLog(log);
-      }
-
-      async getAuditLogsByTargetId(targetType: string, targetId: string): Promise<AuditLog[]> {
-        return this.dbStorage.getAuditLogsByTargetId(targetType, targetId);
-      }
-
-      async getAuditLogsByActorId(actorId: number): Promise<AuditLog[]> {
-        return this.dbStorage.getAuditLogsByActorId(actorId);
-      }
-
-      async getAuditLogsBySchoolId(schoolId: number, filters?: { actionType?: string; severity?: string; startDate?: string; endDate?: string }): Promise<AuditLog[]> {
-        return this.dbStorage.getAuditLogsBySchoolId(schoolId, filters);
-      }
-
-      // Session Attendance methods (Phase 2)
-      async getAttendanceBySessionId(sessionId: number): Promise<SessionAttendance[]> {
-        return this.dbStorage.getAttendanceBySessionId(sessionId);
-      }
-
-      async getAttendanceByChildId(childId: number): Promise<SessionAttendance[]> {
-        return this.dbStorage.getAttendanceByChildId(childId);
-      }
-
-      async getAttendanceBySchoolId(schoolId: number): Promise<SessionAttendance[]> {
-        return this.dbStorage.getAttendanceBySchoolId(schoolId);
-      }
-
-      async getAttendanceRecord(sessionId: number, childId: number): Promise<SessionAttendance | undefined> {
-        return this.dbStorage.getAttendanceRecord(sessionId, childId);
-      }
-
-      async createAttendance(attendance: InsertSessionAttendance): Promise<SessionAttendance> {
-        return this.dbStorage.createAttendance(attendance);
-      }
-
-      async updateAttendance(id: number, attendance: Partial<InsertSessionAttendance>): Promise<SessionAttendance | undefined> {
-        return this.dbStorage.updateAttendance(id, attendance);
-      }
-
-      async deleteAttendance(id: number): Promise<void> {
-        return this.dbStorage.deleteAttendance(id);
-      }
-
-      async upsertAttendance(attendance: InsertSessionAttendance): Promise<SessionAttendance> {
-        return this.dbStorage.upsertAttendance(attendance);
-      }
-
-      // Error Log methods
-      async createErrorLog(errorLog: InsertErrorLog): Promise<ErrorLog> {
-        return this.dbStorage.createErrorLog(errorLog);
-      }
-
-      async getErrorLogById(id: number): Promise<ErrorLog | undefined> {
-        return this.dbStorage.getErrorLogById(id);
-      }
-
-      async getErrorLogs(filters?: { 
-        severity?: string; 
-        status?: string; 
-        errorType?: string;
-        startDate?: Date;
-        endDate?: Date;
-        limit?: number;
-        offset?: number;
-      }): Promise<ErrorLog[]> {
-        return this.dbStorage.getErrorLogs(filters);
-      }
-
-      async getErrorLogsCount(filters?: { 
-        severity?: string; 
-        status?: string; 
-        errorType?: string;
-        startDate?: Date;
-        endDate?: Date;
-      }): Promise<number> {
-        return this.dbStorage.getErrorLogsCount(filters);
-      }
-
-      async updateErrorLog(id: number, updates: Partial<InsertErrorLog>): Promise<ErrorLog | undefined> {
-        return this.dbStorage.updateErrorLog(id, updates);
-      }
-
-      async getUnnotifiedCriticalErrors(): Promise<ErrorLog[]> {
-        return this.dbStorage.getUnnotifiedCriticalErrors();
-      }
-
-      async markErrorsNotified(ids: number[]): Promise<void> {
-        return this.dbStorage.markErrorsNotified(ids);
-      }
-
-      async getErrorsSummary(startDate: Date, endDate: Date): Promise<{
-        total: number;
-        bySeverity: Record<string, number>;
-        byType: Record<string, number>;
-        byStatus: Record<string, number>;
-      }> {
-        return this.dbStorage.getErrorsSummary(startDate, endDate);
-      }
-
-      async cleanupOldErrors(olderThan: Date): Promise<number> {
-        return this.dbStorage.cleanupOldErrors(olderThan);
-      }
-
-      // Signed Waiver methods (Phase 2 - Volunteer)
-      async getSignedWaiverById(id: number): Promise<SignedWaiver | undefined> {
-        return this.dbStorage.getSignedWaiverById(id);
-      }
-
-      async getSignedWaiversByUserId(userId: number): Promise<SignedWaiver[]> {
-        return this.dbStorage.getSignedWaiversByUserId(userId);
-      }
-
-      async getSignedWaiverByUserAndDocument(userId: number, documentId: number): Promise<SignedWaiver | undefined> {
-        return this.dbStorage.getSignedWaiverByUserAndDocument(userId, documentId);
-      }
-
-      async getActiveSignedWaiver(userId: number, documentId: number): Promise<SignedWaiver | undefined> {
-        return this.dbStorage.getActiveSignedWaiver(userId, documentId);
-      }
-
-      async createSignedWaiver(waiver: InsertSignedWaiver): Promise<SignedWaiver> {
-        return this.dbStorage.createSignedWaiver(waiver);
-      }
-
-      async updateSignedWaiver(id: number, waiver: Partial<InsertSignedWaiver>): Promise<SignedWaiver | undefined> {
-        return this.dbStorage.updateSignedWaiver(id, waiver);
-      }
-
-      // Session Volunteer methods (Phase 2 - Volunteer)
-      async getSessionVolunteerById(id: number): Promise<SessionVolunteer | undefined> {
-        return this.dbStorage.getSessionVolunteerById(id);
-      }
-
-      async getSessionVolunteersBySessionId(sessionId: number): Promise<SessionVolunteer[]> {
-        return this.dbStorage.getSessionVolunteersBySessionId(sessionId);
-      }
-
-      async getSessionVolunteersByVolunteerId(volunteerId: number): Promise<SessionVolunteer[]> {
-        return this.dbStorage.getSessionVolunteersByVolunteerId(volunteerId);
-      }
-
-      async createSessionVolunteer(volunteer: InsertSessionVolunteer): Promise<SessionVolunteer> {
-        return this.dbStorage.createSessionVolunteer(volunteer);
-      }
-
-      async updateSessionVolunteer(id: number, volunteer: Partial<InsertSessionVolunteer>): Promise<SessionVolunteer | undefined> {
-        return this.dbStorage.updateSessionVolunteer(id, volunteer);
-      }
-
-      async deleteSessionVolunteer(id: number): Promise<void> {
-        return this.dbStorage.deleteSessionVolunteer(id);
-      }
-
-      // Volunteer Credits methods (Phase 3)
-      async getVolunteerCreditById(id: number): Promise<VolunteerCredit | undefined> {
-        return this.dbStorage.getVolunteerCreditById(id);
-      }
-
-      async getVolunteerCreditsByUserId(userId: number): Promise<VolunteerCredit[]> {
-        return this.dbStorage.getVolunteerCreditsByUserId(userId);
-      }
-
-      async getVolunteerCreditsBySchoolId(schoolId: number): Promise<VolunteerCredit[]> {
-        return this.dbStorage.getVolunteerCreditsBySchoolId(schoolId);
-      }
-
-      async getPendingVolunteerCredits(schoolId: number): Promise<VolunteerCredit[]> {
-        return this.dbStorage.getPendingVolunteerCredits(schoolId);
-      }
-
-      async getAvailableVolunteerCredits(userId: number): Promise<VolunteerCredit[]> {
-        return this.dbStorage.getAvailableVolunteerCredits(userId);
-      }
-
-      async createVolunteerCredit(credit: InsertVolunteerCredit): Promise<VolunteerCredit> {
-        return this.dbStorage.createVolunteerCredit(credit);
-      }
-
-      async updateVolunteerCredit(id: number, credit: Partial<InsertVolunteerCredit> & { usedAmountCents?: number }): Promise<VolunteerCredit | undefined> {
-        return this.dbStorage.updateVolunteerCredit(id, credit);
-      }
-
-      async approveVolunteerCredit(id: number, approvedBy: number): Promise<VolunteerCredit | undefined> {
-        return this.dbStorage.approveVolunteerCredit(id, approvedBy);
-      }
-
-      async rejectVolunteerCredit(id: number, approvedBy: number, reason: string): Promise<VolunteerCredit | undefined> {
-        return this.dbStorage.rejectVolunteerCredit(id, approvedBy, reason);
-      }
-
-      async useVolunteerCredits(userId: number, amountCents: number, paymentHistoryId?: number, description?: string): Promise<{ usedCredits: CreditUsageLog[]; totalUsed: number }> {
-        return this.dbStorage.useVolunteerCredits(userId, amountCents, paymentHistoryId, description);
-      }
-
-      // Credit Usage Log methods
-      async getCreditUsageLogById(id: number): Promise<CreditUsageLog | undefined> {
-        return this.dbStorage.getCreditUsageLogById(id);
-      }
-
-      async getCreditUsageLogsByCreditId(creditId: number): Promise<CreditUsageLog[]> {
-        return this.dbStorage.getCreditUsageLogsByCreditId(creditId);
-      }
-
-      async createCreditUsageLog(log: InsertCreditUsageLog): Promise<CreditUsageLog> {
-        return this.dbStorage.createCreditUsageLog(log);
-      }
-
-      // ==================== UNIFIED CREDIT SYSTEM ====================
       async getCreditById(id: number): Promise<Credit | undefined> {
         return this.dbStorage.getCreditById(id);
       }
 
-      async getCredits(filters: {
-        userId?: number;
-        schoolId?: number;
-        creditType?: CreditType;
-        status?: CreditStatus;
-        includeExpired?: boolean;
-      }): Promise<Credit[]> {
+      async getCredits(filters: Parameters<DatabaseStorage['getCredits']>[0]): Promise<Credit[]> {
         return this.dbStorage.getCredits(filters);
       }
 
@@ -8263,7 +6624,10 @@ import { DatabaseStorage } from "./dbStorage";
         return this.dbStorage.createCredit(credit);
       }
 
-      async updateCredit(id: number, updates: Partial<InsertCredit> & { usedAmountCents?: number; status?: CreditStatus; approvedBy?: number; approvedAt?: Date; expiresAt?: Date }): Promise<Credit | undefined> {
+      async updateCredit(
+        id: number,
+        updates: Parameters<DatabaseStorage['updateCredit']>[1]
+      ): Promise<Credit | undefined> {
         return this.dbStorage.updateCredit(id, updates);
       }
 
@@ -8291,7 +6655,12 @@ import { DatabaseStorage } from "./dbStorage";
         return this.dbStorage.getPendingCredits(schoolId, creditType);
       }
 
-      async useCredits(userId: number, amountCents: number, paymentHistoryId?: number, description?: string): Promise<{ usedCredits: UnifiedCreditUsageLog[]; totalUsed: number }> {
+      async useCredits(
+        userId: number,
+        amountCents: number,
+        paymentHistoryId?: number,
+        description?: string
+      ): Promise<{ usedCredits: UnifiedCreditUsageLog[]; totalUsed: number }> {
         return this.dbStorage.useCredits(userId, amountCents, paymentHistoryId, description);
       }
 
@@ -8299,53 +6668,14 @@ import { DatabaseStorage } from "./dbStorage";
         return this.dbStorage.restoreCredits(usageLogs);
       }
 
-      async expireCredits(): Promise<number> {
-        return this.dbStorage.expireCredits();
-      }
-
-      // Credit Hold methods (Reserve-then-Finalize Pattern)
-      async createCreditHolds(userId: number, amountCents: number, checkoutSessionId: string, description?: string, expiresInMinutes: number = 30): Promise<{ holds: CreditHold[]; totalHeld: number }> {
-        return this.dbStorage.createCreditHolds(userId, amountCents, checkoutSessionId, description, expiresInMinutes);
-      }
-
-      async finalizeCreditHolds(checkoutSessionId: string, paymentHistoryId?: number, description?: string): Promise<{ finalizedCount: number; totalFinalized: number; usageLogs: UnifiedCreditUsageLog[] }> {
-        return this.dbStorage.finalizeCreditHolds(checkoutSessionId, paymentHistoryId, description);
-      }
-
-      async releaseCreditHolds(checkoutSessionId: string): Promise<{ releasedCount: number; totalReleased: number }> {
-        return this.dbStorage.releaseCreditHolds(checkoutSessionId);
-      }
-
-      async completeCreditsOnlyPayment(params: {
-        holdSessionId: string;
-        scheduledPaymentId: number;
-        parentId: number;
-        enrollmentId: number | null;
-        schoolId: number | null;
-        creditsApplied: number;
-        originalAmount: number;
-        installmentNumber: number;
-        totalInstallments: number;
-        parentEmail: string;
-        childName: string | null;
-        className: string | null;
-        chargedBy?: 'auto_pay' | 'parent_manual' | 'parent_manual_saved_card' | 'admin_manual';
-        completionSource?: string;
-        description?: string;
-      }): Promise<void> {
+      async completeCreditsOnlyPayment(
+        params: Parameters<DatabaseStorage['completeCreditsOnlyPayment']>[0]
+      ): Promise<void> {
         return this.dbStorage.completeCreditsOnlyPayment(params);
       }
 
-      async getActiveHoldsForUser(userId: number): Promise<CreditHold[]> {
-        return this.dbStorage.getActiveHoldsForUser(userId);
-      }
-
-      async getTotalHeldCreditsForUser(userId: number): Promise<number> {
-        return this.dbStorage.getTotalHeldCreditsForUser(userId);
-      }
-
-      async expireStaleHolds(): Promise<number> {
-        return this.dbStorage.expireStaleHolds();
+      async expireCredits(): Promise<number> {
+        return this.dbStorage.expireCredits();
       }
 
       async getUnifiedCreditUsageLogById(id: number): Promise<UnifiedCreditUsageLog | undefined> {
@@ -8358,10 +6688,6 @@ import { DatabaseStorage } from "./dbStorage";
 
       async getUnifiedCreditUsageLogsByPaymentHistoryId(paymentHistoryId: number): Promise<UnifiedCreditUsageLog[]> {
         return this.dbStorage.getUnifiedCreditUsageLogsByPaymentHistoryId(paymentHistoryId);
-      }
-
-      async createUnifiedCreditUsageLog(log: InsertUnifiedCreditUsageLog): Promise<UnifiedCreditUsageLog> {
-        return this.dbStorage.createUnifiedCreditUsageLog(log);
       }
 
       async getDoubleSpentCredits(schoolId?: number): Promise<Credit[]> {
@@ -8380,404 +6706,63 @@ import { DatabaseStorage } from "./dbStorage";
         return this.dbStorage.getUnifiedCreditUsageLogsByScheduledPaymentId(scheduledPaymentId);
       }
 
-      // ==================== PAYMENT ALLOCATIONS ====================
-      async getPaymentAllocationById(id: number): Promise<PaymentAllocation | undefined> {
-        return this.dbStorage.getPaymentAllocationById(id);
+      async createUnifiedCreditUsageLog(log: InsertUnifiedCreditUsageLog): Promise<UnifiedCreditUsageLog> {
+        return this.dbStorage.createUnifiedCreditUsageLog(log);
       }
 
-      async getPaymentAllocationsByEnrollmentId(enrollmentId: number): Promise<PaymentAllocation[]> {
-        return this.dbStorage.getPaymentAllocationsByEnrollmentId(enrollmentId);
+      async createCreditHolds(
+        userId: number,
+        amountCents: number,
+        checkoutSessionId: string,
+        description?: string,
+        expiresInMinutes?: number
+      ): Promise<{ holds: CreditHold[]; totalHeld: number }> {
+        return this.dbStorage.createCreditHolds(userId, amountCents, checkoutSessionId, description, expiresInMinutes);
       }
 
-      async getPaymentAllocationsByMembershipEnrollmentId(membershipEnrollmentId: number): Promise<PaymentAllocation[]> {
-        return this.dbStorage.getPaymentAllocationsByMembershipEnrollmentId(membershipEnrollmentId);
+      async finalizeCreditHolds(
+        checkoutSessionId: string,
+        paymentHistoryId?: number,
+        description?: string
+      ): Promise<{ finalizedCount: number; totalFinalized: number; usageLogs: UnifiedCreditUsageLog[] }> {
+        return this.dbStorage.finalizeCreditHolds(checkoutSessionId, paymentHistoryId, description);
       }
 
-      async getPaymentAllocationsByPaymentHistoryId(paymentHistoryId: number): Promise<PaymentAllocation[]> {
-        return this.dbStorage.getPaymentAllocationsByPaymentHistoryId(paymentHistoryId);
+      async releaseCreditHolds(checkoutSessionId: string): Promise<{ releasedCount: number; totalReleased: number }> {
+        return this.dbStorage.releaseCreditHolds(checkoutSessionId);
       }
 
-      async createPaymentAllocation(allocation: InsertPaymentAllocation): Promise<PaymentAllocation> {
-        return this.dbStorage.createPaymentAllocation(allocation);
+      async getActiveHoldsForUser(userId: number): Promise<CreditHold[]> {
+        return this.dbStorage.getActiveHoldsForUser(userId);
       }
 
-      async createPaymentAllocations(allocations: InsertPaymentAllocation[]): Promise<PaymentAllocation[]> {
-        return this.dbStorage.createPaymentAllocations(allocations);
+      async getTotalHeldCreditsForUser(userId: number): Promise<number> {
+        return this.dbStorage.getTotalHeldCreditsForUser(userId);
       }
 
-      async getTotalPaidForEnrollment(enrollmentId: number): Promise<number> {
-        return this.dbStorage.getTotalPaidForEnrollment(enrollmentId);
+      async expireStaleHolds(): Promise<number> {
+        return this.dbStorage.expireStaleHolds();
       }
 
-      async getTotalPaidForMembershipEnrollment(membershipEnrollmentId: number): Promise<number> {
-        return this.dbStorage.getTotalPaidForMembershipEnrollment(membershipEnrollmentId);
-      }
-
-      // ==================== STRIPE PAYMENT HISTORY ====================
       async saveStripePayment(payment: InsertStripePaymentHistory): Promise<StripePaymentHistory> {
-        // Task #219: NEVER fall back to MemStorage on the money path. A
-        // non-durable in-memory row would let `persistedRowId` look real to
-        // the webhook handler, which would then ack Stripe with 200 — exactly
-        // the silent-loss failure mode this task eliminates. All errors
-        // (unique violations AND infrastructure failures) propagate so the
-        // outer handler returns 5xx and Stripe retries.
-        if (this.dbStorage instanceof DatabaseStorage) {
-          return this.dbStorage.saveStripePayment(payment);
-        }
-        // No Postgres available at all (test/dev with disabled DB) — keep the
-        // mem path so non-money-path call sites continue to work, but the
-        // webhook handler runs only when DatabaseStorage is active in
-        // practice.
-        return this.memStorage.saveStripePayment(payment);
+        return this.dbStorage.saveStripePayment(payment);
       }
 
       async getStripePaymentHistoryByUserId(userId: number): Promise<StripePaymentHistory[]> {
-        if (this.dbStorage instanceof DatabaseStorage) {
-          try {
-            return await this.dbStorage.getStripePaymentHistoryByUserId(userId);
-          } catch (err) {
-            console.warn('[CombinedStorage] getStripePaymentHistoryByUserId DB failed, falling back to mem:', err);
-          }
-        }
-        return this.memStorage.getStripePaymentHistoryByUserId(userId);
+        return this.dbStorage.getStripePaymentHistoryByUserId(userId);
       }
 
       async getStripePaymentsBySubscription(subscriptionId: string): Promise<StripePaymentHistory[]> {
-        if (this.dbStorage instanceof DatabaseStorage) {
-          try {
-            return await this.dbStorage.getStripePaymentsBySubscription(subscriptionId);
-          } catch (err) {
-            console.warn('[CombinedStorage] getStripePaymentsBySubscription DB failed, falling back to mem:', err);
-          }
-        }
-        return this.memStorage.getStripePaymentsBySubscription(subscriptionId);
+        return this.dbStorage.getStripePaymentsBySubscription(subscriptionId);
       }
 
       async getStripePaymentByIntentId(paymentIntentId: string): Promise<StripePaymentHistory | undefined> {
-        if (this.dbStorage instanceof DatabaseStorage) {
-          try {
-            return await this.dbStorage.getStripePaymentByIntentId(paymentIntentId);
-          } catch (err) {
-            console.warn('[CombinedStorage] getStripePaymentByIntentId DB failed, falling back to mem:', err);
-          }
-        }
-        return this.memStorage.getStripePaymentByIntentId(paymentIntentId);
+        return this.dbStorage.getStripePaymentByIntentId(paymentIntentId);
       }
 
-      async getStripePaymentByEventId(stripeEventId: string): Promise<StripePaymentHistory | undefined> {
-        // Task #219: lookup by stripe_event_id is the authoritative idempotency
-        // key for webhook events; never silently fall back to mem on this path.
-        if (this.dbStorage instanceof DatabaseStorage) {
-          return this.dbStorage.getStripePaymentByEventId(stripeEventId);
-        }
-        return undefined;
-      }
-
-      // Task #222 — Refund event durability. Same money-path discipline as
-      // saveStripePayment: refuse the MemStorage fallback so the webhook
-      // handler cannot ack 200 on a non-durable in-mem row.
-      async saveRefundEvent(event: InsertRefundEvent): Promise<RefundEvent> {
-        if (this.dbStorage instanceof DatabaseStorage) {
-          return this.dbStorage.saveRefundEvent(event);
-        }
-        return this.memStorage.saveRefundEvent(event);
-      }
-      async getRefundEventByEventId(stripeEventId: string): Promise<RefundEvent | undefined> {
-        if (this.dbStorage instanceof DatabaseStorage) {
-          return this.dbStorage.getRefundEventByEventId(stripeEventId);
-        }
-        return this.memStorage.getRefundEventByEventId(stripeEventId);
-      }
-      async updateRefundEvent(id: number, update: Partial<InsertRefundEvent>): Promise<RefundEvent | undefined> {
-        if (this.dbStorage instanceof DatabaseStorage) {
-          return this.dbStorage.updateRefundEvent(id, update);
-        }
-        return this.memStorage.updateRefundEvent(id, update);
-      }
-
-      async getPaymentByIdempotencyKey(idempotencyKey: string): Promise<StripePaymentHistory | undefined> {
-        return this.dbStorage.getPaymentByIdempotencyKey(idempotencyKey);
-      }
-
-      // ==================== ASSESSMENT TRACKING ====================
-      async getAssessmentTypeById(id: number): Promise<AssessmentType | undefined> {
-        return this.dbStorage.getAssessmentTypeById(id);
-      }
-
-      async getAssessmentTypesBySchoolId(schoolId: number): Promise<AssessmentType[]> {
-        return this.dbStorage.getAssessmentTypesBySchoolId(schoolId);
-      }
-
-      async createAssessmentType(assessmentType: InsertAssessmentType): Promise<AssessmentType> {
-        return this.dbStorage.createAssessmentType(assessmentType);
-      }
-
-      async updateAssessmentType(id: number, assessmentType: Partial<InsertAssessmentType>): Promise<AssessmentType | undefined> {
-        return this.dbStorage.updateAssessmentType(id, assessmentType);
-      }
-
-      async deleteAssessmentType(id: number): Promise<void> {
-        return this.dbStorage.deleteAssessmentType(id);
-      }
-
-      async getCurriculumBookById(id: number): Promise<CurriculumBook | undefined> {
-        return this.dbStorage.getCurriculumBookById(id);
-      }
-
-      async getCurriculumBooksByAssessmentTypeId(assessmentTypeId: number): Promise<CurriculumBook[]> {
-        return this.dbStorage.getCurriculumBooksByAssessmentTypeId(assessmentTypeId);
-      }
-
-      async createCurriculumBook(book: InsertCurriculumBook): Promise<CurriculumBook> {
-        return this.dbStorage.createCurriculumBook(book);
-      }
-
-      async updateCurriculumBook(id: number, book: Partial<InsertCurriculumBook>): Promise<CurriculumBook | undefined> {
-        return this.dbStorage.updateCurriculumBook(id, book);
-      }
-
-      async deleteCurriculumBook(id: number): Promise<void> {
-        return this.dbStorage.deleteCurriculumBook(id);
-      }
-
-      async getStudentAssessmentById(id: number): Promise<StudentAssessment | undefined> {
-        return this.dbStorage.getStudentAssessmentById(id);
-      }
-
-      async getStudentAssessmentsByChildId(childId: number): Promise<StudentAssessment[]> {
-        return this.dbStorage.getStudentAssessmentsByChildId(childId);
-      }
-
-      async getStudentAssessmentsBySchoolId(schoolId: number, filters?: { locationId?: number; assessmentTypeId?: number; childId?: number }): Promise<StudentAssessment[]> {
-        return this.dbStorage.getStudentAssessmentsBySchoolId(schoolId, filters);
-      }
-
-      async createStudentAssessment(assessment: InsertStudentAssessment): Promise<StudentAssessment> {
-        return this.dbStorage.createStudentAssessment(assessment);
-      }
-
-      async updateStudentAssessment(id: number, assessment: Partial<InsertStudentAssessment>): Promise<StudentAssessment | undefined> {
-        return this.dbStorage.updateStudentAssessment(id, assessment);
-      }
-
-      async deleteStudentAssessment(id: number): Promise<void> {
-        return this.dbStorage.deleteStudentAssessment(id);
-      }
-
-      async upsertChildLexileProfile(childId: number, data: { readingGradeLevel?: string; lexileRange?: string; bookList?: string }): Promise<Child | undefined> {
-        return this.dbStorage.upsertChildLexileProfile(childId, data);
-      }
-
-      async insertLexileAssessmentWithProfile(childId: number, schoolId: number, assessmentTypeId: number, recordedBy: number, data: { readingGradeLevel?: string; lexileRange?: string; bookList?: string; notes?: string }): Promise<StudentAssessment> {
-        return this.dbStorage.insertLexileAssessmentWithProfile(childId, schoolId, assessmentTypeId, recordedBy, data);
-      }
-
-      async getChildrenForSchool(schoolId: number): Promise<Array<{ id: number; firstName: string; lastName: string; gradeLevel: string; currentLexileRange?: string | null; currentReadingGradeLevel?: string | null; currentBookList?: string | null }>> {
-        return this.dbStorage.getChildrenForSchool(schoolId);
-      }
-
-      async getLexileHistoryForChild(childId: number, assessmentTypeId: number): Promise<StudentAssessment[]> {
-        return this.dbStorage.getLexileHistoryForChild(childId, assessmentTypeId);
-      }
-
-      async recordLexileAssessment(childId: number, schoolId: number, recordedBy: number, data: { readingGradeLevel?: string; lexileRange?: string; bookList?: string; notes?: string }): Promise<StudentAssessment> {
-        return this.dbStorage.recordLexileAssessment(childId, schoolId, recordedBy, data);
-      }
-
-      async getLexileHistoryForChildBySchool(childId: number, schoolId: number): Promise<StudentAssessment[]> {
-        return this.dbStorage.getLexileHistoryForChildBySchool(childId, schoolId);
-      }
-
-      async fuzzyMatchStudentsForSchool(schoolId: number, rawName: string): Promise<Array<{ id: number; name: string; gradeLevel: string }>> {
-        return this.dbStorage.fuzzyMatchStudentsForSchool(schoolId, rawName);
-      }
-
-      async getChildByIdForSchool(childId: number, schoolId: number): Promise<Child | undefined> {
-        return this.dbStorage.getChildByIdForSchool(childId, schoolId);
-      }
-
-      // ==================== FUNDRAISER SYSTEM ====================
-      async getFundraiserCampaignById(id: number): Promise<FundraiserCampaign | undefined> {
-        return this.dbStorage.getFundraiserCampaignById(id);
-      }
-      async getFundraiserCampaignsBySchoolId(schoolId: number): Promise<FundraiserCampaign[]> {
-        return this.dbStorage.getFundraiserCampaignsBySchoolId(schoolId);
-      }
-      async getActiveFundraiserCampaignsBySchoolId(schoolId: number): Promise<FundraiserCampaign[]> {
-        return this.dbStorage.getActiveFundraiserCampaignsBySchoolId(schoolId);
-      }
-      async createFundraiserCampaign(campaign: InsertFundraiserCampaign): Promise<FundraiserCampaign> {
-        return this.dbStorage.createFundraiserCampaign(campaign);
-      }
-      async updateFundraiserCampaign(id: number, campaign: Partial<InsertFundraiserCampaign>): Promise<FundraiserCampaign | undefined> {
-        return this.dbStorage.updateFundraiserCampaign(id, campaign);
-      }
-      async deleteFundraiserCampaign(id: number): Promise<void> {
-        return this.dbStorage.deleteFundraiserCampaign(id);
-      }
-      async getFundraiserProductById(id: number): Promise<FundraiserProduct | undefined> {
-        return this.dbStorage.getFundraiserProductById(id);
-      }
-      async getFundraiserProductsByCampaignId(campaignId: number): Promise<FundraiserProduct[]> {
-        return this.dbStorage.getFundraiserProductsByCampaignId(campaignId);
-      }
-      async createFundraiserProduct(product: InsertFundraiserProduct): Promise<FundraiserProduct> {
-        return this.dbStorage.createFundraiserProduct(product);
-      }
-      async updateFundraiserProduct(id: number, product: Partial<InsertFundraiserProduct>): Promise<FundraiserProduct | undefined> {
-        return this.dbStorage.updateFundraiserProduct(id, product);
-      }
-      async deleteFundraiserProduct(id: number): Promise<void> {
-        return this.dbStorage.deleteFundraiserProduct(id);
-      }
-      async getFundraiserFamilyLinkById(id: number): Promise<FundraiserFamilyLink | undefined> {
-        return this.dbStorage.getFundraiserFamilyLinkById(id);
-      }
-      async getFundraiserFamilyLinkBySlug(campaignId: number, slug: string): Promise<FundraiserFamilyLink | undefined> {
-        return this.dbStorage.getFundraiserFamilyLinkBySlug(campaignId, slug);
-      }
-      async getFundraiserFamilyLinksByUserId(userId: number): Promise<FundraiserFamilyLink[]> {
-        return this.dbStorage.getFundraiserFamilyLinksByUserId(userId);
-      }
-      async getFundraiserFamilyLinksByCampaignId(campaignId: number): Promise<FundraiserFamilyLink[]> {
-        return this.dbStorage.getFundraiserFamilyLinksByCampaignId(campaignId);
-      }
-      async createFundraiserFamilyLink(link: InsertFundraiserFamilyLink): Promise<FundraiserFamilyLink> {
-        return this.dbStorage.createFundraiserFamilyLink(link);
-      }
-      async getOrCreateFundraiserFamilyLink(campaignId: number, userId: number, userName: string): Promise<FundraiserFamilyLink> {
-        return this.dbStorage.getOrCreateFundraiserFamilyLink(campaignId, userId, userName);
-      }
-      async getFundraiserOrderById(id: number): Promise<FundraiserOrder | undefined> {
-        return this.dbStorage.getFundraiserOrderById(id);
-      }
-      async getFundraiserOrdersByFamilyLinkId(familyLinkId: number): Promise<FundraiserOrder[]> {
-        return this.dbStorage.getFundraiserOrdersByFamilyLinkId(familyLinkId);
-      }
-      async getFundraiserOrdersByCampaignId(campaignId: number): Promise<FundraiserOrder[]> {
-        return this.dbStorage.getFundraiserOrdersByCampaignId(campaignId);
-      }
-      async getFundraiserOrderByStripeSessionId(sessionId: string): Promise<FundraiserOrder | undefined> {
-        return this.dbStorage.getFundraiserOrderByStripeSessionId(sessionId);
-      }
-      async createFundraiserOrder(order: InsertFundraiserOrder): Promise<FundraiserOrder> {
-        return this.dbStorage.createFundraiserOrder(order);
-      }
-      async updateFundraiserOrder(id: number, order: Partial<InsertFundraiserOrder>): Promise<FundraiserOrder | undefined> {
-        return this.dbStorage.updateFundraiserOrder(id, order);
-      }
-      async getFundraiserOrderItemsByOrderId(orderId: number): Promise<FundraiserOrderItem[]> {
-        return this.dbStorage.getFundraiserOrderItemsByOrderId(orderId);
-      }
-      async createFundraiserOrderItem(item: InsertFundraiserOrderItem): Promise<FundraiserOrderItem> {
-        return this.dbStorage.createFundraiserOrderItem(item);
-      }
-      async createFundraiserOrderItems(items: InsertFundraiserOrderItem[]): Promise<FundraiserOrderItem[]> {
-        return this.dbStorage.createFundraiserOrderItems(items);
-      }
-      
-      // Payment Reminder Log methods
-      async createPaymentReminderLog(log: InsertPaymentReminderLog): Promise<PaymentReminderLog> {
-        return this.dbStorage.createPaymentReminderLog(log);
-      }
-      async getPaymentReminderLogsBySchool(schoolId: number, limit: number = 100): Promise<PaymentReminderLog[]> {
-        return this.dbStorage.getPaymentReminderLogsBySchool(schoolId, limit);
-      }
-
-      // Schedule Builder methods
-      async getWeeklySkeletonsBySchool(schoolId: number): Promise<WeeklySkeleton[]> {
-        return this.dbStorage.getWeeklySkeletonsBySchool(schoolId);
-      }
-      async getWeeklySkeletonById(id: number): Promise<WeeklySkeleton | undefined> {
-        return this.dbStorage.getWeeklySkeletonById(id);
-      }
-      async createWeeklySkeleton(skeleton: InsertWeeklySkeleton): Promise<WeeklySkeleton> {
-        return this.dbStorage.createWeeklySkeleton(skeleton);
-      }
-      async updateWeeklySkeleton(id: number, skeleton: Partial<InsertWeeklySkeleton>): Promise<WeeklySkeleton | undefined> {
-        return this.dbStorage.updateWeeklySkeleton(id, skeleton);
-      }
-      async deleteWeeklySkeleton(id: number): Promise<void> {
-        return this.dbStorage.deleteWeeklySkeleton(id);
-      }
-      async getSkeletonBlocksBySkeletonId(skeletonId: number): Promise<SkeletonBlock[]> {
-        return this.dbStorage.getSkeletonBlocksBySkeletonId(skeletonId);
-      }
-      async getSkeletonBlockById(id: number): Promise<SkeletonBlock | undefined> {
-        return this.dbStorage.getSkeletonBlockById(id);
-      }
-      async createSkeletonBlock(block: InsertSkeletonBlock): Promise<SkeletonBlock> {
-        return this.dbStorage.createSkeletonBlock(block);
-      }
-      async updateSkeletonBlock(id: number, block: Partial<InsertSkeletonBlock>): Promise<SkeletonBlock | undefined> {
-        return this.dbStorage.updateSkeletonBlock(id, block);
-      }
-      async deleteSkeletonBlock(id: number): Promise<void> {
-        return this.dbStorage.deleteSkeletonBlock(id);
-      }
-      async reorderSkeletonBlocks(skeletonId: number, blockIds: number[]): Promise<void> {
-        return this.dbStorage.reorderSkeletonBlocks(skeletonId, blockIds);
-      }
-      async bulkReplaceSkeletonBlocks(skeletonId: number, blocks: Omit<InsertSkeletonBlock, 'skeletonId' | 'createdBy'>[], createdBy: number): Promise<SkeletonBlock[]> {
-        return this.dbStorage.bulkReplaceSkeletonBlocks(skeletonId, blocks, createdBy);
-      }
-      async getWeekPlansBySkeletonId(skeletonId: number): Promise<WeekPlan[]> {
-        return this.dbStorage.getWeekPlansBySkeletonId(skeletonId);
-      }
-      async getWeekPlanById(id: number): Promise<WeekPlan | undefined> {
-        return this.dbStorage.getWeekPlanById(id);
-      }
-      async getPublishedWeekPlansBySchool(schoolId: number): Promise<WeekPlan[]> {
-        return this.dbStorage.getPublishedWeekPlansBySchool(schoolId);
-      }
-      async createWeekPlan(plan: InsertWeekPlan): Promise<WeekPlan> {
-        return this.dbStorage.createWeekPlan(plan);
-      }
-      async updateWeekPlan(id: number, plan: Partial<InsertWeekPlan>): Promise<WeekPlan | undefined> {
-        return this.dbStorage.updateWeekPlan(id, plan);
-      }
-      async deleteWeekPlan(id: number): Promise<void> {
-        return this.dbStorage.deleteWeekPlan(id);
-      }
-      async cloneWeekPlan(sourceWeekPlanId: number, newWeekNumber: number, newStartDate: string, createdBy: number): Promise<WeekPlan> {
-        return this.dbStorage.cloneWeekPlan(sourceWeekPlanId, newWeekNumber, newStartDate, createdBy);
-      }
-      async getWeekPlanBlocksByWeekPlanId(weekPlanId: number): Promise<WeekPlanBlock[]> {
-        return this.dbStorage.getWeekPlanBlocksByWeekPlanId(weekPlanId);
-      }
-      async getWeekPlanBlockById(id: number): Promise<WeekPlanBlock | undefined> {
-        return this.dbStorage.getWeekPlanBlockById(id);
-      }
-      async createWeekPlanBlock(block: InsertWeekPlanBlock): Promise<WeekPlanBlock> {
-        return this.dbStorage.createWeekPlanBlock(block);
-      }
-      async updateWeekPlanBlock(id: number, block: Partial<InsertWeekPlanBlock>, updatedBy: number): Promise<WeekPlanBlock | undefined> {
-        return this.dbStorage.updateWeekPlanBlock(id, block, updatedBy);
-      }
-      async deleteWeekPlanBlock(id: number): Promise<void> {
-        return this.dbStorage.deleteWeekPlanBlock(id);
-      }
-      async markBlockCompleted(id: number, completedBy: number): Promise<WeekPlanBlock | undefined> {
-        return this.dbStorage.markBlockCompleted(id, completedBy);
-      }
-      async bulkUpdateWeekPlanBlocks(weekPlanId: number, updates: { dayOfWeek: number; startTime: string; data: Partial<InsertWeekPlanBlock> }[], updatedBy: number): Promise<void> {
-        return this.dbStorage.bulkUpdateWeekPlanBlocks(weekPlanId, updates, updatedBy);
-      }
-      async getBlockHistory(blockId: number): Promise<WeekPlanBlockHistory[]> {
-        return this.dbStorage.getBlockHistory(blockId);
-      }
-
-      // Retention Report
-      async getEnrollmentFamiliesByPeriod(schoolId: number, startDate: string, endDate: string): Promise<{ parentEmail: string; parentId: number; childName: string; className: string }[]> {
-        return this.dbStorage.getEnrollmentFamiliesByPeriod(schoolId, startDate, endDate);
-      }
-
-      // Email Log
-      async createEmailLog(data: InsertEmailLog): Promise<EmailLog> {
-        return this.dbStorage.createEmailLog(data);
-      }
-      async getEmailLogs(limit: number = 200): Promise<EmailLog[]> {
-        return this.dbStorage.getEmailLogs(limit);
+      // Database initialization methods
+      async initializeNotifications(): Promise<void> {
+        return this.dbStorage.initializeNotifications();
       }
 
       // Clear all data from storage (for testing)

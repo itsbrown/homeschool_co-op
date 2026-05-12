@@ -78,6 +78,8 @@ Production/staging containers should define at minimum (names only; rotate secre
 | `ENABLE_BACKGROUND_JOBS` | In **`development`**, background jobs run **by default**; this flag is ignored there. In **production/staging** (any `NODE_ENV` other than `development`/`test`), when **truthy**, starts in-process jobs (reminders, membership, backups, AutoPay reconciliation) on this process. Set **only on one worker**; leave unset/false on web/API replicas. See §10. |
 | `BACKGROUND_JOBS_ROLE` | Optional label for startup logs (`singleton` vs `local-dev`) to document deployment intent; does not change behavior. |
 | `AUTOPAY_RECONCILIATION_INTERVAL_MS` | Optional. Reconciliation tick interval in ms, resolved **once at process start** when `scheduled-payment-reminders` loads. Must be ≥ **60000** or value is ignored and the default (**1 hour**) is used. |
+| `AUTOPAY_OFF_SESSION_CHARGES` | When **truthy** on the same singleton process as `ENABLE_BACKGROUND_JOBS`, the worker may create **off-session** `PaymentIntent`s for due installments (saved default card + `stripe_customer_id`). **Leave unset/false** until Stripe metadata and parent saved-card flows are verified; web/API replicas should never set this. |
+| `AUTOPAY_REQUIRE_METADATA_AUTO_PAY` | When **truthy**, off-session charges (see `AUTOPAY_OFF_SESSION_CHARGES`) run only for scheduled rows whose JSON `metadata.autoPay` is **`true`**. Installment rows created by `server/services/stripe-payment-plans.ts` set this flag; leave unset in environments where any due pending row may be charged. |
 
 Optional / feature-specific: `SUPABASE_ANON_KEY`, `BREVO_API_KEY`, Twilio-related vars, `OPENAI_API_KEY`, `REPLIT_*` for Replit-hosted Stripe connectors.
 
@@ -101,9 +103,10 @@ Current runtime behavior:
 - `production` / `staging`: any `NODE_ENV` other than `development` or `test` follows the production path — background jobs are **off unless** `ENABLE_BACKGROUND_JOBS=true` (e.g. `staging` and `production` both require the explicit opt-in).
 - Optional: set `BACKGROUND_JOBS_ROLE=singleton` for clearer startup logs and deployment intent.
 
-Background work started when enabled includes: backup rotation, membership status job, enrollment payment reminders, **scheduled payment email reminders (~6h)** and **AutoPay stuck-`processing` reconciliation against Stripe** (default **~1h** tick; override with `AUTOPAY_RECONCILIATION_INTERVAL_MS`) — see `server/services/scheduled-payment-reminders.ts` (`reconcileStuckAutoPayProcessingAttempts` via `runAutoPayStuckProcessingReconciliation`). Reconciliation does **not** run on web replicas when `ENABLE_BACKGROUND_JOBS` is unset; it runs only in-process with the singleton worker that enables it.
+Background work started when enabled includes: backup rotation, membership status job, enrollment payment reminders, **scheduled payment email reminders (~6h)** and **AutoPay stuck-`processing` reconciliation against Stripe** (default **~1h** tick; override with `AUTOPAY_RECONCILIATION_INTERVAL_MS`) — see `server/services/scheduled-payment-reminders.ts` (`reconcileStuckAutoPayProcessingAttempts` via `runAutoPayStuckProcessingReconciliation`). When `AUTOPAY_OFF_SESSION_CHARGES` is truthy on that same process, the worker may also create **off-session** installment `PaymentIntent`s for due rows (see §8). Reconciliation does **not** run on web replicas when `ENABLE_BACKGROUND_JOBS` is unset; it runs only in-process with the singleton worker that enables it.
 
 **Graceful shutdown:** platforms that send **SIGTERM** on drain stop interval-backed background work in `server/index.ts` (backups, membership job, enrollment reminders, scheduled-payment timers). **SIGINT** is not overridden so local Ctrl+C behavior stays normal.
+
 Operational choices:
 
 1. Run a **designated singleton** (Reserved VM / single worker dyno / one Replit Scheduled Deployment) whose job includes calling your reminder-processing entry points on a cron, **or**
@@ -116,6 +119,7 @@ Quick deploy checklist for singleton mode:
 - Exactly one worker replica: set `ENABLE_BACKGROUND_JOBS=true`.
 - Keep the same `DATABASE_URL` and mail provider creds on the worker.
 - Verify startup logs include `Starting background services (role=...)` on worker and `Background jobs disabled for this process` on web replicas.
+
 ## 11) Code map (quick audit)
 
 | Area | Location |
@@ -123,5 +127,32 @@ Quick deploy checklist for singleton mode:
 | Raw webhook route + Stripe signature | `server/index.ts` (`POST /api/stripe/webhook`), `server/webhook-handler.ts` |
 | Stripe routes (PaymentIntents, checkout-adjacent) | `server/api/stripe.ts`, `server/api/billing.ts`, `server/api/stripe-webhook.ts` |
 | Scheduled payment HTTP API | `server/api/scheduled-payments.ts` |
-| Scheduled payment reminders + AutoPay reconciliation scheduler | `server/services/scheduled-payment-reminders.ts` (hourly stuck-`processing` vs Stripe, 6h email reminders); core logic `server/services/autopay-reconciliation.ts` |
+| Scheduled payment reminders + AutoPay reconciliation scheduler | `server/services/scheduled-payment-reminders.ts` (hourly stuck-`processing` vs Stripe, 6h email reminders); core logic `server/services/autopay-reconciliation.ts`; off-session charges `server/services/autopay-off-session-charge.ts` |
+| Scheduled PaymentIntent metadata helper | `server/lib/scheduled-payment-intent-metadata.ts` |
 | Stored payments / idempotency lookup | `server/storage.ts`, webhook handler `getPaymentByStripeId`-style guards |
+
+### Scheduled-installment flow (how pieces connect)
+
+**Email / due selection (same module):** `server/services/scheduled-payment-reminders.ts`
+
+- **Reminders:** `processScheduledPaymentReminders()` — pending/overdue rows, cadence (7d / 3d / 1d / due / overdue), updates `reminderCount` and may set status `overdue`.
+- **Autopay policy path:** `processAutoPayExecutionPath()` — loads due candidates via `getDueAutoPayCandidates` (DB query from `queryDueScheduledPayments` + Drizzle on `scheduled_payments`), applies `evaluateAutoPayPolicy` from `autopay-policy.ts`, optional skip/cancel (e.g. credit-covered), pre-charge / skip notifications (`autopay-notifications.ts`), returns `AutoPayExecutionResult[]` (`process` vs `skip`). The 6h tick logs processable vs skipped counts; when `AUTOPAY_OFF_SESSION_CHARGES` is truthy on the singleton worker, `runAutoPayOffSessionChargesForResults()` in `autopay-off-session-charge.ts` may create off-session `PaymentIntent`s for `action: 'process'` rows (see §12).
+- **Stuck `processing`:** `runAutoPayStuckProcessingReconciliation()` → `reconcileStuckAutoPayProcessingAttempts` in `autopay-reconciliation.ts` (maps Stripe PI status vs DB). Ledger backfill when Stripe shows success but no payment row is handled in `scheduled-payment-reminders.ts` (retrieve PI, side effects).
+
+**Reconciliation core:** `server/services/autopay-reconciliation.ts` — `mapStripePaymentIntentStatusString`, `buildAutoPayReconciliationCriteria`, `reconcileStuckAutoPayProcessingAttempts`.
+
+**Parent-initiated scheduled pay (client secret path):** `server/api/scheduled-payments.ts` — e.g. POST flow that `paymentIntents.create` with `automatic_payment_methods`, metadata includes `type: 'scheduled_payment'` (webhook also accepts `paymentType`).
+
+**Worker off-session autopay:** `server/services/autopay-off-session-charge.ts` — after `processAutoPayExecutionPath` results, may call `paymentIntents.create` with `confirm: true`, `off_session: true`, `autoPayInitiated: true`, and Stripe idempotency keys. **Centralize metadata** via `server/lib/scheduled-payment-intent-metadata.ts` (`buildScheduledPaymentIntentMetadata`) so `server/webhook-handler.ts` `scheduled_payment` branch stays aligned (`scheduledPaymentId`, `parentEmail`, `userId`, installments, credits/holds, `enrollmentIds`, etc.).
+
+**Other `paymentIntents.create` call sites** (`billing.ts`, `stripe.ts`, `stripe-payment-plans.ts`, `routes.ts`) are for balance/cart/plan flows; they are not the scheduled-installment webhook path unless they adopt the same metadata contract.
+
+**Enrollment id resolution:** `resolveEnrollmentIdsForScheduledRow` lives inline in `scheduled-payment-reminders.ts` (same role a shared `resolveEnrollmentIdsFromScheduledRow` helper would serve).
+
+## 12) Autopay scheduler internals (operator view)
+
+- **Due selection (what becomes “processable”):** `server/services/scheduled-payment-reminders.ts` → `processAutoPayExecutionPath()` loads due `scheduled_payments` via Drizzle (`status IN (pending, overdue)`, within a 14‑day window) and applies policy guards (retry cap, stale due dates, zero/credit‑covered balances). Rows exit as `action: 'process'` or are terminal‑skipped and optionally cancelled.
+- **Off-session charges (how cards are charged):** When the singleton worker has `ENABLE_BACKGROUND_JOBS=true` and `AUTOPAY_OFF_SESSION_CHARGES=true`, `runAutoPayOffSessionChargesForResults()` creates **off-session** Stripe `PaymentIntent`s for `action: 'process'` rows using the parent’s `stripeCustomerId` + default card; metadata is built by `buildScheduledPaymentIntentMetadata()` so the webhook’s `scheduled_payment` branch can resolve the same installment.
+- **Webhook commit path (how success lands in the DB):** In `server/webhook-handler.ts` under `payment_intent.succeeded` with `paymentType === 'scheduled_payment'`, the handler marks the `scheduled_payments` row `completed`, consumes/finalizes any credits, splits the installment amount across all resolved `enrollmentIds`, updates each enrollment’s `totalPaid` / `remainingBalance`, writes a `payments` history row, and emits a receipt + real-time billing update.
+- **Reconciliation + stuck processing (auto-heal for missed webhooks):** `runAutoPayStuckProcessingReconciliation()` in `scheduled-payment-reminders.ts` queries `processing` rows older than `AUTOPAY_PROCESSING_STUCK_MINUTES` and, via `reconcileStuckAutoPayProcessingAttempts()`, compares them to Stripe’s `PaymentIntent.status` — completed rows are marked `completed` and, if no payment history exists, a ledger backfill mirrors the webhook split logic; other statuses either stay `processing`, move back to `pending` for retry, or end in `failed` after exhaustively hitting the retry cap.
+- **Opt-in gating for autopay (`AUTOPAY_REQUIRE_METADATA_AUTO_PAY`):** When this env is truthy on the worker, off-session charges only run for `scheduled_payments` rows whose JSON `metadata.autoPay === true` (set by the payment‑plan writer). Due rows without this flag are logged/telemetered as `autopay_off_session_charges_total{charge_outcome="skipped", charge_reason="metadata_opt_in"}` and are never charged automatically, but they still appear in due/reminder views for manual follow‑up. Application code may also use `filterAutoPayCandidatesByMetadata()` in `autopay-policy.ts` for tests or auxiliary tooling that mirrors the same rule.

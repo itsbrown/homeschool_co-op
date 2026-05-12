@@ -31,12 +31,10 @@ export default function PaymentSuccess() {
       });
     }
 
-    // Invalidate queries to refresh billing data via the centralized helper
-    // (covers billing-summary, payment-history, scheduled-payments and more).
+    // Invalidate queries to refresh billing data
     refreshPostPaymentState(queryClient).catch((error) => {
       console.error('Failed to refresh post-payment state:', error);
     });
-    queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments/upcoming'] });
     
     setIsLoading(false);
   }, [searchParams]);

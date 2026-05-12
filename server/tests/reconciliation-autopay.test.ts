@@ -13,6 +13,8 @@ describe("autopay reconciliation", () => {
     expect(mapStripePaymentIntentStatusString("processing")).toBe("processing");
     expect(mapStripePaymentIntentStatusString("requires_capture")).toBe("processing");
     expect(mapStripePaymentIntentStatusString("canceled")).toBe("canceled");
+    expect(mapStripePaymentIntentStatusString("requires_confirmation")).toBe("requires_confirmation");
+    expect(mapStripePaymentIntentStatusString("requires_action")).toBe("requires_action");
     expect(mapStripePaymentIntentStatusString("unknown_future_status")).toBe("requires_payment_method");
   });
 
@@ -159,5 +161,56 @@ describe("autopay reconciliation", () => {
 
     expect(result).toEqual([{ paymentId: 21, action: "completed_from_stripe_truth" }]);
     expect(repository.markScheduledPaymentCompleted).toHaveBeenCalledWith(21, expect.any(Date));
+  });
+
+  it("leaves in-database processing rows alone when Stripe still reports processing", async () => {
+    const repository = {
+      queryProcessingScheduledPayments: jest.fn(async () => [
+        { id: 30, amount: 1000, status: "processing", retryCount: 0, stripePaymentIntentId: "pi_processing" },
+      ]),
+      markScheduledPaymentCompleted: jest.fn(async () => undefined),
+      markScheduledPaymentFailed: jest.fn(async () => undefined),
+      markScheduledPaymentPending: jest.fn(async () => undefined),
+    };
+    const stripeGateway = {
+      getPaymentIntentStatus: jest.fn(async () => "processing" as const),
+    };
+
+    const result = await reconcileStuckAutoPayProcessingAttempts(
+      repository,
+      stripeGateway,
+      new Date("2026-05-08T12:00:00.000Z"),
+    );
+
+    expect(result).toEqual([{ paymentId: 30, action: "left_processing" }]);
+    expect(repository.markScheduledPaymentCompleted).not.toHaveBeenCalled();
+    expect(repository.markScheduledPaymentFailed).not.toHaveBeenCalled();
+    expect(repository.markScheduledPaymentPending).not.toHaveBeenCalled();
+  });
+
+  it("moves requires_confirmation Stripe truth back to pending with a bounded reason label", async () => {
+    const repository = {
+      queryProcessingScheduledPayments: jest.fn(async () => [
+        { id: 31, amount: 1000, status: "processing", retryCount: 0, stripePaymentIntentId: "pi_confirm" },
+      ]),
+      markScheduledPaymentCompleted: jest.fn(async () => undefined),
+      markScheduledPaymentFailed: jest.fn(async () => undefined),
+      markScheduledPaymentPending: jest.fn(async () => undefined),
+    };
+    const stripeGateway = {
+      getPaymentIntentStatus: jest.fn(async () => "requires_confirmation" as const),
+    };
+
+    const result = await reconcileStuckAutoPayProcessingAttempts(
+      repository,
+      stripeGateway,
+      new Date("2026-05-08T12:00:00.000Z"),
+    );
+
+    expect(result).toEqual([{ paymentId: 31, action: "moved_to_pending_for_retry" }]);
+    expect(repository.markScheduledPaymentPending).toHaveBeenCalledWith(31, {
+      reason: "stripe_requires_confirmation",
+      retryCount: 1,
+    });
   });
 });

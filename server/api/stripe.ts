@@ -6,14 +6,6 @@ import { supabaseAuth } from '../middleware/supabase-auth';
 import { requireSchoolContext } from '../middleware/require-school-context';
 import { getStripeClient, getStripePublishableKey } from '../config/stripe';
 import { calculateMembershipDiscount } from '../utils/membership';
-import { calculateCartPricing, CartItem, CartPricingResult, deriveSchoolIdFromCart, SchoolIdResult } from '../utils/cart-pricing';
-import { CurrencyUtils } from '@shared/currency-utils';
-import { isActiveMembership, VALID_PAID_MEMBERSHIP_STATUSES, computeEffectiveBalance } from '@shared/schema';
-import {
-  verifyTrustedSnapshot,
-  type CachedSnapshot,
-  type TrustRejectionReason,
-} from '../lib/snapshotTrustCache';
 import { calculateCanonicalAmounts } from '../services/canonical-amount-calculator';
 
 const router = Router();
@@ -42,28 +34,7 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
     
     console.log('💳 Creating payment intent for authenticated user:', userEmail);
 
-    const { items, subtotal, discounts, total, parentEmail, paymentPlan = 'full', paymentFrequency = 'one_time', membership, promoCode, creditsToApply = 0, expectedSchedule, trustedSnapshotId, cartItemFingerprint } = req.body;
-    
-    // DETAILED REQUEST LOGGING for debugging production issues (PII redacted)
-    const checkoutRequestId = `checkout_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
-    console.log(`🔍 [${checkoutRequestId}] CHECKOUT REQUEST START ==================`);
-    console.log(`🔍 [${checkoutRequestId}] User: ${userEmail}`);
-    console.log(`🔍 [${checkoutRequestId}] Request summary:`, JSON.stringify({
-      itemsCount: items?.length || 0,
-      itemIds: items?.map((i: any) => ({ classId: i.classId, childId: i.childId, variantId: i.variantId })),
-      subtotal,
-      total,
-      paymentPlan,
-      paymentFrequency,
-      hasMembership: !!(membership?.amount > 0),
-      membershipAmount: membership?.amount || 0,
-      hasPromoCode: !!promoCode,
-      creditsToApply
-    }, null, 2));
-    
-    // Log received promo code for debugging
-    console.log('🎟️ Received promoCode from client:', promoCode);
-    console.log('💰 Received creditsToApply from client:', creditsToApply);
+    const { items, subtotal, discounts, total, parentEmail, paymentPlan = 'full', paymentFrequency = 'one_time', membership } = req.body;
 
     // Validate required fields - either items OR membership must be present
     const hasItems = items && Array.isArray(items) && items.length > 0;
@@ -92,238 +63,6 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
       });
     }
 
-    // Server-calculated totals - AUTHORITATIVE values to be used for payment
-    // These will be populated from database lookups, not client-sent values
-    let authoritativeItemTotal = 0;
-    let authoritativeMembershipAmount = 0;
-    
-    // Store cart pricing result at handler level so it can be accessed for discount snapshot building
-    let cartPricingResult: Awaited<ReturnType<typeof calculateCartPricing>> | undefined;
-    
-    // MEMBERSHIP VALIDATION: Look up authoritative membership fee from parent's school
-    // This runs ALWAYS (even for membership-only checkouts) to ensure server-side validation
-    // Do NOT trust client-sent membership - derive from authenticated user's school
-    // ALSO calculate applicable discounts to allow discounted payments
-    const parentForMembership = await storage.getUserByEmail(userEmail);
-    let authoritativeMembershipFull = 0; // Full price before discounts
-    let authoritativeMembershipDiscounted = 0; // Price after discounts (may equal full)
-    
-    // Calculate membership amounts whenever:
-    // 1. Membership is required by school (even if client didn't include it)
-    // 2. Client is claiming to pay membership (even if optional)
-    const clientClaimsMembership = (membership?.amount || 0) > 0;
-    
-    // Derive schoolId from cart items if user doesn't have one set (with strict validation)
-    let effectiveSchoolIdForPayment = parentForMembership?.schoolId || null;
-    if (!effectiveSchoolIdForPayment && hasItems) {
-      console.log(`🏫 User ${userEmail} has no schoolId, deriving from cart items for payment...`);
-      const earlyCartItems: CartItem[] = items.map((item: any) => ({
-        id: item.id || `${item.classId}-${item.childId}`,
-        classId: item.classId,
-        childId: item.childId,
-        childName: item.childName || '',
-        variantId: item.variantId
-      }));
-      const derivedResult = await deriveSchoolIdFromCart(earlyCartItems, { strict: true }) as SchoolIdResult;
-      if (derivedResult.error) {
-        console.error(`🚫 Payment creation rejected: ${derivedResult.error}`, { userEmail, error: derivedResult.errorMessage });
-        return res.status(400).json({
-          message: derivedResult.errorMessage || 'Unable to process cart',
-          error: derivedResult.error
-        });
-      }
-      effectiveSchoolIdForPayment = derivedResult.schoolId;
-      if (effectiveSchoolIdForPayment) {
-        console.log(`🏫 Derived schoolId ${effectiveSchoolIdForPayment} from cart items for payment`);
-      }
-    }
-    
-    if (effectiveSchoolIdForPayment) {
-      const schoolForMembership = await storage.getSchool(effectiveSchoolIdForPayment);
-      const membershipRequired = schoolForMembership?.membershipRequired || false;
-      
-      // Calculate amounts if membership is required OR if client wants to purchase
-      if (membershipRequired || clientClaimsMembership) {
-        // Check if parent already has active membership for this year at THIS school
-        const existingMemberships = parentForMembership ? await storage.getMembershipEnrollmentsByParentId(parentForMembership.id) : [];
-        const currentYear = new Date().getFullYear();
-        
-        // Filter for memberships at the same school with valid paid status
-        // Allow current year OR next year to handle academic year memberships (e.g., 2025-2026 school year stored as "2026")
-        // Use shared isActiveMembership() helper for consistent status checking
-        const activeMembershipForThisSchool = existingMemberships?.find((m: any) => 
-          (m.membershipYear === currentYear || m.membershipYear === currentYear + 1) && 
-          isActiveMembership(m.status) &&
-          m.schoolId === effectiveSchoolIdForPayment
-        );
-        const hasActiveMembership = !!activeMembershipForThisSchool;
-        
-        console.log('🎫 Active membership check:', {
-          parentId: parentForMembership?.id,
-          schoolId: effectiveSchoolIdForPayment,
-          currentYear,
-          allowedYears: [currentYear, currentYear + 1],
-          validPaidStatuses: VALID_PAID_MEMBERSHIP_STATUSES,
-          totalMemberships: existingMemberships?.length || 0,
-          membershipsData: existingMemberships?.map((m: any) => ({
-            id: m.id,
-            schoolId: m.schoolId,
-            membershipYear: m.membershipYear,
-            status: m.status,
-            statusRecognized: isActiveMembership(m.status)
-          })),
-          hasActiveMembership,
-          activeMembershipFound: activeMembershipForThisSchool ? {
-            id: activeMembershipForThisSchool.id,
-            year: activeMembershipForThisSchool.membershipYear,
-            status: activeMembershipForThisSchool.status
-          } : null,
-          userEmail
-        });
-        
-        // Only calculate fee if not already paid
-        if (!hasActiveMembership) {
-          // Check if fee is configured
-          if (!schoolForMembership?.membershipFeeAmount || schoolForMembership.membershipFeeAmount <= 0) {
-            // Only error if required - optional memberships without fee config are just skipped
-            if (membershipRequired) {
-              console.error('🚨 PAYMENT VALIDATION FAILED: Membership required but fee not configured', {
-                schoolId: effectiveSchoolIdForPayment,
-                membershipRequired: true,
-                membershipFeeAmount: schoolForMembership?.membershipFeeAmount,
-                userEmail
-              });
-              return res.status(400).json({
-                message: 'Membership fee configuration error. Please contact the school administrator.',
-                error: 'MEMBERSHIP_FEE_NOT_CONFIGURED'
-              });
-            } else if (clientClaimsMembership) {
-              // Client claims membership but school has no fee configured
-              console.error('🚨 PAYMENT VALIDATION FAILED: Client claims membership but school has no fee', {
-                schoolId: effectiveSchoolIdForPayment,
-                clientClaimedAmount: membership?.amount,
-                userEmail
-              });
-              return res.status(400).json({
-                message: 'This school does not have a membership fee configured.',
-                error: 'NO_MEMBERSHIP_FEE'
-              });
-            }
-          } else {
-            authoritativeMembershipFull = schoolForMembership.membershipFeeAmount;
-            
-            // Calculate applicable discounts server-side
-            const discountResult = await calculateMembershipDiscount(
-              effectiveSchoolIdForPayment,
-              parentForMembership?.id || 0,
-              schoolForMembership.membershipFeeAmount
-            );
-            authoritativeMembershipDiscounted = discountResult.finalAmount;
-            
-            console.log('🎫 Membership discount calculation:', {
-              fullAmount: authoritativeMembershipFull,
-              discountedAmount: authoritativeMembershipDiscounted,
-              discountApplied: discountResult.appliedDiscounts.length > 0,
-              membershipRequired,
-              clientClaimsMembership,
-              userEmail
-            });
-          }
-        } else if (clientClaimsMembership) {
-          // Client claims membership but already has active one - this is invalid
-          console.warn('⚠️ Client claims membership but already has active membership', {
-            userEmail,
-            clientClaimedAmount: membership?.amount
-          });
-          // Don't error - just ignore the claim and set authoritative to 0
-          authoritativeMembershipFull = 0;
-          authoritativeMembershipDiscounted = 0;
-        }
-      }
-    }
-    
-    // Determine which authoritative amount to use based on what client is paying
-    // Client can pay EITHER full price OR discounted price (both are valid)
-    // Special case: discounted to $0 is also valid when authoritativeMembershipDiscounted === 0
-    const clientMembershipClaim = membership?.amount ?? -1; // Use -1 to distinguish "no membership sent" from "amount=0 sent"
-    const clientSentMembershipPayload = membership !== null && membership !== undefined;
-    
-    if (clientMembershipClaim > 0) {
-      // Client is claiming to pay membership - validate it matches either valid amount
-      if (clientMembershipClaim === authoritativeMembershipFull) {
-        authoritativeMembershipAmount = authoritativeMembershipFull;
-      } else if (clientMembershipClaim === authoritativeMembershipDiscounted) {
-        authoritativeMembershipAmount = authoritativeMembershipDiscounted;
-      } else {
-        // Client amount doesn't match either valid option - return 409 with authoritative values
-        console.error('🚨 PAYMENT VALIDATION FAILED: Membership amount mismatch', {
-          clientMembershipClaim,
-          authoritativeMembershipFull,
-          authoritativeMembershipDiscounted,
-          userEmail
-        });
-        // Get school name for membership payload construction
-        const schoolForError = await storage.getSchool(effectiveSchoolIdForPayment || 0);
-        return res.status(409).json({
-          message: 'Membership fee amount does not match expected amount. Cart will be refreshed automatically.',
-          error: 'MEMBERSHIP_AMOUNT_MISMATCH',
-          authoritative: {
-            itemsTotal: 0, // Items haven't been validated yet
-            membershipAmount: authoritativeMembershipDiscounted,
-            membershipAlreadyPaid: false, // If we're in mismatch, it means membership is required and not paid
-            membershipRequired: true,
-            membershipSchoolId: effectiveSchoolIdForPayment,
-            membershipSchoolName: schoolForError?.name || 'School',
-            membershipYear: new Date().getFullYear(),
-            membershipFull: authoritativeMembershipFull,
-            grandTotal: authoritativeMembershipDiscounted,
-            discounts: null,
-            schoolSettings: null
-          }
-        });
-      }
-    } else if (clientMembershipClaim === 0 && clientSentMembershipPayload && authoritativeMembershipDiscounted === 0) {
-      // Client sent membership with amount=0, and server confirms discounted amount is $0
-      // This is a valid fully-discounted membership - accept it
-      console.log('✅ Accepting $0 discounted membership:', {
-        clientMembershipClaim,
-        authoritativeMembershipDiscounted,
-        authoritativeMembershipFull,
-        userEmail
-      });
-      authoritativeMembershipAmount = 0;
-    } else if (authoritativeMembershipFull > 0 && authoritativeMembershipDiscounted > 0) {
-      // Membership is required with a cost but client didn't include it or sent wrong amount
-      // Set to discounted amount (what they should pay)
-      authoritativeMembershipAmount = authoritativeMembershipDiscounted;
-    } else if (authoritativeMembershipFull > 0 && authoritativeMembershipDiscounted === 0 && !clientSentMembershipPayload) {
-      // Membership required but discounted to $0, client didn't send payload
-      // Accept this as valid since user owes nothing
-      console.log('✅ Membership fully discounted, no payload needed:', {
-        authoritativeMembershipFull,
-        authoritativeMembershipDiscounted,
-        userEmail
-      });
-      authoritativeMembershipAmount = 0;
-    }
-    
-    console.log('🎫 Authoritative membership amount calculated:', {
-      authoritativeMembershipAmount,
-      authoritativeMembershipFull,
-      authoritativeMembershipDiscounted,
-      clientSentMembership: clientMembershipClaim,
-      userEmail
-    });
-    
-    // Trust-path state — populated inside the `if (hasItems)` block when the
-    // client supplies a valid `trustedSnapshotId` issued by /api/cart/snapshot.
-    // When `useTrustedSnapshot` is true, the strict cart-vs-DB validation
-    // block further down is skipped (items pricing only — membership amount
-    // is always freshly recomputed regardless of trust path).
-    let useTrustedSnapshot = false;
-    let trustedSnapshot: CachedSnapshot | null = null;
-    let trustRejectionReason: TrustRejectionReason | null = null;
-
     // Fetch children for validation and later use (only if there are items)
     let children: any[] = [];
     if (hasItems) {
@@ -337,557 +76,7 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
           error: 'UNAUTHORIZED_CHILDREN'
         });
       }
-      
-      // SERVER-SIDE TOTAL VALIDATION: Look up ACTUAL prices from database
-      // Do NOT trust client-sent totalCost - they can be manipulated
-      let serverCalculatedItemTotal = 0;
-      const pricingMismatches: Array<{ classId: number; variantId: string | null; clientPrice: number; serverPrice: number }> = [];
-      
-      for (const item of items) {
-        const classData = await storage.getClassById(item.classId);
-        if (!classData) {
-          console.error('🚨 Class not found in database:', item.classId);
-          return res.status(400).json({
-            message: 'One or more classes in your cart are no longer available.',
-            error: 'CLASS_NOT_FOUND'
-          });
-        }
-        
-        // Get authoritative price from database
-        // Check if class uses variant pricing (has variants in schedule)
-        let authoritativePrice = 0;
-        let isVariantPricedClass = false;
-        let variantFound = false;
-        
-        if (classData.schedule) {
-          try {
-            const schedule = typeof classData.schedule === 'string' 
-              ? JSON.parse(classData.schedule) 
-              : classData.schedule;
-            
-            if (schedule.variants && Array.isArray(schedule.variants) && schedule.variants.length > 0) {
-              isVariantPricedClass = true;
-              
-              if (item.variantId) {
-                // Client provided a variantId - validate it
-                const variant = schedule.variants.find((v: any) => v.id === item.variantId);
-                if (variant && typeof variant.price === 'number') {
-                  authoritativePrice = variant.price;
-                  variantFound = true;
-                }
-              } else {
-                // LEGACY SUPPORT: Enrollment has no variantId but class has variants
-                // First, try to find default-variant
-                const defaultVariant = schedule.variants.find((v: any) => v.id === 'default-variant');
-                if (defaultVariant && typeof defaultVariant.price === 'number') {
-                  authoritativePrice = defaultVariant.price;
-                  variantFound = true;
-                  console.log('🔄 Legacy enrollment: defaulting to default-variant price', {
-                    classId: item.classId,
-                    variantPrice: defaultVariant.price,
-                    variantName: defaultVariant.name
-                  });
-                } else if (schedule.variants[0] && typeof schedule.variants[0].price === 'number') {
-                  // Fall back to first variant if no default-variant exists
-                  authoritativePrice = schedule.variants[0].price;
-                  variantFound = true;
-                  console.log('🔄 Legacy enrollment: defaulting to first variant price', {
-                    classId: item.classId,
-                    variantId: schedule.variants[0].id,
-                    variantPrice: schedule.variants[0].price,
-                    variantName: schedule.variants[0].name
-                  });
-                }
-              }
-            }
-          } catch (e) {
-            console.warn('⚠️ Failed to parse class schedule:', {
-              classId: item.classId,
-              error: e
-            });
-          }
-        }
-        
-        // For variant-priced classes, REQUIRE a valid variant match - don't fall back to base price
-        if (isVariantPricedClass && !variantFound) {
-          console.error('🚨 PAYMENT VALIDATION FAILED: Invalid or missing variant for variant-priced class', {
-            classId: item.classId,
-            clientVariantId: item.variantId,
-            className: classData.title,
-            userEmail
-          });
-          return res.status(400).json({
-            message: 'Invalid class variant selected. Please refresh your cart and select a valid time slot.',
-            error: 'INVALID_VARIANT'
-          });
-        }
-        
-        // Only use base class price if it's NOT a variant-priced class
-        if (!isVariantPricedClass) {
-          authoritativePrice = classData.price || 0;
-        }
-        
-        // CRITICAL: Reject if authoritative price is 0 or undefined for any class
-        // This prevents zero-priced enrollments from slipping through
-        if (authoritativePrice <= 0) {
-          console.error('🚨 PAYMENT VALIDATION FAILED: Class has no valid price in database', {
-            classId: item.classId,
-            isVariantPricedClass,
-            variantId: item.variantId,
-            className: classData.title,
-            basePriceInDb: classData.price,
-            userEmail
-          });
-          return res.status(400).json({
-            message: 'Unable to process payment. Class pricing is not configured correctly. Please contact support.',
-            error: 'INVALID_CLASS_PRICE'
-          });
-        }
-        
-        const clientSentPrice = item.totalCost || item.price || 0;
-        
-        // Log mismatches for investigation
-        const priceDifference = Math.abs(clientSentPrice - authoritativePrice);
-        const priceDiscrepancyPercent = authoritativePrice > 0 
-          ? (priceDifference / authoritativePrice) * 100 
-          : (clientSentPrice > 0 ? 100 : 0);
-        
-        if (priceDiscrepancyPercent > 5) {
-          pricingMismatches.push({
-            classId: item.classId,
-            variantId: item.variantId || null,
-            clientPrice: clientSentPrice,
-            serverPrice: authoritativePrice
-          });
-        }
-        
-        // Use the DATABASE price, not client-sent price
-        serverCalculatedItemTotal += authoritativePrice;
-      }
-      
-      // Log pricing mismatches for investigation
-      if (pricingMismatches.length > 0) {
-        console.warn('⚠️ PRICING AUDIT: Client prices differ from database', {
-          mismatches: pricingMismatches,
-          userEmail,
-          note: 'Using database prices for validation - client prices logged for audit'
-        });
-      }
-      
-      // ================================================================
-      // SERVER-SIDE DISCOUNT CALCULATION - Use cart-pricing utility
-      // This calculates ALL applicable discounts (promo codes, auto-apply, 
-      // sibling discounts, free-after-threshold) on the server side
-      // ================================================================
-      
-      // Validate remainingBalance for existing enrollments (server-authoritative).
-      // CRITICAL: This value drives what the parent gets charged. Always use the
-      // DB-generated effective_balance column (total_cost - total_paid - COALESCE(comp_amount_cents, 0)),
-      // NEVER the stored remaining_balance — that field is intentionally written as 0
-      // for Stripe-managed payment plans and would silently charge $0.
-      // (See asa-payment-patterns "Parent Payments page shows $0" pitfall.)
-      for (const item of items) {
-        if (item.enrollmentId) {
-          const enrollment: any = await storage.getProgramEnrollmentById(item.enrollmentId);
-          if (enrollment) {
-            const dbRemainingBalance =
-              enrollment.effectiveBalance ??
-              computeEffectiveBalance(
-                enrollment.totalCost ?? 0,
-                enrollment.totalPaid ?? 0,
-                enrollment.compAmountCents ?? 0,
-              );
-            if (item.remainingBalance !== dbRemainingBalance) {
-              console.log(`💰 Payment: Correcting stale remainingBalance for enrollment ${item.enrollmentId}:`, {
-                clientValue: item.remainingBalance,
-                dbValue: dbRemainingBalance,
-                totalCost: enrollment.totalCost,
-                totalPaid: enrollment.totalPaid,
-                compAmountCents: enrollment.compAmountCents,
-                storedRemainingBalance: enrollment.remainingBalance,
-              });
-            }
-            item.remainingBalance = dbRemainingBalance;
-            console.log(`✅ Payment: Validated enrollment ${item.enrollmentId} effectiveBalance: ${item.remainingBalance}`);
-          }
-        }
-      }
-      
-      const cartItems: CartItem[] = items.map((item: any) => ({
-        id: item.id || `${item.classId}-${item.childId}`,
-        classId: item.classId,
-        childId: item.childId,
-        childName: item.childName || '',
-        variantId: item.variantId,
-        enrollmentId: item.enrollmentId,
-        remainingBalance: item.remainingBalance
-      }));
-      
-      // Extract promo code - prefer explicitly passed promoCode, fallback to discounts structure
-      const appliedPromoCode = promoCode || discounts?.appliedDiscounts?.find((d: any) => d.sourceType === 'promo')?.code || null;
-      console.log('🎟️ Final appliedPromoCode for cart pricing:', appliedPromoCode);
-
-      // ================================================================
-      // SNAPSHOT TRUST PATH (item pricing only)
-      // ================================================================
-      // Switching the payment plan / frequency on /cart/checkout used to
-      // re-run calculateCartPricing here AND then re-run the strict
-      // cart-vs-DB validation block below, which could trip on tiny drift
-      // (existing-enrollment effective_balance refresh, credit holds,
-      // promo usage tick, rounding inside discount allocation) and
-      // spuriously block the parent with the "Prices Have Changed" screen.
-      //
-      // When the client passes a trustedSnapshotId issued by
-      // /api/cart/snapshot within the freshness window AND the cached
-      // fingerprint / credits / promo / sanity bounds all match, we:
-      //   - SKIP calculateCartPricing entirely
-      //   - SYNTHESIZE a cartPricingResult from the cached values so
-      //     downstream discount-snapshot building, usage tracking and
-      //     biweekly schedule sizing still work consistently
-      //   - SKIP the strict cart-vs-DB validation block
-      //
-      // Membership amount is NEVER taken from the trust cache — it's
-      // freshly computed from authoritativeMembershipFull above and stays
-      // authoritative. The trust path only short-circuits items pricing.
-      //
-      // On any check failure we fall through to the existing strict path
-      // (calculateCartPricing + UNIFIED STRICT VALIDATION) unchanged.
-      const trustResult = verifyTrustedSnapshot({
-        snapshotId: trustedSnapshotId || null,
-        userId: req.user.id,
-        cartItemFingerprint: cartItemFingerprint || null,
-        creditsToApply: creditsToApply || 0,
-        appliedPromoCode: appliedPromoCode || null,
-      });
-      if (trustResult.trusted) {
-        useTrustedSnapshot = true;
-        trustedSnapshot = trustResult.snapshot;
-        console.log('🔓 SNAPSHOT TRUST PATH (skipping calculateCartPricing)', {
-          snapshotId: trustedSnapshotId,
-          ageMs: trustResult.ageMs,
-          userId: req.user.id,
-          itemsTotal: trustResult.snapshot.itemsTotal,
-          plan: paymentPlan,
-          frequency: paymentFrequency,
-        });
-        // Synthesize a cartPricingResult shape from the cached snapshot so
-        // every downstream code path (discount snapshot building, applied
-        // discount usage tracking, biweekly schedule sizing) keeps
-        // working without further branching. itemPrices is left empty
-        // because no caller below this point reads it on the trust path.
-        const syntheticResult: CartPricingResult = {
-          subtotal: trustResult.snapshot.subtotal,
-          total: trustResult.snapshot.itemsTotal,
-          discounts: trustResult.snapshot.discounts || {
-            siblingDiscount: 0,
-            freeAfterThree: 0,
-            appliedDiscounts: [],
-            totalDiscountAmount: 0,
-            discountedChildIds: [],
-            freeItemIds: [],
-          },
-          schoolSettings: trustResult.snapshot.schoolSettings || {
-            freeAfterThresholdEnabled: false,
-            freeAfterThreshold: 0,
-            siblingDiscountRate: 0,
-          },
-          itemPrices: [],
-          // promoCodeValidation is intentionally omitted (optional in
-          // CartPricingResult). When the trust path engages we already
-          // verified the promo code matched the cached snapshot in
-          // verifyTrustedSnapshot, so the downstream
-          // "promoCodeValidation && !applied" guard is moot.
-        };
-        cartPricingResult = syntheticResult;
-      } else {
-        trustRejectionReason = trustResult.reason;
-        console.log('🔒 STRICT VALIDATION RAN', {
-          reason: trustResult.reason,
-          snapshotId: trustedSnapshotId || null,
-          userId: req.user.id,
-          ageMs: trustResult.ageMs,
-          plan: paymentPlan,
-          frequency: paymentFrequency,
-        });
-        // Store cart pricing at handler level for later discount snapshot building
-        cartPricingResult = await calculateCartPricing(
-          cartItems,
-          parentForMembership?.id || 0,
-          effectiveSchoolIdForPayment || 0,
-          appliedPromoCode,
-          userEmail // Pass parent email for per-user discount usage limit validation
-        );
-      }
-
-      // Defensive: both branches above set cartPricingResult, but TS can't
-      // narrow across the await in the else branch.
-      if (!cartPricingResult) {
-        throw new Error('cartPricingResult unexpectedly undefined after items pricing');
-      }
-
-      console.log('🧮 Server-side cart pricing with discounts:', {
-        subtotal: cartPricingResult.subtotal,
-        discounts: cartPricingResult.discounts,
-        total: cartPricingResult.total,
-        appliedPromoCode,
-        userEmail
-      });
-      
-      // The server-calculated total for items (with all discounts applied)
-      const serverCalculatedItemTotal_WithDiscounts = cartPricingResult.total;
-      
-      console.log('💰 Server-calculated item total with discounts:', {
-        rawSubtotal: cartPricingResult.subtotal,
-        discountedTotal: serverCalculatedItemTotal_WithDiscounts,
-        totalDiscountAmount: cartPricingResult.discounts.totalDiscountAmount,
-        appliedDiscountsCount: cartPricingResult.discounts.appliedDiscounts.length,
-        membershipAmount: authoritativeMembershipAmount,
-        appliedDiscounts: cartPricingResult.discounts.appliedDiscounts.map((d: any) => ({
-          name: d.name,
-          type: d.type,
-          amount: d.discountAmount
-        }))
-      });
-      
-      // CRITICAL: Validate promo code was applied if provided
-      // This prevents charging full price when user expects a promo discount
-      if (cartPricingResult.promoCodeValidation && !cartPricingResult.promoCodeValidation.promoCodeApplied) {
-        console.error('❌ Promo code provided but not applied:', cartPricingResult.promoCodeValidation);
-        return res.status(400).json({ 
-          error: 'Invalid promo code',
-          message: cartPricingResult.promoCodeValidation.reason || 'The promo code could not be applied',
-          promoCode: cartPricingResult.promoCodeValidation.promoCodeProvided
-        });
-      }
-      
-      // CRITICAL: Store server-calculated values for use in payment creation
-      // These are the AUTHORITATIVE amounts that must be used, not client-sent values
-      // Validation deferred to UNIFIED STRICT VALIDATION block below
-      authoritativeItemTotal = serverCalculatedItemTotal_WithDiscounts;
-      // authoritativeMembershipAmount is already set earlier (outside hasItems block)
-    } else {
-      // MEMBERSHIP-ONLY CHECKOUT: authoritativeItemTotal stays 0
-      // authoritativeMembershipAmount was already set at lines 74-113
     }
-    
-    // ================================================================
-    // SNAPSHOT TRUST PATH — `useTrustedSnapshot` was set inside the
-    // `if (hasItems)` block above (right before calculateCartPricing) when
-    // the client supplied a valid trustedSnapshotId. On the trust path
-    // `cartPricingResult` and `authoritativeItemTotal` were derived from
-    // the cached snapshot; membership amount is always freshly recomputed.
-    // The strict-validation block below is gated on `!useTrustedSnapshot`.
-    // ================================================================
-    if (useTrustedSnapshot && trustedSnapshot) {
-      // Trust path was already taken — `authoritativeItemTotal` was set
-      // from `trustedSnapshot.itemsTotal` above (== synthetic cartPricingResult.total).
-      console.log('🔓 SNAPSHOT TRUST PATH (post-items totals)', {
-        snapshotId: trustedSnapshotId,
-        userId: req.user.id,
-        authoritativeItemTotal,
-        authoritativeMembershipAmount,
-        plan: paymentPlan,
-        frequency: paymentFrequency,
-      });
-    }
-
-    // ================================================================
-    // UNIFIED STRICT VALIDATION - Runs for ALL non-trusted checkout paths
-    // This ensures no untrusted path can bypass validation
-    // ================================================================
-    const finalClientTotal = total + (membership?.amount || 0);
-    const finalServerTotal = authoritativeItemTotal + authoritativeMembershipAmount;
-    const finalDiscrepancy = finalClientTotal - finalServerTotal;
-
-    if (!useTrustedSnapshot) {
-    console.log('🔒 UNIFIED STRICT VALIDATION:', {
-      finalClientTotal,
-      finalServerTotal,
-      authoritativeItemTotal,
-      authoritativeMembershipAmount,
-      finalDiscrepancy,
-      hasItems,
-      userEmail
-    });
-    
-    // CASE 1: Server total is 0 but client claims non-zero
-    // This is suspicious - client is trying to charge for something server doesn't recognize
-    if (finalServerTotal === 0 && finalClientTotal !== 0) {
-      console.error('🚨 PAYMENT VALIDATION FAILED: Client claims non-zero but server calculates $0', {
-        finalClientTotal,
-        finalServerTotal,
-        clientSentTotal: total,
-        clientSentMembership: membership?.amount || 0,
-        userEmail,
-        securityNote: 'Server calculated $0 - rejecting non-zero client total'
-      });
-      return res.status(400).json({
-        message: 'Payment total does not match expected amount. Please refresh your cart and try again.',
-        error: 'ZERO_SERVER_TOTAL_MISMATCH'
-      });
-    }
-    
-    // CASE 2: Server total is non-zero - check for overpayment
-    // Use strict 1% tolerance for overpayment (fraud prevention)
-    if (finalServerTotal > 0 && finalDiscrepancy > 0) {
-      const overpaymentPercentage = finalDiscrepancy / finalServerTotal * 100;
-      if (overpaymentPercentage > 1) {
-        // Extract child IDs from cart items for debugging
-        const cartChildIds = hasItems ? [...new Set(items.map((item: any) => item.childId))] : [];
-        const cartChildNames = hasItems ? [...new Set(items.map((item: any) => item.childName))] : [];
-        
-        console.error('🚨 PAYMENT VALIDATION FAILED: Client total exceeds server calculation', {
-          // Basic totals
-          finalClientTotal,
-          finalServerTotal,
-          overpayment: finalDiscrepancy,
-          overpaymentPercentage: `${overpaymentPercentage.toFixed(2)}%`,
-          
-          // Breakdown
-          authoritativeItemTotal,
-          authoritativeMembershipAmount,
-          clientSentItemTotal: total,
-          clientSentMembership: membership?.amount || 0,
-          
-          // Client-sent discounts
-          clientDiscounts: {
-            siblingDiscount: discounts?.siblingDiscount || 0,
-            freeAfterThree: discounts?.freeAfterThree || 0,
-            totalDiscountAmount: discounts?.totalDiscountAmount || 0,
-            appliedDiscounts: discounts?.appliedDiscounts?.map((d: any) => ({
-              name: d.name,
-              type: d.type,
-              amount: d.discountAmount
-            })) || []
-          },
-          
-          // Server-calculated discounts
-          serverDiscounts: cartPricingResult ? {
-            siblingDiscount: cartPricingResult.discounts.siblingDiscount,
-            freeAfterThree: cartPricingResult.discounts.freeAfterThree,
-            totalDiscountAmount: cartPricingResult.discounts.totalDiscountAmount,
-            appliedDiscounts: cartPricingResult.discounts.appliedDiscounts.map((d: any) => ({
-              name: d.name,
-              type: d.type,
-              amount: d.discountAmount,
-              sourceType: d.sourceType
-            })),
-            discountedChildIds: cartPricingResult.discounts.discountedChildIds,
-            freeItemIds: cartPricingResult.discounts.freeItemIds
-          } : null,
-          
-          // School settings used for calculation
-          serverSchoolSettings: cartPricingResult?.schoolSettings || null,
-          
-          // Cart items info
-          cartItemCount: hasItems ? items.length : 0,
-          cartChildIds,
-          cartChildNames,
-          uniqueChildrenCount: cartChildIds.length,
-          
-          // Promo code info
-          clientPromoCode: promoCode || null,
-          
-          userEmail,
-          userId: parentForMembership?.id,
-          schoolId: effectiveSchoolIdForPayment,
-          securityNote: 'FRAUD PREVENTION - client attempting to overpay'
-        });
-        return res.status(400).json({
-          message: 'Payment total does not match expected amount. Please refresh your cart and try again.',
-          error: 'TOTAL_MISMATCH_OVERPAYMENT'
-        });
-      }
-    }
-    
-    // CASE 3: Server total is non-zero - check for underpayment
-    // Allow 5% tolerance for discount calculation differences between frontend/backend
-    // The server-calculated amount is ALWAYS used for the actual Stripe charge
-    if (finalServerTotal > 0 && finalDiscrepancy < 0) {
-      const underpaymentPercentage = Math.abs(finalDiscrepancy) / finalServerTotal * 100;
-      
-      // Log details for debugging when there's any discrepancy
-      if (underpaymentPercentage > 0.1) {
-        console.warn('⚠️ PAYMENT DISCREPANCY DETECTED:', {
-          finalClientTotal,
-          finalServerTotal,
-          discrepancyCents: Math.abs(finalDiscrepancy),
-          discrepancyPercent: `${underpaymentPercentage.toFixed(2)}%`,
-          breakdown: {
-            clientItemTotal: total,
-            clientMembership: membership?.amount || 0,
-            serverItemTotal: authoritativeItemTotal,
-            serverMembership: authoritativeMembershipAmount
-          },
-          discountsApplied: cartPricingResult?.discounts?.appliedDiscounts?.map((d: any) => ({
-            name: d.name,
-            type: d.type,
-            amount: d.discountAmount
-          })) || [],
-          userEmail,
-          note: 'Server-calculated amount will be used for payment (authoritative)'
-        });
-      }
-      
-      // Only reject extreme underpayment (> 5%) which likely indicates a bug or stale data
-      // Moderate discrepancies (0.1-5%) are logged but allowed since server price is authoritative
-      if (underpaymentPercentage > 5) {
-        console.error('🚨 PAYMENT VALIDATION FAILED: Significant underpayment detected', {
-          finalClientTotal,
-          finalServerTotal,
-          underpayment: Math.abs(finalDiscrepancy),
-          underpaymentPercentage: `${underpaymentPercentage.toFixed(2)}%`,
-          authoritativeItemTotal,
-          authoritativeMembershipAmount,
-          clientSentTotal: total,
-          clientSentMembership: membership?.amount || 0,
-          clientSentPromoCode: promoCode || null,
-          serverAppliedDiscounts: cartPricingResult?.discounts?.appliedDiscounts?.map((d: any) => ({
-            name: d.name,
-            type: d.type,
-            amount: d.discountAmount,
-            sourceType: d.sourceType
-          })) || [],
-          serverTotalDiscountAmount: cartPricingResult?.discounts?.totalDiscountAmount || 0,
-          userEmail,
-          securityNote: 'Underpayment > 5% - likely stale cart data or promo code mismatch. User should refresh.'
-        });
-        // Return 409 Conflict with authoritative values so client can auto-retry
-        // Include membershipAlreadyPaid flag to help frontend distinguish paid vs $0 discount
-        // Also include full membership metadata so client can construct proper payload on retry
-        const membershipAlreadyPaid = authoritativeMembershipFull > 0 && authoritativeMembershipAmount === 0;
-        const schoolForConflict = await storage.getSchool(effectiveSchoolIdForPayment || 0);
-        return res.status(409).json({
-          message: 'Your cart prices may have changed. Cart will be refreshed automatically.',
-          error: 'UNIFIED_TOTAL_MISMATCH',
-          authoritative: {
-            itemsTotal: authoritativeItemTotal,
-            membershipAmount: authoritativeMembershipAmount,
-            membershipAlreadyPaid: membershipAlreadyPaid,
-            membershipRequired: authoritativeMembershipFull > 0 && !membershipAlreadyPaid,
-            membershipSchoolId: effectiveSchoolIdForPayment,
-            membershipSchoolName: schoolForConflict?.name || 'School',
-            membershipYear: new Date().getFullYear(),
-            grandTotal: finalServerTotal,
-            discounts: cartPricingResult?.discounts || null,
-            schoolSettings: cartPricingResult?.schoolSettings || null,
-            // Per-line-item authoritative pricing — surfaced so the
-            // "Prices Have Changed" blocking screen can render a precise
-            // per-class diff (client price vs server price) instead of just
-            // an aggregate before/after total.
-            itemPrices: cartPricingResult?.itemPrices || []
-          }
-        });
-      }
-    }
-    
-    console.log('✅ UNIFIED STRICT VALIDATION PASSED:', {
-      finalClientTotal,
-      finalServerTotal,
-      match: finalClientTotal === finalServerTotal ? 'EXACT' : 'MINOR_ROUNDING',
-      hasItems
-    });
-    } // end of `if (!useTrustedSnapshot)` strict-validation block
 
     // Create detailed description for payment
     const uniqueChildren = hasItems ? [...new Set(items.map((item: any) => item.childName))] : [];
@@ -1068,62 +257,12 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
           }
           
           console.log(`✅ Found existing pending enrollment ${enrollment.id} for child ${item.childId}`);
-          
-          const updateData: any = {
+          // Update the existing enrollment with payment plan details
+          await storage.updateProgramEnrollment(enrollment.id, {
             paymentPlan: dbPaymentPlan,
             paymentFrequency: paymentFrequency,
             paymentSystemVersion: 'v2_stripe'
-          };
-          
-          if (!enrollment.programStartDate || !enrollment.programEndDate) {
-            const actualClassId = item.marketplaceClassId || item.classId;
-            if (actualClassId) {
-              try {
-                const classData = await storage.getClassById(actualClassId);
-                if (classData) {
-                  const formatDate = (date: any): string | null => {
-                    if (!date) return null;
-                    if (typeof date === 'string') return date;
-                    if (date instanceof Date) return date.toISOString().split('T')[0];
-                    return String(date);
-                  };
-                  
-                  let enrollmentStartDate = (classData as any).startDate;
-                  let enrollmentEndDate = (classData as any).endDate;
-                  
-                  const classPriceVariants = (classData as any).priceVariants;
-                  if (item.variantId && classPriceVariants) {
-                    try {
-                      const variants = typeof classPriceVariants === 'string' 
-                        ? JSON.parse(classPriceVariants) 
-                        : classPriceVariants;
-                      const variant = Array.isArray(variants) 
-                        ? variants.find((v: any) => v.id === item.variantId)
-                        : null;
-                      if (variant) {
-                        if (variant.startDate) enrollmentStartDate = variant.startDate;
-                        if (variant.endDate) enrollmentEndDate = variant.endDate;
-                      }
-                    } catch (e) {
-                      console.warn('Could not parse price variants for enrollment date backfill:', e);
-                    }
-                  }
-                  
-                  if (enrollmentStartDate) updateData.programStartDate = formatDate(enrollmentStartDate);
-                  if (enrollmentEndDate) updateData.programEndDate = formatDate(enrollmentEndDate);
-                  console.log('📅 Backfilling enrollment dates from class data:', {
-                    enrollmentId: enrollment.id,
-                    startDate: updateData.programStartDate,
-                    endDate: updateData.programEndDate
-                  });
-                }
-              } catch (e) {
-                console.warn('Could not fetch class for enrollment date backfill:', e);
-              }
-            }
-          }
-          
-          await storage.updateProgramEnrollment(enrollment.id, updateData);
+          });
           enrollmentIds.push(enrollment.id);
         } else {
           // Get class data for new enrollments
@@ -1155,42 +294,6 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
             return String(date);
           };
           
-          // CRITICAL: Resolve variant dates following the same pattern as cart-pricing.ts
-          // This ensures payment schedule calculation uses identical dates for display and creation
-          let enrollmentStartDate = classData.startDate;
-          let enrollmentEndDate = classData.endDate;
-          
-          // Access priceVariants from classData (may exist on raw class data)
-          const classPriceVariants = (classData as any).priceVariants;
-          if (item.variantId && classPriceVariants) {
-            try {
-              const variants = typeof classPriceVariants === 'string' 
-                ? JSON.parse(classPriceVariants) 
-                : classPriceVariants;
-              const variant = Array.isArray(variants) 
-                ? variants.find((v: any) => v.id === item.variantId)
-                : null;
-              if (variant) {
-                if (variant.startDate) enrollmentStartDate = variant.startDate;
-                if (variant.endDate) enrollmentEndDate = variant.endDate;
-                console.log('📅 Using variant dates for enrollment:', {
-                  variantId: item.variantId,
-                  startDate: enrollmentStartDate,
-                  endDate: enrollmentEndDate
-                });
-              }
-            } catch (e) {
-              console.warn('Could not parse price variants for date resolution:', e);
-            }
-          }
-          
-          console.log('📅 Enrollment dates resolved:', {
-            classId: actualClassId,
-            variantId: item.variantId || 'none',
-            startDate: enrollmentStartDate,
-            endDate: enrollmentEndDate
-          });
-          
           enrollment = await storage.createProgramEnrollment({
             schoolId: enrollmentSchoolId,
             classType: item.classType || 'regular',
@@ -1200,7 +303,7 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
             childId: item.childId,
             childName: item.childName,
             className: item.className,
-            variantId: item.variantId || null,
+            variantId: null,
             parentId: parent.id,
             parentEmail: userEmail,
             totalCost: lineAmountCents,
@@ -1211,8 +314,8 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
             paymentPlan: dbPaymentPlan,
             paymentSystemVersion: 'v2_stripe',
             paymentFrequency: paymentFrequency,
-            programStartDate: formatDate(enrollmentStartDate),
-            programEndDate: formatDate(enrollmentEndDate),
+            programStartDate: formatDate(classData.startDate),
+            programEndDate: formatDate(classData.endDate),
             stripeSubscriptionId: null,
             stripeCustomerId: null,
             notes: null,
@@ -1227,46 +330,48 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
 
       console.log('✅ Using enrollments with IDs:', enrollmentIds);
 
-      // SECURITY: Use server-calculated AUTHORITATIVE values for payment
-      // NEVER use client-sent totals - they can be manipulated
-      const authoritativeTotal = authoritativeItemTotal + authoritativeMembershipAmount;
-      
-      console.log('💰 Using authoritative totals for payment:', {
-        authoritativeItemTotal,
-        authoritativeMembershipAmount,
-        authoritativeTotal,
-        clientSentTotal: total,
-        clientSentMembership: membership?.amount || 0
+      // SECURITY: Recompute enrollment total server-side from DB state.
+      // Never trust client-provided `total` for charge amount.
+      const enrollmentsForAmount = await Promise.all(
+        enrollmentIds.map((id: number) => storage.getProgramEnrollmentById(id))
+      );
+      const membershipAmount = membership?.amount || 0;
+      const authoritativeAmountResult = calculateCanonicalAmounts({
+        mode: 'checkout',
+        items: enrollmentsForAmount
+          .filter((enrollment: any) => Boolean(enrollment))
+          .map((enrollment: any) => ({
+            id: String(enrollment.id),
+            totalCostCents: enrollment.totalCost,
+            totalPaidCents: enrollment.totalPaid,
+            remainingBalanceCents: enrollment.remainingBalance
+          })),
+        membershipAmountCents: membershipAmount || 0
       });
-      
-      let totalWithMembership = authoritativeTotal;
-      
-      // UNIFIED CREDITS VALIDATION AND APPLICATION
-      // Credits can only reduce payment amount, not exceed it
-      // Uses unified credit system for all credit types (volunteer, referral, etc.)
-      let validatedCreditsToApply = 0;
-      if (creditsToApply > 0) {
-        // Validate user has enough available credits using unified credit system
-        const totalAvailableCents = await storage.getTotalAvailableCredits(parent.id);
-        
-        // Cap credits at total amount or available balance (whichever is lower)
-        validatedCreditsToApply = Math.min(creditsToApply, totalWithMembership, totalAvailableCents);
-        
-        console.log('💰 Credits validation (unified system):', {
-          requestedCredits: creditsToApply,
-          availableCredits: totalAvailableCents,
-          validatedCredits: validatedCreditsToApply,
-          totalBeforeCredits: totalWithMembership
+
+      if (!authoritativeAmountResult.validation.isValid) {
+        console.error('❌ Canonical checkout amount validation failed', {
+          errors: authoritativeAmountResult.validation.errors,
+          enrollmentIds
         });
-        
-        if (validatedCreditsToApply > 0) {
-          totalWithMembership = totalWithMembership - validatedCreditsToApply;
-          console.log('💰 Applied credits:', {
-            creditsApplied: validatedCreditsToApply,
-            newTotal: totalWithMembership
-          });
-        }
+        return res.status(500).json({
+          message: 'Failed to validate checkout amount',
+          error: 'INVALID_CANONICAL_AMOUNT'
+        });
       }
+
+      if (authoritativeAmountResult.validation.hasWarnings) {
+        console.warn('⚠️ Canonical checkout amount warnings', {
+          warnings: authoritativeAmountResult.validation.warnings,
+          enrollmentIds
+        });
+      }
+
+      const authoritativeEnrollmentTotal = authoritativeAmountResult.enrollmentSubtotalCents;
+
+      // Validate membership request if present - use server-derived values only
+      // SECURITY: Do not trust client-provided schoolId/parentUserId - derive from authenticated session
+      const totalWithMembership = authoritativeAmountResult.totalAmountCents;
       
       // Build secure membership data from server-side validated parent info
       let serverMembership: { 
@@ -1280,7 +385,7 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
         discountAmount?: number;
       } | undefined;
       
-      if (membership && authoritativeMembershipAmount > 0 && parent.schoolId) {
+      if (membership && membershipAmount > 0 && parent.schoolId) {
         // Validate that the requested school matches the parent's school
         if (membership.schoolId !== parent.schoolId) {
           console.error('🚨 SECURITY: Membership schoolId mismatch. Request:', membership.schoolId, 'Parent:', parent.schoolId);
@@ -1312,11 +417,11 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
         
         // Validate that client's amount matches server-calculated amount
         // Allow either the original amount OR the discounted amount
-        const isValidAmount = authoritativeMembershipAmount === originalMembershipFee || 
-                             authoritativeMembershipAmount === discountResult.finalAmount;
+        const isValidAmount = membershipAmount === originalMembershipFee || 
+                             membershipAmount === discountResult.finalAmount;
         
         if (!isValidAmount) {
-          console.error('🚨 SECURITY: Membership amount mismatch. Request:', authoritativeMembershipAmount, 
+          console.error('🚨 SECURITY: Membership amount mismatch. Request:', membershipAmount, 
             'Original:', originalMembershipFee, 'Discounted:', discountResult.finalAmount);
           return res.status(403).json({
             message: 'Membership fee amount does not match expected amount',
@@ -1324,17 +429,17 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
             details: {
               originalAmount: originalMembershipFee,
               discountedAmount: discountResult.finalAmount,
-              clientAmount: authoritativeMembershipAmount
+              clientAmount: membershipAmount
             }
           });
         }
         
         // Use the validated amount (either original or discounted)
-        const validatedMembershipAmount = authoritativeMembershipAmount;
+        const validatedMembershipAmount = membershipAmount;
         
         // Check if client is actually paying the discounted amount (not full price)
         const isPayingDiscountedAmount = discountResult.appliedDiscounts.length > 0 && 
-                                         authoritativeMembershipAmount === discountResult.finalAmount;
+                                         membershipAmount === discountResult.finalAmount;
         
         // Log discount application if applicable
         if (isPayingDiscountedAmount) {
@@ -1348,7 +453,7 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
           console.log('ℹ️ Membership discount available but parent paying full price:', {
             originalAmount: originalMembershipFee,
             availableDiscount: discountResult.appliedDiscounts[0]?.discountName,
-            clientAmount: authoritativeMembershipAmount
+            clientAmount: membershipAmount
           });
         }
         
@@ -1369,8 +474,8 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
         };
         
         console.log('🎫 Membership fee included in payment (server-validated):', {
-          enrollmentTotal: total,
-          membershipAmount: authoritativeMembershipAmount,
+          enrollmentTotal: authoritativeEnrollmentTotal,
+          membershipAmount,
           totalWithMembership,
           membershipYear: serverMembership.year,
           parentUserId: serverMembership.parentUserId,
@@ -1385,540 +490,17 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
         });
       }
 
-      // Build discount snapshot for payment tracking/audit
-      // cartPricingResult is stored at handler level so it's accessible here
-      let discountSnapshot: {
-        subtotal: number;
-        discountTotal: number;
-        appliedDiscounts: Array<{
-          source: 'promo' | 'sibling' | 'free_after_threshold' | 'automatic' | 'bundle';
-          discountId?: number;
-          code?: string;
-          name: string;
-          type: string;
-          value: number;
-          amount: number;
-        }>;
-      } | undefined;
-      
-      // Check if cartPricingResult is defined (only exists when hasItems is true)
-      if (hasItems && cartPricingResult && cartPricingResult.discounts.totalDiscountAmount > 0) {
-        // Map applied discounts to the snapshot format
-        const mappedDiscounts = cartPricingResult.discounts.appliedDiscounts.map((d: any) => ({
-          source: (d.sourceType || 'automatic') as 'promo' | 'sibling' | 'free_after_threshold' | 'automatic' | 'bundle',
-          discountId: d.discountId || d.id,
-          code: d.code,
-          name: d.name || d.discountName || 'Discount',
-          type: d.type || d.discountType || 'percentage',
-          value: d.value || d.discountValue || 0,
-          amount: d.discountAmount || d.amount || 0
-        }));
-        
-        // Also include sibling discount if applied (tracked separately from appliedDiscounts)
-        if (cartPricingResult.discounts.siblingDiscount > 0) {
-          mappedDiscounts.push({
-            source: 'sibling' as const,
-            discountId: undefined,
-            code: undefined,
-            name: 'Sibling Discount',
-            type: 'percentage',
-            value: cartPricingResult.schoolSettings?.siblingDiscountRate || 0,
-            amount: cartPricingResult.discounts.siblingDiscount
-          });
-        }
-        
-        // Also include free after threshold discount if applied
-        if (cartPricingResult.discounts.freeAfterThree > 0) {
-          mappedDiscounts.push({
-            source: 'free_after_threshold' as const,
-            discountId: undefined,
-            code: undefined,
-            name: 'Free After ' + (cartPricingResult.schoolSettings?.freeAfterThreshold || 3),
-            type: 'percentage',
-            value: 100,
-            amount: cartPricingResult.discounts.freeAfterThree
-          });
-        }
-        
-        discountSnapshot = {
-          subtotal: cartPricingResult.subtotal,
-          discountTotal: cartPricingResult.discounts.totalDiscountAmount,
-          appliedDiscounts: mappedDiscounts
-        };
-        
-        console.log('💰 Built discount snapshot for payment:', {
-          subtotal: discountSnapshot.subtotal,
-          discountTotal: discountSnapshot.discountTotal,
-          discountsCount: discountSnapshot.appliedDiscounts.length,
-          discountNames: discountSnapshot.appliedDiscounts.map(d => d.name)
-        });
-      }
-      
-      // CREDIT-ONLY CHECKOUT: Handle $0 or below-minimum total after credits are applied
-      // When credits fully cover the order (or bring it below Stripe's $0.50 minimum), 
-      // skip Stripe and process directly with admin approval
-      // Using <= 0 to handle edge cases where credits might exceed cart total slightly
-      const STRIPE_MINIMUM_CENTS = 50; // Stripe requires minimum $0.50 charge
-      if ((totalWithMembership <= 0 || totalWithMembership < STRIPE_MINIMUM_CENTS) && validatedCreditsToApply > 0) {
-        console.log('🎫 CREDIT-ONLY CHECKOUT: Total is $0 or below Stripe minimum after credits, skipping Stripe', {
-          totalWithMembership,
-          validatedCreditsToApply,
-          belowMinimum: totalWithMembership < STRIPE_MINIMUM_CENTS
-        });
-        
-        // Generate a unique checkout session ID for credit hold tracking
-        const checkoutSessionId = `credit_only_${Date.now()}_${parent.id}`;
-        
-        // RESERVE-THEN-FINALIZE PATTERN:
-        // 1. Create credit holds (reserve credits without consuming them)
-        // 2. Process enrollment updates
-        // 3. On success: finalize holds (convert to actual usage)
-        // 4. On failure: release holds (credits automatically become available again)
-        
-        const creditHoldResult = await storage.createCreditHolds(
-          parent.id,
-          validatedCreditsToApply,
-          checkoutSessionId,
-          `Credit-only checkout for enrollments: ${enrollmentIds.join(', ')}`,
-          30 // 30 minute expiration
-        );
-        
-        console.log('🔒 Credits held (reserved):', {
-          totalHeld: creditHoldResult.totalHeld,
-          holdsCount: creditHoldResult.holds.length
-        });
-        
-        // Validate we held enough credits
-        if (creditHoldResult.totalHeld < validatedCreditsToApply) {
-          // Not enough credits available - release any partial holds
-          await storage.releaseCreditHolds(checkoutSessionId);
-          return res.status(400).json({
-            message: 'Insufficient credits available. Some credits may be held by other checkouts.',
-            error: 'INSUFFICIENT_CREDITS'
-          });
-        }
-        
-        // Track original enrollment states for rollback on failure
-        const originalEnrollmentStates: Map<number, { status: string; paymentStatus: string; totalPaid: number; remainingBalance: number | null; metadata: any }> = new Map();
-        
-        try {
-        // Update enrollments to pending_admin_approval status (requires school admin approval for $0 orders)
-        // Allocate credits proportionally based on cart pricing
-        // Use DISCOUNTED total for allocation, SUBTOTAL for proportions (they use same basis)
-        const discountedEnrollmentTotal = hasItems && cartPricingResult ? cartPricingResult.total : 0;
-        const rawEnrollmentSubtotal = hasItems && cartPricingResult ? cartPricingResult.subtotal : 0;
-        const membershipTotal = authoritativeMembershipAmount || 0;
-        
-        // Pre-calculate credit portions: enrollments get their discounted share, membership gets the rest
-        const enrollmentCreditsToAllocate = Math.min(discountedEnrollmentTotal, validatedCreditsToApply);
-        const membershipCreditsToAllocate = Math.min(membershipTotal, validatedCreditsToApply - enrollmentCreditsToAllocate);
-        
-        console.log('📊 Credit allocation plan:', {
-          totalCredits: validatedCreditsToApply,
-          enrollmentSubtotal: rawEnrollmentSubtotal,
-          enrollmentDiscountedTotal: discountedEnrollmentTotal,
-          membershipTotal,
-          enrollmentCredits: enrollmentCreditsToAllocate,
-          membershipCredits: membershipCreditsToAllocate
-        });
-        
-        const creditAllocationDetails: { enrollments: { id: number; credits: number; cost: number }[]; membership: { credits: number; cost: number } | null } = {
-          enrollments: [],
-          membership: null
-        };
-        
-        // Allocate enrollment credits proportionally across all enrollments
-        // Use running remainder approach to ensure exact reconciliation (no rounding drift)
-        let remainingEnrollmentCredits = enrollmentCreditsToAllocate;
-        const enrollmentCount = enrollmentIds.length;
-        let processedCount = 0;
-        
-        for (const enrollmentId of enrollmentIds) {
-          const enrollment = await storage.getProgramEnrollmentById(enrollmentId);
-          if (!enrollment) continue;
-          
-          // Store original state for rollback on failure
-          originalEnrollmentStates.set(enrollmentId, {
-            status: enrollment.status || 'pending',
-            paymentStatus: enrollment.paymentStatus || 'pending',
-            totalPaid: enrollment.totalPaid || 0,
-            remainingBalance: enrollment.remainingBalance,
-            metadata: enrollment.metadata
-          });
-          
-          processedCount++;
-          const isLastEnrollment = processedCount === enrollmentCount;
-          
-          const enrollmentCost = enrollment.totalCost || 0;
-          
-          let creditsForThisEnrollment: number;
-          let discountedEnrollmentCost: number;
-          
-          if (isLastEnrollment) {
-            // Last enrollment absorbs any remaining credits to ensure exact reconciliation
-            creditsForThisEnrollment = remainingEnrollmentCredits;
-            discountedEnrollmentCost = creditsForThisEnrollment; // In credit-only checkout, paid = cost
-          } else {
-            // Calculate proportional share for non-last enrollments
-            const proportion = rawEnrollmentSubtotal > 0 ? enrollmentCost / rawEnrollmentSubtotal : 0;
-            creditsForThisEnrollment = Math.round(enrollmentCreditsToAllocate * proportion);
-            // Clamp to remaining
-            creditsForThisEnrollment = Math.min(creditsForThisEnrollment, remainingEnrollmentCredits);
-            discountedEnrollmentCost = creditsForThisEnrollment; // In credit-only checkout, paid = cost
-          }
-          
-          remainingEnrollmentCredits -= creditsForThisEnrollment;
-          
-          creditAllocationDetails.enrollments.push({
-            id: enrollmentId,
-            credits: creditsForThisEnrollment,
-            cost: discountedEnrollmentCost // In credit-only, credits applied = cost covered
-          });
-          
-          // Compute accurate remaining balance: credits may cover only the discounted portion
-          // while totalCost stores the undiscounted class price.
-          const newRemainingBalance = Math.max(0, enrollmentCost - creditsForThisEnrollment);
-          const newPaymentStatus = newRemainingBalance <= 0 ? 'completed' : 'partial_payment';
-
-          await storage.updateProgramEnrollment(enrollmentId, {
-            status: 'pending_admin_approval',
-            paymentStatus: newPaymentStatus,
-            totalPaid: creditsForThisEnrollment,
-            remainingBalance: newRemainingBalance,
-            metadata: {
-              creditOnlyCheckout: true,
-              creditsAppliedToThisEnrollment: creditsForThisEnrollment,
-              discountedCost: discountedEnrollmentCost,
-              totalCreditsAppliedInCheckout: validatedCreditsToApply,
-              checkoutSessionId,
-              requiresAdminApproval: true,
-              checkoutDate: new Date().toISOString()
-            }
-          });
-          console.log(`✅ Enrollment ${enrollmentId} updated: credits applied ${creditsForThisEnrollment}, remainingBalance ${newRemainingBalance}, status pending_admin_approval`);
-        }
-        
-        // Create payment history record for credit-only checkout using saveStripePayment
-        const totalEnrollmentCredits = creditAllocationDetails.enrollments.reduce((sum, e) => sum + e.credits, 0);
-        
-        // Track membership credit allocation if applicable
-        // Use actual remaining credits after enrollment allocation for exact reconciliation
-        const actualMembershipCredits = validatedCreditsToApply - totalEnrollmentCredits;
-        if (actualMembershipCredits > 0) {
-          creditAllocationDetails.membership = {
-            credits: actualMembershipCredits,
-            cost: actualMembershipCredits // In credit-only checkout, credits = cost
-          };
-          console.log(`✅ Membership credit allocation: ${actualMembershipCredits} cents applied (absorbs any rounding from enrollment allocation)`);
-        }
-        
-        const totalMembershipCredits = creditAllocationDetails.membership?.credits || 0;
-        
-        // Reconciliation check: ensure allocated credits equal total credits (with 1 cent rounding tolerance)
-        const totalAllocatedCredits = totalEnrollmentCredits + totalMembershipCredits;
-        const allocationDifference = Math.abs(totalAllocatedCredits - validatedCreditsToApply);
-        if (allocationDifference > 1) {
-          console.error('🚨 Credit allocation reconciliation failed:', {
-            validatedCreditsToApply,
-            totalAllocatedCredits,
-            enrollmentCredits: totalEnrollmentCredits,
-            membershipCredits: totalMembershipCredits,
-            difference: allocationDifference
-          });
-        } else {
-          console.log('✅ Credit allocation reconciled:', {
-            total: validatedCreditsToApply,
-            allocated: totalAllocatedCredits,
-            enrollments: totalEnrollmentCredits,
-            membership: totalMembershipCredits
-          });
-        }
-        
-        console.log(`🔍 [${checkoutRequestId}] About to call saveStripePayment with source='credit'...`);
-        const paymentHistoryPayload = {
-          userId: parent.id,
-          paymentIntentId: checkoutSessionId, // Use the checkout session ID for tracking
-          amount: validatedCreditsToApply,
-          currency: 'usd',
-          status: 'succeeded',
-          source: 'credit', // Credit-only checkout - no Stripe payment involved
-          metadata: {
-            creditOnlyCheckout: true,
-            enrollmentIds,
-            checkoutSessionId,
-            checkoutType: 'credit_only',
-            creditsApplied: validatedCreditsToApply,
-            creditAllocation: {
-              enrollmentCredits: totalEnrollmentCredits,
-              membershipCredits: totalMembershipCredits,
-              details: creditAllocationDetails
-            }
-          }
-        };
-        console.log(`🔍 [${checkoutRequestId}] saveStripePayment: userId=${parent.id}, amount=${validatedCreditsToApply}, source=credit, enrollmentCount=${enrollmentIds.length}`);
-        
-        const paymentHistoryEntry = await (storage as any).saveStripePayment(paymentHistoryPayload);
-        
-        console.log('📝 Payment history created:', {
-          id: paymentHistoryEntry.id,
-          totalCredits: validatedCreditsToApply,
-          enrollmentCredits: totalEnrollmentCredits,
-          membershipCredits: totalMembershipCredits
-        });
-        
-        // FINALIZE: Convert credit holds to actual usage now that payment history is created
-        const finalizeResult = await storage.finalizeCreditHolds(
-          checkoutSessionId,
-          paymentHistoryEntry.id,
-          `Credit-only checkout for enrollments: ${enrollmentIds.join(', ')}`
-        );
-        
-        console.log('✅ Credits finalized:', {
-          finalizedCount: finalizeResult.finalizedCount,
-          totalFinalized: finalizeResult.totalFinalized
-        });
-        
-        // Track discount usage for credit-only checkout
-        try {
-          if (cartPricingResult && cartPricingResult.discounts && cartPricingResult.discounts.appliedDiscounts && cartPricingResult.discounts.appliedDiscounts.length > 0) {
-            for (const discount of cartPricingResult.discounts.appliedDiscounts) {
-              const discId = (discount as any).discountId || discount.id;
-              if (discId) {
-                try {
-                  await storage.incrementDiscountUsageAtomic(discId);
-                  await storage.createDiscountApplication({
-                    discountId: discId,
-                    parentEmail: userEmail,
-                    childId: items?.[0]?.childId || null,
-                    schoolEnrollmentId: null,
-                    programEnrollmentId: enrollmentIds[0] || null,
-                    paymentId: null,
-                    classId: null,
-                    originalAmount: cartPricingResult.subtotal,
-                    discountAmount: discount.discountAmount,
-                    finalAmount: cartPricingResult.total,
-                    applicationMethod: 'automatic',
-                    appliedBy: null,
-                  });
-                  console.log(`✅ Discount usage tracked for discount ${discId} (credit-only checkout)`);
-                } catch (discountTrackErr) {
-                  console.error(`⚠️ Failed to track usage for discount ${discId} (credit-only checkout):`, discountTrackErr);
-                }
-              }
-            }
-          }
-        } catch (discountTrackingError) {
-          console.error('⚠️ Discount usage tracking failed (credit-only checkout), continuing:', discountTrackingError);
-        }
-
-        // Return success response for credit-only checkout
-        return res.json({
-          creditOnlyCheckout: true,
-          enrollmentIds,
-          creditsApplied: validatedCreditsToApply,
-          message: 'Enrollment submitted for admin approval. Your credits have been applied.',
-          paymentHistoryId: paymentHistoryEntry.id,
-          status: 'pending_admin_approval'
-        });
-        } catch (creditCheckoutError: any) {
-          // RELEASE: Release the credit holds (credits become available again)
-          console.error('❌ Credit-only checkout failed, rolling back and releasing credit holds...', creditCheckoutError);
-          
-          // First, rollback any enrollment updates that were made
-          if (originalEnrollmentStates.size > 0) {
-            console.log(`🔄 Rolling back ${originalEnrollmentStates.size} enrollment(s) to original state...`);
-            for (const [enrollmentId, originalState] of originalEnrollmentStates.entries()) {
-              try {
-                await storage.updateProgramEnrollment(enrollmentId, {
-                  status: originalState.status as "pending_admin_approval" | "pending_payment" | "enrolled" | "completed" | "cancelled" | "waitlist" | "withdrawn" | "failed",
-                  paymentStatus: originalState.paymentStatus as "pending" | "deposit_paid" | "partial_payment" | "completed" | "stripe_managed" | "refunded",
-                  totalPaid: originalState.totalPaid,
-                  remainingBalance: originalState.remainingBalance ?? undefined,
-                  metadata: originalState.metadata
-                });
-                console.log(`   🔄 Rolled back enrollment ${enrollmentId}`);
-              } catch (rollbackError) {
-                console.error(`   ⚠️ Failed to rollback enrollment ${enrollmentId}:`, rollbackError);
-              }
-            }
-          }
-          
-          // Then release credit holds
-          try {
-            const releaseResult = await storage.releaseCreditHolds(checkoutSessionId);
-            console.log('🔓 Credit holds released after failed checkout:', {
-              releasedCount: releaseResult.releasedCount,
-              totalReleased: releaseResult.totalReleased
-            });
-          } catch (releaseError) {
-            console.error('🚨 CRITICAL: Failed to release credit holds after failed checkout:', releaseError);
-            // Holds will auto-expire after 30 minutes if release fails
-          }
-          
-          throw creditCheckoutError; // Re-throw to be caught by outer error handler
-        }
-      }
-      
       // Use payment plan service for ALL payment plans
       // NOTE: CombinedStorage has all IStorage methods needed but doesn't formally implement the interface
       // See server/storage.ts TODO comment for full context on storage interface alignment
       const paymentPlanService = new StripePaymentPlanService(storage as any);
-      
-      // Calculate credit allocation for regular Stripe payments (simpler than credit-only)
-      // Credits are applied: enrollments first, then membership
-      let creditAllocationForPayment: { enrollmentCredits: number; membershipCredits: number } | undefined;
-      if (validatedCreditsToApply > 0) {
-        const discountedEnrollmentTotal = hasItems && cartPricingResult ? cartPricingResult.total : 0;
-        const membershipCost = authoritativeMembershipAmount || 0;
-        
-        // Enrollments absorb credits first, up to their discounted total
-        const enrollmentCredits = Math.min(discountedEnrollmentTotal, validatedCreditsToApply);
-        // Remaining credits go to membership
-        const membershipCredits = Math.min(membershipCost, validatedCreditsToApply - enrollmentCredits);
-        
-        creditAllocationForPayment = {
-          enrollmentCredits,
-          membershipCredits
-        };
-        
-        console.log('📊 Credit allocation for Stripe payment:', creditAllocationForPayment);
-      }
-      
-      if (expectedSchedule && paymentPlan === 'biweekly') {
-        // SNAPSHOT TRUST PATH — when verifyTrustedSnapshot honoured the
-        // cached snapshot, the parent was already shown the snapshot's
-        // biweekly plan, the cart fingerprint matches, and we have nothing
-        // new to verify. Skip the recompute-vs-expected comparison entirely
-        // and use the cached biweekly first-payment amount as authoritative
-        // for sizing the PaymentIntent. Eliminates the "first-enrollment
-        // dates" false 409 for multi-class carts (#186 root cause #2).
-        if (useTrustedSnapshot && trustedSnapshot?.biweeklyPlan) {
-          console.log(`🔓 [${checkoutRequestId}] SNAPSHOT TRUST PATH — skipping biweekly schedule re-verification`, {
-            snapshotId: trustedSnapshotId,
-            cachedFirstPaymentAmount: trustedSnapshot.biweeklyPlan.firstPaymentAmount,
-            cachedNumberOfPayments: trustedSnapshot.biweeklyPlan.numberOfPayments,
-            expectedFirstPaymentAmount: expectedSchedule.firstPaymentAmount,
-            expectedNumberOfPayments: expectedSchedule.numberOfPayments,
-          });
-        } else {
-          const { calculateCheckoutBiweeklySchedule } = await import('../lib/payment-calculator');
-
-          const anchorDate = expectedSchedule.snapshotGeneratedAt
-            ? new Date(expectedSchedule.snapshotGeneratedAt)
-            : new Date();
-
-          // CART-WIDE date range — earliest start and latest end across ALL
-          // enrollments in the cart. The previous "first enrollment only"
-          // lookup disagreed with the snapshot endpoint (which iterates
-          // every cart item via calculatePaymentPlans →
-          // calculateCheckoutBiweeklySchedule with earliestStartDate /
-          // latestEndDate) whenever the first enrollment's class had
-          // already ended but other classes extended later — collapsing
-          // biweekly to one payment of the full total and producing a
-          // guaranteed false PAYMENT SCHEDULE MISMATCH (#186 root cause #2).
-          let verifyStartDate: Date | null = null;
-          let verifyEndDate: Date | null = null;
-
-          for (const enrollmentId of enrollmentIds) {
-            try {
-              const enrollment = await storage.getProgramEnrollmentById(enrollmentId);
-              if (!enrollment) continue;
-
-              let lineStart: Date | null = null;
-              let lineEnd: Date | null = null;
-
-              if ((enrollment as any).programStartDate && (enrollment as any).programEndDate) {
-                lineStart = new Date((enrollment as any).programStartDate);
-                lineEnd = new Date((enrollment as any).programEndDate);
-              }
-
-              // Fall back to class/variant dates the same way calculatePaymentPlans does.
-              if (!lineStart || !lineEnd) {
-                const classId = (enrollment as any).marketplaceClassId
-                  || (enrollment as any).classId
-                  || (enrollment as any).programId;
-                if (classId) {
-                  const classData = await storage.getClassById(classId) as any;
-                  if (classData?.startDate && classData?.endDate) {
-                    lineStart = lineStart || new Date(classData.startDate);
-                    lineEnd = lineEnd || new Date(classData.endDate);
-                  }
-                  // Variant-specific dates take precedence when present
-                  const variantId = (enrollment as any).variantId;
-                  if (variantId && classData?.priceVariants) {
-                    try {
-                      const variants = typeof classData.priceVariants === 'string'
-                        ? JSON.parse(classData.priceVariants)
-                        : classData.priceVariants;
-                      const variant = Array.isArray(variants)
-                        ? variants.find((v: any) => v.id === variantId)
-                        : null;
-                      if (variant?.startDate) lineStart = new Date(variant.startDate);
-                      if (variant?.endDate) lineEnd = new Date(variant.endDate);
-                    } catch {
-                      // Non-fatal: fall through to class-level dates already set
-                    }
-                  }
-                }
-              }
-
-              if (lineStart && (!verifyStartDate || lineStart < verifyStartDate)) {
-                verifyStartDate = lineStart;
-              }
-              if (lineEnd && (!verifyEndDate || lineEnd > verifyEndDate)) {
-                verifyEndDate = lineEnd;
-              }
-            } catch (e) {
-              console.warn(`Could not resolve dates for enrollment ${enrollmentId} during biweekly verification:`, e);
-            }
-          }
-
-          if (verifyStartDate && verifyEndDate) {
-            const serverSchedule = calculateCheckoutBiweeklySchedule(totalWithMembership, verifyStartDate, verifyEndDate, anchorDate);
-            const amountDiff = Math.abs(serverSchedule.firstPaymentAmount - expectedSchedule.firstPaymentAmount);
-            const countDiff = serverSchedule.numberOfPayments !== expectedSchedule.numberOfPayments;
-
-            if (amountDiff > 2 || countDiff) {
-              console.warn(`🚨 [${checkoutRequestId}] PAYMENT SCHEDULE MISMATCH DETECTED:`, {
-                expected: { amount: expectedSchedule.firstPaymentAmount, count: expectedSchedule.numberOfPayments },
-                actual: { amount: serverSchedule.firstPaymentAmount, count: serverSchedule.numberOfPayments },
-                amountDiff,
-                totalWithMembership,
-                anchorDate: anchorDate.toISOString(),
-                verifyStartDate: verifyStartDate.toISOString(),
-                verifyEndDate: verifyEndDate.toISOString(),
-              });
-              return res.status(409).json({
-                message: 'Payment schedule has changed. Please refresh your cart and try again.',
-                error: 'PRICING_CHANGED',
-                serverSchedule: {
-                  firstPaymentAmount: serverSchedule.firstPaymentAmount,
-                  numberOfPayments: serverSchedule.numberOfPayments,
-                }
-              });
-            }
-          }
-        }
-      }
-      
       const paymentPlanResult = await paymentPlanService.createEducationalPaymentPlan({
         parentEmail: userEmail,
         enrollmentIds,
-        totalAmount: totalWithMembership,
-        paymentPlan: paymentPlan as 'deposit' | 'biweekly' | 'full',
+        totalAmount: totalWithMembership, // Include membership fee in total
+        paymentPlan: paymentPlan as 'deposit' | 'split' | 'biweekly' | 'full',
         paymentFrequency: paymentFrequency as 'weekly' | 'biweekly' | 'monthly' | 'one_time',
-        membership: serverMembership,
-        discountSnapshot,
-        creditsAppliedCents: validatedCreditsToApply,
-        creditAllocation: creditAllocationForPayment,
-        // SNAPSHOT TRUST PATH (#186) — thread the cached biweekly plan
-        // through so the PaymentIntent is sized off the EXACT figure the
-        // parent was shown. Null on full-payment carts and on the strict
-        // path; the service falls back to its date-driven schedule in
-        // those cases.
-        cachedBiweeklyPlan: useTrustedSnapshot && trustedSnapshot?.biweeklyPlan
-          ? trustedSnapshot.biweeklyPlan
-          : null,
+        membership: serverMembership // Pass server-validated membership data
       });
 
       console.log('✅ Payment plan created successfully:', {
@@ -1927,39 +509,6 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
         paymentPlan
       });
 
-      // Track discount usage after successful payment plan creation
-      try {
-        if (cartPricingResult && cartPricingResult.discounts && cartPricingResult.discounts.appliedDiscounts && cartPricingResult.discounts.appliedDiscounts.length > 0) {
-          for (const discount of cartPricingResult.discounts.appliedDiscounts) {
-            const discId = (discount as any).discountId || discount.id;
-            if (discId) {
-              try {
-                await storage.incrementDiscountUsageAtomic(discId);
-                await storage.createDiscountApplication({
-                  discountId: discId,
-                  parentEmail: userEmail,
-                  childId: items?.[0]?.childId || null,
-                  schoolEnrollmentId: null,
-                  programEnrollmentId: enrollmentIds[0] || null,
-                  paymentId: null,
-                  classId: null,
-                  originalAmount: cartPricingResult.subtotal,
-                  discountAmount: discount.discountAmount,
-                  finalAmount: cartPricingResult.total,
-                  applicationMethod: 'automatic',
-                  appliedBy: null,
-                });
-                console.log(`✅ Discount usage tracked for discount ${discId} (Stripe payment)`);
-              } catch (discountTrackErr) {
-                console.error(`⚠️ Failed to track usage for discount ${discId} (Stripe payment):`, discountTrackErr);
-              }
-            }
-          }
-        }
-      } catch (discountTrackingError) {
-        console.error('⚠️ Discount usage tracking failed (Stripe payment), continuing:', discountTrackingError);
-      }
-
       // All payment plans now return clientSecret 🎉
       res.json({
         clientSecret: paymentPlanResult.paymentIntent.client_secret,
@@ -1967,8 +516,6 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
         enrollmentIds,
         scheduledPayments: paymentPlanResult.scheduledPayments,
         paymentPlan,
-        // Include volunteer credits info
-        creditsApplied: validatedCreditsToApply,
         // Include Stripe subscription info for UI display
         hasActiveSubscription,
         subscriptionInfo: existingSubscription ? {
@@ -1988,29 +535,17 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
       });
 
     } catch (error: any) {
-      console.error(`❌ [${checkoutRequestId}] CHECKOUT FAILED ==================`);
-      console.error(`❌ [${checkoutRequestId}] Error type: ${error.constructor?.name || 'Unknown'}`);
-      console.error(`❌ [${checkoutRequestId}] Error message: ${error.message}`);
-      console.error(`❌ [${checkoutRequestId}] Error code: ${error.code || 'N/A'}`);
-      console.error(`❌ [${checkoutRequestId}] Full error:`, JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
-      console.error(`❌ [${checkoutRequestId}] Stack trace:`, error.stack);
-      
+      console.error('❌ Error in enrollment creation or payment plan:', error);
       res.status(500).json({
         message: 'Failed to create enrollment or payment plan',
-        error: error.message,
-        checkoutRequestId,
-        details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        error: error.message
       });
     }
   } catch (error: any) {
-    console.error('❌ OUTER CATCH - Error creating payment intent:', error);
-    console.error('❌ OUTER CATCH - Error type:', error.constructor?.name);
-    console.error('❌ OUTER CATCH - Full error:', JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
-    console.error('❌ OUTER CATCH - Stack:', error.stack);
+    console.error('❌ Error creating payment intent:', error);
     res.status(500).json({
       message: 'Failed to create payment intent',
-      error: error.message,
-      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      error: error.message
     });
   }
 });
@@ -2239,12 +774,12 @@ router.get('/payment-history', supabaseAuth, async (req: any, res) => {
     // Format payment history for frontend
     const formattedPayments = paymentHistory.map((payment: any) => ({
       id: payment.id,
-      paymentIntentId: payment.paymentIntentId || payment.stripePaymentIntentId,
+      paymentIntentId: payment.paymentIntentId,
       customerId: payment.customerId,
       amount: payment.amount,
       status: payment.status,
       subscriptionId: payment.subscriptionId,
-      createdDate: payment.createdAt || payment.paymentDate || payment.createdDate,
+      createdDate: payment.createdDate,
       paymentMethod: payment.paymentMethod,
       description: payment.description
     }));
@@ -2372,8 +907,6 @@ router.post('/admin/sync-stripe-subscription', supabaseAuth, requireSchoolContex
         amount: 17500, // $175 in cents
         amountPaid: 17500,
         remainingBalance: 0,
-        totalAmount: 17500, // Total membership amount in cents
-        balanceDue: 0, // Fully paid via Stripe subscription
         status: 'enrolled',
         stripeSubscriptionId: subscription.id,
         stripeCustomerId: customer.id,
@@ -2382,7 +915,6 @@ router.post('/admin/sync-stripe-subscription', supabaseAuth, requireSchoolContex
         notes: 'Admin-synced from Stripe subscription',
         paymentMethod: 'other',
         dueDate: startDate,
-        endDate: endDate, // End date same as expiration date
         expirationDate: endDate,
         gracePeriodEnd: null
       });
@@ -2581,10 +1113,9 @@ router.post('/request-free-enrollment', supabaseAuth, async (req: any, res) => {
     console.log('🆓 Processing free enrollment request (100% discount)');
     
     const userEmail = req.user.email;
-    const { items, subtotal, discounts, total, discountCode, promoCode } = req.body;
+    const { items, subtotal, discounts, total, discountCode } = req.body;
 
-    // Validate this is actually a free enrollment (client-claimed total).
-    // The authoritative check is the server-side cart snapshot recalculation below.
+    // Validate this is actually a free enrollment
     if (total !== 0) {
       return res.status(400).json({
         success: false,
@@ -2608,67 +1139,6 @@ router.post('/request-free-enrollment', supabaseAuth, async (req: any, res) => {
         success: false,
         message: 'Parent user not found',
         error: 'USER_NOT_FOUND'
-      });
-    }
-
-    // AUTHORITATIVE FREE-ENROLLMENT GATE.
-    // Re-derive the cart snapshot server-side and refuse the request unless the
-    // calculator has explicitly flagged it as a recognised free-enrollment scenario
-    // (full_credit / full_discount_code / full_automatic_discount / full_comp).
-    // Without this guard, any cart whose `total === 0` could trigger free enrollment
-    // — including carts whose subtotal collapsed to $0 because items were priced at
-    // the stale remaining_balance=0 of Stripe-managed plans (where the parent
-    // genuinely owes money). See asa-payment-patterns "Parent Payments page shows $0"
-    // pitfall.
-    try {
-      const { calculateCartSnapshot } = await import('../utils/cart-pricing');
-      const snapshotItems = items.map((it: any) => ({
-        id: String(it.id ?? `${it.classId}-${it.childId}`),
-        classId: it.classId,
-        childId: it.childId,
-        childName: it.childName,
-        variantId: it.variantId,
-        enrollmentId: it.enrollmentId,
-        remainingBalance: it.remainingBalance,
-      }));
-      const inferredSchoolId = parent.schoolId
-        || items.find((it: any) => typeof it.schoolId === 'number')?.schoolId
-        || 1;
-      const snapshot = await calculateCartSnapshot(
-        snapshotItems,
-        parent.id,
-        inferredSchoolId,
-        promoCode || discountCode || undefined,
-        undefined,
-        userEmail,
-      );
-      if (!snapshot.isFreeEnrollment) {
-        console.warn('🆓 Rejected free enrollment request — server snapshot does not flag it as free:', {
-          payableAmount: snapshot.totals.payableAmount,
-          grandTotal: snapshot.totals.grandTotal,
-          subtotal: snapshot.pricing.subtotal,
-          totalDiscountAmount: snapshot.pricing.discounts.totalDiscountAmount,
-          appliedCredits: snapshot.credits.applied,
-        });
-        return res.status(409).json({
-          success: false,
-          message:
-            "We couldn't verify that your cart qualifies for free enrollment. Your cart total may be out of date — please refresh your cart and try again.",
-          error: 'FREE_ENROLLMENT_NOT_AUTHORIZED',
-          serverPayableAmount: snapshot.totals.payableAmount,
-          serverGrandTotal: snapshot.totals.grandTotal,
-        });
-      }
-      console.log('🆓 Server snapshot confirms free enrollment:', {
-        reason: snapshot.freeEnrollmentReason,
-        grandTotal: snapshot.totals.grandTotal,
-      });
-    } catch (snapshotError: any) {
-      console.error('🆓 Free-enrollment snapshot recalculation failed:', snapshotError);
-      return res.status(500).json({
-        success: false,
-        message: 'Failed to verify free enrollment eligibility. Please try again.',
-        error: 'SNAPSHOT_RECALC_FAILED',
       });
     }
 
@@ -2788,8 +1258,7 @@ router.post('/request-free-enrollment', supabaseAuth, async (req: any, res) => {
           content: `${parent.email} has requested a free enrollment (100% discount) for ${childNames} in ${classNames}. Please review and approve or reject this request.`,
           targetType: 'individual',
           targetData: { userId: admin.userId, enrollmentIds, discountCode },
-          scheduledFor: null,
-          expiresAt: null
+          scheduledFor: null
         });
         
         // Create recipient for the notification
@@ -2948,8 +1417,7 @@ router.post('/approve-enrollment/:enrollmentId', supabaseAuth, async (req: any, 
             content: `Your free enrollment request for ${enrollment.childName} in ${enrollment.className} has been approved. The enrollment is now active.`,
             targetType: 'individual',
             targetData: { userId: parentUser.id, enrollmentId },
-            scheduledFor: null,
-            expiresAt: null
+            scheduledFor: null
           });
           
           await storage.createNotificationRecipient({
@@ -2996,8 +1464,7 @@ router.post('/approve-enrollment/:enrollmentId', supabaseAuth, async (req: any, 
             content: `Your free enrollment request for ${enrollment.childName} in ${enrollment.className} was not approved. ${reason ? `Reason: ${reason}` : 'Please contact the school for more information.'}`,
             targetType: 'individual',
             targetData: { userId: parentUser.id, enrollmentId, reason },
-            scheduledFor: null,
-            expiresAt: null
+            scheduledFor: null
           });
           
           await storage.createNotificationRecipient({
@@ -3022,195 +1489,6 @@ router.post('/approve-enrollment/:enrollmentId', supabaseAuth, async (req: any, 
 
   } catch (error: any) {
     console.error('❌ Error processing enrollment approval:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
-});
-
-// Admin endpoint to sync payments from Stripe for a specific parent
-// This helps reconcile missing payments that may not have been recorded by webhooks
-router.post('/admin/sync-payments/:parentEmail', supabaseAuth, requireSchoolContext, async (req: any, res) => {
-  try {
-    const parentEmail = decodeURIComponent(req.params.parentEmail);
-    const adminSchoolId = req.schoolId;
-    
-    console.log(`🔄 Syncing Stripe payments for ${parentEmail} (admin from school ${adminSchoolId})`);
-    
-    // SECURITY: Verify the parent exists and admin has access to them
-    const parentUser = await storage.getUserByEmail(parentEmail);
-    if (!parentUser) {
-      return res.status(404).json({
-        success: false,
-        message: 'Parent not found',
-        error: 'PARENT_NOT_FOUND'
-      });
-    }
-    
-    // SECURITY: Check if admin has access to this parent via their children or enrollments
-    const parentChildren = await storage.getChildrenByParentEmail(parentEmail);
-    const parentEnrollments = await storage.getProgramEnrollmentsByParent(parentUser.id);
-    const parentMemberships = await storage.getMembershipEnrollmentsByParentId(parentUser.id);
-    
-    // Check if any enrollment or membership is from admin's school
-    const hasSchoolEnrollment = parentEnrollments.some(e => e.schoolId === adminSchoolId);
-    const hasSchoolMembership = parentMemberships.some(m => m.schoolId === adminSchoolId);
-    const parentBelongsToSchool = parentUser.schoolId === adminSchoolId;
-    
-    if (!hasSchoolEnrollment && !hasSchoolMembership && !parentBelongsToSchool) {
-      console.warn(`🚫 Admin from school ${adminSchoolId} attempted to sync payments for parent ${parentEmail} who is not associated with their school`);
-      return res.status(403).json({
-        success: false,
-        message: 'Access denied: This parent is not associated with your school',
-        error: 'UNAUTHORIZED_ACCESS'
-      });
-    }
-    
-    const stripe = await getStripeClient();
-    
-    // Find the Stripe customer for this parent
-    const customers = await stripe.customers.list({
-      email: parentEmail,
-      limit: 1
-    });
-    
-    if (customers.data.length === 0) {
-      return res.json({
-        success: true,
-        message: 'No Stripe customer found for this email',
-        synced: 0,
-        paymentsFound: 0
-      });
-    }
-    
-    const customer = customers.data[0];
-    
-    // Get all successful payment intents for this customer
-    const paymentIntents = await stripe.paymentIntents.list({
-      customer: customer.id,
-      limit: 100
-    });
-    
-    // Filter for succeeded payments only
-    const succeededPayments = paymentIntents.data.filter(pi => pi.status === 'succeeded');
-    
-    console.log(`💳 Found ${succeededPayments.length} succeeded payments in Stripe for ${parentEmail}`);
-    
-    // Check which payments are already recorded in the database
-    const existingPayments = await storage.getPaymentsByParentEmail(parentEmail);
-    const existingStripeIds = new Set(existingPayments.map(p => p.stripePaymentIntentId));
-    
-    // Find missing payments
-    const missingPayments = succeededPayments.filter(pi => !existingStripeIds.has(pi.id));
-    
-    console.log(`⚠️ Found ${missingPayments.length} payments missing from database`);
-    
-    // Sync missing payments to database
-    const syncedPayments = [];
-    for (const pi of missingPayments) {
-      try {
-        // Extract metadata with defensive parsing
-        let itemsJson: string | undefined;
-        let description = 'Synced payment from Stripe';
-        let childName = 'Unknown';
-        let className = 'Unknown';
-        let enrollmentIds: number[] = [];
-        let derivedSchoolId = adminSchoolId;
-        
-        // Safely extract itemsJson
-        if (pi.metadata?.itemsJson && typeof pi.metadata.itemsJson === 'string') {
-          itemsJson = pi.metadata.itemsJson;
-          try {
-            const items = JSON.parse(itemsJson);
-            if (Array.isArray(items) && items.length > 0) {
-              childName = items[0]?.childName || 'Unknown';
-              className = items.length > 1 ? `${items.length} classes` : (items[0]?.className || 'Unknown');
-              description = `Synced payment (${items.length} items)`;
-            }
-          } catch (e) {
-            console.warn('Failed to parse itemsJson, using defaults');
-          }
-        }
-        
-        // Safely extract enrollmentIds and derive schoolId from enrollments
-        if (pi.metadata?.enrollmentIds && typeof pi.metadata.enrollmentIds === 'string') {
-          try {
-            const parsedIds = JSON.parse(pi.metadata.enrollmentIds);
-            if (Array.isArray(parsedIds)) {
-              enrollmentIds = parsedIds.filter(id => typeof id === 'number');
-              
-              // Derive schoolId from the first valid enrollment
-              for (const eId of enrollmentIds) {
-                const enrollment = parentEnrollments.find(e => e.id === eId);
-                if (enrollment && enrollment.schoolId) {
-                  derivedSchoolId = enrollment.schoolId;
-                  break;
-                }
-              }
-            }
-          } catch (e) {
-            console.warn('Failed to parse enrollmentIds, using empty array');
-          }
-        }
-        
-        // SECURITY: Only sync payments that belong to admin's school
-        // If we can't determine the school from enrollment, only sync if parent belongs to admin's school
-        if (derivedSchoolId !== adminSchoolId && !parentBelongsToSchool) {
-          console.log(`⚠️ Skipping payment ${pi.id} - belongs to different school (${derivedSchoolId})`);
-          continue;
-        }
-        
-        // Use the parent's email from our verified record, not from Stripe metadata
-        const payment = {
-          schoolId: derivedSchoolId,
-          parentId: parentUser.id,
-          parentEmail: parentEmail, // Use verified email
-          childName,
-          className,
-          description: `[Synced] ${description}`,
-          amount: pi.amount,
-          currency: pi.currency || 'usd',
-          status: 'completed' as const,
-          stripePaymentIntentId: pi.id,
-          stripeChargeId: null,
-          stripeRefundId: null,
-          originalPaymentId: null,
-          enrollmentIds,
-          metadata: {
-            syncedAt: new Date().toISOString(),
-            syncedByAdmin: req.user?.email,
-            originalCreated: new Date(pi.created * 1000).toISOString()
-          },
-          paymentDate: new Date(pi.created * 1000)
-        };
-        
-        const createdPayment = await storage.createPayment(payment);
-        syncedPayments.push({
-          id: createdPayment.id,
-          stripeId: pi.id,
-          amount: pi.amount / 100,
-          created: new Date(pi.created * 1000).toISOString()
-        });
-        
-        console.log(`✅ Synced payment ${pi.id} ($${pi.amount / 100})`);
-      } catch (paymentError: any) {
-        console.error(`❌ Failed to sync payment ${pi.id}:`, paymentError.message);
-      }
-    }
-    
-    res.json({
-      success: true,
-      message: `Synced ${syncedPayments.length} of ${missingPayments.length} missing payments`,
-      synced: syncedPayments.length,
-      paymentsFound: succeededPayments.length,
-      existingPayments: existingPayments.length,
-      missingPayments: missingPayments.length,
-      syncedPayments
-    });
-    
-  } catch (error: any) {
-    console.error('❌ Error syncing payments from Stripe:', error);
     res.status(500).json({
       success: false,
       error: error.message

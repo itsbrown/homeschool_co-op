@@ -6,28 +6,25 @@ import { nlpService } from "./nlp-service";
 import bcrypt from "bcryptjs";
 import session from "express-session";
 import { z } from "zod";
-import { insertUserSchema, insertCurriculumSchema, insertLessonSchema, insertEventSchema, insertMarketplaceItemSchema, insertKnowledgeBaseSchema, insertChildSchema, insertEmergencyContactSchema, insertProgramSchema, insertProgramEnrollmentSchema, insertMembershipEnrollmentSchema, userRoles, users, systemRoles, type SystemRole } from "@shared/schema";
+import { insertUserSchema, insertCurriculumSchema, insertLessonSchema, insertEventSchema, insertMarketplaceItemSchema, insertKnowledgeBaseSchema, insertChildSchema, insertEmergencyContactSchema, insertProgramSchema, insertProgramEnrollmentSchema, insertMembershipEnrollmentSchema, userRoles, users } from "@shared/schema";
 import { getDb } from "./db";
 import { eq } from "drizzle-orm";
 import { supabaseAuth } from "./middleware/supabase-auth";
-import { requireRole } from "./middleware/auth0-auth";
 
 // Type for authenticated requests with our auth structure
 interface AuthenticatedRequest extends Request {
   user?: any;
   session?: any;
 }
+// Removed session-based children router - using Auth0 endpoints instead
 import * as emergencyContactsApi from "./api/emergency-contacts";
 import * as programsApi from "./api/programs";
 import * as programEnrollmentsApi from "./api/program-enrollments";
 import * as csvUploadApi from "./api/csv-upload";
 import aiPricingRouter from "./api/ai-pricing";
 import adminClassesRouter from "./api/admin-classes";
-import adminSessionsRouter from "./api/admin-sessions";
-import sessionEnrollmentsRouter from "./api/session-enrollments";
 import adminRouter from "./api/admin";
 import adminEnrollmentsRouter from "./api/admin-enrollments";
-import adminEnrollmentPaymentRouter from "./api/admin-enrollment-payment";
 import adminUsersRouter from "./api/admin-users";
 import classesRouter from "./api/classes";
 import activitiesRouter from "./api/activities";
@@ -36,9 +33,9 @@ import ocrTestRouter from "./api/ocr-test";
 import schoolsRouter from "./api/schools";
 import schoolAdminRouter from "./api/school-admin";
 import educatorRouter from "./api/educator";
-import adminEducatorsRouter from "./api/admin-educators";
 import roleInvitationsRouter from "./api/role-invitations";
 import parentRouter from "./api/parent";
+import creditsRouter from "./api/credits";
 import { handleEnrollmentMessage } from "./api/enrollment-assistant";
 import migrationRouter from "./routes/migration";
 import marketingLinksRouter from "./api/marketing-links";
@@ -49,25 +46,10 @@ import paymentCleanupRouter from "./api/payment-cleanup";
 import { uploadKnowledgeBaseFiles, getProcessingStatus, getProcessingStats } from "./api/knowledge-base-upload";
 import customFormsRouter from "./api/custom-forms";
 import discountsRouter from "./api/discounts";
-import creditsRouter from "./api/credits";
 import enrollmentConflictsRouter from "./api/enrollment-conflicts";
 import classInclusionsRouter from "./api/class-inclusions";
 import onboardingRouter from "./api/onboarding";
 import membershipAgreementRouter from "./api/membership-agreement";
-import smartTutorialRouter from "./api/smart-tutorial";
-import paymentHelpRouter from "./api/payment-help";
-import parentConciergeRouter from "./api/parent-concierge";
-import announcementsRouter from "./api/announcements";
-import calendarEventsRouter from "./api/calendar-events";
-import analyticsRouter from "./api/analytics";
-import cartRouter from "./api/cart";
-import userSearchRouter from "./api/user-search";
-import assessmentsRouter from "./api/assessments";
-import assessmentUploadRouter from "./api/assessment-upload";
-import lexileRouter from "./api/lexile";
-import lexileAiRouter from "./api/lexile-ai";
-import fundraisersRouter from "./api/fundraisers";
-import guardiansRouter from "./api/guardians";
 import archiver from 'archiver';
 import fs from 'fs';
 import path from 'path';
@@ -115,27 +97,30 @@ const testUsers = {
 
 // Helper functions for school boundary validation
 function extractSchoolId(req: any): number | null {
-  const schoolId = req.user?.schoolId;
-  if (schoolId == null) {
+  const schoolIdFromToken = req.auth?.payload?.school_id;
+  if (!schoolIdFromToken) {
     return null;
   }
-  const parsed = typeof schoolId === 'number' ? schoolId : parseInt(schoolId, 10);
-  return isNaN(parsed) ? null : parsed;
+  const schoolId = parseInt(schoolIdFromToken, 10);
+  return isNaN(schoolId) ? null : schoolId;
 }
 
 function requireSchoolContext(req: any, res: any): number | null {
   const schoolId = extractSchoolId(req);
   if (schoolId === null) {
-    res.status(400).json({ message: "School ID not found in user context" });
+    res.status(400).json({ message: "School ID not found or invalid in user metadata" });
     return null;
   }
   return schoolId;
 }
 
-export async function registerRoutes(app: Express, existingServer?: Server): Promise<Server> {
-  // NOTE: initializeDatabase() is intentionally NOT called here.
-  // It is deferred until after server.listen() so the health check endpoint
-  // responds immediately. See server/index.ts listen callback.
+// Removed express-session declarations - using Auth0 token-based authentication
+
+export async function registerRoutes(app: Express): Promise<Server> {
+  // Initialize database tables
+  // Migrations are idempotent and safe to run multiple times
+  const { initializeDatabase } = await import('./init-db');
+  await initializeDatabase();
 
   // Import Supabase authentication middleware
   const { supabaseAuth } = await import("./middleware/supabase-auth");
@@ -236,99 +221,36 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
-  // Role assignment endpoint — requires authentication and enforces a role hierarchy.
-  // Dual-write: updates both users.role (legacy) and user_roles table (new system).
-  // Hierarchy: superAdmin → any role; admin → any except superAdmin;
-  //            schoolAdmin → teacher/director/educator/parent/student (own school only)
-  app.post(
-    "/api/auth/update-role",
-    supabaseAuth,
-    requireRole(['superAdmin', 'admin', 'schoolAdmin']),
-    async (req: any, res) => {
-      try {
-        const callerDbId: number | undefined = req.user?.id;
-        if (!callerDbId) {
-          return res.status(401).json({ message: 'Authentication required' });
-        }
+  // Role update endpoint for Firebase users
+  app.post("/api/auth/update-role", async (req, res) => {
+    try {
+      const { role } = req.body;
 
-        const { targetUserId, role: newRole } = req.body;
-
-        // Validate new role is a known system role
-        if (!newRole || typeof newRole !== 'string' || !(systemRoles as readonly string[]).includes(newRole)) {
-          return res.status(400).json({ message: 'Invalid role provided' });
-        }
-        const typedRole = newRole as SystemRole;
-
-        // Determine caller's effective role from the database (user_roles is source of truth)
-        const callerDbRoles = await storage.getUserRolesByUserId(callerDbId);
-        const callerRoleNames = callerDbRoles.map((r: any) => r.role as string);
-        let callerRole: string;
-        if (callerRoleNames.includes('superAdmin')) callerRole = 'superAdmin';
-        else if (callerRoleNames.includes('admin')) callerRole = 'admin';
-        else if (callerRoleNames.includes('schoolAdmin')) callerRole = 'schoolAdmin';
-        else callerRole = req.auth?.role ?? '';
-
-        // Apply role-assignment hierarchy
-        const SUPERADMIN_ONLY: SystemRole[] = ['superAdmin'];
-        const SCHOOLADMIN_ASSIGNABLE: SystemRole[] = ['teacher', 'director', 'educator', 'parent', 'student'];
-
-        if (callerRole === 'schoolAdmin' && !SCHOOLADMIN_ASSIGNABLE.includes(typedRole)) {
-          return res.status(403).json({ message: `School admins cannot assign the '${typedRole}' role` });
-        }
-        if (callerRole === 'admin' && SUPERADMIN_ONLY.includes(typedRole)) {
-          return res.status(403).json({ message: `Admins cannot assign the '${typedRole}' role` });
-        }
-
-        // Determine target user — defaults to self if not specified
-        const userId = targetUserId ? parseInt(targetUserId, 10) : callerDbId;
-        if (isNaN(userId)) {
-          return res.status(400).json({ message: 'Invalid targetUserId' });
-        }
-
-        // Fetch target user via storage to validate existence and enforce tenant scope
-        const targetUser = await storage.getUser(userId);
-        if (!targetUser) {
-          return res.status(404).json({ message: 'User not found' });
-        }
-
-        // Tenant scope enforcement: schoolAdmin may only modify users in their own school
-        if (callerRole === 'schoolAdmin') {
-          const callerUser = await storage.getUser(callerDbId);
-          if (!callerUser?.schoolId || callerUser.schoolId !== targetUser.schoolId) {
-            return res.status(403).json({ message: 'School admins can only assign roles to users in their own school' });
-          }
-        }
-
-        // Dual-write: update users.role (legacy) and user_roles (new system) via storage
-        const updatedUser = await storage.updateUser(userId, { role: typedRole });
-        if (!updatedUser) {
-          return res.status(404).json({ message: 'User not found' });
-        }
-
-        // Upsert user_roles entry for the new role (dual-write to new system via storage)
-        const existingRoles = await storage.getUserRolesByUserId(userId);
-        const alreadyExists = existingRoles.some((r: any) => r.role === typedRole);
-        if (!alreadyExists) {
-          await storage.createUserRole({
-            userId,
-            role: typedRole,
-            schoolId: updatedUser.schoolId ?? null,
-            isPrimary: false,
-          });
-        }
-
-        res.setHeader('Content-Type', 'application/json');
-        return res.status(200).json({
-          message: 'Role updated successfully',
-          user: { id: updatedUser.id, email: updatedUser.email, role: typedRole },
-        });
-      } catch (error) {
-        console.error('Error updating user role:', error);
-        res.setHeader('Content-Type', 'application/json');
-        return res.status(500).json({ message: 'Internal server error' });
+      if (!role || !['parent', 'instructor', 'schoolAdmin', 'admin'].includes(role)) {
+        return res.status(400).json({ message: 'Invalid role provided' });
       }
-    },
-  );
+
+      // Update the user role and return updated user data
+      const updatedUser = {
+        id: 1, // This would be dynamic in a real system
+        name: req.body.name || 'User',
+        email: req.body.email || '',
+        role: role,
+        avatar: null,
+        subscription: 'free'
+      };
+
+      res.setHeader('Content-Type', 'application/json');
+      return res.status(200).json({
+        message: 'Role updated successfully',
+        user: updatedUser
+      });
+    } catch (error) {
+      console.error('Error updating user role:', error);
+      res.setHeader('Content-Type', 'application/json');
+      return res.status(500).json({ message: 'Internal server error' });
+    }
+  });
 
   // Aliases already defined at top of registerRoutes function
 
@@ -687,7 +609,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
   app.post("/api/curricula/generate", isAuthenticated, async (req, res) => {
     try {
       const authData = (req as any).auth;
-      const userId = authData?.dbUserId || 'dev-user';
+      const userId = authData?.userId || 'dev-user';
       console.log("AI Curriculum Generation - Request received", { userId });
       const { subject, gradeLevel, learningStyles, additionalDetails, knowledgeBaseIds } = req.body;
 
@@ -1002,78 +924,6 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
-  app.get("/api/knowledge-bases/subjects", async (req, res) => {
-    try {
-      const knowledgeBases = await storage.getPublicKnowledgeBases();
-      let subjects = [...new Set(knowledgeBases.map(kb => kb.subject))];
-      if (!subjects.length) {
-        subjects = ["Mathematics", "Science", "Language Arts", "History", "Computer Science"];
-      }
-      res.status(200).json(subjects);
-    } catch (error) {
-      console.error("Error fetching subjects:", error);
-      res.status(500).json({ message: "Error fetching subjects" });
-    }
-  });
-
-  app.get("/api/knowledge-bases/subject/:subject", async (req, res) => {
-    try {
-      const { subject } = req.params;
-      const knowledgeBases = await storage.getKnowledgeBasesBySubject(subject);
-      res.status(200).json(knowledgeBases);
-    } catch (error) {
-      console.error("Error fetching knowledge bases by subject:", error);
-      res.status(500).json({ message: "Error fetching knowledge bases" });
-    }
-  });
-
-  app.get("/api/knowledge-bases/author/:authorId", isAuthenticated, async (req, res) => {
-    try {
-      const { authorId } = req.params;
-      const targetAuthorId = authorId === "me" ? req.session.userId : parseInt(authorId);
-      const knowledgeBases = await storage.getKnowledgeBasesByAuthor(targetAuthorId);
-      res.status(200).json(knowledgeBases);
-    } catch (error) {
-      console.error("Error fetching knowledge bases by author:", error);
-      res.status(500).json({ message: "Error fetching knowledge bases" });
-    }
-  });
-
-  // Combined endpoint to get all accessible knowledge bases for the user (public + owned)
-  app.get("/api/knowledge-bases/all", isAuthenticated, async (req, res) => {
-    try {
-      let publicKnowledgeBases: any[] = [];
-      let userKnowledgeBases: any[] = [];
-
-      try {
-        publicKnowledgeBases = await storage.getPublicKnowledgeBases();
-      } catch (publicError) {
-        console.error("Error fetching public knowledge bases:", publicError);
-      }
-
-      try {
-        const authData = (req as any).auth;
-        if (authData?.dbUserId) {
-          userKnowledgeBases = await storage.getKnowledgeBasesByAuthor(authData.dbUserId);
-        }
-      } catch (userError) {
-        console.error("Error fetching user knowledge bases:", userError);
-      }
-
-      const combinedKnowledgeBases = [...publicKnowledgeBases];
-      userKnowledgeBases.forEach(userKb => {
-        if (!combinedKnowledgeBases.some(kb => kb.id === userKb.id)) {
-          combinedKnowledgeBases.push(userKb);
-        }
-      });
-
-      res.status(200).json(combinedKnowledgeBases);
-    } catch (error) {
-      console.error("Error fetching combined knowledge bases:", error);
-      res.status(200).json([]);
-    }
-  });
-
   // GET individual knowledge base by ID (public access)
   app.get("/api/knowledge-bases/:id", async (req, res) => {
     try {
@@ -1121,6 +971,96 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     }
   });
 
+  app.get("/api/knowledge-bases/subjects", async (req, res) => {
+    try {
+      // Get all public knowledge bases to extract unique subjects
+      const knowledgeBases = await storage.getPublicKnowledgeBases();
+
+      // Extract unique subjects
+      let subjects = [...new Set(knowledgeBases.map(kb => kb.subject))];
+
+      // Add some default subjects if none found (for a better UX)
+      if (!subjects.length) {
+        subjects = ["Mathematics", "Science", "Language Arts", "History", "Computer Science"];
+      }
+
+      res.status(200).json(subjects);
+    } catch (error) {
+      console.error("Error fetching subjects:", error);
+      res.status(500).json({ message: "Error fetching subjects" });
+    }
+  });
+
+  app.get("/api/knowledge-bases/subject/:subject", async (req, res) => {
+    try {
+      const { subject } = req.params;
+      const knowledgeBases = await storage.getKnowledgeBasesBySubject(subject);
+      res.status(200).json(knowledgeBases);
+    } catch (error) {
+      console.error("Error fetching knowledge bases by subject:", error);
+      res.status(500).json({ message: "Error fetching knowledge bases" });
+    }
+  });
+
+  app.get("/api/knowledge-bases/author/:authorId", isAuthenticated, async (req, res) => {
+    try {
+      const { authorId } = req.params;
+
+      // If requesting own knowledge bases, use session user ID
+      const targetAuthorId = authorId === "me" ? req.session.userId : parseInt(authorId);
+
+      const knowledgeBases = await storage.getKnowledgeBasesByAuthor(targetAuthorId);
+      res.status(200).json(knowledgeBases);
+    } catch (error) {
+      console.error("Error fetching knowledge bases by author:", error);
+      res.status(500).json({ message: "Error fetching knowledge bases" });
+    }
+  });
+
+  // Combined endpoint to get all accessible knowledge bases for the user (public + owned)
+  app.get("/api/knowledge-bases/all", isAuthenticated, async (req, res) => {
+    try {
+      let publicKnowledgeBases = [];
+      let userKnowledgeBases = [];
+
+      try {
+        // Get public knowledge bases
+        publicKnowledgeBases = await storage.getPublicKnowledgeBases();
+      } catch (publicError) {
+        console.error("Error fetching public knowledge bases:", publicError);
+        // Continue with empty array if failed
+      }
+
+      try {
+        // Get user's knowledge bases if user is authenticated
+        const authData = (req as any).auth;
+        if (authData?.userId) {
+          userKnowledgeBases = await storage.getKnowledgeBasesByAuthor(authData.userId);
+        }
+      } catch (userError) {
+        console.error("Error fetching user knowledge bases:", userError);
+        // Continue with empty array if failed
+      }
+
+      // Combine and deduplicate knowledge bases
+      const combinedKnowledgeBases = [...publicKnowledgeBases];
+
+      // Add user's knowledge bases that aren't already in the list
+      userKnowledgeBases.forEach(userKb => {
+        if (!combinedKnowledgeBases.some(kb => kb.id === userKb.id)) {
+          combinedKnowledgeBases.push(userKb);
+        }
+      });
+
+      // Return empty array if none found
+      res.status(200).json(combinedKnowledgeBases);
+    } catch (error) {
+      console.error("Error fetching combined knowledge bases:", error);
+      // Return empty array instead of error status to avoid breaking the UI
+      res.status(200).json([]);
+    }
+  });
+
   app.get("/api/knowledge-bases/:id", isAuthenticated, async (req, res) => {
     try {
       const knowledgeBaseId = parseInt(req.params.id);
@@ -1132,7 +1072,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
 
       // Check if knowledge base is public or user is authenticated and is the author
       const authData = (req as any).auth;
-      const isAuthor = authData?.dbUserId && String(knowledgeBase.authorId) === String(authData.dbUserId);
+      const isAuthor = authData?.userId && String(knowledgeBase.authorId) === String(authData.userId);
       if (!knowledgeBase.isPublic && !isAuthor) {
         return res.status(403).json({ message: "You don't have permission to access this knowledge base" });
       }
@@ -1147,12 +1087,12 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
   app.post("/api/knowledge-bases", isAuthenticated, async (req, res) => {
     try {
       const authData = (req as any).auth;
-      console.log("Received knowledge base creation request from:", authData?.dbUserId);
+      console.log("Received knowledge base creation request from:", authData?.userId);
       console.log("Request body:", JSON.stringify(req.body, null, 2));
       console.log("Auth:", JSON.stringify(authData, null, 2));
 
       // Check if user ID is available in auth
-      if (!authData?.dbUserId) {
+      if (!authData?.userId) {
         console.log("User not authenticated in auth");
         return res.status(401).json({ message: "User not authenticated" });
       }
@@ -1168,7 +1108,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
         try {
           const knowledgeBase = await storage.createKnowledgeBase({
             ...validatedData,
-            authorId: authData.dbUserId
+            authorId: authData.userId
           });
 
           console.log("Knowledge base created with ID:", knowledgeBase.id);
@@ -1205,7 +1145,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
             const knowledgeBase = {
               id: newId,
               ...validatedData,
-              authorId: authData.dbUserId,
+              authorId: authData.userId,
               downloadCount: 0,
               purchasedBy: [],
               createdAt: new Date().toISOString(),
@@ -1262,7 +1202,7 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
 
       // Check if user is the author
       const authData = (req as any).auth;
-      if (knowledgeBase.authorId !== authData?.dbUserId) {
+      if (knowledgeBase.authorId !== authData?.userId) {
         return res.status(403).json({ message: "You don't have permission to update this knowledge base" });
       }
 
@@ -1860,13 +1800,9 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
         amount: membershipFee,
         amountPaid: 0,
         remainingBalance: membershipFee,
-        totalAmount: membershipFee,
-        balanceDue: membershipFee,
         status: 'pending_payment' as const,
         dueDate,
-        startDate: dueDate,
         expirationDate,
-        endDate: expirationDate,
         gracePeriodEnd,
         paymentMethod: null,
         notes: null
@@ -2007,23 +1943,10 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
   app.post('/api/ai/enrollment-assistant', jwtCheck, handleEnrollmentMessage);
 
   // SuperAdmin routes
-  const { getSuperAdminSchools, getSuperAdminSchoolDetails, updateSuperAdminSchool, getSchoolFeatures, updateSchoolFeatures } = await import('./api/superadmin-schools');
+  const { getSuperAdminSchools, getSuperAdminSchoolDetails, updateSuperAdminSchool } = await import('./api/superadmin-schools');
   app.get('/api/superadmin/schools', jwtCheck, requireRole(['superAdmin']), getSuperAdminSchools);
   app.get('/api/superadmin/schools/:schoolId', jwtCheck, requireRole(['superAdmin']), getSuperAdminSchoolDetails);
   app.patch('/api/superadmin/schools/:schoolId', jwtCheck, requireRole(['superAdmin']), updateSuperAdminSchool);
-  app.get('/api/superadmin/schools/:schoolId/features', jwtCheck, requireRole(['superAdmin']), getSchoolFeatures);
-  app.put('/api/superadmin/schools/:schoolId/features', jwtCheck, requireRole(['superAdmin']), updateSchoolFeatures);
-
-  // SuperAdmin: email log viewer
-  app.get('/api/admin/email-log', jwtCheck, requireRole(['superAdmin']), async (_req: any, res: any) => {
-    try {
-      const logs = await storage.getEmailLogs(200);
-      res.json(logs);
-    } catch (err: any) {
-      console.error('[email-log] Failed to query email_log:', err);
-      res.status(500).json({ message: 'Failed to fetch email logs', error: err.message });
-    }
-  });
 
   // Locations API is handled by the locations router with proper authentication
   // See: app.use("/api/locations", supabaseAuth, locationsRouter);
@@ -2164,45 +2087,11 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
   // Register API routers
   app.use("/api/classes", classesRouter);
   app.use("/api/discounts", discountsRouter);
-  app.use("/api/credits", creditsRouter);
-  app.use("/api/cart", cartRouter);
   app.use("/api/ai", aiPricingRouter);
   app.use("/api/ai-insights", aiInsightsRouter);
-  app.use("/api/smart-tutorial", smartTutorialRouter);
-  app.use("/api/payment-help", paymentHelpRouter);
-  app.use("/api/parent-concierge", parentConciergeRouter);
-  // Register /api/admin/educators BEFORE /api/admin to ensure specific route matches first
-  // (admin-educators uses Supabase auth, while admin uses Auth0 auth)
-  app.use("/api/admin/educators", adminEducatorsRouter);
-
-  // Admin on-demand credit integrity check — scoped to exact path, role-guarded
-  app.post(
-    '/api/admin/credits/integrity-check',
-    supabaseAuth,
-    requireRole(['admin', 'schoolAdmin', 'director', 'superAdmin']),
-    async (_req: any, res: any) => {
-      try {
-        const { runCreditIntegrityCheck } = await import('./services/credit-integrity-check');
-        const report = await runCreditIntegrityCheck();
-        res.json(report);
-      } catch (error: any) {
-        console.error('[AdminRoute] Error running credit integrity check:', error);
-        res.status(500).json({ error: 'Failed to run credit integrity check' });
-      }
-    }
-  );
-
-  // Mount enrollment routers at /api/admin/enrollments with Supabase auth
-  // These are separate from the Auth0-based admin router at /api/admin
-  app.use("/api/admin/enrollments", supabaseAuth, adminEnrollmentsRouter); // Admin enrollment CRUD + comp (Supabase auth)
-  // supabaseAuth is NOT repeated here. Express runs both mounts for /api/admin/enrollments requests
-  // in sequence; the first mount already populates req.user and req.auth for supabaseAuth-based auth.
-  // requireRole reads from req.auth (set above) before delegating to adminEnrollmentPaymentRouter.
-  app.use("/api/admin/enrollments", requireRole(['admin', 'schoolAdmin', 'superAdmin']), adminEnrollmentPaymentRouter); // Admin enrollment payment management
-  app.use("/api/admin/sessions", adminSessionsRouter); // Session management — must be before /api/admin
   app.use("/api/admin", adminRouter);
   app.use("/api/admin-classes", adminClassesRouter); // Add duplicate route for backwards compatibility
-  app.use("/api/session-enrollments", sessionEnrollmentsRouter); // Session-based enrollment
+  app.use("/api/admin-enrollments", adminEnrollmentsRouter); // Admin enrollment management
   app.use("/api/admin-users", adminUsersRouter); // Admin user management
   app.use("/api/activities", activitiesRouter);
   app.use("/api/migration", migrationRouter);
@@ -2216,11 +2105,8 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
   // Also mount at /api/parent/enrollments for frontend compatibility
   app.use("/api/parent/enrollments", supabaseAuth, enrollmentsRouter.default);
 
-  // Mount guardians router for child guardian management (Supabase auth)
-  app.use("/api/children", supabaseAuth, guardiansRouter);
-
-  // Add children enrollments endpoint (protected - requires parent ownership)
-  app.get("/api/children/:id/enrollments", supabaseAuth, async (req: any, res) => {
+  // Add children enrollments endpoint
+  app.get("/api/children/:id/enrollments", async (req, res) => {
     try {
       const childId = parseInt(req.params.id);
 
@@ -2228,71 +2114,14 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
         return res.status(400).json({ message: 'Invalid child ID' });
       }
 
-      // Verify the requesting user owns this child
-      const userEmail = req.user?.email;
-      if (!userEmail) {
-        return res.status(401).json({ message: 'Authentication required' });
-      }
-
-      // Get the child and verify ownership
-      const child = await storage.getChildById(childId);
-      if (!child) {
-        return res.status(404).json({ message: 'Child not found' });
-      }
-
-      // Check if the parent's email matches the child's parent
-      const parentChildren = await storage.getChildrenByParentEmail(userEmail);
-      const ownsChild = parentChildren.some(c => c.id === childId);
-      
-      if (!ownsChild) {
-        console.log(`❌ User ${userEmail} attempted to access child ${childId} enrollments without ownership`);
-        return res.status(403).json({ message: 'Access denied - you can only view your own children\'s enrollments' });
-      }
-
-      console.log(`📚 Fetching enrollments for child ID: ${childId} (verified parent: ${userEmail})`);
+      console.log(`📚 Fetching enrollments for child ID: ${childId}`);
 
       // Get enrollments for this child
       const enrollments = await storage.getEnrollmentsByChildId(childId);
 
       console.log(`📚 Found ${enrollments.length} enrollments for child ${childId}:`, enrollments);
 
-      // Enrich enrollments with instructor contact info
-      const enrichedEnrollments = await Promise.all(
-        enrollments.map(async (enrollment: any) => {
-          try {
-            const classId = enrollment.classId || enrollment.programId;
-            if (!classId) return enrollment;
-
-            // Get educators assigned to this class
-            const assignments = await storage.getEducatorClassAssignmentsByClassId(classId);
-            
-            // Get user info for each educator
-            const instructors = await Promise.all(
-              assignments.map(async (assignment: any) => {
-                const user = await storage.getUser(assignment.educatorId);
-                if (!user) return null;
-                return {
-                  id: user.id,
-                  name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.name || 'Instructor',
-                  email: user.email,
-                  phone: user.phone || null,
-                  isPrimary: assignment.isPrimary
-                };
-              })
-            );
-
-            return {
-              ...enrollment,
-              instructors: instructors.filter(Boolean)
-            };
-          } catch (err) {
-            console.error(`Error fetching instructors for enrollment ${enrollment.id}:`, err);
-            return { ...enrollment, instructors: [] };
-          }
-        })
-      );
-
-      res.json(enrichedEnrollments);
+      res.json(enrollments);
     } catch (error) {
       console.error('Error fetching child enrollments:', error);
       res.status(500).json({ message: 'Failed to fetch enrollments' });
@@ -2540,6 +2369,16 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       res.status(500).json({ message: "Error fetching user role" });
     }
   });
+
+  // DEPRECATED: Legacy unauthenticated routes removed - use /api/school-admin/* routes instead
+  // These routes had NO authentication and used old file-based data access
+  // Proper authenticated routes exist in server/api/school-admin.ts
+  
+  // Removed routes:
+  // - GET /api/schools/students/:id (now: GET /api/school-admin/students/:id)
+  // - PUT /api/schools/students/:id (now: PUT /api/school-admin/students/:id)
+  // - GET /api/schools/students (now: GET /api/school-admin/students)
+
 
   app.get("/api/users/notifications", jwtCheck, async (req: any, res) => {
     try {
@@ -2901,18 +2740,9 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
   app.use("/api/schools", schoolsRouter);
   app.use("/api/school-admin", schoolAdminRouter);
   app.use("/api/educator", educatorRouter);
-  // Note: /api/admin/educators is registered earlier in the file (before /api/admin) to ensure specific route matching
   app.use("/api/parent", parentRouter);
+  app.use("/api/credits", creditsRouter);
   app.use("/api/custom-forms", customFormsRouter);
-  app.use("/api/announcements", announcementsRouter);
-  app.use("/api/calendar-events", calendarEventsRouter);
-  app.use("/api/analytics", analyticsRouter);
-  app.use("/api/user-search", userSearchRouter);
-  app.use("/api/assessments", assessmentsRouter);
-  app.use("/api/assessment-upload", assessmentUploadRouter);
-  app.use("/api/lexile", lexileRouter);
-  app.use("/api/lexile/insights", lexileAiRouter);
-  app.use("/api/fundraisers", fundraisersRouter);
   
   // School Admin Child Management endpoints (with JWT auth for school admins)
   // Delete child as school admin
@@ -2924,73 +2754,31 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
         return res.status(400).json({ message: 'Invalid child ID' });
       }
 
-      console.log('🗑️ Attempting to delete child with ID:', childId);
+      console.log('🗑️ Deleting child with ID:', childId);
 
-      // First, get the child data
+      // First, get the child data before deleting
       const child = await storage.getChild(childId);
       
       if (!child) {
         return res.status(404).json({ message: 'Child not found' });
       }
 
-      // Check for blocking references before attempting deletion
-      const blockingReasons: string[] = [];
+      // Now delete the child record
+      await storage.deleteChild(childId);
 
-      // 1. Check for program enrollments
-      const allEnrollments = await storage.getProgramEnrollments();
-      const childEnrollments = allEnrollments.filter(e => e.childId === childId);
-      if (childEnrollments.length > 0) {
-        const activeCount = childEnrollments.filter(e => 
-          e.status === 'enrolled' || e.status === 'pending' || e.status === 'confirmed' || e.status === 'pending_payment'
-        ).length;
-        if (activeCount > 0) {
-          blockingReasons.push(`${activeCount} active enrollment${activeCount > 1 ? 's' : ''}`);
-        } else {
-          blockingReasons.push(`${childEnrollments.length} enrollment record${childEnrollments.length > 1 ? 's' : ''}`);
-        }
-      }
-
-      // 2. Check for discount applications
-      try {
-        const discountApplications = await storage.getDiscountApplicationsByChild(childId);
-        if (discountApplications && discountApplications.length > 0) {
-          blockingReasons.push(`${discountApplications.length} discount application${discountApplications.length > 1 ? 's' : ''}`);
-        }
-      } catch (discountErr) {
-        // If method doesn't exist, skip this check
-        console.log('⚠️ Could not check discount applications:', discountErr);
-      }
-
-      // If there are blocking references, return error with details
-      if (blockingReasons.length > 0) {
-        const childName = `${child.firstName} ${child.lastName}`;
-        const reasonsList = blockingReasons.join(', ');
-        console.log(`❌ Cannot delete ${childName}: has ${reasonsList}`);
-        
-        return res.status(409).json({
-          success: false,
-          message: `Cannot delete ${childName}. Please remove the following first: ${reasonsList}.`,
-          blockingReasons,
-          childId,
-          childName
-        });
-      }
-
-      // First delete the school student record (if exists)
+      // Also delete the corresponding school student record
       try {
         const schoolStudents = await storage.getAllSchoolStudents();
         const schoolStudent = schoolStudents.find(ss => ss.childId === childId);
         
         if (schoolStudent) {
           await storage.deleteSchoolStudent(schoolStudent.id);
-          console.log('✅ Deleted school student record with ID:', schoolStudent.id);
+          console.log('✅ Also deleted school student record with ID:', schoolStudent.id);
         }
       } catch (schoolStudentError) {
         console.warn('⚠️ Failed to delete school student record:', schoolStudentError);
+        // Don't fail the entire operation if school student deletion fails
       }
-
-      // Now delete the child record
-      await storage.deleteChild(childId);
 
       console.log('✅ Child deleted successfully:', child.firstName, child.lastName);
 
@@ -3018,10 +2806,10 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
       console.log('👶 School admin child creation endpoint hit');
       console.log('📝 Request body:', JSON.stringify(req.body, null, 2));
 
-      // Extract school_id from authenticated user's DB record (req.user.schoolId set by auth middleware)
-      const schoolId = req.user?.schoolId;
-      if (schoolId == null) {
-        return res.status(400).json({ message: "School ID not found in user context" });
+      // Extract school_id from authenticated user's token metadata
+      const schoolId = req.auth?.payload?.school_id;
+      if (!schoolId) {
+        return res.status(400).json({ message: "School ID not found in user metadata" });
       }
 
       const {
@@ -3191,54 +2979,12 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
   
   // Multi-location support routes
   const locationsRouter = (await import("./api/locations")).default;
-  
-  // PUBLIC endpoint for locations - no auth required (for registration page)
-  // Must be defined BEFORE the authenticated router
-  app.get("/api/locations/public", async (req, res) => {
-    try {
-      const schoolIdParam = req.query.schoolId;
-      
-      if (!schoolIdParam) {
-        return res.status(400).json({ message: "School ID is required" });
-      }
-      
-      const schoolId = parseInt(String(schoolIdParam), 10);
-      if (isNaN(schoolId) || schoolId <= 0) {
-        return res.status(400).json({ message: "Invalid school ID - must be a positive number" });
-      }
-      
-      console.log('🏢 [PUBLIC] Fetching locations for school ID:', schoolId);
-      const locations = await storage.getLocationsBySchoolId(schoolId);
-      console.log('✅ [PUBLIC] Found locations:', locations.length);
-      
-      // Return only public information (id and name) - no sensitive data
-      const publicLocations = locations.map(loc => ({
-        id: loc.id,
-        name: loc.name
-      }));
-      
-      res.json(publicLocations);
-    } catch (error) {
-      console.error("Error fetching public locations:", error);
-      res.status(500).json({ message: "Failed to fetch locations" });
-    }
-  });
-  
   app.use("/api/locations", supabaseAuth, locationsRouter);
-  
-  // Location enrollments with parent contacts (for location coordinators)
-  const locationEnrollmentsRouter = (await import("./api/location-enrollments")).default;
-  app.use("/api/location-enrollments", supabaseAuth, locationEnrollmentsRouter);
   
   const notificationsRouter = (await import("./api/notifications")).default;
   app.use("/api/notifications", supabaseAuth, notificationsRouter);
 
   // Billing is mounted once in server/index.ts (avoid duplicate Express stacks).
-
-  // Register auto-pay routes (user) and admin payment-methods routes
-  const autoPayModule = await import("./api/auto-pay");
-  app.use("/api/user", autoPayModule.default);
-  app.use("/api/admin/users", autoPayModule.adminPaymentMethodsRouter);
 
   // Register payment history routes
   const paymentHistoryRouter = (await import("./api/payment-history")).default;
@@ -3259,71 +3005,6 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
   
   const scheduledPaymentsRouter = (await import("./api/scheduled-payments")).default;
   app.use("/api/scheduled-payments", scheduledPaymentsRouter);
-
-  // User-facing credits endpoints - uses unified credit system
-  // GET /api/my-credits - Get all credits for the current user
-  app.get("/api/my-credits", supabaseAuth, async (req: any, res) => {
-    try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({ error: 'User ID not found' });
-      }
-
-      const { creditType, status, includeExpired } = req.query;
-      
-      // Use unified credit system
-      const credits = await storage.getCredits({
-        userId,
-        creditType: creditType as any,
-        status: status as any,
-        includeExpired: includeExpired === 'true'
-      });
-      
-      // Format for frontend compatibility
-      const formattedCredits = credits.map(c => ({
-        ...c,
-        remainingAmount: c.creditAmountCents - c.usedAmountCents,
-        // Extract common metadata fields for backward compatibility
-        minutesWorked: (c.metadata as any)?.minutesWorked || null,
-        sessionId: (c.metadata as any)?.sessionId || null
-      }));
-      
-      res.json(formattedCredits);
-    } catch (error) {
-      console.error('[MyCredits] Error fetching credits:', error);
-      res.status(500).json({ error: 'Failed to fetch credits' });
-    }
-  });
-
-  // GET /api/my-credits/available - Get available credits balance for checkout
-  app.get("/api/my-credits/available", supabaseAuth, async (req: any, res) => {
-    try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({ error: 'User ID not found' });
-      }
-
-      // Use unified credit system
-      const availableCredits = await storage.getAvailableCredits(userId);
-      const totalAvailable = await storage.getTotalAvailableCredits(userId);
-      
-      // Format for frontend compatibility
-      const formattedCredits = availableCredits.map(c => ({
-        ...c,
-        remainingAmount: c.creditAmountCents - c.usedAmountCents,
-        minutesWorked: (c.metadata as any)?.minutesWorked || null,
-        sessionId: (c.metadata as any)?.sessionId || null
-      }));
-      
-      res.json({
-        credits: formattedCredits,
-        totalAvailableCents: totalAvailable
-      });
-    } catch (error) {
-      console.error('[MyCredits] Error fetching available credits:', error);
-      res.status(500).json({ error: 'Failed to fetch available credits' });
-    }
-  });
 
   // General enrollments endpoint for dashboard
   app.get("/api/enrollments", isAuthenticated, async (req: any, res) => {
@@ -3476,16 +3157,16 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
 
           if (accountResult.success) {
             accountCreated = true;
-            // Send account credentials email (fire-and-forget)
+            // Send account credentials email
             if (accountResult.temporaryPassword) {
-              sendAccountCredentialsEmail(
+              await sendAccountCredentialsEmail(
                 invitationDTO.email,
                 firstName,
                 lastName,
                 accountResult.temporaryPassword,
                 invitationDTO.role
-              ).catch(err => console.error('[Email fire-and-forget] sendAccountCredentialsEmail failed:', err));
-              console.log(`✅ Account created and credentials email dispatched to: ${invitationDTO.email}`);
+              );
+              console.log(`✅ Account created and credentials sent to: ${invitationDTO.email}`);
             }
           } else if (!accountResult.userExists && !accountResult.error?.includes('already registered')) {
             console.error(`❌ Failed to create account for ${invitationDTO.email}:`, accountResult.error);
@@ -3804,47 +3485,6 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
   
   app.use("/api/admin/role-invitations", roleInvitationsRouter);
 
-  // ============================================
-  // PUBLIC QR SESSION ENDPOINT (no auth required)
-  // ============================================
-
-  // Resolve a QR token to basic session/class info for the teacher scan page
-  app.get("/api/public/session-by-qr/:token", async (req, res) => {
-    try {
-      const { token } = req.params;
-      if (!token) {
-        return res.status(400).json({ error: 'Token is required' });
-      }
-
-      const session = await storage.getSessionByQrToken(token);
-      if (!session) {
-        return res.status(404).json({ error: 'Invalid or expired QR code' });
-      }
-
-      if (session.qrTokenExpiresAt && new Date(session.qrTokenExpiresAt) < new Date()) {
-        return res.status(400).json({ error: 'QR code has expired' });
-      }
-
-      // Look up class and educator names — expose only minimal info (no PII)
-      const cls = await storage.getClassById(session.classId);
-      const educator = session.educatorId ? await storage.getUser(session.educatorId) : null;
-
-      return res.json({
-        sessionId: session.id,
-        className: cls?.title ?? 'Unknown Class',
-        scheduledDate: session.scheduledDate,
-        startTime: session.scheduledStartTime,
-        endTime: session.scheduledEndTime,
-        status: session.status,
-        educatorName: educator ? `${educator.firstName} ${educator.lastName}` : null,
-        expiresAt: session.qrTokenExpiresAt,
-      });
-    } catch (error) {
-      console.error('[PublicQR] Error fetching session by QR token:', error);
-      return res.status(500).json({ error: 'Failed to retrieve session information' });
-    }
-  });
-
   // School Applications route
   const schoolApplicationsRouter = await import("./api/school-applications");
   app.use("/api/school-applications", schoolApplicationsRouter.default);
@@ -3855,29 +3495,36 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
     console.log('📝 Request body:', JSON.stringify(req.body, null, 2));
 
     try {
-      // SECURITY: Derive schoolId from authenticated admin's DB record (set by auth middleware), not from client
-      const schoolId = req.user?.schoolId;
-      if (schoolId == null) {
-        console.error('❌ No school ID found in user context (DB record)');
+      // SECURITY: Derive schoolId from authenticated admin's JWT token, not from client
+      const schoolIdFromToken = req.auth?.payload?.school_id;
+      if (!schoolIdFromToken) {
+        console.error('❌ No school ID found in JWT token');
         return res.status(400).json({ 
           success: false,
-          message: "School ID not found in user context. Please ensure you're logged in as a school administrator." 
+          message: "School ID not found in user credentials. Please ensure you're logged in as a school administrator." 
+        });
+      }
+      const schoolId = Number(schoolIdFromToken);
+      if (isNaN(schoolId)) {
+        console.error('❌ Invalid school ID in JWT token:', schoolIdFromToken);
+        return res.status(400).json({ 
+          success: false,
+          message: "Invalid school ID in user credentials." 
         });
       }
 
-      console.log('🔐 Authenticated school ID from DB:', schoolId);
+      console.log('🔐 Authenticated school ID from JWT:', schoolId);
 
       // SECURITY: Verify user has schoolAdmin role (only admins can register students)
-      // Use req.user.allRoles (DB-populated by auth middleware) — never JWT payload
-      const userRoles: string[] = req.user?.allRoles ?? [];
-      if (!userRoles.includes('schoolAdmin') && !userRoles.includes('superAdmin')) {
-        console.error('❌ Unauthorized role attempting student registration. Roles:', userRoles);
+      const userRole = req.auth?.payload?.role;
+      if (userRole !== 'schoolAdmin' && userRole !== 'superAdmin') {
+        console.error('❌ Unauthorized role attempting student registration. Role:', userRole);
         return res.status(403).json({
           success: false,
           message: "Access denied: Only school administrators can register students."
         });
       }
-      console.log('✅ Role authorization passed:', userRoles);
+      console.log('✅ Role authorization passed:', userRole);
 
       const {
         firstName,
@@ -3932,22 +3579,15 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
             password: 'temppass123', // Temporary password - parent will set their own
             name: `${firstName}'s Parent`, // Default name
             role: 'parent',
-            subscription: 'free',
-            schoolId: schoolId // Associate parent with the school (derived from admin's JWT)
+            subscription: 'free'
           });
-          console.log('✅ Parent account created:', parentUser.id, 'with schoolId:', schoolId);
+          console.log('✅ Parent account created:', parentUser.id);
         } catch (userError) {
           console.error('❌ Error creating parent user:', userError);
           throw userError;
         }
       } else {
         console.log('✅ Found existing parent:', parentUser.id);
-        // Update parent's schoolId if null (parent may have been created without school association)
-        if (!parentUser.schoolId) {
-          console.log('📝 Updating parent schoolId from null to:', schoolId);
-          await storage.updateUser(parentUser.id, { schoolId: schoolId });
-          parentUser.schoolId = schoolId;
-        }
       }
 
       // Create the student/child record with correct schema
@@ -4036,7 +3676,6 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
 
   // CSV Upload routes
   app.post('/api/admin/upload/classes', isAuthenticated, requireAdmin, csvUploadApi.uploadClassesCsv);
-  app.post('/api/school-admin/upload/classes', jwtCheck, requireRole(['schoolAdmin', 'superAdmin', 'admin']), csvUploadApi.uploadSchoolClassesCsv);
 
   // Children API endpoint for parents
   app.get("/api/children", jwtCheck, async (req, res) => {
@@ -4230,8 +3869,8 @@ export async function registerRoutes(app: Express, existingServer?: Server): Pro
   // Register technical support routes
   registerTechnicalSupportRoutes(app);
 
-  const httpServer = existingServer ?? createServer(app);
-
+  const httpServer = createServer(app);
+  
   // Initialize WebSocket data layer for real-time updates (development only)
   // Autoscale deployments may have issues with WebSocket connections across multiple instances
   const currentEnv = process.env.NODE_ENV || 'development';
@@ -4424,8 +4063,8 @@ async function getCombinedKnowledgeBases(req: any, res: any) {
         try {
             // Get user's knowledge bases if user is authenticated
             const authData = (req as any).auth;
-            if (authData?.dbUserId) {
-                userKnowledgeBases = await storage.getKnowledgeBasesByAuthor(authData.dbUserId);
+            if (authData?.userId) {
+                userKnowledgeBases = await storage.getKnowledgeBasesByAuthor(authData.userId);
             }
         } catch (userError) {
             console.error("Error fetching user knowledge bases:", userError);

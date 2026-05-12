@@ -1,13 +1,5 @@
 /**
- * Credit Ledger Integrity Check Service
- *
- * Audits the credit ledger for three impossible states that can silently accumulate:
- * 1. Double-spent credits (usedAmountCents > creditAmountCents)
- * 2. Status/amount mismatch on credits
- * 3. Completed scheduled payments that claim credits were applied but have no
- *    matching unified_credit_usage_logs entry
- *
- * Used by the daily reconciliation job and the admin on-demand endpoint.
+ * Audits the unified credit ledger for impossible states.
  */
 
 import { storage } from '../storage';
@@ -29,10 +21,6 @@ export interface CreditIntegrityReport {
   };
 }
 
-/**
- * Typed shape for the subset of scheduled_payments.metadata fields
- * that the integrity check cares about.
- */
 interface ScheduledPaymentMeta {
   pendingCreditsReservation?: number;
 }
@@ -49,11 +37,6 @@ function parseScheduledPaymentMeta(metadata: unknown): ScheduledPaymentMeta {
   return result;
 }
 
-/**
- * Check 1: Double-spent credits
- * A credit is double-spent when usedAmountCents > creditAmountCents.
- * The storage method already filters at the DB level using indexed columns.
- */
 function checkDoubleSpend(doubleSpentCredits: Credit[]): CreditViolation[] {
   return doubleSpentCredits.map((credit) => ({
     type: 'double_spend' as const,
@@ -62,14 +45,6 @@ function checkDoubleSpend(doubleSpentCredits: Credit[]): CreditViolation[] {
   }));
 }
 
-/**
- * Check 2: Status/amount mismatch
- * Valid invariants:
- *   - status='used' => usedAmountCents === creditAmountCents
- *   - status='partially_used' => 0 < usedAmountCents < creditAmountCents
- *   - status='approved' => usedAmountCents === 0
- * The storage method already filters at the DB level.
- */
 function checkStatusMismatch(mismatchedCredits: Credit[]): CreditViolation[] {
   const violations: CreditViolation[] = [];
   for (const credit of mismatchedCredits) {
@@ -100,24 +75,7 @@ function checkStatusMismatch(mismatchedCredits: Credit[]): CreditViolation[] {
   return violations;
 }
 
-/**
- * Check 3: Completed scheduled payments that claim credits were applied
- * but have no matching unified_credit_usage_logs entry.
- *
- * Signals that credits were applied:
- * - stripePaymentIntentId starts with 'credit_' (credit-only payment via pay-with-credits)
- * - metadata.pendingCreditsReservation > 0 (partial credit + Stripe reservation was set)
- *
- * For credit-only payments the usage log description is deterministically:
- *   "Scheduled payment {id} - {n}/{total}"
- * The storage method uses this exact anchored prefix pattern (no wildcard prefix)
- * to avoid substring collisions.
- *
- * For partial credit+Stripe payments the usage log is linked via paymentHistoryId.
- */
-async function checkMissingUsageLogs(
-  creditPayments: ScheduledPayment[]
-): Promise<CreditViolation[]> {
+async function checkMissingUsageLogs(creditPayments: ScheduledPayment[]): Promise<CreditViolation[]> {
   const violations: CreditViolation[] = [];
 
   for (const sp of creditPayments) {
@@ -172,15 +130,7 @@ async function checkMissingUsageLogs(
   return violations;
 }
 
-/**
- * Run a full credit ledger integrity scan.
- * @param schoolId - Optional school ID to scope the scan. If omitted, scans all schools.
- * @returns A structured report of violations and counts.
- *          Returns empty violations array and zero counts for a clean database (no logging).
- */
-export async function runCreditIntegrityCheck(
-  schoolId?: number
-): Promise<CreditIntegrityReport> {
+export async function runCreditIntegrityCheck(schoolId?: number): Promise<CreditIntegrityReport> {
   const [doubleSpentCredits, mismatchedCredits, creditPayments] = await Promise.all([
     storage.getDoubleSpentCredits(schoolId),
     storage.getMismatchedStatusCredits(schoolId),
@@ -198,10 +148,7 @@ export async function runCreditIntegrityCheck(
   ];
 
   if (doubleSpendViolations.length > 0) {
-    console.error(
-      `[CreditIntegrity] ${doubleSpendViolations.length} double-spend violation(s):`,
-      doubleSpendViolations
-    );
+    console.error(`[CreditIntegrity] ${doubleSpendViolations.length} double-spend violation(s):`, doubleSpendViolations);
   }
   if (statusMismatchViolations.length > 0) {
     console.error(
@@ -210,10 +157,7 @@ export async function runCreditIntegrityCheck(
     );
   }
   if (missingLogViolations.length > 0) {
-    console.error(
-      `[CreditIntegrity] ${missingLogViolations.length} missing usage log violation(s):`,
-      missingLogViolations
-    );
+    console.error(`[CreditIntegrity] ${missingLogViolations.length} missing usage log violation(s):`, missingLogViolations);
   }
 
   return {

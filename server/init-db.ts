@@ -908,6 +908,77 @@ async function runMigrations() {
       END $$;
     `);
     console.log('✅ Migration completed: school_staff entries backfilled to user_roles');
+
+    // Unified credit ledger (option B): credits, usage logs, holds — no volunteer_credits table
+    console.log('Running migration: Creating credits table...');
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS credits (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        school_id INTEGER NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+        credit_type TEXT NOT NULL CHECK (credit_type IN ('volunteer', 'referral', 'achievement', 'marketing', 'manual', 'fundraiser')),
+        source_type TEXT,
+        source_id INTEGER,
+        credit_amount_cents INTEGER NOT NULL,
+        used_amount_cents INTEGER NOT NULL DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected', 'partially_used', 'used', 'expired', 'revoked')),
+        approved_by INTEGER REFERENCES users(id),
+        approved_at TIMESTAMP,
+        rejection_reason TEXT,
+        expires_at TIMESTAMP,
+        title TEXT,
+        description TEXT,
+        metadata JSONB,
+        notes TEXT,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+    `);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_credits_user_id ON credits(user_id);`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_credits_school_id ON credits(school_id);`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_credits_status ON credits(status);`);
+    console.log('✅ Migration completed: credits table');
+
+    console.log('Running migration: Creating unified_credit_usage_logs table...');
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS unified_credit_usage_logs (
+        id SERIAL PRIMARY KEY,
+        credit_id INTEGER NOT NULL REFERENCES credits(id) ON DELETE CASCADE,
+        payment_history_id INTEGER REFERENCES stripe_payment_history(id),
+        amount_cents INTEGER NOT NULL,
+        description TEXT,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+    `);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_unified_credit_usage_logs_credit_id ON unified_credit_usage_logs(credit_id);`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_unified_credit_usage_logs_payment_history_id ON unified_credit_usage_logs(payment_history_id);`);
+    console.log('✅ Migration completed: unified_credit_usage_logs table');
+
+    console.log('Running migration: Creating credit_holds table...');
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS credit_holds (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        credit_id INTEGER NOT NULL REFERENCES credits(id) ON DELETE CASCADE,
+        amount_cents INTEGER NOT NULL,
+        checkout_session_id TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'finalized', 'released', 'expired')),
+        expires_at TIMESTAMP NOT NULL,
+        finalized_at TIMESTAMP,
+        released_at TIMESTAMP,
+        description TEXT,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+    `);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_credit_holds_user_id ON credit_holds(user_id);`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_credit_holds_checkout_session_id ON credit_holds(checkout_session_id);`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_credit_holds_status ON credit_holds(status);`);
+    console.log('✅ Migration completed: credit_holds table');
+
+    console.log('Running migration: Adding completion_source and charged_by to scheduled_payments...');
+    await db.execute(sql`ALTER TABLE scheduled_payments ADD COLUMN IF NOT EXISTS completion_source TEXT;`);
+    await db.execute(sql`ALTER TABLE scheduled_payments ADD COLUMN IF NOT EXISTS charged_by TEXT;`);
+    console.log('✅ Migration completed: scheduled_payments audit columns');
     
     // Create educator_class_assignments table for Phase 1a Educator Dashboard
     console.log('Running migration: Creating educator_class_assignments table...');

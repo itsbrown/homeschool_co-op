@@ -2,12 +2,8 @@ import express from "express";
 import { z } from "zod";
 import { insertNotificationSchema } from "@shared/schema";
 import { storage } from '../storage';
-import { sendSMS, isTwilioConfigured, getTwilioClient } from '../services/twilio';
+import { sendSMS, isTwilioConfigured } from '../services/twilio';
 import * as brevo from '@getbrevo/brevo';
-import { getBrevoApiInstance, logEmailAttempt } from '../lib/email-service';
-import { supabaseAuth } from '../middleware/supabase-auth';
-import { requireRole } from '../middleware/auth0-auth';
-import { requireSchoolContext } from '../middleware/require-school-context';
 
 const router = express.Router();
 
@@ -101,63 +97,6 @@ router.post("/", async (req: any, res) => {
 
 router.get("/", async (req, res) => {
   try {
-    const view = req.query.view as string;
-    
-    // Admin view: return all sent notifications for the admin's school
-    if (view === 'sent') {
-      console.log('📤 Admin view requested - verifying admin authorization');
-      
-      // Get user from auth
-      const email = (req as any).auth?.payload?.email || (req as any).auth?.email || (req as any).user?.email;
-      if (!email) {
-        console.log('❌ No email found in auth for admin view');
-        return res.status(401).json({ message: "Authentication required" });
-      }
-      
-      const user = await storage.getUserByEmail(email);
-      if (!user) {
-        console.log('❌ User not found for admin view');
-        return res.status(401).json({ message: "User not found" });
-      }
-      
-      // Verify user has admin role and get their admin school IDs
-      const userRoles = await storage.getUserRolesByUserId(user.id);
-      const adminRoles = userRoles.filter(r => 
-        r.role?.toLowerCase() === 'admin' || 
-        r.role?.toLowerCase() === 'school_admin' ||
-        r.role?.toLowerCase() === 'schooladmin' ||
-        r.role?.toLowerCase() === 'superadmin'
-      );
-      
-      if (adminRoles.length === 0) {
-        console.log('❌ User does not have admin role for sent view');
-        return res.status(403).json({ message: "Admin role required to view all sent notifications" });
-      }
-      
-      // Check if superadmin (gets all notifications)
-      const isSuperAdmin = adminRoles.some(r => r.role?.toLowerCase() === 'superadmin');
-      
-      // Get all school IDs where user is admin (not from non-admin roles)
-      const adminSchoolIds = adminRoles
-        .filter(r => r.schoolId)
-        .map(r => r.schoolId!);
-      
-      console.log('📤 Returning sent notifications for admin, school IDs:', adminSchoolIds, 'isSuperAdmin:', isSuperAdmin);
-      
-      // Get all notifications
-      const allNotifications = await storage.getAllNotifications();
-      
-      // Superadmins see all notifications; regular admins see only their schools
-      const scopedNotifications = isSuperAdmin 
-        ? allNotifications
-        : allNotifications.filter(n => 
-            !n.schoolId || // Global notifications (no school)
-            adminSchoolIds.includes(n.schoolId) // Notifications from admin's schools
-          );
-      
-      return res.json(scopedNotifications);
-    }
-    
     let userId = req.query.userId ? parseInt(req.query.userId as string) : null;
     const role = req.query.role as string;
     
@@ -177,8 +116,6 @@ router.get("/", async (req, res) => {
         
         userId = user.id;
       } else {
-        // No email and no userId - return empty paginated payload for safety
-        console.log('❌ No user context available');
         return res.json({ notifications: [], pagination: { page: 1, limit: 50, total: 0, totalPages: 1 } });
       }
     }
@@ -241,8 +178,6 @@ router.get("/", async (req, res) => {
   }
 });
 
-// Test/lightweight CRUD endpoints from origin/main; broader admin send flows
-// (send-individual, send-bulk) are kept further below.
 router.get("/unread-count", async (req: any, res) => {
   try {
     const userId = req.user?.id || req.session?.userId;
@@ -416,19 +351,10 @@ router.post("/send-payment-confirmation", async (req: any, res) => {
   }
 });
 
-router.post("/send-individual", supabaseAuth, requireRole(['admin', 'superAdmin', 'schoolAdmin', 'director']), requireSchoolContext, async (req: any, res) => {
+router.post("/send-individual", async (req, res) => {
   try {
     const { userIds, subject, content, type = "both", priority = "normal", scheduledFor } = req.body;
-    const senderId = req.user?.id;
-    const schoolId = req.schoolId ? Number(req.schoolId) : null;
-
-    if (!senderId) {
-      return res.status(401).json({ message: "Authentication required" });
-    }
-
-    if (!schoolId) {
-      return res.status(400).json({ message: "School context required" });
-    }
+    const senderId = req.body.senderId || 1;
 
     if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
       return res.status(400).json({ message: "User IDs are required" });
@@ -436,8 +362,6 @@ router.post("/send-individual", supabaseAuth, requireRole(['admin', 'superAdmin'
 
     const notificationData = {
       senderId,
-      schoolId,
-      isAnnouncement: true,
       type,
       priority,
       subject,
@@ -449,8 +373,7 @@ router.post("/send-individual", supabaseAuth, requireRole(['admin', 'superAdmin'
 
     const notification = await storage.createNotification(notificationData);
     
-    processNotification(notification)
-      .catch(err => console.error('[Email fire-and-forget] processNotification (individual) failed:', err));
+    await processNotification(notification);
 
     res.status(201).json(notification);
   } catch (error) {
@@ -459,19 +382,10 @@ router.post("/send-individual", supabaseAuth, requireRole(['admin', 'superAdmin'
   }
 });
 
-router.post("/send-by-role", supabaseAuth, requireRole(['admin', 'superAdmin', 'schoolAdmin', 'director']), requireSchoolContext, async (req: any, res) => {
+router.post("/send-by-role", async (req, res) => {
   try {
     const { roles, locationIds, subject, content, type = "both", priority = "normal", scheduledFor } = req.body;
-    const senderId = req.user?.id;
-    const schoolId = req.schoolId ? Number(req.schoolId) : null;
-
-    if (!senderId) {
-      return res.status(401).json({ message: "Authentication required" });
-    }
-
-    if (!schoolId) {
-      return res.status(400).json({ message: "School context required" });
-    }
+    const senderId = req.body.senderId || 1;
 
     if (!roles || !Array.isArray(roles) || roles.length === 0) {
       return res.status(400).json({ message: "Roles are required" });
@@ -479,8 +393,6 @@ router.post("/send-by-role", supabaseAuth, requireRole(['admin', 'superAdmin', '
 
     const notificationData = {
       senderId,
-      schoolId,
-      isAnnouncement: true,
       type,
       priority,
       subject,
@@ -491,8 +403,7 @@ router.post("/send-by-role", supabaseAuth, requireRole(['admin', 'superAdmin', '
     };
 
     const notification = await storage.createNotification(notificationData);
-    processNotification(notification)
-      .catch(err => console.error('[Email fire-and-forget] processNotification (role-based) failed:', err));
+    await processNotification(notification);
 
     res.status(201).json(notification);
   } catch (error) {
@@ -501,19 +412,10 @@ router.post("/send-by-role", supabaseAuth, requireRole(['admin', 'superAdmin', '
   }
 });
 
-router.post("/send-by-location", supabaseAuth, requireRole(['admin', 'superAdmin', 'schoolAdmin', 'director']), requireSchoolContext, async (req: any, res) => {
+router.post("/send-by-location", async (req, res) => {
   try {
     const { locationIds, includeRoles, subject, content, type = "both", priority = "normal", scheduledFor } = req.body;
-    const senderId = req.user?.id;
-    const schoolId = req.schoolId ? Number(req.schoolId) : null;
-
-    if (!senderId) {
-      return res.status(401).json({ message: "Authentication required" });
-    }
-
-    if (!schoolId) {
-      return res.status(400).json({ message: "School context required" });
-    }
+    const senderId = req.body.senderId || 1;
 
     if (!locationIds || !Array.isArray(locationIds) || locationIds.length === 0) {
       return res.status(400).json({ message: "Location IDs are required" });
@@ -521,8 +423,6 @@ router.post("/send-by-location", supabaseAuth, requireRole(['admin', 'superAdmin
 
     const notificationData = {
       senderId,
-      schoolId,
-      isAnnouncement: true,
       type,
       priority,
       subject,
@@ -533,8 +433,7 @@ router.post("/send-by-location", supabaseAuth, requireRole(['admin', 'superAdmin
     };
 
     const notification = await storage.createNotification(notificationData);
-    processNotification(notification)
-      .catch(err => console.error('[Email fire-and-forget] processNotification (location-based) failed:', err));
+    await processNotification(notification);
 
     res.status(201).json(notification);
   } catch (error) {
@@ -543,24 +442,13 @@ router.post("/send-by-location", supabaseAuth, requireRole(['admin', 'superAdmin
   }
 });
 
-router.post("/send-all", supabaseAuth, requireRole(['admin', 'superAdmin', 'schoolAdmin', 'director']), requireSchoolContext, async (req: any, res) => {
+router.post("/send-all", async (req, res) => {
   try {
     const { subject, content, type = "both", priority = "normal", scheduledFor } = req.body;
-    const senderId = req.user?.id;
-    const schoolId = req.schoolId ? Number(req.schoolId) : null;
-
-    if (!senderId) {
-      return res.status(401).json({ message: "Authentication required" });
-    }
-
-    if (!schoolId) {
-      return res.status(400).json({ message: "School context required" });
-    }
+    const senderId = req.body.senderId || 1;
 
     const notificationData = {
       senderId,
-      schoolId,
-      isAnnouncement: true,
       type,
       priority,
       subject,
@@ -571,190 +459,11 @@ router.post("/send-all", supabaseAuth, requireRole(['admin', 'superAdmin', 'scho
     };
 
     const notification = await storage.createNotification(notificationData);
-    processNotification(notification)
-      .catch(err => console.error('[Email fire-and-forget] processNotification (broadcast) failed:', err));
+    await processNotification(notification);
 
     res.status(201).json(notification);
   } catch (error) {
     console.error("Error sending broadcast notification:", error);
-    res.status(500).json({ message: "Failed to send notification" });
-  }
-});
-
-// Send notification to parents of students enrolled in specific classes
-router.post("/send-by-class", supabaseAuth, requireRole(['admin', 'superAdmin', 'schoolAdmin', 'director']), requireSchoolContext, async (req: any, res) => {
-  try {
-    const { classIds, subject, content, type = "in_app", priority = "normal", scheduledFor } = req.body;
-    const senderId = req.user?.id;
-    const schoolId = req.schoolId ? Number(req.schoolId) : null;
-
-    if (!senderId) {
-      return res.status(401).json({ message: "Authentication required" });
-    }
-
-    if (!schoolId) {
-      return res.status(400).json({ message: "School context required" });
-    }
-
-    if (!classIds || !Array.isArray(classIds) || classIds.length === 0) {
-      return res.status(400).json({ message: "Class IDs are required" });
-    }
-
-    console.log('[Notifications] Sending class-specific notification to classes:', classIds);
-
-    // Collect all parent user IDs from selected classes
-    const parentUserIds = new Set<number>();
-
-    for (const classId of classIds) {
-      const enrollments = await storage.getEnrollmentsByClassId(classId);
-      const activeEnrollments = enrollments.filter((e: any) => 
-        e.status === 'enrolled' || e.status === 'active' || e.status === 'confirmed'
-      );
-
-      for (const enrollment of activeEnrollments) {
-        if (enrollment.childId) {
-          const child = await storage.getChildById(enrollment.childId);
-          if (child?.parentEmail) {
-            const parentUser = await storage.getUserByEmail(child.parentEmail);
-            if (parentUser) {
-              parentUserIds.add(parentUser.id);
-            }
-          }
-        }
-      }
-    }
-
-    if (parentUserIds.size === 0) {
-      return res.status(400).json({ message: "No parents found in selected classes" });
-    }
-
-    const userIdsArray = Array.from(parentUserIds);
-    console.log('[Notifications] Found', userIdsArray.length, 'parent users for class notification');
-
-    // Use "individual" targetType to work with existing pipeline
-    const notificationData = {
-      senderId,
-      schoolId: schoolId ?? null,
-      isAnnouncement: true,
-      type,
-      priority,
-      subject,
-      content,
-      targetType: "individual" as const,
-      targetData: { userIds: userIdsArray, classIds }, // Include classIds for reference
-      scheduledFor: scheduledFor ? new Date(scheduledFor) : null,
-    };
-
-    const notification = await storage.createNotification(notificationData);
-    
-    // Use existing processNotification pipeline (fire-and-forget)
-    processNotification(notification)
-      .catch(err => console.error('[Email fire-and-forget] processNotification (class) failed:', err));
-
-    console.log('[Notifications] Class notification created with', userIdsArray.length, 'recipients');
-
-    res.status(201).json({
-      ...notification,
-      recipientCount: userIdsArray.length
-    });
-  } catch (error) {
-    console.error("Error sending class-specific notification:", error);
-    res.status(500).json({ message: "Failed to send notification" });
-  }
-});
-
-// Preview recipient count for combined multi-source notification (no side-effects)
-router.post("/preview-recipients", supabaseAuth, requireRole(['admin', 'superAdmin', 'schoolAdmin', 'director']), requireSchoolContext, async (req: any, res) => {
-  try {
-    const { userIds, roles, locationIds, classIds, includeAll } = req.body;
-    const senderId = req.user?.id;
-    if (!senderId) return res.status(401).json({ message: "Authentication required" });
-
-    const recipientIds = await resolveCombinedRecipients({
-      includeAll,
-      userIds: userIds || [],
-      roles: roles || [],
-      locationIds: locationIds || [],
-      classIds: classIds || [],
-    });
-
-    res.json({ recipientCount: recipientIds.length });
-  } catch (error) {
-    console.error("Error previewing recipients:", error);
-    res.status(500).json({ message: "Failed to preview recipients" });
-  }
-});
-
-// Send combined multi-source notification
-router.post("/send-combined", supabaseAuth, requireRole(['admin', 'superAdmin', 'schoolAdmin', 'director']), requireSchoolContext, async (req: any, res) => {
-  try {
-    const { userIds, roles, locationIds, classIds, includeAll, subject, content, type = "both", priority = "normal", scheduledFor } = req.body;
-    const senderId = req.user?.id;
-    const schoolId = req.schoolId ? Number(req.schoolId) : null;
-
-    if (!senderId) {
-      return res.status(401).json({ message: "Authentication required" });
-    }
-
-    if (!schoolId) {
-      return res.status(400).json({ message: "School context required" });
-    }
-
-    console.log('[Notifications] send-combined — includeAll:', includeAll, 'userIds:', userIds?.length, 'roles:', roles?.length, 'locationIds:', locationIds?.length, 'classIds:', classIds?.length);
-
-    const deduplicatedIds = await resolveCombinedRecipients({
-      includeAll,
-      userIds: userIds || [],
-      roles: roles || [],
-      locationIds: locationIds || [],
-      classIds: classIds || [],
-    });
-
-    if (deduplicatedIds.length === 0) {
-      return res.status(400).json({ message: "No recipients found for the selected targeting criteria" });
-    }
-
-    console.log('[Notifications] send-combined resolved', deduplicatedIds.length, 'unique recipients');
-
-    // Store as "all" targetType when broadcasting, else as "individual" with combined targetData
-    const notificationData = includeAll
-      ? {
-          senderId,
-          schoolId,
-          isAnnouncement: true,
-          type,
-          priority,
-          subject,
-          content,
-          targetType: "all" as const,
-          targetData: {},
-          scheduledFor: scheduledFor ? new Date(scheduledFor) : null,
-        }
-      : {
-          senderId,
-          schoolId,
-          isAnnouncement: true,
-          type,
-          priority,
-          subject,
-          content,
-          targetType: "individual" as const,
-          targetData: {
-            userIds: deduplicatedIds,
-            roles: roles || [],
-            locationIds: locationIds || [],
-            classIds: classIds || [],
-          },
-          scheduledFor: scheduledFor ? new Date(scheduledFor) : null,
-        };
-
-    const notification = await storage.createNotification(notificationData);
-    processNotification(notification)
-      .catch(err => console.error('[Email fire-and-forget] processNotification (combined) failed:', err));
-
-    res.status(201).json({ ...notification, recipientCount: deduplicatedIds.length });
-  } catch (error) {
-    console.error("Error sending combined notification:", error);
     res.status(500).json({ message: "Failed to send notification" });
   }
 });
@@ -902,135 +611,56 @@ async function processNotification(notification: any): Promise<void> {
   }
 }
 
-// --- Shared recipient resolution sub-functions ---
-
-async function resolveUserIds(userIds: number[]): Promise<number[]> {
-  return userIds.filter(id => id && id > 0);
-}
-
-async function resolveRoleRecipients(roles: string[], locationIds?: number[]): Promise<number[]> {
-  const allUsers = await storage.getAllUsers();
-  let roleUsers = allUsers.filter(u => roles.includes(u.role));
-  if (locationIds && locationIds.length > 0) {
-    const locationUserIds: number[] = [];
-    for (const locationId of locationIds) {
-      const userLocations = await storage.getUserLocationsByLocationId(locationId);
-      locationUserIds.push(...userLocations.map((ul: any) => ul.userId));
-    }
-    roleUsers = roleUsers.filter(u => locationUserIds.includes(u.id));
-  }
-  return roleUsers.map(u => u.id);
-}
-
-async function resolveLocationRecipients(locationIds: number[], roles?: string[]): Promise<number[]> {
-  const locationUserIds: number[] = [];
-  for (const locationId of locationIds) {
-    const userLocations = await storage.getUserLocationsByLocationId(locationId);
-    locationUserIds.push(...userLocations.map((ul: any) => ul.userId));
-  }
-  let locationUsers = await storage.getAllUsers();
-  locationUsers = locationUsers.filter(u => locationUserIds.includes(u.id));
-  if (roles && roles.length > 0) {
-    locationUsers = locationUsers.filter(u => roles.includes(u.role));
-  }
-  return locationUsers.map(u => u.id);
-}
-
-async function resolveClassRecipients(classIds: number[]): Promise<number[]> {
-  const parentUserIds = new Set<number>();
-  for (const classId of classIds) {
-    const enrollments = await storage.getEnrollmentsByClassId(classId);
-    const activeEnrollments = enrollments.filter((e: any) =>
-      e.status === 'enrolled' || e.status === 'active' || e.status === 'confirmed'
-    );
-    for (const enrollment of activeEnrollments) {
-      if (enrollment.childId) {
-        const child = await storage.getChildById(enrollment.childId);
-        if (child?.parentEmail) {
-          const parentUser = await storage.getUserByEmail(child.parentEmail);
-          if (parentUser) parentUserIds.add(parentUser.id);
-        }
-      }
-    }
-  }
-  return Array.from(parentUserIds);
-}
-
-/**
- * Resolve combined multi-source recipients and deduplicate.
- * Accepts the same shape as the send-combined request body.
- */
-async function resolveCombinedRecipients(params: {
-  includeAll?: boolean;
-  userIds?: number[];
-  roles?: string[];
-  locationIds?: number[];
-  classIds?: number[];
-}): Promise<number[]> {
-  const { includeAll, userIds = [], roles = [], locationIds = [], classIds = [] } = params;
-
-  if (includeAll) {
-    const allUsers = await storage.getAllUsers();
-    return [...new Set(allUsers.map(u => u.id))].filter(id => id && id > 0);
-  }
-
-  const recipientSet = new Set<number>();
-
-  if (userIds.length > 0) {
-    const ids = await resolveUserIds(userIds);
-    ids.forEach(id => recipientSet.add(id));
-  }
-  if (roles.length > 0) {
-    const ids = await resolveRoleRecipients(roles);
-    ids.forEach(id => recipientSet.add(id));
-  }
-  if (locationIds.length > 0) {
-    const ids = await resolveLocationRecipients(locationIds);
-    ids.forEach(id => recipientSet.add(id));
-  }
-  if (classIds.length > 0) {
-    const ids = await resolveClassRecipients(classIds);
-    ids.forEach(id => recipientSet.add(id));
-  }
-
-  return [...new Set(recipientSet)].filter(id => id && id > 0);
-}
-
-// --- End shared resolution functions ---
-
 async function resolveNotificationRecipients(notification: any): Promise<number[]> {
+  let recipients: number[] = [];
+  
   switch (notification.targetType) {
     case "individual":
-      return resolveUserIds(notification.targetData.userIds || []);
-
+      recipients = notification.targetData.userIds || [];
+      break;
+      
     case "role":
-      return resolveRoleRecipients(
-        notification.targetData.roles || [],
-        notification.targetData.locationIds
+      const allUsers = await storage.getAllUsers();
+      let roleUsers = allUsers.filter(u => 
+        notification.targetData.roles?.includes(u.role)
       );
-
+      
+      if (notification.targetData.locationIds && notification.targetData.locationIds.length > 0) {
+        const locationUserIds: number[] = [];
+        for (const locationId of notification.targetData.locationIds) {
+          const userLocations = await storage.getUserLocationsByLocationId(locationId);
+          locationUserIds.push(...userLocations.map(ul => ul.userId));
+        }
+        roleUsers = roleUsers.filter(u => locationUserIds.includes(u.id));
+      }
+      
+      recipients = roleUsers.map(u => u.id);
+      break;
+      
     case "location":
-      return resolveLocationRecipients(
-        notification.targetData.locationIds || [],
-        notification.targetData.roles
-      );
-
-    case "all": {
+      const locationUserIds: number[] = [];
+      for (const locationId of notification.targetData.locationIds || []) {
+        const userLocations = await storage.getUserLocationsByLocationId(locationId);
+        locationUserIds.push(...userLocations.map(ul => ul.userId));
+      }
+      
+      let locationUsers = await storage.getAllUsers();
+      locationUsers = locationUsers.filter(u => locationUserIds.includes(u.id));
+      
+      if (notification.targetData.roles && notification.targetData.roles.length > 0) {
+        locationUsers = locationUsers.filter(u => notification.targetData.roles.includes(u.role));
+      }
+      
+      recipients = locationUsers.map(u => u.id);
+      break;
+      
+    case "all":
       const users = await storage.getAllUsers();
-      return [...new Set(users.map(u => u.id))].filter(id => id && id > 0);
-    }
-
-    case "combined":
-      return resolveCombinedRecipients({
-        userIds: notification.targetData.userIds,
-        roles: notification.targetData.roles,
-        locationIds: notification.targetData.locationIds,
-        classIds: notification.targetData.classIds,
-      });
-
-    default:
-      return [];
+      recipients = users.map(u => u.id);
+      break;
   }
+  
+  return [...new Set(recipients)].filter(id => id && id > 0);
 }
 
 async function sendNotificationEmails(notification: any, recipientIds: number[]): Promise<void> {
@@ -1051,17 +681,14 @@ async function sendNotificationEmails(notification: any, recipientIds: number[])
     return;
   }
 
-  const brevoApiInstance = getBrevoApiInstance();
-  if (!brevoApiInstance) {
+  const brevoApiKey = process.env.BREVO_API_KEY;
+  if (!brevoApiKey) {
     console.log('⚠️ Brevo API key not configured, skipping email delivery');
-    for (const recipientId of recipientIds) {
-      const user = await storage.getUser(recipientId);
-      if (user?.email) {
-        await logEmailAttempt({ recipientEmail: user.email, type: 'notification', subject: notification.subject, status: 'failed', error: 'Brevo not configured' });
-      }
-    }
     return;
   }
+  
+  const brevoApiInstance = new brevo.TransactionalEmailsApi();
+  brevoApiInstance.setApiKey(brevo.TransactionalEmailsApiApiKeys.apiKey, brevoApiKey);
   
   for (const recipientId of recipientIds) {
     const user = await storage.getUser(recipientId);
@@ -1097,13 +724,7 @@ async function sendNotificationEmails(notification: any, recipientIds: number[])
       };
       sendSmtpEmail.to = [{ email: user.email, name: user.name || user.email }];
       
-      await Promise.race([
-        brevoApiInstance.sendTransacEmail(sendSmtpEmail),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error(`timeout:notification:${user.email}`)), 10000)
-        ),
-      ]);
-      await logEmailAttempt({ recipientEmail: user.email, type: 'notification', subject: notification.subject, status: 'sent' });
+      await brevoApiInstance.sendTransacEmail(sendSmtpEmail);
       
       const recipients = await storage.getNotificationRecipientsByNotificationId(notification.id);
       const recipientRecord = recipients.find(
@@ -1117,19 +738,8 @@ async function sendNotificationEmails(notification: any, recipientIds: number[])
       }
       
       console.log(`✅ Email sent to ${user.email} for notification: ${notification.subject}`);
-    } catch (error: any) {
-      const isTimeout = error?.message?.startsWith('timeout:');
-      const isIpBlocked = error?.body?.code === 'unauthorized' || error?.statusCode === 401;
-      if (isTimeout) {
-        console.error(`[Email timeout] notification email to ${user.email} timed out after 10s`);
-        await logEmailAttempt({ recipientEmail: user.email, type: 'notification', subject: notification.subject, status: 'timeout', error: 'Timed out after 10s' });
-      } else if (isIpBlocked) {
-        console.error(`[Email blocked] Brevo rejected notification email to ${user.email}: IP not whitelisted`);
-        await logEmailAttempt({ recipientEmail: user.email, type: 'notification', subject: notification.subject, status: 'failed', error: 'Brevo IP not whitelisted' });
-      } else {
-        console.error(`❌ Failed to send email to user ${recipientId}:`, error);
-        await logEmailAttempt({ recipientEmail: user.email, type: 'notification', subject: notification.subject, status: 'failed', error: error.message || String(error) });
-      }
+    } catch (error) {
+      console.error(`❌ Failed to send email to user ${recipientId}:`, error);
       
       const recipients = await storage.getNotificationRecipientsByNotificationId(notification.id);
       const recipientRecord = recipients.find(
@@ -1146,26 +756,10 @@ async function sendNotificationEmails(notification: any, recipientIds: number[])
 }
 
 async function sendNotificationSMS(notification: any, recipientIds: number[]): Promise<void> {
-  let smsDelivered = 0;
-  let smsFailed = 0;
-
-  const allRecipientRecords = await storage.getNotificationRecipientsByNotificationId(notification.id);
-
   for (const recipientId of recipientIds) {
     const user = await storage.getUser(recipientId);
-    const recipientRecord = allRecipientRecords.find(
-      r => r.recipientId === recipientId && r.deliveryType === "sms"
-    );
-
     if (!user || !user.phone) {
       console.log(`⚠️ No phone number for user ${recipientId}, skipping SMS`);
-      if (recipientRecord) {
-        await storage.updateNotificationRecipient(recipientRecord.id, {
-          status: "failed",
-          errorMessage: "No phone number on file",
-        });
-      }
-      smsFailed++;
       continue;
     }
     const smsAllowed = (user as any).notificationPreferences?.smsNotifications !== false;
@@ -1180,6 +774,10 @@ async function sendNotificationSMS(notification: any, recipientIds: number[]): P
         await sendSMS(user.phone, smsMessage);
       }
       
+      const recipients = await storage.getNotificationRecipientsByNotificationId(notification.id);
+      const recipientRecord = recipients.find(
+        r => r.recipientId === recipientId && r.deliveryType === "sms"
+      );
       if (recipientRecord) {
         await storage.updateNotificationRecipient(recipientRecord.id, {
           status: "sent",
@@ -1187,30 +785,22 @@ async function sendNotificationSMS(notification: any, recipientIds: number[]): P
         });
       }
       
-      smsDelivered++;
       console.log(`📱 SMS sent to ${user.phone} for notification: ${notification.subject}`);
     } catch (error) {
       console.error(`❌ Failed to send SMS to user ${recipientId}:`, error);
       
+      const recipients = await storage.getNotificationRecipientsByNotificationId(notification.id);
+      const recipientRecord = recipients.find(
+        r => r.recipientId === recipientId && r.deliveryType === "sms"
+      );
       if (recipientRecord) {
         await storage.updateNotificationRecipient(recipientRecord.id, {
           status: "failed",
           errorMessage: error instanceof Error ? error.message : 'Unknown error',
         });
       }
-      smsFailed++;
     }
   }
-
-  const existingNotification = await storage.getNotificationById(notification.id);
-  const existingStats = (existingNotification?.deliveryStats as Record<string, any>) || {};
-  await storage.updateNotification(notification.id, {
-    deliveryStats: {
-      ...existingStats,
-      smsDelivered,
-      smsFailed,
-    },
-  } as any);
 }
 
 async function getNotificationStats(notificationId: number): Promise<any> {
@@ -1264,320 +854,5 @@ async function markAllNotificationsAsRead(userId: number): Promise<void> {
     }
   }
 }
-
-// GET /api/notifications/twilio-status - Check if Twilio account is in trial mode
-router.get(
-  "/twilio-status",
-  supabaseAuth,
-  requireRole(['schoolAdmin', 'admin', 'superAdmin']),
-  async (req: any, res) => {
-    try {
-      const configured = await isTwilioConfigured();
-      if (!configured) {
-        return res.json({ configured: false, trial: false });
-      }
-
-      try {
-        const client = await getTwilioClient();
-        // Use the accounts endpoint to list accounts and find trial status
-        const acctList = await client.api.v2010.accounts.list({ limit: 20 });
-        const mainAcct = acctList.find((a: any) => a.type === 'Trial' || a.type === 'Full') || acctList[0];
-        const isTrial = mainAcct?.type === 'Trial';
-        return res.json({ configured: true, trial: isTrial, accountType: mainAcct?.type || 'unknown' });
-      } catch (twilioError) {
-        console.error('[TwilioStatus] Error fetching account info:', twilioError);
-        return res.json({ configured: true, trial: false, error: 'Could not determine account type' });
-      }
-    } catch (error) {
-      console.error('[TwilioStatus] Error:', error);
-      res.status(500).json({ message: "Failed to check Twilio status" });
-    }
-  }
-);
-
-// GET /api/notifications/:id - Get a single notification by ID
-router.get("/:id", async (req, res) => {
-  try {
-    const notificationId = parseInt(req.params.id);
-    if (isNaN(notificationId)) {
-      return res.status(400).json({ message: "Invalid notification ID" });
-    }
-
-    // Authorization check
-    const email = (req as any).auth?.payload?.email || (req as any).auth?.email || (req as any).user?.email;
-    if (!email) {
-      return res.status(401).json({ message: "Authentication required" });
-    }
-    
-    const user = await storage.getUserByEmail(email);
-    if (!user) {
-      return res.status(401).json({ message: "User not found" });
-    }
-    
-    // Verify user has admin role
-    const userRoles = await storage.getUserRolesByUserId(user.id);
-    const adminRoles = userRoles.filter(r => 
-      r.role?.toLowerCase() === 'admin' || 
-      r.role?.toLowerCase() === 'school_admin' ||
-      r.role?.toLowerCase() === 'schooladmin' ||
-      r.role?.toLowerCase() === 'superadmin'
-    );
-    
-    if (adminRoles.length === 0) {
-      return res.status(403).json({ message: "Admin role required" });
-    }
-
-    const notification = await storage.getNotificationById(notificationId);
-    if (!notification) {
-      return res.status(404).json({ message: "Notification not found" });
-    }
-
-    // Check school scope (unless superadmin)
-    const isSuperAdmin = adminRoles.some(r => r.role?.toLowerCase() === 'superadmin');
-    if (!isSuperAdmin && notification.schoolId) {
-      const adminSchoolIds = adminRoles.filter(r => r.schoolId).map(r => r.schoolId!);
-      if (!adminSchoolIds.includes(notification.schoolId)) {
-        return res.status(404).json({ message: "Notification not found" });
-      }
-    }
-
-    res.json(notification);
-  } catch (error) {
-    console.error("Error fetching notification:", error);
-    res.status(500).json({ message: "Failed to fetch notification" });
-  }
-});
-
-// PUT /api/notifications/:id - Update a draft notification
-router.put("/:id", async (req, res) => {
-  try {
-    const notificationId = parseInt(req.params.id);
-    if (isNaN(notificationId)) {
-      return res.status(400).json({ message: "Invalid notification ID" });
-    }
-
-    // Get the existing notification
-    const existingNotification = await storage.getNotificationById(notificationId);
-    if (!existingNotification) {
-      return res.status(404).json({ message: "Notification not found" });
-    }
-
-    // Only allow editing draft notifications
-    if (existingNotification.status !== "draft") {
-      return res.status(400).json({ message: "Can only edit draft notifications" });
-    }
-
-    const { subject, content, type, priority, targetType, targetData, sendNow } = req.body;
-
-    // Build update object with only provided fields
-    const updateData: any = {};
-    if (subject !== undefined) updateData.subject = subject;
-    if (content !== undefined) updateData.content = content;
-    if (type !== undefined) updateData.type = type;
-    if (priority !== undefined) updateData.priority = priority;
-    if (targetType !== undefined) updateData.targetType = targetType;
-    if (targetData !== undefined) updateData.targetData = targetData;
-
-    // If sendNow is true, validate targeting before processing
-    if (sendNow) {
-      const finalTargetType = targetType || existingNotification.targetType;
-      const finalTargetData = targetData || existingNotification.targetData;
-      
-      // Validate required targeting data based on target type
-      if (finalTargetType === "individual") {
-        if (!finalTargetData?.userIds || finalTargetData.userIds.length === 0) {
-          return res.status(400).json({ message: "Individual notifications require at least one user" });
-        }
-      } else if (finalTargetType === "class") {
-        if (!finalTargetData?.classIds || finalTargetData.classIds.length === 0) {
-          return res.status(400).json({ message: "Class notifications require at least one class" });
-        }
-      } else if (finalTargetType === "location") {
-        if (!finalTargetData?.locationIds || finalTargetData.locationIds.length === 0) {
-          return res.status(400).json({ message: "Location notifications require at least one location" });
-        }
-      } else if (finalTargetType === "role") {
-        if (!finalTargetData?.roles || finalTargetData.roles.length === 0) {
-          return res.status(400).json({ message: "Role notifications require at least one role" });
-        }
-      }
-      
-      updateData.status = "sent";
-      updateData.sentAt = new Date();
-    }
-
-    const updatedNotification = await storage.updateNotification(notificationId, updateData);
-    if (!updatedNotification) {
-      return res.status(500).json({ message: "Failed to update notification" });
-    }
-
-    // If sending the draft, process it to deliver to recipients (fire-and-forget)
-    if (sendNow) {
-      processNotification(updatedNotification)
-        .catch(err => console.error('[Email fire-and-forget] processNotification (sendNow) failed:', err));
-    }
-
-    res.json(updatedNotification);
-  } catch (error) {
-    console.error("Error updating notification:", error);
-    res.status(500).json({ message: "Failed to update notification" });
-  }
-});
-
-// DELETE /api/notifications/:id - Delete a draft notification
-router.delete("/:id", async (req, res) => {
-  try {
-    const notificationId = parseInt(req.params.id);
-    if (isNaN(notificationId)) {
-      return res.status(400).json({ message: "Invalid notification ID" });
-    }
-
-    // Get the existing notification
-    const existingNotification = await storage.getNotificationById(notificationId);
-    if (!existingNotification) {
-      return res.status(404).json({ message: "Notification not found" });
-    }
-
-    // Only allow deleting draft notifications
-    if (existingNotification.status !== "draft") {
-      return res.status(400).json({ message: "Can only delete draft notifications" });
-    }
-
-    await storage.deleteNotification(notificationId);
-    res.json({ message: "Notification deleted" });
-  } catch (error) {
-    console.error("Error deleting notification:", error);
-    res.status(500).json({ message: "Failed to delete notification" });
-  }
-});
-
-// POST /api/notifications/:id/resend - Resend an existing notification
-router.post("/:id/resend", async (req, res) => {
-  try {
-    const notificationId = parseInt(req.params.id);
-    if (isNaN(notificationId)) {
-      return res.status(400).json({ message: "Invalid notification ID" });
-    }
-
-    // Authorization check
-    const email = (req as any).auth?.payload?.email || (req as any).auth?.email || (req as any).user?.email;
-    if (!email) {
-      return res.status(401).json({ message: "Authentication required" });
-    }
-    
-    const user = await storage.getUserByEmail(email);
-    if (!user) {
-      return res.status(401).json({ message: "User not found" });
-    }
-    
-    // Verify user has admin role
-    const userRoles = await storage.getUserRolesByUserId(user.id);
-    const adminRoles = userRoles.filter(r => 
-      r.role?.toLowerCase() === 'admin' || 
-      r.role?.toLowerCase() === 'school_admin' ||
-      r.role?.toLowerCase() === 'schooladmin' ||
-      r.role?.toLowerCase() === 'superadmin'
-    );
-    
-    if (adminRoles.length === 0) {
-      return res.status(403).json({ message: "Admin role required to resend notifications" });
-    }
-
-    // Get the existing notification
-    const existingNotification = await storage.getNotificationById(notificationId);
-    if (!existingNotification) {
-      return res.status(404).json({ message: "Notification not found" });
-    }
-
-    // Check school scope (unless superadmin)
-    const isSuperAdmin = adminRoles.some(r => r.role?.toLowerCase() === 'superadmin');
-    if (!isSuperAdmin && existingNotification.schoolId) {
-      const adminSchoolIds = adminRoles.filter(r => r.schoolId).map(r => r.schoolId!);
-      if (!adminSchoolIds.includes(existingNotification.schoolId)) {
-        return res.status(404).json({ message: "Notification not found" });
-      }
-    }
-
-    // Only allow resending sent notifications
-    if (existingNotification.status !== "sent") {
-      return res.status(400).json({ message: "Can only resend notifications that have been sent" });
-    }
-
-    // Create a new notification with the same content
-    const newNotification = await storage.createNotification({
-      senderId: existingNotification.senderId,
-      type: existingNotification.type,
-      priority: existingNotification.priority,
-      subject: existingNotification.subject,
-      content: existingNotification.content,
-      targetType: existingNotification.targetType,
-      targetData: existingNotification.targetData as any,
-      schoolId: existingNotification.schoolId,
-      status: "sent",
-      sentAt: new Date(),
-      expiresAt: null,
-    });
-
-    // Process the notification to deliver to recipients (fire-and-forget)
-    processNotification(newNotification)
-      .catch(err => console.error('[Email fire-and-forget] processNotification (resend) failed:', err));
-
-    res.json({ 
-      message: "Notification resent successfully",
-      notification: newNotification 
-    });
-  } catch (error) {
-    console.error("Error resending notification:", error);
-    res.status(500).json({ message: "Failed to resend notification" });
-  }
-});
-
-const testSmsSchema = z.object({
-  phoneNumber: z.string().min(1, "Phone number is required"),
-  message: z.string().min(1, "Message is required"),
-});
-
-router.post("/test-sms", async (req, res) => {
-  try {
-    const email = (req as any).auth?.payload?.email || (req as any).auth?.email || (req as any).user?.email;
-    if (!email) {
-      return res.status(401).json({ message: "Authentication required" });
-    }
-
-    const user = await storage.getUserByEmail(email);
-    if (!user) {
-      return res.status(401).json({ message: "User not found" });
-    }
-
-    const userRoles = await storage.getUserRolesByUserId(user.id);
-    const adminRoles = userRoles.filter(r =>
-      r.role?.toLowerCase() === 'school_admin' ||
-      r.role?.toLowerCase() === 'schooladmin' ||
-      r.role?.toLowerCase() === 'superadmin'
-    );
-
-    if (adminRoles.length === 0) {
-      return res.status(403).json({ message: "School admin or super admin role required to send test SMS" });
-    }
-
-    const parseResult = testSmsSchema.safeParse(req.body);
-    if (!parseResult.success) {
-      return res.status(400).json({ message: "Invalid request", errors: parseResult.error.errors });
-    }
-
-    const { phoneNumber, message } = parseResult.data;
-
-    const result = await sendSMS(phoneNumber, message);
-    return res.json({ success: true, sid: result.sid });
-  } catch (error) {
-    console.error("❌ Test SMS failed:", error);
-    const errorMessage = error instanceof Error ? error.message : "Failed to send test SMS";
-    const isFormatError = errorMessage.startsWith("Invalid US phone number");
-    return res.status(isFormatError ? 400 : 500).json({
-      success: false,
-      message: errorMessage,
-    });
-  }
-});
 
 export default router;

@@ -6,6 +6,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import { PlusCircle, User, Calendar, BookOpen, Clock, DollarSign, Users, UserPlus, CreditCard, RefreshCw, FileText, FolderOpen, Loader2, Award, CheckCircle, AlertCircle, XCircle, Copy, Edit2, Save, X, Coins, Gift, ExternalLink, Share2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useAuth } from "@/components/SupabaseProvider";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -449,11 +450,34 @@ export default function ParentDashboard() {
     enabled: true,
   });
 
+  const [dismissPaymentDueAlert, setDismissPaymentDueAlert] = useState(false);
+
   // Fetch enrollments data
   const { data: enrollmentsData, isLoading: enrollmentsLoading } = useQuery({
     queryKey: ["/api/parent/enrollments"],
     enabled: !!user && !!session,
   });
+
+  const { data: upcomingScheduledData } = useQuery({
+    queryKey: ["/api/scheduled-payments/upcoming"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/scheduled-payments/upcoming");
+      if (!res.ok) {
+        return { success: false as const, payments: [] as any[] };
+      }
+      return (await res.json()) as { success: boolean; payments: any[] };
+    },
+    enabled: !!user && !!session,
+  });
+
+  const actionableInstallmentCount = (() => {
+    const payments = upcomingScheduledData?.payments;
+    if (!Array.isArray(payments)) return 0;
+    return payments.filter(
+      (p: any) =>
+        p.overdue === true || p.status === "overdue" || p.status === "failed"
+    ).length;
+  })();
 
   // Fetch upcoming events
   const { data: eventsData, isLoading: eventsLoading } = useQuery({
@@ -704,6 +728,32 @@ export default function ParentDashboard() {
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
+          {!dismissPaymentDueAlert && actionableInstallmentCount > 0 && (
+            <Alert variant="destructive" className="relative pr-12">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Scheduled payments need attention</AlertTitle>
+              <AlertDescription className="flex flex-wrap items-center gap-x-2 gap-y-1 pr-6">
+                <span>
+                  You have {actionableInstallmentCount} installment
+                  {actionableInstallmentCount === 1 ? "" : "s"} that {actionableInstallmentCount === 1 ? "is" : "are"}{" "}
+                  overdue or failed.
+                </span>
+                <Link href="/payments?tab=upcoming" className="font-semibold underline">
+                  View payments
+                </Link>
+              </AlertDescription>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="absolute right-2 top-2 h-8 w-8 text-destructive hover:text-destructive"
+                aria-label="Dismiss"
+                onClick={() => setDismissPaymentDueAlert(true)}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </Alert>
+          )}
           {/* Stats Cards Row */}
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             <Card>

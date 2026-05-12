@@ -17,6 +17,10 @@ export type ProgramEnrollmentRowLike = {
   programId?: number | null;
   classId?: number | null;
   marketplaceClassId?: number | null;
+  /** Present on full program enrollment rows; used by webhook balance updates. */
+  totalPaid?: number | null;
+  totalCost?: number | null;
+  schoolId?: number | null;
 };
 
 export function findProgramEnrollmentForCartItem<T extends ProgramEnrollmentRowLike>(

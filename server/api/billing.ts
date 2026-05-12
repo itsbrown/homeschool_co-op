@@ -9,8 +9,6 @@ import { createClient } from '@supabase/supabase-js';
 import { dataLayer } from '../services/dataLayer';
 import { getStripeClient } from '../config/stripe';
 import { supabaseAuth } from '../middleware/supabase-auth';
-import { isPaymentProcessorEnabled } from '../services/PaymentProcessorService';
-import { calculateCanonicalEnrollmentAmount } from '../services/canonical-payment-amount';
 import { getChildrenForAuthenticatedParent } from '../lib/parent-auth-scope';
 import {
   buildIdempotencyFingerprint,
@@ -25,7 +23,7 @@ import {
 
 const router = Router();
 const PAY_BALANCE_IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1000;
-type PayBalanceResponsePayload = { success: true; clientSecret: string | null; paymentIntentId: string; canonicalAmountCents?: number };
+type PayBalanceResponsePayload = { success: true; clientSecret: string | null; paymentIntentId: string };
 const payBalanceIdempotencyStore = createInMemoryIdempotencyStore<PayBalanceResponsePayload>();
 type DivergenceAction = 'REFRESH_AND_REPRICE';
 
@@ -296,68 +294,8 @@ export async function processBalancePayment(paymentIntent: Stripe.PaymentIntent,
     await storage.createPayment(paymentRecord);
     console.log('✅ Payment record created:', paymentRecord.stripePaymentIntentId);
     
-    // Sync scheduled payments: mark as 'completed' when cumulative amount is covered by totalPaid
-    // This ensures scheduled payment status matches actual payment state
-    for (const enrollment of enrollments) {
-      try {
-        const updatedEnrollment = await storage.getProgramEnrollmentById(enrollment.id);
-        if (!updatedEnrollment) continue;
-        
-        const enrollmentScheduledPayments = await storage.getScheduledPaymentsByEnrollmentId(enrollment.id);
-        const sortedPayments = enrollmentScheduledPayments
-          .sort((a, b) => {
-            const dateCompare = new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime();
-            return dateCompare !== 0 ? dateCompare : (a.installmentNumber || 0) - (b.installmentNumber || 0);
-          });
-        
-        let cumulativeAmount = 0;
-        let paymentsMarked = 0;
-        
-        for (const sp of sortedPayments) {
-          if (sp.status === 'cancelled' || sp.status === 'skipped') continue;
-          cumulativeAmount += sp.amount;
-          if (sp.status === 'completed') continue;
-          
-          // Mark as completed if cumulative is covered by totalPaid
-          if (cumulativeAmount <= (updatedEnrollment.totalPaid || 0)) {
-            await storage.updateScheduledPayment(sp.id, {
-              status: 'completed',
-              processedAt: new Date(),
-            });
-            paymentsMarked++;
-          } else {
-            break;
-          }
-        }
-        
-        if (paymentsMarked > 0) {
-          console.log(`✅ Synced ${paymentsMarked} scheduled payment(s) to 'completed' for enrollment ${enrollment.id}`);
-        }
-      } catch (syncErr) {
-        console.error(`⚠️ Failed to sync scheduled payments for enrollment ${enrollment.id}:`, syncErr);
-        // Log to error monitoring system for admin visibility
-        try {
-          await storage.createErrorLog({
-            errorType: 'backend',
-            message: `Failed to sync scheduled payments for enrollment ${enrollment.id}`,
-            severity: 'medium',
-            route: '/billing/processBalancePayment',
-            method: 'POST',
-            userEmail: userEmail,
-            schoolId: enrollment.schoolId,
-            stackTrace: syncErr instanceof Error ? syncErr.stack : String(syncErr),
-            metadata: {
-              enrollmentId: enrollment.id,
-              paymentIntentId: paymentIntent.id,
-              error: syncErr instanceof Error ? syncErr.message : String(syncErr)
-            },
-            notificationSent: false
-          });
-        } catch (logErr) {
-          console.error('❌ Failed to log sync error:', logErr);
-        }
-      }
-    }
+    // Payment plans are now handled by Stripe Subscription Schedules in the stripe-payment-plans service
+    // No manual scheduled payments needed - all payment scheduling is managed by Stripe
     
     // Add small delay to ensure all storage operations are committed
     await new Promise(resolve => setTimeout(resolve, 100));
@@ -403,26 +341,6 @@ router.post('/create-payment-intent', paymentRateLimit, supabaseAuth, async (req
         success: false,
         error: 'enrollmentDetails is required'
       });
-    }
-
-    // Generate snapshot metadata for PaymentProcessor if enabled
-    let snapshotMetadata: Record<string, string> = {};
-    if (isPaymentProcessorEnabled()) {
-      try {
-        const parentUserForSnapshot = await storage.getUserByEmail(effectiveParentEmail);
-        const userIdForSnapshot = parentUserForSnapshot?.id || 0;
-        snapshotMetadata = {
-          processorEnabled: 'true',
-          userId: String(userIdForSnapshot),
-          snapshotVersion: '1'
-        };
-        console.log('📸 PaymentProcessor metadata set for PaymentIntent:', {
-          userId: userIdForSnapshot,
-          enrollmentCount: enrollmentDetails.length
-        });
-      } catch (snapshotError) {
-        console.warn('⚠️ Failed to set PaymentProcessor metadata:', snapshotError);
-      }
     }
 
     // Get parent user and schoolId before creating payment record
@@ -516,8 +434,7 @@ router.post('/create-payment-intent', paymentRateLimit, supabaseAuth, async (req
         enrollmentDetails: JSON.stringify(enrollmentDetails),
         paymentPlan,
         paymentType: 'balance_payment',
-        enrollmentIds: JSON.stringify(enrollmentIds),
-        ...snapshotMetadata
+        enrollmentIds: JSON.stringify(enrollmentIds)
       }
     });
     
@@ -713,7 +630,7 @@ router.get('/payment-status/:paymentIntentId', async (req, res) => {
 });
 
 // Get billing summary for a parent
-router.get('/summary', supabaseAuth, async (req: any, res) => {
+router.get('/summary', async (req, res) => {
   try {
     if (process.env.NODE_ENV === 'test') {
       const testEmail = req.headers['x-test-user-email'] as string | undefined;
@@ -771,48 +688,39 @@ router.get('/summary', supabaseAuth, async (req: any, res) => {
       }
     }
 
-    // supabaseAuth populates req.user with database-sourced identity (email,
-    // sub, role, schoolId). Sub is the Supabase UUID when available, falling
-    // back to the database ID for session-based auth (used in tests).
-    const userEmail = req.user?.email;
+    // Extract user email from Supabase token
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Authorization header missing' });
+    }
+
+    const token = authHeader.split(' ')[1];
+    
+    // Verify the Supabase token
+    const supabase = createClient(
+      process.env.SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    
+    if (error || !user) {
+      console.log('❌ Supabase auth error:', error);
+      return res.status(401).json({ error: 'Invalid authentication token' });
+    }
+
+    const userEmail = user.email;
     if (!userEmail) {
       return res.status(401).json({ error: 'User email not found' });
     }
 
-    // Construct a minimal `user` object for downstream code that previously
-    // relied on Supabase's `user.id` (UUID) for the supabaseId fallback below.
-    const user = {
-      id: req.user.sub,
-      email: userEmail,
-    };
-
     console.log('🔍 Getting billing summary for:', userEmail);
 
-    // Get all children for this parent — primary lookup by email
-    let children = await storage.getChildrenByParentEmail(userEmail);
-
-    // Supabase userId-based fallback: if email-based lookup found no children,
-    // look up the app user by their Supabase UID (user.id) and fetch children via parentId.
-    // This handles cases where the email stored in the DB differs from the auth token email.
-    if (!children || children.length === 0) {
-      console.warn(`⚠️ No children found by email for ${userEmail} — trying supabaseId fallback (uid: ${user.id})`);
-      try {
-        const db = await (await import('../db')).getDb();
-        const { users: usersTable, children: childrenTable } = await import('../../shared/schema');
-        const { eq: eqFn } = await import('drizzle-orm');
-        const [appUser] = await db.select().from(usersTable).where(eqFn(usersTable.supabaseId, user.id));
-        if (appUser) {
-          const fallbackChildren = await db.select().from(childrenTable).where(eqFn(childrenTable.parentId, appUser.id));
-          if (fallbackChildren.length > 0) {
-            console.warn(`⚠️ Found ${fallbackChildren.length} children via supabaseId fallback for uid ${user.id}`);
-            children = fallbackChildren;
-          }
-        }
-      } catch (fallbackErr) {
-        console.warn('⚠️ supabaseId children fallback failed:', fallbackErr);
-      }
-    }
-
+    // Get all children for this parent
+    const children = await getChildrenForAuthenticatedParent(storage, {
+      email: userEmail,
+      supabaseId: user.id,
+    });
     if (!children || children.length === 0) {
       console.log('📋 No children found for parent:', userEmail);
       return res.json({
@@ -856,16 +764,11 @@ router.get('/summary', supabaseAuth, async (req: any, res) => {
       const child = children.find(c => c.id === enrollment.childId);
       if (!child) continue;
 
-      // Calculate balance using effectiveBalance — the DB-generated source of truth.
-      // effectiveBalance = total_cost - total_paid - COALESCE(comp_amount_cents, 0)
-      // For stripe_managed enrollments remainingBalance is 0, so we must not use it here.
       const totalAmount = enrollment.totalCost ?? classDetails?.price ?? 0;
       const totalPaid = enrollment.totalPaid ?? (enrollment as any).amount ?? 0;
-      // Prefer the DB-computed effectiveBalance; fall back to application formula only if
-      // the generated column is unavailable (e.g. in-memory storage during testing).
-      const balance = enrollment.effectiveBalance != null
-        ? Math.max(0, enrollment.effectiveBalance)
-        : Math.max(0, totalAmount - totalPaid - (enrollment.compAmountCents || 0));
+      const balance = enrollment.remainingBalance != null
+        ? enrollment.remainingBalance
+        : Math.max(0, totalAmount - totalPaid);
 
       enrollmentDetails.push({
         enrollmentId: enrollment.id,
@@ -942,31 +845,6 @@ router.get('/summary', supabaseAuth, async (req: any, res) => {
       parentEmail: userEmail
     });
 
-    // Divergence logging: compare parent-facing total vs. admin-facing enrollment data.
-    // The admin-side total is derived from effectiveBalance (same generated column formula),
-    // so any mismatch reveals a regression in how the parent-facing path computes balance.
-    // Warn when the two differ by more than $0.01 (1 cent).
-    try {
-      let adminSideTotal = 0;
-      for (const childId of childIds) {
-        const adminEnrollments = await storage.getEnrollmentsByChildId(childId);
-        for (const ae of adminEnrollments) {
-          if (ae.status === 'enrolled' || ae.status === 'pending_payment') {
-            // Use effectiveBalance from DB if available; fall back to formula for in-memory storage.
-            const adminEffective = ae.effectiveBalance != null
-              ? Math.max(0, ae.effectiveBalance)
-              : Math.max(0, (ae.totalCost || 0) - (ae.totalPaid || 0) - (ae.compAmountCents || 0));
-            adminSideTotal += adminEffective;
-          }
-        }
-      }
-      if (Math.abs(totalBalance - adminSideTotal) > 1) {
-        console.warn(`⚠️ BILLING DIVERGENCE for ${userEmail}: parent-facing enrollmentBalance=${totalBalance} cents, admin-side total=${adminSideTotal} cents (diff=${totalBalance - adminSideTotal})`);
-      }
-    } catch (divergenceErr) {
-      console.warn('⚠️ Could not run billing divergence check:', divergenceErr);
-    }
-
     res.json(summary);
   } catch (error) {
     console.error('❌ Error getting billing summary:', error);
@@ -1011,44 +889,72 @@ router.post('/pay-balance', async (req, res) => {
       return res.status(400).json({ error: 'enrollmentIds is required' });
     }
 
-    const parentUser = await storage.getUserByEmail(userEmail);
-    if (!parentUser) {
-      return res.status(404).json({ error: 'Parent user not found' });
-    }
-
-    const canonicalAmount = await calculateCanonicalEnrollmentAmount({
-      enrollmentIds: Array.isArray(enrollmentIds) ? enrollmentIds : [],
-      parentId: parentUser.id,
-      parentEmail: userEmail,
+    const userChildren = await getChildrenForAuthenticatedParent(storage, {
+      email: userEmail,
+      supabaseId: user.id,
     });
+    const userChildIds = new Set(userChildren.map(c => c.id));
+    const targetEnrollments = await Promise.all(
+      enrollmentIds.map((id: number) => storage.getProgramEnrollmentById(id))
+    );
+    const validEnrollments = targetEnrollments.filter((enrollment): enrollment is NonNullable<typeof enrollment> =>
+      !!enrollment && userChildIds.has(enrollment.childId)
+    );
 
-    if (canonicalAmount.totalAmountCents <= 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'No payable balance found for the selected enrollments',
-      });
+    if (validEnrollments.length !== enrollmentIds.length) {
+      return res.status(403).json({ error: 'One or more enrollments are not owned by this user' });
     }
 
-    if (typeof totalAmount === 'number' && Math.round(totalAmount * 100) !== canonicalAmount.totalAmountCents) {
-      console.warn('⚠️ Client pay-balance amount mismatch; using canonical server amount', {
-        parentEmail: userEmail,
-        clientTotalCents: Math.round(totalAmount * 100),
-        canonicalTotalCents: canonicalAmount.totalAmountCents,
-        enrollmentIds: canonicalAmount.enrollmentIds,
-      });
+    const amountCents = validEnrollments.reduce((sum, enrollment) => {
+      return sum + getAuthoritativeRemainingBalanceCents(enrollment);
+    }, 0);
+
+    if (amountCents <= 0) {
+      return res.status(400).json({ error: 'No outstanding balance found for selected enrollments' });
     }
 
-    console.log('💳 Processing payment for:', userEmail, 'Amount (cents):', canonicalAmount.totalAmountCents);
+    const advisoryClientTotalRaw =
+      paymentDetails?.totalAmountCents ??
+      paymentDetails?.amount ??
+      paymentDetails?.total ??
+      req.body?.total;
+    const advisoryClientTotal = parseAdvisoryAmountCents(advisoryClientTotalRaw);
+    if (advisoryClientTotal.malformed) {
+      console.warn('⚠️ Malformed client total diverged from server-computed balance amount:', {
+        clientTotal: advisoryClientTotalRaw,
+        authoritativeAmount: amountCents
+      });
+      return sendRecoverableDivergence(res, {
+        operation: 'billing_pay_balance',
+        authoritativeAmountCents: amountCents,
+        clientAmountRaw: advisoryClientTotalRaw,
+        clientAmountParsed: advisoryClientTotal.parsed,
+        malformed: true,
+      });
+    } else if (advisoryClientTotal.parsed !== null && advisoryClientTotal.parsed !== amountCents) {
+      console.warn('⚠️ Client total mismatch diverged from server-computed balance amount:', {
+        clientTotal: advisoryClientTotal.parsed,
+        authoritativeAmount: amountCents
+      });
+      return sendRecoverableDivergence(res, {
+        operation: 'billing_pay_balance',
+        authoritativeAmountCents: amountCents,
+        clientAmountRaw: advisoryClientTotalRaw,
+        clientAmountParsed: advisoryClientTotal.parsed,
+        malformed: false,
+      });
+    }
 
     const idempotencyKeyRaw = req.get('Idempotency-Key');
     const idempotencyKey = typeof idempotencyKeyRaw === 'string' ? idempotencyKeyRaw.trim() : '';
+    const schoolIdForFingerprint = validEnrollments[0]?.schoolId ?? null;
     const idempotencyFingerprint = idempotencyKey
       ? buildIdempotencyFingerprint({
           parentEmail: userEmail,
-          enrollmentIds: canonicalAmount.enrollmentIds,
-          amountCents: canonicalAmount.totalAmountCents,
+          enrollmentIds: enrollmentIds as number[],
+          amountCents,
           operation: 'billing_pay_balance',
-          schoolId: parentUser.schoolId ?? null,
+          schoolId: schoolIdForFingerprint,
         })
       : null;
 
@@ -1074,18 +980,19 @@ router.post('/pay-balance', async (req, res) => {
       }
     }
 
+    console.log('💳 Processing payment for:', userEmail, 'Amount (cents):', amountCents);
+
     // Create payment intent
     const stripe = await getStripeClient();
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: canonicalAmount.totalAmountCents,
+      amount: amountCents,
       currency: 'usd',
       metadata: {
         parentEmail: userEmail,
-        enrollmentIds: JSON.stringify(canonicalAmount.enrollmentIds),
-        amountCents: String(canonicalAmount.totalAmountCents),
+        enrollmentIds: JSON.stringify(enrollmentIds),
+        amountCents: amountCents.toString(),
         paymentPlan: paymentPlan,
-        paymentType: 'balance_payment',
-        canonicalAmountCents: String(canonicalAmount.totalAmountCents),
+        paymentType: 'balance_payment'
       },
       automatic_payment_methods: {
         enabled: true,
@@ -1098,8 +1005,7 @@ router.post('/pay-balance', async (req, res) => {
     const responsePayload: PayBalanceResponsePayload = {
       success: true,
       clientSecret: paymentIntent.client_secret,
-      paymentIntentId: paymentIntent.id,
-      canonicalAmountCents: canonicalAmount.totalAmountCents
+      paymentIntentId: paymentIntent.id
     };
 
     if (idempotencyKey && idempotencyFingerprint) {

@@ -1,11 +1,9 @@
 import express from "express";
 import { storage } from "../storage";
 import { getDb } from "../db";
-import { programEnrollments, users } from "../../shared/schema";
+import { programEnrollments } from "../../shared/schema";
 import { eq, inArray } from "drizzle-orm";
 import { getStripeClient } from "../config/stripe";
-import { StripePaymentPlanService } from "../services/stripe-payment-plans";
-import { generateMemberId } from "../utils/membership";
 import { getChildrenForAuthenticatedParent } from "../lib/parent-auth-scope";
 
 const router = express.Router();
@@ -252,7 +250,7 @@ router.delete('/:enrollmentId/unenroll', async (req, res) => {
   }
 });
 
-// Unenroll a child from a class (admin endpoint - uses database)
+// Unenroll a child from a class (legacy endpoint)
 router.delete('/:enrollmentId', async (req: any, res) => {
   try {
     const enrollmentId = parseInt(req.params.enrollmentId);
@@ -263,33 +261,29 @@ router.delete('/:enrollmentId', async (req: any, res) => {
 
     console.log(`❌ Unenrolling enrollment ID: ${enrollmentId}`);
 
-    // Get the enrollment from database to verify it exists
-    const enrollment = await storage.getProgramEnrollmentById(enrollmentId);
+    // Get the enrollment first to verify ownership
+    const allEnrollments = await storage.getAllEnrollments();
+    const enrollmentToRemove = allEnrollments.find((e: any) => e.id === enrollmentId);
     
-    if (!enrollment) {
-      console.log(`❌ Enrollment ${enrollmentId} not found in database`);
+    if (!enrollmentToRemove) {
+      console.log(`❌ Enrollment ${enrollmentId} not found`);
       return res.status(404).json({ message: 'Enrollment not found' });
     }
 
-    console.log(`📝 Found enrollment to remove:`, {
-      id: enrollment.id,
-      childId: enrollment.childId,
-      className: enrollment.className,
-      status: enrollment.status
-    });
+    // For now, allow any authenticated request to remove enrollments
+    // In production, you would verify the user is the parent of the child
+    console.log(`📝 Found enrollment to remove:`, enrollmentToRemove);
     
-    // Delete the enrollment from database using the correct method
-    await storage.deleteProgramEnrollment(enrollmentId);
+    // Remove the enrollment
+    const success = await storage.removeEnrollment(enrollmentId);
     
-    console.log(`✅ Successfully unenrolled enrollment ID: ${enrollmentId}`);
-    res.json({ 
-      message: 'Unenrollment successful',
-      deletedEnrollment: {
-        id: enrollmentId,
-        className: enrollment.className,
-        childName: enrollment.childName
-      }
-    });
+    if (success) {
+      console.log(`✅ Successfully unenrolled enrollment ID: ${enrollmentId}`);
+      res.json({ message: 'Unenrollment successful' });
+    } else {
+      console.log(`❌ Failed to remove enrollment ID: ${enrollmentId}`);
+      res.status(404).json({ message: 'Enrollment not found' });
+    }
   } catch (error) {
     console.error('Error removing enrollment:', error);
     res.status(500).json({ message: 'Failed to unenroll' });
@@ -493,25 +487,6 @@ router.post('/confirm', async (req: any, res) => {
 
     console.log(`✅ Payment verified with Stripe. Status: ${paymentIntent.status}, Amount: ${paymentIntent.amount}`);
 
-    // Save payment method synchronously so auto-pay can be enabled immediately on success page
-    // The webhook handler also does this async, but this ensures it's ready before the page loads
-    try {
-      const paymentMethodId = typeof paymentIntent.payment_method === 'string'
-        ? paymentIntent.payment_method
-        : (paymentIntent.payment_method as any)?.id;
-
-      if (paymentMethodId) {
-        const currentUser = await storage.getUserById(userId);
-        if (currentUser && !currentUser.stripeDefaultPaymentMethodId) {
-          await storage.updateUser(userId, { stripeDefaultPaymentMethodId: paymentMethodId });
-          console.log(`💳 Saved payment method ${paymentMethodId} for user ${userId}`);
-        }
-      }
-    } catch (pmSaveError) {
-      // Non-fatal — webhook handler will retry; don't abort enrollment confirmation
-      console.warn('⚠️ Could not save payment method synchronously:', pmSaveError);
-    }
-
     // Get database instance for transaction
     const db = await getDb();
     
@@ -555,354 +530,22 @@ router.post('/confirm', async (req: any, res) => {
 
     console.log(`📝 Confirming ${idsToConfirm.length} enrollments:`, idsToConfirm);
 
-    const paymentAmount = paymentIntent.amount;
-    console.log(`💰 Payment amount: ${paymentAmount} cents`);
-    
-    // Calculate proportional payment allocation based on each enrollment's outstanding balance
-    // This ensures larger balances get proportionally more of the payment
-    const totalOutstanding = enrollmentsToConfirm.reduce((sum: number, e: any) => {
-      const outstanding = Math.max(0, (e.totalCost || 0) - (e.totalPaid || 0));
-      return sum + outstanding;
-    }, 0);
-    
-    // Pre-calculate allocations to ensure they sum exactly to paymentAmount
-    const allocations: { enrollmentId: number; allocation: number }[] = [];
-    let allocatedTotal = 0;
-    
-    for (let i = 0; i < enrollmentsToConfirm.length; i++) {
-      const enrollment = enrollmentsToConfirm[i];
-      const outstanding = Math.max(0, (enrollment.totalCost || 0) - (enrollment.totalPaid || 0));
-      
-      let allocation: number;
-      if (totalOutstanding > 0) {
-        // Proportional allocation based on outstanding balance
-        allocation = Math.floor((outstanding / totalOutstanding) * paymentAmount);
-      } else if (enrollmentsToConfirm.length > 0) {
-        // If all enrollments are paid off, split evenly (edge case)
-        allocation = Math.floor(paymentAmount / enrollmentsToConfirm.length);
-      } else {
-        allocation = 0;
-      }
-      
-      allocations.push({ enrollmentId: enrollment.id, allocation });
-      allocatedTotal += allocation;
-    }
-    
-    // Distribute any remainder cents to the first enrollment(s) to ensure exact match
-    let remainder = paymentAmount - allocatedTotal;
-    for (let i = 0; remainder > 0 && i < allocations.length; i++) {
-      allocations[i].allocation += 1;
-      remainder -= 1;
-    }
-    
-    console.log(`📊 Payment allocations:`, allocations);
-
-    // Update each enrollment with correct balance calculation
-    // CRITICAL FIX: Don't blindly set remainingBalance to 0 - calculate correctly!
+    // Update enrollments to 'enrolled' status only.
+    // Do NOT force financial fields here. Stripe webhook/payment handlers are the
+    // single source of truth for total_paid/remaining_balance/payment_status.
     await db.transaction(async (tx: any) => {
-      for (const enrollment of enrollmentsToConfirm) {
-        const allocationRecord = allocations.find(a => a.enrollmentId === enrollment.id);
-        const paymentForThisEnrollment = allocationRecord?.allocation || 0;
-        
-        const totalCost = enrollment.totalCost || 0;
-        const currentPaid = enrollment.totalPaid || 0;
-        const newTotalPaid = currentPaid + paymentForThisEnrollment;
-        const newRemainingBalance = Math.max(0, totalCost - newTotalPaid);
-        
-        // Determine correct payment status based on actual balance
-        let newPaymentStatus: string;
-        if (newRemainingBalance <= 0) {
-          newPaymentStatus = 'completed';
-        } else if (newTotalPaid > 0) {
-          newPaymentStatus = 'deposit_paid';
-        } else {
-          newPaymentStatus = 'pending';
-        }
-        
-        await tx
-          .update(programEnrollments)
-          .set({ 
-            status: 'enrolled',
-            totalPaid: newTotalPaid,
-            remainingBalance: newRemainingBalance,
-            paymentStatus: newPaymentStatus
-          })
-          .where(eq(programEnrollments.id, enrollment.id));
-        
-        console.log(`✅ Updated enrollment ${enrollment.id}: allocated=${paymentForThisEnrollment}, paid=${newTotalPaid}, remaining=${newRemainingBalance}, status=${newPaymentStatus}`);
-      }
+      const result = await tx
+        .update(programEnrollments)
+        .set({ 
+          status: 'enrolled'
+        })
+        .where(inArray(programEnrollments.id, idsToConfirm))
+        .returning({ id: programEnrollments.id });
+      
+      console.log(`✅ Updated ${result.length} enrollments to enrolled status`);
     });
 
     console.log(`✅ Successfully confirmed ${idsToConfirm.length} enrollments for ${userEmail}`);
-    
-    // Create scheduled payments from PaymentIntent metadata (post-confirmation)
-    // This ensures scheduled payments are only created for successful payments
-    let scheduledPaymentsResult = { created: 0, skipped: false };
-    try {
-      if (paymentIntent.metadata) {
-        const paymentPlanService = new StripePaymentPlanService(storage as any);
-        scheduledPaymentsResult = await paymentPlanService.createScheduledPaymentsFromConfirmedPayment(
-          paymentIntentId,
-          paymentIntent.metadata as Record<string, string>
-        );
-        console.log(`📅 Scheduled payments creation result:`, scheduledPaymentsResult);
-      }
-    } catch (scheduledPaymentError) {
-      console.error('⚠️ Error creating scheduled payments (non-blocking):', scheduledPaymentError);
-    }
-    
-    // Create membership from PaymentIntent metadata (post-confirmation)
-    // This ensures membership is recorded immediately on payment success, not just via webhook
-    let membershipCreated = false;
-    try {
-      const metadata = paymentIntent.metadata as Record<string, string>;
-      const hasMembership = metadata.hasMembership === 'true';
-      const membershipSchoolId = metadata.membershipSchoolId ? parseInt(metadata.membershipSchoolId) : null;
-      const membershipAmount = metadata.membershipAmount ? parseInt(metadata.membershipAmount) : 0;
-      const membershipYear = metadata.membershipYear ? parseInt(metadata.membershipYear) : new Date().getFullYear();
-      const parentUserId = metadata.membershipParentUserId ? parseInt(metadata.membershipParentUserId) : null;
-      
-      // Extract discount tracking metadata (mirrors webhook handler)
-      const membershipDiscountId = metadata.membershipDiscountId ? parseInt(metadata.membershipDiscountId) : null;
-      const membershipDiscountName = metadata.membershipDiscountName || null;
-      const membershipOriginalAmount = metadata.membershipOriginalAmount ? parseInt(metadata.membershipOriginalAmount) : null;
-      const membershipDiscountAmount = metadata.membershipDiscountAmount ? parseInt(metadata.membershipDiscountAmount) : 0;
-      
-      if (hasMembership && parentUserId && membershipSchoolId) {
-        console.log('🎫 Creating membership from confirm endpoint:', {
-          parentUserId,
-          membershipSchoolId,
-          membershipAmount,
-          membershipYear,
-          membershipDiscountId,
-          membershipDiscountAmount
-        });
-        
-        // Check if user already has member ID
-        const existingUser = await db
-          .select()
-          .from(users)
-          .where(eq(users.id, parentUserId))
-          .limit(1);
-        
-        if (existingUser.length > 0 && !existingUser[0].memberId) {
-          const newMemberId = generateMemberId();
-          
-          await db
-            .update(users)
-            .set({ memberId: newMemberId })
-            .where(eq(users.id, parentUserId));
-          
-          console.log(`🎫 ✅ Generated Member ID ${newMemberId} for user ${parentUserId}`);
-          
-          // Before creating a new membership, check if a record already exists (e.g. auto-created during registration)
-          const existingMembershipForNewMember = await storage.getMembershipEnrollmentByParentAndSchoolAndYear(
-            parentUserId, membershipSchoolId, membershipYear
-          );
-          
-          if (existingMembershipForNewMember) {
-            // Update the existing record (e.g. the pending_payment created at registration) rather than creating a duplicate
-            console.log(`🎫 Found existing membership ${existingMembershipForNewMember.id} (status: ${existingMembershipForNewMember.status}) for new member - updating to enrolled`);
-            
-            if (existingMembershipForNewMember.notes?.includes(paymentIntent.id)) {
-              console.log(`🎫 Membership ${existingMembershipForNewMember.id} already updated with payment ${paymentIntent.id} - skipping`);
-            } else {
-              await storage.updateMembershipEnrollment(existingMembershipForNewMember.id, {
-                status: 'enrolled',
-                amount: membershipAmount,
-                totalAmount: membershipAmount,
-                amountPaid: membershipAmount,
-                remainingBalance: 0,
-                balanceDue: 0,
-                paymentMethod: 'other',
-                stripeCustomerId: (paymentIntent.customer as string) || existingMembershipForNewMember.stripeCustomerId,
-                notes: `${existingMembershipForNewMember.notes || ''} | Updated via cart checkout (${paymentIntent.id})${membershipDiscountName ? ` - Discount: ${membershipDiscountName}` : ''}`
-              });
-              membershipCreated = true;
-              console.log(`🎫 ✅ Updated existing membership ${existingMembershipForNewMember.id} to enrolled for user ${parentUserId}`);
-            }
-          } else {
-            const startDate = new Date();
-            const expirationDate = new Date(startDate);
-            expirationDate.setFullYear(expirationDate.getFullYear() + 1);
-            
-            await storage.createMembershipEnrollment({
-              schoolId: membershipSchoolId,
-              parentUserId: parentUserId,
-              membershipYear: membershipYear,
-              membershipTier: 'basic',
-              amount: membershipAmount,
-              amountPaid: membershipAmount,
-              remainingBalance: 0,
-              totalAmount: membershipAmount,
-              balanceDue: 0,
-              status: 'enrolled',
-              stripeSubscriptionId: null,
-              stripeCustomerId: (paymentIntent.customer as string) || null,
-              startDate,
-              renewalDate: expirationDate,
-              dueDate: startDate,
-              endDate: expirationDate,
-              expirationDate,
-              gracePeriodEnd: null,
-              paymentMethod: 'other',
-              notes: `Stripe payment via cart checkout (${paymentIntent.id}) - confirmed via confirm endpoint${membershipDiscountName ? ` - Discount: ${membershipDiscountName}` : ''}`
-            });
-            
-            membershipCreated = true;
-            console.log(`🎫 ✅ Created membership enrollment for user ${parentUserId} in confirm endpoint`);
-          }
-          
-          // Track discount usage (mirrors webhook handler logic)
-          if (membershipDiscountId && membershipDiscountAmount > 0 && membershipSchoolId) {
-            try {
-              const schoolDiscounts = await storage.getDiscountsBySchoolId(membershipSchoolId);
-              const discount = schoolDiscounts.find(d => d.id === membershipDiscountId);
-              
-              if (!discount) {
-                console.error(`⚠️ Discount ${membershipDiscountId} not found for school ${membershipSchoolId} - skipping tracking`);
-              } else {
-                const incrementSuccess = await storage.incrementDiscountUsageAtomic(membershipDiscountId);
-                
-                if (!incrementSuccess) {
-                  console.log(`⚠️ Discount ${membershipDiscountName} has reached usage limit - atomic increment failed`);
-                } else {
-                  await storage.createDiscountApplication({
-                    discountId: membershipDiscountId,
-                    parentEmail: userEmail || '',
-                    childId: null,
-                    schoolEnrollmentId: null,
-                    programEnrollmentId: null,
-                    paymentId: null,
-                    classId: null,
-                    originalAmount: membershipOriginalAmount || membershipAmount + membershipDiscountAmount,
-                    discountAmount: membershipDiscountAmount,
-                    finalAmount: membershipAmount,
-                    applicationMethod: 'automatic',
-                    appliedBy: null,
-                  });
-                  console.log(`🎫 ✅ Tracked membership discount usage: ${membershipDiscountName}`);
-                }
-              }
-            } catch (discountTrackError) {
-              console.error('⚠️ Error tracking membership discount application:', discountTrackError);
-            }
-          }
-        } else if (existingUser.length > 0 && existingUser[0].memberId) {
-          console.log(`🎫 User ${parentUserId} already has Member ID: ${existingUser[0].memberId}`);
-          
-          // User has member ID - check for existing unpaid membership to update
-          // Match any unpaid status (pending_payment, pending) or check remainingBalance > 0
-          const existingMemberships = await storage.getMembershipEnrollmentsByParentId(parentUserId);
-          const unpaidMembership = existingMemberships?.find(
-            (m: any) => m.schoolId === membershipSchoolId && 
-                       m.membershipYear === membershipYear && 
-                       (m.status === 'pending_payment' || m.status === 'pending' || (m.remainingBalance && m.remainingBalance > 0))
-          );
-          
-          if (unpaidMembership) {
-            // Check idempotency - if notes already contain this paymentIntent, skip update
-            if (unpaidMembership.notes?.includes(paymentIntent.id)) {
-              console.log(`🎫 Membership ${unpaidMembership.id} already updated with payment ${paymentIntent.id} - skipping`);
-            } else {
-              console.log(`🎫 Found unpaid membership ${unpaidMembership.id} (status: ${unpaidMembership.status}) - updating to enrolled`);
-              
-              await storage.updateMembershipEnrollment(unpaidMembership.id, {
-                status: 'enrolled',
-                amount: membershipAmount,
-                totalAmount: membershipAmount,
-                amountPaid: membershipAmount,
-                remainingBalance: 0,
-                balanceDue: 0,
-                paymentMethod: 'other',
-                stripeCustomerId: (paymentIntent.customer as string) || unpaidMembership.stripeCustomerId,
-                notes: `${unpaidMembership.notes || ''} | Updated via cart checkout (${paymentIntent.id})${membershipDiscountName ? ` - Discount: ${membershipDiscountName}` : ''}`
-              });
-              
-              membershipCreated = true;
-              console.log(`🎫 ✅ Updated membership ${unpaidMembership.id} to enrolled status`);
-              
-              // Track discount usage for updated membership with idempotency check
-              if (membershipDiscountId && membershipDiscountAmount > 0) {
-                try {
-                  // Check if discount was already tracked for this membership/payment
-                  const existingApplications = await storage.getDiscountApplicationsByDiscountId(membershipDiscountId);
-                  const alreadyTracked = existingApplications?.some(
-                    (app: any) => app.parentEmail === userEmail && 
-                                 app.finalAmount === membershipAmount
-                  );
-                  
-                  if (alreadyTracked) {
-                    console.log(`🎫 Discount ${membershipDiscountId} already tracked for this parent/amount - skipping`);
-                  } else {
-                    const schoolDiscounts = await storage.getDiscountsBySchoolId(membershipSchoolId);
-                    const discount = schoolDiscounts.find(d => d.id === membershipDiscountId);
-                    
-                    if (discount) {
-                      const incrementSuccess = await storage.incrementDiscountUsageAtomic(membershipDiscountId);
-                      if (incrementSuccess) {
-                        await storage.createDiscountApplication({
-                          discountId: membershipDiscountId,
-                          parentEmail: userEmail || '',
-                          childId: null,
-                          schoolEnrollmentId: null,
-                          programEnrollmentId: null,
-                          paymentId: null,
-                          classId: null,
-                          originalAmount: membershipOriginalAmount || membershipAmount + membershipDiscountAmount,
-                          discountAmount: membershipDiscountAmount,
-                          finalAmount: membershipAmount,
-                          applicationMethod: 'automatic',
-                          appliedBy: null,
-                        });
-                        console.log(`🎫 ✅ Tracked membership discount usage: ${membershipDiscountName}`);
-                      }
-                    }
-                  }
-                } catch (discountTrackError) {
-                  console.error('⚠️ Error tracking membership discount for updated membership:', discountTrackError);
-                }
-              }
-            }
-          } else {
-            console.log(`🎫 User ${parentUserId} has no unpaid membership to update for school ${membershipSchoolId} year ${membershipYear}`);
-          }
-        }
-      }
-    } catch (membershipError) {
-      console.error('⚠️ Error creating membership (non-blocking):', membershipError);
-    }
-    
-    // Process credits consumption for mixed payments (credits + Stripe)
-    // For Stripe payments, we use direct consumption (not reserve-then-finalize)
-    // because Stripe already gates the transaction - this only runs after payment confirmation
-    let creditsConsumed = 0;
-    try {
-      const metadata = paymentIntent.metadata as Record<string, string>;
-      const creditsApplied = metadata.creditsAppliedCents 
-        ? parseInt(metadata.creditsAppliedCents) 
-        : 0;
-      
-      if (creditsApplied > 0) {
-        console.log('💰 Processing credits consumption for mixed payment:', { 
-          creditsToConsume: creditsApplied, 
-          userEmail 
-        });
-        
-        // Use unified credit system for atomic FIFO consumption
-        const { usedCredits, totalUsed } = await storage.useCredits(
-          userId, 
-          creditsApplied, 
-          undefined, // paymentHistoryId - could be populated if we want to link it
-          `Applied to enrollment payment ${paymentIntentId}`
-        );
-        
-        creditsConsumed = totalUsed;
-        console.log(`💰 ✅ Consumed ${totalUsed} cents across ${usedCredits.length} credits for mixed payment`);
-      }
-    } catch (creditsError) {
-      console.error('⚠️ Error consuming credits (non-blocking):', creditsError);
-    }
     
     res.json({ 
       success: true,
@@ -910,10 +553,7 @@ router.post('/confirm', async (req: any, res) => {
       confirmed: idsToConfirm.length,
       enrollmentIds: idsToConfirm,
       paymentIntentId,
-      paymentAmount: paymentIntent.amount,
-      scheduledPayments: scheduledPaymentsResult,
-      membershipCreated,
-      creditsConsumed
+      paymentAmount: paymentIntent.amount
     });
   } catch (error) {
     console.error('Error confirming enrollments:', error);

@@ -2,16 +2,15 @@ import { Router } from 'express';
 import fs from 'fs';
 import path from 'path';
 import { storage } from '../storage';
-import { supabaseAuth } from '../middleware/supabase-auth';
+import { jwtCheck } from '../middleware/auth0-auth';
 import { sendNewStudentNotificationEmail } from '../lib/email-service';
-import { isActiveMembership } from '@shared/schema';
 import { getChildrenForAuthenticatedParent, resolveParentDbUser } from '../lib/parent-auth-scope';
 import { enrollmentMatchesParent, emailsMatch } from '@shared/parent-identity';
 
 const router = Router();
 
 // Get children for the authenticated parent
-router.get('/children', supabaseAuth, async (req: any, res) => {
+router.get('/children', jwtCheck, async (req: any, res) => {
   try {
     console.log('👨‍👩‍👧‍👦 Children API called - Headers:', Object.keys(req.headers));
 
@@ -43,9 +42,7 @@ router.get('/children', supabaseAuth, async (req: any, res) => {
     } catch {
       // Optional debug only.
     }
-
-    // Use parent-auth-scope helper which handles both supabaseId and email lookup,
-    // falling back to direct getChildrenByParentEmail for backwards compatibility.
+    
     const children = await getChildrenForAuthenticatedParent(storage, {
       email: userEmail,
       supabaseId: req.auth?.supabaseId,
@@ -53,24 +50,13 @@ router.get('/children', supabaseAuth, async (req: any, res) => {
 
     console.log(`🔍 Found ${children.length} children for parent ${userEmail}:`, children);
 
-    let guardianChildren: any[] = [];
-    const user = await storage.getUserByEmail(userEmail);
-    if (user) {
-      guardianChildren = await storage.getChildrenByGuardianUserId(user.id);
-    }
-
-    const directChildIds = new Set(children.map(c => c.id));
-    const allChildren = [
-      ...children,
-      ...guardianChildren.filter(c => !directChildIds.has(c.id))
-    ];
-
-    if (!allChildren || allChildren.length === 0) {
+    if (!children || children.length === 0) {
       console.log('ℹ️ No children found for this user.');
       return res.status(200).json([]);
     }
 
-    const transformedChildren = allChildren.map(child => ({
+    // Transform children data to ensure consistent format
+    const transformedChildren = children.map(child => ({
       id: child.id,
       firstName: child.firstName,
       lastName: child.lastName,
@@ -89,8 +75,7 @@ router.get('/children', supabaseAuth, async (req: any, res) => {
       additionalLanguages: child.additionalLanguages,
       notes: child.notes,
       createdAt: child.createdAt,
-      updatedAt: child.updatedAt,
-      isGuardianLinked: !directChildIds.has(child.id)
+      updatedAt: child.updatedAt
     }));
 
     return res.status(200).json(transformedChildren);
@@ -105,7 +90,7 @@ router.get('/children', supabaseAuth, async (req: any, res) => {
 });
 
 // Get a specific child by ID (parent must own the child)
-router.get('/children/:id', supabaseAuth, async (req: any, res) => {
+router.get('/children/:id', jwtCheck, async (req: any, res) => {
   try {
     const childId = parseInt(req.params.id);
     const userEmail = req.auth?.email || req.user?.email;
@@ -134,8 +119,6 @@ router.get('/children/:id', supabaseAuth, async (req: any, res) => {
       });
     }
     
-    // 🔒 SECURITY: Verify parent owns this child (by parentId link or email match)
-    // or is a registered guardian for the child.
     const dbUser = await resolveParentDbUser(storage, {
       email: userEmail,
       supabaseId: req.auth?.supabaseId,
@@ -143,17 +126,10 @@ router.get('/children/:id', supabaseAuth, async (req: any, res) => {
     const ownsByLink = dbUser != null && child.parentId === dbUser.id;
     const ownsByEmail = emailsMatch(child.parentEmail, userEmail);
     if (!ownsByLink && !ownsByEmail) {
-      let isGuardian = false;
-      if (dbUser) {
-        const guardians = await storage.getGuardiansByChildId(childId);
-        isGuardian = guardians.some(g => g.guardianUserId === dbUser.id);
-      }
-      if (!isGuardian) {
-        return res.status(403).json({ 
-          message: 'Access denied: You can only view your own children',
-          error: 'NOT_YOUR_CHILD'
-        });
-      }
+      return res.status(403).json({ 
+        message: 'Access denied: You can only view your own children',
+        error: 'NOT_YOUR_CHILD'
+      });
     }
     
     return res.status(200).json(child);
@@ -167,7 +143,7 @@ router.get('/children/:id', supabaseAuth, async (req: any, res) => {
 });
 
 // Register a new child
-router.post('/children', supabaseAuth, async (req: any, res) => {
+router.post('/children', jwtCheck, async (req: any, res) => {
   try {
     console.log('👶 Child registration API called');
 
@@ -340,7 +316,7 @@ router.post('/children', supabaseAuth, async (req: any, res) => {
           // Send email notifications to each admin
           for (const admin of schoolAdmins) {
             try {
-              sendNewStudentNotificationEmail({
+              const emailSent = await sendNewStudentNotificationEmail({
                 adminEmail: admin.email,
                 adminName: admin.name || `${admin.firstName} ${admin.lastName}`,
                 schoolName: schoolName,
@@ -350,11 +326,16 @@ router.post('/children', supabaseAuth, async (req: any, res) => {
                 parentEmail: userEmail,
                 parentPhone: parentPhone || parent.phone,
                 registrationDate: new Date()
-              }).catch(err => console.error(`[Email fire-and-forget] sendNewStudentNotificationEmail to ${admin.email} failed:`, err));
-              console.log(`✅ Email notification dispatched to admin: ${admin.email}`);
+              });
+              
+              if (emailSent) {
+                console.log(`✅ Sent email notification to admin: ${admin.email}`);
+              } else {
+                console.log(`⚠️ Email notification failed for admin: ${admin.email}`);
+              }
             } catch (notificationError) {
               const error = notificationError as Error;
-              console.error(`❌ Failed to dispatch email to admin ${admin.email}:`, error.message);
+              console.error(`❌ Failed to notify admin ${admin.email}:`, error.message);
               // Continue notifying other admins even if one fails
             }
           }
@@ -381,7 +362,7 @@ router.post('/children', supabaseAuth, async (req: any, res) => {
 });
 
 // Get enrollments for the authenticated parent's children
-router.get('/enrollments', supabaseAuth, async (req: any, res) => {
+router.get('/enrollments', jwtCheck, async (req: any, res) => {
   try {
     console.log('📚 Parent enrollments API called');
 
@@ -398,48 +379,21 @@ router.get('/enrollments', supabaseAuth, async (req: any, res) => {
 
     console.log('📚 Parent requesting enrollments for email:', userEmail);
 
-    // Use integer parent_id FK — authoritative per asa-auth-patterns.
-    // getEnrollmentsByParentEmail() queries the stale denormalized parent_email
-    // field and misses rows where that field is out of sync with the user record.
-    // Falls back to email-match (via enrollmentMatchesParent) for legacy rows
-    // where parent_id was never backfilled.
-    const parentId = req.auth?.dbUserId || req.user?.id;
-    let parentEnrollments: any[];
-    if (parentId) {
-      parentEnrollments = await storage.getProgramEnrollmentsByParent(parentId);
-    } else {
-      const dbUser = await resolveParentDbUser(storage, {
-        email: userEmail,
-        supabaseId: req.auth?.supabaseId,
-      });
-      const allEnrollments = await storage.getAllEnrollments();
-      parentEnrollments = allEnrollments.filter((enrollment: any) =>
-        enrollmentMatchesParent(enrollment, dbUser?.id, userEmail)
-      );
-    }
+    // Get all enrollments from storage
+    const allEnrollments = await storage.getAllEnrollments();
+    
+    const dbUser = await resolveParentDbUser(storage, {
+      email: userEmail,
+      supabaseId: req.auth?.supabaseId,
+    });
+
+    const parentEnrollments = allEnrollments.filter((enrollment: any) =>
+      enrollmentMatchesParent(enrollment, dbUser?.id, userEmail)
+    );
 
     console.log(`📚 Found ${parentEnrollments.length} enrollments for parent ${userEmail}`);
 
-    // Recalculate remainingBalance from authoritative fields (totalCost / totalPaid).
-    // The stored remaining_balance column can be stale for certain creation paths (e.g. deposit plan).
-    // Gold-standard pattern from parent-profile.ts: Math.max(0, totalCost - totalPaid - compAmountCents).
-    // Use ?? not || — || treats a genuinely fully-paid enrollment (balance = 0) as falsy.
-    const enriched = parentEnrollments.map((enrollment: any) => {
-      const totalPaid = enrollment.totalPaid ?? 0;
-      const totalCost = enrollment.totalCost ?? 0;
-      const compAmount = enrollment.compAmountCents ?? 0;
-      const effectiveBalance = Math.max(0, totalCost - totalPaid - compAmount);
-      return { ...enrollment, remainingBalance: effectiveBalance, effectiveBalance };
-    });
-
-    // Exclude terminal-status enrollments (denylist per asa-payment-patterns gold-standard).
-    // Cancelled/withdrawn/failed/waitlist/completed enrollments have no legitimate outstanding balance.
-    // 'pending_admin_approval' is intentionally kept — payment was made, awaiting admin sign-off.
-    const activeEnrollments = enriched.filter(
-      (e: any) => !['cancelled', 'waitlist', 'withdrawn', 'failed', 'completed'].includes(e.status)
-    );
-
-    return res.status(200).json(activeEnrollments);
+    return res.status(200).json(parentEnrollments);
   } catch (error) {
     console.error('❌ Error fetching enrollments:', error);
     return res.status(500).json({ 
@@ -450,7 +404,7 @@ router.get('/enrollments', supabaseAuth, async (req: any, res) => {
 });
 
 // Get membership enrollments for the authenticated parent
-router.get('/memberships', supabaseAuth, async (req: any, res) => {
+router.get('/memberships', jwtCheck, async (req: any, res) => {
   try {
     console.log('🎫 Parent memberships API called');
 
@@ -508,7 +462,7 @@ router.get('/memberships', supabaseAuth, async (req: any, res) => {
 });
 
 // Get membership details after successful Stripe payment
-router.get('/memberships/confirm', supabaseAuth, async (req: any, res) => {
+router.get('/memberships/confirm', jwtCheck, async (req: any, res) => {
   try {
     console.log('✅ Confirming membership payment');
 
@@ -622,7 +576,7 @@ router.get('/memberships/confirm', supabaseAuth, async (req: any, res) => {
 });
 
 // Create Stripe checkout session for parent's membership payment
-router.post('/memberships/checkout', supabaseAuth, async (req: any, res) => {
+router.post('/memberships/checkout', jwtCheck, async (req: any, res) => {
   try {
     console.log('💳 Parent membership checkout API called');
 
@@ -786,8 +740,8 @@ router.post('/memberships/checkout', supabaseAuth, async (req: any, res) => {
   }
 });
 
-// Get parent's member ID and membership status
-router.get('/member-id', supabaseAuth, async (req: any, res) => {
+// Get parent's member ID
+router.get('/member-id', jwtCheck, async (req: any, res) => {
   try {
     console.log('🎫 Get member ID API called');
 
@@ -811,25 +765,9 @@ router.get('/member-id', supabaseAuth, async (req: any, res) => {
       });
     }
 
-    // Check actual membership enrollment status for accurate badge display
-    const currentYear = new Date().getFullYear();
-    const memberships = await storage.getMembershipEnrollmentsByParentId(user.id);
-    
-    // Find the most recent membership for current or next year
-    const relevantMembership = memberships?.find((m: any) => 
-      (m.membershipYear === currentYear || m.membershipYear === currentYear + 1)
-    );
-    
-    // Use shared isActiveMembership helper for consistent status checking
-    const isActiveMember = relevantMembership ? isActiveMembership(relevantMembership.status) : false;
-    
-    // hasMemberId: Whether user has a member ID (for copy/edit controls - any member with ID)
-    // hasMembership: Whether membership is actively paid (for "Active Member" badge)
     return res.status(200).json({
       memberId: user.memberId || null,
-      hasMemberId: !!user.memberId && user.memberId.trim() !== '',
-      hasMembership: isActiveMember,
-      membershipStatus: relevantMembership?.status || null
+      hasMembership: !!user.memberId && user.memberId.trim() !== ''
     });
   } catch (error: any) {
     console.error('❌ Error getting member ID:', error);
@@ -841,7 +779,7 @@ router.get('/member-id', supabaseAuth, async (req: any, res) => {
 });
 
 // Save/update parent's member ID (used when parent enters an existing member ID)
-router.put('/member-id', supabaseAuth, async (req: any, res) => {
+router.put('/member-id', jwtCheck, async (req: any, res) => {
   try {
     console.log('🎫 Update member ID API called');
 
@@ -900,7 +838,7 @@ router.put('/member-id', supabaseAuth, async (req: any, res) => {
 });
 
 // Get school documents published for parents
-router.get('/school-documents', supabaseAuth, async (req: any, res) => {
+router.get('/school-documents', jwtCheck, async (req: any, res) => {
   try {
     console.log('📄 Get parent school documents API called');
 
@@ -924,18 +862,8 @@ router.get('/school-documents', supabaseAuth, async (req: any, res) => {
       });
     }
 
-    // Derive schoolId from enrollments if user.schoolId is null
-    let effectiveSchoolId = user.schoolId;
-    if (!effectiveSchoolId) {
-      const enrollments = await storage.getProgramEnrollmentsByParent(user.id);
-      if (enrollments.length > 0) {
-        effectiveSchoolId = enrollments[0].schoolId;
-        console.log(`📄 Derived schoolId ${effectiveSchoolId} from parent's enrollments`);
-      }
-    }
-
     // Get the parent's school ID
-    if (!effectiveSchoolId) {
+    if (!user.schoolId) {
       return res.status(200).json({ 
         success: true,
         documents: []
@@ -943,7 +871,7 @@ router.get('/school-documents', supabaseAuth, async (req: any, res) => {
     }
 
     // Get published documents for the parent's school
-    const documents = await storage.getPublishedSchoolDocuments(effectiveSchoolId);
+    const documents = await storage.getPublishedSchoolDocuments(user.schoolId);
 
     console.log(`📄 Found ${documents.length} school documents for parent ${userEmail}`);
 
@@ -960,152 +888,8 @@ router.get('/school-documents', supabaseAuth, async (req: any, res) => {
   }
 });
 
-router.get('/credits', supabaseAuth, async (req: any, res) => {
-  try {
-    console.log('💰 Get parent credits API called');
-
-    const userEmail = req.auth?.email || req.user?.email;
-    
-    if (!userEmail) {
-      return res.status(401).json({ 
-        message: 'Authentication required',
-        error: 'NO_USER_EMAIL'
-      });
-    }
-
-    const user = await storage.getUserByEmail(userEmail);
-    if (!user) {
-      return res.status(404).json({ 
-        message: 'User not found',
-        error: 'USER_NOT_FOUND'
-      });
-    }
-
-    const allCredits = await storage.getCredits({ userId: user.id });
-    
-    const totalAvailableCents = allCredits.reduce((sum, credit) => {
-      if (credit.status === 'approved' || credit.status === 'partially_used') {
-        const remaining = (credit.creditAmountCents || 0) - (credit.usedAmountCents || 0);
-        return sum + Math.max(0, remaining);
-      }
-      return sum;
-    }, 0);
-
-    const creditsByType: Record<string, { count: number; totalCents: number }> = {};
-    for (const credit of allCredits) {
-      const remaining = (credit.creditAmountCents || 0) - (credit.usedAmountCents || 0);
-      if (remaining > 0 && (credit.status === 'approved' || credit.status === 'partially_used')) {
-        if (!creditsByType[credit.creditType]) {
-          creditsByType[credit.creditType] = { count: 0, totalCents: 0 };
-        }
-        creditsByType[credit.creditType].count++;
-        creditsByType[credit.creditType].totalCents += remaining;
-      }
-    }
-
-    console.log(`💰 Found ${allCredits.length} credits (${totalAvailableCents} cents available) for ${userEmail}`);
-
-    return res.status(200).json({
-      success: true,
-      totalAvailableCents,
-      totalAvailableFormatted: `$${(totalAvailableCents / 100).toFixed(2)}`,
-      creditsByType,
-      credits: allCredits.map(c => ({
-        id: c.id,
-        creditType: c.creditType,
-        title: c.title,
-        creditAmountCents: c.creditAmountCents,
-        usedAmountCents: c.usedAmountCents,
-        remainingCents: Math.max(0, (c.creditAmountCents || 0) - (c.usedAmountCents || 0)),
-        status: c.status,
-        expiresAt: c.expiresAt,
-        createdAt: c.createdAt
-      }))
-    });
-  } catch (error: any) {
-    console.error('❌ Error getting credits:', error);
-    return res.status(500).json({ 
-      message: 'Failed to get credits',
-      error: error.message || 'GET_CREDITS_ERROR'
-    });
-  }
-});
-
-// Get class roster for a class where parent has an enrolled child (privacy-safe)
-router.get('/class-roster/:classId', supabaseAuth, async (req: any, res) => {
-  try {
-    const userEmail = req.auth?.email || req.user?.email;
-    if (!userEmail) {
-      return res.status(401).json({ message: 'Authentication required' });
-    }
-
-    const classId = parseInt(req.params.classId);
-    if (isNaN(classId)) {
-      return res.status(400).json({ message: 'Invalid class ID' });
-    }
-
-    const user = await storage.getUserByEmail(userEmail);
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    const directChildren = await storage.getChildrenByParentEmail(userEmail);
-    const guardianChildren = await storage.getChildrenByGuardianUserId(user.id);
-    const directIds = new Set(directChildren.map(c => c.id));
-    const allChildren = [
-      ...directChildren,
-      ...guardianChildren.filter(c => !directIds.has(c.id))
-    ];
-
-    if (allChildren.length === 0) {
-      return res.status(403).json({ message: 'No children found for this parent' });
-    }
-
-    const childIds = allChildren.map(c => c.id);
-    const enrollments = await storage.getEnrollmentsByChildIds(childIds);
-    const hasEnrolledChild = enrollments.some((e: any) =>
-      (e.classId === classId || e.marketplaceClassId === classId) &&
-      ['enrolled', 'pending_payment', 'completed'].includes(e.status)
-    );
-
-    if (!hasEnrolledChild) {
-      return res.status(403).json({ message: 'You do not have a child enrolled in this class' });
-    }
-
-    const allEnrollments = await storage.getAllEnrollments();
-    const classEnrollments = allEnrollments.filter((e: any) =>
-      (e.classId === classId || e.marketplaceClassId === classId) &&
-      ['enrolled', 'pending_payment', 'completed'].includes(e.status)
-    );
-
-    const seenChildIds = new Set<number>();
-    const students = await Promise.all(classEnrollments.map(async (e: any) => {
-      if (seenChildIds.has(e.childId)) return null;
-      seenChildIds.add(e.childId);
-      const child = await storage.getChildById(e.childId);
-      if (!child) return null;
-      return {
-        firstName: child.firstName,
-        lastInitial: child.lastName ? child.lastName.charAt(0).toUpperCase() + '.' : '',
-        gradeLevel: child.gradeLevel || null,
-      };
-    }));
-
-    const validStudents = students.filter(s => s !== null);
-    validStudents.sort((a: any, b: any) => a.firstName.localeCompare(b.firstName));
-
-    return res.status(200).json({
-      students: validStudents,
-      totalStudents: validStudents.length,
-    });
-  } catch (error: any) {
-    console.error('Error fetching parent class roster:', error);
-    return res.status(500).json({ message: 'Failed to fetch class roster' });
-  }
-});
-
 // Get payment receipts for the parent
-router.get('/payment-receipts', supabaseAuth, async (req: any, res) => {
+router.get('/payment-receipts', jwtCheck, async (req: any, res) => {
   try {
     console.log('🧾 Get parent payment receipts API called');
 
@@ -1155,191 +939,6 @@ router.get('/payment-receipts', supabaseAuth, async (req: any, res) => {
       message: 'Failed to get payment receipts',
       error: error.message || 'GET_PAYMENT_RECEIPTS_ERROR'
     });
-  }
-});
-
-// GET /api/parent/children/:id/attendance - Get attendance history for a child (parent view)
-router.get('/children/:id/attendance', supabaseAuth, async (req: any, res) => {
-  try {
-    const childId = parseInt(req.params.id);
-    const userEmail = req.auth?.email || req.user?.email;
-
-    if (!userEmail) {
-      return res.status(401).json({ message: 'Authentication required' });
-    }
-
-    if (isNaN(childId)) {
-      return res.status(400).json({ message: 'Invalid child ID' });
-    }
-
-    // Verify parent owns this child or is a guardian
-    const child = await storage.getChildById(childId);
-    if (!child) {
-      return res.status(404).json({ message: 'Child not found' });
-    }
-
-    if (child.parentEmail !== userEmail) {
-      const user = await storage.getUserByEmail(userEmail);
-      let isGuardian = false;
-      if (user) {
-        const guardians = await storage.getGuardiansByChildId(childId);
-        isGuardian = guardians.some((g: any) => g.guardianUserId === user.id);
-      }
-      if (!isGuardian) {
-        return res.status(403).json({ message: 'Access denied: You can only view your own children' });
-      }
-    }
-
-    const attendance = await storage.getAttendanceByChildId(childId);
-
-    // Enrich with session and class info
-    const enriched = await Promise.all(
-      attendance.map(async (record: any) => {
-        const session = await storage.getClassSessionById(record.sessionId);
-        const classInfo = session ? await storage.getClassById(session.classId) : null;
-        return {
-          ...record,
-          sessionDate: session?.scheduledDate,
-          className: classInfo?.title || 'Unknown',
-        };
-      })
-    );
-
-    return res.status(200).json(enriched);
-  } catch (error: any) {
-    console.error('❌ Error fetching child attendance:', error);
-    return res.status(500).json({ message: 'Failed to fetch attendance' });
-  }
-});
-
-// Get published classes for the authenticated parent's school
-router.get('/classes', supabaseAuth, async (req: any, res) => {
-  try {
-    const userEmail = req.auth?.email || req.user?.email;
-    if (!userEmail) {
-      return res.status(401).json({ message: 'Authentication required', error: 'NO_USER_EMAIL' });
-    }
-
-    const user = await storage.getUserByEmail(userEmail);
-    if (!user) {
-      return res.status(404).json({ message: 'User not found', error: 'USER_NOT_FOUND' });
-    }
-
-    // Derive schoolId from enrollments if user.schoolId is null
-    let effectiveSchoolId = user.schoolId;
-    if (!effectiveSchoolId) {
-      const enrollments = await storage.getProgramEnrollmentsByParent(user.id);
-      if (enrollments.length > 0) {
-        effectiveSchoolId = enrollments[0].schoolId;
-        console.log(`📄 Derived schoolId ${effectiveSchoolId} from parent's enrollments`);
-      }
-    }
-
-    if (!effectiveSchoolId) {
-      return res.status(404).json({ message: 'School not found for this parent', error: 'NO_SCHOOL_ID' });
-    }
-
-    const allClasses = await storage.getClassesBySchoolId(String(effectiveSchoolId));
-    const hiddenCategoryIds = await storage.getHiddenCategoryIds();
-
-    const classesWithEnrichment = await Promise.all(allClasses.map(async (classItem) => {
-      const classEnrollmentCount = await storage.getEnrollmentCountForClass(classItem.id);
-
-      let variants = undefined;
-      if (classItem.schedule && typeof classItem.schedule === 'string') {
-        try {
-          const scheduleData = JSON.parse(classItem.schedule);
-          if (scheduleData && scheduleData.variants && Array.isArray(scheduleData.variants)) {
-            variants = scheduleData.variants;
-          }
-        } catch (e) {}
-      } else if (classItem.schedule && typeof classItem.schedule === 'object') {
-        if ((classItem.schedule as any).variants && Array.isArray((classItem.schedule as any).variants)) {
-          variants = (classItem.schedule as any).variants;
-        }
-      }
-
-      let locationName = null;
-      if (classItem.locationId) {
-        try {
-          const location = await storage.getLocationById(classItem.locationId);
-          if (location) locationName = location.name;
-        } catch (e) {}
-      }
-
-      let sessionName = null;
-      if (classItem.sessionId) {
-        try {
-          const session = await storage.getSessionById(classItem.sessionId);
-          if (session) sessionName = session.name;
-        } catch (e) {}
-      }
-
-      let derivedInstructorName = null;
-      if (classItem.instructorId) {
-        try {
-          const instructor = await storage.getUser(classItem.instructorId);
-          if (instructor) {
-            derivedInstructorName = instructor.name
-              || (instructor.firstName && instructor.lastName ? `${instructor.firstName} ${instructor.lastName}` : null)
-              || instructor.email
-              || null;
-          }
-        } catch (e) {}
-      }
-
-      return {
-        ...classItem,
-        enrollmentCount: classEnrollmentCount,
-        capacity: classItem.capacity || 20,
-        enrolled: classEnrollmentCount,
-        variants: variants || undefined,
-        location: locationName || classItem.location || null,
-        categoryName: classItem.categoryName || classItem.category || null,
-        categoryId: classItem.categoryId || null,
-        categoryIsPublic: classItem.categoryId
-          ? !hiddenCategoryIds.includes(classItem.categoryId)
-          : true,
-        instructorName: derivedInstructorName || classItem.instructorName || null,
-        sessionName: sessionName || null
-      };
-    }));
-
-    console.log(`📊 Parent classes for schoolId=${effectiveSchoolId}: ${allClasses.length} total, statuses: ${[...new Set(allClasses.map(c => c.status))].join(', ')}`);
-
-    // Filter out cancelled, completed, expired, admin-only, and hidden-category classes
-    // Normalize today to a YYYY-MM-DD string (UTC) so same-day end dates are not expired
-    const todayStr = new Date().toISOString().slice(0, 10);
-    const filtered = classesWithEnrichment.filter((cls) => {
-      if (['cancelled', 'completed'].includes(cls.status)) {
-        console.log(`🔍 [parent/classes] Excluding class ${cls.id} "${cls.title}": status=${cls.status}`);
-        return false;
-      }
-      if (cls.endDate && cls.endDate < todayStr) {
-        console.log(`🔍 [parent/classes] Excluding class ${cls.id} "${cls.title}": endDate=${cls.endDate} < today=${todayStr}`);
-        return false;
-      }
-      if (cls.isAdminOnly) {
-        console.log(`🔍 [parent/classes] Excluding class ${cls.id} "${cls.title}": isAdminOnly=true`);
-        return false;
-      }
-      if (cls.categoryId && !cls.categoryIsPublic) {
-        console.log(`🔍 [parent/classes] Excluding class ${cls.id} "${cls.title}": categoryId=${cls.categoryId} categoryIsPublic=${cls.categoryIsPublic}`);
-        return false;
-      }
-      return true;
-    });
-
-    return res.json({
-      items: filtered,
-      total: filtered.length,
-      page: 1,
-      limit: filtered.length,
-      totalPages: 1
-    });
-  } catch (error) {
-    console.error('❌ Error fetching parent classes:', error);
-    return res.status(500).json({ message: 'Error fetching classes' });
   }
 });
 

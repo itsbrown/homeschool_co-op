@@ -1,11 +1,9 @@
-import { useState, useEffect, lazy, Suspense } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AdminShell } from "@/components/ui/admin-shell";
 import { useAuth } from "@/hooks/useAuth0";
 import { ClassCreationForm } from "../components/admin/ClassCreationForm";
 import { Route, Switch, useLocation, Link } from "wouter";
-
-const ClassesUploadPage = lazy(() => import("./admin/ClassesUploadPage"));
 import { apiRequest } from "../lib/queryClient";
 import { formatDate, formatCurrency } from "../lib/utils";
 import { useToast } from "../hooks/use-toast";
@@ -17,12 +15,6 @@ import {
   CardHeader,
   CardTitle,
 } from "../components/ui/card";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "../components/ui/tooltip";
 import {
   Table,
   TableBody,
@@ -70,7 +62,6 @@ import {
   EyeOff,
   Upload,
   UserPlus,
-  Loader2,
 } from "lucide-react";
 
 export function AdminClassesPage() {
@@ -99,12 +90,44 @@ export function AdminClassesPage() {
     refetch
   } = useQuery({
     queryKey: ['/api/admin-classes/classes', page, search, category],
+    // Direct use of the default fetcher doesn't work correctly here
+    // We need to manually handle the response and parse the JSON
     queryFn: async () => {
-      const params = new URLSearchParams({ page: String(page), limit: "10" });
-      if (search) params.set("search", search);
-      if (category) params.set("category", category);
-      const res = await apiRequest("GET", `/api/admin-classes/classes?${params.toString()}`);
-      return res.json();
+      try {
+        // Manually fetch and parse the data instead of using the default fetcher
+        const response = await fetch(`/api/admin-classes/classes?page=${page}&limit=10${search ? `&search=${search}` : ""}${category ? `&category=${category}` : ""}`, {
+          credentials: "include"
+        });
+        
+        if (!response.ok) {
+          throw new Error(`API error: ${response.status}`);
+        }
+        
+        const responseData = await response.json();
+        console.log("Classes data from API:", responseData);
+        
+        // Check if we received classes data in the expected format
+        if (!responseData.classes && Array.isArray(responseData)) {
+          // If the API returned an array directly, transform it into the expected format
+          console.log("Converting array response to expected format");
+          return { 
+            classes: responseData, 
+            page: page, 
+            limit: 10, 
+            totalCount: responseData.length,
+            totalPages: Math.ceil(responseData.length / 10)
+          };
+        } else if (!responseData.classes) {
+          console.error("Missing 'classes' property in API response:", responseData);
+          return { classes: [], page: 1, limit: 10, totalCount: 0, totalPages: 0 };
+        }
+        console.log("Final classes data being returned:", responseData);
+        console.log("Classes array length:", responseData.classes.length);
+        return responseData;
+      } catch (error) {
+        console.error("Error fetching classes:", error);
+        throw error;
+      }
     },
     enabled: !!isAdmin,
   });
@@ -113,12 +136,12 @@ export function AdminClassesPage() {
   const handleDeleteClass = async (id: number) => {
     if (window.confirm("Are you sure you want to delete this class?")) {
       try {
-        await apiRequest("DELETE", `/api/admin-classes/classes/${id}`);
+        await apiRequest("DELETE", `/api/admin/classes/${id}`);
         toast({
           title: "Class deleted",
           description: "The class has been deleted successfully.",
         });
-        queryClient.invalidateQueries({ queryKey: ['/api/admin-classes/classes'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/admin/classes'] });
       } catch (error) {
         console.error("Failed to delete class:", error);
         toast({
@@ -133,7 +156,7 @@ export function AdminClassesPage() {
   // Handle publishing toggle
   const handleTogglePublish = async (id: number, currentStatus: boolean) => {
     try {
-      await apiRequest("PATCH", `/api/admin-classes/classes/${id}`, {
+      await apiRequest("PATCH", `/api/admin/classes/${id}`, {
         isPublished: !currentStatus,
       });
       toast({
@@ -142,7 +165,7 @@ export function AdminClassesPage() {
           currentStatus ? "hidden from" : "visible to"
         } parents.`,
       });
-      queryClient.invalidateQueries({ queryKey: ['/api/admin-classes/classes'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/classes'] });
     } catch (error) {
       console.error("Failed to update class:", error);
       toast({
@@ -288,11 +311,14 @@ export function AdminClassesPage() {
                                 </p>
                               </div>
                             </div>
-                          ) : classesData?.classes?.length > 0 ? (
+                          ) : (
                             <>
+                              {console.log("Rendering class data:", classesData)}
+                              <pre className="text-xs text-red-500">Debug: {JSON.stringify(classesData, null, 2)}</pre>
                               
+                              {classesData?.classes?.length ? (
+                              <>
                               <div className="rounded-md border">
-                                <TooltipProvider>
                                 <Table>
                                   <TableHeader>
                                     <TableRow>
@@ -301,7 +327,6 @@ export function AdminClassesPage() {
                                       <TableHead>Dates</TableHead>
                                       <TableHead>Price</TableHead>
                                       <TableHead>Enrollment</TableHead>
-                                      <TableHead>Supplies</TableHead>
                                       <TableHead>Status</TableHead>
                                       <TableHead>Visibility</TableHead>
                                       <TableHead className="text-right">Actions</TableHead>
@@ -347,22 +372,6 @@ export function AdminClassesPage() {
                                             <Users className="h-3 w-3" />
                                             {classItem.enrollmentCount || 0}/{classItem.maxEnrollment || classItem.capacity || 20}
                                           </div>
-                                        </TableCell>
-                                        <TableCell>
-                                          {classItem.materials && String(classItem.materials).trim() ? (
-                                            <Tooltip>
-                                              <TooltipTrigger asChild>
-                                                <span className="block max-w-[140px] truncate cursor-default text-sm">
-                                                  {String(classItem.materials).trim()}
-                                                </span>
-                                              </TooltipTrigger>
-                                              <TooltipContent className="max-w-xs whitespace-pre-wrap">
-                                                {String(classItem.materials).trim()}
-                                              </TooltipContent>
-                                            </Tooltip>
-                                          ) : (
-                                            <span className="text-muted-foreground">—</span>
-                                          )}
                                         </TableCell>
                                         <TableCell>
                                           <Badge
@@ -438,7 +447,6 @@ export function AdminClassesPage() {
                                     ))}
                                   </TableBody>
                                 </Table>
-                                </TooltipProvider>
                               </div>
 
                               {/* Pagination */}
@@ -463,9 +471,8 @@ export function AdminClassesPage() {
                                   </PaginationItem>
                                 </PaginationContent>
                               </Pagination>
-                            </>
-                          ) : (
-                            // Empty state
+                              </>
+                              ) : (
                             <div className="flex h-[300px] flex-col items-center justify-center rounded-md border border-dashed p-8">
                               <div className="flex h-20 w-20 items-center justify-center rounded-full bg-muted">
                                 <Calendar className="h-10 w-10 text-muted-foreground" />
@@ -483,6 +490,8 @@ export function AdminClassesPage() {
                                 </Button>
                               </Link>
                             </div>
+                              )}
+                            </>
                           )}
                         </TabsContent>
                       </Tabs>
@@ -541,9 +550,13 @@ export function AdminClassesPage() {
           </Route>
           
           <Route path="/admin/classes/upload">
-            <Suspense fallback={<div className="flex items-center justify-center py-12"><Loader2 className="h-6 w-6 animate-spin" /></div>}>
-              <ClassesUploadPage />
-            </Suspense>
+            {({ matches }) => {
+              if (matches) {
+                const ClassesUploadPage = require("../pages/admin/ClassesUploadPage").default;
+                return <ClassesUploadPage />;
+              }
+              return null;
+            }}
           </Route>
         </Switch>
       </div>
