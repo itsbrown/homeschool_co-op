@@ -1,10 +1,12 @@
-import { pgTable, text, serial, integer, boolean, jsonb, timestamp, date, varchar, pgEnum, unique, doublePrecision } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, jsonb, timestamp, date, varchar, pgEnum, unique, uniqueIndex, doublePrecision } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations, sql } from "drizzle-orm";
 
-// Define the enum for user roles
-const roleEnum = pgEnum('role', ["student", "parent", "learner", "educator", "mentor", "teacher", "schoolAdmin", "director", "admin", "superAdmin"]);
+// Define the enum for user roles.
+// Exported so drizzle-kit picks it up during introspection and emits
+// `CREATE TYPE "role"` before any table that references it.
+export const roleEnum = pgEnum('role', ["student", "parent", "learner", "educator", "mentor", "teacher", "schoolAdmin", "director", "admin", "superAdmin"]);
 
 // Users table
 export const users = pgTable("users", {
@@ -54,7 +56,21 @@ export const userRoles = pgTable("user_roles", {
   schoolId: integer("school_id"), // For tenant scoping - educators/admins must be tied to a school
   isPrimary: boolean("is_primary").default(false).notNull(), // Which role is the user's primary/default role
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (t) => ({
+  // Two partial UNIQUE indexes replace the legacy expression index
+  // `idx_user_roles_unique_user_role` on (user_id, role, COALESCE(school_id, 0)).
+  // drizzle-kit could not parse the COALESCE expression (ZodError on introspection),
+  // which made `npm run db:push` unusable. Partial indexes preserve the original
+  // invariant: any (user_id, role, school_id) is unique when school_id is set, and
+  // any (user_id, role) is unique when school_id is NULL (so two NULL rows still
+  // collide). See docs/audit/242-schema-migration-fix-report.md.
+  uniqueUserRoleSchool: uniqueIndex("idx_user_roles_unique_user_role_school")
+    .on(t.userId, t.role, t.schoolId)
+    .where(sql`school_id IS NOT NULL`),
+  uniqueUserRoleNoSchool: uniqueIndex("idx_user_roles_unique_user_role_no_school")
+    .on(t.userId, t.role)
+    .where(sql`school_id IS NULL`),
+}));
 
 // System roles that are always valid, plus custom staff positions validated at API layer
 export const systemRoles = ["student", "parent", "learner", "educator", "mentor", "teacher", "schoolAdmin", "director", "admin", "superAdmin"] as const;

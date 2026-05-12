@@ -357,10 +357,23 @@ async function runMigrations() {
       CREATE INDEX IF NOT EXISTS idx_user_roles_user_id_role ON user_roles(user_id, role);
     `);
     
-    // Add unique constraint to prevent duplicate role assignments
+    // Add unique constraint to prevent duplicate role assignments.
+    // We use two partial UNIQUE indexes instead of a single expression index on
+    // COALESCE(school_id, 0) because drizzle-kit cannot introspect expression
+    // columns (ZodError on `db:push`). See task #242 and
+    // server/migrations/fix-user-roles-unique-index.sql.
     await db.execute(sql`
-      CREATE UNIQUE INDEX IF NOT EXISTS idx_user_roles_unique_user_role 
-      ON user_roles(user_id, role, COALESCE(school_id, 0));
+      DROP INDEX IF EXISTS idx_user_roles_unique_user_role;
+    `);
+    await db.execute(sql`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_user_roles_unique_user_role_school
+        ON user_roles (user_id, role, school_id)
+        WHERE school_id IS NOT NULL;
+    `);
+    await db.execute(sql`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_user_roles_unique_user_role_no_school
+        ON user_roles (user_id, role)
+        WHERE school_id IS NULL;
     `);
     console.log('✅ Migration completed: user_roles table created');
     

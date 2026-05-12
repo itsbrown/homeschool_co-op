@@ -21,8 +21,16 @@ CREATE INDEX IF NOT EXISTS idx_user_roles_user_id ON user_roles(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_roles_school_id ON user_roles(school_id);
 CREATE INDEX IF NOT EXISTS idx_user_roles_user_id_role ON user_roles(user_id, role);
 
--- Step 4: Add unique constraint to prevent duplicate role assignments for same user
-CREATE UNIQUE INDEX IF NOT EXISTS idx_user_roles_unique_user_role ON user_roles(user_id, role, COALESCE(school_id, 0));
+-- Step 4: Add unique constraint to prevent duplicate role assignments for same user.
+-- Uses two partial UNIQUE indexes instead of an expression index on COALESCE(school_id, 0)
+-- so that drizzle-kit can introspect the schema for `db:push` (see task #242 and
+-- server/migrations/fix-user-roles-unique-index.sql).
+CREATE UNIQUE INDEX IF NOT EXISTS idx_user_roles_unique_user_role_school
+  ON user_roles (user_id, role, school_id)
+  WHERE school_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_user_roles_unique_user_role_no_school
+  ON user_roles (user_id, role)
+  WHERE school_id IS NULL;
 
 COMMENT ON TABLE user_roles IS 'Stores multiple role assignments for users (e.g., someone can be both parent AND educator)';
 COMMENT ON COLUMN user_roles.school_id IS 'Required for educator/admin roles to enforce tenant isolation. NULL for roles like parent.';
