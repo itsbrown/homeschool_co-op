@@ -1669,6 +1669,17 @@ export const insertNotificationRecipientSchema = createInsertSchema(notification
 export type InsertNotificationRecipient = z.infer<typeof insertNotificationRecipientSchema>;
 export type NotificationRecipient = typeof notificationRecipients.$inferSelect;
 
+/** Outbound transactional email attempts (Brevo); written by server/lib/email-service logEmailAttempt */
+export const emailLog = pgTable("email_log", {
+  id: serial("id").primaryKey(),
+  recipientEmail: text("recipient_email").notNull(),
+  type: text("type").notNull(),
+  subject: text("subject"),
+  status: text("status", { enum: ["sent", "failed", "timeout"] }).notNull(),
+  error: text("error"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // Relations for multi-location support
 export const locationsRelations = relations(locations, ({ one, many }) => ({
   school: one(schools, { fields: [locations.schoolId], references: [schools.id] }),
