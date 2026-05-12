@@ -16,6 +16,57 @@ interface BackendNotification {
   createdAt: string;
 }
 
+/** GET /api/notifications returns { notifications, pagination }; legacy clients may receive a bare array. */
+function normalizeNotificationsResponse(data: unknown): BackendNotification[] {
+  let list: unknown[] = [];
+  if (Array.isArray(data)) {
+    list = data;
+  } else if (data && typeof data === "object" && "notifications" in data) {
+    const raw = (data as { notifications: unknown }).notifications;
+    if (Array.isArray(raw)) list = raw;
+  }
+
+  return list.flatMap((item): BackendNotification[] => {
+    if (!item || typeof item !== "object") return [];
+    const o = item as Record<string, unknown>;
+    const subject =
+      typeof o.subject === "string"
+        ? o.subject
+        : typeof o.title === "string"
+          ? o.title
+          : "";
+    const content =
+      typeof o.content === "string"
+        ? o.content
+        : typeof o.message === "string"
+          ? o.message
+          : "";
+    const read =
+      typeof o.read === "boolean"
+        ? o.read
+        : typeof o.isRead === "boolean"
+          ? o.isRead
+          : false;
+
+    return [
+      {
+        id: Number(o.id),
+        subject,
+        content,
+        type: typeof o.type === "string" ? o.type : "info",
+        priority: typeof o.priority === "string" ? o.priority : "normal",
+        status: typeof o.status === "string" ? o.status : "active",
+        read,
+        readAt: (o.readAt as string | null | undefined) ?? null,
+        createdAt:
+          typeof o.createdAt === "string"
+            ? o.createdAt
+            : new Date().toISOString(),
+      },
+    ];
+  });
+}
+
 interface NotificationContextType {
   notifications: Notification[];
   addNotification: (notification: Omit<Notification, 'id' | 'timestamp' | 'read'>) => void;
@@ -34,15 +85,17 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const [readOverrides, setReadOverrides] = React.useState<Set<string>>(new Set());
 
   // Fetch notifications from backend
-  const { data: backendNotifications = [], isLoading } = useQuery<BackendNotification[]>({
+  const { data: backendNotifications = [], isLoading } = useQuery({
     queryKey: ['/api/notifications'],
     enabled: isAuthenticated && !!user,
     refetchInterval: 30000, // Refetch every 30 seconds
+    select: normalizeNotificationsResponse,
   });
 
   // Convert backend notifications to frontend format with optimistic read state
   const convertedNotifications = React.useMemo(() => {
-    return backendNotifications.map((n): Notification => ({
+    const list = Array.isArray(backendNotifications) ? backendNotifications : [];
+    return list.map((n): Notification => ({
       id: String(n.id),
       type: n.priority === 'urgent' ? 'error' : n.priority === 'high' ? 'warning' : 'info',
       title: n.subject,
@@ -88,7 +141,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
   // Clear read overrides when all backend notifications are confirmed as read
   React.useEffect(() => {
-    const allBackendRead = backendNotifications.every(n => n.read);
+    const list = Array.isArray(backendNotifications) ? backendNotifications : [];
+    const allBackendRead = list.length === 0 || list.every(n => n.read);
     if (allBackendRead && readOverrides.size > 0) {
       setReadOverrides(new Set());
     }
@@ -122,7 +176,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
   const clearAll = React.useCallback(() => {
     // Optimistically mark all backend notifications as read
-    const allBackendIds = backendNotifications.map(n => String(n.id));
+    const list = Array.isArray(backendNotifications) ? backendNotifications : [];
+    const allBackendIds = list.map(n => String(n.id));
     setReadOverrides(new Set(allBackendIds));
     
     // Mark all local notifications as read
