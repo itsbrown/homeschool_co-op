@@ -1,0 +1,116 @@
+## 13) Replit / PostgreSQL: backfill `metadata.autoPay` before enabling `AUTOPAY_REQUIRE_METADATA_AUTO_PAY`
+
+**Why:** Application code uses **strict** JSON boolean checks (`metadata.autoPay === true` in TypeScript). A string like `"true"` in JSON does **not** qualify. Rows created before the payment-plan writer started setting `autoPay: true` (see `server/services/stripe-payment-plans.ts`) will be **skipped** for off-session autopay when the env is on, with no automatic charge until you backfill or parents pay manually.
+
+**Do not** set `AUTOPAY_REQUIRE_METADATA_AUTO_PAY=true` in production until you have verified (or backfilled) the rows you expect to auto-charge.
+
+### A) Confirm you are on PostgreSQL with `DATABASE_URL`
+
+On Replit, open **Secrets** (or your deployment env) and confirm `DATABASE_URL` points at the **same** database the running app uses. All steps below run against that database.
+
+### B) Open a SQL shell against production (or staging first)
+
+Examples (pick one):
+
+- **Replit Shell** (if `psql` is installed):  
+  `psql "$DATABASE_URL"`
+- **Hosted provider console** (Neon, Supabase SQL editor, etc.): paste the queries below.
+
+Use **staging first** if you have a staging database clone.
+
+### C) Preview rows that are missing a boolean `autoPay: true`
+
+Adjust the `WHERE` clause if your business rules differ (e.g. exclude `failed` if you never want to retry them automatically).
+
+```sql
+SELECT id, school_id, enrollment_id, parent_email, status, installment_number, total_installments,
+       metadata,
+       metadata->'autoPay' AS auto_pay_json,
+       pg_typeof(metadata->'autoPay') AS auto_pay_type
+FROM scheduled_payments
+WHERE status IN ('pending', 'overdue')
+  AND (
+    NOT (metadata ? 'autoPay')
+    OR (metadata->'autoPay') IS DISTINCT FROM 'true'::jsonb
+  )
+ORDER BY scheduled_date ASC
+LIMIT 200;
+```
+
+Inspect `auto_pay_type`: you want **`boolean`** after backfill, not `text`.
+
+### D) Backfill: set JSON boolean `true` (merge into existing `metadata`)
+
+This keeps existing keys (`enrollmentIds`, `paymentPlan`, `description`, etc.) and only sets or replaces `autoPay` with a real JSON boolean.
+
+**Conservative default:** only rows that are still actionable and not terminal.
+
+```sql
+BEGIN;
+
+UPDATE scheduled_payments
+SET
+  metadata = jsonb_set(
+    COALESCE(metadata, '{}'::jsonb),
+    '{autoPay}',
+    'true'::jsonb,
+    true
+  ),
+  updated_at = NOW()
+WHERE status IN ('pending', 'overdue')
+  AND (
+    NOT (metadata ? 'autoPay')
+    OR (metadata->'autoPay') IS DISTINCT FROM 'true'::jsonb
+  );
+
+-- Check row count in your client; then:
+COMMIT;
+-- ROLLBACK;  -- use instead of COMMIT while testing
+```
+
+**Narrower scope (recommended if not every pending row should autopay):** add predicates, for example:
+
+- `AND school_id = <your_school_id>`
+- `AND scheduled_date >= CURRENT_DATE` (only future / today-and-later installments)
+- `AND installment_number > 1` (if installment 1 is always collected elsewhere)
+
+Run a **count-only** `SELECT` with the same `WHERE` before `UPDATE`.
+
+### E) Verify after backfill
+
+```sql
+SELECT
+  COUNT(*) FILTER (
+    WHERE status IN ('pending', 'overdue')
+      AND (metadata->'autoPay') = 'true'::jsonb
+  ) AS eligible_boolean_true,
+  COUNT(*) FILTER (
+    WHERE status IN ('pending', 'overdue')
+      AND (metadata ? 'autoPay')
+      AND (metadata->'autoPay') IS DISTINCT FROM 'true'::jsonb
+  ) AS has_non_boolean_or_false
+FROM scheduled_payments;
+```
+
+`has_non_boolean_or_false` should be **0** for rows you expect the worker to charge when the env flag is on.
+
+### F) Rollout order on Replit (recommended)
+
+1. Deploy application code that already writes `autoPay: true` for new plans (`stripe-payment-plans.ts`).
+2. Run the **preview** query (step C) on production during a quiet window.
+3. Run the **UPDATE** in a transaction; `COMMIT` after spot-checking row counts.
+4. Deploy or toggle **singleton** secrets: `ENABLE_BACKGROUND_JOBS=true`, `AUTOPAY_OFF_SESSION_CHARGES=true` (only on the worker), then **`AUTOPAY_REQUIRE_METADATA_AUTO_PAY=true`** on that same worker.
+5. Watch logs for JSON lines containing `autopay_metric` / `autopay_off_session_charges_total` and confirm you do **not** see sustained `metadata_opt_in` skips for installments that should have charged.
+
+### G) Rollback options
+
+- **Turn off the gate:** remove or set `AUTOPAY_REQUIRE_METADATA_AUTO_PAY` to `false` on the worker and redeploy / restart (behavior returns to “do not require metadata opt-in” for eligibility in code paths that check this env).
+- **Remove the key** (if you incorrectly opted in rows):  
+  `UPDATE scheduled_payments SET metadata = metadata - 'autoPay' WHERE …`  
+  Then fix data and re-run a corrected backfill.
+
+### H) Common mistakes
+
+- Storing `"true"` as a **string** in JSON — the app checks **boolean** `true` only (`server/services/autopay-off-session-charge.ts`, `server/services/autopay-policy.ts`).
+- Enabling `AUTOPAY_REQUIRE_METADATA_AUTO_PAY` **before** backfill — results in skipped off-session charges until metadata is fixed.
+- Setting the env on **web** replicas — it has no effect unless that process also runs off-session charges; still prefer setting secrets only on the singleton worker to avoid confusion.

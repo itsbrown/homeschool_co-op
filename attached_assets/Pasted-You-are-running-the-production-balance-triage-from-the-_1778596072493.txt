@@ -1,0 +1,32 @@
+You are running the production balance triage from the repo (Part B). Do NOT change production data unless I explicitly say "apply remediation" in a follow-up message. Read-only SQL and evidence gathering only unless I approve writes.
+
+## Preconditions
+1. `git pull origin main` and confirm you have commit that includes `docs/audit/BALANCE_TRIAGE_PRODUCTION.md` and `docs/audit/sql/*.sql` (paths under repo root).
+2. Task #242 (schema sync) should be merged or you should note if DB/schema still diverges.
+
+## Follow this doc in order
+Open and execute steps in order: `docs/audit/BALANCE_TRIAGE_PRODUCTION.md` — section "Phase 2 — Run this week".
+
+## SQL to run (use prod read-only DB credentials / Replit SQL console)
+Run each file as-is; paste full output (or CSV export summary: row count + first 20 ids) into a new evidence folder:
+
+1. `docs/audit/sql/b1-orphan-scheduled-payments.sql` — all three parts (orphan list, count, optional cancelled+pending).
+2. `docs/audit/sql/b4-cached-remaining-vs-computed.sql` — bulk drift query.
+3. `docs/audit/sql/b2-missing-pending-schedules.sql` — heuristic missing schedules (limit 200).
+4. `docs/audit/sql/b5-pending-sum-by-enrollment.sql` — only AFTER we agree B1 orphan policy (still run read-only and report).
+
+## Deliverables (paste in task + commit if small)
+1. Create `docs/audit/evidence-balance-<YYYYMMDD>/` with:
+   - `README.md` listing which SQL ran, timestamp (UTC), and DB environment (prod vs staging).
+   - Raw outputs or summaries: `b1.txt`, `b4.txt`, `b2.txt`, `b5.txt` (or `.csv`).
+2. For B4: pick **5** enrollment_ids from the top of the drift list; for each run the single-enrollment SELECT from the doc and note whether drift matches admin "cached vs effective" wording.
+3. For B2: pick **2** enrollments from the heuristic list; run `SELECT * FROM scheduled_payments WHERE enrollment_id = ? ORDER BY scheduled_date` and summarize statuses (pending vs completed vs none).
+4. B3: one paragraph — are past-due rows staying `pending` by design? Cite `server/services/scheduled-payment-reminders.ts` or related code if you touch the repo for research only.
+5. If any query errors (column name, permission), paste the error and stop — do not guess column names; cross-check `shared/schema.ts` for `program_enrollments` and `scheduled_payments`.
+
+## Out of scope (this task)
+- No `UPDATE`/`DELETE` on production without my explicit second message.
+- No merging unrelated code; doc/sql evidence only unless a one-line comment in README is needed.
+
+## Close criteria
+Task is done when evidence folder exists with B1+B4+B2+B5 outputs and the 5-enrollment B4 notes + 2-enrollment B2 notes are written in `README.md`.
