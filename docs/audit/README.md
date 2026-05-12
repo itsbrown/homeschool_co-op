@@ -6,6 +6,7 @@ Payment- and schema-sensitive work should leave **durable** evidence here (not o
 
 - **Report:** `docs/audit/<task>-<short-slug>-report.md`
 - **Bulky evidence:** optional `docs/audit/<task>-evidence/` (JSON, SQL dumps, logs)
+- **Reusable SQL:** [sql/](sql/) — production triage queries (B1–B5) aligned with `shared/schema.ts`
 
 Each report should include:
 

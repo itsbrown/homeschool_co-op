@@ -2,6 +2,16 @@
 
 Admin “balance issues” (e.g. cached vs effective, missing schedules, orphans) are **server-side consistency** signals surfaced in UI. Triage in this order to avoid false fixes.
 
+## Phase 2 — Run this week (after #242 schema sync)
+
+1. **#242 complete** — Run `npm run db:push` (or production migration) so Drizzle/introspection matches DB; reduces false Zod noise while you read results.
+2. **B1** — Execute [sql/b1-orphan-scheduled-payments.sql](sql/b1-orphan-scheduled-payments.sql); save CSV + row counts under `docs/audit/<date>-b1-evidence/` (or attach to Replit task).
+3. **B4** — Execute [sql/b4-cached-remaining-vs-computed.sql](sql/b4-cached-remaining-vs-computed.sql); pick top 5 `enrollment_id`s and compare to what the admin UI calls `effectiveBalance` (find that computation on the deployed branch if not in this repo).
+4. **B2** — Run [sql/b2-missing-pending-schedules.sql](sql/b2-missing-pending-schedules.sql); validate 2–3 rows manually (Stripe metadata, webhook logs).
+5. **B3** — Confirm product rules: should past-due rows stay `pending` until autopay/admin? If yes, tune the admin audit to classify “expected pending” vs “stuck”; if no, trace status transitions in [server/services/scheduled-payment-reminders.ts](../server/services/scheduled-payment-reminders.ts).
+6. **B5** — Run [sql/b5-pending-sum-by-enrollment.sql](sql/b5-pending-sum-by-enrollment.sql) **after** B1 policy is clear (cancelled orphans skew sums).
+7. Open follow-up tasks only with **evidence**: orphan cleanup (data), `remaining_balance` recompute job (code), `effectiveBalance` spec doc (product/engineering).
+
 ## Symptom clusters
 
 | ID | Symptom | Likely cause |
@@ -26,21 +36,16 @@ Admin “balance issues” (e.g. cached vs effective, missing schedules, orphans
 
 **Goal:** List rows whose enrollment no longer exists for the same school context.
 
-Template (adjust table/column names to match production schema — often `scheduled_payments` + `program_enrollments`):
+**Executable copy:** [sql/b1-orphan-scheduled-payments.sql](sql/b1-orphan-scheduled-payments.sql) (matches `program_enrollments` / `scheduled_payments` in [shared/schema.ts](../../shared/schema.ts)).
+
+Legacy inline template (same as file):
 
 ```sql
--- Orphans: scheduled payment points at missing enrollment
-SELECT sp.id AS scheduled_payment_id,
-       sp.enrollment_id,
-       sp.amount,
-       sp.status,
-       sp.parent_email
+SELECT sp.id, sp.enrollment_id, sp.amount, sp.status, sp.parent_email
 FROM scheduled_payments sp
 LEFT JOIN program_enrollments pe ON pe.id = sp.enrollment_id
 WHERE pe.id IS NULL
-   OR pe.status IN ('cancelled', 'withdrawn')  -- tighten per product rules
-ORDER BY sp.id
-LIMIT 200;
+ORDER BY sp.id;
 ```
 
 **Remediation policy (choose explicitly):**
@@ -61,14 +66,13 @@ Record counts + sample IDs in `docs/audit/<task>-evidence/` for any production r
 - Computed: `GREATEST(0, total_cost - total_paid)` in cents if stored as dollars adjust accordingly
 - Sum of applied payments from payment history if authoritative
 
-Template:
+**Executable copy:** [sql/b4-cached-remaining-vs-computed.sql](sql/b4-cached-remaining-vs-computed.sql) (bulk drift + single-ID notes).
+
+Single enrollment:
 
 ```sql
-SELECT id,
-       total_cost,
-       total_paid,
-       remaining_balance,
-       (COALESCE(total_cost,0) - COALESCE(total_paid,0)) AS computed_remaining
+SELECT id, total_cost, total_paid, remaining_balance,
+       (COALESCE(total_cost,0) - COALESCE(total_paid,0)) AS computed_remaining_cents
 FROM program_enrollments
 WHERE id = :enrollment_id;
 ```
@@ -90,21 +94,15 @@ WHERE enrollment_id = :enrollment_id
 ORDER BY scheduled_date, id;
 ```
 
+**Heuristic bulk list:** [sql/b2-missing-pending-schedules.sql](sql/b2-missing-pending-schedules.sql)
+
 Check statuses (`pending`, `completed`, `cancelled`, …). If no rows: trace code path that creates installments (checkout success, admin plan save, migration). See server scheduled-payment APIs and storage layer.
 
 ---
 
 ## B5 — Scheduled total vs effective
 
-After B1 cleanup, re-run dashboard or:
-
-```sql
-SELECT enrollment_id,
-       SUM(CASE WHEN status = 'pending' THEN amount ELSE 0 END) AS pending_sum
-FROM scheduled_payments
-WHERE enrollment_id = :id
-GROUP BY enrollment_id;
-```
+After B1 cleanup, re-run dashboard or use [sql/b5-pending-sum-by-enrollment.sql](sql/b5-pending-sum-by-enrollment.sql).
 
 Compare to `effectiveBalance` from the same source the UI uses. If definitions differ, document in one place: *effective = net of credits; schedule sum = gross installments*, etc.
 
