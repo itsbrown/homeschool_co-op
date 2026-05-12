@@ -51,6 +51,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Catches missing npm deps (e.g. qrcode) before db:push / dev server — same resolution as Replit after npm ci
+      - name: Verify client bundle
+        run: npx vite build
+
       - name: Push schema to test database
         run: npm run db:push
 

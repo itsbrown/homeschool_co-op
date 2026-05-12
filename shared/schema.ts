@@ -427,6 +427,43 @@ export const insertSchoolClassEnrollmentSchema = createInsertSchema(schoolClassE
 export type InsertSchoolClassEnrollment = z.infer<typeof insertSchoolClassEnrollmentSchema>;
 export type SchoolClassEnrollment = typeof schoolClassEnrollments.$inferSelect;
 
+/** Enrollment periods (admin "sessions") — not the same as `class_sessions` */
+export const sessions = pgTable("sessions", {
+  id: serial("id").primaryKey(),
+  schoolId: integer("school_id").notNull().references(() => schools.id),
+  name: text("name").notNull(),
+  description: text("description"),
+  startDate: date("start_date").notNull(),
+  endDate: date("end_date").notNull(),
+  status: text("status", {
+    enum: ["upcoming", "active", "completed", "cancelled"],
+  })
+    .notNull()
+    .default("upcoming"),
+  enrollmentOpen: boolean("enrollment_open").notNull().default(false),
+  halfDayPrice: integer("half_day_price"),
+  fullDayPrice: integer("full_day_price"),
+  halfDayStartTime: text("half_day_start_time"),
+  halfDayEndTime: text("half_day_end_time"),
+  fullDayStartTime: text("full_day_start_time"),
+  fullDayEndTime: text("full_day_end_time"),
+  halfDayDays: text("half_day_days").array(),
+  fullDayDays: text("full_day_days").array(),
+  halfDayCapacity: integer("half_day_capacity"),
+  fullDayCapacity: integer("full_day_capacity"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertSessionSchema = createInsertSchema(sessions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertSession = z.infer<typeof insertSessionSchema>;
+export type EnrollmentSession = typeof sessions.$inferSelect;
+
 // Update user relations to include schools
 export const usersRelations = relations(users, ({ many, one }) => ({
   curricula: many(curricula),
@@ -486,6 +523,27 @@ export const insertChildSchema = createInsertSchema(children)
   });
 export type InsertChild = z.infer<typeof insertChildSchema>;
 export type Child = typeof children.$inferSelect;
+
+/** Secondary guardians linked to a child (see API: guardians, school-admin) */
+export const childGuardians = pgTable("child_guardians", {
+  id: serial("id").primaryKey(),
+  childId: integer("child_id").notNull().references(() => children.id, { onDelete: "cascade" }),
+  guardianUserId: integer("guardian_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  relationship: text("relationship").notNull(),
+  notes: text("notes"),
+  addedBy: integer("added_by").notNull().references(() => users.id),
+  isPrimary: boolean("is_primary").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertChildGuardianSchema = createInsertSchema(childGuardians).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertChildGuardian = z.infer<typeof insertChildGuardianSchema>;
+export type ChildGuardian = typeof childGuardians.$inferSelect;
 
 // Define child relations - note: programEnrollments will be defined later
 export const childrenRelations = relations(children, ({ one, many }) => ({
@@ -907,6 +965,42 @@ export const insertRefundEventSchema = createInsertSchema(refundEvents).omit({
 export type InsertRefundEvent = z.infer<typeof insertRefundEventSchema>;
 export type RefundEvent = typeof refundEvents.$inferSelect;
 
+/** Application / API error telemetry (`error_logs` in init-db) */
+export const errorLogs = pgTable("error_logs", {
+  id: serial("id").primaryKey(),
+  errorType: text("error_type").notNull(),
+  severity: text("severity").notNull(),
+  message: text("message").notNull(),
+  stackTrace: text("stack_trace"),
+  errorCode: text("error_code"),
+  url: text("url"),
+  route: text("route"),
+  method: text("method"),
+  userId: integer("user_id"),
+  userEmail: text("user_email"),
+  schoolId: integer("school_id"),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  requestBody: jsonb("request_body"),
+  metadata: jsonb("metadata").default({}),
+  status: text("status").default("new"),
+  resolutionNotes: text("resolution_notes"),
+  resolvedBy: integer("resolved_by"),
+  resolvedAt: timestamp("resolved_at"),
+  notificationSent: boolean("notification_sent").default(false),
+  notificationSentAt: timestamp("notification_sent_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertErrorLogSchema = createInsertSchema(errorLogs).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertErrorLog = z.infer<typeof insertErrorLogSchema>;
+export type ErrorLog = typeof errorLogs.$inferSelect;
+
 // Define emergency contact relations
 export const emergencyContactsRelations = relations(emergencyContacts, ({ one }) => ({
   user: one(users, { fields: [emergencyContacts.userId], references: [users.id] })
@@ -1060,6 +1154,33 @@ export const membershipEnrollmentsRelations = relations(membershipEnrollments, (
   school: one(schools, { fields: [membershipEnrollments.schoolId], references: [schools.id] }),
   parent: one(users, { fields: [membershipEnrollments.parentUserId], references: [users.id] })
 }));
+
+/** Stripe payment → enrollment splits (init-db + Task #247 membership_enrollment_id) */
+export const paymentAllocations = pgTable("payment_allocations", {
+  id: serial("id").primaryKey(),
+  paymentHistoryId: integer("payment_history_id")
+    .notNull()
+    .references(() => stripePaymentHistory.id, { onDelete: "cascade" }),
+  enrollmentId: integer("enrollment_id")
+    .notNull()
+    .references(() => programEnrollments.id, { onDelete: "cascade" }),
+  membershipEnrollmentId: integer("membership_enrollment_id").references(() => membershipEnrollments.id, {
+    onDelete: "cascade",
+  }),
+  allocatedAmountCents: integer("allocated_amount_cents").notNull(),
+  allocationType: text("allocation_type").notNull().default("payment"),
+  sourceAllocationId: integer("source_allocation_id"),
+  adminComment: text("admin_comment"),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertPaymentAllocationSchema = createInsertSchema(paymentAllocations).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertPaymentAllocation = z.infer<typeof insertPaymentAllocationSchema>;
+export type PaymentAllocation = typeof paymentAllocations.$inferSelect;
 
 // Membership Agreements table - stores signed membership agreements
 export const membershipAgreements = pgTable("membership_agreements", {
@@ -1517,6 +1638,123 @@ export const classesRelations = relations(classes, ({ one }) => ({
   curriculum: one(curricula, { fields: [classes.curriculumId], references: [curricula.id] }),
 }));
 
+// Schedule builder tables (init-db migrations around weekly_skeletons / week_plans)
+export const weeklySkeletons = pgTable("weekly_skeletons", {
+  id: serial("id").primaryKey(),
+  schoolId: integer("school_id").notNull().references(() => schools.id),
+  classId: integer("class_id").references(() => classes.id),
+  sessionId: integer("session_id").references(() => sessions.id),
+  title: text("title"),
+  name: text("name").notNull().default(""),
+  description: text("description"),
+  gradeLevel: text("grade_level"),
+  operatingDays: text("operating_days").array().notNull().default(["Monday", "Wednesday", "Friday"]),
+  status: text("status").notNull().default("draft"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdBy: integer("created_by").references(() => users.id),
+  updatedBy: integer("updated_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const skeletonBlocks = pgTable("skeleton_blocks", {
+  id: serial("id").primaryKey(),
+  skeletonId: integer("skeleton_id")
+    .notNull()
+    .references(() => weeklySkeletons.id, { onDelete: "cascade" }),
+  dayOfWeek: integer("day_of_week").notNull(),
+  startTime: text("start_time").notNull(),
+  endTime: text("end_time").notNull(),
+  blockType: text("block_type").notNull().default("curriculum"),
+  subject: text("subject"),
+  subjectArea: text("subject_area"),
+  defaultTitle: text("default_title"),
+  defaultDescription: text("default_description"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdBy: integer("created_by").references(() => users.id),
+  updatedBy: integer("updated_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const weekPlans = pgTable("week_plans", {
+  id: serial("id").primaryKey(),
+  skeletonId: integer("skeleton_id")
+    .notNull()
+    .references(() => weeklySkeletons.id, { onDelete: "cascade" }),
+  schoolId: integer("school_id").notNull().references(() => schools.id),
+  sessionId: integer("session_id").references(() => sessions.id),
+  weekNumber: integer("week_number").notNull(),
+  startDate: text("start_date"),
+  endDate: text("end_date"),
+  weekStartDate: date("week_start_date"),
+  theme: text("theme"),
+  notes: text("notes"),
+  status: text("status").notNull().default("draft"),
+  createdBy: integer("created_by").references(() => users.id),
+  updatedBy: integer("updated_by").references(() => users.id),
+  publishedAt: timestamp("published_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const weekPlanBlocks = pgTable("week_plan_blocks", {
+  id: serial("id").primaryKey(),
+  weekPlanId: integer("week_plan_id")
+    .notNull()
+    .references(() => weekPlans.id, { onDelete: "cascade" }),
+  skeletonBlockId: integer("skeleton_block_id")
+    .notNull()
+    .references(() => skeletonBlocks.id, { onDelete: "cascade" }),
+  customTitle: text("custom_title"),
+  customDescription: text("custom_description"),
+  content: jsonb("content").default({}),
+  materials: text("materials").array(),
+  homework: text("homework"),
+  aiGenerated: boolean("ai_generated").default(false),
+  aiPrompt: text("ai_prompt"),
+  resources: text("resources").array(),
+  title: text("title"),
+  description: text("description"),
+  lessonLink: text("lesson_link"),
+  attachments: jsonb("attachments").default([]),
+  objectives: jsonb("objectives").default([]),
+  groups: jsonb("groups").default([]),
+  isCompleted: boolean("is_completed").notNull().default(false),
+  completedBy: integer("completed_by").references(() => users.id),
+  completedAt: timestamp("completed_at"),
+  notes: text("notes"),
+  updatedBy: integer("updated_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertWeeklySkeletonSchema = createInsertSchema(weeklySkeletons).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export const insertSkeletonBlockSchema = createInsertSchema(skeletonBlocks).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export const insertWeekPlanSchema = createInsertSchema(weekPlans).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export const insertWeekPlanBlockSchema = createInsertSchema(weekPlanBlocks).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type WeeklySkeleton = typeof weeklySkeletons.$inferSelect;
+export type SkeletonBlock = typeof skeletonBlocks.$inferSelect;
+export type WeekPlan = typeof weekPlans.$inferSelect;
+export type WeekPlanBlock = typeof weekPlanBlocks.$inferSelect;
+
 // Class Inclusions - tracks which classes are included in other classes (e.g., Full Day includes Woodshop, Art, Music)
 export const classInclusions = pgTable("class_inclusions", {
   id: serial("id").primaryKey(),
@@ -1596,6 +1834,33 @@ export const insertLocationSchema = createInsertSchema(locations)
   });
 export type InsertLocation = z.infer<typeof insertLocationSchema>;
 export type Location = typeof locations.$inferSelect;
+
+/** PII access audit trail (init-db `pii_access_logs`) */
+export const piiAccessLogs = pgTable("pii_access_logs", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id),
+  locationId: integer("location_id").references(() => locations.id),
+  schoolId: integer("school_id").references(() => schools.id),
+  accessType: text("access_type", {
+    enum: ["view_parent_contacts", "export_parent_contacts", "view_student_details", "view_enrollment_details"],
+  }).notNull(),
+  resourceType: text("resource_type", {
+    enum: ["enrollment", "student", "parent", "location"],
+  }).notNull(),
+  resourceIds: integer("resource_ids").array(),
+  recordCount: integer("record_count").notNull().default(0),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  requestPath: text("request_path"),
+  accessedAt: timestamp("accessed_at").defaultNow().notNull(),
+});
+
+export const insertPiiAccessLogSchema = createInsertSchema(piiAccessLogs).omit({
+  id: true,
+  accessedAt: true,
+});
+export type InsertPiiAccessLog = z.infer<typeof insertPiiAccessLogSchema>;
+export type PiiAccessLog = typeof piiAccessLogs.$inferSelect;
 
 // User-Location access mapping for multi-location permissions
 export const userLocations = pgTable("user_locations", {
@@ -1961,6 +2226,39 @@ export const educatorClassAssignments = pgTable("educator_class_assignments", {
 });
 
 export type EducatorClassAssignment = typeof educatorClassAssignments.$inferSelect;
+
+/** Educator availability schedules (init-db `educator_schedules`) */
+export const educatorSchedules = pgTable("educator_schedules", {
+  id: serial("id").primaryKey(),
+  assignmentId: integer("assignment_id")
+    .notNull()
+    .references(() => educatorClassAssignments.id, { onDelete: "cascade" }),
+  educatorId: integer("educator_id").notNull().references(() => users.id),
+  classId: integer("class_id").notNull().references(() => classes.id),
+  schoolId: integer("school_id").notNull().references(() => schools.id),
+  scheduleType: text("schedule_type", { enum: ["recurring", "one_time", "adhoc"] })
+    .notNull()
+    .default("recurring"),
+  dayOfWeek: integer("day_of_week"),
+  scheduledDate: text("scheduled_date"),
+  startTime: text("start_time").notNull(),
+  endTime: text("end_time").notNull(),
+  effectiveFrom: text("effective_from").notNull(),
+  effectiveTo: text("effective_to"),
+  isActive: boolean("is_active").notNull().default(true),
+  timezone: text("timezone").notNull().default("America/New_York"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertEducatorScheduleSchema = createInsertSchema(educatorSchedules).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertEducatorSchedule = z.infer<typeof insertEducatorScheduleSchema>;
+export type EducatorSchedule = typeof educatorSchedules.$inferSelect;
 
 // Audit trail (admin / educator / system actions)
 export const auditLogs = pgTable("audit_logs", {

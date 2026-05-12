@@ -2556,6 +2556,38 @@ async function runMigrations() {
     console.log('refund_events migration note:', errorMessage);
   }
 
+  // child_guardians — secondary parents/guardians linked to a child (API: guardians, school-admin)
+  try {
+    console.log('Running migration: Ensuring child_guardians table exists...');
+    const db = await getDb();
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS child_guardians (
+        id SERIAL PRIMARY KEY,
+        child_id INTEGER NOT NULL REFERENCES children(id) ON DELETE CASCADE,
+        guardian_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        relationship TEXT NOT NULL,
+        notes TEXT,
+        added_by INTEGER NOT NULL REFERENCES users(id),
+        is_primary BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        CONSTRAINT child_guardians_child_guardian_unique UNIQUE (child_id, guardian_user_id)
+      )
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_child_guardians_child_id ON child_guardians(child_id)
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_child_guardians_guardian_user_id ON child_guardians(guardian_user_id)
+    `);
+    console.log('✅ Migration completed: child_guardians table ensured');
+  } catch (childGuardiansError) {
+    const errorMessage = childGuardiansError instanceof Error
+      ? childGuardiansError.message
+      : String(childGuardiansError);
+    console.log('child_guardians migration note:', errorMessage);
+  }
+
   // Add / repair effective_balance generated column — the single source of truth for what a family owes.
   // Replaces the unreliable remaining_balance field (which is set to 0 for deposit_only/stripe_managed
   // enrollments after a deposit, and for comped accounts — causing false positives in financial reports).
