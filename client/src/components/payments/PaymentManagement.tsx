@@ -498,8 +498,10 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
     },
   });
 
-  // Get database-stored scheduled payments (class enrollments)
-  const { data: dbScheduledPayments, isLoading: isLoadingDbScheduled, refetch: refetchDbScheduledPayments } = useQuery({
+  // Get database-stored scheduled payments (class enrollments).
+  // IMPORTANT: queryKey is shared with ParentDashboard — cache stores API shape
+  // `{ success, payments }`, not a bare array. Use `select` to normalize to UI rows.
+  const { data: dbScheduledPayments = [], isLoading: isLoadingDbScheduled, refetch: refetchDbScheduledPayments } = useQuery({
     queryKey: ["/api/scheduled-payments/upcoming"],
     queryFn: async () => {
       const token = localStorage.getItem('supabase_token');
@@ -515,16 +517,19 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
       });
 
       if (!response.ok) {
-        throw new Error(`Failed to fetch scheduled payments: ${response.status}`);
+        return { success: false as const, payments: [] as unknown[] };
       }
 
-      const data = await response.json();
-      if (!data.success || !data.payments) {
-        return [];
+      return (await response.json()) as { success?: boolean; payments?: unknown };
+    },
+    select: (data) => {
+      let raw: unknown[] = [];
+      if (Array.isArray(data)) {
+        raw = data as unknown[];
+      } else if (data && typeof data === 'object' && Array.isArray((data as { payments?: unknown }).payments)) {
+        raw = (data as { payments: unknown[] }).payments;
       }
-
-      // Transform database payments to match UI structure
-      return data.payments.map((payment: any) => ({
+      return raw.map((payment: any) => ({
         id: payment.id,
         amount: payment.amount,
         dueDate: new Date(payment.dueDate),
