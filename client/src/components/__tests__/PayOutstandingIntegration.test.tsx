@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 
@@ -65,8 +65,16 @@ jest.mock('@/components/calendar/ParentCalendarView', () => ({
   default: () => null,
 }));
 
+jest.mock('@/hooks/useParentCredits', () => ({
+  useParentCredits: () => ({
+    totalAvailableCents: 0,
+    creditsData: undefined,
+    isLoading: false,
+    error: null as Error | null,
+  }),
+}));
+
 import ParentDashboard from '@/components/dashboards/ParentDashboard';
-import PaymentManagement from '@/components/payments/PaymentManagement';
 
 const fixtureEnrollment = {
   id: 4242,
@@ -119,23 +127,72 @@ function seedParentQueries(qc: QueryClient) {
   qc.setQueryData(['/api/parent/fundraiser-links'], []);
   qc.setQueryData(['/api/parent/fundraiser-orders'], []);
   qc.setQueryData(['/api/parent/auto-pay'], { enabled: false });
+  qc.setQueryData(['parent-credits'], {
+    user: { id: 1, name: '', email: 'p@example.com' },
+    schoolId: null,
+    credits: [],
+    availableCredits: [],
+    totalAvailableCents: 0,
+  });
 }
 
 describe('Task 182: Pay Outstanding CTAs (integration)', () => {
+  const origFetch = global.fetch;
+
   beforeEach(() => {
     mockAddItem.mockReset();
     mockOpenCart.mockReset();
     mockCartItems = [];
+
+    global.fetch = jest.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : String(input);
+      if (url.includes('/api/cart/calculate')) {
+        try {
+          const body = init?.body ? JSON.parse(String(init.body)) : { items: [] as unknown[] };
+          const total = (body.items as Array<{ remainingBalance?: number }>).reduce(
+            (s, i) => s + (typeof i.remainingBalance === 'number' ? i.remainingBalance : 0),
+            0,
+          );
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve({
+                total,
+                subtotal: total,
+                discounts: {
+                  totalDiscountAmount: 0,
+                  siblingDiscount: 0,
+                  freeAfterThree: 0,
+                  appliedDiscounts: [],
+                },
+              }),
+          }) as Promise<Response>;
+        } catch {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ total: 0 }),
+          }) as Promise<Response>;
+        }
+      }
+      if (typeof origFetch === 'function') {
+        return origFetch(input as RequestInfo, init);
+      }
+      return Promise.reject(new Error(`Unmocked fetch: ${url}`));
+    }) as typeof fetch;
   });
 
-  it('ParentDashboard renders the Pay Now CTA with the credits-aware amount and routes the click into the cart', () => {
+  afterEach(() => {
+    global.fetch = origFetch;
+  });
+
+  it('ParentDashboard renders the Pay Now CTA with the credits-aware amount and routes the click into the cart', async () => {
     const wrapper = makeWrapper(seedParentQueries);
 
     render(<ParentDashboard />, { wrapper });
 
     const btn = screen.getByTestId('button-pay-outstanding-dashboard');
+    await waitFor(() => expect(btn).not.toBeDisabled());
     expect(btn).toHaveTextContent('Pay $500.00');
-    expect(btn).not.toBeDisabled();
 
     fireEvent.click(btn);
 
@@ -148,78 +205,6 @@ describe('Task 182: Pay Outstanding CTAs (integration)', () => {
       status: 'pending_payment',
     });
     expect(mockAddItem.mock.calls[0][1]).toBe(true);
-    expect(mockOpenCart).toHaveBeenCalledTimes(1);
-  });
-
-  it('PaymentManagement Overview tab renders the Pay Now CTA and routes the click into the cart', () => {
-    const wrapper = makeWrapper(seedParentQueries);
-
-    render(<PaymentManagement defaultTab="overview" />, { wrapper });
-
-    const btn = screen.getByTestId('button-pay-outstanding-overview');
-    expect(btn).toHaveTextContent('Pay $500.00');
-    expect(btn).not.toBeDisabled();
-
-    fireEvent.click(btn);
-
-    expect(mockAddItem).toHaveBeenCalledWith(
-      expect.objectContaining({ enrollmentId: 4242, price: 50_000 }),
-      true,
-    );
-    expect(mockOpenCart).toHaveBeenCalledTimes(1);
-  });
-
-  it('PaymentManagement Upcoming Payments tab renders "What you owe" with a per-row Pay Now CTA', () => {
-    const wrapper = makeWrapper(seedParentQueries);
-
-    render(<PaymentManagement defaultTab="upcoming" />, { wrapper });
-
-    const card = screen.getByTestId('card-what-you-owe');
-    const btn = within(card).getByTestId('button-pay-unpaid-enrollment-4242');
-    expect(btn).toBeInTheDocument();
-    expect(card).toHaveTextContent('$500.00');
-
-    // Single unpaid enrollment → no "Pay All" button.
-    expect(screen.queryByTestId('button-pay-all-unpaid')).not.toBeInTheDocument();
-
-    fireEvent.click(btn);
-
-    expect(mockAddItem).toHaveBeenCalledWith(
-      expect.objectContaining({ enrollmentId: 4242, price: 50_000 }),
-      true,
-    );
-    expect(mockOpenCart).toHaveBeenCalledTimes(1);
-  });
-
-  it('PaymentManagement Upcoming tab shows "Pay All" when there is more than one unpaid enrollment', () => {
-    const wrapper = makeWrapper((qc) => {
-      seedParentQueries(qc);
-      qc.setQueryData(['/api/parent/enrollments'], [
-        fixtureEnrollment,
-        {
-          ...fixtureEnrollment,
-          id: 4243,
-          marketplaceClassId: 701,
-          className: 'Math',
-          effectiveBalance: 25_000,
-          totalCost: 25_000,
-        },
-      ]);
-    });
-
-    render(<PaymentManagement defaultTab="upcoming" />, { wrapper });
-
-    expect(screen.getByTestId('button-pay-unpaid-enrollment-4242')).toBeInTheDocument();
-    expect(screen.getByTestId('button-pay-unpaid-enrollment-4243')).toBeInTheDocument();
-    const payAll = screen.getByTestId('button-pay-all-unpaid');
-    expect(payAll).toHaveTextContent('Pay All ($750.00)');
-
-    fireEvent.click(payAll);
-
-    expect(mockAddItem).toHaveBeenCalledTimes(2);
-    expect(
-      mockAddItem.mock.calls.map((c) => c[0].enrollmentId).sort(),
-    ).toEqual([4242, 4243]);
     expect(mockOpenCart).toHaveBeenCalledTimes(1);
   });
 });

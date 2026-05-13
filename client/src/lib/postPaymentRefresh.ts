@@ -14,6 +14,7 @@ const POST_PAYMENT_QUERY_KEYS: string[][] = [
   ["/api/scheduled-payments/upcoming"],
   ["scheduled-payments-upcoming"],
   ["parent-credits"],
+  ["parent-outstanding-cart-classes-total"],
   ["/api/parent/credits"],
 ];
 

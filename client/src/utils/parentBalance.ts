@@ -211,16 +211,30 @@ export function computeOutstandingBreakdown(input: {
   memberships: ParentMembershipBalanceFields[] | null | undefined;
   credits?: ParentCreditRecord[] | null;
   creditsCents?: number | null;
+  /**
+   * When set (finite, >= 0), replaces the sum of per-enrollment balances for
+   * `enrollmentsCents` / `totalOwedCents` so parent surfaces match
+   * `POST /api/cart/calculate` (sibling discount, Free After Three, etc.).
+   */
+  enrollmentsTotalCentsOverride?: number | null;
 }): OutstandingBreakdown {
-  let enrollmentsCents = 0;
+  let rawEnrollmentSumCents = 0;
   let enrollmentCount = 0;
   for (const enrollment of input.enrollments ?? []) {
     const balance = Math.max(0, getEnrollmentEffectiveBalance(enrollment));
     if (balance > 0) {
-      enrollmentsCents += balance;
+      rawEnrollmentSumCents += balance;
       enrollmentCount += 1;
     }
   }
+
+  const override = input.enrollmentsTotalCentsOverride;
+  const enrollmentsCents =
+    typeof override === 'number' &&
+    Number.isFinite(override) &&
+    override >= 0
+      ? Math.round(override)
+      : rawEnrollmentSumCents;
 
   let membershipsCents = 0;
   let membershipCount = 0;

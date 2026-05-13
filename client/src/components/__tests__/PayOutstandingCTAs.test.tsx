@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import {
@@ -11,12 +11,22 @@ import { formatCurrency } from '@/lib/utils';
 const mockAddItem = jest.fn();
 const mockOpenCart = jest.fn();
 let mockCartItems: Array<{ enrollmentId?: number | null }> = [];
+let mockCreditsCents = 0;
 
 jest.mock('@/contexts/CartContext', () => ({
   useCart: () => ({
     cart: { items: mockCartItems },
     addItem: mockAddItem,
     openCart: mockOpenCart,
+  }),
+}));
+
+jest.mock('@/hooks/useParentCredits', () => ({
+  useParentCredits: () => ({
+    totalAvailableCents: mockCreditsCents,
+    creditsData: undefined,
+    isLoading: false,
+    error: null as Error | null,
   }),
 }));
 
@@ -117,13 +127,57 @@ const baseEnrollment = {
 };
 
 describe('Task 182: Pay Outstanding CTAs (UI-level)', () => {
+  const origFetch = global.fetch;
+
   beforeEach(() => {
     mockAddItem.mockReset();
     mockOpenCart.mockReset();
     mockCartItems = [];
+    mockCreditsCents = 0;
+
+    global.fetch = jest.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : String(input);
+      if (url.includes('/api/cart/calculate')) {
+        try {
+          const body = init?.body ? JSON.parse(String(init.body)) : { items: [] as unknown[] };
+          const total = (body.items as Array<{ remainingBalance?: number }>).reduce(
+            (s, i) => s + (typeof i.remainingBalance === 'number' ? i.remainingBalance : 0),
+            0,
+          );
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve({
+                total,
+                subtotal: total,
+                discounts: {
+                  totalDiscountAmount: 0,
+                  siblingDiscount: 0,
+                  freeAfterThree: 0,
+                  appliedDiscounts: [],
+                },
+              }),
+          }) as Promise<Response>;
+        } catch {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ total: 0 }),
+          }) as Promise<Response>;
+        }
+      }
+      if (typeof origFetch === 'function') {
+        return origFetch(input as RequestInfo, init);
+      }
+      return Promise.reject(new Error(`Unmocked fetch: ${url}`));
+    }) as typeof fetch;
   });
 
-  it('Dashboard CTA renders the credits-aware net amount and pays through the cart', () => {
+  afterEach(() => {
+    global.fetch = origFetch;
+  });
+
+  it('Dashboard CTA renders the credits-aware net amount and pays through the cart', async () => {
+    mockCreditsCents = 2_500;
     const wrapper = makeWrapper((qc) => {
       qc.setQueryData(['/api/parent/enrollments'], [
         { ...baseEnrollment, id: 1, effectiveBalance: 12_500 },
@@ -134,8 +188,8 @@ describe('Task 182: Pay Outstanding CTAs (UI-level)', () => {
     render(<DashboardCTAHarness />, { wrapper });
 
     const btn = screen.getByTestId('button-pay-outstanding-dashboard');
+    await waitFor(() => expect(btn).not.toBeDisabled());
     expect(btn).toHaveTextContent('Pay $100.00');
-    expect(btn).not.toBeDisabled();
 
     fireEvent.click(btn);
     expect(mockAddItem).toHaveBeenCalledTimes(1);
@@ -188,7 +242,7 @@ describe('Task 182: Pay Outstanding CTAs (UI-level)', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('Overview CTA renders enrollment-only Pay amount and pays through the cart', () => {
+  it('Overview CTA renders enrollment-only Pay amount and pays through the cart', async () => {
     const wrapper = makeWrapper((qc) => {
       qc.setQueryData(['/api/parent/enrollments'], [
         { ...baseEnrollment, id: 9, effectiveBalance: 9_900 },
@@ -198,7 +252,8 @@ describe('Task 182: Pay Outstanding CTAs (UI-level)', () => {
     render(<OverviewCTAHarness />, { wrapper });
 
     const btn = screen.getByTestId('button-pay-outstanding-overview');
-    expect(btn).toHaveTextContent('Pay $99.00');
+    await waitFor(() => expect(btn).toHaveTextContent('Pay $99.00'));
+    expect(btn).not.toBeDisabled();
     fireEvent.click(btn);
     expect(mockOpenCart).toHaveBeenCalledTimes(1);
     expect(mockAddItem).toHaveBeenCalledWith(

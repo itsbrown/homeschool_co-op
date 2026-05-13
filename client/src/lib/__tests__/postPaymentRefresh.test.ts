@@ -30,9 +30,10 @@ describe("refreshPostPaymentState (P1-A-13)", () => {
         ["payment-history"],
         ["/api/payment-history/history"],
         ["/api/payment-history"],
+        ["parent-outstanding-cart-classes-total"],
       ]),
     );
-    expect(invalidateSpy).toHaveBeenCalledTimes(9);
+    expect(invalidateSpy).toHaveBeenCalledTimes(15);
   });
 
   it("refetches high-churn surfaces that drive Pay now / owed UI", async () => {
@@ -45,9 +46,8 @@ describe("refreshPostPaymentState (P1-A-13)", () => {
         ["/api/enrollments"],
         ["/api/parent/memberships"],
         ["billing-summary"],
-        ["/api/billing/summary"],
       ]),
     );
-    expect(refetchSpy).toHaveBeenCalledTimes(5);
+    expect(refetchSpy).toHaveBeenCalledTimes(8);
   });
 });

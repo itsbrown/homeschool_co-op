@@ -67,6 +67,20 @@ interface Payment {
 
 interface PaymentManagementProps {
   childId?: string; // Optional child ID to filter payments for a specific child
+  /** Initial tab when not overridden by `?tab=` on the payments route (tests / PaymentsPage). */
+  defaultTab?: string;
+}
+
+const VALID_PAYMENT_TABS = new Set([
+  'overview',
+  'all-payments',
+  'stripe-payments',
+  'upcoming',
+]);
+
+function normalizePaymentTab(tab: string | undefined | null): string | null {
+  if (!tab || !VALID_PAYMENT_TABS.has(tab)) return null;
+  return tab;
 }
 
 // Stripe payment form for scheduled payments
@@ -446,7 +460,7 @@ function ScheduledPaymentDialog({
   );
 }
 
-export default function PaymentManagement({ childId }: PaymentManagementProps) {
+export default function PaymentManagement({ childId, defaultTab }: PaymentManagementProps) {
   const { toast } = useToast();
   const [selectedPaymentId, setSelectedPaymentId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -457,18 +471,15 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
   const [selectedPaymentForDialog, setSelectedPaymentForDialog] = useState<any>(null);
 
   const searchString = useSearch();
-  const [activePaymentTab, setActivePaymentTab] = useState("all-payments");
+  const [activePaymentTab, setActivePaymentTab] = useState(
+    () => normalizePaymentTab(defaultTab) ?? 'all-payments',
+  );
 
   useEffect(() => {
     const raw = searchString.startsWith("?") ? searchString.slice(1) : searchString;
     const params = new URLSearchParams(raw);
-    const tab = params.get("tab");
-    if (
-      tab === "upcoming" ||
-      tab === "overview" ||
-      tab === "all-payments" ||
-      tab === "stripe-payments"
-    ) {
+    const tab = normalizePaymentTab(params.get("tab"));
+    if (tab) {
       setActivePaymentTab(tab);
     }
   }, [searchString]);

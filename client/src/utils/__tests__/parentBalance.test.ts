@@ -269,6 +269,23 @@ describe('computeOutstandingBreakdown (canonical Owed contract)', () => {
     expect(r.payableNowCents).toBe(12_500);
   });
 
+  it('honors enrollmentsTotalCentsOverride (cart sibling / promo net) while keeping enrollmentCount', () => {
+    const enrollments: ParentEnrollmentBalanceFields[] = [
+      { effectiveBalance: 90_000 },
+      { effectiveBalance: 293_000 },
+    ];
+    const r = computeOutstandingBreakdown({
+      enrollments,
+      memberships: [{ remainingBalance: 17_500, status: 'pending_payment' }],
+      creditsCents: 0,
+      enrollmentsTotalCentsOverride: 90_000 + 293_000 - 9_000,
+    });
+    expect(r.enrollmentCount).toBe(2);
+    expect(r.enrollmentsCents).toBe(374_000);
+    expect(r.membershipsCents).toBe(17_500);
+    expect(r.totalOwedCents).toBe(374_000 + 17_500);
+  });
+
   it('applies credits across enrollments + memberships (memberships are now cart-payable)', () => {
     const enrollments: ParentEnrollmentBalanceFields[] = [
       { effectiveBalance: 20_000 },

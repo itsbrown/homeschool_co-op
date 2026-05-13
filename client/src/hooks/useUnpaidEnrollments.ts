@@ -13,6 +13,21 @@ import {
 } from '@/utils/parentBalance';
 import { filterEnrollmentsToCartLineItems } from '@/utils/parentEnrollmentLineItems';
 
+async function postParentCartCalculate(body: unknown): Promise<Response> {
+  const token = localStorage.getItem('supabase_token');
+  const activeRole = localStorage.getItem('activeRole');
+  return fetch('/api/cart/calculate', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(activeRole ? { 'X-Active-Role': activeRole } : {}),
+    },
+    credentials: 'include',
+    body: JSON.stringify(body),
+  });
+}
+
 interface ParentEnrollmentRow {
   id: number;
   childId: number;
@@ -76,7 +91,9 @@ function normalizeEnrollments(data: EnrollmentsResponse): ParentEnrollmentRow[] 
 }
 
 export function useUnpaidEnrollments() {
-  const { data: enrollmentsRaw, isLoading } = useQuery<EnrollmentsResponse>({
+  const { cart } = useCart();
+
+  const { data: enrollmentsRaw, isLoading: enrollmentsLoading } = useQuery<EnrollmentsResponse>({
     queryKey: ['/api/parent/enrollments'],
   });
 
@@ -114,6 +131,61 @@ export function useUnpaidEnrollments() {
     return result;
   }, [enrollmentsRaw]);
 
+  const enrollmentCartFingerprint = useMemo(
+    () =>
+      unpaidEnrollments
+        .map(
+          (e) =>
+            `${e.id}:${e.effectiveBalance}:${e.childId}:${e.classId ?? ''}:${e.marketplaceClassId ?? ''}:${e.variantId ?? ''}`,
+        )
+        .sort()
+        .join('|'),
+    [unpaidEnrollments],
+  );
+
+  const {
+    data: cartEnrollmentsTotalCents,
+    isSuccess: cartPricingSettled,
+    isPending: cartPricingPending,
+  } = useQuery({
+    queryKey: [
+      'parent-outstanding-cart-classes-total',
+      enrollmentCartFingerprint,
+      cart.appliedPromoCode?.code ?? '',
+    ],
+    queryFn: async (): Promise<number | null> => {
+      if (unpaidEnrollments.length === 0) {
+        return 0;
+      }
+      try {
+        const classId = (e: UnpaidEnrollment) =>
+          (e.marketplaceClassId ?? e.classId) as number;
+        const res = await postParentCartCalculate({
+          items: unpaidEnrollments.map((e) => ({
+            id: `enrollment-${e.id}`,
+            classId: classId(e),
+            childId: e.childId,
+            childName: e.childName,
+            variantId: e.variantId,
+            enrollmentId: e.id,
+            remainingBalance: e.effectiveBalance,
+          })),
+          appliedPromoCode: cart.appliedPromoCode?.code ?? null,
+        });
+        if (!res.ok) {
+          return null;
+        }
+        const data = await res.json();
+        return typeof data.total === 'number' ? data.total : null;
+      } catch {
+        return null;
+      }
+    },
+    enabled: unpaidEnrollments.length > 0,
+    staleTime: 30_000,
+    placeholderData: (previousData) => previousData,
+  });
+
   const unpaidMemberships = useMemo<UnpaidMembership[]>(() => {
     const result: UnpaidMembership[] = [];
     for (const m of membershipsRaw ?? []) {
@@ -139,14 +211,44 @@ export function useUnpaidEnrollments() {
     return result;
   }, [membershipsRaw]);
 
+  const enrollmentsTotalCentsOverride = useMemo(() => {
+    if (unpaidEnrollments.length === 0) {
+      return 0;
+    }
+    if (!cartPricingSettled) {
+      return undefined;
+    }
+    if (
+      typeof cartEnrollmentsTotalCents === 'number' &&
+      Number.isFinite(cartEnrollmentsTotalCents)
+    ) {
+      return cartEnrollmentsTotalCents;
+    }
+    return undefined;
+  }, [
+    unpaidEnrollments.length,
+    cartPricingSettled,
+    cartEnrollmentsTotalCents,
+  ]);
+
+  const balanceSurfacesLoading =
+    enrollmentsLoading ||
+    (unpaidEnrollments.length > 0 && cartPricingPending);
+
   const breakdown = useMemo<OutstandingBreakdown>(
     () =>
       computeOutstandingBreakdown({
         enrollments: unpaidEnrollments,
         memberships: unpaidMemberships,
         creditsCents: creditsAvailableFromMe,
+        enrollmentsTotalCentsOverride,
       }),
-    [unpaidEnrollments, unpaidMemberships, creditsAvailableFromMe],
+    [
+      unpaidEnrollments,
+      unpaidMemberships,
+      creditsAvailableFromMe,
+      enrollmentsTotalCentsOverride,
+    ],
   );
 
   const creditsCents = breakdown.creditsAvailableCents;
@@ -177,7 +279,7 @@ export function useUnpaidEnrollments() {
     membershipCount: breakdown.membershipCount,
     enrollmentsOnlyDisplayCents: display.displayCents,
     enrollmentsOnlyNetDueCents: display.netDueCents,
-    isLoading,
+    isLoading: balanceSurfacesLoading,
   };
 }
 
