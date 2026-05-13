@@ -5789,6 +5789,79 @@ export class MemStorage implements IStorage {
         return this.memStorage.updatePaymentStatus(id, internalStatus);
       }
 
+      // Payment receipts — implemented on DatabaseStorage only; CombinedStorage must delegate
+      // (otherwise GET /api/parent/payment-receipts throws: getPaymentReceiptsByParentId is not a function).
+      async getPaymentReceiptById(id: number): Promise<PaymentReceipt | undefined> {
+        try {
+          const db = this.dbStorage as any;
+          if (db && typeof db.getPaymentReceiptById === 'function') {
+            return await db.getPaymentReceiptById(id);
+          }
+        } catch (error) {
+          console.error('❌ Error getting payment receipt by id:', error);
+        }
+        return undefined;
+      }
+
+      async getPaymentReceiptByNumber(receiptNumber: string): Promise<PaymentReceipt | undefined> {
+        try {
+          const db = this.dbStorage as any;
+          if (db && typeof db.getPaymentReceiptByNumber === 'function') {
+            return await db.getPaymentReceiptByNumber(receiptNumber);
+          }
+        } catch (error) {
+          console.error('❌ Error getting payment receipt by number:', error);
+        }
+        return undefined;
+      }
+
+      async getPaymentReceiptsByParentId(parentUserId: number): Promise<PaymentReceipt[]> {
+        try {
+          const db = this.dbStorage as any;
+          if (db && typeof db.getPaymentReceiptsByParentId === 'function') {
+            return await db.getPaymentReceiptsByParentId(parentUserId);
+          }
+        } catch (error) {
+          console.error('❌ Error getting payment receipts by parent id:', error);
+        }
+        return [];
+      }
+
+      async getPaymentReceiptsBySchoolId(schoolId: number): Promise<PaymentReceipt[]> {
+        try {
+          const db = this.dbStorage as any;
+          if (db && typeof db.getPaymentReceiptsBySchoolId === 'function') {
+            return await db.getPaymentReceiptsBySchoolId(schoolId);
+          }
+        } catch (error) {
+          console.error('❌ Error getting payment receipts by school id:', error);
+        }
+        return [];
+      }
+
+      async createPaymentReceipt(receipt: InsertPaymentReceipt): Promise<PaymentReceipt> {
+        const db = this.dbStorage as any;
+        if (db && typeof db.createPaymentReceipt === 'function') {
+          return await db.createPaymentReceipt(receipt);
+        }
+        throw new Error('createPaymentReceipt requires DatabaseStorage (not available on this storage backend)');
+      }
+
+      async updatePaymentReceiptStatus(
+        id: number,
+        status: 'generated' | 'downloaded' | 'emailed',
+      ): Promise<PaymentReceipt | undefined> {
+        try {
+          const db = this.dbStorage as any;
+          if (db && typeof db.updatePaymentReceiptStatus === 'function') {
+            return await db.updatePaymentReceiptStatus(id, status);
+          }
+        } catch (error) {
+          console.error('❌ Error updating payment receipt status:', error);
+        }
+        return undefined;
+      }
+
       async removeEnrollment(enrollmentId: number): Promise<boolean> {
         return this.memStorage.removeEnrollment(enrollmentId);
       }

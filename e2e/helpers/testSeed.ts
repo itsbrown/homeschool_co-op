@@ -13,6 +13,7 @@ export type SetupCartScenarioResponse = {
     parent: { email: string; password: string; id: number };
     enrollment: { id: number; paymentPlan?: string; remainingBalance?: number };
     child: { id: number; firstName: string; lastName: string };
+    credit?: { id: number; amountCents: number; status: string } | null;
   };
   error?: string;
   details?: string;
