@@ -22,19 +22,7 @@ import { formatDistanceToNow } from "date-fns";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
-
-interface Notification {
-  id: number;
-  senderId: number;
-  type: string;
-  priority: string;
-  subject: string;
-  content: string;
-  targetType: string;
-  createdAt: string;
-  read: boolean;
-  readAt?: string | null;
-}
+import { normalizeNotificationsResponse } from "@/hooks/useNotifications";
 
 const priorityColors = {
   low: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200",
@@ -59,19 +47,11 @@ export default function NotificationsPage() {
   }, []);
 
   // Fetch notifications from API (backend will use authenticated user's ID from middleware)
-  const { data: notifications = [], isLoading } = useQuery<Notification[]>({
+  const { data: notifications = [], isLoading } = useQuery({
     queryKey: ['/api/notifications'],
     enabled: !!user,
+    select: normalizeNotificationsResponse,
   });
-  
-  // DEBUG: Log notifications data whenever it changes
-  React.useEffect(() => {
-    console.log('📧 NotificationsPage received notifications:', notifications.map(n => ({
-      id: n.id,
-      subject: n.subject,
-      read: n.read
-    })));
-  }, [notifications]);
 
   // Mark notification as read mutation
   const markAsReadMutation = useMutation({

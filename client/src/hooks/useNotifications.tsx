@@ -17,7 +17,7 @@ interface BackendNotification {
 }
 
 /** GET /api/notifications returns { notifications, pagination }; legacy clients may receive a bare array. */
-function normalizeNotificationsResponse(data: unknown): BackendNotification[] {
+export function normalizeNotificationsResponse(data: unknown): BackendNotification[] {
   let list: unknown[] = [];
   if (Array.isArray(data)) {
     list = data;

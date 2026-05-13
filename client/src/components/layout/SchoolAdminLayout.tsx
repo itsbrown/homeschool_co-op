@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useLayoutShell } from "@/contexts/LayoutShellContext";
+import { normalizeNotificationsResponse } from "@/hooks/useNotifications";
 
 interface SchoolAdminLayoutProps {
   children: React.ReactNode;
@@ -15,11 +16,12 @@ interface SchoolAdminLayoutProps {
 
 export default function SchoolAdminLayout({ children, pageTitle }: SchoolAdminLayoutProps) {
   const { hasShell } = useLayoutShell();
-  const { data: notifications = [] } = useQuery<any[]>({
+  const { data: notifications = [] } = useQuery({
     queryKey: ['/api/notifications'],
+    select: normalizeNotificationsResponse,
   });
-  
-  const unreadNotifications = notifications.filter((n: any) => !n.read).length;
+
+  const unreadNotifications = notifications.filter((n) => !n.read).length;
 
   if (hasShell) {
     return (

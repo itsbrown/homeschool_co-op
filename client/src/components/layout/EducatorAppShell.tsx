@@ -14,14 +14,10 @@ import { apiRequest } from "@/lib/queryClient";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { normalizeNotificationsResponse } from "@/hooks/useNotifications";
 
 interface EducatorAppShellProps {
   children: React.ReactNode;
-}
-
-interface Notification {
-  id: number;
-  recipientStatus?: string;
 }
 
 const educatorNavigationItems = [
@@ -90,12 +86,13 @@ function EducatorSidebar() {
   const isDirector = hasRole('director');
   const hasSuperAdminRole = hasRole('superadmin');
 
-  const { data: notifications = [] } = useQuery<Notification[]>({
+  const { data: notifications = [] } = useQuery({
     queryKey: ['/api/notifications'],
     enabled: !!user?.id,
+    select: normalizeNotificationsResponse,
   });
 
-  const unreadNotifications = notifications.filter(n => n.recipientStatus !== "read").length;
+  const unreadNotifications = notifications.filter(n => !n.read).length;
 
   useEffect(() => {
     if (user?.email) {
@@ -275,12 +272,13 @@ export default function EducatorAppShell({ children }: EducatorAppShellProps) {
   
   const hasSuperAdminRole = hasRole('superadmin');
 
-  const { data: notifications = [] } = useQuery<Notification[]>({
+  const { data: notifications = [] } = useQuery({
     queryKey: ['/api/notifications'],
     enabled: !!user?.id,
+    select: normalizeNotificationsResponse,
   });
 
-  const unreadNotifications = notifications.filter(n => n.recipientStatus !== "read").length;
+  const unreadNotifications = notifications.filter(n => !n.read).length;
 
   const handleLogout = async () => {
     await signOut();

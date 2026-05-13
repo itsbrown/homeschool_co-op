@@ -25,14 +25,10 @@ import {
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { normalizeNotificationsResponse } from "@/hooks/useNotifications";
 
 interface ParentAppShellProps {
   children: React.ReactNode;
-}
-
-interface Notification {
-  id: number;
-  recipientStatus?: string;
 }
 
 const mobileNavigationItems = [
@@ -129,12 +125,13 @@ export default function ParentAppShell({ children }: ParentAppShellProps) {
     }
   }, [location, availableRoles]);
 
-  const { data: notifications = [] } = useQuery<Notification[]>({
+  const { data: notifications = [] } = useQuery({
     queryKey: ['/api/notifications'],
     enabled: !!user?.id,
+    select: normalizeNotificationsResponse,
   });
 
-  const unreadNotifications = notifications.filter(n => n.recipientStatus !== "read").length;
+  const unreadNotifications = notifications.filter(n => !n.read).length;
 
   // Task 266 — subscribe to the global SERVICE_UNAVAILABLE signal so we can
   // render a single non-blocking banner above the page content.
