@@ -823,6 +823,9 @@ export default function ParentDashboard() {
                         </>
                       )}
                     </p>
+                    <p className="text-xs text-muted-foreground mt-1.5 leading-snug">
+                      Promotional discounts (for example Free After Three) are calculated in the cart and can reduce the total you pay.
+                    </p>
                     <Button
                       className="mt-3 w-full h-11"
                       onClick={() => payOutstanding(unpaidEnrollments, unpaidMemberships)}

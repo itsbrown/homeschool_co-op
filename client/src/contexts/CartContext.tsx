@@ -5,6 +5,7 @@ import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useAuth } from "@/components/SupabaseProvider";
 import { useRole } from "@/contexts/RoleContext";
 import { trackAddToCart, trackRemoveFromCart, trackViewCart } from '@/lib/analytics';
+import { filterEnrollmentsToCartLineItems } from '@/utils/parentEnrollmentLineItems';
 
 // Helper function to get user-specific cart storage key
 // This prevents cross-account data leakage by namespacing localStorage per user
@@ -1370,58 +1371,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     processingRef.current = true;
 
     try {
-      // Group enrollments by class+child combination to find the latest status
-      const enrollmentGroups = enrollments.reduce((acc: any, enrollment: any) => {
-        // Prioritize marketplaceClassId for marketplace enrollments, fallback to classId/programId
-        const classId = enrollment.marketplaceClassId || enrollment.classId || enrollment.programId;
-        const key = `${classId}-${enrollment.childId}`;
-        if (!acc[key]) {
-          acc[key] = [];
-        }
-        acc[key].push(enrollment);
-        return acc;
-      }, {});
-
-      // Filter for enrollments with remaining balance that aren't superseded by successful enrollments
-      const unpaidEnrollments = [];
-
-      for (const [key, groupEnrollments] of Object.entries(enrollmentGroups)) {
-        const enrollmentList = groupEnrollments as any[];
-
-        // Sort by enrollment date (newest first)
-        const sortedEnrollments = enrollmentList.sort((a, b) => 
-          new Date(b.enrollmentDate).getTime() - new Date(a.enrollmentDate).getTime()
-        );
-
-        // Find the latest enrollment and check if it has a balance due
-        const latestEnrollment = sortedEnrollments[0];
-        // Prefer effectiveBalance from API (server-authoritative); fall back to formula.
-        // Never fall back to remainingBalance — it is 0 for stripe-managed/deposit-only plans.
-        const getEnrollmentBalance = (e: any): number =>
-          e.effectiveBalance ?? Math.max(0, (e.totalCost || 0) - (e.totalPaid || 0) - (e.compAmountCents ?? 0));
-
-        // Include any unpaid enrollment regardless of paymentSystemVersion so
-        // legacy / Full-Payment plans flow through the Pay Outstanding pipeline.
-        const hasBalance = getEnrollmentBalance(latestEnrollment) > 0;
-        
-        // Check if there's a fully paid enrollment (enrolled with no balance)
-        const hasFullyPaidEnrollment = sortedEnrollments.some(e => 
-          (e.status === 'enrolled' && getEnrollmentBalance(e) === 0) ||
-          (e.paymentStatus === 'completed' && getEnrollmentBalance(e) === 0)
-        );
-
-        // Check if latest enrollment is fully paid
-        const latestIsPaid = (latestEnrollment.status === 'enrolled' && getEnrollmentBalance(latestEnrollment) === 0) ||
-                           (latestEnrollment.paymentStatus === 'completed' && getEnrollmentBalance(latestEnrollment) === 0);
-
-        // Skip items where there's a fully paid enrollment OR latest enrollment is paid OR on waitlist
-        const isWaitlisted = latestEnrollment.status === 'waitlist';
-        const shouldSkip = hasFullyPaidEnrollment || latestIsPaid || isWaitlisted;
-
-        if (!isWaitlisted && !shouldSkip && (hasBalance || (latestEnrollment.status === 'pending_payment' && getEnrollmentBalance(latestEnrollment) > 0))) {
-          unpaidEnrollments.push(latestEnrollment);
-        }
-      }
+      const unpaidEnrollments = filterEnrollmentsToCartLineItems(enrollments);
 
       // Convert enrollments to cart items with enhanced status display
       const cartItems: CartItem[] = unpaidEnrollments.map((enrollment: any) => {

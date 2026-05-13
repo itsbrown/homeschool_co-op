@@ -11,6 +11,7 @@ import {
   type ParentMembershipBalanceFields,
   type ParentCreditRecord,
 } from '@/utils/parentBalance';
+import { filterEnrollmentsToCartLineItems } from '@/utils/parentEnrollmentLineItems';
 
 interface CreditsResponse {
   totalAvailableCents?: number;
@@ -93,7 +94,8 @@ export function useUnpaidEnrollments() {
   });
 
   const unpaidEnrollments = useMemo<UnpaidEnrollment[]>(() => {
-    const rows = normalizeEnrollments(enrollmentsRaw);
+    const rowsRaw = normalizeEnrollments(enrollmentsRaw);
+    const rows = filterEnrollmentsToCartLineItems(rowsRaw);
     const result: UnpaidEnrollment[] = [];
     for (const e of rows) {
       const balance = getEnrollmentEffectiveBalance(e);

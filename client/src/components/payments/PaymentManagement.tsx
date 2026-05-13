@@ -49,6 +49,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle, CreditCard, DollarSign, Calendar, Check, Clock, FileText, Search, Gift } from "lucide-react";
 import { useParentCredits } from "@/hooks/useParentCredits";
 import { computeCreditCoverageFifo } from "@/utils/creditInstallmentCoverage";
+import { filterEnrollmentsToCartLineItems } from "@/utils/parentEnrollmentLineItems";
+import { getEnrollmentEffectiveBalance } from "@/utils/parentBalance";
 
 interface Payment {
   id: string;
@@ -605,38 +607,12 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
     });
   }, [payments, searchQuery, filterStatus]);
   
-  // Calculate outstanding balances from enrollments
+  // Calculate outstanding balances from enrollments (same line items as cart)
   const outstandingBalances = React.useMemo(() => {
     if (!enrollments) return [];
-    
-    const enrollmentGroups = enrollments.reduce((acc: any, enrollment: any) => {
-      const key = `${enrollment.classId}-${enrollment.childId}`;
-      if (!acc[key]) {
-        acc[key] = [];
-      }
-      acc[key].push(enrollment);
-      return acc;
-    }, {});
-
-    const unpaidEnrollments = [];
-    for (const [key, groupEnrollments] of Object.entries(enrollmentGroups)) {
-      const enrollmentList = groupEnrollments as any[];
-      const sortedEnrollments = enrollmentList.sort((a, b) => 
-        new Date(b.enrollmentDate).getTime() - new Date(a.enrollmentDate).getTime()
-      );
-
-      const latestEnrollment = sortedEnrollments[0];
-      const hasBalance = latestEnrollment.remainingBalance > 0;
-      const hasFullyPaidEnrollment = sortedEnrollments.some((e: any) => 
-        e.status === 'enrolled' && e.remainingBalance === 0
-      );
-
-      if (hasBalance || (!hasFullyPaidEnrollment && latestEnrollment.status === 'pending_payment' && latestEnrollment.remainingBalance > 0)) {
-        unpaidEnrollments.push(latestEnrollment);
-      }
-    }
-    
-    return unpaidEnrollments;
+    const list = Array.isArray(enrollments) ? enrollments : [];
+    const lineItems = filterEnrollmentsToCartLineItems(list);
+    return lineItems.filter((e) => getEnrollmentEffectiveBalance(e) > 0);
   }, [enrollments]);
 
   // Group payments by status for the overview tab, including outstanding balances
@@ -661,8 +637,10 @@ export default function PaymentManagement({ childId }: PaymentManagementProps) {
     }, { paid: 0, succeeded: 0, pending: 0, failed: 0, refunded: 0, canceled: 0, total: 0, totalPaid: 0, totalPending: 0, totalOutstanding: 0, outstandingCount: 0, successfulCount: 0 });
     
     // Add outstanding balances
-    stats.totalOutstanding = outstandingData.reduce((total: number, enrollment: any) => 
-      total + (enrollment.remainingBalance || 0), 0
+    stats.totalOutstanding = outstandingData.reduce(
+      (total: number, enrollment: any) =>
+        total + getEnrollmentEffectiveBalance(enrollment),
+      0,
     );
     stats.outstandingCount = outstandingData.length;
     
