@@ -595,7 +595,10 @@ export default function CartCheckout() {
     // items array and still derives membership/credits from the parent's
     // school config and credit balance.
     if (cart.items.length === 0 && !cart.membership) return null; // Nothing to sync
-    
+
+    const defaultSnapshotError =
+      'Unable to verify cart pricing. Please refresh and try again.';
+
     try {
       setSnapshotLoading(true);
       // Use override if provided, otherwise fall back to cart state
@@ -603,7 +606,7 @@ export default function CartCheckout() {
       // Use credits override if provided, otherwise use current state
       const creditsAmount = creditsOverride !== undefined ? creditsOverride : (applyCredits ? creditsToApply : 0);
       console.log('📸 Fetching cart snapshot from server with promoCode:', promoCode, 'creditsToApply:', creditsAmount);
-      
+
       const response = await apiRequest(
         'POST',
         '/api/cart/snapshot',
@@ -620,56 +623,93 @@ export default function CartCheckout() {
           })),
           appliedPromoCode: promoCode,
           creditsToApply: creditsAmount
-        }
+        },
+        {
+          // Read JSON error bodies instead of apiRequest throwing before we can
+          // surface the server's message (fixes opaque "verify cart pricing" UX).
+          passthroughStatuses: [400, 404, 409, 422, 429, 500, 502, 503],
+        },
       );
 
-      const snapshot = await response.json();
-      
-      if (snapshot.snapshotId) {
-        setSnapshotId(snapshot.snapshotId);
-        console.log('📸 Cart snapshot received:', {
-          snapshotId: snapshot.snapshotId,
-          serverTotal: snapshot.totals.grandTotal,
-          clientTotal: cart.total + (cart.membership?.amount || 0),
-          membershipRequired: snapshot.membership.required,
-          membershipAmount: snapshot.membership.discountedAmount,
-          membershipAlreadyPaid: snapshot.membership.alreadyPaid,
-          availableCredits: snapshot.credits.available
-        });
-        
-        // Build authoritative data object
-        const authData: AuthoritativeDataType = {
-          itemsTotal: snapshot.totals.itemsTotal,
-          membershipAmount: snapshot.membership.alreadyPaid ? 0 : snapshot.membership.discountedAmount,
-          membershipAlreadyPaid: snapshot.membership.alreadyPaid,
-          membershipRequired: snapshot.membership.required,
-          membershipSchoolId: snapshot.membership.schoolId || null,
-          membershipSchoolName: snapshot.membership.schoolName || 'School',
-          membershipYear: snapshot.membership.year || new Date().getFullYear(),
-          discounts: snapshot.pricing.discounts,
-          schoolSettings: snapshot.pricing.schoolSettings,
-          appliedPromoCode: promoCode, // Store the promo code used for this snapshot
-          payableAmount: snapshot.totals.payableAmount,
-          paymentPlans: snapshot.paymentPlans || [],
-          snapshotGeneratedAt: snapshot.generatedAt,
-          // Authoritative server-derived free-enrollment flag — see type comment.
-          isFreeEnrollment: snapshot.isFreeEnrollment === true,
-          freeEnrollmentReason: snapshot.freeEnrollmentReason ?? null,
-        };
-        
-        // Store authoritative data in state for UI components
-        setAuthoritativeData(authData);
-        
-        // Update available credits from snapshot
-        setAvailableCredits(snapshot.credits.available);
-        
-        // Return the data directly for immediate use (avoids waiting for React state update)
-        return authData;
+      if (!response.ok) {
+        let detail = defaultSnapshotError;
+        if (response.status === 401) {
+          detail = 'Your session may have expired. Please sign in again and retry checkout.';
+        } else {
+          try {
+            const errBody = await response.json();
+            const code = errBody?.error;
+            const msg =
+              typeof errBody?.message === 'string' && errBody.message.trim()
+                ? errBody.message.trim()
+                : '';
+            if (msg) {
+              detail = msg;
+            } else if (code === 'UNAUTHORIZED_CHILDREN') {
+              detail =
+                'One or more classes in your cart are linked to a child we could not verify on your account. Remove those lines or refresh your cart, then try again.';
+            } else if (code === 'MIXED_SCHOOLS') {
+              detail =
+                'Your cart contains classes from more than one school. Complete checkout for one school at a time.';
+            } else if (code === 'SCHOOL_NOT_FOUND' || code === 'NO_SCHOOL_ID') {
+              detail =
+                'We could not determine which school this cart belongs to. Remove invalid classes and try again.';
+            }
+          } catch {
+            // non-JSON error body — keep defaultSnapshotError
+          }
+        }
+        throw new Error(detail);
       }
-      return null;
+
+      const snapshot = await response.json();
+
+      if (!snapshot?.snapshotId) {
+        throw new Error(defaultSnapshotError);
+      }
+
+      setSnapshotId(snapshot.snapshotId);
+      console.log('📸 Cart snapshot received:', {
+        snapshotId: snapshot.snapshotId,
+        serverTotal: snapshot.totals.grandTotal,
+        clientTotal: cart.total + (cart.membership?.amount || 0),
+        membershipRequired: snapshot.membership.required,
+        membershipAmount: snapshot.membership.discountedAmount,
+        membershipAlreadyPaid: snapshot.membership.alreadyPaid,
+        availableCredits: snapshot.credits.available
+      });
+
+      // Build authoritative data object
+      const authData: AuthoritativeDataType = {
+        itemsTotal: snapshot.totals.itemsTotal,
+        membershipAmount: snapshot.membership.alreadyPaid ? 0 : snapshot.membership.discountedAmount,
+        membershipAlreadyPaid: snapshot.membership.alreadyPaid,
+        membershipRequired: snapshot.membership.required,
+        membershipSchoolId: snapshot.membership.schoolId || null,
+        membershipSchoolName: snapshot.membership.schoolName || 'School',
+        membershipYear: snapshot.membership.year || new Date().getFullYear(),
+        discounts: snapshot.pricing.discounts,
+        schoolSettings: snapshot.pricing.schoolSettings,
+        appliedPromoCode: promoCode, // Store the promo code used for this snapshot
+        payableAmount: snapshot.totals.payableAmount,
+        paymentPlans: snapshot.paymentPlans || [],
+        snapshotGeneratedAt: snapshot.generatedAt,
+        // Authoritative server-derived free-enrollment flag — see type comment.
+        isFreeEnrollment: snapshot.isFreeEnrollment === true,
+        freeEnrollmentReason: snapshot.freeEnrollmentReason ?? null,
+      };
+
+      // Store authoritative data in state for UI components
+      setAuthoritativeData(authData);
+
+      // Update available credits from snapshot
+      setAvailableCredits(snapshot.credits.available);
+
+      // Return the data directly for immediate use (avoids waiting for React state update)
+      return authData;
     } catch (err: any) {
-      console.warn('⚠️ Failed to fetch cart snapshot (will proceed with client values):', err);
-      return null; // Return null on error
+      console.warn('⚠️ Failed to fetch cart snapshot:', err);
+      throw err instanceof Error ? err : new Error(defaultSnapshotError);
     } finally {
       setSnapshotLoading(false);
     }
@@ -1666,7 +1706,11 @@ export default function CartCheckout() {
                           setPromoCode('');
                           // Refresh cart snapshot with the newly applied promo code
                           // Pass explicitly to avoid stale closure issue (React state is async)
-                          await fetchCartSnapshot(appliedCode);
+                          try {
+                            await fetchCartSnapshot(appliedCode);
+                          } catch (e: any) {
+                            setPromoError(e?.message || 'Could not refresh pricing after applying this code.');
+                          }
                         }
                       }}
                       disabled={!promoCode || validatingPromo}
@@ -1699,7 +1743,15 @@ export default function CartCheckout() {
                         removePromoCode();
                         // Refresh cart snapshot to update totals without promo discount
                         // Pass null explicitly since state won't be updated yet
-                        await fetchCartSnapshot(null);
+                        try {
+                          await fetchCartSnapshot(null);
+                        } catch (e: any) {
+                          toast({
+                            title: 'Could not refresh pricing',
+                            description: e?.message || 'Try refreshing the page.',
+                            variant: 'destructive',
+                          });
+                        }
                       }}
                       variant="ghost"
                       size="sm"
