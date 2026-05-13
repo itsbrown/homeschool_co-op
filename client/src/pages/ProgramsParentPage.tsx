@@ -17,6 +17,7 @@ import { CalendarIcon, DollarSign, BookOpen, Users, Filter, Sparkles, CalendarDa
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { normalizeParentChildrenResponse } from "@/lib/parent-children-api";
 import ParentAppShell from "@/components/layout/ParentAppShell";
 import { formatClassSchedule } from "@/lib/utils";
 
@@ -79,7 +80,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
         throw new Error(`Failed to fetch children: ${response.status}: ${response.statusText}`);
       }
       const data = await response.json();
-      return data;
+      return normalizeParentChildrenResponse(data) as any[];
     },
   });
 

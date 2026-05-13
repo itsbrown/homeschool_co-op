@@ -4,6 +4,7 @@ import { EmergencyContactsManagement } from "./EmergencyContactsManagement";
 import { ProgramList } from "./ProgramList";
 import { EnrollmentList } from "./EnrollmentList";
 import { useQuery } from "@tanstack/react-query";
+import { normalizeParentChildrenResponse } from "@/lib/parent-children-api";
 
 import { 
   Tabs, 
@@ -32,6 +33,7 @@ export function RegistrationDashboard() {
   // Get counts for the dashboard
   const { data: childrenData } = useQuery({
     queryKey: ["/api/parent/children"],
+    select: (raw: unknown) => normalizeParentChildrenResponse(raw),
   });
   
   const { data: contactsData } = useQuery({

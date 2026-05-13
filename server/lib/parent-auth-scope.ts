@@ -46,12 +46,13 @@ export async function getChildrenForAuthenticatedParent(
   criteria: ParentAuthCriteria,
 ): Promise<Child[]> {
   const parent = await resolveParentDbUser(storage, criteria);
-  if (parent) {
-    return storage.getChildrenByParentId(parent.id);
-  }
   const emailNorm = normalizeEmailForLookup(criteria.email ?? '');
-  if (emailNorm) {
-    return storage.getChildrenByParentEmail(criteria.email!);
-  }
-  return [];
+
+  const byParentId = parent ? await storage.getChildrenByParentId(parent.id) : [];
+  const byEmail = emailNorm ? await storage.getChildrenByParentEmail(criteria.email!) : [];
+
+  const merged = new Map<number, Child>();
+  for (const c of byParentId) merged.set(c.id, c);
+  for (const c of byEmail) merged.set(c.id, c);
+  return [...merged.values()];
 }

@@ -360,7 +360,12 @@ export class FileStorage implements IStorage {
 
   async getChildrenByParentEmail(parentEmail: string): Promise<Child[]> {
     const children = this.loadChildren();
-    return children.filter(child => emailsMatch((child as Child).parentEmail, parentEmail));
+    const parent = await this.getUserByEmail(parentEmail);
+    const byId = parent ? children.filter((child) => child.parentId === parent.id) : [];
+    const byDenorm = children.filter((child) => emailsMatch((child as Child).parentEmail, parentEmail));
+    const map = new Map<number, Child>();
+    for (const c of [...byId, ...byDenorm]) map.set(c.id, c);
+    return [...map.values()];
   }
 
   async createChild(child: InsertChild & { parentId: number }): Promise<Child> {

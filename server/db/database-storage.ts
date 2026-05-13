@@ -10,6 +10,7 @@ import {
   programs, type Program, type InsertProgram,
   programEnrollments, type ProgramEnrollment, type InsertProgramEnrollment
 } from "@shared/schema";
+import { normalizeEmailForLookup } from "@shared/parent-identity";
 import { db } from "../db";
 import { eq, desc, and, gte, gt, sql } from "drizzle-orm";
 import { IStorage } from "../storage";
@@ -326,12 +327,24 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getChildrenByParentEmail(parentEmail: string): Promise<Child[]> {
-    // First, find the parent user by email
-    const [parent] = await db.select().from(users).where(eq(users.email, parentEmail));
-    if (!parent) return [];
-    
-    // Then get children by parent ID
-    return await db.select().from(children).where(eq(children.parentId, parent.id));
+    const normalized = normalizeEmailForLookup(parentEmail);
+    if (!normalized) return [];
+
+    const parent = await this.getUserByEmail(parentEmail);
+    const byParentId = parent
+      ? await db.select().from(children).where(eq(children.parentId, parent.id))
+      : [];
+
+    const byDenormalizedEmail = await db
+      .select()
+      .from(children)
+      .where(sql`lower(trim(${children.parentEmail})) = ${normalized}`);
+
+    const map = new Map<number, Child>();
+    for (const c of [...byParentId, ...byDenormalizedEmail]) {
+      map.set(c.id, c);
+    }
+    return [...map.values()];
   }
 
   // Emergency Contact methods

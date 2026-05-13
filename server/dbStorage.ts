@@ -1289,10 +1289,24 @@ export class DatabaseStorage implements IStorage {
 
   async getChildrenByParentEmail(parentEmail: string): Promise<Child[]> {
     const db = await getDb();
-    const parent = await this.getUserByEmail(parentEmail);
-    if (!parent) return [];
+    const normalized = normalizeEmailForLookup(parentEmail);
+    if (!normalized) return [];
 
-    return await db.select().from(children).where(eq(children.parentId, parent.id));
+    const parent = await this.getUserByEmail(parentEmail);
+    const byParentId = parent
+      ? await db.select().from(children).where(eq(children.parentId, parent.id))
+      : [];
+
+    const byDenormalizedEmail = await db
+      .select()
+      .from(children)
+      .where(sql`lower(trim(${children.parentEmail})) = ${normalized}`);
+
+    const map = new Map<number, Child>();
+    for (const c of [...byParentId, ...byDenormalizedEmail]) {
+      map.set(c.id, c);
+    }
+    return [...map.values()];
   }
 
   // Emergency Contact methods

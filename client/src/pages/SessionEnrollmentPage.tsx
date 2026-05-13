@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { normalizeParentChildrenResponse } from "@/lib/parent-children-api";
 import { ArrowLeft, ArrowRight, Check, Calendar, Clock, DollarSign, User, ShoppingCart, Sun, Sunrise, Loader2, AlertCircle } from "lucide-react";
 import type { Session } from "@shared/schema";
 
@@ -41,7 +42,8 @@ export default function SessionEnrollmentPage() {
     queryFn: async () => {
       const response = await apiRequest("GET", "/api/parent/children");
       if (!response.ok) throw new Error("Failed to fetch children");
-      return response.json();
+      const data = await response.json();
+      return normalizeParentChildrenResponse(data) as any[];
     },
   });
 

@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useCart } from "@/contexts/CartContext";
 import { useUnpaidEnrollments, usePayOutstanding } from "@/hooks/useUnpaidEnrollments";
 import { formatCurrency } from "@/lib/utils";
+import { normalizeParentChildrenResponse } from "@/lib/parent-children-api";
 import OnboardingTour from "@/components/onboarding/OnboardingTour";
 import { Input } from "@/components/ui/input";
 import ParentCalendarView from "@/components/calendar/ParentCalendarView";
@@ -441,7 +442,7 @@ export default function ParentDashboard() {
         }
 
         const children = await response.json();
-        return children;
+        return normalizeParentChildrenResponse(children);
       } catch (error) {
         console.error("Error fetching children:", error);
         return [];

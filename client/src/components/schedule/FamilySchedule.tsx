@@ -45,6 +45,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { normalizeParentChildrenResponse } from "@/lib/parent-children-api";
 
 interface ScheduleEvent {
   id: string;
@@ -91,6 +92,7 @@ export default function FamilySchedule({ childId }: FamilyScheduleProps) {
   // Get children data for the filter
   const { data: children = [] } = useQuery({
     queryKey: ["/api/parent/children"],
+    select: (raw: unknown) => normalizeParentChildrenResponse(raw),
   });
   
   // Calendar navigation functions

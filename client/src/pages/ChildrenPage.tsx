@@ -9,6 +9,8 @@ import { UserPlus, Calendar, School, Plus, GraduationCap } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { normalizeParentChildrenResponse } from "@/lib/parent-children-api";
 
 // Most Recent Enrollment Component for Child Card
 function MostRecentEnrollment({ childId }: { childId: number }) {
@@ -149,9 +151,10 @@ export default function ChildrenPage() {
   }, []);
   
   // Fetch children data - always call the hook
-  const { data: children = [], isLoading: isLoadingChildren } = useQuery<Child[]>({
+  const { data: children = [], isLoading: isLoadingChildren, isError: childrenQueryError, error: childrenError } = useQuery<Child[]>({
     queryKey: ["/api/parent/children"],
     enabled: isAuthenticated,
+    select: (raw) => normalizeParentChildrenResponse(raw) as Child[],
   });
   
   // If not authenticated, redirect to login
@@ -182,6 +185,16 @@ export default function ChildrenPage() {
             <TabsTrigger value="profiles">Child Profiles</TabsTrigger>
             <TabsTrigger value="enrollments">Program Enrollments</TabsTrigger>
           </TabsList>
+
+          {childrenQueryError && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertTitle>Could not load children</AlertTitle>
+              <AlertDescription>
+                {(childrenError as Error)?.message ||
+                  "The server did not return a valid children list. Check the browser Network tab for GET /api/parent/children."}
+              </AlertDescription>
+            </Alert>
+          )}
           
           <TabsContent value="profiles">
             {isLoadingChildren ? (

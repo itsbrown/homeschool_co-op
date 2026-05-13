@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { normalizeParentChildrenResponse } from "@/lib/parent-children-api";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { ChildForm } from "./ChildForm";
@@ -77,6 +78,7 @@ export function ChildrenManagement() {
   // Fetch children data
   const { data: children, isLoading } = useQuery({
     queryKey: ["/api/parent/children"],
+    select: (raw: unknown) => normalizeParentChildrenResponse(raw) as Child[],
   });
 
   // Get selected child data for editing

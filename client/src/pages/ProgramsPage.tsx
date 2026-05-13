@@ -20,6 +20,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { trackViewItemList } from "@/lib/analytics";
+import { normalizeParentChildrenResponse } from "@/lib/parent-children-api";
 
 // Separate component for Programs content to avoid hooks issues
 function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
@@ -53,6 +54,7 @@ function ProgramsContent({ isAdmin }: { isAdmin: boolean }) {
   const { data: children = [] } = useQuery<any[]>({
     queryKey: ["/api/parent/children"],
     enabled: !isAdmin,
+    select: (raw) => normalizeParentChildrenResponse(raw) as any[],
   });
   
   // Fetch classes with filters

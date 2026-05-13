@@ -17,6 +17,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { normalizeParentChildrenResponse } from "@/lib/parent-children-api";
 
 // Child interface (simplified)
 interface Child {
@@ -92,6 +93,7 @@ export function ProgramEnrollmentForm({
 
   const { data: children, isLoading: isLoadingChildren} = useQuery({
     queryKey: ["/api/parent/children"],
+    select: (raw: unknown) => normalizeParentChildrenResponse(raw) as Child[],
   });
 
   // Form setup

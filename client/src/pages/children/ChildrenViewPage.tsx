@@ -8,6 +8,7 @@ import { User, Plus } from "lucide-react";
 import ParentAppShell from "@/components/layout/ParentAppShell";
 import { useAuth } from "@/components/SupabaseProvider";
 import { useRole } from "@/contexts/RoleContext";
+import { normalizeParentChildrenResponse } from "@/lib/parent-children-api";
 
 export default function ChildrenViewPage() {
   const [, setLocation] = useLocation();
@@ -32,6 +33,7 @@ export default function ChildrenViewPage() {
   const { data: rawChildrenData = [], isLoading: childrenLoading } = useQuery<any[]>({
     queryKey: ["/api/parent/children"],
     enabled: isAuthenticated && activeRole === 'parent',
+    select: (raw) => normalizeParentChildrenResponse(raw) as any[],
   });
 
   // Transform children data to include computed properties

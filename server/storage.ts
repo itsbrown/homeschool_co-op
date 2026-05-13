@@ -1329,9 +1329,20 @@ export class MemStorage implements IStorage {
   }
 
   async getChildrenByParentEmail(parentEmail: string): Promise<Child[]> {
+    const normalized = normalizeEmailForLookup(parentEmail);
     const parent = await this.getUserByEmail(parentEmail);
-    if (!parent) return [];
-    return this.getChildrenByParentId(parent.id);
+    const byId = parent ? await this.getChildrenByParentId(parent.id) : [];
+    if (!normalized) return byId;
+
+    const byDenorm = Array.from(this.childrenStore.values()).filter((child) => {
+      const pe = child.parentEmail;
+      if (pe == null || pe === '') return false;
+      return normalizeEmailForLookup(pe) === normalized;
+    });
+
+    const map = new Map<number, Child>();
+    for (const c of [...byId, ...byDenorm]) map.set(c.id, c);
+    return [...map.values()];
   }
 
   async createChild(childData: InsertChild & { parentId: number }): Promise<Child> {

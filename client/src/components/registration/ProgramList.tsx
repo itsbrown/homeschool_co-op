@@ -20,6 +20,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Search, Filter } from "lucide-react";
+import { normalizeParentChildrenResponse } from "@/lib/parent-children-api";
 
 // Program interface from ProgramCard component
 interface Program {
@@ -74,6 +75,7 @@ export function ProgramList({ isAdmin = false, childId, featured = false, limit 
   const { data: children, isLoading: isLoadingChildren } = useQuery({
     queryKey: ["/api/parent/children"],
     enabled: !isAdmin,
+    select: (raw: unknown) => normalizeParentChildrenResponse(raw) as Child[],
   });
   
   // Find selected child if childId is provided

@@ -85,11 +85,38 @@ describe('getChildrenForAuthenticatedParent', () => {
         return pid === 7 ? kids : [];
       },
       async getChildrenByParentEmail() {
-        throw new Error('should not be called when parent resolves');
+        return [];
       },
     });
 
     const children = await getChildrenForAuthenticatedParent(storage2, { email: 'ANY@x.com' });
     expect(children).toEqual(kids);
+  });
+
+  it('merges children by parent_id and by denormalized parent_email', async () => {
+    const parent = { id: 7 } as User;
+    const byIdKid = { id: 1, parentId: 7 } as Child;
+    const byEmailKid = { id: 2, parentId: 999, parentEmail: 'parent@test.com' } as Child;
+
+    const storage = mockStorage({
+      async getUserByEmail() {
+        return parent;
+      },
+      async getUserBySupabaseId() {
+        return undefined;
+      },
+      async getUserByAuth0Id() {
+        return undefined;
+      },
+      async getChildrenByParentId(pid: number) {
+        return pid === 7 ? [byIdKid] : [];
+      },
+      async getChildrenByParentEmail() {
+        return [byEmailKid];
+      },
+    });
+
+    const children = await getChildrenForAuthenticatedParent(storage, { email: 'parent@test.com' });
+    expect(children.map((c) => c.id).sort()).toEqual([1, 2]);
   });
 });
