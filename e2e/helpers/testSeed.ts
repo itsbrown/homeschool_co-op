@@ -11,9 +11,30 @@ export type SetupCartScenarioResponse = {
   data?: {
     supabaseLinked?: boolean;
     parent: { email: string; password: string; id: number };
-    enrollment: { id: number; paymentPlan?: string; remainingBalance?: number };
+    admin?: { email: string; password: string; id: number };
+    enrollment: {
+      id: number;
+      status?: string;
+      totalCost?: number;
+      paymentPlan?: string;
+      remainingBalance?: number;
+    };
     child: { id: number; firstName: string; lastName: string };
+    class?: { id: number; title: string; price: number };
+    school?: {
+      id: number;
+      name: string;
+      registrationCode: string;
+      membershipFeeAmountCents?: number;
+      membershipRequired?: boolean;
+    };
     credit?: { id: number; amountCents: number; status: string } | null;
+    membership?: {
+      id: number;
+      status: string;
+      membershipYear: number;
+      totalAmount: number;
+    } | null;
   };
   error?: string;
   details?: string;

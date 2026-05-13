@@ -278,7 +278,11 @@ export default function CartDrawer() {
                   ) : (
                     <>
                       <p className="text-xs text-green-700" data-testid="text-sibling-discount-active">
-                        <strong>Great!</strong> You're getting a {cart.schoolSettings?.siblingDiscountRate ? `${cart.schoolSettings.siblingDiscountRate}%` : '10%'} sibling discount for enrolling multiple children.
+                        <strong>Great!</strong> You're getting a{' '}
+                        {cart.schoolSettings?.siblingDiscountRate != null
+                          ? `${Math.round(Number(cart.schoolSettings.siblingDiscountRate) * 100)}%`
+                          : '10%'}{' '}
+                        sibling discount for enrolling multiple children.
                       </p>
                       {cart.schoolSettings?.freeAfterThresholdEnabled && 
                        getUniqueChildrenCount() >= cart.schoolSettings.freeAfterThreshold && (

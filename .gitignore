@@ -3,6 +3,10 @@ node_modules
 scratch/
 # Runtime timestamped JSON snapshots (new files only; does not remove existing tracked backups)
 data/backups/*-*-*T*.json
+
+# Local file-storage dev state (mutates during dev / E2E seeds; server starts empty if missing)
+data/users.json
+data/locations.json
 dist
 .DS_Store
 server/public

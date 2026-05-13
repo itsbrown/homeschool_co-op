@@ -26,6 +26,22 @@ function daysBetween(start: Date, end: Date): number {
   return Math.floor((utcEnd - utcStart) / msPerDay);
 }
 
+/** Biweekly installments must not charge on/after the class end; last due date is this many days before class end (calendar days). */
+export const BIWEEKLY_CLASS_END_PAYMENT_BUFFER_DAYS = 14;
+
+/**
+ * Last calendar day a biweekly installment may fall on (inclusive), relative to class/program end.
+ * Uses the same local Y/M/D → UTC-midnight convention as {@link daysBetween}.
+ */
+export function biweeklyInstallmentScheduleEndDate(classEndDate: Date): Date {
+  const utcEnd = Date.UTC(
+    classEndDate.getFullYear(),
+    classEndDate.getMonth(),
+    classEndDate.getDate(),
+  );
+  return new Date(utcEnd - BIWEEKLY_CLASS_END_PAYMENT_BUFFER_DAYS * 86400000);
+}
+
 /**
  * Safely parse and validate a date, returning null if invalid
  */
@@ -85,6 +101,11 @@ export function calculatePaymentSchedule(
   // Use validated dates from here on
   startDate = validStartDate;
   endDate = validEndDate;
+
+  // Biweekly: last charge must fall on or before (class end − 2 weeks).
+  if (frequency === 'biweekly') {
+    endDate = biweeklyInstallmentScheduleEndDate(endDate);
+  }
   
   // For one-time payments, return single payment
   if (frequency === 'one_time') {
@@ -170,12 +191,13 @@ export function calculatePaymentSchedule(
 /**
  * Calculate the biweekly checkout schedule — SINGLE SOURCE OF TRUTH
  * Used by both cart-pricing.ts (for display) and stripe-payment-plans.ts (for charging).
- * 
+ *
  * This function handles the "first payment today + remaining from class start" pattern:
  * - First payment is ALWAYS collected today (immediately at enrollment)
  * - Remaining payments are spaced biweekly starting from class start date
+ * - Installment due dates do not extend past (class end − {@link BIWEEKLY_CLASS_END_PAYMENT_BUFFER_DAYS} days)
  * - Total is divided evenly across ALL payments (today + future)
- * 
+ *
  * Both the checkout display and the payment processor MUST use this function
  * to prevent display-vs-charge mismatches.
  */
@@ -309,8 +331,14 @@ export function recalculatePaymentSchedule(
     errors.push('Program has already ended');
   }
   
-  // Calculate remaining days from now to program end
-  const remainingDays = daysBetween(currentDate, programEndDate);
+  // Remaining installment window: biweekly charges stop 2 weeks before program end.
+  const installmentBoundaryEndDate =
+    newFrequency === 'biweekly'
+      ? biweeklyInstallmentScheduleEndDate(programEndDate)
+      : programEndDate;
+
+  // Calculate remaining days from now to that boundary
+  const remainingDays = daysBetween(currentDate, installmentBoundaryEndDate);
   
   // Validation: Check if enough time remains for the requested frequency
   const minDaysRequired = newFrequency === 'weekly' ? 7 : newFrequency === 'biweekly' ? 14 : 30;

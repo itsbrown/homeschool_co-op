@@ -39,6 +39,8 @@ const webServerEnv = {
   DISABLE_LISTEN_REUSE_PORT: process.env.DISABLE_LISTEN_REUSE_PORT ?? "true",
   /** Skip interval jobs when the dev server is started by Playwright's webServer. */
   PLAYWRIGHT_WEB_SERVER: process.env.PLAYWRIGHT_WEB_SERVER ?? "true",
+  /** Expose `window.__E2E_CART__.refreshDiscounts` for Playwright membership regression tests. */
+  VITE_E2E_EXPOSE_CART: process.env.VITE_E2E_EXPOSE_CART ?? "true",
 };
 
 /**

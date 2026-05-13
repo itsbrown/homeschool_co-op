@@ -76,30 +76,40 @@ export class StripePaymentPlanService {
     const customer = await this.getOrCreateCustomer(data.parentEmail);
     console.log('👤 Customer ready:', customer.id);
 
-    // Get enrollment data for date-based scheduling if needed
+    // Get enrollment data for date-based scheduling if needed.
+    // Earliest start + latest end across all enrollments in this checkout so
+    // multi-class carts match cart-pricing / parent expectations.
     let programStartDate: Date | null = null;
     let programEndDate: Date | null = null;
     
     if (data.paymentFrequency && data.paymentFrequency !== 'one_time' && data.enrollmentIds.length > 0) {
-      const firstEnrollment = await this.storage.getEnrollmentById(data.enrollmentIds[0]);
-      if (firstEnrollment?.programStartDate && firstEnrollment?.programEndDate) {
-        const parsedStartDate = new Date(firstEnrollment.programStartDate);
-        const parsedEndDate = new Date(firstEnrollment.programEndDate);
-        
-        // Only use dates if they are valid (not NaN)
-        if (!isNaN(parsedStartDate.getTime()) && !isNaN(parsedEndDate.getTime())) {
-          programStartDate = parsedStartDate;
-          programEndDate = parsedEndDate;
-          console.log('📅 Using enrollment dates for payment schedule:', {
-            startDate: programStartDate.toLocaleDateString(),
-            endDate: programEndDate.toLocaleDateString()
-          });
-        } else {
-          console.warn('⚠️ Invalid enrollment dates, using default payment schedule:', {
-            rawStartDate: firstEnrollment.programStartDate,
-            rawEndDate: firstEnrollment.programEndDate
-          });
+      for (const enrollmentId of data.enrollmentIds) {
+        const enrollment = await this.storage.getEnrollmentById(enrollmentId);
+        if (!enrollment?.programStartDate || !enrollment?.programEndDate) {
+          continue;
         }
+        const parsedStartDate = new Date(enrollment.programStartDate);
+        const parsedEndDate = new Date(enrollment.programEndDate);
+        if (isNaN(parsedStartDate.getTime()) || isNaN(parsedEndDate.getTime())) {
+          console.warn('⚠️ Invalid enrollment dates on enrollment', enrollmentId, {
+            rawStartDate: enrollment.programStartDate,
+            rawEndDate: enrollment.programEndDate,
+          });
+          continue;
+        }
+        if (!programStartDate || parsedStartDate < programStartDate) {
+          programStartDate = parsedStartDate;
+        }
+        if (!programEndDate || parsedEndDate > programEndDate) {
+          programEndDate = parsedEndDate;
+        }
+      }
+      if (programStartDate && programEndDate) {
+        console.log('📅 Using enrollment date span for payment schedule:', {
+          enrollmentCount: data.enrollmentIds.length,
+          startDate: programStartDate.toLocaleDateString(),
+          endDate: programEndDate.toLocaleDateString(),
+        });
       }
     }
 

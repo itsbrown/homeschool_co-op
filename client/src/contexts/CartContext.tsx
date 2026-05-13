@@ -1634,6 +1634,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
           items: state.cart.items,
           ...serverPricing,
           appliedPromoCode: state.cart.appliedPromoCode, // Preserve promo code
+          membership: state.cart.membership,
         },
       });
     } catch (error) {
@@ -1652,6 +1653,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
             items: state.cart.items,
             ...fallbackTotals,
             appliedPromoCode: state.cart.appliedPromoCode,
+            membership: state.cart.membership,
           },
         });
       } catch (fallbackError) {
@@ -2086,6 +2088,17 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setMembership,
     removeMembership,
   };
+
+  useEffect(() => {
+    if (import.meta.env.VITE_E2E_EXPOSE_CART !== 'true') {
+      return;
+    }
+    const w = window as unknown as { __E2E_CART__?: { refreshDiscounts: () => Promise<void> } };
+    w.__E2E_CART__ = { refreshDiscounts };
+    return () => {
+      delete w.__E2E_CART__;
+    };
+  }, [refreshDiscounts]);
 
   return (
     <CartContext.Provider value={contextValue}>

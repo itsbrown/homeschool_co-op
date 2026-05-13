@@ -8,6 +8,9 @@ module.exports = {
   testMatch: [
     '<rootDir>/server/tests/billing-cents-consistency.test.ts',
     '<rootDir>/server/tests/cart-checkout-enrollment-match.test.ts',
+    '<rootDir>/server/tests/checkout-enrollment-outstanding.test.ts',
+    '<rootDir>/server/tests/checkout-payment-plans-offer.test.ts',
+    '<rootDir>/server/tests/biweekly-schedule-end-buffer.test.ts',
     '<rootDir>/server/tests/idempotency-helper.test.ts',
     '<rootDir>/server/tests/integration/checkout-pi-webhook-idempotency.test.ts',
     '<rootDir>/server/tests/integration/payment-webhook-replay.test.ts',

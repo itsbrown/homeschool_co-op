@@ -1069,7 +1069,7 @@ function generateSnapshotId(
 
 // Calculate payment plan options based on payable amount and class dates
 // Uses the same logic as actual payment creation to ensure consistency
-async function calculatePaymentPlans(
+export async function calculatePaymentPlans(
   payableAmount: number, 
   items: CartItem[]
 ): Promise<PaymentPlanOption[]> {
@@ -1134,29 +1134,37 @@ async function calculatePaymentPlans(
     }
   }
 
+  const fullPlan = {
+    id: 'full' as const,
+    name: 'Pay in Full',
+    description: 'Complete payment now',
+    amount: payableAmount,
+    features: [
+      'No additional fees',
+      'No future payment worries'
+    ]
+  };
+
+  // Do not offer biweekly when the schedule collapses to a single payment — it
+  // duplicates "Pay in Full" and confuses parents (same headline amount).
+  if (numberOfBiweeklyPayments < 2) {
+    return [fullPlan];
+  }
+
   return [
+    fullPlan,
     {
-      id: 'full',
-      name: 'Pay in Full',
-      description: 'Complete payment now',
-      amount: payableAmount,
-      features: [
-        'No additional fees',
-        'No future payment worries'
-      ]
-    },
-    {
-      id: 'biweekly',
+      id: 'biweekly' as const,
       name: 'Biweekly Payment Plan',
-      description: 'Automatic payments every 2 weeks until class ends',
+      description: 'Automatic payments every 2 weeks; last payment at least 2 weeks before your latest class ends',
       amount: biweeklyAmount,
       numberOfPayments: numberOfBiweeklyPayments,
       totalAmount: payableAmount,
       finalPaymentAmount: finalPaymentAmount,
       features: [
         'Pay every 2 weeks based on class schedule',
-        'Payments automatically calculated from class start to end date'
-      ]
+        'Payments end at least two weeks before the latest class end date in your cart',
+      ],
     }
   ];
 }

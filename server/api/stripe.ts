@@ -7,6 +7,7 @@ import { requireSchoolContext } from '../middleware/require-school-context';
 import { getStripeClient, getStripePublishableKey } from '../config/stripe';
 import { calculateMembershipDiscount } from '../utils/membership';
 import { calculateCanonicalAmounts } from '../services/canonical-amount-calculator';
+import { enrollmentOutstandingCentsForCheckout } from '../lib/checkout-enrollment-balance';
 
 /** Stripe minimum charge in USD cents for card-present checkouts. */
 const STRIPE_MINIMUM_CHECKOUT_CENTS = 50;
@@ -369,7 +370,7 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
             id: String(enrollment.id),
             totalCostCents: enrollment.totalCost,
             totalPaidCents: enrollment.totalPaid,
-            remainingBalanceCents: enrollment.remainingBalance
+            remainingBalanceCents: enrollmentOutstandingCentsForCheckout(enrollment),
           })),
         membershipAmountCents: membershipAmount || 0
       });
@@ -400,11 +401,8 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
 
       let availableVolunteerCredits = 0;
       try {
-        const creditRows = await storage.getAvailableCredits(parent.id);
-        availableVolunteerCredits = creditRows.reduce(
-          (sum, c) => sum + (c.creditAmountCents - (c.usedAmountCents || 0)),
-          0
-        );
+        // Match /api/credits/me: subtract credit holds so we do not over-apply at checkout.
+        availableVolunteerCredits = await storage.getTotalAvailableCredits(parent.id);
       } catch (credErr) {
         console.warn('Could not load available volunteer credits for checkout:', credErr);
       }

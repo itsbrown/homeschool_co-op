@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useCart } from '@/contexts/CartContext';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useCart, type MembershipFee } from '@/contexts/CartContext';
 import { useAuth } from '@/components/SupabaseProvider';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -23,6 +23,42 @@ import type { Stripe } from '@stripe/stripe-js';
 import { trackBeginCheckout, trackAddPaymentInfo } from '@/lib/analytics';
 import { isFreeEnrollmentApproved as gateIsFreeEnrollmentApproved, cartLooksFreeButUnverified as gateCartLooksFreeButUnverified } from '@/utils/freeEnrollmentGate';
 import { computeCartItemFingerprint } from '@shared/cartFingerprint';
+
+/** Server cart snapshot shape used for checkout reconciliation (see /api/cart/snapshot). */
+type CheckoutPaymentPlanOption = {
+  id: string;
+  name: string;
+  description: string;
+  amount: number;
+  features: string[];
+  numberOfPayments?: number;
+  totalAmount?: number;
+  finalPaymentAmount?: number;
+};
+
+type FreeEnrollmentReason =
+  | 'full_credit'
+  | 'full_discount_code'
+  | 'full_automatic_discount'
+  | 'full_comp';
+
+type AuthoritativeDataType = {
+  itemsTotal: number;
+  membershipAmount: number;
+  membershipAlreadyPaid: boolean;
+  membershipRequired: boolean;
+  membershipSchoolId: number | null;
+  membershipSchoolName: string;
+  membershipYear: number;
+  discounts: any;
+  schoolSettings: any;
+  appliedPromoCode: string | null;
+  payableAmount: number;
+  paymentPlans: CheckoutPaymentPlanOption[];
+  snapshotGeneratedAt?: number;
+  isFreeEnrollment: boolean;
+  freeEnrollmentReason: FreeEnrollmentReason | null;
+};
 
 function CheckoutForm({ selectedPaymentPlan, selectedPlanAmount, autoPayEnabled, hasPaymentMethod, togglingAutoPay, toggleAutoPay }: { selectedPaymentPlan: string; selectedPlanAmount: number; autoPayEnabled: boolean; hasPaymentMethod: boolean; togglingAutoPay: boolean; toggleAutoPay: (enabled: boolean) => void }) {
   const stripe = useStripe();
@@ -274,22 +310,51 @@ export default function CartCheckout() {
   // When true, the initialization useEffect will not re-trigger createPaymentIntent
   const [hasCheckoutConflict, setHasCheckoutConflict] = useState(false);
 
-  // Calculate the ACTUAL total payable amount (class total + membership)
-  // This is used to determine if we should show the payment form or free enrollment flow
-  const actualPayableAmount = cart.total + (cart.membership?.amount || 0);
-  // NOTE: isFreeEnrollmentApproved / cartLooksFreeButUnverified are derived AFTER
-  // authoritativeData is declared (search for "authoritative free-enrollment gate"
-  // below) — they live there because they depend on the snapshot state.
-  
-  // Debug cart data
+  const [authoritativeData, setAuthoritativeData] = useState<AuthoritativeDataType | null>(null);
+
+  /** Membership cents owed: cart line first, then server snapshot (covers refreshDiscounts wiping cart.membership). */
+  const effectiveMembershipCents = useMemo(() => {
+    const fromCart = cart.membership?.amount ?? 0;
+    if (fromCart > 0) return fromCart;
+    const a = authoritativeData;
+    if (a?.membershipRequired && !a.membershipAlreadyPaid && (a.membershipAmount ?? 0) > 0) {
+      return a.membershipAmount;
+    }
+    return 0;
+  }, [cart.membership?.amount, authoritativeData]);
+
+  const membershipForOrderSummary = useMemo((): MembershipFee | null => {
+    if (cart.membership) return cart.membership;
+    const a = authoritativeData;
+    if (
+      a?.membershipRequired &&
+      !a.membershipAlreadyPaid &&
+      (a.membershipAmount ?? 0) > 0 &&
+      a.membershipSchoolId != null
+    ) {
+      return {
+        schoolId: a.membershipSchoolId,
+        schoolName: a.membershipSchoolName,
+        amount: a.membershipAmount,
+        year: a.membershipYear,
+      };
+    }
+    return null;
+  }, [cart.membership, authoritativeData]);
+
+  const actualPayableAmount = cart.total + effectiveMembershipCents;
+
+  const isFreeEnrollmentApproved = gateIsFreeEnrollmentApproved(actualPayableAmount, authoritativeData);
+  const cartLooksFreeButUnverified = gateCartLooksFreeButUnverified(actualPayableAmount, authoritativeData);
+
   console.log('🛒 CartCheckout - cart data:', {
     itemsCount: cart.items.length,
-    items: cart.items,
     subtotal: cart.subtotal,
     discounts: cart.discounts,
     total: cart.total,
-    membershipAmount: cart.membership?.amount || 0,
-    actualPayableAmount
+    membershipCartCents: cart.membership?.amount || 0,
+    effectiveMembershipCents,
+    actualPayableAmount,
   });
 
   // Automatically set payment frequency based on selected plan
@@ -375,7 +440,7 @@ export default function CartCheckout() {
   });
   checkoutGateRef.current = {
     itemCount: cart.items.length,
-    hasMembership: !!cart.membership,
+    hasMembership: !!cart.membership || effectiveMembershipCents > 0,
     hydrated: cartHydrated,
     loading: cartLoading,
   };
@@ -414,11 +479,11 @@ export default function CartCheckout() {
       return;
     }
 
-    // If cart has items OR membership after hydration, proceed
-    const hasCartContent = cart.items.length > 0 || cart.membership;
+    // If cart has items OR membership (cart or server snapshot) after hydration, proceed
+    const hasCartContent =
+      cart.items.length > 0 || !!cart.membership || effectiveMembershipCents > 0;
     if (hasCartContent) {
-      // Calculate actual payable amount (class total + membership)
-      const payableAmount = cart.total + (cart.membership?.amount || 0);
+      const payableAmount = actualPayableAmount;
       
       // If total payable is $0 (100% discount with no membership), don't create payment intent
       // The UI will show the Free Enrollment request flow instead
@@ -436,7 +501,12 @@ export default function CartCheckout() {
       }
       
       if (!clientSecret) {
-        console.log('🛒 Creating initial payment intent with', cart.items.length, 'items and membership:', !!cart.membership);
+        console.log(
+          '🛒 Creating initial payment intent with',
+          cart.items.length,
+          'items and membership due (cart or snapshot):',
+          effectiveMembershipCents > 0,
+        );
         // Pass forceRefresh=true to ensure fresh snapshot with membership data
         createPaymentIntent(null, true);
       }
@@ -462,12 +532,13 @@ export default function CartCheckout() {
         emptyCartRedirectTimerRef.current = null;
       }
     };
-  }, [isAuthenticated, cartHydrated, cartLoading, cart.items.length, cart.membership, cart.total, hasCheckoutConflict]); // Re-run when cart or loading status changes
+  }, [isAuthenticated, cartHydrated, cartLoading, cart.items.length, cart.membership, cart.total, effectiveMembershipCents, actualPayableAmount, hasCheckoutConflict]); // Re-run when cart or loading status changes
   
   // Separate effect to handle discount changes - recreate payment intent when cart total changes
   useEffect(() => {
     // Check if cart has any content (items OR membership)
-    const hasCartContent = cart.items.length > 0 || cart.membership;
+    const hasCartContent =
+      cart.items.length > 0 || !!cart.membership || effectiveMembershipCents > 0;
     
     // Don't recreate if we haven't created the initial payment intent yet or no cart content
     // Also don't recreate if we have a checkout conflict (prevents infinite loop)
@@ -475,8 +546,7 @@ export default function CartCheckout() {
       return;
     }
     
-    // Calculate actual payable amount (class total + membership)
-    const payableAmount = cart.total + (cart.membership?.amount || 0);
+    const payableAmount = actualPayableAmount;
     
     // If total payable becomes $0, clear clientSecret to show Free Enrollment flow
     if (payableAmount === 0) {
@@ -492,12 +562,13 @@ export default function CartCheckout() {
     console.log('💳 Cart total changed, recreating payment intent with new amount:', cart.total, 'promoCode:', cart.appliedPromoCode?.code || 'none');
     setClientSecret(''); // Clear to show loading state
     createPaymentIntent(null, true); // Force fresh snapshot to include promo code
-  }, [cart.total]); // Re-run when cart total changes
+  }, [cart.total, actualPayableAmount]); // Re-run when class total or membership component changes
   
   // Separate effect to handle payment plan changes with debouncing
   useEffect(() => {
     // Check if cart has any content (items OR membership)
-    const hasCartContent = cart.items.length > 0 || cart.membership;
+    const hasCartContent =
+      cart.items.length > 0 || !!cart.membership || effectiveMembershipCents > 0;
     
     // Don't recreate if we haven't created the initial payment intent yet or no cart content
     // Also don't recreate if we have a checkout conflict (prevents infinite loop)
@@ -521,7 +592,8 @@ export default function CartCheckout() {
 
   // Effect to recreate payment intent and refresh snapshot when credits are toggled
   useEffect(() => {
-    const hasCartContent = cart.items.length > 0 || cart.membership;
+    const hasCartContent =
+      cart.items.length > 0 || !!cart.membership || effectiveMembershipCents > 0;
     
     // Also don't recreate if we have a checkout conflict (prevents infinite loop)
     if (!clientSecret || !isAuthenticated || !hasCartContent || isInitialLoad || hasCheckoutConflict) {
@@ -537,67 +609,6 @@ export default function CartCheckout() {
     
     return () => clearTimeout(timeoutId);
   }, [creditsToApply]);
-
-  // Payment plan option from server
-  interface PaymentPlanOption {
-    id: string;
-    name: string;
-    description: string;
-    amount: number;
-    features: string[];
-    numberOfPayments?: number;
-    totalAmount?: number;
-    finalPaymentAmount?: number;
-  }
-
-  type FreeEnrollmentReason =
-    | 'full_credit'
-    | 'full_discount_code'
-    | 'full_automatic_discount'
-    | 'full_comp';
-
-  type AuthoritativeDataType = {
-    itemsTotal: number;
-    membershipAmount: number;
-    membershipAlreadyPaid: boolean;
-    membershipRequired: boolean;
-    membershipSchoolId: number | null;
-    membershipSchoolName: string;
-    membershipYear: number;
-    discounts: any;
-    schoolSettings: any;
-    appliedPromoCode: string | null;
-    payableAmount: number;
-    paymentPlans: PaymentPlanOption[];
-    snapshotGeneratedAt?: number;
-    // Authoritative free-enrollment flag from server cart snapshot.
-    // The Free Enrollment / Request Free Enrollment UI MUST gate on this,
-    // never on payableAmount === 0 alone — items priced at the stale
-    // remaining_balance=0 of Stripe-managed plans can collapse the subtotal
-    // to 0 even when the parent genuinely owes money.
-    isFreeEnrollment: boolean;
-    freeEnrollmentReason: FreeEnrollmentReason | null;
-  };
-
-  const [authoritativeData, setAuthoritativeData] = useState<AuthoritativeDataType | null>(null);
-
-  // Authoritative free-enrollment gate. The "Free Enrollment / Request Free Enrollment"
-  // UI must NEVER fire on actualPayableAmount === 0 alone — items priced at the stale
-  // remaining_balance=0 of Stripe-managed plans (or other fallbacks) can collapse the
-  // subtotal to 0 even when the parent genuinely owes money. Only the server cart
-  // snapshot can authoritatively decide this.
-  const isFreeEnrollmentApproved = gateIsFreeEnrollmentApproved(
-    actualPayableAmount,
-    authoritativeData,
-  );
-  // True when the local total looks free but the server snapshot disagrees (snapshot
-  // is loaded but did not flag the cart as free) — used to show a recovery/refresh
-  // card instead of silently submitting a free-enrollment request the server would
-  // reject.
-  const cartLooksFreeButUnverified = gateCartLooksFreeButUnverified(
-    actualPayableAmount,
-    authoritativeData,
-  );
 
   const prevCartItemsRef = useRef<string>('');
   
@@ -1308,12 +1319,12 @@ export default function CartCheckout() {
       {
         id: 'biweekly',
         name: 'Biweekly Payment Plan',
-        description: 'Automatic payments every 2 weeks until class ends',
+        description: 'Automatic payments every 2 weeks; last payment at least 2 weeks before your latest class ends',
         amount: biweeklyAmount,
         numberOfPayments: 4, // Fallback estimate - server will provide actual count
         features: [
           'Pay every 2 weeks based on class schedule',
-          'Payments automatically calculated from class start to end date',
+          'Payments end at least two weeks before the latest class end date in your cart',
           'No additional fees',
           'Cancel anytime with 30-day notice'
         ],
@@ -1617,21 +1628,21 @@ export default function CartCheckout() {
                 );
                 })}
 
-                {/* Membership Fee */}
-                {cart.membership && (
+                {/* Membership Fee — use server snapshot when cart.membership was cleared (e.g. refreshDiscounts) */}
+                {membershipForOrderSummary && (
                   <div className="flex justify-between items-start p-3 border rounded-lg border-primary/20 bg-primary/5" data-testid="checkout-membership-fee">
                     <div className="flex-1">
                       <h4 className="font-medium text-sm flex items-center gap-2">
                         <Award className="h-4 w-4 text-primary" />
                         Annual Membership
                       </h4>
-                      <p className="text-xs text-muted-foreground">{cart.membership.schoolName}</p>
+                      <p className="text-xs text-muted-foreground">{membershipForOrderSummary.schoolName}</p>
                       <Badge variant="secondary" className="text-xs bg-primary/10 text-primary mt-1">
-                        {cart.membership.year} Membership
+                        {membershipForOrderSummary.year} Membership
                       </Badge>
                     </div>
                     <div className="text-sm font-medium">
-                      {formatCurrency(cart.membership.amount)}
+                      {formatCurrency(membershipForOrderSummary.amount)}
                     </div>
                   </div>
                 )}
@@ -1646,13 +1657,13 @@ export default function CartCheckout() {
                     </div>
                   )}
 
-                  {cart.membership && (
+                  {membershipForOrderSummary && (
                     <div className="flex justify-between text-sm" data-testid="checkout-summary-membership">
                       <span className="flex items-center gap-1">
                         <Award className="h-3 w-3 text-primary" />
                         Membership Fee:
                       </span>
-                      <span>{formatCurrency(cart.membership.amount)}</span>
+                      <span>{formatCurrency(membershipForOrderSummary.amount)}</span>
                     </div>
                   )}
 
@@ -1715,7 +1726,7 @@ export default function CartCheckout() {
                   <Separator />
                   <div className="flex justify-between font-medium text-lg">
                     <span>Total:</span>
-                    <span>{formatCurrency(Math.max(0, cart.total + (cart.membership?.amount || 0) - creditsToApply))}</span>
+                    <span>{formatCurrency(Math.max(0, actualPayableAmount - creditsToApply))}</span>
                   </div>
                 </div>
               </CardContent>
@@ -1924,7 +1935,21 @@ export default function CartCheckout() {
                             </div>
                             <div className="text-right">
                               <div className="text-lg font-bold">
-                                {formatCurrency(plan.amount)}
+                                {plan.id === 'biweekly' &&
+                                typeof (plan as any).numberOfPayments === 'number' &&
+                                (plan as any).numberOfPayments > 1 ? (
+                                  <div className="space-y-0.5">
+                                    <div className="text-sm font-medium text-muted-foreground">
+                                      First payment
+                                    </div>
+                                    <div>{formatCurrency(plan.amount)}</div>
+                                    <div className="text-xs font-normal text-muted-foreground">
+                                      × {(plan as any).numberOfPayments} payments
+                                    </div>
+                                  </div>
+                                ) : (
+                                  formatCurrency(plan.amount)
+                                )}
                               </div>
                             </div>
                           </div>

@@ -86,6 +86,23 @@ router.post('/setup-cart-scenario', async (req: Request, res: Response) => {
     }
     const withMembership = req.body?.withMembership === true;
 
+    /** When > 0, school requires membership at this fee and no enrolled membership row is created (for checkout E2E). */
+    let unpaidMembershipFeeCents = 0;
+    const rawUnpaid = req.body?.unpaidMembershipFeeCents;
+    if (rawUnpaid !== undefined && rawUnpaid !== null && rawUnpaid !== false) {
+      if (typeof rawUnpaid !== 'number' || !Number.isFinite(rawUnpaid) || rawUnpaid <= 0) {
+        return res.status(400).json({
+          error: 'unpaidMembershipFeeCents must be a positive integer (cents) or omitted.',
+        });
+      }
+      unpaidMembershipFeeCents = Math.floor(rawUnpaid);
+    }
+    if (unpaidMembershipFeeCents > 0 && withMembership) {
+      return res.status(400).json({
+        error: 'Use either unpaidMembershipFeeCents (unpaid fee at checkout) or withMembership (pre-paid row), not both.',
+      });
+    }
+
     // 1. Create school admin
     // Note: Don't pass password in overrides - let createTestUser hash it properly
     const adminPassword = 'TestPassword123!';
@@ -105,6 +122,13 @@ router.post('/setup-cart-scenario', async (req: Request, res: Response) => {
       registrationCode: `CART${uniqueId.toUpperCase()}`
     });
     await storage.updateUser(admin.id, { schoolId: school.id });
+
+    if (unpaidMembershipFeeCents > 0) {
+      await storage.updateSchool(school.id, {
+        membershipRequired: true,
+        membershipFeeAmount: unpaidMembershipFeeCents,
+      });
+    }
 
     // 3. Create parent user
     const parentEmail = `parent_${uniqueId}@test.com`;
@@ -390,7 +414,10 @@ router.post('/setup-cart-scenario', async (req: Request, res: Response) => {
         school: {
           id: school.id,
           name: school.name,
-          registrationCode: school.registrationCode
+          registrationCode: school.registrationCode,
+          ...(unpaidMembershipFeeCents > 0
+            ? { membershipFeeAmountCents: unpaidMembershipFeeCents, membershipRequired: true }
+            : {}),
         },
         credit: credit
           ? { id: credit.id, amountCents: credit.creditAmountCents, status: credit.status }
