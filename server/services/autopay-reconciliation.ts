@@ -4,6 +4,19 @@ import { AUTOPAY_MAX_RETRY_ATTEMPTS } from "./autopay-policy";
 export { AUTOPAY_PROCESSING_STUCK_MINUTES };
 export { buildAutoPayReconciliationLabels } from "./autopay-observability";
 
+/** Test / seed PaymentIntent ids that must never hit Stripe.retrieve (fixtures, local JSON, jest). */
+const DEV_FIXTURE_STRIPE_PAYMENT_INTENT_IDS = new Set([
+  "pi_multi_1",
+  "pi_single_fallback",
+  "pi_equiv_test_1",
+  "pi_sched_success_1",
+]);
+
+export function isDevFixtureStripePaymentIntentId(paymentIntentId: string | null | undefined): boolean {
+  if (!paymentIntentId || typeof paymentIntentId !== "string") return false;
+  return DEV_FIXTURE_STRIPE_PAYMENT_INTENT_IDS.has(paymentIntentId.trim());
+}
+
 export type StripePaymentIntentTruth =
   | "succeeded"
   | "processing"
@@ -67,6 +80,7 @@ export interface AutoPayReconciliationResult {
     | "left_processing"
     | "failed_missing_payment_intent"
     | "failed_retry_cap_reached"
+    | "failed_dev_fixture_stripe_intent"
     | "moved_to_pending_for_retry";
 }
 
@@ -112,7 +126,20 @@ export async function reconcileStuckAutoPayProcessingAttempts<T extends Processi
         continue;
       }
 
-      const stripeStatus = await stripeGateway.getPaymentIntentStatus(payment.stripePaymentIntentId);
+      const piId = payment.stripePaymentIntentId.trim();
+      if (isDevFixtureStripePaymentIntentId(piId)) {
+        console.warn(
+          `[autopay-reconciliation] payment ${payment.id}: terminal-fail dev fixture PaymentIntent id (not live Stripe)`,
+        );
+        await repository.markScheduledPaymentFailed(payment.id, {
+          reason: "dev_fixture_stripe_payment_intent_id",
+          retryCount: AUTOPAY_MAX_RETRY_ATTEMPTS,
+        });
+        results.push({ paymentId: payment.id, action: "failed_dev_fixture_stripe_intent" });
+        continue;
+      }
+
+      const stripeStatus = await stripeGateway.getPaymentIntentStatus(piId);
       if (stripeStatus === "succeeded") {
         await repository.markScheduledPaymentCompleted(payment.id, now);
         results.push({ paymentId: payment.id, action: "completed_from_stripe_truth" });

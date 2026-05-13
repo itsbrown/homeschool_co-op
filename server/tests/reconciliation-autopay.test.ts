@@ -134,6 +134,29 @@ describe("autopay reconciliation", () => {
     expect(stripeGateway.getPaymentIntentStatus).not.toHaveBeenCalled();
   });
 
+  it("terminal-fails dev fixture PaymentIntent ids without calling Stripe", async () => {
+    const repository = {
+      queryProcessingScheduledPayments: jest.fn(async () => [
+        { id: 327, amount: 2000, status: "processing", retryCount: 0, stripePaymentIntentId: "pi_multi_1" },
+      ]),
+      markScheduledPaymentCompleted: jest.fn(async () => undefined),
+      markScheduledPaymentFailed: jest.fn(async () => undefined),
+      markScheduledPaymentPending: jest.fn(async () => undefined),
+    };
+    const stripeGateway = {
+      getPaymentIntentStatus: jest.fn(async () => "succeeded" as const),
+    };
+
+    const result = await reconcileStuckAutoPayProcessingAttempts(repository, stripeGateway);
+
+    expect(result).toEqual([{ paymentId: 327, action: "failed_dev_fixture_stripe_intent" }]);
+    expect(repository.markScheduledPaymentFailed).toHaveBeenCalledWith(327, {
+      reason: "dev_fixture_stripe_payment_intent_id",
+      retryCount: 3,
+    });
+    expect(stripeGateway.getPaymentIntentStatus).not.toHaveBeenCalled();
+  });
+
   it("continues reconciling other rows when Stripe lookup throws for one payment", async () => {
     const repository = {
       queryProcessingScheduledPayments: jest.fn(async () => [

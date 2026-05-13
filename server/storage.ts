@@ -54,6 +54,12 @@ import { normalizeEmailForLookup } from '@shared/parent-identity';
 import { eq, inArray } from 'drizzle-orm';
 import { getDb } from './db';
 
+/** When Postgres is down, CombinedStorage must not return undefined — auth would mis-report REGISTRATION_REQUIRED. */
+function isPostgresUnavailableError(error: unknown): boolean {
+  const msg = error instanceof Error ? error.message : String(error);
+  return msg.includes('Database connection not available');
+}
+
 export interface IStorage {
   // Methods for backup
   getAllUsers(): Promise<User[]>;
@@ -4639,6 +4645,7 @@ export class MemStorage implements IStorage {
         const result = await this.dbStorage.getUser(id);
         return result;
       } catch (error) {
+        if (isPostgresUnavailableError(error)) throw error;
         // Fall back to memory storage first (contains test data and runtime changes)
         try {
           const memUser = await this.fileStorage.getUser(id);
@@ -4674,6 +4681,7 @@ export class MemStorage implements IStorage {
         // Try database storage first
         return await this.dbStorage.getUserByUsername(username);
       } catch (error) {
+        if (isPostgresUnavailableError(error)) throw error;
         console.log('💾 Database unavailable, checking memory storage for username lookup');
         
         // Try memory storage first as it's most up-to-date
@@ -4715,6 +4723,7 @@ export class MemStorage implements IStorage {
         // Try database storage first
         return await this.dbStorage.getUserByEmail(email);
       } catch (error) {
+        if (isPostgresUnavailableError(error)) throw error;
         console.error('❌ Database error in getUserByEmail:', error);
         console.error('Error details:', {
           message: error instanceof Error ? error.message : 'Unknown error',
@@ -4762,6 +4771,7 @@ export class MemStorage implements IStorage {
       try {
         return await this.dbStorage.getUserBySupabaseId(supabaseId);
       } catch (error) {
+        if (isPostgresUnavailableError(error)) throw error;
         console.error('❌ Database error in getUserBySupabaseId:', error);
         return await this.memStorage.getUserBySupabaseId(supabaseId);
       }
@@ -4771,6 +4781,7 @@ export class MemStorage implements IStorage {
       try {
         return await this.dbStorage.getUserByAuth0Id(auth0Id);
       } catch (error) {
+        if (isPostgresUnavailableError(error)) throw error;
         console.error('❌ Database error in getUserByAuth0Id:', error);
         return await this.memStorage.getUserByAuth0Id(auth0Id);
       }
