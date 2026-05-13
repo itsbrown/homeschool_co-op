@@ -21,6 +21,7 @@ import {
   type Child,
   type Class,
   type Payment,
+  type InsertScheduledPayment,
 } from '@shared/schema';
 
 const router = Router();
@@ -117,6 +118,91 @@ router.post('/setup-cart-scenario', async (req: Request, res: Response) => {
     });
     const hashedParentPassword = await bcrypt.hash(parentPassword, 10);
     await storage.updateUser(parent.id, { password: hashedParentPassword });
+
+    /** When true, creates a Supabase Auth user for the seeded parent and links `users.supabase_id` so the SPA can sign in with email/password. */
+    let supabaseLinked = false;
+    if (req.body?.linkSupabaseAuth === true) {
+      const supabaseUrl = process.env.SUPABASE_URL;
+      const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      if (!supabaseUrl || !serviceKey) {
+        return res.status(400).json({
+          error: 'linkSupabaseAuth requires SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in the server environment',
+        });
+      }
+      try {
+        const { createClient } = await import('@supabase/supabase-js');
+        const admin = createClient(supabaseUrl, serviceKey, {
+          auth: { autoRefreshToken: false, persistSession: false },
+        });
+        const { data: created, error: createErr } = await admin.auth.admin.createUser({
+          email: parentEmail,
+          password: parentPassword,
+          email_confirm: true,
+          app_metadata: {
+            role: 'parent',
+            school_id: school.id,
+          },
+          user_metadata: {
+            name: parent.name || 'Test Parent',
+          },
+        });
+
+        let supabaseUserId: string | null = null;
+
+        if (createErr) {
+          const msg = (createErr.message || '').toLowerCase();
+          const already =
+            msg.includes('already') ||
+            msg.includes('registered') ||
+            (createErr as { code?: string }).code === 'email_exists';
+          if (!already) {
+            return res.status(500).json({
+              error: 'Failed to create Supabase auth user for seeded parent',
+              details: createErr.message,
+            });
+          }
+          let match: { id: string } | undefined;
+          for (let pageNum = 1; pageNum <= 10; pageNum++) {
+            const { data: listData, error: listErr } = await admin.auth.admin.listUsers({
+              page: pageNum,
+              perPage: 200,
+            });
+            if (listErr || !listData?.users?.length) {
+              break;
+            }
+            match = listData.users.find((u) => u.email?.toLowerCase() === parentEmail.toLowerCase());
+            if (match) {
+              break;
+            }
+            if (listData.users.length < 200) {
+              break;
+            }
+          }
+          if (!match) {
+            return res.status(500).json({
+              error: 'Supabase reported existing user but listUsers did not return a match',
+              details: createErr.message,
+            });
+          }
+          supabaseUserId = match.id;
+          await admin.auth.admin.updateUserById(supabaseUserId, {
+            password: parentPassword,
+            email_confirm: true,
+            app_metadata: { role: 'parent', school_id: school.id },
+          });
+        } else if (created.user?.id) {
+          supabaseUserId = created.user.id;
+        }
+
+        if (supabaseUserId) {
+          await storage.updateUser(parent.id, { supabaseId: supabaseUserId });
+          supabaseLinked = true;
+        }
+      } catch (e) {
+        console.error("linkSupabaseAuth failed (continuing without Supabase link):", e);
+        supabaseLinked = false;
+      }
+    }
 
     // 4. Create child
     const child = await testDb.createTestChild(parent.id, {
@@ -273,6 +359,7 @@ router.post('/setup-cart-scenario', async (req: Request, res: Response) => {
     res.json({
       success: true,
       data: {
+        supabaseLinked,
         parent: {
           email: parentEmail,
           password: parentPassword,
@@ -324,6 +411,77 @@ router.post('/setup-cart-scenario', async (req: Request, res: Response) => {
     res.status(500).json({
       error: 'Failed to setup cart test scenario',
       details: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+/**
+ * POST /api/test/seed-upcoming-scheduled-payment
+ * Inserts a pending DB scheduled payment row for an enrollment (harness only).
+ * Lets Playwright exercise /payments → Upcoming → Pay without waiting on Stripe webhooks.
+ */
+router.post('/seed-upcoming-scheduled-payment', async (req: Request, res: Response) => {
+  try {
+    const enrollmentId = Number(req.body?.enrollmentId);
+    if (!Number.isFinite(enrollmentId)) {
+      return res.status(400).json({ error: 'enrollmentId (number) is required' });
+    }
+    const enrollment = await storage.getProgramEnrollmentById(enrollmentId);
+    if (!enrollment) {
+      return res.status(404).json({ error: 'enrollment not found' });
+    }
+    const rawAmount = req.body?.amountCents;
+    const amount =
+      typeof rawAmount === 'number' && Number.isFinite(rawAmount) && rawAmount > 0
+        ? Math.floor(rawAmount)
+        : Math.min(2500, Math.max(100, enrollment.remainingBalance || 2500));
+    const paymentPlan =
+      typeof req.body?.paymentPlan === 'string' && req.body.paymentPlan.trim()
+        ? String(req.body.paymentPlan).trim()
+        : 'biweekly';
+    const installmentNumber =
+      typeof req.body?.installmentNumber === 'number' && req.body.installmentNumber > 0
+        ? Math.floor(req.body.installmentNumber)
+        : 2;
+    const totalInstallments =
+      typeof req.body?.totalInstallments === 'number' && req.body.totalInstallments >= installmentNumber
+        ? Math.floor(req.body.totalInstallments)
+        : Math.max(installmentNumber + 1, 4);
+
+    const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const insert: InsertScheduledPayment = {
+      schoolId: enrollment.schoolId,
+      enrollmentId: enrollment.id,
+      parentId: enrollment.parentId,
+      parentEmail: enrollment.parentEmail,
+      amount,
+      currency: 'usd',
+      scheduledDate: tomorrow,
+      frequency: 'one_time',
+      installmentNumber,
+      totalInstallments,
+      status: 'pending',
+      stripePaymentIntentId: null,
+      processedAt: null,
+      failureReason: null,
+      retryCount: 0,
+      reminderCount: 0,
+      lastReminderSentAt: null,
+      metadata: {
+        paymentPlan,
+        description: `Installment ${installmentNumber} of ${totalInstallments} — ${enrollment.className || 'Class'}`,
+      },
+      completionSource: null,
+      chargedBy: null,
+    };
+
+    const row = await storage.createScheduledPayment(insert);
+    res.json({ success: true, scheduledPayment: row });
+  } catch (error) {
+    console.error('❌ seed-upcoming-scheduled-payment:', error);
+    res.status(500).json({
+      error: 'Failed to seed scheduled payment',
+      details: error instanceof Error ? error.message : String(error),
     });
   }
 });

@@ -1333,9 +1333,11 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return enrollments;
     },
     enabled: !!user?.email && isAuthenticated && !isLoading && activeRole === 'parent',
-    staleTime: 5 * 60 * 1000, // Consider data fresh for 5 minutes
-    refetchOnMount: false, // CRITICAL: Don't refetch on component remount
-    refetchOnWindowFocus: false, // Don't refetch when window gains focus
+    // Keep parent cart / dashboard / payments in sync after checkouts and webhooks.
+    // A long stale window left "Pay now" and cart totals wrong for minutes after paying.
+    staleTime: 30 * 1000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
   });
 
   // Track last processed enrollments to prevent infinite loops

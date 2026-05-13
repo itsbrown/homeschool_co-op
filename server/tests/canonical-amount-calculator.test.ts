@@ -15,12 +15,12 @@ describe("calculateCanonicalAmounts", () => {
       membershipAmountCents: 17500,
     });
 
-    expect(result.enrollmentSubtotalCents).toBe(220000);
+    expect(result.enrollmentSubtotalCents).toBe(210000);
     expect(result.membershipAmountCents).toBe(17500);
-    expect(result.totalAmountCents).toBe(237500);
+    expect(result.totalAmountCents).toBe(227500);
     expect(result.breakdown).toHaveLength(2);
     expect(result.breakdown[0].selectedChargeCents).toBe(130000);
-    expect(result.breakdown[1].selectedChargeCents).toBe(90000);
+    expect(result.breakdown[1].selectedChargeCents).toBe(80000);
     expect(result.validation.isValid).toBe(true);
     expect(result.validation.errors).toEqual([]);
   });
@@ -48,6 +48,25 @@ describe("calculateCanonicalAmounts", () => {
     expect(result.totalAmountCents).toBe(160000);
     expect(result.breakdown[0].flags.usedProvidedRemainingBalance).toBe(true);
     expect(result.breakdown[1].flags.usedProvidedRemainingBalance).toBe(true);
+    expect(result.validation.isValid).toBe(true);
+  });
+
+  it("checkout uses remainingBalance when lower than totalCost (cart discounts)", () => {
+    const result = calculateCanonicalAmounts({
+      mode: "checkout",
+      items: [
+        {
+          id: "enrollment-a",
+          totalCostCents: 200000,
+          totalPaidCents: 0,
+          remainingBalanceCents: 158631,
+        },
+      ],
+    });
+
+    expect(result.enrollmentSubtotalCents).toBe(158631);
+    expect(result.breakdown[0].selectedChargeCents).toBe(158631);
+    expect(result.breakdown[0].source).toBe("remaining_balance");
     expect(result.validation.isValid).toBe(true);
   });
 

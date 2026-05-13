@@ -13,11 +13,11 @@ import { useToast } from '@/hooks/use-toast';
 import { formatCurrency } from '@/utils/currency';
 
 export default function CartDrawer() {
-  const { cart, isOpen, closeCart, removeItem, clearCart, getItemCount } = useCart();
+  const { cart, isOpen, closeCart, removeItem, clearCart, getItemCount, refreshCart } = useCart();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
-  const handleCheckout = (e: React.MouseEvent) => {
+  const handleCheckout = async (e: React.MouseEvent) => {
     console.log('🛒 🚨 CHECKOUT BUTTON CLICKED - EVENT RECEIVED!');
     
     e.preventDefault();
@@ -34,6 +34,12 @@ export default function CartDrawer() {
         variant: "destructive",
       });
       return;
+    }
+
+    try {
+      await refreshCart();
+    } catch (err) {
+      console.warn('🛒 refreshCart before checkout failed (non-fatal):', err);
     }
 
     console.log('🛒 Navigating to checkout...');

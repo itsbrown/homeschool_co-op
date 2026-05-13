@@ -162,6 +162,7 @@ function CheckoutForm({ selectedPaymentPlan, selectedPlanAmount, autoPayEnabled,
         className="w-full" 
         disabled={!stripe || !elementsReady || processing || (cart.items.length === 0 && !cart.membership)}
         size="lg"
+        data-testid="button-checkout-submit"
       >
         {processing ? (
           <>
@@ -364,7 +365,28 @@ export default function CartCheckout() {
   // Track if this is the initial load
   const [isInitialLoad, setIsInitialLoad] = useState(true);
 
+  // Latest cart gate for debounced "empty cart" redirect — avoids racing TanStack
+  // refetch so checkout briefly sees 0 lines and sends parents to the wrong page.
+  const checkoutGateRef = useRef({
+    itemCount: 0,
+    hasMembership: false,
+    hydrated: false,
+    loading: true,
+  });
+  checkoutGateRef.current = {
+    itemCount: cart.items.length,
+    hasMembership: !!cart.membership,
+    hydrated: cartHydrated,
+    loading: cartLoading,
+  };
+  const emptyCartRedirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
+    if (emptyCartRedirectTimerRef.current) {
+      clearTimeout(emptyCartRedirectTimerRef.current);
+      emptyCartRedirectTimerRef.current = null;
+    }
+
     console.log('🛒 CartCheckout useEffect - isAuthenticated:', isAuthenticated, 'cart items:', cart.items.length, 'membership:', cart.membership, 'cartHydrated:', cartHydrated, 'cartLoading:', cartLoading);
     
     if (!isAuthenticated) {
@@ -418,11 +440,28 @@ export default function CartCheckout() {
         // Pass forceRefresh=true to ensure fresh snapshot with membership data
         createPaymentIntent(null, true);
       }
-    } else {
-      // Cart is hydrated, not loading, and empty - redirect to programs
-      console.log('🛒 Cart hydrated, not loading, and empty - redirecting to programs');
-      setLocation('/programs');
+      return;
     }
+
+    // Cart looks empty: debounce redirect so a refetching window does not send users
+    // away from checkout while lines are still loading into state.
+    emptyCartRedirectTimerRef.current = setTimeout(() => {
+      const g = checkoutGateRef.current;
+      const stillEmpty =
+        g.hydrated && !g.loading && g.itemCount === 0 && !g.hasMembership;
+      if (stillEmpty) {
+        console.log('🛒 Cart still empty after debounce — leaving checkout for /payments');
+        setLocation('/payments');
+      }
+      emptyCartRedirectTimerRef.current = null;
+    }, 600);
+
+    return () => {
+      if (emptyCartRedirectTimerRef.current) {
+        clearTimeout(emptyCartRedirectTimerRef.current);
+        emptyCartRedirectTimerRef.current = null;
+      }
+    };
   }, [isAuthenticated, cartHydrated, cartLoading, cart.items.length, cart.membership, cart.total, hasCheckoutConflict]); // Re-run when cart or loading status changes
   
   // Separate effect to handle discount changes - recreate payment intent when cart total changes
@@ -1465,8 +1504,8 @@ export default function CartCheckout() {
                   </Button>
                 </>
               ) : (
-                <Button onClick={() => setLocation('/programs')} className="w-full">
-                  Return to Classes
+                <Button onClick={() => setLocation('/payments')} className="w-full">
+                  Return to Payments
                 </Button>
               )}
             </CardFooter>
@@ -1496,10 +1535,10 @@ export default function CartCheckout() {
             variant="ghost"
             size="sm"
             className="mb-3 -ml-2 text-muted-foreground hover:text-foreground"
-            onClick={() => setLocation('/parent/programs')}
+            onClick={() => setLocation('/parent/home')}
           >
             <ArrowLeft className="h-4 w-4 mr-1" />
-            Back to Classes
+            Back to Dashboard
           </Button>
           <h1 className="text-3xl font-bold tracking-tight">Checkout</h1>
           <p className="text-muted-foreground">

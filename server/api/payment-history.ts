@@ -318,10 +318,36 @@ router.get('/history', supabaseAuth, async (req: any, res) => {
       });
     }
     
-    // Step 6: Merge and sort all payments
-    const allPayments = [...enrichedDbPayments, ...stripeOnlyPayments]
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    
+    // Step 6: Merge, dedupe by Stripe PaymentIntent id (prefer DB row over Stripe-only),
+    // and sort by date descending
+    const merged = [...enrichedDbPayments, ...stripeOnlyPayments].sort(
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+    );
+
+    const byIntent = new Map<string, EnrichedPaymentHistory>();
+    const noIntent: EnrichedPaymentHistory[] = [];
+    for (const p of merged) {
+      const pid = p.stripePaymentIntentId;
+      if (!pid) {
+        noIntent.push(p);
+        continue;
+      }
+      const existing = byIntent.get(pid);
+      if (!existing) {
+        byIntent.set(pid, p);
+        continue;
+      }
+      const prefer = (row: EnrichedPaymentHistory) =>
+        row.source === "database" || (typeof row.id === "number" && row.id > 0);
+      if (prefer(p) && !prefer(existing)) {
+        byIntent.set(pid, p);
+      }
+    }
+
+    const allPayments = [...noIntent, ...byIntent.values()].sort(
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+    );
+
     // Step 7: Validate response with Zod schema
     const response = enrichedPaymentHistoryListResponseSchema.parse({
       success: true,

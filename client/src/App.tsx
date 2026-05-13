@@ -495,15 +495,16 @@ function Router() {
       <Route path="/knowledge-base/:id" component={KnowledgeBaseDetail} />
       <Route path="/checkout" component={Checkout} />
       <Route path="/checkout/success" component={CheckoutSuccess} />
-      {/* Cart routes */}
-          <Route path="/cart">
+      {/* Cart routes — list /cart/checkout before /cart so wouter Switch does not
+          treat "/cart/checkout" as a nested match of "/cart" (avoids wrong screen / redirects). */}
+          <Route path="/cart/checkout">
             {isAuthenticated ? (
               <CartCheckout />
             ) : (
               <Redirect to="/login" />
             )}
           </Route>
-          <Route path="/cart/checkout">
+          <Route path="/cart">
             {isAuthenticated ? (
               <CartCheckout />
             ) : (

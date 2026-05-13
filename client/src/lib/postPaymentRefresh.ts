@@ -10,6 +10,11 @@ const POST_PAYMENT_QUERY_KEYS: string[][] = [
   ["payment-history"],
   ["/api/payment-history/history"],
   ["/api/payment-history"],
+  ["/api/stripe/payment-history"],
+  ["/api/scheduled-payments/upcoming"],
+  ["scheduled-payments-upcoming"],
+  ["parent-credits"],
+  ["/api/parent/credits"],
 ];
 
 /**
@@ -27,5 +32,9 @@ export async function refreshPostPaymentState(queryClient: QueryClient): Promise
     queryClient.refetchQueries({ queryKey: ["/api/enrollments"], type: "all" }),
     queryClient.refetchQueries({ queryKey: ["/api/parent/memberships"], type: "all" }),
     queryClient.refetchQueries({ queryKey: ["billing-summary"], type: "all" }),
+    queryClient.refetchQueries({ queryKey: ["/api/stripe/payment-history"], type: "all" }),
+    queryClient.refetchQueries({ queryKey: ["/api/scheduled-payments/upcoming"], type: "all" }),
+    queryClient.refetchQueries({ queryKey: ["/api/parent/credits"], type: "all" }),
+    queryClient.refetchQueries({ queryKey: ["parent-credits"], type: "all" }),
   ]);
 }

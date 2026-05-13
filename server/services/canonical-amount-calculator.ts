@@ -29,7 +29,7 @@ export interface CanonicalAmountLineBreakdown {
   totalPaidCents: number;
   computedRemainingBalanceCents: number;
   selectedChargeCents: number;
-  source: "total_cost" | "remaining_balance";
+  source: "total_cost" | "remaining_balance" | "computed_remaining";
   mismatch: {
     providedRemainingBalanceCents: number | null;
     remainingBalanceMismatchCents: number;
@@ -170,15 +170,31 @@ export function calculateCanonicalAmounts(
       line.remainingBalanceCents !== null &&
       line.remainingBalanceCents !== undefined &&
       line.remainingBalanceCents !== "";
-    const canUseProvidedRemaining = request.mode === "billing" && hasProvidedRemaining && !providedRemaining.invalid;
-    const selectedChargeCents = canUseProvidedRemaining
-      ? providedRemaining.value
-      : request.mode === "checkout"
-        ? totalCost.value
+    const canUseProvidedRemaining =
+      request.mode === "billing" && hasProvidedRemaining && !providedRemaining.invalid;
+
+    /**
+     * Checkout must align with cart/snapshot pricing: enrollments often carry list `totalCost`
+     * while `remainingBalance` reflects discounts/credits already applied in the DB row.
+     * Never charge more than `totalCost - totalPaid`; when remaining is lower, trust it (capped).
+     */
+    const checkoutChargeCents =
+      request.mode === "checkout" && hasProvidedRemaining && !providedRemaining.invalid
+        ? Math.min(providedRemaining.value, computedRemainingBalanceCents)
         : computedRemainingBalanceCents;
 
+    const selectedChargeCents = canUseProvidedRemaining
+      ? providedRemaining.value
+      : checkoutChargeCents;
+
+    const usedCheckoutRemaining =
+      request.mode === "checkout" &&
+      hasProvidedRemaining &&
+      !providedRemaining.invalid &&
+      providedRemaining.value < computedRemainingBalanceCents;
+
     const remainingBalanceMismatchCents =
-      canUseProvidedRemaining
+      canUseProvidedRemaining || usedCheckoutRemaining
         ? providedRemaining.value - computedRemainingBalanceCents
         : 0;
 
@@ -194,7 +210,11 @@ export function calculateCanonicalAmounts(
       totalPaidCents: totalPaid.value,
       computedRemainingBalanceCents,
       selectedChargeCents,
-      source: request.mode === "checkout" ? "total_cost" : "remaining_balance",
+      source: usedCheckoutRemaining
+        ? "remaining_balance"
+        : canUseProvidedRemaining
+          ? "remaining_balance"
+          : "computed_remaining",
       mismatch: {
         providedRemainingBalanceCents: hasProvidedRemaining && !providedRemaining.invalid
           ? providedRemaining.value
@@ -205,7 +225,7 @@ export function calculateCanonicalAmounts(
         invalidTotalCost: totalCost.invalid,
         invalidTotalPaid: totalPaid.invalid,
         invalidRemainingBalance: providedRemaining.invalid,
-        usedProvidedRemainingBalance: canUseProvidedRemaining,
+        usedProvidedRemainingBalance: canUseProvidedRemaining || usedCheckoutRemaining,
         overpaidAgainstTotalCost,
       },
     });
