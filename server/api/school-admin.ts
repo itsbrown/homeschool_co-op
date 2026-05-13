@@ -33,7 +33,7 @@ const permissionUpdateLimiter = rateLimit({
   },
   skip: (req: any) => !req.user?.id, // Skip rate limiting if no user (will be rejected by auth anyway)
 });
-import { sql, eq, and } from 'drizzle-orm';
+import { sql, eq, and, or, exists } from 'drizzle-orm';
 import { users, schools, userRoles, userLocations, locations, classSessions, sessionAttendance, children, classes, type InsertSchool, type UserRole, systemRoles } from '@shared/schema';
 
 const router = Router();
@@ -5355,9 +5355,24 @@ router.get('/users', supabaseAuth, requireSchoolContext, async (req: any, res) =
     const schoolId = req.schoolId;
     console.log('📋 Fetching users for school admin...');
 
+    const schoolIdNum = Number(schoolId);
+    if (!Number.isFinite(schoolIdNum) || schoolIdNum <= 0) {
+      return res.status(400).json({ message: 'Invalid school context' });
+    }
+
     const db = await getDb();
-    
-    // Get all users for this school from database with active role and location
+
+    const roleScopeForSchool = exists(
+      db
+        .select()
+        .from(userRoles)
+        .where(
+          and(eq(userRoles.userId, users.id), eq(userRoles.schoolId, schoolIdNum)),
+        ),
+    );
+
+    // Include users with legacy users.school_id AND users who only appear under
+    // this tenant via user_roles.school_id (common after multi-role imports).
     const dbUsers = await db
       .select({
         id: users.id,
@@ -5377,7 +5392,7 @@ router.get('/users', supabaseAuth, requireSchoolContext, async (req: any, res) =
       })
       .from(users)
       .leftJoin(locations, eq(users.locationId, locations.id))
-      .where(eq(users.schoolId, Number(schoolId)));
+      .where(or(eq(users.schoolId, schoolIdNum), roleScopeForSchool));
 
     // Load staff from database to create a lookup map by userId
     const staffRecords = await storage.getSchoolStaffBySchoolId(Number(schoolId));
