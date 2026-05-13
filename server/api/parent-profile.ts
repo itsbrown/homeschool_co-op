@@ -3,6 +3,7 @@ import { storage } from '../storage';
 import { supabaseAuth } from '../middleware/supabase-auth';
 import { CurrencyUtils, BillingCalculationService } from '../../shared/currency-utils';
 import { getStripeClient } from '../config/stripe';
+import { isEnrollmentIncludedInProfileClassAmountDue } from '../lib/profile-style-enrollment-due';
 
 const router = Router();
 
@@ -661,7 +662,7 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
     // 'pending_admin_approval' is intentionally included — payment was made but admin approval is pending.
     const classAmountDue = CurrencyUtils.sum(
       processedEnrollments
-        .filter(e => !['cancelled', 'waitlist', 'withdrawn', 'failed', 'completed'].includes(e.status))
+        .filter(e => isEnrollmentIncludedInProfileClassAmountDue(e.status))
         .map(enrollment => (enrollment as any)._remainingBalanceCents || 0)
     );
 

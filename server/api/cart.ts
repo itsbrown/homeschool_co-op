@@ -2,34 +2,12 @@ import { Router } from 'express';
 import { supabaseAuth } from '../middleware/supabase-auth';
 import { storage } from '../storage';
 import { calculateCartPricing, validateCartTotal, calculateCartSnapshot, CartItem, deriveSchoolIdFromCart, SchoolIdResult } from '../utils/cart-pricing';
-import { computeEffectiveBalance } from '@shared/schema';
 import {
   cacheSnapshot,
   computeCartItemFingerprint,
   type CachedSnapshot,
 } from '../lib/snapshotTrustCache';
-
-/**
- * For an existing-enrollment cart line, return the parent's true outstanding balance
- * in cents, never reading the stored `remaining_balance` directly.
- *
- * Why: `remaining_balance` is intentionally written as 0 (NOT NULL) for Stripe-managed
- * payment plans, so any read of it understates what families owe and silently zeros
- * out cart totals / payment intents. Always prefer the DB-generated `effective_balance`
- * column, falling back to the same formula if it's absent.
- *
- * (See asa-payment-patterns "Parent Payments page shows $0" pitfall.)
- */
-function resolveEnrollmentEffectiveBalance(enrollment: any): number {
-  return (
-    enrollment?.effectiveBalance ??
-    computeEffectiveBalance(
-      enrollment?.totalCost ?? 0,
-      enrollment?.totalPaid ?? 0,
-      enrollment?.compAmountCents ?? 0,
-    )
-  );
-}
+import { resolveEnrollmentEffectiveBalance } from '../lib/enrollment-effective-balance';
 
 const router = Router();
 

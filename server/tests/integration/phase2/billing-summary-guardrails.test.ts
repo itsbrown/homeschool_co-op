@@ -119,6 +119,38 @@ describe('Integration: Billing summary guardrails', () => {
     expect(balances).toEqual([6000, 10000]);
   });
 
+  it('uses effective-balance semantics when stored remaining_balance is zero (stripe-managed)', async () => {
+    const classItem = await testDb.createTestClass(school.id, {
+      name: 'Stripe Plan Class',
+      price: 80000,
+    });
+
+    await storage.createProgramEnrollment({
+      schoolId: school.id,
+      classType: 'school_class',
+      classId: classItem.id,
+      childId: child.id,
+      childName: `${child.firstName} ${child.lastName}`,
+      className: classItem.name,
+      parentId: parent.id,
+      parentEmail: parent.email,
+      totalCost: 80000,
+      totalPaid: 35000,
+      remainingBalance: 0,
+      paymentStatus: 'stripe_managed',
+      status: 'enrolled',
+    } as any);
+
+    const response = await request(app)
+      .get('/api/billing/summary')
+      .set('Authorization', 'Bearer test-token');
+
+    expect(response.status).toBe(200);
+    expect(response.body.totalBalance).toBe(45000);
+    expect(response.body.enrollmentDetails).toHaveLength(1);
+    expect(response.body.enrollmentDetails[0].balance).toBe(45000);
+  });
+
   it('does not double-count pending scheduled payments into canonical balance', async () => {
     const classItem = await testDb.createTestClass(school.id, {
       name: 'Schedule Class',

@@ -1,5 +1,6 @@
 import { storage } from '../storage';
 import type { ProgramEnrollment } from '@shared/schema';
+import { resolveEnrollmentEffectiveBalance } from '../lib/enrollment-effective-balance';
 
 export interface CanonicalAmountInput {
   enrollmentIds: number[];
@@ -21,10 +22,11 @@ type EnrollmentWithBalance = ProgramEnrollment & {
 /**
  * Server-authoritative balance calculator for "pay balance" flows.
  *
- * Sums the current outstanding balance (effectiveBalance, falling back to
- * remainingBalance) across the supplied program_enrollments belonging to the
- * given parent. Enrollments that fail the tenant check or have a non-positive
- * balance are excluded so the caller never charges $0 or crosses tenants.
+ * Sums the current outstanding balance via resolveEnrollmentEffectiveBalance
+ * (DB `effective_balance` or canonical formula — never raw `remaining_balance`
+ * alone) across the supplied program_enrollments belonging to the given parent.
+ * Enrollments that fail the tenant check or have a non-positive balance are
+ * excluded so the caller never charges $0 or crosses tenants.
  *
  * Tenant guard: an enrollment is only counted when its parentId is present
  * AND equals the requesting parent's ID. Records with a null/missing parentId
@@ -65,16 +67,7 @@ export async function calculateCanonicalEnrollmentAmount(
       continue;
     }
 
-    const effective =
-      typeof enrollment.effectiveBalance === 'number'
-        ? enrollment.effectiveBalance
-        : null;
-    const remaining =
-      typeof enrollment.remainingBalance === 'number'
-        ? enrollment.remainingBalance
-        : 0;
-
-    const balance = effective ?? remaining;
+    const balance = resolveEnrollmentEffectiveBalance(enrollment);
     if (balance > 0) {
       totalAmountCents += balance;
       usedIds.push(id);

@@ -9,7 +9,12 @@ import { createClient } from '@supabase/supabase-js';
 import { dataLayer } from '../services/dataLayer';
 import { getStripeClient } from '../config/stripe';
 import { supabaseAuth } from '../middleware/supabase-auth';
-import { getChildrenForAuthenticatedParent } from '../lib/parent-auth-scope';
+import {
+  getChildrenForAuthenticatedParent,
+  resolveParentDbUser,
+} from '../lib/parent-auth-scope';
+import { resolveEnrollmentEffectiveBalance } from '../lib/enrollment-effective-balance';
+import { sumProfileStyleClassEnrollmentDueCents } from '../lib/profile-style-enrollment-due';
 import {
   buildIdempotencyFingerprint,
   createInMemoryIdempotencyStore,
@@ -103,8 +108,9 @@ export function splitCentsEvenly(totalCents: number, recipientCount: number): nu
  * returns the first match, or null if none resolve.
  *
  * Callers should NOT use the return value as the source of truth for amounts — the canonical
- * amount fields are denormalized onto program_enrollments (total_cost, total_paid,
- * remaining_balance). This helper is for display-only fields like the class title.
+ * owed cents for an enrollment come from `effective_balance` / `resolveEnrollmentEffectiveBalance`
+ * (total_cost, total_paid, comp_amount_cents); not from stored `remaining_balance` alone.
+ * This helper is for display-only fields like the class title.
  */
 async function resolveClassForEnrollment(
   enrollment: { marketplaceClassId?: number | null; programId?: number | null; classId?: number | null }
@@ -696,8 +702,10 @@ router.get('/summary', async (req, res) => {
 
           const paidAmount = enrollment.totalPaid || 0;
           const classCost = enrollment.totalCost || 0;
-          const remainingBalance = enrollment.remainingBalance || Math.max(0, classCost - paidAmount);
-          totalBalance += remainingBalance;
+          const balance = resolveEnrollmentEffectiveBalance(enrollment);
+          if (balance > 0) {
+            totalBalance += balance;
+          }
 
           enrollmentDetails.push({
             enrollmentId: enrollment.id,
@@ -705,11 +713,27 @@ router.get('/summary', async (req, res) => {
             className: classItem?.title || enrollment.className || 'Unknown Class',
             classCost,
             amountPaid: paidAmount,
-            remainingBalance,
+            balance,
             classDate: classItem?.startDate || null,
             status: enrollment.status,
             paymentStatus: enrollment.paymentStatus
           });
+        }
+
+        const profileStyleTestCents = sumProfileStyleClassEnrollmentDueCents(allEnrollments);
+        const driftTestCents = Math.abs(totalBalance - profileStyleTestCents);
+        if (driftTestCents > 1) {
+          const parentDb = await resolveParentDbUser(storage, { email: userEmail });
+          console.warn(
+            '[billing/summary test] Enrollment total diverges from parent-profile-style class due.',
+            {
+              parentEmail: userEmail,
+              parentDbUserId: parentDb?.id ?? null,
+              billingSummaryEnrollmentTotalCents: totalBalance,
+              profileStyleClassEnrollmentDueCents: profileStyleTestCents,
+              driftCents: driftTestCents,
+            },
+          );
         }
 
         return res.json({
@@ -786,9 +810,9 @@ router.get('/summary', async (req, res) => {
     // drawer (which doesn't do this lookup) showed them. That divergence is the dominant source of
     // "I don't see my balance" reports.
     //
-    // We also stop dropping enrollments when the class lookup fails. The amount fields
-    // (total_cost, total_paid, remaining_balance) are denormalized on program_enrollments, so the
-    // balance is correct even without a class row. The only field we lose is the display title.
+    // We also stop dropping enrollments when the class lookup fails. Owed cents use
+    // resolveEnrollmentEffectiveBalance (DB `effective_balance` or same formula), never raw
+    // `remaining_balance` — Stripe-managed rows often store remaining_balance = 0 while still owed.
     const enrollmentDetails = [];
     let totalBalance = 0;
 
@@ -800,9 +824,7 @@ router.get('/summary', async (req, res) => {
 
       const totalAmount = enrollment.totalCost ?? classDetails?.price ?? 0;
       const totalPaid = enrollment.totalPaid ?? (enrollment as any).amount ?? 0;
-      const balance = enrollment.remainingBalance != null
-        ? enrollment.remainingBalance
-        : Math.max(0, totalAmount - totalPaid);
+      const balance = resolveEnrollmentEffectiveBalance(enrollment);
 
       enrollmentDetails.push({
         enrollmentId: enrollment.id,
@@ -855,6 +877,28 @@ router.get('/summary', async (req, res) => {
     // C2: scheduled_payments are installments of the same enrollment debt; adding them on top of
     // remaining_balance double-counts. Expose schedule totals separately; canonical owed = enrollments.
     const canonicalBalance = totalBalance;
+
+    const profileStyleClassEnrollmentDueCents =
+      sumProfileStyleClassEnrollmentDueCents(allEnrollments);
+    const driftVsProfileStyleCents = Math.abs(
+      canonicalBalance - profileStyleClassEnrollmentDueCents,
+    );
+    if (driftVsProfileStyleCents > 1) {
+      const parentDb = await resolveParentDbUser(storage, {
+        email: userEmail,
+        supabaseId: user.id,
+      });
+      console.warn(
+        '[billing/summary] Enrollment total diverges from parent-profile-style class due (same enrollment rows; admin parent-profile excludes some statuses from class amount due).',
+        {
+          parentEmail: userEmail,
+          parentDbUserId: parentDb?.id ?? null,
+          billingSummaryEnrollmentTotalCents: canonicalBalance,
+          profileStyleClassEnrollmentDueCents: profileStyleClassEnrollmentDueCents,
+          driftCents: driftVsProfileStyleCents,
+        },
+      );
+    }
 
     const summary = {
       totalBalance: canonicalBalance,

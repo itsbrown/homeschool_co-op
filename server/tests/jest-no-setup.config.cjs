@@ -10,6 +10,8 @@ module.exports = {
   testMatch: [
     '<rootDir>/server/tests/minimal-test.test.ts',
     '<rootDir>/server/tests/snapshot-trust-cache.test.ts',
+    '<rootDir>/server/tests/enrollment-effective-balance.test.ts',
+    '<rootDir>/server/tests/profile-style-enrollment-due.test.ts',
   ],
   transform: {
     '^.+\\.tsx?$': ['ts-jest', {
