@@ -33,7 +33,7 @@ const permissionUpdateLimiter = rateLimit({
   },
   skip: (req: any) => !req.user?.id, // Skip rate limiting if no user (will be rejected by auth anyway)
 });
-import { sql, eq, and, or, exists } from 'drizzle-orm';
+import { sql, eq, and, or, inArray } from 'drizzle-orm';
 import { users, schools, userRoles, userLocations, locations, classSessions, sessionAttendance, children, classes, type InsertSchool, type UserRole, systemRoles } from '@shared/schema';
 
 const router = Router();
@@ -5362,14 +5362,16 @@ router.get('/users', supabaseAuth, requireSchoolContext, async (req: any, res) =
 
     const db = await getDb();
 
-    const roleScopeForSchool = exists(
-      db
-        .select()
-        .from(userRoles)
-        .where(
-          and(eq(userRoles.userId, users.id), eq(userRoles.schoolId, schoolIdNum)),
-        ),
-    );
+    const roleRows = await db
+      .select({ userId: userRoles.userId })
+      .from(userRoles)
+      .where(eq(userRoles.schoolId, schoolIdNum));
+    const userIdsFromRoles = [...new Set(roleRows.map((r) => r.userId).filter((id) => id != null))];
+
+    const schoolScopeWhere =
+      userIdsFromRoles.length > 0
+        ? or(eq(users.schoolId, schoolIdNum), inArray(users.id, userIdsFromRoles))
+        : eq(users.schoolId, schoolIdNum);
 
     // Include users with legacy users.school_id AND users who only appear under
     // this tenant via user_roles.school_id (common after multi-role imports).
@@ -5392,7 +5394,7 @@ router.get('/users', supabaseAuth, requireSchoolContext, async (req: any, res) =
       })
       .from(users)
       .leftJoin(locations, eq(users.locationId, locations.id))
-      .where(or(eq(users.schoolId, schoolIdNum), roleScopeForSchool));
+      .where(schoolScopeWhere);
 
     // Load staff from database to create a lookup map by userId
     const staffRecords = await storage.getSchoolStaffBySchoolId(Number(schoolId));
