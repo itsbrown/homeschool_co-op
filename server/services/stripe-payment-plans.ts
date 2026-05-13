@@ -28,6 +28,12 @@ export interface PaymentPlanData {
     originalAmount?: number;
     discountAmount?: number;
   };
+  /** Volunteer credits applied to this checkout (card charge = totalAmount). */
+  creditsAppliedCents?: number;
+  /** Gross cents owed before credits (enrollments + membership in cart). */
+  originalAmountCents?: number;
+  /** Parent user id for credit consumption on webhook success. */
+  creditUserId?: number;
 }
 
 export interface PaymentPhase {
@@ -54,7 +60,8 @@ export class StripePaymentPlanService {
       enrollmentIds: data.enrollmentIds,
       totalAmount: CurrencyUtils.toDisplay(data.totalAmount),
       paymentPlan: data.paymentPlan,
-      paymentFrequency: data.paymentFrequency || 'one_time'
+      paymentFrequency: data.paymentFrequency || 'one_time',
+      creditsAppliedCents: data.creditsAppliedCents ?? 0,
     });
 
     // Validate total amount meets Stripe's minimum
@@ -109,7 +116,9 @@ export class StripePaymentPlanService {
     // Create immediate PaymentIntent for the first payment
     const firstPhase = phases[0];
     let paymentIntent: Stripe.PaymentIntent;
-    
+
+    const appliedCredits = Math.floor(data.creditsAppliedCents ?? 0);
+
     if (isTestMode) {
       // Mock payment intent for test environment
       paymentIntent = {
@@ -128,7 +137,20 @@ export class StripePaymentPlanService {
           installmentNumber: '1',
           totalInstallments: phases.length.toString(),
           createdBy: 'asa_payment_system',
-          version: 'v2_stripe_simplified'
+          version: 'v2_stripe_simplified',
+          ...(appliedCredits > 0
+            ? {
+                creditsAppliedCents: String(appliedCredits),
+                originalAmountCents: String(
+                  data.originalAmountCents != null && data.originalAmountCents > 0
+                    ? Math.floor(data.originalAmountCents)
+                    : data.totalAmount + appliedCredits
+                ),
+                ...(data.creditUserId != null && data.creditUserId > 0
+                  ? { userId: String(Math.floor(data.creditUserId)) }
+                  : {}),
+              }
+            : {}),
         },
         status: 'requires_payment_method',
         created: Math.floor(Date.now() / 1000)
@@ -147,6 +169,18 @@ export class StripePaymentPlanService {
         createdBy: 'asa_payment_system',
         version: 'v2_stripe_simplified'
       };
+
+      if (appliedCredits > 0) {
+        paymentMetadata.creditsAppliedCents = String(appliedCredits);
+        const gross =
+          data.originalAmountCents != null && data.originalAmountCents > 0
+            ? Math.floor(data.originalAmountCents)
+            : data.totalAmount + appliedCredits;
+        paymentMetadata.originalAmountCents = String(gross);
+        if (data.creditUserId != null && data.creditUserId > 0) {
+          paymentMetadata.userId = String(Math.floor(data.creditUserId));
+        }
+      }
       
       // Add membership metadata if present (derived server-side, not from client)
       if (data.membership) {

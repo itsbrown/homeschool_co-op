@@ -18,7 +18,9 @@ import {
 } from '../services/idempotency-helper';
 import {
   enrollmentPoolCentsForBalanceIntent,
+  parseBalanceIntentCredits,
   parseMetadataMembershipAmountCents,
+  totalCentsForBalanceAllocation,
 } from '../lib/balance-payment-metadata';
 
 const router = Router();
@@ -200,7 +202,15 @@ export async function processBalancePayment(paymentIntent: Stripe.PaymentIntent,
     const membershipCents = parseMetadataMembershipAmountCents(
       paymentIntent.metadata as Record<string, string | undefined>
     );
-    const classPoolCents = enrollmentPoolCentsForBalanceIntent(currentPaymentAmount, membershipCents);
+    const { creditsAppliedCents, originalAmountCents } = parseBalanceIntentCredits(
+      paymentIntent.metadata as Record<string, string | undefined>
+    );
+    const totalChargedCents = totalCentsForBalanceAllocation({
+      paymentIntentAmountCents: currentPaymentAmount,
+      creditsAppliedCents,
+      originalAmountCents,
+    });
+    const classPoolCents = enrollmentPoolCentsForBalanceIntent(totalChargedCents, membershipCents);
 
     console.log('💰 Processing balance payment with installment support:', {
       enrollmentIds,
@@ -208,6 +218,9 @@ export async function processBalancePayment(paymentIntent: Stripe.PaymentIntent,
       currentPaymentAmount,
       totalAmount,
       membershipCentsReserved: membershipCents,
+      creditsAppliedCents,
+      originalAmountCents,
+      totalChargedCents,
       classPoolCents,
     });
     
@@ -272,7 +285,7 @@ export async function processBalancePayment(paymentIntent: Stripe.PaymentIntent,
       childName: enrollments[0].childName || 'Multiple Children',
       className: enrollments.length > 1 ? 'Multiple Classes' : enrollments[0].className || 'Class',
       description: `Payment for ${enrollments.length} enrollment(s) - ${paymentPlan} plan`,
-      amount: currentPaymentAmount,
+      amount: totalChargedCents,
       currency: paymentIntent.currency || 'usd',
       status: 'completed' as const,
       stripeChargeId: null,
@@ -286,13 +299,34 @@ export async function processBalancePayment(paymentIntent: Stripe.PaymentIntent,
         paymentPlan,
         installmentNumber: 1,
         totalInstallments: 1,
-        isFirstInstallment: true
+        isFirstInstallment: true,
+        ...(creditsAppliedCents > 0
+          ? {
+              creditsAppliedCents,
+              stripeChargedCents: currentPaymentAmount,
+              originalAmountCents: originalAmountCents || currentPaymentAmount + creditsAppliedCents,
+            }
+          : {}),
       },
       paymentDate: new Date()
     };
     
-    await storage.createPayment(paymentRecord);
+    const createdPayment = await storage.createPayment(paymentRecord);
     console.log('✅ Payment record created:', paymentRecord.stripePaymentIntentId);
+
+    if (creditsAppliedCents > 0 && parentUser?.id) {
+      try {
+        const { totalUsed } = await storage.useCredits(
+          parentUser.id,
+          creditsAppliedCents,
+          createdPayment.id,
+          `Cart checkout ${paymentIntent.id}`
+        );
+        console.log(`💰 Consumed ${totalUsed} cents of volunteer credits for user ${parentUser.id}`);
+      } catch (creditErr) {
+        console.error('❌ Failed to consume volunteer credits after checkout payment:', creditErr);
+      }
+    }
     
     // Payment plans are now handled by Stripe Subscription Schedules in the stripe-payment-plans service
     // No manual scheduled payments needed - all payment scheduling is managed by Stripe

@@ -1854,7 +1854,7 @@ export default function CartCheckout() {
                         <Check className="h-4 w-4 text-amber-600" />
                         <div>
                           <p className="text-sm font-medium text-amber-800">Credits Applied</p>
-                          <p className="text-xs text-amber-600">
+                          <p className="text-xs text-amber-600" data-testid="text-credits-saving">
                             Saving {formatCurrency(creditsToApply)}
                           </p>
                         </div>

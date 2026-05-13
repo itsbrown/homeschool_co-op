@@ -1,12 +1,37 @@
 import { Router } from 'express';
 import { storage } from '../storage';
 import { sendPaymentReceipt } from '../lib/email-service';
-import { StripePaymentPlanService } from '../services/stripe-payment-plans';
+import { StripePaymentPlanService, type PaymentPlanData } from '../services/stripe-payment-plans';
 import { supabaseAuth } from '../middleware/supabase-auth';
 import { requireSchoolContext } from '../middleware/require-school-context';
 import { getStripeClient, getStripePublishableKey } from '../config/stripe';
 import { calculateMembershipDiscount } from '../utils/membership';
 import { calculateCanonicalAmounts } from '../services/canonical-amount-calculator';
+
+/** Stripe minimum charge in USD cents for card-present checkouts. */
+const STRIPE_MINIMUM_CHECKOUT_CENTS = 50;
+
+function computeCheckoutAppliedCreditsCents(params: {
+  requestedRaw: unknown;
+  availableCredits: number;
+  totalOwedCents: number;
+}): number {
+  const requested = Math.max(0, Math.floor(Number(params.requestedRaw) || 0));
+  if (requested === 0 || params.totalOwedCents <= 0) {
+    return 0;
+  }
+  let applied = Math.min(requested, params.availableCredits, params.totalOwedCents);
+  let payable = params.totalOwedCents - applied;
+  if (
+    payable > 0 &&
+    payable < STRIPE_MINIMUM_CHECKOUT_CENTS &&
+    params.totalOwedCents >= STRIPE_MINIMUM_CHECKOUT_CENTS
+  ) {
+    const maxCredit = params.totalOwedCents - STRIPE_MINIMUM_CHECKOUT_CENTS;
+    applied = Math.min(requested, params.availableCredits, Math.max(0, maxCredit));
+  }
+  return applied;
+}
 
 const router = Router();
 
@@ -34,7 +59,7 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
     
     console.log('💳 Creating payment intent for authenticated user:', userEmail);
 
-    const { items, subtotal, discounts, total, parentEmail, paymentPlan = 'full', paymentFrequency = 'one_time', membership } = req.body;
+    const { items, subtotal, discounts, total, parentEmail, paymentPlan = 'full', paymentFrequency = 'one_time', membership, creditsToApply } = req.body;
 
     // Validate required fields - either items OR membership must be present
     const hasItems = items && Array.isArray(items) && items.length > 0;
@@ -372,6 +397,56 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
       // Validate membership request if present - use server-derived values only
       // SECURITY: Do not trust client-provided schoolId/parentUserId - derive from authenticated session
       const totalWithMembership = authoritativeAmountResult.totalAmountCents;
+
+      let availableVolunteerCredits = 0;
+      try {
+        const creditRows = await storage.getAvailableCredits(parent.id);
+        availableVolunteerCredits = creditRows.reduce(
+          (sum, c) => sum + (c.creditAmountCents - (c.usedAmountCents || 0)),
+          0
+        );
+      } catch (credErr) {
+        console.warn('Could not load available volunteer credits for checkout:', credErr);
+      }
+
+      const appliedVolunteerCreditsCents = computeCheckoutAppliedCreditsCents({
+        requestedRaw: creditsToApply,
+        availableCredits: availableVolunteerCredits,
+        totalOwedCents: totalWithMembership,
+      });
+      const payableTotalCents = totalWithMembership - appliedVolunteerCreditsCents;
+
+      if (totalWithMembership > 0 && payableTotalCents === 0 && appliedVolunteerCreditsCents > 0) {
+        return res.status(400).json({
+          message: 'This order is fully covered by credits — no card payment is required.',
+          error: 'FULL_CREDIT_NO_CARD',
+        });
+      }
+
+      if (
+        payableTotalCents > 0 &&
+        payableTotalCents < STRIPE_MINIMUM_CHECKOUT_CENTS &&
+        totalWithMembership >= STRIPE_MINIMUM_CHECKOUT_CENTS
+      ) {
+        console.error('❌ Checkout payable below Stripe minimum after credit clamp', {
+          totalWithMembership,
+          appliedVolunteerCreditsCents,
+          payableTotalCents,
+        });
+        return res.status(500).json({
+          message: 'Unable to finalize checkout amount — please refresh and try again.',
+          error: 'CHECKOUT_MIN_PAYABLE',
+        });
+      }
+
+      if (appliedVolunteerCreditsCents > 0) {
+        console.log('🎟️ Volunteer credits applied at checkout:', {
+          appliedVolunteerCreditsCents,
+          payableTotalCents,
+          totalWithMembership,
+          availableVolunteerCredits,
+        });
+      }
       
       // Build secure membership data from server-side validated parent info
       let serverMembership: { 
@@ -494,14 +569,22 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
       // NOTE: CombinedStorage has all IStorage methods needed but doesn't formally implement the interface
       // See server/storage.ts TODO comment for full context on storage interface alignment
       const paymentPlanService = new StripePaymentPlanService(storage as any);
-      const paymentPlanResult = await paymentPlanService.createEducationalPaymentPlan({
+      const paymentPlanPayload: PaymentPlanData = {
         parentEmail: userEmail,
         enrollmentIds,
-        totalAmount: totalWithMembership, // Include membership fee in total
+        totalAmount: payableTotalCents,
         paymentPlan: paymentPlan as 'deposit' | 'split' | 'biweekly' | 'full',
         paymentFrequency: paymentFrequency as 'weekly' | 'biweekly' | 'monthly' | 'one_time',
-        membership: serverMembership // Pass server-validated membership data
-      });
+        membership: serverMembership,
+        ...(appliedVolunteerCreditsCents > 0
+          ? {
+              creditsAppliedCents: appliedVolunteerCreditsCents,
+              originalAmountCents: totalWithMembership,
+              creditUserId: parent.id,
+            }
+          : {}),
+      };
+      const paymentPlanResult = await paymentPlanService.createEducationalPaymentPlan(paymentPlanPayload);
 
       console.log('✅ Payment plan created successfully:', {
         paymentIntentId: paymentPlanResult.paymentIntent.id,

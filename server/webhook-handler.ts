@@ -6,7 +6,12 @@ import { getStripeClient } from './config/stripe';
 import { createReceiptFromPayment } from './services/receiptService';
 import { processMembershipStripeEvent } from './api/stripe-webhook';
 import { splitCentsEvenly } from './api/billing';
-import { enrollmentPoolCentsForBalanceIntent, parseMetadataMembershipAmountCents } from './lib/balance-payment-metadata';
+import {
+  enrollmentPoolCentsForBalanceIntent,
+  parseBalanceIntentCredits,
+  parseMetadataMembershipAmountCents,
+  totalCentsForBalanceAllocation,
+} from './lib/balance-payment-metadata';
 import { fulfillMembershipFromCartPaymentIntent } from './services/fulfill-membership-payment-intent';
 import { findProgramEnrollmentForCartItem } from './lib/cart-checkout-enrollment-match';
 import { resolveScheduledPaymentEnrollmentIds } from './lib/scheduled-payment-intent-metadata';
@@ -94,7 +99,14 @@ async function applyBalancePaymentToEnrollmentsOnly(
   const membershipCents = parseMetadataMembershipAmountCents(
     paymentIntent.metadata as Record<string, string | undefined>
   );
-  const classPoolCents = enrollmentPoolCentsForBalanceIntent(amountCents, membershipCents);
+  const meta = paymentIntent.metadata as Record<string, string | undefined>;
+  const { creditsAppliedCents, originalAmountCents } = parseBalanceIntentCredits(meta);
+  const totalCharged = totalCentsForBalanceAllocation({
+    paymentIntentAmountCents: amountCents,
+    creditsAppliedCents,
+    originalAmountCents,
+  });
+  const classPoolCents = enrollmentPoolCentsForBalanceIntent(totalCharged, membershipCents);
   const allocation = splitCentsEvenly(classPoolCents, enrollmentIds.length);
 
   for (let i = 0; i < enrollmentIds.length; i++) {
@@ -603,6 +615,22 @@ export const webhookHandler = async (req: Request, res: Response) => {
               // Pre-existing pending payment records are authoritative for payment history.
               // Apply enrollment effects only to avoid duplicate financial side effects on replay.
               await applyBalancePaymentToEnrollmentsOnly(paymentIntent, enrollmentIds);
+              const meta = paymentIntent.metadata as Record<string, string | undefined>;
+              const { creditsAppliedCents } = parseBalanceIntentCredits(meta);
+              const userIdForCredits = parseInt(String(meta.userId || '0'), 10) || 0;
+              if (creditsAppliedCents > 0 && userIdForCredits > 0 && existingPayment) {
+                try {
+                  const { totalUsed } = await storage.useCredits(
+                    userIdForCredits,
+                    creditsAppliedCents,
+                    existingPayment.id,
+                    `Cart checkout ${paymentIntent.id}`
+                  );
+                  console.log(`💰 (pending replay) Consumed ${totalUsed} cents of volunteer credits`);
+                } catch (creditErr) {
+                  console.error('❌ Failed to consume volunteer credits on pending-payment replay:', creditErr);
+                }
+              }
             } else {
               await fulfillMembershipFromCartPaymentIntent(paymentIntent);
               // Calculate payment amount in dollars (Stripe amount is in cents)
