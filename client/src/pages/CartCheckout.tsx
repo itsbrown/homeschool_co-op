@@ -12,7 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useLocation } from 'wouter';
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { apiRequest, queryClient } from '@/lib/queryClient';
+import { apiRequest, queryClient, safeJsonParse } from '@/lib/queryClient';
 import { Switch } from '@/components/ui/switch';
 import { ShoppingCart, CreditCard, Percent, Gift, AlertCircle, Check, Loader2, Calendar, DollarSign, Clock, CheckCircle2, Award, RefreshCw, ArrowLeft, Zap } from 'lucide-react';
 import ParentAppShell from '@/components/layout/ParentAppShell';
@@ -637,7 +637,7 @@ export default function CartCheckout() {
           detail = 'Your session may have expired. Please sign in again and retry checkout.';
         } else {
           try {
-            const errBody = await response.json();
+            const errBody = await safeJsonParse(response);
             const code = errBody?.error;
             const msg =
               typeof errBody?.message === 'string' && errBody.message.trim()
@@ -655,14 +655,16 @@ export default function CartCheckout() {
               detail =
                 'We could not determine which school this cart belongs to. Remove invalid classes and try again.';
             }
-          } catch {
-            // non-JSON error body — keep defaultSnapshotError
+          } catch (parseErr: any) {
+            const pm =
+              typeof parseErr?.message === 'string' ? parseErr.message.trim() : '';
+            if (pm) detail = pm;
           }
         }
         throw new Error(detail);
       }
 
-      const snapshot = await response.json();
+      const snapshot = await safeJsonParse(response);
 
       if (!snapshot?.snapshotId) {
         throw new Error(defaultSnapshotError);
@@ -709,6 +711,16 @@ export default function CartCheckout() {
       return authData;
     } catch (err: any) {
       console.warn('⚠️ Failed to fetch cart snapshot:', err);
+      const msg = typeof err?.message === 'string' ? err.message : '';
+      if (
+        msg.includes("Unexpected token '<") ||
+        msg.includes('<!DOCTYPE') ||
+        msg.includes('<html')
+      ) {
+        throw new Error(
+          'The pricing service returned a web page instead of data. Open checkout on the same app URL where the rest of the site loads (so /api routes work), then refresh.',
+        );
+      }
       throw err instanceof Error ? err : new Error(defaultSnapshotError);
     } finally {
       setSnapshotLoading(false);

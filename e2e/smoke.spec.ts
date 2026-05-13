@@ -8,11 +8,18 @@ test.describe("app smoke", () => {
     expect(html).toContain('id="root"');
   });
 
-  test("login page shows academy branding", async ({ page }) => {
-    await page.goto("/login", { waitUntil: "load" });
-    await expect(page.getByText("American Seekers Academy")).toBeVisible({
-      timeout: 30_000,
+  test("POST /api/cart/snapshot returns JSON (not SPA HTML) when unauthenticated", async ({
+    request,
+  }) => {
+    const res = await request.post("/api/cart/snapshot", {
+      data: { items: [], creditsToApply: 0 },
+      headers: { "Content-Type": "application/json" },
     });
-    await expect(page.getByText(/Sign in to your account/i)).toBeVisible();
+    const ct = (res.headers()["content-type"] ?? "").toLowerCase();
+    expect(ct, `expected JSON content-type, got ${ct}`).toMatch(/application\/json/);
+    const body = await res.json();
+    expect(body).toBeTruthy();
+    expect(typeof body).toBe("object");
+    expect(res.status()).toBe(401);
   });
 });

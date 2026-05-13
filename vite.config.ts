@@ -22,6 +22,10 @@ export default defineConfig({
       "@shared": path.resolve(import.meta.dirname, "shared"),
       "@assets": path.resolve(import.meta.dirname, "attached_assets"),
     },
+    // Prevent duplicate React (e.g. wouter vs app) — fixes
+    // "Cannot read properties of null (reading 'useContext')" from useLocation/useRouter
+    // when Vite pre-bundles deps under @fs/.../node_modules/.vite/deps on Replit.
+    dedupe: ["react", "react-dom"],
   },
   root: path.resolve(import.meta.dirname, "client"),
   build: {

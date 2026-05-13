@@ -7,7 +7,7 @@ import { test, expect } from "@playwright/test";
 test.describe("parent dashboard (unauthenticated)", () => {
   test("dashboard redirects or gates when not logged in", async ({ page }) => {
     await page.goto("/dashboard", { waitUntil: "domcontentloaded" });
-    // Router sends unauthenticated users to /login
-    await expect(page).toHaveURL(/\/login$/, { timeout: 30_000 });
+    // Router sends unauthenticated users to /login (often with ?returnTo=…)
+    await expect(page).toHaveURL(/\/login(\?|$)/, { timeout: 30_000 });
   });
 });

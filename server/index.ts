@@ -29,6 +29,7 @@ import adminEnrollmentPaymentRouter from "./api/admin-enrollment-payment";
 import membershipRouter from "./api/membership";
 import { webhookHandler } from "./webhook-handler";
 import userRolesRouter from "./api/user-roles";
+import cartRouter from "./api/cart";
 
 // 🔒 PRODUCTION SAFETY: Verify NODE_ENV is set and log startup environment
 const currentEnv = process.env.NODE_ENV || 'development';
@@ -155,6 +156,10 @@ app.use("/api/payment-import", paymentImport);
 app.use("/api/account-import", accountImport);
 app.use("/api/daily-flows", dailyFlowsRoutes);
 app.use("/api/user", userRolesRouter); // Multi-role management endpoints
+// Cart pricing (snapshot / calculate / validate). Each route applies supabaseAuth.
+// Must be registered on the Express app — otherwise /api/cart/* falls through to Vite
+// and returns HTML, which breaks checkout with "Unexpected token '<'" JSON errors.
+app.use("/api/cart", cartRouter);
 
 // Test endpoints for development
 if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
