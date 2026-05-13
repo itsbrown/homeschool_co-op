@@ -759,14 +759,17 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
       // Use processed enrollments (remove internal _remainingBalanceCents field from response)
       enrollments: processedEnrollments.map(({ _remainingBalanceCents, ...rest }) => rest),
       membershipEnrollments: processedMembershipEnrollments.map(({ _remainingBalanceCents, ...rest }) => rest),
-      paymentHistory: paymentHistory.map(payment => ({
+      paymentHistory: paymentHistory.map((payment) => ({
         id: payment.id,
         amount: CurrencyUtils.toDisplay(payment.amount || 0),
         status: payment.status,
-        paymentDate: payment.createdAt,
-        paymentMethod: 'stripe',
-        description: `${payment.childName} - ${payment.className}`,
-        transactionId: payment.stripePaymentIntentId
+        paymentDate: payment.paymentDate ?? payment.createdAt,
+        paymentMethod: payment.paymentMethod ?? 'other',
+        description:
+          (payment.description && String(payment.description).trim()) ||
+          [payment.childName, payment.className].filter(Boolean).join(' — ') ||
+          'Payment',
+        transactionId: payment.stripePaymentIntentId,
       })),
       scheduledPayments: scheduledPayments.map(payment => {
         const enrollment = filteredEnrollments.find(e => e.id === payment.enrollmentId);

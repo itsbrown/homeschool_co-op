@@ -12,6 +12,16 @@ import { enrollmentOutstandingCentsForCheckout } from '../lib/checkout-enrollmen
 /** Stripe minimum charge in USD cents for card-present checkouts. */
 const STRIPE_MINIMUM_CHECKOUT_CENTS = 50;
 
+function toIsoOrNull(value: unknown): string | null {
+  if (value == null) return null;
+  if (value instanceof Date) {
+    const t = value.getTime();
+    return Number.isNaN(t) ? null : value.toISOString();
+  }
+  const d = new Date(String(value));
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
 function computeCheckoutAppliedCreditsCents(params: {
   requestedRaw: unknown;
   availableCredits: number;
@@ -832,13 +842,12 @@ router.get('/subscriptions', supabaseAuth, async (req: any, res) => {
   }
 });
 
-// Get payment history for authenticated user
+// Get Stripe-linked payment history for authenticated user (not all `payments` rows).
 router.get('/payment-history', supabaseAuth, async (req: any, res) => {
   try {
     const userEmail = req.user.email;
-    console.log('💰 Fetching payment history for user:', userEmail);
+    console.log('💰 Fetching Stripe payment history for user:', userEmail);
 
-    // Get user from database to get user ID
     const user = await storage.getUserByEmail(userEmail);
     if (!user) {
       return res.status(404).json({
@@ -847,29 +856,75 @@ router.get('/payment-history', supabaseAuth, async (req: any, res) => {
       });
     }
 
-    // Fetch payment history from database
-    const paymentHistory = await storage.getPaymentsByParentEmail(userEmail);
-    
-    console.log(`✅ Retrieved ${paymentHistory.length} payment records from database`);
+    const [stripeRows, dbPayments] = await Promise.all([
+      storage.getStripePaymentHistoryByUserId(user.id),
+      storage.getPaymentsByParentEmail(userEmail),
+    ]);
 
-    // Format payment history for frontend
-    const formattedPayments = paymentHistory.map((payment: any) => ({
-      id: payment.id,
-      paymentIntentId: payment.paymentIntentId,
-      customerId: payment.customerId,
-      amount: payment.amount,
-      status: payment.status,
-      subscriptionId: payment.subscriptionId,
-      createdDate: payment.createdDate,
-      paymentMethod: payment.paymentMethod,
-      description: payment.description
-    }));
+    const byIntent = new Map(stripeRows.map((r) => [r.paymentIntentId, r]));
+
+    type Row = {
+      id: string;
+      paymentIntentId: string | null;
+      customerId: string | null;
+      amount: number;
+      status: string;
+      subscriptionId: string | null;
+      createdDate: string;
+      paymentMethod: string;
+      description: string;
+    };
+
+    const rows: Row[] = [];
+
+    for (const r of stripeRows) {
+      const when =
+        toIsoOrNull(r.stripeCreatedAt) ??
+        toIsoOrNull(r.createdAt) ??
+        new Date().toISOString();
+      rows.push({
+        id: `sph:${r.id}`,
+        paymentIntentId: r.paymentIntentId,
+        customerId: r.customerId,
+        amount: r.amount,
+        status: r.status === 'succeeded' ? 'succeeded' : r.status,
+        subscriptionId: r.subscriptionId ?? null,
+        createdDate: when,
+        paymentMethod: r.paymentMethod || 'card',
+        description: r.description?.trim() || 'Stripe payment',
+      });
+    }
+
+    for (const p of dbPayments as any[]) {
+      const pi = p.stripePaymentIntentId as string | null | undefined;
+      if (!pi || byIntent.has(pi)) continue;
+      const when =
+        toIsoOrNull(p.paymentDate) ??
+        toIsoOrNull(p.createdAt) ??
+        new Date().toISOString();
+      rows.push({
+        id: `pay:${p.id}`,
+        paymentIntentId: pi,
+        customerId: null,
+        amount: p.amount,
+        status: p.status === 'completed' ? 'succeeded' : p.status,
+        subscriptionId: null,
+        createdDate: when,
+        paymentMethod: p.paymentMethod === 'stripe' ? 'card' : String(p.paymentMethod || 'stripe'),
+        description: (p.description as string | null)?.trim() || 'Stripe payment',
+      });
+    }
+
+    rows.sort((a, b) => new Date(b.createdDate).getTime() - new Date(a.createdDate).getTime());
+
+    console.log(
+      `✅ Stripe tab: ${stripeRows.length} stripe_payment_history + ${rows.length - stripeRows.length} PI-only payments rows`,
+    );
 
     res.json({
       success: true,
-      payments: formattedPayments
+      payments: rows,
     });
-
   } catch (error: any) {
     console.error('❌ Error fetching payment history:', error);
     res.status(500).json({

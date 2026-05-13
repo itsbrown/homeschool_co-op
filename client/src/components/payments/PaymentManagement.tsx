@@ -753,12 +753,18 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
     }).format(amount / 100);
   };
   
-  // Format date
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
+  const formatDate = (dateInput: string | Date | undefined | null) => {
+    if (dateInput == null || dateInput === '') {
+      return '—';
+    }
+    const d = dateInput instanceof Date ? dateInput : new Date(dateInput);
+    if (Number.isNaN(d.getTime())) {
+      return '—';
+    }
+    return d.toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
-      day: 'numeric'
+      day: 'numeric',
     });
   };
   
@@ -1028,7 +1034,10 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
           <Card>
             <CardHeader>
               <CardTitle>Stripe Payment History</CardTitle>
-              <CardDescription>View all payments processed through Stripe (membership subscriptions)</CardDescription>
+              <CardDescription>
+                Stripe charges and synced card payments. Manual or offline payments are listed under All
+                Payments.
+              </CardDescription>
             </CardHeader>
             <CardContent>
               {isLoadingStripePayments ? (

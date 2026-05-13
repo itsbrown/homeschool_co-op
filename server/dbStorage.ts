@@ -3324,7 +3324,11 @@ export class DatabaseStorage implements IStorage {
 
   async getStripePaymentHistoryByUserId(userId: number): Promise<StripePaymentHistory[]> {
     const db = await getDb();
-    return db.select().from(stripePaymentHistory).where(eq(stripePaymentHistory.userId, userId));
+    return db
+      .select()
+      .from(stripePaymentHistory)
+      .where(eq(stripePaymentHistory.userId, userId))
+      .orderBy(desc(stripePaymentHistory.stripeCreatedAt));
   }
 
   async getStripePaymentsBySubscription(subscriptionId: string): Promise<StripePaymentHistory[]> {
