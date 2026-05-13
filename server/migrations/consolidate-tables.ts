@@ -1,5 +1,5 @@
 import { Pool } from 'pg';
-import { getDbSslConfig } from '../lib/database-url';
+import { getDbSslConfig, getNormalizedDatabaseUrl } from '../lib/database-url';
 
 /**
  * Migration Script: Consolidate Programs and Classes Tables
@@ -12,14 +12,14 @@ import { getDbSslConfig } from '../lib/database-url';
  */
 
 async function runMigration() {
-  const connectionString = process.env.DATABASE_URL;
+  const connectionString = getNormalizedDatabaseUrl();
   if (!connectionString) {
     throw new Error('DATABASE_URL is not set');
   }
 
   const pool = new Pool({
     connectionString,
-    ssl: getDbSslConfig(),
+    ssl: getDbSslConfig(connectionString),
   });
 
   const client = await pool.connect();

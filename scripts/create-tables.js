@@ -1,11 +1,19 @@
 // Script to create the necessary database tables for the application
 import 'dotenv/config';
 import pg from 'pg';
+import { getDbSslConfig, getNormalizedDatabaseUrl } from '../server/lib/database-url.mjs';
 const { Pool } = pg;
+
+const connectionString = getNormalizedDatabaseUrl();
+if (!connectionString) {
+  console.error('DATABASE_URL is not set');
+  process.exit(1);
+}
 
 // Create a connection pool using environment variables provided by Replit
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL
+  connectionString,
+  ssl: getDbSslConfig(connectionString),
 });
 
 async function createTables() {

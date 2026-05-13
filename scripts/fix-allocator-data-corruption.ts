@@ -50,7 +50,7 @@ import pg from 'pg';
 import { randomUUID } from 'crypto';
 import { mkdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
-import { getDbSslConfig } from '../server/lib/database-url';
+import { getDbSslConfig, getNormalizedDatabaseUrl } from '../server/lib/database-url';
 import {
   PaymentReallocationService,
   PaymentReallocationError,
@@ -771,12 +771,12 @@ async function main(): Promise<void> {
   console.log(`🆔 Run ID: ${runId}`);
   console.log(`Mode: ${opts.apply ? 'APPLY (writes will happen)' : 'DRY-RUN (no writes)'}`);
 
-  const connectionString = process.env.DATABASE_URL;
+  const connectionString = getNormalizedDatabaseUrl();
   if (!connectionString) {
     console.error('❌ DATABASE_URL is required');
     process.exit(1);
   }
-  const pool = new Pool({ connectionString, ssl: getDbSslConfig() });
+  const pool = new Pool({ connectionString, ssl: getDbSslConfig(connectionString) });
 
   try {
     console.log('🔍 Scanning for affected parents…');

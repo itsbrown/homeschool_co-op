@@ -1,14 +1,14 @@
 import postgres from 'postgres';
-import { getPostgresJsSslOption } from '../server/lib/database-url';
+import { getNormalizedDatabaseUrl, getPostgresJsSslOption } from '../server/lib/database-url';
 
-const connectionString = process.env.DATABASE_URL;
+const connectionString = getNormalizedDatabaseUrl();
 if (!connectionString) {
   console.error('❌ DATABASE_URL environment variable is required');
   process.exit(1);
 }
 
 console.log('🔗 Connecting to database...');
-const sql = postgres(connectionString, { ssl: getPostgresJsSslOption() });
+const sql = postgres(connectionString, { ssl: getPostgresJsSslOption(connectionString) });
 
 async function syncSchema() {
   try {

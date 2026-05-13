@@ -1,7 +1,7 @@
 import { Pool } from 'pg';
-import { getDbSslConfig } from '../server/lib/database-url';
+import { getDbSslConfig, getNormalizedDatabaseUrl } from '../server/lib/database-url';
 
-const DATABASE_URL = process.env.DATABASE_URL;
+const DATABASE_URL = getNormalizedDatabaseUrl();
 
 if (!DATABASE_URL) {
   console.error('❌ DATABASE_URL environment variable is required');
@@ -10,7 +10,7 @@ if (!DATABASE_URL) {
 
 const pool = new Pool({
   connectionString: DATABASE_URL,
-  ssl: getDbSslConfig(),
+  ssl: getDbSslConfig(DATABASE_URL),
 });
 
 async function restoreCredits() {

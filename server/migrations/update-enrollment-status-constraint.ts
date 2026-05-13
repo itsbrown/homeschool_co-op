@@ -1,16 +1,16 @@
 import postgres from 'postgres';
-import { getPostgresJsSslOption } from '../lib/database-url';
+import { getNormalizedDatabaseUrl, getPostgresJsSslOption } from '../lib/database-url';
 
 // Migration to update program_enrollments status constraint
 export async function updateEnrollmentStatusConstraint() {
-  const connectionString = process.env.DATABASE_URL;
+  const connectionString = getNormalizedDatabaseUrl();
   if (!connectionString) {
     throw new Error('DATABASE_URL is not set');
   }
 
   console.log('🔄 Running enrollment status constraint migration...');
 
-  const sql = postgres(connectionString, { ssl: getPostgresJsSslOption(), max: 1 });
+  const sql = postgres(connectionString, { ssl: getPostgresJsSslOption(connectionString), max: 1 });
 
   try {
     // Drop the old constraint if it exists

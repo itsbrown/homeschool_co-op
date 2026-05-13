@@ -1,5 +1,5 @@
 import pg from 'pg';
-import { getDbSslConfig } from '../server/lib/database-url';
+import { getDbSslConfig, getNormalizedDatabaseUrl } from '../server/lib/database-url';
 
 const { Pool } = pg;
 
@@ -13,7 +13,7 @@ async function deleteEnrollmentsByIds() {
     process.exit(1);
   }
 
-  const connectionString = process.env.DATABASE_URL;
+  const connectionString = getNormalizedDatabaseUrl();
   if (!connectionString) {
     throw new Error('DATABASE_URL environment variable is required');
   }
@@ -21,7 +21,7 @@ async function deleteEnrollmentsByIds() {
   // Create database connection
   const pool = new Pool({
     connectionString,
-    ssl: getDbSslConfig(),
+    ssl: getDbSslConfig(connectionString),
   });
 
   try {

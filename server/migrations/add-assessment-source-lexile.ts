@@ -1,15 +1,15 @@
 import postgres from 'postgres';
-import { getPostgresJsSslOption } from '../lib/database-url';
+import { getNormalizedDatabaseUrl, getPostgresJsSslOption } from '../lib/database-url';
 
 export async function addAssessmentSourceAndLexile() {
-  const connectionString = process.env.DATABASE_URL;
+  const connectionString = getNormalizedDatabaseUrl();
   if (!connectionString) {
     throw new Error('DATABASE_URL is not set');
   }
 
   console.log('Running migration: Adding source, lexile_score, session_id to student_assessments...');
 
-  const sql = postgres(connectionString, { ssl: getPostgresJsSslOption(), max: 1 });
+  const sql = postgres(connectionString, { ssl: getPostgresJsSslOption(connectionString), max: 1 });
 
   try {
     // Create enum type for assessment source

@@ -1,16 +1,16 @@
 import postgres from 'postgres';
-import { getPostgresJsSslOption } from './lib/database-url.mjs';
+import { getNormalizedDatabaseUrl, getPostgresJsSslOption } from './lib/database-url.mjs';
 
 async function testConnection() {
   console.log('🔍 Testing database connection...');
-  console.log('DATABASE_URL exists:', !!process.env.DATABASE_URL);
+  const connectionString = getNormalizedDatabaseUrl();
+  console.log('DATABASE_URL exists:', !!connectionString);
 
-  if (process.env.DATABASE_URL) {
-    const url = process.env.DATABASE_URL;
-    const protocol = url.split('://')[0];
-    const hostStart = url.indexOf('@') + 1;
-    const hostEnd = url.indexOf('/', hostStart);
-    const host = hostEnd > hostStart ? url.substring(hostStart, hostEnd) : url.substring(hostStart);
+  if (connectionString) {
+    const protocol = connectionString.split('://')[0];
+    const hostStart = connectionString.indexOf('@') + 1;
+    const hostEnd = connectionString.indexOf('/', hostStart);
+    const host = hostEnd > hostStart ? connectionString.substring(hostStart, hostEnd) : connectionString.substring(hostStart);
     console.log('DATABASE_URL protocol:', protocol);
     console.log('DATABASE_URL host:', host);
   } else {
@@ -19,10 +19,10 @@ async function testConnection() {
   }
 
   try {
-    const client = postgres(process.env.DATABASE_URL, {
+    const client = postgres(connectionString, {
       prepare: false,
       max: 1,
-      ssl: getPostgresJsSslOption(),
+      ssl: getPostgresJsSslOption(connectionString),
     });
 
     console.log('🔧 Attempting database connection...');
