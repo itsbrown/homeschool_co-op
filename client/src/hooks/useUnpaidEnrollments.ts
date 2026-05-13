@@ -1,6 +1,7 @@
 import { useCallback, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useCart, type MembershipFee } from '@/contexts/CartContext';
+import { useParentCredits } from '@/hooks/useParentCredits';
 import {
   getEnrollmentEffectiveBalance,
   getMembershipOutstandingBalance,
@@ -9,14 +10,8 @@ import {
   computeOutstandingBreakdown,
   type OutstandingBreakdown,
   type ParentMembershipBalanceFields,
-  type ParentCreditRecord,
 } from '@/utils/parentBalance';
 import { filterEnrollmentsToCartLineItems } from '@/utils/parentEnrollmentLineItems';
-
-interface CreditsResponse {
-  totalAvailableCents?: number;
-  credits?: ParentCreditRecord[];
-}
 
 interface ParentEnrollmentRow {
   id: number;
@@ -85,9 +80,7 @@ export function useUnpaidEnrollments() {
     queryKey: ['/api/parent/enrollments'],
   });
 
-  const { data: creditsData } = useQuery<CreditsResponse>({
-    queryKey: ['/api/parent/credits'],
-  });
+  const { totalAvailableCents: creditsAvailableFromMe } = useParentCredits();
 
   const { data: membershipsRaw } = useQuery<UnpaidMembershipRow[]>({
     queryKey: ['/api/parent/memberships'],
@@ -151,10 +144,9 @@ export function useUnpaidEnrollments() {
       computeOutstandingBreakdown({
         enrollments: unpaidEnrollments,
         memberships: unpaidMemberships,
-        credits: creditsData?.credits,
-        creditsCents: creditsData?.totalAvailableCents,
+        creditsCents: creditsAvailableFromMe,
       }),
-    [unpaidEnrollments, unpaidMemberships, creditsData],
+    [unpaidEnrollments, unpaidMemberships, creditsAvailableFromMe],
   );
 
   const creditsCents = breakdown.creditsAvailableCents;

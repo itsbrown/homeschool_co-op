@@ -50,7 +50,7 @@ import { AlertCircle, CreditCard, DollarSign, Calendar, Check, Clock, FileText, 
 import { useParentCredits } from "@/hooks/useParentCredits";
 import { computeCreditCoverageFifo } from "@/utils/creditInstallmentCoverage";
 import { filterEnrollmentsToCartLineItems } from "@/utils/parentEnrollmentLineItems";
-import { getEnrollmentEffectiveBalance } from "@/utils/parentBalance";
+import { computeManualPayDisplay, getEnrollmentEffectiveBalance } from "@/utils/parentBalance";
 
 interface Payment {
   id: string;
@@ -195,66 +195,106 @@ function ScheduledPaymentDialog({
   formatDate
 }: ScheduledPaymentDialogProps) {
   const { toast } = useToast();
+  const { totalAvailableCents } = useParentCredits();
+  const [applyCredits, setApplyCredits] = useState(true);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [creditsOnlySuccess, setCreditsOnlySuccess] = useState(false);
+  const [fetchNonce, setFetchNonce] = useState(0);
 
-  // Create payment intent when dialog opens
-  useEffect(() => {
-    if (isOpen && !clientSecret) {
-      createPaymentIntent();
-    }
-  }, [isOpen]);
+  const payDisplay = React.useMemo(
+    () =>
+      computeManualPayDisplay({
+        amount: payment.amount,
+        availableCredits: totalAvailableCents,
+        applyCredits: totalAvailableCents > 0 ? applyCredits : false,
+      }),
+    [payment.amount, totalAvailableCents, applyCredits],
+  );
 
-  // Reset state when dialog closes
+  const dialogSessionKeyRef = React.useRef<string | null>(null);
+
+  // When the dialog opens for a given installment, default "apply credits" on if the parent has a balance.
   useEffect(() => {
     if (!isOpen) {
+      dialogSessionKeyRef.current = null;
+      setClientSecret(null);
+      setError(null);
+      setCreditsOnlySuccess(false);
+      setFetchNonce(0);
+      return;
+    }
+    const key = `${payment.id}`;
+    if (dialogSessionKeyRef.current !== key) {
+      dialogSessionKeyRef.current = key;
+      setApplyCredits(totalAvailableCents > 0);
+      setCreditsOnlySuccess(false);
       setClientSecret(null);
       setError(null);
     }
-  }, [isOpen]);
+  }, [isOpen, payment.id, totalAvailableCents]);
 
-  const createPaymentIntent = async () => {
-    setIsLoading(true);
-    setError(null);
-    
-    try {
-      const token = localStorage.getItem('supabase_token');
-      if (!token) {
-        throw new Error('Please sign in to make a payment');
-      }
+  useEffect(() => {
+    if (!isOpen || creditsOnlySuccess) return;
 
-      const response = await fetch('/api/scheduled-payments/pay', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          paymentId: payment.id,
+    const run = async () => {
+      setIsLoading(true);
+      setError(null);
+      setClientSecret(null);
+
+      try {
+        const token = localStorage.getItem('supabase_token');
+        if (!token) {
+          throw new Error('Please sign in to make a payment');
+        }
+
+        const display = computeManualPayDisplay({
           amount: payment.amount,
-          description: payment.description
-        })
-      });
+          availableCredits: totalAvailableCents,
+          applyCredits: totalAvailableCents > 0 ? applyCredits : false,
+        });
 
-      const data = await response.json();
+        const response = await fetch('/api/scheduled-payments/pay', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            paymentId: payment.id,
+            description: payment.description,
+            applyCredits: totalAvailableCents > 0 ? applyCredits : false,
+            expectedChargeAmount: display.amountAfterCredits,
+          }),
+        });
 
-      if (!response.ok || !data.success) {
-        throw new Error(data.error || 'Failed to initialize payment');
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+          throw new Error(data.error || 'Failed to initialize payment');
+        }
+
+        if (data.mode === 'credits_only') {
+          setCreditsOnlySuccess(true);
+          return;
+        }
+
+        setClientSecret(data.clientSecret);
+      } catch (err: any) {
+        setError(err.message || 'Failed to initialize payment');
+        toast({
+          title: "Payment Error",
+          description: err.message || 'Failed to initialize payment',
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoading(false);
       }
+    };
 
-      setClientSecret(data.clientSecret);
-    } catch (err: any) {
-      setError(err.message || 'Failed to initialize payment');
-      toast({
-        title: "Payment Error",
-        description: err.message || 'Failed to initialize payment',
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    void run();
+  }, [isOpen, payment.id, payment.amount, payment.description, applyCredits, totalAvailableCents, creditsOnlySuccess, fetchNonce]);
 
   const handleSuccess = () => {
     toast({
@@ -267,6 +307,8 @@ function ScheduledPaymentDialog({
     queryClient.invalidateQueries({ queryKey: ['scheduled-payments-upcoming'] });
     queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments/upcoming'] });
     queryClient.invalidateQueries({ queryKey: ['parent-credits'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/parent/credits'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/credits/me'] });
     onSuccess();
     onClose();
   };
@@ -296,7 +338,7 @@ function ScheduledPaymentDialog({
           {/* Payment Summary */}
           <div className="space-y-2">
             <h3 className="text-sm font-medium">Payment Summary</h3>
-            <div className="bg-muted p-4 rounded-lg">
+            <div className="bg-muted p-4 rounded-lg space-y-2">
               <div className="flex justify-between mb-2">
                 <span>Program:</span>
                 <span className="font-medium">{payment.programName || 'Class'}</span>
@@ -312,27 +354,72 @@ function ScheduledPaymentDialog({
                 </div>
               )}
               <div className="flex justify-between pt-2 border-t border-border">
-                <span>Total:</span>
+                <span>Installment due:</span>
                 <span className="font-bold">{formatCurrency(payment.amount)}</span>
               </div>
+              {totalAvailableCents > 0 && (
+                <div className="flex items-center justify-between gap-2 pt-2 border-t border-border">
+                  <label htmlFor="sp-apply-credits" className="text-sm cursor-pointer">
+                    Apply available credits
+                  </label>
+                  <input
+                    id="sp-apply-credits"
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-gray-300"
+                    checked={applyCredits}
+                    onChange={(e) => setApplyCredits(e.target.checked)}
+                    data-testid="checkbox-scheduled-payment-apply-credits"
+                  />
+                </div>
+              )}
+              {payDisplay.creditsToApply > 0 && (
+                <div className="text-sm space-y-1 pt-1 text-muted-foreground">
+                  <div className="flex justify-between">
+                    <span>Credits applied</span>
+                    <span className="text-emerald-800 font-medium">−{formatCurrency(payDisplay.creditsToApply)}</span>
+                  </div>
+                  <div className="flex justify-between font-semibold text-foreground">
+                    <span>Card charge</span>
+                    <span>{formatCurrency(payDisplay.amountAfterCredits)}</span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
+          {creditsOnlySuccess && (
+            <div className="rounded-md border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+              <p className="font-medium">Paid with credits</p>
+              <p className="mt-1">This installment was fully covered by your available balance. No card charge was required.</p>
+              <Button className="mt-4 w-full" type="button" onClick={() => handleSuccess()}>
+                Done
+              </Button>
+            </div>
+          )}
+
           {/* Payment Form */}
-          {isLoading ? (
+          {!creditsOnlySuccess && isLoading ? (
             <div className="flex flex-col items-center justify-center py-8">
               <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
               <p className="text-muted-foreground">Initializing payment...</p>
             </div>
-          ) : error ? (
+          ) : !creditsOnlySuccess && error ? (
             <div className="text-center py-4">
               <AlertCircle className="h-8 w-8 text-destructive mx-auto mb-2" />
               <p className="text-destructive mb-4">{error}</p>
-              <Button onClick={createPaymentIntent} variant="outline">
+              <Button
+                type="button"
+                onClick={() => {
+                  setError(null);
+                  setClientSecret(null);
+                  setFetchNonce((n) => n + 1);
+                }}
+                variant="outline"
+              >
                 Try Again
               </Button>
             </div>
-          ) : clientSecret ? (
+          ) : !creditsOnlySuccess && clientSecret ? (
             <Elements 
               stripe={stripePromise} 
               options={{ 
@@ -349,7 +436,7 @@ function ScheduledPaymentDialog({
                 onSuccess={handleSuccess}
                 onError={handleError}
                 onCancel={onClose}
-                amount={payment.amount}
+                amount={payDisplay.amountAfterCredits}
               />
             </Elements>
           ) : null}
