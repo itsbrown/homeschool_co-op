@@ -6,6 +6,10 @@ import {
   buildScheduledPaymentIntentMetadata,
   resolveEnrollmentIdsFromScheduledRow,
 } from '../lib/scheduled-payment-intent-metadata';
+import {
+  computeManualPayCredits,
+  isChargeAmountDivergent,
+} from '../utils/manualPayCredits';
 
 const router = Router();
 
@@ -257,9 +261,11 @@ router.get('/upcoming-old', async (req, res) => {
 
 // Process a scheduled payment
 router.post('/pay', supabaseAuth, async (req: any, res) => {
+  let holdSessionIdForRelease: string | null = null;
   try {
-    const { paymentId, description } = req.body;
+    const { paymentId, description, applyCredits: applyCreditsRaw, expectedChargeAmount } = req.body;
     const userEmail = req.user.email;
+    const userId = typeof req.user?.id === 'number' ? req.user.id : null;
 
     console.log('💳 Processing scheduled payment:', { paymentId, description, userEmail });
 
@@ -267,6 +273,13 @@ router.post('/pay', supabaseAuth, async (req: any, res) => {
       return res.status(400).json({
         success: false,
         error: 'Payment ID is required'
+      });
+    }
+
+    if (userId == null || Number.isNaN(userId)) {
+      return res.status(401).json({
+        success: false,
+        error: 'User id missing from session'
       });
     }
 
@@ -280,15 +293,13 @@ router.post('/pay', supabaseAuth, async (req: any, res) => {
       });
     }
 
-    if (scheduledPayment.parentEmail !== userEmail) {
+    if (scheduledPayment.parentEmail !== userEmail || scheduledPayment.parentId !== userId) {
       return res.status(403).json({
         success: false,
         error: 'Payment does not belong to this user'
       });
     }
 
-    // Create Stripe payment intent
-    const stripe = await getStripeClient();
     const amountCents = Math.round(scheduledPayment.amount);
     if (!Number.isFinite(amountCents) || amountCents <= 0) {
       return res.status(400).json({
@@ -297,13 +308,109 @@ router.post('/pay', supabaseAuth, async (req: any, res) => {
       });
     }
 
-    const userId = typeof req.user?.id === 'number' ? req.user.id : null;
+    const availableRows = await storage.getAvailableCredits(userId);
+    const availableCredits = availableRows.reduce(
+      (sum, c) => sum + (c.creditAmountCents - (c.usedAmountCents || 0)),
+      0,
+    );
+    const applyCredits = applyCreditsRaw !== false;
+
+    const decision = computeManualPayCredits({
+      amount: amountCents,
+      availableCredits,
+      applyCredits,
+    });
+
+    if (
+      isChargeAmountDivergent(expectedChargeAmount, decision.chargeAmount) &&
+      typeof expectedChargeAmount === 'number'
+    ) {
+      return res.status(409).json({
+        success: false,
+        error: 'Charge amount mismatch — pricing was refreshed.',
+        authoritative: {
+          chargeAmountCents: decision.chargeAmount,
+          creditsToApplyCents: decision.creditsToApply,
+          originalAmountCents: decision.originalAmount,
+          availableCreditsCents: decision.availableCredits,
+        },
+      });
+    }
+
+    if (decision.tooSmall && !decision.isCreditsOnly) {
+      return res.status(400).json({
+        success: false,
+        error:
+          'This installment is below the card minimum. Add credits or wait until the balance can be charged.',
+        decision,
+      });
+    }
+
     const enrollmentIds = resolveEnrollmentIdsFromScheduledRow({
       enrollmentId: scheduledPayment.enrollmentId,
       metadata: scheduledPayment.metadata,
     });
+
+    if (decision.isCreditsOnly) {
+      holdSessionIdForRelease = `parent_manual_sp_${scheduledPayment.id}_${Date.now()}`;
+      const { totalHeld } = await storage.createCreditHolds(
+        userId,
+        decision.creditsToApply,
+        holdSessionIdForRelease,
+        `Parent Pay Now — scheduled payment ${scheduledPayment.id} (credits-only)`,
+        60,
+      );
+      if (totalHeld < decision.creditsToApply) {
+        await storage.releaseCreditHolds(holdSessionIdForRelease).catch(() => {});
+        holdSessionIdForRelease = null;
+        return res.status(400).json({
+          success: false,
+          error: 'Could not reserve enough credits for this payment. Try again or pay by card only.',
+        });
+      }
+
+      const enrollment = scheduledPayment.enrollmentId
+        ? await storage.getProgramEnrollmentById(scheduledPayment.enrollmentId)
+        : null;
+
+      try {
+        await storage.completeCreditsOnlyPayment({
+          holdSessionId: holdSessionIdForRelease,
+          scheduledPaymentId: scheduledPayment.id,
+          parentId: userId,
+          enrollmentId: scheduledPayment.enrollmentId ?? null,
+          schoolId: scheduledPayment.schoolId,
+          creditsApplied: decision.creditsToApply,
+          originalAmount: decision.originalAmount,
+          installmentNumber: scheduledPayment.installmentNumber || 1,
+          totalInstallments: scheduledPayment.totalInstallments || 1,
+          parentEmail: userEmail,
+          childName: enrollment?.childName ?? null,
+          className: enrollment?.className ?? null,
+          chargedBy: 'parent_manual',
+          completionSource: 'parent_manual_credits_only',
+          description:
+            description ||
+            `Installment ${scheduledPayment.installmentNumber || 1}/${scheduledPayment.totalInstallments || 1} — fully covered by credits`,
+        });
+      } catch (completeErr) {
+        await storage.releaseCreditHolds(holdSessionIdForRelease).catch(() => {});
+        holdSessionIdForRelease = null;
+        throw completeErr;
+      }
+
+      holdSessionIdForRelease = null;
+      console.log('✅ Scheduled payment settled with credits only:', scheduledPayment.id);
+      return res.json({
+        success: true,
+        mode: 'credits_only' as const,
+        scheduledPaymentId: scheduledPayment.id,
+      });
+    }
+
+    const stripe = await getStripeClient();
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: amountCents,
+      amount: decision.chargeAmount,
       currency: 'usd',
       metadata: buildScheduledPaymentIntentMetadata({
         scheduledPaymentId: parseInt(String(paymentId), 10),
@@ -313,7 +420,9 @@ router.post('/pay', supabaseAuth, async (req: any, res) => {
         totalInstallments: scheduledPayment.totalInstallments,
         enrollmentIds,
         autoPayInitiated: false,
-        chargeAmountCents: amountCents,
+        creditsAppliedCents: decision.creditsToApply > 0 ? decision.creditsToApply : undefined,
+        originalAmountCents: decision.creditsToApply > 0 ? decision.originalAmount : undefined,
+        chargeAmountCents: decision.chargeAmount,
         description: description || `Scheduled Payment ${scheduledPayment.installmentNumber}`,
       }),
       automatic_payment_methods: {
@@ -325,11 +434,15 @@ router.post('/pay', supabaseAuth, async (req: any, res) => {
 
     res.json({
       success: true,
+      mode: 'stripe' as const,
       clientSecret: paymentIntent.client_secret,
       paymentIntentId: paymentIntent.id
     });
 
   } catch (error) {
+    if (holdSessionIdForRelease) {
+      await storage.releaseCreditHolds(holdSessionIdForRelease).catch(() => {});
+    }
     console.error('❌ Error processing scheduled payment:', error);
     res.status(500).json({
       success: false,

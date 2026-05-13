@@ -11,6 +11,17 @@ const mockAddItem = jest.fn();
 const mockOpenCart = jest.fn();
 let mockCartItems: Array<{ enrollmentId?: number | null }> = [];
 
+const mockUseParentCredits = jest.fn(() => ({
+  totalAvailableCents: 0,
+  creditsData: undefined,
+  isLoading: false,
+  error: null as Error | null,
+}));
+
+jest.mock('@/hooks/useParentCredits', () => ({
+  useParentCredits: () => mockUseParentCredits(),
+}));
+
 jest.mock('@/contexts/CartContext', () => ({
   useCart: () => ({
     cart: { items: mockCartItems },
@@ -48,15 +59,26 @@ describe('useUnpaidEnrollments', () => {
     mockAddItem.mockReset();
     mockOpenCart.mockReset();
     mockCartItems = [];
+    mockUseParentCredits.mockReturnValue({
+      totalAvailableCents: 0,
+      creditsData: undefined,
+      isLoading: false,
+      error: null,
+    });
   });
 
   it('returns enrollments with effectiveBalance > 0 and credits-aware totals', () => {
+    mockUseParentCredits.mockReturnValue({
+      totalAvailableCents: 5_000,
+      creditsData: undefined,
+      isLoading: false,
+      error: null,
+    });
     const wrapper = makeWrapper((qc) => {
       qc.setQueryData(['/api/parent/enrollments'], [
         { ...baseEnrollment, id: 1, effectiveBalance: 12_500 },
         { ...baseEnrollment, id: 2, marketplaceClassId: 501, effectiveBalance: 0 },
       ]);
-      qc.setQueryData(['/api/parent/credits'], { totalAvailableCents: 5_000 });
     });
 
     const { result } = renderHook(() => useUnpaidEnrollments(), { wrapper });
@@ -94,6 +116,7 @@ describe('useUnpaidEnrollments', () => {
         {
           ...baseEnrollment,
           id: 1,
+          marketplaceClassId: 100,
           effectiveBalance: 0,
           status: 'enrolled',
           paymentStatus: 'completed',
@@ -101,6 +124,7 @@ describe('useUnpaidEnrollments', () => {
         {
           ...baseEnrollment,
           id: 2,
+          marketplaceClassId: 500,
           effectiveBalance: 5_000,
         },
         {

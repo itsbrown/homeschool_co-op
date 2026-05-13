@@ -6,6 +6,7 @@ import { useAuth } from "@/components/SupabaseProvider";
 import { useRole } from "@/contexts/RoleContext";
 import { trackAddToCart, trackRemoveFromCart, trackViewCart } from '@/lib/analytics';
 import { filterEnrollmentsToCartLineItems } from '@/utils/parentEnrollmentLineItems';
+import { getMembershipOutstandingBalance } from '@/utils/parentBalance';
 
 // Helper function to get user-specific cart storage key
 // This prevents cross-account data leakage by namespacing localStorage per user
@@ -1242,26 +1243,81 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const fetchWithTimeout = async (): Promise<MembershipFee | null> => {
       try {
         const token = await getAccessToken();
-        
-        // Fetch both school data and member status in parallel
-        const [schoolResponse, memberResponse] = await Promise.all([
-          fetch(`/api/school-parents/school/${userEmail}`, {
+
+        // Align with dashboard / useUnpaidEnrollments: unpaid membership rows come from
+        // `/api/parent/memberships` + `getMembershipOutstandingBalance`. The old path used
+        // `hasMembership` from `/api/parent/member-id`, which hid partial balances (cart
+        // total below dashboard "owed").
+        const [membershipsResponse, schoolResponse, memberResponse] = await Promise.all([
+          fetch('/api/parent/memberships', {
             headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            }
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+          }),
+          fetch(`/api/school-parents/school/${encodeURIComponent(userEmail)}`, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
           }),
           fetch('/api/parent/member-id', {
             headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            }
-          })
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+          }),
         ]);
-        
-        // Check if user already has active membership
-        // Only skip if hasMembership is true (enrolled/grace_period status)
-        // memberId alone doesn't mean they've paid for current year - it's just their card ID
+
+        type MembershipApiRow = {
+          schoolId?: number | null;
+          schoolName?: string | null;
+          membershipYear?: number | null;
+          remainingBalance?: number | null;
+          status?: string | null;
+          amount?: number | null;
+          amountPaid?: number | null;
+        };
+
+        let membershipRows: MembershipApiRow[] = [];
+        if (membershipsResponse.ok) {
+          const parsed = await membershipsResponse.json();
+          membershipRows = Array.isArray(parsed) ? parsed : [];
+        }
+
+        let totalOutstandingCents = 0;
+        let primaryForLabel: { row: MembershipApiRow; balance: number } | null = null;
+        for (const m of membershipRows) {
+          const balance = getMembershipOutstandingBalance(m);
+          if (balance <= 0) continue;
+          totalOutstandingCents += balance;
+          if (!primaryForLabel || balance > primaryForLabel.balance) {
+            primaryForLabel = { row: m, balance };
+          }
+        }
+
+        const p = primaryForLabel?.row;
+        if (
+          totalOutstandingCents > 0 &&
+          p &&
+          p.schoolId != null &&
+          p.schoolName &&
+          p.membershipYear != null
+        ) {
+          console.log('🎫 CartContext: membership balance from API rows:', {
+            schoolId: p.schoolId,
+            schoolName: p.schoolName,
+            amountCents: totalOutstandingCents,
+          });
+          return {
+            schoolId: p.schoolId,
+            schoolName: p.schoolName,
+            amount: totalOutstandingCents,
+            year: p.membershipYear,
+          };
+        }
+
+        // No unpaid membership enrollment rows: offer full school fee for first-time purchase.
         if (memberResponse.ok) {
           const memberData = await memberResponse.json();
           if (memberData.hasMembership) {
@@ -1269,17 +1325,16 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
             return null;
           }
         }
-        
-        // Check if school has membership fee configured
+
         if (schoolResponse.ok) {
           const schoolResult = await schoolResponse.json();
           if (schoolResult.success && schoolResult.school && schoolResult.school.membershipFeeAmount > 0) {
-            console.log('🎫 CartContext: Adding membership during hydration:', {
+            console.log('🎫 CartContext: Adding new membership fee during hydration:', {
               schoolId: schoolResult.school.id,
               schoolName: schoolResult.school.name,
               amount: schoolResult.school.membershipFeeAmount,
             });
-            
+
             return {
               schoolId: schoolResult.school.id,
               schoolName: schoolResult.school.name,
@@ -1288,7 +1343,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
             };
           }
         }
-        
+
         return null;
       } catch (error) {
         console.warn('🎫 Error fetching membership data (non-blocking):', error);

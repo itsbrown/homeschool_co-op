@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -12,6 +12,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useCart } from "@/contexts/CartContext";
 import { useUnpaidEnrollments, usePayOutstanding } from "@/hooks/useUnpaidEnrollments";
+import { useParentCredits } from "@/hooks/useParentCredits";
 import { formatCurrency } from "@/lib/utils";
 import { normalizeParentChildrenResponse } from "@/lib/parent-children-api";
 import OnboardingTour from "@/components/onboarding/OnboardingTour";
@@ -256,6 +257,11 @@ export default function ParentDashboard() {
     isLoading: isLoadingUnpaid,
   } = useUnpaidEnrollments();
   const payOutstanding = usePayOutstanding();
+  const { totalAvailableCents: dashboardCreditsCents, isLoading: creditsLoading } = useParentCredits();
+  const creditsDisplayFormatted = useMemo(
+    () => formatCurrency(dashboardCreditsCents ?? 0),
+    [dashboardCreditsCents],
+  );
 
   // Fetch user's member ID and membership status
   interface MemberIdResponse {
@@ -563,49 +569,6 @@ export default function ParentDashboard() {
     retry: 1,
   });
 
-  // Fetch parent credits balance (with refetching)
-  interface CreditsResponse {
-    success: boolean;
-    totalAvailableCents: number;
-    totalAvailableFormatted: string;
-    creditsByType: Record<string, { count: number; totalCents: number }>;
-    credits: Array<{
-      id: number;
-      creditType: string;
-      title: string | null;
-      creditAmountCents: number;
-      usedAmountCents: number;
-      remainingCents: number;
-      status: string;
-      expiresAt: string | null;
-      createdAt: string;
-    }>;
-  }
-
-  const { data: creditsData, isLoading: creditsLoading } = useQuery<CreditsResponse>({
-    queryKey: ["/api/parent/credits"],
-    queryFn: async () => {
-      const token = localStorage.getItem('supabase_token');
-      if (!token) {
-        throw new Error('No authentication token found');
-      }
-      
-      const response = await fetch("/api/parent/credits", {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Failed to fetch credits: ${response.status}`);
-      }
-      return response.json();
-    },
-    enabled: !!user && !!session,
-    refetchInterval: 30000,
-  });
-
   // Helper function to get membership status display info
   const getMembershipStatusInfo = (status: string) => {
     switch (status) {
@@ -860,7 +823,7 @@ export default function ParentDashboard() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-green-600">
-                  {creditsLoading ? '...' : creditsData?.totalAvailableFormatted || '$0.00'}
+                  {creditsLoading ? '...' : creditsDisplayFormatted}
                 </div>
                 <p className="text-xs text-muted-foreground">Available balance</p>
               </CardContent>
@@ -955,14 +918,14 @@ export default function ParentDashboard() {
                   </div>
                 </Button>
 
-                {(creditsData?.totalAvailableCents ?? 0) > 0 && (
+                {(dashboardCreditsCents ?? 0) > 0 && (
                   <Button asChild variant="outline" className="w-full justify-start h-auto p-4 border-green-200 bg-green-50 hover:bg-green-100" data-testid="btn-view-credits">
                     <Link href="/payments">
                       <Coins className="mr-3 h-5 w-5 text-green-600" />
                       <div className="text-left">
                         <div className="font-medium text-green-700">My Credits</div>
                         <div className="text-sm text-green-600">
-                          {creditsData?.totalAvailableFormatted} available
+                          {creditsDisplayFormatted} available
                         </div>
                       </div>
                     </Link>
