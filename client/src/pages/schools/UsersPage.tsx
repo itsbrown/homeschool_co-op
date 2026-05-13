@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   UserPlus, 
@@ -78,15 +79,11 @@ export default function UsersPage() {
     enabled: !!schoolId,
   });
 
-  console.log('🔍 UsersPage - schoolId:', schoolId, 'isLoadingSchool:', isLoadingSchool, 'userProfile:', userProfile);
-
-  // Fetch users for the school
-  const { data: users = [], isLoading: isLoadingUsers, error } = useQuery<any[]>({
+  const { data: users = [], isLoading: isLoadingUsers, error: usersQueryError, isError: usersQueryIsError } = useQuery<any[]>({
     queryKey: ['/api/school-admin/users'],
-    enabled: !!schoolId, // Only fetch when schoolId is available
+    enabled: !!schoolId,
+    select: (raw) => (Array.isArray(raw) ? raw : []),
   });
-
-  console.log('👥 UsersPage - users:', users?.length, 'isLoadingUsers:', isLoadingUsers, 'error:', error);
 
   const isLoading = isLoadingSchool || isLoadingUsers;
 
@@ -377,6 +374,16 @@ export default function UsersPage() {
             </Button>
           </div>
         </div>
+
+        {usersQueryIsError && (
+          <Alert variant="destructive">
+            <AlertTitle>Could not load users</AlertTitle>
+            <AlertDescription>
+              {(usersQueryError as Error)?.message ||
+                'Check the browser Network tab for GET /api/school-admin/users (403 = missing school on your account; 500 = server/database error).'}
+            </AlertDescription>
+          </Alert>
+        )}
 
       {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-4">
