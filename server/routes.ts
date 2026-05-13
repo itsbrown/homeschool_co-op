@@ -1974,7 +1974,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     // Check if user already has children registered
     try {
-      const existingChildren = await storage.getChildrenByParent(userId);
+      const existingChildren = await storage.getChildrenByParentId(Number(userId));
       if (existingChildren.length > 0) {
         response += `I see you already have ${existingChildren.length} child${existingChildren.length > 1 ? 'ren' : ''} registered. `;
       }
