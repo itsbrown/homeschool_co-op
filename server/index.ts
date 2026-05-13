@@ -336,21 +336,38 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
         console.warn('⚠️ Skipping notification initialization in local fallback mode:', (error as Error).message);
       }
 
-      // Graceful platform drain: stop interval-backed work so ticks do not fire during shutdown.
+      // Graceful platform drain: stop interval-backed work so ticks do not fire during shutdown,
+      // then close the HTTP server and exit so port 5000 is released promptly for the next restart.
+      // Without an explicit exit, registering a SIGTERM listener suppresses Node's default termination,
+      // causing the process to linger until SIGKILL and intermittently blocking port 5000 on cold restart.
       // SIGINT is intentionally not handled here so interactive dev Ctrl+C keeps default termination.
       process.once('SIGTERM', () => {
         void (async () => {
           console.log('🛑 SIGTERM received — stopping background intervals');
-          const { backupService: backup } = await import('./services/backupService.js');
-          const { MembershipStatusService: MembershipSvc } = await import('./services/membership-status-service.js');
-          const { stopEnrollmentReminderScheduler } = await import('./services/enrollmentReminderScheduler.js');
-          const { stopScheduledPaymentReminderJob } = await import('./services/scheduled-payment-reminders.js');
-          const { stopCreditExpirationJob } = await import('./services/creditExpirationService.js');
-          backup.stopAutomaticBackups();
-          MembershipSvc.stopMembershipStatusJob();
-          stopEnrollmentReminderScheduler();
-          stopScheduledPaymentReminderJob();
-          stopCreditExpirationJob();
+          try {
+            const { backupService: backup } = await import('./services/backupService.js');
+            const { MembershipStatusService: MembershipSvc } = await import('./services/membership-status-service.js');
+            const { stopEnrollmentReminderScheduler } = await import('./services/enrollmentReminderScheduler.js');
+            const { stopScheduledPaymentReminderJob } = await import('./services/scheduled-payment-reminders.js');
+            const { stopCreditExpirationJob } = await import('./services/creditExpirationService.js');
+            backup.stopAutomaticBackups();
+            MembershipSvc.stopMembershipStatusJob();
+            stopEnrollmentReminderScheduler();
+            stopScheduledPaymentReminderJob();
+            stopCreditExpirationJob();
+          } catch (err) {
+            console.warn('⚠️ Error while stopping background intervals:', (err as Error).message);
+          }
+          // Close the HTTP server so the listening socket on port 5000 is released before exit.
+          const closeTimer = setTimeout(() => {
+            console.warn('⏱️ HTTP server close timed out — forcing exit');
+            process.exit(0);
+          }, 3000);
+          server.close(() => {
+            clearTimeout(closeTimer);
+            console.log('✅ HTTP server closed — exiting');
+            process.exit(0);
+          });
         })();
       });
     } else {
