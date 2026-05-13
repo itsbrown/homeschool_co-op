@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useSyncExternalStore } from "react";
 import { useAuth } from "@/components/SupabaseProvider";
 import { useRole, silentRoleContextUpdate } from "@/contexts/RoleContext";
 import { CartProvider } from "@/contexts/CartContext";
@@ -13,9 +13,15 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetTrigger, SheetClose } from "@/components/ui/sheet";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { LogOut, Menu, User, Bell, Home, Users, BookOpen, Calendar, DollarSign, Settings, FolderOpen, Sparkles, GraduationCap, Clock, ClipboardList, Building2, Shield, ChevronDown, LayoutGrid, CalendarDays, ClipboardCheck, UserCheck } from "lucide-react";
+import { LogOut, Menu, User, Bell, Home, Users, BookOpen, Calendar, DollarSign, Settings, FolderOpen, Sparkles, GraduationCap, Clock, ClipboardList, Building2, Shield, ChevronDown, LayoutGrid, CalendarDays, ClipboardCheck, UserCheck, AlertTriangle, RefreshCw, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { apiRequest } from "@/lib/queryClient";
+import {
+  apiRequest,
+  queryClient,
+  getServiceUnavailable,
+  subscribeServiceUnavailable,
+  setServiceUnavailable,
+} from "@/lib/queryClient";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -129,6 +135,25 @@ export default function ParentAppShell({ children }: ParentAppShellProps) {
   });
 
   const unreadNotifications = notifications.filter(n => n.recipientStatus !== "read").length;
+
+  // Task 266 — subscribe to the global SERVICE_UNAVAILABLE signal so we can
+  // render a single non-blocking banner above the page content.
+  const isServiceUnavailable = useSyncExternalStore(
+    subscribeServiceUnavailable,
+    getServiceUnavailable,
+    getServiceUnavailable,
+  );
+  const [bannerDismissed, setBannerDismissed] = useState(false);
+  useEffect(() => {
+    // Re-arm the banner whenever the flag flips back on after being cleared.
+    if (isServiceUnavailable) setBannerDismissed(false);
+  }, [isServiceUnavailable]);
+  const showServiceBanner = isServiceUnavailable && !bannerDismissed;
+  const handleServiceRetry = () => {
+    setServiceUnavailable(false);
+    setBannerDismissed(false);
+    queryClient.invalidateQueries();
+  };
 
   const handleLogout = async () => {
     console.log('🚪 ParentAppShell logout clicked');
@@ -483,6 +508,43 @@ export default function ParentAppShell({ children }: ParentAppShellProps) {
               </div>
             </div>
           </div>
+
+          {showServiceBanner && (
+            <div
+              className="border-b border-amber-200 bg-amber-50 px-4 py-3 lg:px-6"
+              role="status"
+              data-testid="banner-service-unavailable"
+            >
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="h-5 w-5 flex-shrink-0 text-amber-600 mt-0.5" />
+                <div className="flex-1 text-sm text-amber-800">
+                  Service temporarily unavailable — some data may not load. We'll keep trying.
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 border-amber-300 bg-white text-amber-800 hover:bg-amber-100"
+                    onClick={handleServiceRetry}
+                    data-testid="button-service-unavailable-retry"
+                  >
+                    <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                    Retry
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-amber-800 hover:bg-amber-100"
+                    onClick={() => setBannerDismissed(true)}
+                    data-testid="button-service-unavailable-dismiss"
+                    aria-label="Dismiss"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
 
           <main className="flex-1">
             {children}

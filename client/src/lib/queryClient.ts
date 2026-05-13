@@ -3,6 +3,43 @@ import { supabase } from "@/components/SupabaseProvider";
 import { captureApiError, captureApi404 } from "@/lib/errorTracker";
 import { toast } from "@/hooks/use-toast";
 
+// ---------------------------------------------------------------------------
+// Task 266 — global "service unavailable" signal.
+//
+// When the API returns 503 with body { error: "SERVICE_UNAVAILABLE" } (emitted
+// by `server/middleware/supabase-auth.ts` when the DB is unreachable and there
+// is no app_metadata fallback), we surface a single non-blocking banner in the
+// parent shell instead of letting every query spam toasts and refetch loops.
+//
+// The flag is module-local and exposed via a tiny pub/sub so React components
+// can subscribe with `useSyncExternalStore` — no new context provider, no new
+// dependencies. Cleared on any 2xx /api response (or via the banner Retry
+// button).
+// ---------------------------------------------------------------------------
+let serviceUnavailable = false;
+const serviceUnavailableListeners = new Set<() => void>();
+
+function emitServiceUnavailableChange() {
+  for (const l of serviceUnavailableListeners) {
+    try { l(); } catch { /* ignore */ }
+  }
+}
+
+export function getServiceUnavailable(): boolean {
+  return serviceUnavailable;
+}
+
+export function subscribeServiceUnavailable(listener: () => void): () => void {
+  serviceUnavailableListeners.add(listener);
+  return () => { serviceUnavailableListeners.delete(listener); };
+}
+
+export function setServiceUnavailable(value: boolean) {
+  if (serviceUnavailable === value) return;
+  serviceUnavailable = value;
+  emitServiceUnavailableChange();
+}
+
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
@@ -282,6 +319,30 @@ export async function apiRequest(
   const finalUrl = url.startsWith('/api') ? url : `/api${url}`;
   const response = await fetch(finalUrl, config);
 
+  // Task 266 — clear the global "service unavailable" flag on any 2xx /api
+  // response. We deliberately do NOT *set* the flag here for non-GET requests
+  // (mutations, payment posts, etc.) — only authenticated GETs going through
+  // `getQueryFn` should turn the banner on. This keeps mutation/payment flows
+  // out of scope per the task: a failed mutation won't flip the global signal,
+  // but a successful mutation will clear a stale signal.
+  if (response.ok && finalUrl.startsWith('/api')) {
+    if (serviceUnavailable) setServiceUnavailable(false);
+  } else if (
+    response.status === 503 &&
+    method === 'GET' &&
+    finalUrl.startsWith('/api')
+  ) {
+    try {
+      const clone = response.clone();
+      const data = await clone.json();
+      if (data?.error === 'SERVICE_UNAVAILABLE') {
+        setServiceUnavailable(true);
+      }
+    } catch {
+      // body wasn't JSON — ignore
+    }
+  }
+
   // Handle auth errors with automatic token refresh
   if (response.status === 401 && _retryCount === 0) {
     console.log('🔒 API 401: Token expired, attempting refresh...');
@@ -393,18 +454,32 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
+    // Handle array query keys properly by joining them into a URL
+    // e.g., ['/api/staff', 5] becomes '/api/staff/5'
+    let url: string;
+    if (Array.isArray(queryKey) && queryKey.length > 1) {
+      url = queryKey.join('/');
+    } else {
+      url = queryKey[0] as string;
+    }
+    const isApiUrl = typeof url === 'string' && url.startsWith('/api');
+
+    // Task 266 — outage-aware suppression. While the global SERVICE_UNAVAILABLE
+    // flag is set, short-circuit `/api/*` queries before they hit the network.
+    // This wins over any per-query `refetchInterval`/`retry`/`refetchOnMount`
+    // overrides that would otherwise keep hammering the backend during the
+    // outage. The user can still manually clear the flag via the banner's
+    // Retry button (which calls `setServiceUnavailable(false)` and
+    // `queryClient.invalidateQueries()`), at which point queries run normally
+    // again. Non-/api/* URLs and mutations are unaffected.
+    if (isApiUrl && getServiceUnavailable()) {
+      if (unauthorizedBehavior === 'returnNull') return null;
+      throw new Error('503: SERVICE_UNAVAILABLE');
+    }
+
     const doFetch = async () => {
       const token = localStorage.getItem('supabase_token');
       const activeRole = localStorage.getItem('activeRole');
-
-      // Handle array query keys properly by joining them into a URL
-      // e.g., ['/api/staff', 5] becomes '/api/staff/5'
-      let url: string;
-      if (Array.isArray(queryKey) && queryKey.length > 1) {
-        url = queryKey.join('/');
-      } else {
-        url = queryKey[0] as string;
-      }
 
       return fetch(url, {
         credentials: "include",
@@ -433,6 +508,25 @@ export const getQueryFn: <T>(options: {
       }
     }
 
+    // Task 266 — detect/clear the SERVICE_UNAVAILABLE signal at the query
+    // layer too (queries fetch directly via `fetch`, bypassing apiRequest).
+    // Restricted to `/api/*` URLs to avoid false positives from any non-API
+    // queries that happen to use the default queryFn.
+    if (isApiUrl) {
+      if (res.ok) {
+        if (serviceUnavailable) setServiceUnavailable(false);
+      } else if (res.status === 503) {
+        try {
+          const data = await res.clone().json();
+          if (data?.error === 'SERVICE_UNAVAILABLE') {
+            setServiceUnavailable(true);
+          }
+        } catch {
+          // ignore non-JSON
+        }
+      }
+    }
+
     await throwIfResNotOk(res);
     return await res.json();
   };
@@ -450,4 +544,53 @@ export const queryClient = new QueryClient({
       retry: false,
     },
   },
+});
+
+// Task 266 — refetch-storm suppression while SERVICE_UNAVAILABLE is active.
+//
+// The default options above already disable retries / window-focus refetch /
+// interval refetch, but individual queries are free to override those defaults
+// (e.g. `useQuery({ refetchInterval: 30_000, retry: 3 })`). When the global
+// 503 signal flips on, we re-assert the safe defaults so any such per-query
+// overrides are forced to pause for the duration of the outage. We also
+// cancel in-flight queries so a chain of pending requests doesn't keep
+// re-firing. When the signal clears (success or user-initiated Retry), we
+// restore the original defaults so normal refetch behavior resumes. Mutations
+// are intentionally untouched so payment flows continue to work as today.
+const SAFE_QUERY_DEFAULTS = {
+  retry: false as const,
+  refetchOnWindowFocus: false as const,
+  refetchOnReconnect: false as const,
+  refetchInterval: false as const,
+  refetchOnMount: false as const,
+};
+const NORMAL_QUERY_DEFAULTS = {
+  retry: false as const,
+  refetchOnWindowFocus: false as const,
+  refetchOnReconnect: true as const,
+  refetchInterval: false as const,
+  refetchOnMount: true as const,
+};
+subscribeServiceUnavailable(() => {
+  if (getServiceUnavailable()) {
+    queryClient.setDefaultOptions({
+      queries: {
+        queryFn: getQueryFn({ on401: "throw" }),
+        staleTime: Infinity,
+        ...SAFE_QUERY_DEFAULTS,
+      },
+      mutations: { retry: false },
+    });
+    // Stop any currently-in-flight queries so they don't keep retrying.
+    void queryClient.cancelQueries();
+  } else {
+    queryClient.setDefaultOptions({
+      queries: {
+        queryFn: getQueryFn({ on401: "throw" }),
+        staleTime: Infinity,
+        ...NORMAL_QUERY_DEFAULTS,
+      },
+      mutations: { retry: false },
+    });
+  }
 });
