@@ -1737,6 +1737,13 @@ export class MemStorage implements IStorage {
         .filter(e => normalizeEmailForLookup(e.parentEmail) === normalizeEmailForLookup(parentEmail) && activeStatuses.includes(e.status) && e.stripeCustomerId)
         .map(e => e.stripeCustomerId!)
     );
+
+    const parentUser = Array.from(this.usersStore.values()).find(
+      (u) => normalizeEmailForLookup(u.email) === normalizeEmailForLookup(parentEmail),
+    );
+    if (parentUser?.stripeCustomerId) {
+      uniqueCustomerIds.add(parentUser.stripeCustomerId);
+    }
     
     return Array.from(uniqueCustomerIds);
   }
@@ -5443,6 +5450,21 @@ export class MemStorage implements IStorage {
             .map(e => e.stripeCustomerId)
             .filter((id): id is string => id !== null)
         );
+
+        const userStripeRows = await db
+          .select({ stripeCustomerId: users.stripeCustomerId })
+          .from(users)
+          .where(
+            and(
+              sql`lower(trim(${users.email})) = ${normalized}`,
+              isNotNull(users.stripeCustomerId),
+            ),
+          );
+        for (const row of userStripeRows) {
+          if (row.stripeCustomerId) {
+            uniqueCustomerIds.add(row.stripeCustomerId);
+          }
+        }
         
         return Array.from(uniqueCustomerIds);
       } catch (error) {

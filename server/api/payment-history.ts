@@ -3,6 +3,7 @@ import { storage } from '../storage';
 import { supabaseAuth } from '../middleware/supabase-auth';
 import { sendPaymentReceipt } from '../lib/email-service';
 import { CurrencyUtils, BillingCalculationService } from '../../shared/currency-utils';
+import { normalizeEmailForLookup } from '../../shared/parent-identity';
 import { MembershipService } from '../services/membership-service';
 import { enrichedPaymentHistoryListResponseSchema, type EnrichedPaymentHistory } from '../../shared/schema';
 import { getStripeClient } from '../config/stripe';
@@ -34,6 +35,63 @@ function safeStripeTimestampToISO(timestamp: number | undefined | null): string 
   } catch {
     console.warn('⚠️ Error parsing Stripe timestamp:', timestamp);
     return null;
+  }
+}
+
+/** Stripe Customer Search query literals must escape backslashes and single quotes. */
+function escapeStripeCustomerSearchValue(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
+/**
+ * Fallback: find PaymentIntents not tied to a Customer (or missed by customer list)
+ * via Stripe Search — receipt_email and app metadata keys we set on create.
+ */
+async function mergePaymentIntentsFromStripeSearchByParentEmail(
+  stripe: { paymentIntents: { search: (p: Record<string, unknown>) => Promise<any> } },
+  parentEmail: string,
+  into: Map<string, any>,
+): Promise<void> {
+  const trimmed = parentEmail.trim();
+  const normalized = normalizeEmailForLookup(trimmed);
+  const variants = Array.from(
+    new Set([trimmed, normalized].filter((v): v is string => v.length > 0)),
+  );
+  const queries: string[] = [];
+  for (const v of variants) {
+    const escaped = escapeStripeCustomerSearchValue(v);
+    queries.push(
+      `receipt_email:'${escaped}'`,
+      `metadata['parentEmail']:'${escaped}'`,
+      `metadata['userEmail']:'${escaped}'`,
+    );
+  }
+  const uniqueQueries = Array.from(new Set(queries));
+  for (const query of uniqueQueries) {
+    try {
+      let searchPage: string | undefined;
+      for (;;) {
+        const res = await stripe.paymentIntents.search({
+          query,
+          limit: 100,
+          ...(searchPage ? { page: searchPage } : {}),
+        });
+        for (const intent of res.data as any[]) {
+          into.set(intent.id, intent);
+        }
+        const nextPage =
+          res.has_more && typeof (res as { next_page?: string }).next_page === 'string'
+            ? (res as { next_page: string }).next_page
+            : undefined;
+        if (!nextPage) break;
+        searchPage = nextPage;
+      }
+    } catch (err: any) {
+      console.warn(
+        `⚠️  paymentIntents.search fallback skipped (${query.slice(0, 48)}…):`,
+        err?.message ?? err,
+      );
+    }
   }
 }
 
@@ -105,48 +163,76 @@ router.get('/history', supabaseAuth, async (req: any, res) => {
       storage.getStripeLinkedEnrollmentsByParentEmail(userEmail),
       storage.getStripeCustomerIdsByParentEmail(userEmail)
     ]);
-    
-    console.log(`📊 Found: ${dbPayments.length} DB payments, ${enrollments.length} enrollments, ${customerIds.length} customer IDs`);
-    
-    // Step 2: Batch-fetch Stripe data (PaymentIntents AND subscription schedules) for all customer IDs
+
+    const customerIdSet = new Set(customerIds);
+
+    // Step 2: Batch-fetch Stripe data (PaymentIntents AND subscription schedules).
+    // Include every Stripe customer whose email matches the logged-in parent (not only IDs stored on enrollments).
     const stripePaymentIntents = new Map<string, any>();
     const stripeSubscriptionSchedules = new Map<string, any>();
-    
-    // Test mode: skip Stripe API calls
-    if (process.env.NODE_ENV !== 'test' && customerIds.length > 0) {
+
+    if (process.env.NODE_ENV !== 'test') {
       const stripe = await getStripeClient();
-      for (const customerId of customerIds) {
+      try {
+        const escaped = escapeStripeCustomerSearchValue(userEmail.trim());
+        let searchPage: string | undefined;
+        for (;;) {
+          const searchRes = await stripe.customers.search({
+            query: `email:'${escaped}'`,
+            limit: 100,
+            ...(searchPage ? { page: searchPage } : {}),
+          });
+          for (const c of searchRes.data) {
+            customerIdSet.add(c.id);
+          }
+          const nextPage =
+            searchRes.has_more && typeof (searchRes as { next_page?: string }).next_page === 'string'
+              ? (searchRes as { next_page: string }).next_page
+              : undefined;
+          if (!nextPage) break;
+          searchPage = nextPage;
+        }
+      } catch (searchErr: any) {
+        console.error('⚠️  Stripe customer search by email failed:', searchErr?.message ?? searchErr);
+      }
+
+      console.log(
+        `📊 Found: ${dbPayments.length} DB payments, ${enrollments.length} enrollments, ` +
+          `${customerIdSet.size} Stripe customer ID(s) (DB-linked + Stripe email search)`,
+      );
+
+      for (const customerId of customerIdSet) {
         try {
-          // Fetch PaymentIntents
           const paymentIntents = await stripe.paymentIntents.list({
             customer: customerId,
             limit: 100
           });
-          
+
           for (const intent of paymentIntents.data) {
             stripePaymentIntents.set(intent.id, intent);
           }
-          
-          // Fetch subscription schedules
+
           const schedules = await stripe.subscriptionSchedules.list({
             customer: customerId,
             limit: 50
           });
-          
+
           for (const schedule of schedules.data) {
-            // Index by subscription ID for easy lookup
             if (schedule.subscription) {
               stripeSubscriptionSchedules.set(schedule.subscription as string, schedule);
             }
           }
-          
         } catch (stripeError: any) {
           console.error(`⚠️  Failed to fetch Stripe data for customer ${customerId}:`, stripeError.message);
-          // Continue processing other customers even if one fails
         }
       }
+
+      await mergePaymentIntentsFromStripeSearchByParentEmail(stripe, userEmail, stripePaymentIntents);
     } else if (process.env.NODE_ENV === 'test') {
       console.log('🧪 Test mode: Skipping Stripe API calls');
+      console.log(
+        `📊 Found: ${dbPayments.length} DB payments, ${enrollments.length} enrollments, ${customerIdSet.size} customer IDs`,
+      );
     }
     console.log(`💳 Fetched ${stripePaymentIntents.size} PaymentIntents, ${stripeSubscriptionSchedules.size} subscription schedules`);
     
