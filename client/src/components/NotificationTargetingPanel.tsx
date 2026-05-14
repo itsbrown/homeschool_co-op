@@ -67,7 +67,6 @@ export function NotificationTargetingPanel({
     role: false,
     location: false,
     class: false,
-    everyone: false,
   });
 
   const { data: locations = [] } = useQuery<Location[]>({
@@ -102,7 +101,7 @@ export function NotificationTargetingPanel({
         selectedLocations: [],
         selectedClasses: [],
       });
-      setOpenSections({ individual: false, role: false, location: false, class: false, everyone: true });
+      setOpenSections({ individual: false, role: false, location: false, class: false });
     } else {
       update({ includeAll: false });
     }
@@ -197,6 +196,27 @@ export function NotificationTargetingPanel({
 
       <div className="grid gap-2">
         <Label>Target Recipients</Label>
+
+        {/* Broadcast control stays here (not only inside a collapsible) so it is not missed. */}
+        <div className="rounded-md border border-orange-200 bg-orange-50/90 p-3 space-y-2">
+          <div className="flex items-start gap-3">
+            <Checkbox
+              id="include-all-primary"
+              className="mt-0.5"
+              checked={value.includeAll}
+              onCheckedChange={(checked) => handleIncludeAllChange(checked === true)}
+            />
+            <div className="space-y-1 min-w-0">
+              <Label htmlFor="include-all-primary" className="text-sm font-semibold text-orange-900 cursor-pointer">
+                Send to everyone (broadcast)
+              </Label>
+              <p className="text-xs text-orange-900/85 leading-relaxed">
+                Delivers to all users in the system for this deployment. Clears other targeting when checked.
+                For smaller groups, leave this off and use Individuals, Roles, Locations, or Classes below.
+              </p>
+            </div>
+          </div>
+        </div>
 
         {/* Active selection summary */}
         {!value.includeAll && activeBadges.length > 0 && (
@@ -463,38 +483,6 @@ export function NotificationTargetingPanel({
                 <p className="text-sm text-muted-foreground">
                   Disabled while "Everyone" is selected.
                 </p>
-              </div>
-            )}
-          </div>
-
-          {/* Everyone Section */}
-          <div className="border rounded-md overflow-hidden">
-            <SectionHeader id="everyone" label="Everyone (Broadcast)" />
-            {openSections.everyone && (
-              <div className="p-3 border-t space-y-3">
-                <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg">
-                  <div className="flex items-center space-x-2">
-                    <AlertCircle className="h-5 w-5 text-orange-600" />
-                    <div>
-                      <h4 className="font-medium text-orange-800">Broadcast to Everyone</h4>
-                      <p className="text-sm text-orange-700">
-                        This will send the notification to all staff and students across all locations.
-                        Selecting this clears all other targeting selections. Use carefully for important
-                        announcements only.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="include-all"
-                    checked={value.includeAll}
-                    onCheckedChange={(checked) => handleIncludeAllChange(!!checked)}
-                  />
-                  <Label htmlFor="include-all" className="font-medium">
-                    Send to everyone (overrides all other selections)
-                  </Label>
-                </div>
               </div>
             )}
           </div>
