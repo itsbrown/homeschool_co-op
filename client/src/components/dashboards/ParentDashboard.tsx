@@ -759,7 +759,9 @@ export default function ParentDashboard() {
                 <DollarSign className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                {outstandingNetDueCents > 0 ? (
+                {outstandingNetDueCents > 0 ||
+                outstandingEnrollmentCount > 0 ||
+                outstandingMembershipCount > 0 ? (
                   <>
                     <div
                       className="text-2xl font-bold text-orange-600"
@@ -808,7 +810,12 @@ export default function ParentDashboard() {
                 ) : (
                   <>
                     <div className="text-2xl font-bold">
-                      {enrollmentsData?.filter((e: any) => e.paymentStatus !== 'completed').length || 0}
+                      {isLoadingUnpaid
+                        ? '…'
+                        : outstandingEnrollmentCount > 0
+                          ? outstandingEnrollmentCount
+                          : enrollmentsData?.filter((e: any) => e.paymentStatus !== 'completed')
+                              .length || 0}
                     </div>
                     <p className="text-xs text-muted-foreground">Unpaid enrollments</p>
                   </>
