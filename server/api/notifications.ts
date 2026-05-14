@@ -2,7 +2,7 @@ import express from "express";
 import { z } from "zod";
 import { insertNotificationSchema } from "@shared/schema";
 import { storage } from '../storage';
-import { sendSMS, isTwilioConfigured } from '../services/twilio';
+import { sendSMS, isTwilioConfigured, getTwilioConnectionSummary } from '../services/twilio';
 import * as brevo from '@getbrevo/brevo';
 
 const router = express.Router();
@@ -21,6 +21,67 @@ const enhancedNotificationSchema = insertNotificationSchema.extend({
   targetType: z.enum(["individual", "role", "location", "all"]),
   targetData: notificationTargetSchema.shape.recipients,
 });
+
+type CombinedTargetingBody = {
+  includeAll?: boolean;
+  userIds?: number[];
+  roles?: string[];
+  locationIds?: number[];
+  classIds?: number[];
+};
+
+/** Union recipient user IDs from the school notification compose UI (individuals, roles, locations, classes). */
+async function resolveCombinedRecipientIds(body: CombinedTargetingBody): Promise<number[]> {
+  const ids = new Set<number>();
+
+  if (body.includeAll) {
+    const users = await storage.getAllUsers();
+    for (const u of users) ids.add(u.id);
+    return [...ids].filter((id) => id > 0);
+  }
+
+  for (const uid of body.userIds || []) {
+    const n = Number(uid);
+    if (Number.isFinite(n) && n > 0) ids.add(n);
+  }
+
+  for (const role of body.roles || []) {
+    const allUsers = await storage.getAllUsers();
+    const rLower = String(role).toLowerCase();
+    for (const u of allUsers) {
+      if (String(u.role || "").toLowerCase() === rLower) ids.add(u.id);
+    }
+  }
+
+  for (const locId of body.locationIds || []) {
+    const lid = Number(locId);
+    if (!Number.isFinite(lid)) continue;
+    const userLocs = await storage.getUserLocationsByLocationId(lid);
+    for (const ul of userLocs) ids.add(ul.userId);
+  }
+
+  for (const classId of body.classIds || []) {
+    const cid = Number(classId);
+    if (!Number.isFinite(cid)) continue;
+    const enrollments = await storage.getAllEnrollments();
+    for (const e of enrollments as any[]) {
+      const eClass = Number(e.classId ?? e.marketplaceClassId ?? e.programId ?? 0);
+      if (eClass !== cid) continue;
+      const childId = Number(e.childId);
+      if (!childId) continue;
+      const child = await storage.getChildById(childId);
+      if (child?.parentId) ids.add(Number(child.parentId));
+    }
+  }
+
+  return [...ids].filter((id) => id > 0);
+}
+
+function normalizeCombinedDeliveryType(raw: unknown): "email" | "in_app" | "sms" | "both" | "all" {
+  const t = String(raw ?? "both").toLowerCase();
+  if (t === "email" || t === "in_app" || t === "sms" || t === "both" || t === "all") return t;
+  return "both";
+}
 
 // Compatibility endpoint used by integration tests.
 router.post("/", async (req: any, res) => {
@@ -188,6 +249,88 @@ router.get("/unread-count", async (req: any, res) => {
   } catch (error) {
     console.error("Error fetching unread count:", error);
     return res.status(500).json({ message: "Failed to fetch unread count" });
+  }
+});
+
+router.get("/twilio-status", async (_req, res) => {
+  try {
+    const summary = await getTwilioConnectionSummary();
+    return res.json(summary);
+  } catch (error) {
+    console.error("Error reading Twilio status:", error);
+    return res.json({ configured: false, trial: false });
+  }
+});
+
+router.post("/preview-recipients", async (req: any, res) => {
+  try {
+    const userId = req.user?.id || req.session?.userId;
+    if (!userId) return res.status(401).json({ message: "User not authenticated" });
+    const body = (req.body || {}) as CombinedTargetingBody;
+    const recipientIds = await resolveCombinedRecipientIds(body);
+    return res.json({ recipientCount: recipientIds.length });
+  } catch (error) {
+    console.error("Error previewing notification recipients:", error);
+    return res.status(500).json({ message: "Failed to preview recipients" });
+  }
+});
+
+router.post("/send-combined", async (req: any, res) => {
+  try {
+    const senderId = req.user?.id || req.session?.userId;
+    if (!senderId) return res.status(401).json({ message: "User not authenticated" });
+
+    const {
+      subject,
+      content,
+      type,
+      priority = "normal",
+      scheduledFor,
+      includeAll,
+      userIds,
+      roles,
+      locationIds,
+      classIds,
+    } = req.body || {};
+
+    if (!subject || !content) {
+      return res.status(400).json({ message: "subject and content are required" });
+    }
+
+    const recipientIds = await resolveCombinedRecipientIds({
+      includeAll,
+      userIds,
+      roles,
+      locationIds,
+      classIds,
+    });
+    if (recipientIds.length === 0) {
+      return res.status(400).json({ message: "No recipients match the selected targeting" });
+    }
+
+    const deliveryType = normalizeCombinedDeliveryType(type);
+    const notification = await storage.createNotification({
+      senderId: Number(senderId),
+      type: deliveryType,
+      priority: priority || "normal",
+      subject,
+      content,
+      targetType: "individual" as const,
+      targetData: { userIds: recipientIds } as any,
+      scheduledFor: scheduledFor ? new Date(scheduledFor) : null,
+      status: scheduledFor ? "scheduled" : "pending",
+    } as any);
+
+    await processNotification(notification);
+
+    return res.status(201).json({
+      id: notification.id,
+      recipientCount: recipientIds.length,
+      status: notification.status || "sent",
+    });
+  } catch (error) {
+    console.error("Error sending combined notification:", error);
+    return res.status(500).json({ message: "Failed to send notification" });
   }
 });
 
@@ -537,6 +680,40 @@ router.post("/mark-all-read", async (req, res) => {
   } catch (error) {
     console.error("Error marking all notifications as read:", error);
     res.status(500).json({ message: "Failed to mark all notifications as read" });
+  }
+});
+
+router.post("/:id/resend", async (req: any, res) => {
+  try {
+    const senderId = req.user?.id || req.session?.userId;
+    if (!senderId) return res.status(401).json({ message: "User not authenticated" });
+
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) return res.status(400).json({ message: "Invalid notification ID" });
+
+    const notification = await storage.getNotificationById(id);
+    if (!notification) return res.status(404).json({ message: "Notification not found" });
+
+    const recs = await storage.getNotificationRecipientsByNotificationId(id);
+    const userIds = [...new Set(recs.map((r) => r.recipientId))];
+    if (userIds.length === 0) {
+      return res.status(400).json({ message: "No recipients found for this notification" });
+    }
+
+    if (notification.type === "email" || notification.type === "both" || notification.type === "all") {
+      await sendNotificationEmails(notification, userIds);
+    }
+    if (notification.type === "sms" || notification.type === "all") {
+      const twilioConfigured = process.env.NODE_ENV === "test" ? true : await isTwilioConfigured();
+      if (twilioConfigured) {
+        await sendNotificationSMS(notification, userIds);
+      }
+    }
+
+    return res.json({ success: true, recipientCount: userIds.length });
+  } catch (error) {
+    console.error("Error resending notification:", error);
+    return res.status(500).json({ message: "Failed to resend notification" });
   }
 });
 

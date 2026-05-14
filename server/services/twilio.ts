@@ -92,3 +92,30 @@ export async function isTwilioConfigured(): Promise<boolean> {
     return false;
   }
 }
+
+/** Used by admin notification UI (trial SMS banner). */
+export async function getTwilioConnectionSummary(): Promise<{
+  configured: boolean;
+  trial: boolean;
+  accountType?: string;
+}> {
+  try {
+    const creds = await getCredentials();
+    const client = twilio(creds.apiKey, creds.apiKeySecret, {
+      accountSid: creds.accountSid,
+    });
+    const acc = await client.api.accounts(creds.accountSid).fetch();
+    return {
+      configured: true,
+      trial: acc.type === "Trial",
+      accountType: acc.type,
+    };
+  } catch {
+    try {
+      await getCredentials();
+      return { configured: true, trial: false };
+    } catch {
+      return { configured: false, trial: false };
+    }
+  }
+}

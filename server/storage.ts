@@ -150,6 +150,8 @@ export interface IStorage {
   getNotificationById(id: number): Promise<Notification | undefined>;
   getAllNotifications(): Promise<Notification[]>;
   getNotificationsByUserId(userId: number, role?: string): Promise<Notification[]>;
+  /** Notifications whose sender has a role row for this school (school admin / tracking UI). */
+  getSentNotificationsBySchool(schoolId: number): Promise<Notification[]>;
   createNotification(notification: InsertNotification): Promise<Notification>;
   updateNotification(id: number, notification: Partial<InsertNotification>): Promise<Notification | undefined>;
   deleteNotification(id: number): Promise<void>;
@@ -349,6 +351,10 @@ export interface IStorage {
   updateScheduledPaymentStatus(id: number, status: string): Promise<any | undefined>;
   updateScheduledPaymentReminderCount(id: number, count: number): Promise<any | undefined>;
   updateScheduledPayment(id: number, payment: Partial<InsertScheduledPayment>): Promise<ScheduledPayment | undefined>;
+  /** Atomically move an actionable installment to `processing` for parent manual pay (DB concurrency guard). */
+  claimScheduledPaymentForParentCharge(id: number, parentId: number): Promise<ScheduledPayment | undefined>;
+  /** Undo a parent manual claim when checkout did not finish (row must be `processing` + `parent_manual`). */
+  releaseScheduledPaymentParentClaim(id: number, parentId: number): Promise<ScheduledPayment | undefined>;
 
   // Refund methods
   createRefund(refund: InsertRefund): Promise<Refund>;
@@ -3334,6 +3340,46 @@ export class MemStorage implements IStorage {
     return updatedPayment;
   }
 
+  async claimScheduledPaymentForParentCharge(
+    id: number,
+    parentId: number,
+  ): Promise<ScheduledPayment | undefined> {
+    const existing = this.scheduledPaymentsStore.get(id);
+    if (!existing || existing.parentId !== parentId) return undefined;
+    const st = String(existing.status);
+    if (!['pending', 'overdue', 'failed'].includes(st)) return undefined;
+    const updatedPayment: ScheduledPayment = {
+      ...existing,
+      status: 'processing',
+      chargedBy: 'parent_manual',
+      updatedAt: new Date(),
+    };
+    this.scheduledPaymentsStore.set(id, updatedPayment);
+    await this.saveScheduledPaymentsToFile();
+    return updatedPayment;
+  }
+
+  async releaseScheduledPaymentParentClaim(
+    id: number,
+    parentId: number,
+  ): Promise<ScheduledPayment | undefined> {
+    const existing = this.scheduledPaymentsStore.get(id);
+    if (!existing || existing.parentId !== parentId) return undefined;
+    if (String(existing.status) !== 'processing' || existing.chargedBy !== 'parent_manual') {
+      return undefined;
+    }
+    const updatedPayment: ScheduledPayment = {
+      ...existing,
+      status: 'pending',
+      chargedBy: null,
+      stripePaymentIntentId: null,
+      updatedAt: new Date(),
+    };
+    this.scheduledPaymentsStore.set(id, updatedPayment);
+    await this.saveScheduledPaymentsToFile();
+    return updatedPayment;
+  }
+
   private async saveScheduledPaymentsToFile(): Promise<void> {
     try {
       const fs = await import('fs');
@@ -4137,6 +4183,18 @@ export class MemStorage implements IStorage {
       );
       return { ...n, readAt: inAppRecipient?.readAt ?? null };
     });
+  }
+
+  async getSentNotificationsBySchool(schoolId: number): Promise<Notification[]> {
+    const all = await this.getAllNotifications();
+    const out: Notification[] = [];
+    for (const n of all) {
+      const roles = await this.getUserRolesByUserId(n.senderId);
+      if (roles.some((r) => r.schoolId === schoolId)) {
+        out.push(n);
+      }
+    }
+    return out.sort((a, b) => b.id - a.id);
   }
 
   async createNotification(notification: InsertNotification): Promise<Notification> {
@@ -5992,6 +6050,34 @@ export class MemStorage implements IStorage {
         }
       }
 
+      async claimScheduledPaymentForParentCharge(
+        id: number,
+        parentId: number,
+      ): Promise<ScheduledPayment | undefined> {
+        try {
+          if (this.dbStorage && typeof this.dbStorage.claimScheduledPaymentForParentCharge === 'function') {
+            return await this.dbStorage.claimScheduledPaymentForParentCharge(id, parentId);
+          }
+          return await this.memStorage.claimScheduledPaymentForParentCharge(id, parentId);
+        } catch (error) {
+          return await this.memStorage.claimScheduledPaymentForParentCharge(id, parentId);
+        }
+      }
+
+      async releaseScheduledPaymentParentClaim(
+        id: number,
+        parentId: number,
+      ): Promise<ScheduledPayment | undefined> {
+        try {
+          if (this.dbStorage && typeof this.dbStorage.releaseScheduledPaymentParentClaim === 'function') {
+            return await this.dbStorage.releaseScheduledPaymentParentClaim(id, parentId);
+          }
+          return await this.memStorage.releaseScheduledPaymentParentClaim(id, parentId);
+        } catch (error) {
+          return await this.memStorage.releaseScheduledPaymentParentClaim(id, parentId);
+        }
+      }
+
       // Refund methods - use memStorage since database fallback is needed
       async createRefund(refund: InsertRefund): Promise<Refund> {
         return this.memStorage.createRefund(refund);
@@ -6329,6 +6415,15 @@ export class MemStorage implements IStorage {
         } catch (error) {
           if (process.env.NODE_ENV === 'production') throw error;
           return await this.memStorage.getNotificationsByUserId(userId, role);
+        }
+      }
+
+      async getSentNotificationsBySchool(schoolId: number): Promise<Notification[]> {
+        try {
+          return await this.dbStorage.getSentNotificationsBySchool(schoolId);
+        } catch (error) {
+          if (process.env.NODE_ENV === 'production') throw error;
+          return await this.memStorage.getSentNotificationsBySchool(schoolId);
         }
       }
 

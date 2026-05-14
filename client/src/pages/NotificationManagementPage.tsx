@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -26,6 +26,7 @@ import {
   MapPin,
   Plus,
   Eye,
+  Phone,
   RefreshCw
 } from "lucide-react";
 import { NotificationTargetingPanel, defaultTargetingState, type TargetingState } from "@/components/NotificationTargetingPanel";
@@ -33,7 +34,7 @@ import { NotificationTargetingPanel, defaultTargetingState, type TargetingState 
 interface Notification {
   id: number;
   senderId: number;
-  type: "email" | "in_app" | "both";
+  type: "email" | "in_app" | "both" | "sms" | "all";
   priority: "low" | "normal" | "high" | "urgent";
   subject: string;
   content: string;
@@ -47,6 +48,64 @@ interface Notification {
   updatedAt: string;
 }
 
+/** Response row from GET /api/school-admin/notifications/tracking */
+interface NotificationTrackingRow {
+  id: number;
+  subject: string;
+  content: string;
+  targetType: string;
+  type: string;
+  priority: string;
+  sentAt: string | null;
+  createdAt: string;
+  stats: {
+    totalRecipients: number;
+    delivered: number;
+    opened: number;
+    openRate: number;
+    email: { sent: number; total: number };
+    sms: { sent: number; total: number };
+  };
+}
+
+function mapTrackingRowToNotification(row: NotificationTrackingRow): Notification {
+  const rawType = String(row.type || "both").toLowerCase();
+  const type: Notification["type"] =
+    rawType === "email" || rawType === "in_app" || rawType === "sms" || rawType === "both" || rawType === "all"
+      ? (rawType as Notification["type"])
+      : "both";
+
+  const rawPriority = String(row.priority || "normal").toLowerCase();
+  const priority: Notification["priority"] =
+    rawPriority === "low" || rawPriority === "normal" || rawPriority === "high" || rawPriority === "urgent"
+      ? (rawPriority as Notification["priority"])
+      : "normal";
+
+  const tt = String(row.targetType || "all").toLowerCase();
+  const targetType: Notification["targetType"] =
+    tt === "individual" || tt === "role" || tt === "location" || tt === "all"
+      ? (tt as Notification["targetType"])
+      : "all";
+
+  const status: Notification["status"] = row.sentAt ? "sent" : "scheduled";
+
+  return {
+    id: row.id,
+    senderId: 0,
+    type,
+    priority,
+    subject: row.subject,
+    content: row.content,
+    targetType,
+    targetData: {},
+    sentAt: row.sentAt || undefined,
+    status,
+    deliveryStats: { totalRecipients: row.stats?.totalRecipients ?? 0 },
+    createdAt: row.createdAt,
+    updatedAt: row.createdAt,
+  };
+}
+
 export default function NotificationManagementPage() {
   const [isComposeDialogOpen, setIsComposeDialogOpen] = useState(false);
   const [editingNotification, setEditingNotification] = useState<Notification | null>(null);
@@ -54,16 +113,21 @@ export default function NotificationManagementPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Fetch all sent notifications (admin view)
-  const { data: notifications = [], isLoading } = useQuery<Notification[]>({
-    queryKey: ["/api/notifications?view=sent"],
+  const TRACKING_QUERY_KEY = ["/api/school-admin/notifications/tracking"] as const;
+
+  // School-scoped sent notifications (matches Notification Tracking API contract)
+  const { data: notifications = [], isLoading } = useQuery({
+    queryKey: TRACKING_QUERY_KEY,
+    select: (data: unknown) => {
+      if (!Array.isArray(data)) return [];
+      return (data as NotificationTrackingRow[]).map(mapTrackingRowToNotification);
+    },
   });
 
-  // Fetch selected notification details
-  const { data: selectedNotification, isLoading: isLoadingDetails } = useQuery<Notification>({
-    queryKey: [`/api/notifications/${selectedNotificationId}`],
-    enabled: !!selectedNotificationId,
-  });
+  const selectedNotification = useMemo(
+    () => notifications.find((n) => n.id === selectedNotificationId) ?? null,
+    [notifications, selectedNotificationId],
+  );
 
   // Fetch Twilio status for trial warning
   const { data: twilioStatus } = useQuery<{ configured: boolean; trial: boolean; accountType?: string }>({
@@ -81,7 +145,7 @@ export default function NotificationManagementPage() {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications?view=sent"] });
+      queryClient.invalidateQueries({ queryKey: TRACKING_QUERY_KEY });
       setSelectedNotificationId(null);
       toast({
         title: "Success",
@@ -109,7 +173,7 @@ export default function NotificationManagementPage() {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications?view=sent"] });
+      queryClient.invalidateQueries({ queryKey: TRACKING_QUERY_KEY });
       setIsComposeDialogOpen(false);
       toast({
         title: "Success",
@@ -136,7 +200,7 @@ export default function NotificationManagementPage() {
       return response.json();
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications?view=sent"] });
+      queryClient.invalidateQueries({ queryKey: TRACKING_QUERY_KEY });
       setIsComposeDialogOpen(false);
       setEditingNotification(null);
       toast({
@@ -164,7 +228,7 @@ export default function NotificationManagementPage() {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications?view=sent"] });
+      queryClient.invalidateQueries({ queryKey: TRACKING_QUERY_KEY });
       setIsComposeDialogOpen(false);
       setEditingNotification(null);
       toast({
@@ -424,10 +488,18 @@ export default function NotificationManagementPage() {
                       <div className="flex items-center space-x-1">
                         {notification.type === "email" && <Mail className="h-4 w-4" />}
                         {notification.type === "in_app" && <MessageSquare className="h-4 w-4" />}
+                        {notification.type === "sms" && <Phone className="h-4 w-4" />}
                         {notification.type === "both" && (
                           <>
                             <Mail className="h-4 w-4" />
                             <MessageSquare className="h-4 w-4" />
+                          </>
+                        )}
+                        {notification.type === "all" && (
+                          <>
+                            <Mail className="h-4 w-4" />
+                            <MessageSquare className="h-4 w-4" />
+                            <Phone className="h-4 w-4" />
                           </>
                         )}
                         <span className="capitalize">{notification.type}</span>
@@ -478,7 +550,7 @@ export default function NotificationManagementPage() {
             </DialogDescription>
           </DialogHeader>
           
-          {isLoadingDetails ? (
+          {isLoading && selectedNotificationId ? (
             <div className="py-8 text-center text-muted-foreground">Loading...</div>
           ) : selectedNotification ? (
             <div className="space-y-4">
@@ -500,10 +572,18 @@ export default function NotificationManagementPage() {
                   <div className="flex items-center gap-2 mt-1">
                     {selectedNotification.type === "email" && <Mail className="h-4 w-4" />}
                     {selectedNotification.type === "in_app" && <MessageSquare className="h-4 w-4" />}
+                    {selectedNotification.type === "sms" && <Phone className="h-4 w-4" />}
                     {selectedNotification.type === "both" && (
                       <>
                         <Mail className="h-4 w-4" />
                         <MessageSquare className="h-4 w-4" />
+                      </>
+                    )}
+                    {selectedNotification.type === "all" && (
+                      <>
+                        <Mail className="h-4 w-4" />
+                        <MessageSquare className="h-4 w-4" />
+                        <Phone className="h-4 w-4" />
                       </>
                     )}
                     <span className="capitalize">{selectedNotification.type?.replace("_", " ")}</span>
@@ -541,6 +621,10 @@ export default function NotificationManagementPage() {
                   </div>
                 </div>
               )}
+            </div>
+          ) : selectedNotificationId ? (
+            <div className="py-8 text-center text-muted-foreground">
+              This notification is no longer in the recent list. Try refreshing the page.
             </div>
           ) : null}
           

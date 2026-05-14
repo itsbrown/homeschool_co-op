@@ -1756,6 +1756,58 @@ export class DatabaseStorage implements IStorage {
     return payment;
   }
 
+  /**
+   * Parent manual pay: only one in-flight charge per installment. Autopay uses `charged_by = auto_pay`;
+   * this path uses `parent_manual` so we do not steal rows mid–off-session charge.
+   */
+  async claimScheduledPaymentForParentCharge(
+    id: number,
+    parentId: number,
+  ): Promise<ScheduledPayment | undefined> {
+    const db = await getDb();
+    const [row] = await db
+      .update(scheduledPayments)
+      .set({
+        status: 'processing',
+        chargedBy: 'parent_manual',
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(scheduledPayments.id, id),
+          eq(scheduledPayments.parentId, parentId),
+          sql`${scheduledPayments.status} in ('pending', 'overdue', 'failed')`,
+        ),
+      )
+      .returning();
+    return row;
+  }
+
+  async releaseScheduledPaymentParentClaim(
+    id: number,
+    parentId: number,
+  ): Promise<ScheduledPayment | undefined> {
+    const db = await getDb();
+    const [row] = await db
+      .update(scheduledPayments)
+      .set({
+        status: 'pending',
+        chargedBy: null,
+        stripePaymentIntentId: null,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(scheduledPayments.id, id),
+          eq(scheduledPayments.parentId, parentId),
+          eq(scheduledPayments.status, 'processing'),
+          eq(scheduledPayments.chargedBy, 'parent_manual'),
+        ),
+      )
+      .returning();
+    return row;
+  }
+
   async getScheduledPaymentsByParentEmail(parentEmail: string): Promise<ScheduledPayment[]> {
     const db = await getDb();
     const normalized = normalizeEmailForLookup(parentEmail);
@@ -2400,6 +2452,27 @@ export class DatabaseStorage implements IStorage {
         readAt: recipientInfo?.readAt,
       } as any;
     });
+  }
+
+  async getSentNotificationsBySchool(schoolId: number): Promise<Notification[]> {
+    const db = await getDb();
+    const rows = await db
+      .select({ n: notifications })
+      .from(notifications)
+      .innerJoin(
+        userRoles,
+        and(eq(userRoles.userId, notifications.senderId), eq(userRoles.schoolId, schoolId)),
+      )
+      .orderBy(desc(notifications.createdAt));
+
+    const seen = new Set<number>();
+    const result: Notification[] = [];
+    for (const row of rows) {
+      if (seen.has(row.n.id)) continue;
+      seen.add(row.n.id);
+      result.push(row.n as Notification);
+    }
+    return result;
   }
 
   async createNotification(notification: InsertNotification): Promise<Notification> {

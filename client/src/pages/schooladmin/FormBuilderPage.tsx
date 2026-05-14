@@ -530,7 +530,7 @@ function SendSurveyDialog({ form, onClose }: { form: CustomForm; onClose: () => 
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/notifications?view=sent'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/school-admin/notifications/tracking'] });
       toast({ title: 'Survey Sent', description: 'The survey notification has been sent successfully.' });
       onClose();
     },
