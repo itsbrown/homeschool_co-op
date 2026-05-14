@@ -1,7 +1,15 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, jest } from '@jest/globals';
+import { nanoid } from 'nanoid';
 import { testDb } from '../helpers/testDatabase';
 import { api, resetApi } from '../helpers/apiHelpers';
 import { storage } from '../../storage';
+
+/**
+ * Same contract as other DB-backed integration suites (see server/tests/README.md):
+ * set TEST_DATABASE_URL to a reachable Postgres with the app schema, e.g.
+ *   TEST_DATABASE_URL="postgresql://user:pass@localhost:5432/asa_test" npx jest --config jest.integration.config.cjs server/tests/integration/cart-credits-only-checkout-route.test.ts --runInBand
+ */
+const describeWithDb = process.env.TEST_DATABASE_URL ? describe : describe.skip;
 
 const mockStripeCustomersSearch = jest.fn();
 const mockStripeSubscriptionsList = jest.fn();
@@ -13,7 +21,7 @@ jest.mock('../../config/stripe', () => ({
   getStripePublishableKey: jest.fn(async () => 'pk_test_mock'),
 }));
 
-describe('Integration: cart credits-only checkout (create-payment-intent)', () => {
+describeWithDb('Integration: cart credits-only checkout (create-payment-intent)', () => {
   let testUser: any;
   let testSchool: any;
   let testChild: any;
@@ -34,6 +42,8 @@ describe('Integration: cart credits-only checkout (create-payment-intent)', () =
     jest.restoreAllMocks();
     await testDb.cleanup();
 
+    const uid = nanoid(8).toLowerCase();
+
     (mockStripeCustomersSearch as any).mockResolvedValue({ data: [] });
     (mockStripeSubscriptionsList as any).mockResolvedValue({ data: [] });
     (mockStripePaymentIntentsCreate as any).mockResolvedValue({
@@ -50,19 +60,19 @@ describe('Integration: cart credits-only checkout (create-payment-intent)', () =
     });
 
     const admin = await testDb.createTestUser({
-      username: 'cart_credit_admin',
-      email: 'admin.cartcredit@test.com',
+      username: `cart_credit_admin_${uid}`,
+      email: `cart_admin_${uid}@test.com`,
       role: 'schoolAdmin',
       name: 'Cart Credit Admin',
     });
     testSchool = await testDb.createTestSchool(admin.id, {
-      name: 'Cart Credit School',
-      registrationCode: 'CARTCR1',
+      name: `Cart Credit School ${uid}`,
+      registrationCode: `CART${uid.toUpperCase().slice(0, 6)}`,
     });
 
     testUser = await testDb.createTestUser({
-      username: 'cart_credit_parent',
-      email: 'parent.cartcredit@test.com',
+      username: `cart_credit_parent_${uid}`,
+      email: `cart_parent_${uid}@test.com`,
       password: 'TestPassword123',
       name: 'Cart Credit Parent',
       role: 'parent',
@@ -74,14 +84,20 @@ describe('Integration: cart credits-only checkout (create-payment-intent)', () =
       lastName: 'Child',
       dateOfBirth: new Date('2015-01-01'),
       schoolId: testSchool.id,
+      parentEmail: testUser.email,
     });
 
+    const category = await testDb.createTestCategory(testSchool.id, {
+      name: `Cart Credit Category ${uid}`,
+    });
     testClass = await testDb.createTestClass(testSchool.id, {
-      name: 'Cart Credit Class',
+      name: `Cart Credit Class ${uid}`,
       description: 'For credits-only checkout',
       price: 10000,
       status: 'active',
-      type: 'school',
+      type: 'school_admin',
+      categoryId: category.id,
+      category: `Cart Credit Category ${uid}`,
     });
   });
 
@@ -98,7 +114,8 @@ describe('Integration: cart credits-only checkout (create-payment-intent)', () =
       usageLogs: [],
     } as any);
 
-    await api.loginAsUser(testUser.email, 'TestPassword123');
+    api.clearAuth();
+    api.setTestUserEmail(testUser.email);
 
     const response = await api.post('/api/stripe/create-payment-intent', {
       items: [
@@ -107,7 +124,7 @@ describe('Integration: cart credits-only checkout (create-payment-intent)', () =
           childName: `${testChild.firstName} ${testChild.lastName}`,
           classId: testClass.id,
           className: testClass.name,
-          classType: 'school',
+          classType: 'school_class',
           price: 10000,
           totalCost: 10000,
           depositRequired: 0,

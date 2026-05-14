@@ -200,6 +200,7 @@ export const api = {
   setAuthToken(token: string) { return getApi().setAuthToken(token); },
   setCookies(cookies: string[]) { return getApi().setCookies(cookies); },
   clearAuth() { return getApi().clearAuth(); },
+  setTestUserEmail(email: string | null) { return getApi().setTestUserEmail(email); },
   async get(url: string, query?: Record<string, any>) { return getApi().get(url, query); },
   async post(url: string, data?: any) { return getApi().post(url, data); },
   async put(url: string, data?: any) { return getApi().put(url, data); },

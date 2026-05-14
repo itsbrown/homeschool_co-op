@@ -422,8 +422,11 @@ export class DatabaseStorage implements IStorage {
 
   async createClass(classData: InsertClass & { instructorId: number }): Promise<Class> {
     const db = await getDb();
+    // Never send `id` on insert — serial PK must come from Postgres; a stale or
+    // mem-sourced id causes 23505 duplicate key (classes_pkey) on shared DBs.
+    const { id: _ignoredId, ...insertPayload } = classData as InsertClass & { id?: number };
     const [newClass] = await db.insert(classes).values({
-      ...classData,
+      ...insertPayload,
       createdAt: new Date(),
       updatedAt: new Date()
     }).returning();

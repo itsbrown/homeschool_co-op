@@ -344,6 +344,7 @@ export interface IStorage {
   // Scheduled Payment methods
   createScheduledPayment(payment: any): Promise<any>;
   getScheduledPaymentsByParentEmail(parentEmail: string): Promise<any[]>;
+  getScheduledPaymentsByEnrollmentId(enrollmentId: number): Promise<ScheduledPayment[]>;
   getAllScheduledPayments(): Promise<any[]>;
   updateScheduledPaymentStatus(id: number, status: string): Promise<any | undefined>;
   updateScheduledPaymentReminderCount(id: number, count: number): Promise<any | undefined>;
@@ -3279,6 +3280,12 @@ export class MemStorage implements IStorage {
     return filteredPayments;
   }
 
+  async getScheduledPaymentsByEnrollmentId(enrollmentId: number): Promise<ScheduledPayment[]> {
+    return Array.from(this.scheduledPaymentsStore.values())
+      .filter((p) => p.enrollmentId === enrollmentId)
+      .sort((a, b) => new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime());
+  }
+
   async updateScheduledPaymentStatus(id: number, status: 'pending' | 'paid' | 'overdue' | 'cancelled'): Promise<ScheduledPayment | undefined> {
     const payment = this.scheduledPaymentsStore.get(id);
     if (!payment) return undefined;
@@ -5934,6 +5941,17 @@ export class MemStorage implements IStorage {
         } catch (error) {
           return await this.fileStorage.getScheduledPaymentsByParentEmail(parentEmail);
         }
+      }
+
+      async getScheduledPaymentsByEnrollmentId(enrollmentId: number): Promise<ScheduledPayment[]> {
+        try {
+          if (this.dbStorage && typeof this.dbStorage.getScheduledPaymentsByEnrollmentId === 'function') {
+            return await this.dbStorage.getScheduledPaymentsByEnrollmentId(enrollmentId);
+          }
+        } catch (error) {
+          console.error('❌ Error loading scheduled payments by enrollment, using mem fallback:', error);
+        }
+        return await this.memStorage.getScheduledPaymentsByEnrollmentId(enrollmentId);
       }
 
       async updateScheduledPaymentStatus(id: number, status: 'pending' | 'paid' | 'overdue' | 'cancelled'): Promise<ScheduledPayment | undefined> {
