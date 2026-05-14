@@ -1581,6 +1581,7 @@ router.post('/setup-auto-pay-scenario', async (req: Request, res: Response) => {
       'stuck-processing-no-pi',
       'credits-partial-cover',
       'credits-full-cover',
+      'credits-sub50-full-cover',
       'credits-floor-guard',
       'credits-held-async-fail',
       'comped-credits-full-cover',
@@ -1671,7 +1672,8 @@ router.post('/setup-auto-pay-scenario', async (req: Request, res: Response) => {
     } as any);
 
     // Determine payment amount, status and date per scenario
-    const paymentAmount = scenario === 'amount-too-small' ? 30 : 5000;
+    const paymentAmount =
+      scenario === 'amount-too-small' ? 30 : scenario === 'credits-sub50-full-cover' ? 30 : 5000;
     const paymentStatus =
       scenario === 'already-processing' || scenario === 'stuck-processing-no-pi' ? 'processing' : 'pending';
     const yesterday = new Date(Date.now() - 86400000);
@@ -1733,6 +1735,26 @@ router.post('/setup-auto-pay-scenario', async (req: Request, res: Response) => {
         approvedBy: admin.id,
         title: `Test Full Credit ${uid}`,
         description: 'Seeded for credits-full-cover integration test',
+        sourceType: 'manual_grant',
+        sourceId: null,
+        expiresAt: null,
+        rejectionReason: null,
+        notes: null,
+        metadata: null,
+      } as any);
+      seededCreditId = credit.id;
+    }
+
+    if (scenario === 'credits-sub50-full-cover') {
+      const credit = await storage.createCredit({
+        userId: parent.id,
+        schoolId: school.id,
+        creditType: 'manual',
+        creditAmountCents: 30,
+        status: 'approved',
+        approvedBy: admin.id,
+        title: `Test Sub50 Full Credit ${uid}`,
+        description: 'Seeded for credits-sub50-full-cover integration test',
         sourceType: 'manual_grant',
         sourceId: null,
         expiresAt: null,

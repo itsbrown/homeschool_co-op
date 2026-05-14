@@ -8,6 +8,7 @@ import { getStripeClient, getStripePublishableKey } from '../config/stripe';
 import { calculateMembershipDiscount } from '../utils/membership';
 import { calculateCanonicalAmounts } from '../services/canonical-amount-calculator';
 import { enrollmentOutstandingCentsForCheckout } from '../lib/checkout-enrollment-balance';
+import { completeCartCreditsOnlyCheckout } from '../services/cart-credits-only-checkout';
 
 /** Stripe minimum charge in USD cents for card-present checkouts. */
 const STRIPE_MINIMUM_CHECKOUT_CENTS = 50;
@@ -427,13 +428,6 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
       });
       const payableTotalCents = totalWithMembership - appliedVolunteerCreditsCents;
 
-      if (totalWithMembership > 0 && payableTotalCents === 0 && appliedVolunteerCreditsCents > 0) {
-        return res.status(400).json({
-          message: 'This order is fully covered by credits — no card payment is required.',
-          error: 'FULL_CREDIT_NO_CARD',
-        });
-      }
-
       if (
         payableTotalCents > 0 &&
         payableTotalCents < STRIPE_MINIMUM_CHECKOUT_CENTS &&
@@ -574,6 +568,59 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
           clientTotal: total,
           authoritativeTotal: totalWithMembership
         });
+      }
+
+      if (
+        totalWithMembership > 0 &&
+        payableTotalCents === 0 &&
+        appliedVolunteerCreditsCents > 0
+      ) {
+        try {
+          const coc = await completeCartCreditsOnlyCheckout({
+            parentEmail: userEmail,
+            parentId: parent.id,
+            parentSchoolId: parent.schoolId ?? null,
+            enrollmentIds,
+            authoritativeAmountResult,
+            appliedVolunteerCreditsCents,
+            totalWithMembership,
+            serverMembership,
+          });
+          return res.json({
+            creditOnlyCheckout: true,
+            creditsApplied: coc.creditsApplied,
+            paymentIntentId: coc.syntheticPaymentIntentId,
+            enrollmentIds,
+            scheduledPayments: [],
+            paymentPlan,
+            hasActiveSubscription,
+            subscriptionInfo: existingSubscription
+              ? {
+                  id: existingSubscription.id,
+                  status: existingSubscription.status,
+                  currentPeriodEnd: (() => {
+                    try {
+                      const ts = existingSubscription.current_period_end;
+                      if (!ts || typeof ts !== 'number') return null;
+                      const date = new Date(ts * 1000);
+                      return isNaN(date.getTime()) ? null : date.toISOString();
+                    } catch {
+                      return null;
+                    }
+                  })(),
+                }
+              : null,
+          });
+        } catch (cocErr: any) {
+          console.error('❌ Credits-only cart checkout failed:', cocErr);
+          return res.status(500).json({
+            message:
+              typeof cocErr?.message === 'string' && cocErr.message.includes('INSUFFICIENT_CREDIT_HOLD')
+                ? 'Could not reserve enough volunteer credits. Please refresh and try again.'
+                : 'Failed to complete credits-only checkout',
+            error: 'CREDITS_ONLY_CHECKOUT_FAILED',
+          });
+        }
       }
 
       // Use payment plan service for ALL payment plans

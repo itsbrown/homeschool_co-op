@@ -21,3 +21,11 @@ if (process.env.TEST_DATABASE_URL) {
 } else if (!process.env.DATABASE_URL) {
   process.env.DATABASE_URL = 'postgresql://test:test@localhost:5432/asa_test';
 }
+
+// server/tests/setup.ts requires explicit money-path flags in integration runs.
+if (!process.env.PAYMENT_PROCESSOR_ENABLED) {
+  process.env.PAYMENT_PROCESSOR_ENABLED = 'true';
+}
+if (!process.env.BALANCE_AWARE_ALLOCATION) {
+  process.env.BALANCE_AWARE_ALLOCATION = 'false';
+}

@@ -358,6 +358,20 @@ export async function processPayment(
     if (enrollmentCreditTotal > 0) {
       console.log(`💰 PaymentProcessor: Including ${enrollmentCreditTotal} cents of credits in totalPaid (across ${allocations.length} enrollment(s))`);
     }
+
+    const creditShareByEnrollmentId = new Map<number, number>();
+    if (enrollmentCreditTotal > 0 && input.enrollmentIds.length > 0 && input.amountCents === 0) {
+      if (balanceAwareEnabled) {
+        const balanceInputsCredit = await loadEnrollmentBalances(input.enrollmentIds);
+        for (const row of allocatePaymentByBalance(enrollmentCreditTotal, balanceInputsCredit)) {
+          creditShareByEnrollmentId.set(row.enrollmentId, row.amountCents);
+        }
+      } else {
+        for (const row of splitAmountAcrossEnrollments(enrollmentCreditTotal, input.enrollmentIds)) {
+          creditShareByEnrollmentId.set(row.enrollmentId, row.amountCents);
+        }
+      }
+    }
     
     for (const allocation of allocations) {
       try {
@@ -365,10 +379,13 @@ export async function processPayment(
         if (enrollment) {
           const currentPaid = enrollment.totalPaid || 0;
           
-          // Distribute credits proportionally by Stripe allocation amount (same split as Stripe charges)
+          // Distribute credits: when Stripe charged $0, split enrollment credits by balance (or evenly),
+          // not by zero Stripe allocations (which would put 100% on the last enrollment).
           let creditShareForThisEnrollment = 0;
           if (enrollmentCreditTotal > 0 && allocations.length > 0) {
-            if (allocations.length === 1) {
+            if (input.amountCents === 0) {
+              creditShareForThisEnrollment = creditShareByEnrollmentId.get(allocation.enrollmentId) ?? 0;
+            } else if (allocations.length === 1) {
               creditShareForThisEnrollment = enrollmentCreditTotal;
             } else {
               // Proportional share: this allocation's Stripe amount / total Stripe amount

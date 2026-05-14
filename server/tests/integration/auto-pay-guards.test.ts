@@ -12,7 +12,7 @@
  * Guards tested (G1–G5):
  *  G1: autoPayEnabled === false       → status stays 'pending'
  *  G2: No saved payment method        → status stays 'pending'
- *  G3: amount < 50 cents              → status stays 'pending'
+ *  G3: amount < 50 cents (no credits)     → status stays 'pending' (Stripe cannot charge < $0.50)
  *  G4: enrollment already paid (balance = 0) → status set to 'cancelled' (critical double-charge guard)
  *  G5: payment already in 'processing' state → status stays 'processing' (idempotency guard)
  *
@@ -170,6 +170,20 @@ describe('Auto-Pay Guard Conditions', () => {
 
     expect(result).toBe('skipped');
     expect(status).toBe('pending');
+  }, 30000);
+
+  it('G16: credits-full-cover-sub50 — installment under $0.50 fully covered by credits completes without Stripe', async () => {
+    const { scheduledPaymentId, enrollmentId, creditId } = await seedScenario('credits-sub50-full-cover');
+    const enrollmentBefore = await getEnrollment(enrollmentId);
+    const result = await triggerGuard(scheduledPaymentId);
+    const payment = await getPayment(scheduledPaymentId);
+    const credit = await getCredit(creditId!);
+
+    expect(result).toBe('charged');
+    expect(payment.status).toBe('completed');
+    expect(credit.usedAmountCents).toBe(30);
+    const enrollmentAfter = await getEnrollment(enrollmentId);
+    expect(enrollmentAfter.totalPaid).toBe((enrollmentBefore.totalPaid || 0) + 30);
   }, 30000);
 
   it('G3: amount-too-small — skips amount below $0.50 Stripe minimum and leaves status as pending', async () => {

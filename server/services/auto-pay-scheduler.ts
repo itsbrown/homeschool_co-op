@@ -510,8 +510,8 @@ export async function processOneScheduledPayment(sp: any): Promise<'charged' | '
       return 'skipped';
     }
 
-    if (!sp.amount || sp.amount < 50) {
-      console.log(`[AutoPay] Skipping payment ${sp.id} — amount ${sp.amount} is below Stripe minimum ($0.50)`);
+    if (!sp.amount || sp.amount < 0) {
+      console.log(`[AutoPay] Skipping payment ${sp.id} — invalid amount ${sp.amount}`);
       return 'skipped';
     }
 
@@ -550,11 +550,9 @@ export async function processOneScheduledPayment(sp: any): Promise<'charged' | '
     }
 
     // Credit calculation: apply available credits to reduce or eliminate the card charge.
+    // Use getTotalAvailableCredits (same as checkout) so pending holds do not double-spend.
     try {
-      const availableCredits = await storage.getAvailableCredits(parent.id);
-      const totalAvailable = availableCredits.reduce(
-        (sum: number, c: any) => sum + (c.creditAmountCents - (c.usedAmountCents || 0)), 0
-      );
+      const totalAvailable = await storage.getTotalAvailableCredits(parent.id);
 
       if (totalAvailable > 0) {
         // Determine how many credits to apply, respecting the $0.50 Stripe minimum:
@@ -653,6 +651,14 @@ export async function processOneScheduledPayment(sp: any): Promise<'charged' | '
         } catch (_) { /* best-effort */ }
         return 'failed';
       }
+    }
+
+    // Stripe cannot charge positive amounts below $0.50 USD; credits-only path already returned above.
+    if (chargeAmount > 0 && chargeAmount < 50) {
+      console.log(
+        `[AutoPay] Skipping payment ${sp.id} — net card amount ${chargeAmount}c is below Stripe minimum ($0.50)`,
+      );
+      return 'skipped';
     }
 
     // Stripe card is required for any payment that reaches here (partial-credit or full charge)
