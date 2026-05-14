@@ -397,9 +397,20 @@ describe('Integration: Financial & Enrollment Features (Phase 2)', () => {
           amount: 5000,
           amountPaid: 0,
           remainingBalance: 5000,
+          totalAmount: 5000,
+          balanceDue: 5000,
           status: 'pending_payment',
           dueDate,
-          expirationDate
+          expirationDate,
+          endDate: expirationDate,
+          membershipTier: 'basic',
+          stripeSubscriptionId: null,
+          stripeCustomerId: null,
+          startDate: null,
+          renewalDate: null,
+          paymentMethod: null,
+          notes: null,
+          gracePeriodEnd: null,
         });
 
         expect(membershipEnrollment).toBeDefined();
@@ -498,9 +509,20 @@ describe('Integration: Financial & Enrollment Features (Phase 2)', () => {
           amount: 5000,
           amountPaid: 0,
           remainingBalance: 5000,
+          totalAmount: 5000,
+          balanceDue: 5000,
           status: 'pending_payment',
           dueDate,
-          expirationDate
+          expirationDate,
+          endDate: expirationDate,
+          membershipTier: 'basic',
+          stripeSubscriptionId: null,
+          stripeCustomerId: null,
+          startDate: null,
+          renewalDate: null,
+          paymentMethod: null,
+          notes: null,
+          gracePeriodEnd: null,
         });
 
         expect(membership.status).toBe('pending_payment');

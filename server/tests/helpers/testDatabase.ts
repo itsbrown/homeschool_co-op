@@ -421,19 +421,35 @@ export class TestDatabase {
     return payment;
   }
 
-  async createTestMembershipEnrollment(parentId: number, schoolId: number, overrides: any = {}) {
-    const membershipData = {
+  async createTestMembershipEnrollment(parentId: number, schoolId: number, overrides: Partial<InsertMembershipEnrollment> = {}) {
+    const membershipYear = overrides.membershipYear ?? new Date().getFullYear();
+    const amount = overrides.amount ?? 15000;
+    const dueDate = overrides.dueDate ?? new Date();
+    const expirationDate = overrides.expirationDate ?? new Date(membershipYear, 11, 31);
+    const remaining = overrides.remainingBalance ?? amount;
+    const paid = overrides.amountPaid ?? 0;
+
+    const membershipData: InsertMembershipEnrollment = {
       parentUserId: parentId,
       schoolId,
-      membershipYear: overrides.membershipYear || new Date().getFullYear(),
-      amount: overrides.amount || 15000,
-      totalCost: overrides.totalCost || 15000,
-      remainingBalance: overrides.remainingBalance || 15000,
-      status: overrides.status || 'pending',
-      dueDate: overrides.dueDate || new Date().toISOString(),
-      expirationDate: overrides.expirationDate || new Date(new Date().getFullYear(), 11, 31).toISOString(),
-      gracePeriodEnd: overrides.gracePeriodEnd || new Date(new Date().getFullYear() + 1, 0, 31).toISOString(),
-      ...overrides
+      membershipYear,
+      amount,
+      amountPaid: paid,
+      remainingBalance: remaining,
+      totalAmount: overrides.totalAmount ?? amount,
+      balanceDue: overrides.balanceDue ?? remaining,
+      status: overrides.status ?? 'pending_payment',
+      dueDate,
+      expirationDate,
+      endDate: overrides.endDate ?? expirationDate,
+      gracePeriodEnd: overrides.gracePeriodEnd ?? null,
+      paymentMethod: overrides.paymentMethod ?? null,
+      notes: overrides.notes ?? null,
+      membershipTier: overrides.membershipTier ?? 'basic',
+      stripeSubscriptionId: overrides.stripeSubscriptionId ?? null,
+      stripeCustomerId: overrides.stripeCustomerId ?? null,
+      startDate: overrides.startDate ?? null,
+      renewalDate: overrides.renewalDate ?? null,
     };
 
     const membership = await storage.createMembershipEnrollment(membershipData);

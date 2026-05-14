@@ -1111,11 +1111,15 @@ export const membershipEnrollments = pgTable("membership_enrollments", {
   amount: integer("amount").notNull(), // Total membership fee in cents
   amountPaid: integer("amount_paid").default(0).notNull(), // Amount paid so far in cents
   remainingBalance: integer("remaining_balance").notNull(), // Remaining balance in cents
+  totalAmount: integer("total_amount").notNull().default(0), // Total membership amount (cents); aligns with amount when fully configured
+  balanceDue: integer("balance_due").notNull().default(0), // Outstanding membership balance (cents)
   status: text("status", { 
     enum: ["pending_payment", "enrolled", "expired", "grace_period", "suspended"] 
   }).default("pending_payment").notNull(),
   dueDate: timestamp("due_date").notNull(), // When membership payment is due
   expirationDate: timestamp("expiration_date").notNull(), // When membership expires
+  /** Term end (DB NOT NULL); keep in sync with expirationDate for annual memberships */
+  endDate: timestamp("end_date").notNull(),
   gracePeriodEnd: timestamp("grace_period_end"), // End of grace period if applicable
   paymentMethod: text("payment_method", { 
     enum: ["credit_card", "paypal", "bank_transfer", "cash", "check", "other"] 

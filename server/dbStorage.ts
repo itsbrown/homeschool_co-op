@@ -1033,6 +1033,7 @@ export class DatabaseStorage implements IStorage {
       return existing;
     }
 
+    const expirationDate = new Date(membershipYear, 11, 31);
     const enrollmentData: InsertMembershipEnrollment = {
       schoolId,
       parentUserId,
@@ -1040,9 +1041,17 @@ export class DatabaseStorage implements IStorage {
       amount: 6000, // $60 in cents
       amountPaid: 0,
       remainingBalance: 6000,
+      totalAmount: 6000,
+      balanceDue: 6000,
       status: 'pending_payment',
       dueDate: new Date(),
-      expirationDate: new Date(membershipYear, 11, 31),
+      expirationDate,
+      endDate: expirationDate,
+      membershipTier: 'basic',
+      stripeSubscriptionId: null,
+      stripeCustomerId: null,
+      startDate: null,
+      renewalDate: null,
       paymentMethod: null,
       notes: null,
       gracePeriodEnd: null

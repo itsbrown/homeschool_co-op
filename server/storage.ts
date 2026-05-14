@@ -1830,19 +1830,28 @@ export class MemStorage implements IStorage {
     gracePeriodEnd.setDate(gracePeriodEnd.getDate() + (school.membershipGracePeriodDays || 30));
 
     // Create new membership enrollment
+    const fee = school.membershipFeeAmount || 0;
     const enrollmentData: InsertMembershipEnrollment = {
       schoolId,
       parentUserId,
       membershipYear,
-      amount: school.membershipFeeAmount || 0,
+      amount: fee,
       amountPaid: 0,
-      remainingBalance: school.membershipFeeAmount || 0,
+      remainingBalance: fee,
+      totalAmount: fee,
+      balanceDue: fee,
       status: 'pending_payment',
       dueDate: renewalDate,
       expirationDate,
+      endDate: expirationDate,
       gracePeriodEnd,
       notes: null,
-      paymentMethod: null
+      paymentMethod: null,
+      membershipTier: 'basic',
+      stripeSubscriptionId: null,
+      stripeCustomerId: null,
+      startDate: null,
+      renewalDate: null,
     };
 
     return this.createMembershipEnrollment(enrollmentData);

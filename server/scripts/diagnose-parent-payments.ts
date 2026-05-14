@@ -112,7 +112,7 @@ async function diagnoseParentPayments(parentEmail: string) {
   
   // 3. Get membership enrollments
   const memberships = await db.select().from(membershipEnrollments)
-    .where(eq(membershipEnrollments.parentId, parent.id));
+    .where(eq(membershipEnrollments.parentUserId, parent.id));
   
   console.log(`\n🎫 MEMBERSHIP ENROLLMENTS (${memberships.length} total):`);
   console.log('-'.repeat(80));

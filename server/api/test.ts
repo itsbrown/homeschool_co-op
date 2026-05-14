@@ -354,6 +354,12 @@ router.post('/setup-cart-scenario', async (req: Request, res: Response) => {
         expirationDate: oneYearOut,
         membershipTier: 'basic',
         startDate: now,
+        renewalDate: oneYearOut,
+        gracePeriodEnd: null,
+        paymentMethod: 'other',
+        notes: 'Seeded via /api/test/setup-cart-scenario',
+        stripeSubscriptionId: null,
+        stripeCustomerId: null,
       };
       const insertedMemberships = await db
         .insert(membershipEnrollments)
@@ -2565,6 +2571,7 @@ router.post('/membership-idempotency/simulate-confirm', async (req: Request, res
         balanceDue: 0,
         startDate,
         renewalDate: expirationDate,
+        endDate: expirationDate,
         expirationDate,
         notes: `${existing.notes || ''} | Updated via cart checkout (${paymentIntentId})`.trim(),
       });
@@ -2639,6 +2646,7 @@ router.post('/membership-idempotency/simulate-webhook', async (req: Request, res
         balanceDue: 0,
         startDate,
         renewalDate: expirationDate,
+        endDate: expirationDate,
         expirationDate,
         notes: `Stripe payment via cart checkout (${paymentIntentId})`,
       });

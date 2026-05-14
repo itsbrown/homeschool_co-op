@@ -1041,6 +1041,7 @@ export const activateParentMembership = async (req: any, res: Response) => {
         startDate,
         renewalDate,
         dueDate,
+        endDate: expirationDate,
         expirationDate,
         gracePeriodEnd,
         notes: `Manually activated by admin ${userEmail}`
