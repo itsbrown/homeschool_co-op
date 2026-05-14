@@ -68,6 +68,19 @@ interface NotificationTrackingRow {
   };
 }
 
+/** Accept raw GET body whether Replit/cache returns a bare array or a wrapped object. */
+function extractTrackingRows(response: unknown): NotificationTrackingRow[] {
+  if (Array.isArray(response)) return response as NotificationTrackingRow[];
+  if (response && typeof response === "object") {
+    const o = response as Record<string, unknown>;
+    if (Array.isArray(o.data)) return o.data as NotificationTrackingRow[];
+    if (Array.isArray(o.items)) return o.items as NotificationTrackingRow[];
+    if (Array.isArray(o.tracking)) return o.tracking as NotificationTrackingRow[];
+    if (Array.isArray(o.notifications)) return o.notifications as NotificationTrackingRow[];
+  }
+  return [];
+}
+
 function mapTrackingRowToNotification(row: NotificationTrackingRow): Notification {
   const rawType = String(row.type || "both").toLowerCase();
   const type: Notification["type"] =
@@ -116,13 +129,19 @@ export default function NotificationManagementPage() {
   const TRACKING_QUERY_KEY = ["/api/school-admin/notifications/tracking"] as const;
 
   // School-scoped sent notifications (matches Notification Tracking API contract)
-  const { data: notifications = [], isLoading } = useQuery({
+  const { data: notificationsRaw, isLoading } = useQuery({
     queryKey: TRACKING_QUERY_KEY,
     select: (data: unknown) => {
-      if (!Array.isArray(data)) return [];
-      return (data as NotificationTrackingRow[]).map(mapTrackingRowToNotification);
+      try {
+        const rows = extractTrackingRows(data);
+        return rows.map((row) => mapTrackingRowToNotification(row));
+      } catch {
+        return [];
+      }
     },
   });
+
+  const notifications = Array.isArray(notificationsRaw) ? notificationsRaw : [];
 
   const selectedNotification = useMemo(
     () => notifications.find((n) => n.id === selectedNotificationId) ?? null,
