@@ -269,12 +269,12 @@ function DashboardRouter() {
   // Show dashboard based on selected role (roles come from database via RoleContext)
   console.log(`🏠 Dashboard routing - activeRole:`, activeRole);
 
-  // For parent - route to AI Concierge as default landing page
+  // For parent - default landing is the parent dashboard (not AI Concierge)
   if (activeRole === 'parent') {
-    console.log('🏠 Routing parent to AI Concierge');
+    console.log('🏠 Routing parent to ParentDashboard');
     return (
       <ParentAppShell key={`dashboard-${activeRole}`}>
-        <ParentConciergePage />
+        <ParentDashboard />
       </ParentAppShell>
     );
   }
