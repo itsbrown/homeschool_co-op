@@ -83,6 +83,15 @@ function normalizeCombinedDeliveryType(raw: unknown): "email" | "in_app" | "sms"
   return "both";
 }
 
+/** DB user id for `notifications.sender_id` FK. Null when auth has no numeric user (e.g. degraded DB mode). */
+function getAuthenticatedSenderId(req: any): number | null {
+  const raw = req.user?.id ?? req.session?.userId;
+  if (raw === undefined || raw === null || raw === "") return null;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 1) return null;
+  return n;
+}
+
 // Compatibility endpoint used by integration tests.
 router.post("/", async (req: any, res) => {
   try {
@@ -264,8 +273,15 @@ router.get("/twilio-status", async (_req, res) => {
 
 router.post("/preview-recipients", async (req: any, res) => {
   try {
-    const userId = req.user?.id || req.session?.userId;
-    if (!userId) return res.status(401).json({ message: "User not authenticated" });
+    const senderId = getAuthenticatedSenderId(req);
+    if (!senderId) {
+      const degraded = Boolean(req.user?.degradedDbMode);
+      return res.status(degraded ? 503 : 401).json({
+        message: degraded
+          ? "Your account could not be loaded from the database. Try again shortly or sign back in."
+          : "User not authenticated",
+      });
+    }
     const body = (req.body || {}) as CombinedTargetingBody;
     const recipientIds = await resolveCombinedRecipientIds(body);
     return res.json({ recipientCount: recipientIds.length });
@@ -277,8 +293,15 @@ router.post("/preview-recipients", async (req: any, res) => {
 
 router.post("/send-combined", async (req: any, res) => {
   try {
-    const senderId = req.user?.id || req.session?.userId;
-    if (!senderId) return res.status(401).json({ message: "User not authenticated" });
+    const senderId = getAuthenticatedSenderId(req);
+    if (!senderId) {
+      const degraded = Boolean(req.user?.degradedDbMode);
+      return res.status(degraded ? 503 : 401).json({
+        message: degraded
+          ? "Your account could not be loaded from the database. Try again shortly or sign back in."
+          : "User not authenticated",
+      });
+    }
 
     const {
       subject,
@@ -310,7 +333,7 @@ router.post("/send-combined", async (req: any, res) => {
 
     const deliveryType = normalizeCombinedDeliveryType(type);
     const notification = await storage.createNotification({
-      senderId: Number(senderId),
+      senderId,
       type: deliveryType,
       priority: priority || "normal",
       subject,
@@ -318,7 +341,7 @@ router.post("/send-combined", async (req: any, res) => {
       targetType: "individual" as const,
       targetData: { userIds: recipientIds } as any,
       scheduledFor: scheduledFor ? new Date(scheduledFor) : null,
-      status: scheduledFor ? "scheduled" : "pending",
+      status: scheduledFor ? "scheduled" : "sending",
     } as any);
 
     await processNotification(notification);
@@ -330,6 +353,8 @@ router.post("/send-combined", async (req: any, res) => {
     });
   } catch (error) {
     console.error("Error sending combined notification:", error);
+    const detail = error instanceof Error ? error.message : String(error);
+    console.error("send-combined detail:", detail);
     return res.status(500).json({ message: "Failed to send notification" });
   }
 });
@@ -685,8 +710,14 @@ router.post("/mark-all-read", async (req, res) => {
 
 router.post("/:id/resend", async (req: any, res) => {
   try {
-    const senderId = req.user?.id || req.session?.userId;
-    if (!senderId) return res.status(401).json({ message: "User not authenticated" });
+    if (!getAuthenticatedSenderId(req)) {
+      const degraded = Boolean(req.user?.degradedDbMode);
+      return res.status(degraded ? 503 : 401).json({
+        message: degraded
+          ? "Your account could not be loaded from the database. Try again shortly or sign back in."
+          : "User not authenticated",
+      });
+    }
 
     const id = parseInt(req.params.id, 10);
     if (isNaN(id)) return res.status(400).json({ message: "Invalid notification ID" });
