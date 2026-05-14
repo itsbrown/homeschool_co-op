@@ -504,18 +504,24 @@ function SendSurveyDialog({ form, onClose }: { form: CustomForm; onClose: () => 
       const subject = form.title;
       const content = message;
 
-      if (!includeAll && selectedUsers.length === 0 && selectedRoles.length === 0 && selectedLocations.length === 0 && selectedClasses.length === 0) {
+      const resolvedUserIds = selectedUsers
+        .map((u) => Number(u.id))
+        .filter((id) => Number.isFinite(id) && id > 0);
+
+      if (!includeAll && resolvedUserIds.length === 0 && selectedRoles.length === 0 && selectedLocations.length === 0 && selectedClasses.length === 0) {
+        if (selectedUsers.length > 0) {
+          throw new Error('Selected users are missing valid IDs. Remove them and pick recipients again from search.');
+        }
         throw new Error('Please select at least one recipient group or choose Everyone.');
       }
 
       const body = {
-        senderId: 1,
         subject,
         content,
         type: deliveryType,
         priority,
         includeAll,
-        userIds: selectedUsers.map(u => u.id),
+        userIds: resolvedUserIds,
         roles: selectedRoles,
         locationIds: selectedLocations,
         classIds: selectedClasses,

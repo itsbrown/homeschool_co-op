@@ -720,7 +720,15 @@ function NotificationComposeDialog({
   // Debounced recipient count preview
   useEffect(() => {
     const { includeAll, selectedUsers, selectedRoles, selectedLocations, selectedClasses } = targeting;
-    const hasSelection = includeAll || selectedUsers.length > 0 || selectedRoles.length > 0 || selectedLocations.length > 0 || selectedClasses.length > 0;
+    const resolvedUserIds = selectedUsers
+      .map((u) => Number(u.id))
+      .filter((id) => Number.isFinite(id) && id > 0);
+    const hasSelection =
+      includeAll ||
+      resolvedUserIds.length > 0 ||
+      selectedRoles.length > 0 ||
+      selectedLocations.length > 0 ||
+      selectedClasses.length > 0;
     if (!hasSelection) {
       setPreviewCount(null);
       return;
@@ -730,7 +738,7 @@ function NotificationComposeDialog({
       try {
         const response = await apiRequest("POST", "/api/notifications/preview-recipients", {
           includeAll,
-          userIds: selectedUsers.map(u => u.id),
+          userIds: resolvedUserIds,
           roles: selectedRoles,
           locationIds: selectedLocations,
           classIds: selectedClasses,
@@ -756,7 +764,9 @@ function NotificationComposeDialog({
       type: deliveryType,
       priority: prio,
       includeAll,
-      userIds: selectedUsers.map(u => u.id),
+      userIds: selectedUsers
+        .map((u) => Number(u.id))
+        .filter((id) => Number.isFinite(id) && id > 0),
       roles: selectedRoles,
       locationIds: selectedLocations,
       classIds: selectedClasses,
@@ -778,9 +788,25 @@ function NotificationComposeDialog({
       return;
     }
 
+    const resolvedUserIds = selectedUsers
+      .map((u) => Number(u.id))
+      .filter((id) => Number.isFinite(id) && id > 0);
+
     // Validate at least one targeting source is selected when sending
-    if (!includeAll && selectedUsers.length === 0 && selectedRoles.length === 0 && selectedLocations.length === 0 && selectedClasses.length === 0) {
-      toast({ title: "No recipients selected", description: "Please select at least one targeting group or choose Everyone.", variant: "destructive" });
+    if (!includeAll && resolvedUserIds.length === 0 && selectedRoles.length === 0 && selectedLocations.length === 0 && selectedClasses.length === 0) {
+      if (selectedUsers.length > 0) {
+        toast({
+          title: "Invalid recipient selection",
+          description: "Selected users are missing valid IDs. Remove them and pick recipients again from search.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "No recipients selected",
+          description: "Please select at least one targeting group or choose Everyone.",
+          variant: "destructive",
+        });
+      }
       return;
     }
 

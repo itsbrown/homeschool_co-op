@@ -1,5 +1,6 @@
 import { supabase, supabaseAdmin, DatabaseUser, RoleInvitation } from './db/supabase';
 import { IStorage } from './storage';
+import type { User } from '@shared/schema';
 
 export class SupabaseStorage implements IStorage {
   // User management methods
@@ -80,6 +81,61 @@ export class SupabaseStorage implements IStorage {
     }
 
     return data ?? undefined;
+  }
+
+  /** Used by /api/user-search when this adapter is the active IStorage — keep in sync with DatabaseStorage.searchUsers semantics. */
+  async searchUsers(params: {
+    schoolId: number | null;
+    query?: string;
+    role?: string;
+    limit: number;
+    offset: number;
+  }): Promise<{ users: User[]; total: number }> {
+    const { data, error } = await supabase.from('users').select('*').limit(5000);
+    if (error) {
+      console.error('SupabaseStorage.searchUsers error:', error);
+      return { users: [], total: 0 };
+    }
+    let list = (data || []) as any[];
+    if (params.schoolId != null && Number.isFinite(Number(params.schoolId))) {
+      const sid = Number(params.schoolId);
+      list = list.filter((u) => Number(u.school_id) === sid);
+    }
+    const q = (params.query ?? '').trim().toLowerCase();
+    if (q.length > 0) {
+      list = list.filter((u) => {
+        const blob = [u.email, u.name, u.first_name, u.last_name]
+          .map((x: string | null) => String(x ?? '').toLowerCase())
+          .join(' ');
+        return blob.includes(q);
+      });
+    }
+    if (params.role) {
+      const rl = params.role.toLowerCase();
+      list = list.filter(
+        (u) =>
+          String(u.role ?? '').toLowerCase() === rl ||
+          String(u.active_role ?? '').toLowerCase() === rl,
+      );
+    }
+    const total = list.length;
+    list.sort((a: any, b: any) => String(a.email ?? '').localeCompare(String(b.email ?? '')));
+    const slice = list.slice(params.offset, params.offset + params.limit);
+    const users = slice.map(
+      (u: any) =>
+        ({
+          id: Number(u.id),
+          email: u.email,
+          name: u.name,
+          firstName: u.first_name,
+          lastName: u.last_name,
+          role: u.role,
+          schoolId: u.school_id,
+          phone: u.phone,
+          avatar: u.avatar,
+        }) as User,
+    );
+    return { users, total };
   }
 
   async createUser(userData: any): Promise<any> {

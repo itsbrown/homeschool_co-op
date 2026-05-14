@@ -1,4 +1,4 @@
-import { eq, and, desc, asc, like, or, sql, lt, gt, lte, gte, isNull, inArray } from 'drizzle-orm';
+import { eq, and, desc, asc, like, or, sql, lt, gt, lte, gte, isNull, inArray, ilike } from 'drizzle-orm';
 import { normalizeEmailForLookup } from '@shared/parent-identity';
 import { getDb } from './db';
 import { IStorage } from './storage';
@@ -113,6 +113,65 @@ export class DatabaseStorage implements IStorage {
   async getAllUsers(): Promise<User[]> {
     const db = await getDb();
     return await db.select().from(users);
+  }
+
+  async searchUsers(params: {
+    schoolId: number | null;
+    query?: string;
+    role?: string;
+    limit: number;
+    offset: number;
+  }): Promise<{ users: User[]; total: number }> {
+    const db = await getDb();
+    const limit = Math.max(1, Math.min(params.limit, 100));
+    const offset = Math.max(0, params.offset);
+    const qRaw = (params.query ?? "").trim();
+    const escapeIlike = (s: string) => s.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
+
+    const conditions: any[] = [];
+
+    if (params.schoolId != null && Number.isFinite(Number(params.schoolId))) {
+      const sid = Number(params.schoolId);
+      const roleRows = await db
+        .select({ userId: userRoles.userId })
+        .from(userRoles)
+        .where(eq(userRoles.schoolId, sid));
+      const rawIds = roleRows.map((r: { userId: number | null }) => r.userId).filter((id: number | null): id is number => id != null);
+      const userIdsFromRoles = [...new Set(rawIds)];
+      if (userIdsFromRoles.length > 0) {
+        conditions.push(or(eq(users.schoolId, sid), inArray(users.id, userIdsFromRoles)));
+      } else {
+        conditions.push(eq(users.schoolId, sid));
+      }
+    }
+
+    if (qRaw.length > 0) {
+      const pat = `%${escapeIlike(qRaw)}%`;
+      conditions.push(
+        or(
+          ilike(users.email, pat),
+          ilike(users.name, pat),
+          ilike(users.firstName, pat),
+          ilike(users.lastName, pat),
+        ),
+      );
+    }
+
+    if (params.role) {
+      const r = params.role;
+      conditions.push(sql`((${users.role})::text = ${r} OR coalesce(${users.activeRole}, '') = ${r})`);
+    }
+
+    const whereExpr = conditions.length === 0 ? undefined : conditions.length === 1 ? conditions[0] : and(...conditions);
+
+    const countBase = db.select({ c: sql<number>`count(*)::int` }).from(users);
+    const [countRow] = whereExpr ? await countBase.where(whereExpr) : await countBase;
+    const total = Number(countRow?.c ?? 0);
+
+    const selectBase = db.select().from(users).orderBy(asc(users.email)).limit(limit).offset(offset);
+    const rows = whereExpr ? await selectBase.where(whereExpr) : await selectBase;
+
+    return { users: rows as User[], total };
   }
 
   async updateUser(id: number, user: Partial<InsertUser>): Promise<User | undefined> {

@@ -2,11 +2,21 @@ import { Router } from 'express';
 import { storage } from '../storage';
 import { supabaseAuth } from '../middleware/supabase-auth';
 import { z } from 'zod';
-import type { User } from '@shared/schema';
 
 const router = Router();
 
-const validRoles: User['role'][] = ["student", "parent", "learner", "educator", "mentor", "teacher", "schoolAdmin", "director", "admin", "superAdmin"];
+const validRoles: readonly string[] = [
+  "student",
+  "parent",
+  "learner",
+  "educator",
+  "mentor",
+  "teacher",
+  "schoolAdmin",
+  "director",
+  "admin",
+  "superAdmin",
+];
 
 const searchQuerySchema = z.object({
   query: z.string().optional().default(''),
@@ -28,7 +38,7 @@ router.get('/search', supabaseAuth, async (req: any, res) => {
       return res.status(401).json({ success: false, error: 'User not found' });
     }
 
-    if (!['schoolAdmin', 'admin', 'superAdmin'].includes(currentUser.role)) {
+    if (!['schoolAdmin', 'admin', 'superAdmin', 'director'].includes(String(currentUser.role))) {
       return res.status(403).json({ success: false, error: 'Insufficient permissions - admin access required' });
     }
 
@@ -41,16 +51,14 @@ router.get('/search', supabaseAuth, async (req: any, res) => {
     if (currentUser.role === 'superAdmin' || currentUser.role === 'admin') {
       const requestedSchoolId = params.schoolId ? parseInt(String(params.schoolId)) : null;
       effectiveSchoolId = requestedSchoolId;
-    } else if (currentUser.role === 'schoolAdmin') {
+    } else if (String(currentUser.role) === 'schoolAdmin' || String(currentUser.role) === 'director') {
       if (!currentUser.schoolId) {
-        return res.status(403).json({ success: false, error: 'School admin must have a school assigned' });
+        return res.status(403).json({ success: false, error: 'A school must be assigned to search users for this role.' });
       }
       effectiveSchoolId = currentUser.schoolId;
     }
 
-    const roleFilter = params.role && validRoles.includes(params.role as User['role'])
-      ? (params.role as User['role'])
-      : undefined;
+    const roleFilter = params.role && validRoles.includes(params.role) ? params.role : undefined;
 
     const { users: matchedUsers, total } = await storage.searchUsers({
       schoolId: effectiveSchoolId,
@@ -101,7 +109,7 @@ router.get('/roles', supabaseAuth, async (req: any, res) => {
       return res.status(401).json({ success: false, error: 'User not found' });
     }
 
-    if (!['schoolAdmin', 'admin', 'superAdmin'].includes(currentUser.role)) {
+    if (!['schoolAdmin', 'admin', 'superAdmin', 'director'].includes(String(currentUser.role))) {
       return res.status(403).json({ success: false, error: 'Insufficient permissions' });
     }
 

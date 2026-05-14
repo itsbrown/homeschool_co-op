@@ -3040,6 +3040,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const notificationsRouter = (await import("./api/notifications")).default;
   app.use("/api/notifications", supabaseAuth, notificationsRouter);
 
+  const userSearchRouter = (await import("./api/user-search")).default;
+  app.use("/api/user-search", userSearchRouter);
+
   // Billing is mounted once in server/index.ts (avoid duplicate Express stacks).
 
   // Register payment history routes

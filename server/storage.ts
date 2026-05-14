@@ -49,6 +49,7 @@ import {
   type CreditHold,
   type InsertCreditHold,
   type CreditHoldStatus,
+  type ErrorLog,
 } from "@shared/schema";
 import { normalizeEmailForLookup } from '@shared/parent-identity';
 import { eq, inArray } from 'drizzle-orm';
@@ -75,6 +76,14 @@ export interface IStorage {
   getUserByEmail(email: string): Promise<User | undefined>;
   getUserBySupabaseId(supabaseId: string): Promise<User | undefined>;
   getUserByAuth0Id(auth0Id: string): Promise<User | undefined>;
+  /** Admin notification compose / user picker — school-scoped or global (platform admins). */
+  searchUsers(params: {
+    schoolId: number | null;
+    query?: string;
+    role?: string;
+    limit: number;
+    offset: number;
+  }): Promise<{ users: User[]; total: number }>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: number, user: Partial<InsertUser>): Promise<User | undefined>;
   deleteUser(id: number): Promise<void>;
@@ -948,6 +957,41 @@ export class MemStorage implements IStorage {
 
   async getAllUsers(): Promise<User[]> {
     return Array.from(this.usersStore.values());
+  }
+
+  async searchUsers(params: {
+    schoolId: number | null;
+    query?: string;
+    role?: string;
+    limit: number;
+    offset: number;
+  }): Promise<{ users: User[]; total: number }> {
+    let list = Array.from(this.usersStore.values());
+    if (params.schoolId != null && Number.isFinite(Number(params.schoolId))) {
+      const sid = Number(params.schoolId);
+      list = list.filter((u) => Number(u.schoolId) === sid);
+    }
+    const q = (params.query ?? "").trim().toLowerCase();
+    if (q.length > 0) {
+      list = list.filter((u) => {
+        const blob = [u.email, u.name, u.firstName, u.lastName]
+          .map((x) => String(x ?? "").toLowerCase())
+          .join(" ");
+        return blob.includes(q);
+      });
+    }
+    if (params.role) {
+      const rl = params.role.toLowerCase();
+      list = list.filter(
+        (u) =>
+          String(u.role ?? "").toLowerCase() === rl ||
+          String((u as { activeRole?: string }).activeRole ?? "").toLowerCase() === rl,
+      );
+    }
+    const total = list.length;
+    const sorted = [...list].sort((a, b) => String(a.email).localeCompare(String(b.email)));
+    const slice = sorted.slice(params.offset, params.offset + params.limit);
+    return { users: slice, total };
   }
 
   // School methods
@@ -4879,6 +4923,22 @@ export class MemStorage implements IStorage {
       }
     }
 
+    async searchUsers(params: {
+      schoolId: number | null;
+      query?: string;
+      role?: string;
+      limit: number;
+      offset: number;
+    }): Promise<{ users: User[]; total: number }> {
+      try {
+        return await this.dbStorage.searchUsers(params);
+      } catch (error) {
+        if (isPostgresUnavailableError(error)) throw error;
+        this.logStorageError("searchUsers", error, true);
+        return await this.memStorage.searchUsers(params);
+      }
+    }
+
     async createUser(user: InsertUser): Promise<User> {
       // Enforce unique email constraint with fallback to memStorage
       let existingUser;
@@ -6997,6 +7057,67 @@ export class MemStorage implements IStorage {
 
       async getStripePaymentByIntentId(paymentIntentId: string): Promise<StripePaymentHistory | undefined> {
         return this.dbStorage.getStripePaymentByIntentId(paymentIntentId);
+      }
+
+      async createErrorLog(
+        row: Parameters<DatabaseStorage['createErrorLog']>[0],
+      ): Promise<ErrorLog> {
+        if (!(this.dbStorage instanceof DatabaseStorage)) {
+          throw new Error('createErrorLog requires PostgreSQL (DatabaseStorage)');
+        }
+        return this.dbStorage.createErrorLog(row);
+      }
+
+      async getErrorLogs(
+        filters: Parameters<DatabaseStorage['getErrorLogs']>[0],
+      ): Promise<ErrorLog[]> {
+        if (!(this.dbStorage instanceof DatabaseStorage)) {
+          throw new Error('getErrorLogs requires PostgreSQL (DatabaseStorage)');
+        }
+        return this.dbStorage.getErrorLogs(filters);
+      }
+
+      async getErrorLogsCount(
+        filters: Parameters<DatabaseStorage['getErrorLogsCount']>[0],
+      ): Promise<number> {
+        if (!(this.dbStorage instanceof DatabaseStorage)) {
+          throw new Error('getErrorLogsCount requires PostgreSQL (DatabaseStorage)');
+        }
+        return this.dbStorage.getErrorLogsCount(filters);
+      }
+
+      async getErrorLogById(id: number): Promise<ErrorLog | undefined> {
+        if (!(this.dbStorage instanceof DatabaseStorage)) {
+          throw new Error('getErrorLogById requires PostgreSQL (DatabaseStorage)');
+        }
+        return this.dbStorage.getErrorLogById(id);
+      }
+
+      async updateErrorLog(
+        id: number,
+        updates: Parameters<DatabaseStorage['updateErrorLog']>[1],
+      ): Promise<ErrorLog | undefined> {
+        if (!(this.dbStorage instanceof DatabaseStorage)) {
+          throw new Error('updateErrorLog requires PostgreSQL (DatabaseStorage)');
+        }
+        return this.dbStorage.updateErrorLog(id, updates);
+      }
+
+      async getErrorsSummary(
+        startDate: Date,
+        endDate: Date,
+      ): Promise<Awaited<ReturnType<DatabaseStorage['getErrorsSummary']>>> {
+        if (!(this.dbStorage instanceof DatabaseStorage)) {
+          throw new Error('getErrorsSummary requires PostgreSQL (DatabaseStorage)');
+        }
+        return this.dbStorage.getErrorsSummary(startDate, endDate);
+      }
+
+      async markErrorsNotified(ids: number[]): Promise<void> {
+        if (!(this.dbStorage instanceof DatabaseStorage)) {
+          throw new Error('markErrorsNotified requires PostgreSQL (DatabaseStorage)');
+        }
+        return this.dbStorage.markErrorsNotified(ids);
       }
 
       // Database initialization methods
