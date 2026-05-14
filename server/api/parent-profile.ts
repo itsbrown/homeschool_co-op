@@ -687,27 +687,33 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
       // Look up school name from the pre-fetched map
       const schoolName = membership.schoolId ? (schoolNameMap.get(membership.schoolId) ?? `School ${membership.schoolId}`) : 'Unknown School';
       
-      // Calculate actual membership payments made
+      // Calculate actual membership payments made (Stripe / manual payment rows)
       const membershipPayments = paymentHistory.filter(payment => 
         payment.description?.includes('Membership') &&
         ['completed', 'succeeded'].includes(payment.status)
       );
       
-      const totalPaid = CurrencyUtils.sum(membershipPayments.map(p => p.amount || 0));
-      const actualRemainingBalance = CurrencyUtils.calculateBalance(membership.amount, totalPaid);
+      const paymentsTotalCents = CurrencyUtils.sum(membershipPayments.map(p => p.amount || 0));
+      const recordedPaidCents = membership.amountPaid ?? 0;
+      /** Prefer DB ledger (admin comps, waivers) over payment-row sum so "Amount Paid" is not stuck at $0. */
+      const totalPaidCents = Math.max(recordedPaidCents, paymentsTotalCents);
+      const remainingCents =
+        typeof membership.remainingBalance === 'number'
+          ? membership.remainingBalance
+          : CurrencyUtils.calculateBalance(membership.amount ?? 0, totalPaidCents);
       
       return {
         id: membership.id,
         schoolId: membership.schoolId,
         schoolName,
         membershipYear: membership.membershipYear,
-        amount: CurrencyUtils.toDisplay(totalPaid),
-        amountPaid: CurrencyUtils.toDisplay(membership.amountPaid || totalPaid),
+        amount: CurrencyUtils.toDisplay(totalPaidCents),
+        amountPaid: CurrencyUtils.toDisplay(recordedPaidCents),
         totalCost: CurrencyUtils.toDisplay(membership.amount),
-        remainingBalance: CurrencyUtils.toDisplay(membership.remainingBalance ?? actualRemainingBalance),
-        balanceDue: CurrencyUtils.toDisplay(membership.balanceDue ?? actualRemainingBalance),
+        remainingBalance: CurrencyUtils.toDisplay(remainingCents),
+        balanceDue: CurrencyUtils.toDisplay(membership.balanceDue ?? remainingCents),
         // Keep raw cents value for summary calculation
-        _remainingBalanceCents: membership.remainingBalance ?? actualRemainingBalance,
+        _remainingBalanceCents: remainingCents,
         status: membership.status,
         dueDate: membership.dueDate,
         expirationDate: membership.expirationDate,

@@ -1863,12 +1863,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Not authorized to update this membership" });
       }
 
-      // Validate allowed fields with Zod schema
+      // Validate allowed fields with Zod schema (status values align with DB / Drizzle membership_enrollments)
       const updateSchema = z.object({
-        status: z.enum(["pending_payment", "active", "expired", "grace_period", "suspended", "cancelled", "payment_failed"]).optional(),
+        status: z
+          .enum([
+            "pending_payment",
+            "enrolled",
+            "expired",
+            "grace_period",
+            "suspended",
+            "cancelled",
+            "payment_failed",
+            "active", // legacy UI — coerced to enrolled server-side
+          ])
+          .optional(),
         membershipTier: z.enum(["basic", "standard", "premium", "vip"]).optional(),
         amountPaid: z.number().min(0).optional(),
         remainingBalance: z.number().min(0).optional(),
+        totalAmount: z.number().min(0).optional(),
+        balanceDue: z.number().min(0).optional(),
         paymentMethod: z.enum(["credit_card", "paypal", "bank_transfer", "cash", "check", "comp", "stripe", "other"]).optional(),
         notes: z.string().optional(),
         stripeSubscriptionId: z.string().optional(),
@@ -1885,8 +1898,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Update membership with validated fields
-      const updatedMembership = await storage.updateMembershipEnrollment(membershipId, validationResult.data);
+      const body = validationResult.data;
+      const feeCents = membership.amount ?? 0;
+
+      /** Complimentary / admin waiver: record as fully paid (not platform credits). */
+      const isComplimentary = body.paymentMethod === "comp";
+
+      let patch: Record<string, unknown> = { ...body };
+
+      if (body.status === "active") {
+        patch.status = "enrolled";
+      }
+
+      if (isComplimentary) {
+        const now = new Date();
+        patch.status = "enrolled";
+        patch.amountPaid = feeCents;
+        patch.remainingBalance = 0;
+        patch.balanceDue = 0;
+        patch.totalAmount = feeCents;
+        patch.paymentMethod = "other";
+        patch.notes =
+          body.notes?.trim() ||
+          "Complimentary membership — recorded as paid in full (admin)";
+        patch.startDate = patch.startDate ?? now;
+        if (!patch.endDate && membership.expirationDate) {
+          patch.endDate = membership.expirationDate;
+        }
+        if (!patch.renewalDate && membership.renewalDate) {
+          patch.renewalDate = membership.renewalDate;
+        }
+
+        const parentUser = await storage.getUser(membership.parentUserId);
+        if (parentUser && !(parentUser.memberId && String(parentUser.memberId).trim())) {
+          const { generateMemberId } = await import("./utils/membership");
+          await storage.updateUser(parentUser.id, { memberId: generateMemberId() });
+        }
+      }
+
+      const updatedMembership = await storage.updateMembershipEnrollment(
+        membershipId,
+        patch as any,
+      );
       
       console.log(`✅ Admin ${authenticatedUser.email} updated membership ${membershipId}`);
       res.status(200).json(updatedMembership);

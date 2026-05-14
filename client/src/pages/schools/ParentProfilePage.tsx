@@ -916,14 +916,12 @@ export default function ParentProfilePage() {
   });
 
   // Comp/Free membership mutation
+  // Comp/Free membership — server applies full waiver + member ID when paymentMethod is comp
   const compFreeMutation = useMutation({
     mutationFn: async (membershipId: number) => {
       return apiRequest("PATCH", `/api/admin/membership-enrollments/${membershipId}`, {
-        status: 'active',
-        amountPaid: 0,
-        remainingBalance: 0,
-        paymentMethod: 'comp',
-        notes: 'Marked as complimentary/free by school administrator'
+        paymentMethod: "comp",
+        notes: "Complimentary membership (school administrator)",
       });
     },
     onSuccess: () => {
@@ -1316,8 +1314,8 @@ export default function ParentProfilePage() {
     });
   };
 
-  const handleCompFree = (membership: any) => {
-    compFreeMutation.mutate(membership.id);
+  const handleCompFree = (membershipId: number) => {
+    compFreeMutation.mutate(membershipId);
   };
 
   const handleChangeTier = (membership: any, tier: 'basic' | 'standard' | 'premium' | 'vip') => {
@@ -2564,7 +2562,7 @@ export default function ParentProfilePage() {
                               <Button 
                                 size="sm" 
                                 variant="outline"
-                                onClick={() => handleCompFree(membership)}
+                                onClick={() => handleCompFree(membership.id)}
                                 disabled={compFreeMutation.isPending}
                                 data-testid={`button-comp-free-${membership.id}`}
                               >

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -11,10 +11,11 @@ import { useAuth } from "@/components/SupabaseProvider";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useCart } from "@/contexts/CartContext";
-import { useUnpaidEnrollments, usePayOutstanding } from "@/hooks/useUnpaidEnrollments";
+import { useUnpaidEnrollments, usePayOutstanding, type UnpaidEnrollment } from "@/hooks/useUnpaidEnrollments";
 import { useParentCredits } from "@/hooks/useParentCredits";
 import { formatCurrency } from "@/lib/utils";
 import { normalizeParentChildrenResponse } from "@/lib/parent-children-api";
+import { getEnrollmentEffectiveBalance } from "@/utils/parentBalance";
 import OnboardingTour from "@/components/onboarding/OnboardingTour";
 import { Input } from "@/components/ui/input";
 import ParentCalendarView from "@/components/calendar/ParentCalendarView";
@@ -257,6 +258,59 @@ export default function ParentDashboard() {
     isLoading: isLoadingUnpaid,
   } = useUnpaidEnrollments();
   const payOutstanding = usePayOutstanding();
+
+  const buildUnpaidEnrollmentForPay = useCallback(
+    (enrollment: any): UnpaidEnrollment | null => {
+      const fromList = unpaidEnrollments.find((x) => x.id === enrollment.id);
+      if (fromList) return fromList;
+      const balance = getEnrollmentEffectiveBalance(enrollment);
+      if (balance <= 0 || enrollment.status === "waitlist") return null;
+      return {
+        id: enrollment.id,
+        childId: enrollment.childId,
+        childName:
+          enrollment.childName ||
+          (enrollment.child
+            ? `${enrollment.child.firstName} ${enrollment.child.lastName}`.trim()
+            : "Child"),
+        className: enrollment.className || enrollment.program?.title || "Program",
+        classId: enrollment.classId ?? null,
+        marketplaceClassId: enrollment.marketplaceClassId ?? null,
+        classType: enrollment.classType || "school_class",
+        effectiveBalance: balance,
+        variantId: enrollment.variantId,
+        variantName: enrollment.variantName,
+        totalCost: enrollment.totalCost ?? 0,
+        totalPaid: enrollment.totalPaid ?? 0,
+        compAmountCents: enrollment.compAmountCents ?? 0,
+        depositRequired: enrollment.depositRequired ?? 0,
+        paymentSystemVersion: enrollment.paymentSystemVersion,
+      };
+    },
+    [unpaidEnrollments],
+  );
+
+  const handlePayEnrollmentClick = useCallback(
+    (enrollment: any) => (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const row = buildUnpaidEnrollmentForPay(enrollment);
+      if (!row) {
+        toast({
+          title: "Nothing to pay",
+          description: "This enrollment has no outstanding balance for checkout.",
+          variant: "destructive",
+        });
+        return;
+      }
+      payOutstanding([row], []);
+      toast({
+        title: "Added to cart",
+        description: "Open the cart to complete payment for this enrollment.",
+      });
+    },
+    [buildUnpaidEnrollmentForPay, payOutstanding, toast],
+  );
   const { totalAvailableCents: dashboardCreditsCents, isLoading: creditsLoading } = useParentCredits();
   const creditsDisplayFormatted = useMemo(
     () => formatCurrency(dashboardCreditsCents ?? 0),
@@ -776,6 +830,20 @@ export default function ParentDashboard() {
                           − Credits available: {formatCurrency(outstandingCreditsCents)}
                         </div>
                       </div>
+                    )}
+                    {outstandingTotalOwedCents > 0 && outstandingNetDueCents === 0 && (
+                      <Alert className="mt-3 border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-50">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertTitle>Covered by your credits</AlertTitle>
+                        <AlertDescription className="text-sm leading-snug">
+                          Your balance is fully covered by available volunteer credits, but enrollments or
+                          membership still need to be settled in checkout. Open your cart and complete the
+                          credits-only flow (no card charge).
+                          <Button variant="link" className="h-auto p-0 pl-0 text-amber-900 underline" asChild>
+                            <Link href="/cart">Go to cart</Link>
+                          </Button>
+                        </AlertDescription>
+                      </Alert>
                     )}
                     <p className="text-xs text-muted-foreground mt-1">
                       {outstandingEnrollmentCount} unpaid enrollment
@@ -1380,43 +1448,95 @@ export default function ParentDashboard() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {enrollmentsData.map((enrollment: any, index: number) => (
-                    <div 
-                      key={enrollment.id || `enrollment-${index}`} 
-                      className="border rounded-lg p-4 hover:bg-gray-50 cursor-pointer transition-colors"
-                      onClick={() => {
-                        // Navigate to checkout if payment is pending
-                        if (enrollment.status === 'pending_payment') {
-                          setLocation('/cart/checkout');
-                        } else {
-                          // For other statuses, could navigate to enrollment details
-                          // For now, just show a toast
-                          toast({
-                            title: "Enrollment Details",
-                            description: `${enrollment.className} for ${enrollment.childName}`,
-                          });
-                        }
-                      }}
-                      data-testid={`enrollment-card-${enrollment.id}`}
-                    >
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h4 className="font-medium">{enrollment.className}</h4>
-                          <p className="text-sm text-muted-foreground">
-                            {enrollment.childName} • Enrolled on {new Date(enrollment.enrollmentDate).toLocaleDateString()}
-                          </p>
-                        </div>
-                        <Badge 
-                          variant={enrollment.status === 'enrolled' ? 'default' : 'secondary'}
-                          className={enrollment.status === 'enrolled' ? 'bg-green-100 text-green-800' : ''}
-                        >
-                          {enrollment.status}
-                        </Badge>
-                      </div>
-                    </div>
-                  ))}
-                  <div className="flex justify-end mt-2">
-                    <Button asChild>
+                  <div className="border rounded-md overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Child</TableHead>
+                          <TableHead>Class</TableHead>
+                          <TableHead>Enrolled</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead className="text-right">Total</TableHead>
+                          <TableHead className="text-right">Paid</TableHead>
+                          <TableHead className="text-right">Balance</TableHead>
+                          <TableHead className="text-right w-[100px]">Pay</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {enrollmentsData.map((enrollment: any, index: number) => {
+                          const balanceCents = getEnrollmentEffectiveBalance(enrollment);
+                          const canPay = buildUnpaidEnrollmentForPay(enrollment) !== null;
+                          const childName =
+                            enrollment.childName ||
+                            (enrollment.child
+                              ? `${enrollment.child.firstName} ${enrollment.child.lastName}`.trim()
+                              : "—");
+                          const title =
+                            enrollment.className || enrollment.program?.title || "Program";
+                          return (
+                            <TableRow
+                              key={enrollment.id || `enrollment-${index}`}
+                              data-testid={`enrollment-row-${enrollment.id}`}
+                            >
+                              <TableCell className="font-medium">{childName}</TableCell>
+                              <TableCell>
+                                <div className="font-medium">{title}</div>
+                                {enrollment.program?.description ? (
+                                  <p className="text-xs text-muted-foreground line-clamp-2 max-w-xs mt-0.5">
+                                    {enrollment.program.description}
+                                  </p>
+                                ) : null}
+                              </TableCell>
+                              <TableCell>
+                                {enrollment.enrollmentDate
+                                  ? new Date(enrollment.enrollmentDate).toLocaleDateString()
+                                  : "—"}
+                              </TableCell>
+                              <TableCell>
+                                <Badge
+                                  variant={enrollment.status === "enrolled" ? "default" : "secondary"}
+                                  className={
+                                    enrollment.status === "enrolled" ? "bg-green-100 text-green-800" : ""
+                                  }
+                                >
+                                  {enrollment.status}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-right tabular-nums">
+                                {formatCurrency(enrollment.totalCost ?? 0)}
+                              </TableCell>
+                              <TableCell className="text-right tabular-nums text-green-600">
+                                {formatCurrency(enrollment.totalPaid ?? 0)}
+                              </TableCell>
+                              <TableCell
+                                className={`text-right tabular-nums font-medium ${
+                                  balanceCents > 0 ? "text-orange-600" : "text-muted-foreground"
+                                }`}
+                              >
+                                {formatCurrency(balanceCents)}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {canPay ? (
+                                  <Button
+                                    size="sm"
+                                    onClick={handlePayEnrollmentClick(enrollment)}
+                                    data-testid={`btn-parent-pay-enrollment-${enrollment.id}`}
+                                  >
+                                    <CreditCard className="h-4 w-4 mr-1" />
+                                    Pay
+                                  </Button>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">—</span>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                  <div className="flex justify-end">
+                    <Button asChild variant="outline">
                       <Link href="/programs">Browse More Programs</Link>
                     </Button>
                   </div>
