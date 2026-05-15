@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import type Stripe from 'stripe';
 import { storage } from '../storage';
 import { supabaseAuth } from '../middleware/supabase-auth';
 import { getStripeClient } from '../config/stripe';
@@ -262,6 +263,9 @@ router.get('/upcoming-old', async (req, res) => {
 // Process a scheduled payment
 router.post('/pay', supabaseAuth, async (req: any, res) => {
   let holdSessionIdForRelease: string | null = null;
+  let claimAcquired = false;
+  let numericPaymentId = -1;
+  let parentUserId = 0;
   try {
     const { paymentId, description, applyCredits: applyCreditsRaw, expectedChargeAmount } = req.body;
     const userEmail = req.user.email;
@@ -276,6 +280,14 @@ router.post('/pay', supabaseAuth, async (req: any, res) => {
       });
     }
 
+    numericPaymentId = parseInt(String(paymentId), 10);
+    if (!Number.isFinite(numericPaymentId) || numericPaymentId <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid payment ID',
+      });
+    }
+
     if (userId == null || Number.isNaN(userId)) {
       return res.status(401).json({
         success: false,
@@ -283,9 +295,9 @@ router.post('/pay', supabaseAuth, async (req: any, res) => {
       });
     }
 
-    // Get the scheduled payment to verify it belongs to the user
+    parentUserId = userId;
     const allScheduledPayments = await storage.getScheduledPaymentsByParentEmail(userEmail);
-    const scheduledPayment = allScheduledPayments.find(p => p.id === parseInt(paymentId));
+    const scheduledPayment = allScheduledPayments.find(p => p.id === numericPaymentId);
     if (!scheduledPayment) {
       return res.status(404).json({
         success: false,
@@ -351,6 +363,17 @@ router.post('/pay', supabaseAuth, async (req: any, res) => {
       metadata: scheduledPayment.metadata,
     });
 
+    const claimedRow = await storage.claimScheduledPaymentForParentCharge(numericPaymentId, parentUserId);
+    if (!claimedRow) {
+      return res.status(409).json({
+        success: false,
+        error: 'INSTALLMENT_NOT_AVAILABLE',
+        message:
+          'This installment cannot be started right now. It may already be processing, completed, or in use. Refresh Upcoming Payments and try again.',
+      });
+    }
+    claimAcquired = true;
+
     if (decision.isCreditsOnly) {
       holdSessionIdForRelease = `parent_manual_sp_${scheduledPayment.id}_${Date.now()}`;
       const { totalHeld } = await storage.createCreditHolds(
@@ -363,6 +386,8 @@ router.post('/pay', supabaseAuth, async (req: any, res) => {
       if (totalHeld < decision.creditsToApply) {
         await storage.releaseCreditHolds(holdSessionIdForRelease).catch(() => {});
         holdSessionIdForRelease = null;
+        await storage.releaseScheduledPaymentParentClaim(numericPaymentId, parentUserId).catch(() => {});
+        claimAcquired = false;
         return res.status(400).json({
           success: false,
           error: 'Could not reserve enough credits for this payment. Try again or pay by card only.',
@@ -396,10 +421,13 @@ router.post('/pay', supabaseAuth, async (req: any, res) => {
       } catch (completeErr) {
         await storage.releaseCreditHolds(holdSessionIdForRelease).catch(() => {});
         holdSessionIdForRelease = null;
+        await storage.releaseScheduledPaymentParentClaim(numericPaymentId, parentUserId).catch(() => {});
+        claimAcquired = false;
         throw completeErr;
       }
 
       holdSessionIdForRelease = null;
+      claimAcquired = false;
       console.log('✅ Scheduled payment settled with credits only:', scheduledPayment.id);
       return res.json({
         success: true,
@@ -409,39 +437,53 @@ router.post('/pay', supabaseAuth, async (req: any, res) => {
     }
 
     const stripe = await getStripeClient();
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: decision.chargeAmount,
-      currency: 'usd',
-      metadata: buildScheduledPaymentIntentMetadata({
-        scheduledPaymentId: parseInt(String(paymentId), 10),
-        parentEmail: userEmail,
-        parentUserId: userId,
-        installmentNumber: scheduledPayment.installmentNumber,
-        totalInstallments: scheduledPayment.totalInstallments,
-        enrollmentIds,
-        autoPayInitiated: false,
-        creditsAppliedCents: decision.creditsToApply > 0 ? decision.creditsToApply : undefined,
-        originalAmountCents: decision.creditsToApply > 0 ? decision.originalAmount : undefined,
-        chargeAmountCents: decision.chargeAmount,
-        description: description || `Scheduled Payment ${scheduledPayment.installmentNumber}`,
-      }),
-      automatic_payment_methods: {
-        enabled: true
-      }
+    let paymentIntent: Stripe.PaymentIntent;
+    try {
+      paymentIntent = await stripe.paymentIntents.create({
+        amount: decision.chargeAmount,
+        currency: 'usd',
+        metadata: buildScheduledPaymentIntentMetadata({
+          scheduledPaymentId: numericPaymentId,
+          parentEmail: userEmail,
+          parentUserId: parentUserId,
+          installmentNumber: scheduledPayment.installmentNumber,
+          totalInstallments: scheduledPayment.totalInstallments,
+          enrollmentIds,
+          autoPayInitiated: false,
+          creditsAppliedCents: decision.creditsToApply > 0 ? decision.creditsToApply : undefined,
+          originalAmountCents: decision.creditsToApply > 0 ? decision.originalAmount : undefined,
+          chargeAmountCents: decision.chargeAmount,
+          description: description || `Scheduled Payment ${scheduledPayment.installmentNumber}`,
+        }),
+        automatic_payment_methods: {
+          enabled: true,
+        },
+      });
+    } catch (stripeErr) {
+      await storage.releaseScheduledPaymentParentClaim(numericPaymentId, parentUserId).catch(() => {});
+      claimAcquired = false;
+      throw stripeErr;
+    }
+
+    await storage.updateScheduledPayment(numericPaymentId, {
+      stripePaymentIntentId: paymentIntent.id,
     });
 
+    claimAcquired = false;
     console.log('✅ Created payment intent for scheduled payment:', paymentIntent.id);
 
     res.json({
       success: true,
       mode: 'stripe' as const,
       clientSecret: paymentIntent.client_secret,
-      paymentIntentId: paymentIntent.id
+      paymentIntentId: paymentIntent.id,
     });
-
   } catch (error) {
     if (holdSessionIdForRelease) {
       await storage.releaseCreditHolds(holdSessionIdForRelease).catch(() => {});
+    }
+    if (claimAcquired && numericPaymentId > 0 && parentUserId > 0) {
+      await storage.releaseScheduledPaymentParentClaim(numericPaymentId, parentUserId).catch(() => {});
     }
     console.error('❌ Error processing scheduled payment:', error);
     res.status(500).json({

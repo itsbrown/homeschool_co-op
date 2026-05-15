@@ -25,5 +25,7 @@ module.exports = {
     '<rootDir>/server/tests/scheduled-payment-installment-variants.test.ts',
     '<rootDir>/server/tests/reconciliation-ledger-equivalence.test.ts',
     '<rootDir>/server/tests/autopay-metadata-flag.test.ts',
+    '<rootDir>/server/tests/balance-payment-metadata.test.ts',
+    '<rootDir>/server/tests/payment-settlement-display.test.ts',
   ],
 };

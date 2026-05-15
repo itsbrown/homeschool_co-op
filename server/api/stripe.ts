@@ -8,6 +8,7 @@ import { getStripeClient, getStripePublishableKey } from '../config/stripe';
 import { calculateMembershipDiscount } from '../utils/membership';
 import { calculateCanonicalAmounts } from '../services/canonical-amount-calculator';
 import { enrollmentOutstandingCentsForCheckout } from '../lib/checkout-enrollment-balance';
+import { findProgramEnrollmentForCartItem } from '../lib/cart-checkout-enrollment-match';
 import { completeCartCreditsOnlyCheckout } from '../services/cart-credits-only-checkout';
 
 /** Stripe minimum charge in USD cents for card-present checkouts. */
@@ -273,14 +274,12 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
             throw new Error(`Child ${item.childId} not found`);
           }
         
-        // Check if there's already a pending enrollment (from cart or existing)
-        let enrollment = allEnrollments.find(e => 
-          (item.enrollmentId && e.id === item.enrollmentId) || // Match by enrollmentId if available
-          (e.childId === item.childId &&
-           ((item.classType === 'marketplace' && e.marketplaceClassId === item.marketplaceClassId) ||
-            (item.classType !== 'marketplace' && e.classId === item.classId)) &&
-           e.status === 'pending_payment' &&
-           (e.parentEmail === userEmail || e.parentId === parent.id))
+        // Reuse pending OR already-enrolled rows with a balance (avoid duplicate enrollments on pay-in-full).
+        let enrollment = findProgramEnrollmentForCartItem(
+          allEnrollments as any,
+          item,
+          userEmail,
+          parent.id,
         );
         
         if (enrollment) {

@@ -244,35 +244,17 @@ export async function processBalancePayment(paymentIntent: Stripe.PaymentIntent,
       return;
     }
     
-    // Allocate only the class/enrollment portion; membership is reserved via metadata (payment plans / cart).
-    const allocationByEnrollment = splitCentsEvenly(classPoolCents, enrollments.length);
-    
-    // Update each enrollment
-    for (let index = 0; index < enrollments.length; index++) {
-      const enrollment = enrollments[index];
-      const allocatedAmountCents = allocationByEnrollment[index];
-      const newAmountPaid = (enrollment.totalPaid || 0) + allocatedAmountCents;
-      const classData = await resolveClassForEnrollment(enrollment);
-      const totalCost = enrollment.totalCost ?? classData?.price ?? 0;
-      const remainingBalance = Math.max(0, totalCost - newAmountPaid);
-      
-      // All payments now use Stripe-managed status
-      const paymentStatus = 'stripe_managed';
-      const paymentSystemVersion = 'v2_stripe';
-      
-      // Update enrollment with Stripe-managed payment system
-      const updateData: any = {
-        totalPaid: newAmountPaid,
-        remainingBalance,
-        paymentStatus,
-        paymentSystemVersion,
-        status: 'enrolled',
-        updatedAt: new Date().toISOString()
-      };
-      
-      await storage.updateProgramEnrollment(enrollment.id, updateData);
-      console.log(`✅ Updated enrollment ${enrollment.id}: paid ${newAmountPaid} of ${totalCost}, remaining ${remainingBalance}, status ${paymentStatus}`);
-    }
+    const { fulfillMembershipFromCartPaymentIntent } = await import(
+      '../services/fulfill-membership-payment-intent.js'
+    );
+    await fulfillMembershipFromCartPaymentIntent(paymentIntent);
+
+    const { applyClassPoolToEnrollments } = await import('../lib/apply-class-pool-to-enrollments.js');
+    const applyResult = await applyClassPoolToEnrollments(
+      paymentIntent,
+      enrollments.map((e) => e.id),
+    );
+    console.log('✅ applyClassPoolToEnrollments from processBalancePayment:', applyResult);
     
     // Create payment record with installment details
     // Get schoolId from enrollment or parent user - NEVER allow hardcoded fallback
@@ -322,15 +304,17 @@ export async function processBalancePayment(paymentIntent: Stripe.PaymentIntent,
 
     if (creditsAppliedCents > 0 && parentUser?.id) {
       try {
-        const { totalUsed } = await storage.useCredits(
-          parentUser.id,
-          creditsAppliedCents,
-          createdPayment.id,
-          `Cart checkout ${paymentIntent.id}`
+        const { consumeCreditsFromPaymentIntentMetadata } = await import(
+          '../lib/fulfill-balance-payment-intent.js'
         );
-        console.log(`💰 Consumed ${totalUsed} cents of volunteer credits for user ${parentUser.id}`);
+        const { creditsConsumedCents, creditsSkippedAlreadyApplied } =
+          await consumeCreditsFromPaymentIntentMetadata(paymentIntent, createdPayment.id);
+        console.log(`💰 Credits for checkout ${paymentIntent.id}:`, {
+          creditsConsumedCents,
+          creditsSkippedAlreadyApplied,
+        });
       } catch (creditErr) {
-        console.error('❌ Failed to consume volunteer credits after checkout payment:', creditErr);
+        console.error('❌ Failed to consume credits after checkout payment:', creditErr);
       }
     }
     

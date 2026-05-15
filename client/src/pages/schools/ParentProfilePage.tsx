@@ -144,6 +144,10 @@ interface ParentProfile {
   paymentHistory: Array<{
     id: number;
     amount: number;
+    cardAmount?: number;
+    creditsApplied?: number;
+    totalSettlement?: number;
+    hasCreditsBreakdown?: boolean;
     status: string;
     paymentDate: string;
     paymentMethod: string;
@@ -2626,6 +2630,7 @@ export default function ParentProfilePage() {
                             <TableHead>Date</TableHead>
                             <TableHead>Description</TableHead>
                             <TableHead>Amount</TableHead>
+                            <TableHead>Credits</TableHead>
                             <TableHead>Status</TableHead>
                             <TableHead>Transaction ID</TableHead>
                           </TableRow>
@@ -2637,7 +2642,27 @@ export default function ParentProfilePage() {
                                 {new Date(payment.paymentDate).toLocaleDateString()}
                               </TableCell>
                               <TableCell>{payment.description}</TableCell>
-                              <TableCell>${payment.amount.toFixed(2)}</TableCell>
+                              <TableCell>
+                                {payment.hasCreditsBreakdown ? (
+                                  <div className="space-y-0.5 text-sm">
+                                    <div>Card: ${(payment.cardAmount ?? payment.amount).toFixed(2)}</div>
+                                    <div className="text-muted-foreground">
+                                      Total: ${(payment.totalSettlement ?? payment.amount).toFixed(2)}
+                                    </div>
+                                  </div>
+                                ) : (
+                                  `$${payment.amount.toFixed(2)}`
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                {payment.hasCreditsBreakdown && payment.creditsApplied != null ? (
+                                  <span className="text-emerald-700 dark:text-emerald-400">
+                                    ${payment.creditsApplied.toFixed(2)}
+                                  </span>
+                                ) : (
+                                  <span className="text-muted-foreground">—</span>
+                                )}
+                              </TableCell>
                               <TableCell>
                                 <Badge variant={getPaymentStatusBadgeVariant(payment.status)}>
                                   {payment.status}

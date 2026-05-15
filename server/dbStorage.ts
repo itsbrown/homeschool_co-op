@@ -1935,6 +1935,29 @@ export class DatabaseStorage implements IStorage {
     return updatedPayment;
   }
 
+  async deleteScheduledPayment(id: number): Promise<void> {
+    const db = await getDb();
+    await db.delete(scheduledPayments).where(eq(scheduledPayments.id, id));
+  }
+
+  /**
+   * Admin payment-plan changes: drop installments that are not yet completed so a new schedule can be created.
+   * Keeps `completed` rows for payment history.
+   */
+  async deletePendingScheduledPaymentsByEnrollmentId(enrollmentId: number): Promise<number> {
+    const db = await getDb();
+    const deleted = await db
+      .delete(scheduledPayments)
+      .where(
+        and(
+          eq(scheduledPayments.enrollmentId, enrollmentId),
+          sql`${scheduledPayments.status} in ('pending', 'overdue', 'failed', 'processing')`,
+        ),
+      )
+      .returning({ id: scheduledPayments.id });
+    return deleted.length;
+  }
+
   // Refund methods
   async createRefund(refund: InsertRefund): Promise<Refund> {
     const db = await getDb();

@@ -70,7 +70,8 @@ export async function createSimpleTestApp(): Promise<Application> {
   const notificationsRouter = await import('./api/notifications');
   const parentProfileRouter = await import('./api/parent-profile');
   const childrenRouter = await import('./api/children');
-  
+  const scheduledPaymentsRouter = await import('./api/scheduled-payments');
+
   app.use('/api/school-admin', schoolAdminRouter.default);
   app.use('/api/auth', authRouter.default);
   app.use('/api/stripe', stripeRouter.default);
@@ -83,6 +84,7 @@ export async function createSimpleTestApp(): Promise<Application> {
   app.use('/api/notifications', notificationsRouter.default);
   app.use('/api/parent-profile', parentProfileRouter.default);
   app.use('/api/children', childrenRouter.default);
+  app.use('/api/scheduled-payments', scheduledPaymentsRouter.default);
 
   app.post('/api/staff', async (req: any, res) => {
     const id = staffIdCounter++;

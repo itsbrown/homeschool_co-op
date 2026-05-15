@@ -354,12 +354,16 @@ export interface IStorage {
 
   // Scheduled Payment methods
   createScheduledPayment(payment: any): Promise<any>;
+  getScheduledPaymentById(id: number): Promise<ScheduledPayment | undefined>;
   getScheduledPaymentsByParentEmail(parentEmail: string): Promise<any[]>;
   getScheduledPaymentsByEnrollmentId(enrollmentId: number): Promise<ScheduledPayment[]>;
   getAllScheduledPayments(): Promise<any[]>;
   updateScheduledPaymentStatus(id: number, status: string): Promise<any | undefined>;
   updateScheduledPaymentReminderCount(id: number, count: number): Promise<any | undefined>;
   updateScheduledPayment(id: number, payment: Partial<InsertScheduledPayment>): Promise<ScheduledPayment | undefined>;
+  deleteScheduledPayment(id: number): Promise<void>;
+  /** Remove unpaid/actionable installments when admin changes or removes a payment plan. */
+  deletePendingScheduledPaymentsByEnrollmentId(enrollmentId: number): Promise<number>;
   /** Atomically move an actionable installment to `processing` for parent manual pay (DB concurrency guard). */
   claimScheduledPaymentForParentCharge(id: number, parentId: number): Promise<ScheduledPayment | undefined>;
   /** Undo a parent manual claim when checkout did not finish (row must be `processing` + `parent_manual`). */
@@ -3336,6 +3340,31 @@ export class MemStorage implements IStorage {
       .sort((a, b) => new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime());
   }
 
+  async getScheduledPaymentById(id: number): Promise<ScheduledPayment | undefined> {
+    return this.scheduledPaymentsStore.get(id);
+  }
+
+  async deleteScheduledPayment(id: number): Promise<void> {
+    if (!this.scheduledPaymentsStore.has(id)) return;
+    this.scheduledPaymentsStore.delete(id);
+    await this.saveScheduledPaymentsToFile();
+  }
+
+  async deletePendingScheduledPaymentsByEnrollmentId(enrollmentId: number): Promise<number> {
+    const actionable = new Set(['pending', 'overdue', 'failed', 'processing']);
+    let deleted = 0;
+    for (const [id, payment] of this.scheduledPaymentsStore.entries()) {
+      if (payment.enrollmentId === enrollmentId && actionable.has(String(payment.status))) {
+        this.scheduledPaymentsStore.delete(id);
+        deleted++;
+      }
+    }
+    if (deleted > 0) {
+      await this.saveScheduledPaymentsToFile();
+    }
+    return deleted;
+  }
+
   async updateScheduledPaymentStatus(id: number, status: 'pending' | 'paid' | 'overdue' | 'cancelled'): Promise<ScheduledPayment | undefined> {
     const payment = this.scheduledPaymentsStore.get(id);
     if (!payment) return undefined;
@@ -6070,6 +6099,46 @@ export class MemStorage implements IStorage {
           console.error('❌ Error loading scheduled payments by enrollment, using mem fallback:', error);
         }
         return await this.memStorage.getScheduledPaymentsByEnrollmentId(enrollmentId);
+      }
+
+      async getScheduledPaymentById(id: number): Promise<ScheduledPayment | undefined> {
+        try {
+          if (this.dbStorage && typeof this.dbStorage.getScheduledPaymentById === 'function') {
+            return await this.dbStorage.getScheduledPaymentById(id);
+          }
+        } catch (error) {
+          console.error('❌ Error loading scheduled payment by id, using mem fallback:', error);
+        }
+        return await this.memStorage.getScheduledPaymentById(id);
+      }
+
+      async deleteScheduledPayment(id: number): Promise<void> {
+        try {
+          if (this.dbStorage && typeof this.dbStorage.deleteScheduledPayment === 'function') {
+            await this.dbStorage.deleteScheduledPayment(id);
+            return;
+          }
+        } catch (error) {
+          console.error('❌ Error deleting scheduled payment in database, using mem fallback:', error);
+        }
+        await this.memStorage.deleteScheduledPayment(id);
+      }
+
+      async deletePendingScheduledPaymentsByEnrollmentId(enrollmentId: number): Promise<number> {
+        try {
+          if (
+            this.dbStorage &&
+            typeof this.dbStorage.deletePendingScheduledPaymentsByEnrollmentId === 'function'
+          ) {
+            return await this.dbStorage.deletePendingScheduledPaymentsByEnrollmentId(enrollmentId);
+          }
+        } catch (error) {
+          console.error(
+            '❌ Error deleting pending scheduled payments by enrollment, using mem fallback:',
+            error,
+          );
+        }
+        return await this.memStorage.deletePendingScheduledPaymentsByEnrollmentId(enrollmentId);
       }
 
       async updateScheduledPaymentStatus(id: number, status: 'pending' | 'paid' | 'overdue' | 'cancelled'): Promise<ScheduledPayment | undefined> {

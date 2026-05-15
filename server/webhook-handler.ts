@@ -13,7 +13,12 @@ import {
   totalCentsForBalanceAllocation,
 } from './lib/balance-payment-metadata';
 import { fulfillMembershipFromCartPaymentIntent } from './services/fulfill-membership-payment-intent';
+import { applyClassPoolToEnrollments } from './lib/apply-class-pool-to-enrollments';
 import { findProgramEnrollmentForCartItem } from './lib/cart-checkout-enrollment-match';
+import {
+  consumeCreditsFromPaymentIntentMetadata,
+  fulfillBalancePaymentIntent,
+} from './lib/fulfill-balance-payment-intent';
 import { resolveScheduledPaymentEnrollmentIds } from './lib/scheduled-payment-intent-metadata';
 
 // Stripe client will be lazily initialized within the webhook handler
@@ -87,45 +92,13 @@ async function applyBalancePaymentToEnrollmentsOnly(
   paymentIntent: Stripe.PaymentIntent,
   enrollmentIds: number[],
 ): Promise<void> {
-  if (!Array.isArray(enrollmentIds) || enrollmentIds.length === 0) {
-    return;
-  }
-
-  const amountCents = typeof paymentIntent.amount === 'number' ? paymentIntent.amount : 0;
-  if (!Number.isInteger(amountCents) || amountCents <= 0) {
-    throw new Error('Payment intent amount must be a positive integer in cents');
-  }
-
-  const membershipCents = parseMetadataMembershipAmountCents(
-    paymentIntent.metadata as Record<string, string | undefined>
-  );
-  const meta = paymentIntent.metadata as Record<string, string | undefined>;
-  const { creditsAppliedCents, originalAmountCents } = parseBalanceIntentCredits(meta);
-  const totalCharged = totalCentsForBalanceAllocation({
-    paymentIntentAmountCents: amountCents,
-    creditsAppliedCents,
-    originalAmountCents,
+  const result = await applyClassPoolToEnrollments(paymentIntent, enrollmentIds);
+  console.log('💰 applyClassPoolToEnrollments:', {
+    paymentIntentId: paymentIntent.id,
+    appliedCents: result.appliedCents,
+    skippedCents: result.skippedCents,
+    updatedEnrollmentIds: result.enrollmentIds,
   });
-  const classPoolCents = enrollmentPoolCentsForBalanceIntent(totalCharged, membershipCents);
-  const allocation = splitCentsEvenly(classPoolCents, enrollmentIds.length);
-
-  for (let i = 0; i < enrollmentIds.length; i++) {
-    const enrollmentId = enrollmentIds[i];
-    const amountPerEnrollment = allocation[i];
-    const enrollment = await storage.getProgramEnrollmentById(enrollmentId);
-    if (!enrollment) continue;
-
-    const currentAmountPaid = enrollment.totalPaid || 0;
-    const newAmountPaid = currentAmountPaid + amountPerEnrollment;
-    const remainingBalance = Math.max(0, (enrollment.totalCost || 0) - newAmountPaid);
-    await storage.updateProgramEnrollment(enrollment.id, {
-      totalPaid: newAmountPaid,
-      remainingBalance,
-      paymentStatus: 'stripe_managed',
-      paymentSystemVersion: 'v2_stripe',
-      status: 'enrolled',
-    });
-  }
 }
 
 /**
@@ -341,11 +314,21 @@ export const webhookHandler = async (req: Request, res: Response) => {
         // Skipping here caused "charged but balance unchanged" incidents.
         const existingPayment = await storage.getPaymentByStripeId(paymentIntent.id);
         let hadPreexistingPendingPayment = false;
+        let paymentLedgerAlreadySucceeded = false;
         if (existingPayment) {
           if (existingPayment.status === 'pending') {
             console.log('ℹ️ Existing payment row is pending; continuing webhook processing:', paymentIntent.id);
             await storage.updatePaymentStatus(existingPayment.id, 'succeeded');
             hadPreexistingPendingPayment = true;
+          } else if (
+            existingPayment.status === 'completed' ||
+            existingPayment.status === 'succeeded'
+          ) {
+            console.log(
+              'ℹ️ Payment row already succeeded; will still apply enrollment ledger if owed:',
+              paymentIntent.id,
+            );
+            paymentLedgerAlreadySucceeded = true;
           } else {
             console.log('⚠️ Payment already processed, skipping:', paymentIntent.id, 'status:', existingPayment.status);
             break;
@@ -365,6 +348,12 @@ export const webhookHandler = async (req: Request, res: Response) => {
           
           if (scheduledPayment) {
             const spId = parseInt(scheduledPaymentId, 10);
+            if (String(scheduledPayment.status) === 'completed') {
+              console.log(
+                `ℹ️ Scheduled payment ${scheduledPaymentId} already completed; skipping duplicate ledger application for PI ${paymentIntent.id}`,
+              );
+              break;
+            }
             const completionSrc =
               paymentIntent.metadata.autoPayInitiated === 'true' ? 'stripe_autopay' : 'stripe_checkout';
             await storage.updateScheduledPayment(spId, {
@@ -611,26 +600,16 @@ export const webhookHandler = async (req: Request, res: Response) => {
           console.log('💰 Processing payment for enrollments:', enrollmentIds, 'payment type:', paymentType);
           
           if (enrollmentIds.length > 0 && parentEmail) {
-            if (hadPreexistingPendingPayment) {
-              // Pre-existing pending payment records are authoritative for payment history.
-              // Apply enrollment effects only to avoid duplicate financial side effects on replay.
-              await applyBalancePaymentToEnrollmentsOnly(paymentIntent, enrollmentIds);
-              const meta = paymentIntent.metadata as Record<string, string | undefined>;
-              const { creditsAppliedCents } = parseBalanceIntentCredits(meta);
-              const userIdForCredits = parseInt(String(meta.userId || '0'), 10) || 0;
-              if (creditsAppliedCents > 0 && userIdForCredits > 0 && existingPayment) {
-                try {
-                  const { totalUsed } = await storage.useCredits(
-                    userIdForCredits,
-                    creditsAppliedCents,
-                    existingPayment.id,
-                    `Cart checkout ${paymentIntent.id}`
-                  );
-                  console.log(`💰 (pending replay) Consumed ${totalUsed} cents of volunteer credits`);
-                } catch (creditErr) {
-                  console.error('❌ Failed to consume volunteer credits on pending-payment replay:', creditErr);
-                }
-              }
+            if (hadPreexistingPendingPayment || paymentLedgerAlreadySucceeded) {
+              const replay = await fulfillBalancePaymentIntent(paymentIntent, enrollmentIds, {
+                paymentHistoryId: existingPayment?.id,
+              });
+              console.log('💰 Balance payment replay fulfillment:', {
+                paymentIntentId: paymentIntent.id,
+                appliedCents: replay.enrollmentApply.appliedCents,
+                creditsConsumedCents: replay.creditsConsumedCents,
+                creditsSkipped: replay.creditsSkippedAlreadyApplied,
+              });
             } else {
               await fulfillMembershipFromCartPaymentIntent(paymentIntent);
               // Calculate payment amount in dollars (Stripe amount is in cents)

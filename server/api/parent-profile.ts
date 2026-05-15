@@ -4,6 +4,10 @@ import { supabaseAuth } from '../middleware/supabase-auth';
 import { CurrencyUtils, BillingCalculationService } from '../../shared/currency-utils';
 import { getStripeClient } from '../config/stripe';
 import { isEnrollmentIncludedInProfileClassAmountDue } from '../lib/profile-style-enrollment-due';
+import {
+  parsePaymentSettlementCents,
+  paymentSettlementToDisplayFields,
+} from '../lib/payment-settlement-display';
 
 const router = Router();
 
@@ -765,18 +769,25 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
       // Use processed enrollments (remove internal _remainingBalanceCents field from response)
       enrollments: processedEnrollments.map(({ _remainingBalanceCents, ...rest }) => rest),
       membershipEnrollments: processedMembershipEnrollments.map(({ _remainingBalanceCents, ...rest }) => rest),
-      paymentHistory: paymentHistory.map((payment) => ({
-        id: payment.id,
-        amount: CurrencyUtils.toDisplay(payment.amount || 0),
-        status: payment.status,
-        paymentDate: payment.paymentDate ?? payment.createdAt,
-        paymentMethod: payment.paymentMethod ?? 'other',
-        description:
-          (payment.description && String(payment.description).trim()) ||
-          [payment.childName, payment.className].filter(Boolean).join(' — ') ||
-          'Payment',
-        transactionId: payment.stripePaymentIntentId,
-      })),
+      paymentHistory: paymentHistory.map((payment) => {
+        const settlement = parsePaymentSettlementCents({
+          amount: payment.amount,
+          metadata: payment.metadata,
+        });
+        const display = paymentSettlementToDisplayFields(settlement);
+        return {
+          id: payment.id,
+          ...display,
+          status: payment.status,
+          paymentDate: payment.paymentDate ?? payment.createdAt,
+          paymentMethod: payment.paymentMethod ?? 'other',
+          description:
+            (payment.description && String(payment.description).trim()) ||
+            [payment.childName, payment.className].filter(Boolean).join(' — ') ||
+            'Payment',
+          transactionId: payment.stripePaymentIntentId,
+        };
+      }),
       scheduledPayments: scheduledPayments.map(payment => {
         const enrollment = filteredEnrollments.find(e => e.id === payment.enrollmentId);
         return {
