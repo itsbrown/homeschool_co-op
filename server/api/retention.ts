@@ -1,5 +1,6 @@
 import express from 'express';
 import { storage } from '../storage';
+import { normalizeEmailForLookup } from '@shared/parent-identity';
 
 const router = express.Router();
 
@@ -169,6 +170,9 @@ async function buildRetentionData(schoolId: number, period1Start: string, period
   const returningPct = period1Total > 0 ? Math.round((returningCount / period1Total) * 100) : 0;
 
   return {
+    reportVersion: 'cohort-retention-v1',
+    dateFieldNote:
+      'A family counts toward a period when enrollment_date or program_start_date falls within that period (inclusive).',
     summary: {
       returningCount,
       returningPct,
@@ -178,6 +182,72 @@ async function buildRetentionData(schoolId: number, period1Start: string, period
       period2Total,
     },
     rows,
+    generatedAt: new Date().toISOString(),
+  };
+}
+
+type LapsedFamilyRow = {
+  parentId: number | null;
+  parentEmail: string;
+  parentName: string;
+  phone: string | null;
+  lastEnrollmentDate: string | null;
+};
+
+async function buildLapsedFamiliesData(schoolId: number, lookbackDays: number) {
+  const cappedDays = Math.min(Math.max(lookbackDays, 1), 365);
+  const since = new Date();
+  since.setDate(since.getDate() - cappedDays);
+  const sinceStr = since.toISOString().split('T')[0];
+
+  const [parents, enrollmentEmails, activeEmails] = await Promise.all([
+    storage.getParentsBySchoolId(schoolId),
+    storage.getDistinctParentEmailsForSchool(schoolId),
+    storage.getParentEmailsWithEnrollmentSince(schoolId, sinceStr),
+  ]);
+
+  const activeSet = new Set(activeEmails.map((e) => normalizeEmailForLookup(e) || e));
+  const parentByEmail = new Map<string, { id: number; name: string; phone: string | null }>();
+  for (const p of parents) {
+    const key = normalizeEmailForLookup(p.email);
+    if (key) {
+      parentByEmail.set(key, { id: p.id, name: p.name || p.email, phone: p.phone ?? null });
+    }
+  }
+
+  const allEmails = new Set<string>([
+    ...parentByEmail.keys(),
+    ...enrollmentEmails.map((e) => normalizeEmailForLookup(e) || e),
+  ]);
+
+  const rows: LapsedFamilyRow[] = [];
+  for (const email of allEmails) {
+    if (activeSet.has(email)) continue;
+    const known = parentByEmail.get(email);
+    rows.push({
+      parentId: known?.id ?? null,
+      parentEmail: email,
+      parentName: known?.name ?? email,
+      phone: known?.phone ?? null,
+      lastEnrollmentDate: null,
+    });
+  }
+
+  rows.sort((a, b) => a.parentName.localeCompare(b.parentName));
+
+  return {
+    reportVersion: 'lapsed-families-v1',
+    lookbackDays: cappedDays,
+    sinceDate: sinceStr,
+    dateFieldNote:
+      'Lapsed = no qualifying enrollment (pending_payment, pending_admin_approval, enrolled, completed, waitlist) with enrollment_date or program_start_date on/after the since date.',
+    summary: {
+      totalKnownFamilies: allEmails.size,
+      activeFamilies: activeSet.size,
+      lapsedFamilies: rows.length,
+    },
+    rows,
+    generatedAt: new Date().toISOString(),
   };
 }
 
@@ -241,6 +311,54 @@ router.get('/export', async (req: any, res) => {
   } catch (error) {
     console.error('Error exporting retention CSV:', error);
     res.status(500).json({ error: 'Failed to export retention data' });
+  }
+});
+
+router.get('/lapsed-families', async (req: any, res) => {
+  try {
+    const result = await getSchoolAdminWithFeatureCheck(req, 'financialReports');
+    if (isError(result)) {
+      return res.status(result.status).json({ error: result.error });
+    }
+    const { schoolId } = result;
+    const lookbackDays = parseInt(req.query.lookbackDays as string, 10) || 90;
+    const data = await buildLapsedFamiliesData(schoolId, lookbackDays);
+    res.json(data);
+  } catch (error) {
+    console.error('Error fetching lapsed families:', error);
+    res.status(500).json({ error: 'Failed to fetch lapsed families' });
+  }
+});
+
+router.get('/lapsed-families/export', async (req: any, res) => {
+  try {
+    const result = await getSchoolAdminWithFeatureCheck(req, 'financialReports');
+    if (isError(result)) {
+      return res.status(result.status).json({ error: result.error });
+    }
+    const { schoolId } = result;
+    const lookbackDays = parseInt(req.query.lookbackDays as string, 10) || 90;
+    const data = await buildLapsedFamiliesData(schoolId, lookbackDays);
+
+    const header = 'Parent Name,Parent Email,Phone,Last Enrollment Date\n';
+    const csvRows = data.rows.map((row) => {
+      const escape = (v: string) => `"${v.replace(/"/g, '""')}"`;
+      return [
+        escape(row.parentName),
+        escape(row.parentEmail),
+        escape(row.phone ?? ''),
+        escape(row.lastEnrollmentDate ?? ''),
+      ].join(',');
+    });
+
+    const csv = header + csvRows.join('\n');
+    const filename = `lapsed-families-${data.sinceDate}.csv`;
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(csv);
+  } catch (error) {
+    console.error('Error exporting lapsed families:', error);
+    res.status(500).json({ error: 'Failed to export lapsed families' });
   }
 });
 

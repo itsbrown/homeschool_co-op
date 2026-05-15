@@ -127,6 +127,11 @@ router.post("/", supabaseAuth, async (req: any, res) => {
           classType: "marketplace",
           classId: null,
           marketplaceClassId: null,
+          sessionId: session.id,
+          enrollmentVersion: "v2",
+          dayType: variant,
+          enrolledHalfDayPrice: session.halfDayPrice ?? null,
+          enrolledFullDayPrice: session.fullDayPrice ?? null,
           childId,
           childName: `${child.firstName} ${child.lastName}`,
           className: `${session.name} - ${variantLabel}`,
@@ -147,8 +152,6 @@ router.post("/", supabaseAuth, async (req: any, res) => {
           stripeSubscriptionId: null,
           stripeCustomerId: null,
         });
-
-        (enrollmentData as any).sessionId = session.id;
 
         const saved = await storage.createProgramEnrollment(enrollmentData);
         createdEnrollments.push(saved);

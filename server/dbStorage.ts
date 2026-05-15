@@ -12,6 +12,7 @@ import {
   Lesson, InsertLesson, lessons,
   Program, InsertProgram, programs,
   ProgramEnrollment, InsertProgramEnrollment, programEnrollments,
+  schoolClasses,
   MembershipEnrollment, InsertMembershipEnrollment, membershipEnrollments,
   MembershipAgreement, InsertMembershipAgreement, membershipAgreements,
   SchoolDocument, InsertSchoolDocument, schoolDocuments,
@@ -3780,5 +3781,115 @@ export class DatabaseStorage implements IStorage {
       console.error('❌ FATAL: Notification seeding failed, transaction rolled back:', error);
       throw error; // Re-throw to prevent silent failures
     }
+  }
+
+  /**
+   * Families with at least one qualifying enrollment whose enrollment_date or program_start_date
+   * falls within [periodStart, periodEnd] (inclusive, date strings YYYY-MM-DD).
+   */
+  async getEnrollmentFamiliesByPeriod(
+    schoolId: number,
+    periodStart: string,
+    periodEnd: string,
+  ): Promise<
+    Array<{
+      parentId: number;
+      parentEmail: string;
+      childName: string;
+      className: string;
+    }>
+  > {
+    const db = await getDb();
+    const excludedStatuses = ['cancelled', 'withdrawn', 'failed'] as const;
+
+    const rows = await db
+      .select({
+        parentId: programEnrollments.parentId,
+        parentEmail: programEnrollments.parentEmail,
+        childName: programEnrollments.childName,
+        className: programEnrollments.className,
+      })
+      .from(programEnrollments)
+      .where(
+        and(
+          eq(programEnrollments.schoolId, schoolId),
+          not(inArray(programEnrollments.status, [...excludedStatuses])),
+          sql`(
+            (${programEnrollments.enrollmentDate}::date >= ${periodStart}::date
+              AND ${programEnrollments.enrollmentDate}::date <= ${periodEnd}::date)
+            OR (
+              ${programEnrollments.programStartDate} IS NOT NULL
+              AND ${programEnrollments.programStartDate}::date >= ${periodStart}::date
+              AND ${programEnrollments.programStartDate}::date <= ${periodEnd}::date
+            )
+          )`,
+        ),
+      );
+
+    return rows.map((r) => ({
+      parentId: r.parentId,
+      parentEmail: normalizeEmailForLookup(r.parentEmail) || r.parentEmail.trim(),
+      childName: r.childName,
+      className: r.className,
+    }));
+  }
+
+  /** Distinct normalized parent emails with qualifying enrollment on/after sinceDate. */
+  async getParentEmailsWithEnrollmentSince(schoolId: number, sinceDate: string): Promise<string[]> {
+    const db = await getDb();
+    const qualifyingStatuses = [
+      'pending_payment',
+      'pending_admin_approval',
+      'enrolled',
+      'completed',
+      'waitlist',
+    ] as const;
+
+    const rows = await db
+      .selectDistinct({ parentEmail: programEnrollments.parentEmail })
+      .from(programEnrollments)
+      .where(
+        and(
+          eq(programEnrollments.schoolId, schoolId),
+          inArray(programEnrollments.status, [...qualifyingStatuses]),
+          sql`(
+            ${programEnrollments.enrollmentDate}::date >= ${sinceDate}::date
+            OR (
+              ${programEnrollments.programStartDate} IS NOT NULL
+              AND ${programEnrollments.programStartDate}::date >= ${sinceDate}::date
+            )
+          )`,
+        ),
+      );
+
+    return rows
+      .map((r) => normalizeEmailForLookup(r.parentEmail) || r.parentEmail.trim())
+      .filter(Boolean);
+  }
+
+  async getDistinctParentEmailsForSchool(schoolId: number): Promise<string[]> {
+    const db = await getDb();
+    const rows = await db
+      .selectDistinct({ parentEmail: programEnrollments.parentEmail })
+      .from(programEnrollments)
+      .where(eq(programEnrollments.schoolId, schoolId));
+    return rows
+      .map((r) => normalizeEmailForLookup(r.parentEmail) || r.parentEmail.trim())
+      .filter(Boolean);
+  }
+
+  async getStripePaymentHistoryForSchool(schoolId: number, limit = 100): Promise<StripePaymentHistory[]> {
+    const db = await getDb();
+    const cap = Math.min(Math.max(limit, 1), 200);
+    const rows = await db.execute(sql`
+      SELECT sph.*
+      FROM stripe_payment_history sph
+      INNER JOIN user_roles ur ON ur.user_id = sph.user_id
+      WHERE ur.school_id = ${schoolId}
+        AND LOWER(ur.role) = 'parent'
+      ORDER BY sph.stripe_created_at DESC
+      LIMIT ${cap}
+    `);
+    return rows.rows as StripePaymentHistory[];
   }
 }

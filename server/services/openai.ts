@@ -2,15 +2,27 @@ import OpenAI from "openai";
 
 // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
+let openaiClient: OpenAI | undefined;
+
+function getOpenAIClient(): OpenAI {
+  const apiKey = process.env.OPENAI_API_KEY?.trim();
+  if (!apiKey) {
+    throw new Error("OPENAI_API_KEY is not configured");
+  }
+  if (!openaiClient) {
+    openaiClient = new OpenAI({ apiKey });
+  }
+  return openaiClient;
+}
 
 // Check if OpenAI API key is available
 export async function checkOpenAIStatus() {
+  if (!process.env.OPENAI_API_KEY?.trim()) {
+    return { available: false, status: "error", message: "OPENAI_API_KEY not configured" };
+  }
   try {
     // Simple models list request to check if API key is valid
-    await openai.models.list();
+    await getOpenAIClient().models.list();
     return { available: true, status: "operational" };
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -360,7 +372,7 @@ export async function generateContentWithOpenAI(
         options.response_format = { type: "json_object" };
       }
       
-      const response = await openai.chat.completions.create(options);
+      const response = await getOpenAIClient().chat.completions.create(options);
       
       return response.choices[0].message.content || "";
     } catch (error) {
@@ -753,4 +765,4 @@ export async function generateEducationalActivity(
   }
 }
 
-export default openai;
+export default getOpenAIClient;

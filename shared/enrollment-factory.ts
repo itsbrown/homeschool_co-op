@@ -320,6 +320,14 @@ export interface SimpleEnrollmentParams {
   stripeSubscriptionId?: string | null;
   notes?: string | null;
   metadata?: Record<string, any>;
+
+  // F001 session enrollment
+  sessionId?: number | null;
+  enrollmentVersion?: "v1" | "v2";
+  dayType?: "half_day" | "full_day" | null;
+  enrolledHalfDayPrice?: number | null;
+  enrolledFullDayPrice?: number | null;
+  familyPlanId?: number | null;
 }
 
 /**
@@ -389,5 +397,13 @@ export function createEnrollmentDataSimple(params: SimpleEnrollmentParams): Inse
     // Metadata
     notes: params.notes ?? null,
     metadata: params.metadata ?? {},
+
+    // F001 session enrollment (defaults preserve v1 class enrollments)
+    sessionId: params.sessionId ?? null,
+    enrollmentVersion: params.enrollmentVersion ?? "v1",
+    dayType: params.dayType ?? null,
+    enrolledHalfDayPrice: params.enrolledHalfDayPrice ?? null,
+    enrolledFullDayPrice: params.enrolledFullDayPrice ?? null,
+    familyPlanId: params.familyPlanId ?? null,
   };
 }

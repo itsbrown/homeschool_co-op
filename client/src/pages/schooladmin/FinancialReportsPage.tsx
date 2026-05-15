@@ -126,11 +126,15 @@ interface PaymentPlan {
 }
 
 interface RecentTransaction {
-  id: number;
+  id: number | string;
   type: 'payment' | 'refund';
   amount: number;
   status: string;
   createdAt: string;
+  parentEmail?: string | null;
+  className?: string | null;
+  childName?: string | null;
+  source?: 'ledger' | 'stripe_history' | 'stripe_live';
   enrollment: { id: number; childName: string; className: string; parentEmail: string } | null;
 }
 
@@ -932,15 +936,22 @@ export default function FinancialReportsPage() {
                                   {tx.type === 'payment' ? 'Payment' : 'Refund'}
                                 </Badge>
                               </TableCell>
-                              <TableCell>{tx.enrollment?.childName || 'N/A'}</TableCell>
-                              <TableCell>{tx.enrollment?.className || 'N/A'}</TableCell>
+                              <TableCell>{tx.enrollment?.childName || tx.childName || '—'}</TableCell>
+                              <TableCell>{tx.enrollment?.className || tx.className || '—'}</TableCell>
                               <TableCell className={tx.type === 'refund' ? 'text-red-600' : ''}>
                                 {tx.type === 'refund' ? '-' : ''}{formatCurrency(tx.amount)}
                               </TableCell>
                               <TableCell>
-                                <Badge variant={tx.status === 'completed' ? 'outline' : 'secondary'}>
-                                  {tx.status === 'completed' ? <CheckCircle2 className="h-3 w-3 mr-1" /> : <Clock className="h-3 w-3 mr-1" />}
+                                <Badge variant={tx.status === 'completed' || tx.status === 'succeeded' ? 'outline' : 'secondary'}>
+                                  {tx.status === 'completed' || tx.status === 'succeeded' ? (
+                                    <CheckCircle2 className="h-3 w-3 mr-1" />
+                                  ) : (
+                                    <Clock className="h-3 w-3 mr-1" />
+                                  )}
                                   {tx.status}
+                                  {tx.source && tx.source !== 'ledger' ? (
+                                    <span className="ml-1 text-[10px] opacity-70">({tx.source})</span>
+                                  ) : null}
                                 </Badge>
                               </TableCell>
                             </TableRow>

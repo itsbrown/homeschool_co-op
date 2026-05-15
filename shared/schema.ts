@@ -110,6 +110,9 @@ export const schools = pgTable("schools", {
   membershipAgreementTemplate: text("membership_agreement_template"), // The agreement text/HTML that members must sign
   membershipAgreementVersion: text("membership_agreement_version").default("1.0"), // Version of the current agreement
   membershipAgreementUpdatedAt: timestamp("membership_agreement_updated_at"), // When the agreement was last updated
+
+  // F001: session-based enrollment (half/full day per enrollment period)
+  sessionModeEnabled: boolean("session_mode_enabled").default(false).notNull(),
 });
 
 export const insertSchoolSchema = createInsertSchema(schools)
@@ -148,6 +151,8 @@ export const insertSchoolSchema = createInsertSchema(schools)
     membershipAgreementTemplate: z.string().nullable().default(null),
     membershipAgreementVersion: z.string().default("1.0"),
     membershipAgreementUpdatedAt: z.date().nullable().default(null),
+
+    sessionModeEnabled: z.boolean().default(false),
   });
 export type InsertSchool = z.infer<typeof insertSchoolSchema>;
 export type School = typeof schools.$inferSelect;
@@ -466,6 +471,38 @@ export const insertSessionSchema = createInsertSchema(sessions).omit({
 export type InsertSession = z.infer<typeof insertSessionSchema>;
 export type EnrollmentSession = typeof sessions.$inferSelect;
 
+/** Bundled payment plan across multiple session enrollments (F001) */
+export const familyPaymentPlans = pgTable("family_payment_plans", {
+  id: serial("id").primaryKey(),
+  schoolId: integer("school_id").notNull().references(() => schools.id),
+  parentId: integer("parent_id").notNull().references(() => users.id),
+  totalAmountCents: integer("total_amount_cents").notNull(),
+  totalPaidCents: integer("total_paid_cents").default(0).notNull(),
+  remainingBalanceCents: integer("remaining_balance_cents").notNull(),
+  paymentFrequency: text("payment_frequency", {
+    enum: ["weekly", "biweekly", "monthly", "one_time"],
+  }).notNull(),
+  status: text("status", {
+    enum: ["active", "completed", "cancelled", "recalculating"],
+  })
+    .notNull()
+    .default("active"),
+  lockedAt: timestamp("locked_at"),
+  lockedBy: text("locked_by"),
+  stripeSubscriptionId: text("stripe_subscription_id"),
+  metadata: jsonb("metadata").default({}).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertFamilyPaymentPlanSchema = createInsertSchema(familyPaymentPlans).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertFamilyPaymentPlan = z.infer<typeof insertFamilyPaymentPlanSchema>;
+export type FamilyPaymentPlan = typeof familyPaymentPlans.$inferSelect;
+
 // Update user relations to include schools
 export const usersRelations = relations(users, ({ many, one }) => ({
   curricula: many(curricula),
@@ -592,6 +629,7 @@ export const programEnrollments = pgTable("program_enrollments", {
   classId: integer("class_id").references(() => schoolClasses.id), // For school_class type
   marketplaceClassId: integer("marketplace_class_id").references(() => classes.id), // For marketplace type
   programId: integer("program_id"), // Legacy field for backward compatibility
+  sessionId: integer("session_id").references(() => sessions.id), // F001: enrollment-period session
   childId: integer("child_id").notNull().references(() => children.id),
   childName: text("child_name").notNull(), // Denormalized for reporting
   className: text("class_name").notNull(), // Denormalized for reporting
@@ -635,19 +673,66 @@ export const programEnrollments = pgTable("program_enrollments", {
   // Metadata for additional info
   notes: text("notes"),
   metadata: jsonb("metadata").default({}).notNull(),
+
+  // F001: session-based enrollment (v2)
+  enrollmentVersion: text("enrollment_version", { enum: ["v1", "v2"] })
+    .default("v1")
+    .notNull(),
+  dayType: text("day_type", { enum: ["half_day", "full_day"] }),
+  enrolledHalfDayPrice: integer("enrolled_half_day_price"),
+  enrolledFullDayPrice: integer("enrolled_full_day_price"),
+  familyPlanId: integer("family_plan_id").references(() => familyPaymentPlans.id),
   
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
+
+/** Audit trail for session enrollment price / day-type changes (F001 Safeguard 5) */
+export const enrollmentPriceHistory = pgTable("enrollment_price_history", {
+  id: serial("id").primaryKey(),
+  enrollmentId: integer("enrollment_id")
+    .notNull()
+    .references(() => programEnrollments.id, { onDelete: "cascade" }),
+  changeType: text("change_type", {
+    enum: ["initial", "upgrade", "downgrade", "proration", "admin_adjustment"],
+  }).notNull(),
+  previousDayType: text("previous_day_type"),
+  newDayType: text("new_day_type"),
+  previousPriceCents: integer("previous_price_cents").notNull(),
+  newPriceCents: integer("new_price_cents").notNull(),
+  differenceCents: integer("difference_cents").notNull(),
+  proratedDays: integer("prorated_days"),
+  totalDaysInSession: integer("total_days_in_session"),
+  effectiveDate: date("effective_date").notNull(),
+  changedBy: integer("changed_by")
+    .notNull()
+    .references(() => users.id),
+  reason: text("reason"),
+  metadata: jsonb("metadata").default({}).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertEnrollmentPriceHistorySchema = createInsertSchema(enrollmentPriceHistory).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertEnrollmentPriceHistory = z.infer<typeof insertEnrollmentPriceHistorySchema>;
+export type EnrollmentPriceHistory = typeof enrollmentPriceHistory.$inferSelect;
 
 export const insertProgramEnrollmentSchema = createInsertSchema(programEnrollments)
   .omit({ id: true, createdAt: true, updatedAt: true })
   .extend({
     classType: z.enum(["school_class", "marketplace"]).default("school_class"),
     programId: z.number().nullable().default(null),
+    sessionId: z.number().nullable().default(null),
     classId: z.number().nullable().default(null),
     marketplaceClassId: z.number().nullable().default(null),
     variantId: z.string().nullable().default(null),
+    enrollmentVersion: z.enum(["v1", "v2"]).default("v1"),
+    dayType: z.enum(["half_day", "full_day"]).nullable().default(null),
+    enrolledHalfDayPrice: z.number().nullable().default(null),
+    enrolledFullDayPrice: z.number().nullable().default(null),
+    familyPlanId: z.number().nullable().default(null),
     depositRequired: z.number().default(0),
     totalPaid: z.number().default(0),
     paymentPlan: z.enum(["full_payment", "deposit_only", "biweekly", "custom"]).nullable().default(null),
@@ -1059,11 +1144,34 @@ export const programsRelations = relations(programs, ({ one, many }) => ({
 }));
 
 // Define program enrollment relations (table defined earlier with financial fields)
-export const programEnrollmentsRelations = relations(programEnrollments, ({ one }) => ({
+export const programEnrollmentsRelations = relations(programEnrollments, ({ one, many }) => ({
   program: one(programs, { fields: [programEnrollments.programId], references: [programs.id] }),
+  session: one(sessions, { fields: [programEnrollments.sessionId], references: [sessions.id] }),
   child: one(children, { fields: [programEnrollments.childId], references: [children.id] }),
   parent: one(users, { fields: [programEnrollments.parentId], references: [users.id] }),
-  school: one(schools, { fields: [programEnrollments.schoolId], references: [schools.id] })
+  school: one(schools, { fields: [programEnrollments.schoolId], references: [schools.id] }),
+  familyPlan: one(familyPaymentPlans, {
+    fields: [programEnrollments.familyPlanId],
+    references: [familyPaymentPlans.id],
+  }),
+  priceHistory: many(enrollmentPriceHistory),
+}));
+
+export const familyPaymentPlansRelations = relations(familyPaymentPlans, ({ one, many }) => ({
+  school: one(schools, { fields: [familyPaymentPlans.schoolId], references: [schools.id] }),
+  parent: one(users, { fields: [familyPaymentPlans.parentId], references: [users.id] }),
+  enrollments: many(programEnrollments),
+}));
+
+export const enrollmentPriceHistoryRelations = relations(enrollmentPriceHistory, ({ one }) => ({
+  enrollment: one(programEnrollments, {
+    fields: [enrollmentPriceHistory.enrollmentId],
+    references: [programEnrollments.id],
+  }),
+  changedByUser: one(users, {
+    fields: [enrollmentPriceHistory.changedBy],
+    references: [users.id],
+  }),
 }));
 
 // Stripe Subscription Schedules table - tracks Stripe payment plans

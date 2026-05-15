@@ -244,6 +244,7 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
 }
 
 (async () => {
+  try {
   // Import and apply auth middleware for admin routes
   const { jwtCheck, requireRole } = await import("./middleware/auth0-auth");
   
@@ -274,7 +275,12 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
     await setupVite(app, server);
   } else {
     const { serveStatic } = await import("./vite");
-    serveStatic(app);
+    try {
+      serveStatic(app);
+    } catch (staticError) {
+      console.error('❌ Failed to configure static file serving:', staticError);
+      throw staticError;
+    }
   }
 
   // ALWAYS serve the app on port 5000
@@ -382,4 +388,8 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
       );
     }
   });
+  } catch (startupError) {
+    console.error('❌ Fatal server startup error:', startupError);
+    process.exit(1);
+  }
 })();

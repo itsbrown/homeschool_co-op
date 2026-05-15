@@ -3,11 +3,13 @@ import Anthropic from '@anthropic-ai/sdk';
 import rateLimit from 'express-rate-limit';
 import { storage } from '../storage';
 import { getDb } from '../db';
-import { payments, scheduledPayments, programEnrollments, users, refunds, schools, classes } from '@shared/schema';
+import { payments, scheduledPayments, programEnrollments, users, refunds, schools, classes, schoolClasses } from '@shared/schema';
 import { eq, and, gte, lte, sql, desc, isNull, not, inArray } from 'drizzle-orm';
 import { generateCFOInsights, isAIAvailable } from '../services/cfoInsightsService';
 import { reconcileSchoolScheduledPayments, cleanupScheduledPayments, generateMissingScheduledPayments } from '../services/scheduled-payment-reconciliation';
 import { computeEffectiveBalance } from '@shared/schema';
+import { resolveEnrollmentOutstandingCents } from '../lib/enrollment-balance';
+import { fetchSucceededPaymentIntentsForSchool } from '../services/school-stripe-transactions';
 
 const AI_MODEL = 'claude-sonnet-4-20250514';
 
@@ -364,13 +366,12 @@ router.get('/outstanding-balances', async (req: any, res) => {
             // outstanding scheduled payments incorrectly look fully paid here and
             // get auto-cancelled by the filter below.
             // (See asa-payment-patterns "Parent Payments page shows $0" pitfall.)
-            enrollmentRemainingBalance =
-              enrollment.effectiveBalance ??
-              computeEffectiveBalance(
-                enrollment.totalCost ?? 0,
-                enrollment.totalPaid ?? 0,
-                enrollment.compAmountCents ?? 0,
-              );
+            enrollmentRemainingBalance = resolveEnrollmentOutstandingCents({
+              effectiveBalance: (enrollment as { effectiveBalance?: number }).effectiveBalance,
+              totalCost: enrollment.totalCost,
+              totalPaid: enrollment.totalPaid,
+              compAmountCents: (enrollment as { compAmountCents?: number }).compAmountCents,
+            });
           }
         } catch (e) {}
 
@@ -434,7 +435,12 @@ router.get('/outstanding-balances', async (req: any, res) => {
           }
         } catch (e) {}
 
-        const amount = enrollment.totalCost - enrollment.totalPaid - (enrollment.compAmountCents ?? 0);
+        const amount = resolveEnrollmentOutstandingCents({
+          effectiveBalance: (enrollment as { effectiveBalance?: number }).effectiveBalance,
+          totalCost: enrollment.totalCost,
+          totalPaid: enrollment.totalPaid,
+          compAmountCents: (enrollment as { compAmountCents?: number }).compAmountCents,
+        });
 
         return {
           id: -enrollment.id,
@@ -683,19 +689,106 @@ router.get('/recent-transactions', async (req: any, res) => {
       .orderBy(desc(refunds.createdAt))
       .limit(limit);
 
-    const allTransactions = [...recentPayments.map((p: typeof recentPayments[number]) => ({
-      ...p,
-      enrollmentId: Array.isArray(p.enrollmentIds) && p.enrollmentIds.length > 0 
-        ? (p.enrollmentIds as number[])[0] 
-        : null,
-    })), ...recentRefundsData]
-      .sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime())
+    type TxRow = {
+      id: string | number;
+      type: string;
+      amount: number;
+      status: string;
+      createdAt: Date | string;
+      enrollmentId: number | null;
+      stripePaymentIntentId?: string | null;
+      paymentMethod?: string | null;
+      childName?: string | null;
+      className?: string | null;
+      parentEmail?: string | null;
+      reason?: string | null;
+      source: 'ledger' | 'stripe_history' | 'stripe_live';
+    };
+
+    const byIntent = new Map<string, TxRow>();
+
+    for (const p of recentPayments) {
+      const enrollmentId =
+        Array.isArray(p.enrollmentIds) && p.enrollmentIds.length > 0
+          ? (p.enrollmentIds as number[])[0]
+          : null;
+      const row: TxRow = {
+        id: p.id,
+        type: 'payment',
+        amount: p.amount,
+        status: p.status === 'completed' ? 'succeeded' : p.status,
+        createdAt: p.createdAt!,
+        enrollmentId,
+        stripePaymentIntentId: p.stripePaymentIntentId,
+        paymentMethod: p.paymentMethod,
+        childName: p.childName,
+        className: p.className,
+        parentEmail: p.parentEmail,
+        source: 'ledger',
+      };
+      if (p.stripePaymentIntentId) {
+        byIntent.set(p.stripePaymentIntentId, row);
+      } else {
+        byIntent.set(`ledger:${p.id}`, row);
+      }
+    }
+
+    const stripeHistory = await storage.getStripePaymentHistoryForSchool(schoolId, limit * 2);
+    for (const sph of stripeHistory) {
+      if (byIntent.has(sph.paymentIntentId)) continue;
+      byIntent.set(sph.paymentIntentId, {
+        id: `sph:${sph.id}`,
+        type: 'payment',
+        amount: sph.amount,
+        status: sph.status === 'succeeded' ? 'succeeded' : sph.status,
+        createdAt: sph.stripeCreatedAt,
+        enrollmentId: null,
+        stripePaymentIntentId: sph.paymentIntentId,
+        paymentMethod: sph.paymentMethod,
+        childName: null,
+        className: sph.description,
+        parentEmail: null,
+        source: 'stripe_history',
+      });
+    }
+
+    const liveStripe = await fetchSucceededPaymentIntentsForSchool(schoolId, { maxParents: 100 });
+    for (const [, intent] of liveStripe) {
+      if (byIntent.has(intent.id)) continue;
+      byIntent.set(intent.id, {
+        id: `stripe:${intent.id}`,
+        type: 'payment',
+        amount: intent.amount,
+        status: 'succeeded',
+        createdAt: intent.created,
+        enrollmentId: null,
+        stripePaymentIntentId: intent.id,
+        paymentMethod: intent.paymentMethod,
+        childName: null,
+        className: intent.description,
+        parentEmail: intent.parentEmail,
+        source: 'stripe_live',
+      });
+    }
+
+    const refundRows: TxRow[] = recentRefundsData.map((r) => ({
+      id: r.id,
+      type: 'refund',
+      amount: r.amount,
+      status: r.status,
+      createdAt: r.createdAt!,
+      enrollmentId: r.enrollmentId,
+      reason: r.reason,
+      source: 'ledger' as const,
+    }));
+
+    const merged = [...byIntent.values(), ...refundRows]
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       .slice(0, limit);
 
     const enrichedTransactions = await Promise.all(
-      allTransactions.map(async (tx: any) => {
+      merged.map(async (tx) => {
         let enrollmentInfo = null;
-
         if (tx.enrollmentId) {
           try {
             const enrollment = await storage.getProgramEnrollmentById(tx.enrollmentId);
@@ -707,17 +800,21 @@ router.get('/recent-transactions', async (req: any, res) => {
                 parentEmail: enrollment.parentEmail,
               };
             }
-          } catch (e) {}
+          } catch (_e) {}
         }
-
-        return {
-          ...tx,
-          enrollment: enrollmentInfo,
-        };
-      })
+        return { ...tx, enrollment: enrollmentInfo };
+      }),
     );
 
-    res.json({ transactions: enrichedTransactions });
+    res.json({
+      transactions: enrichedTransactions,
+      generatedAt: new Date().toISOString(),
+      sources: {
+        ledgerPayments: recentPayments.length,
+        stripeHistoryRows: stripeHistory.length,
+        stripeLiveOrphans: liveStripe.size,
+      },
+    });
   } catch (error) {
     console.error('Error fetching recent transactions:', error);
     res.status(500).json({ error: 'Failed to fetch recent transactions' });
@@ -737,29 +834,86 @@ router.get('/class-breakdown', async (req: any, res) => {
 
     const db = await getDb();
 
-    const conditions: any[] = [
+    const baseEnrollmentConditions = [
       eq(programEnrollments.schoolId, schoolId),
       not(inArray(programEnrollments.status, ['cancelled', 'waitlist', 'withdrawn', 'failed'])),
     ];
-    if (startDateParam) conditions.push(gte(classes.startDate, startDateParam));
-    if (endDateParam) conditions.push(lte(classes.startDate, endDateParam));
 
-    const rows = await db
+    const outstandingSql = sql<number>`GREATEST(0, ${programEnrollments.totalCost} - ${programEnrollments.totalPaid} - COALESCE(comp_amount_cents, 0))`;
+
+    const marketplaceConditions = [
+      ...baseEnrollmentConditions,
+      sql`(${programEnrollments.classType} = 'marketplace' OR ${programEnrollments.marketplaceClassId} IS NOT NULL)`,
+    ];
+    if (startDateParam) marketplaceConditions.push(gte(classes.startDate, startDateParam));
+    if (endDateParam) marketplaceConditions.push(lte(classes.startDate, endDateParam));
+
+    const marketplaceRows = await db
       .select({
         className: programEnrollments.className,
-        marketplaceClassId: programEnrollments.marketplaceClassId,
         totalCost: programEnrollments.totalCost,
         totalPaid: programEnrollments.totalPaid,
-        remainingBalance: programEnrollments.remainingBalance,
-        compAmountCents: programEnrollments.compAmountCents,
+        outstandingCents: outstandingSql,
+        compAmountCents: sql<number>`COALESCE(comp_amount_cents, 0)`,
         classStartDate: classes.startDate,
         classEndDate: classes.endDate,
       })
       .from(programEnrollments)
       .leftJoin(classes, eq(programEnrollments.marketplaceClassId, classes.id))
-      .where(and(...conditions));
+      .where(and(...marketplaceConditions));
 
-    // Group by class name in JS (handles both school_class and marketplace types via denormalized className)
+    const schoolConditions = [
+      ...baseEnrollmentConditions,
+      sql`(${programEnrollments.classType} = 'school_class' OR (${programEnrollments.marketplaceClassId} IS NULL AND ${programEnrollments.classId} IS NOT NULL))`,
+    ];
+    if (startDateParam) schoolConditions.push(gte(programEnrollments.programStartDate, startDateParam));
+    if (endDateParam) schoolConditions.push(lte(programEnrollments.programStartDate, endDateParam));
+
+    const schoolRows = await db
+      .select({
+        className: programEnrollments.className,
+        totalCost: programEnrollments.totalCost,
+        totalPaid: programEnrollments.totalPaid,
+        outstandingCents: outstandingSql,
+        compAmountCents: sql<number>`COALESCE(comp_amount_cents, 0)`,
+        classStartDate: sql<string | null>`NULL`,
+        classEndDate: sql<string | null>`NULL`,
+      })
+      .from(programEnrollments)
+      .leftJoin(schoolClasses, eq(programEnrollments.classId, schoolClasses.id))
+      .where(and(...schoolConditions));
+
+  type BreakdownRow = {
+    className: string | null;
+    totalCost: number | null;
+    totalPaid: number | null;
+    outstandingCents: number;
+    compAmountCents: number;
+    classStartDate: string | Date | null;
+    classEndDate: string | Date | null;
+  };
+
+    const rows: BreakdownRow[] = [
+      ...marketplaceRows.map((r) => ({
+        className: r.className,
+        totalCost: r.totalCost,
+        totalPaid: r.totalPaid,
+        outstandingCents: Number(r.outstandingCents) || 0,
+        compAmountCents: Number(r.compAmountCents) || 0,
+        classStartDate: r.classStartDate,
+        classEndDate: r.classEndDate,
+      })),
+      ...schoolRows.map((r) => ({
+        className: r.className,
+        totalCost: r.totalCost,
+        totalPaid: r.totalPaid,
+        outstandingCents: Number(r.outstandingCents) || 0,
+        compAmountCents: Number(r.compAmountCents) || 0,
+        classStartDate: r.classStartDate,
+        classEndDate: r.classEndDate,
+      })),
+    ];
+
     const classMap = new Map<string, {
       className: string;
       classStartDate: string | null;
@@ -776,8 +930,8 @@ router.get('/class-breakdown', async (req: any, res) => {
       if (!classMap.has(key)) {
         classMap.set(key, {
           className: key,
-          classStartDate: row.classStartDate ?? null,
-          classEndDate: row.classEndDate ?? null,
+          classStartDate: row.classStartDate ? String(row.classStartDate) : null,
+          classEndDate: row.classEndDate ? String(row.classEndDate) : null,
           enrollmentCount: 0,
           totalExpectedCents: 0,
           totalCollectedCents: 0,
@@ -789,8 +943,8 @@ router.get('/class-breakdown', async (req: any, res) => {
       entry.enrollmentCount++;
       entry.totalExpectedCents += row.totalCost ?? 0;
       entry.totalCollectedCents += row.totalPaid ?? 0;
-      entry.totalOutstandingCents += Math.max(0, (row.totalCost ?? 0) - (row.totalPaid ?? 0) - (row.compAmountCents ?? 0));
-      entry.totalCompedCents += row.compAmountCents ?? 0;
+      entry.totalOutstandingCents += row.outstandingCents;
+      entry.totalCompedCents += row.compAmountCents;
     }
 
     const classList = Array.from(classMap.values()).sort((a, b) => {
@@ -800,14 +954,23 @@ router.get('/class-breakdown', async (req: any, res) => {
       return new Date(b.classStartDate).getTime() - new Date(a.classStartDate).getTime();
     });
 
-    const totals = classList.reduce((acc, c) => ({
-      totalExpectedCents: acc.totalExpectedCents + c.totalExpectedCents,
-      totalCollectedCents: acc.totalCollectedCents + c.totalCollectedCents,
-      totalOutstandingCents: acc.totalOutstandingCents + c.totalOutstandingCents,
-      totalCompedCents: acc.totalCompedCents + c.totalCompedCents,
-    }), { totalExpectedCents: 0, totalCollectedCents: 0, totalOutstandingCents: 0, totalCompedCents: 0 });
+    const totals = classList.reduce(
+      (acc, c) => ({
+        totalExpectedCents: acc.totalExpectedCents + c.totalExpectedCents,
+        totalCollectedCents: acc.totalCollectedCents + c.totalCollectedCents,
+        totalOutstandingCents: acc.totalOutstandingCents + c.totalOutstandingCents,
+        totalCompedCents: acc.totalCompedCents + c.totalCompedCents,
+      }),
+      { totalExpectedCents: 0, totalCollectedCents: 0, totalOutstandingCents: 0, totalCompedCents: 0 },
+    );
 
-    res.json({ classes: classList, totals });
+    res.json({
+      classes: classList,
+      totals,
+      generatedAt: new Date().toISOString(),
+      dateFieldNote:
+        'Marketplace classes filter by classes.start_date when date range is set; school classes include all active enrollments in range-agnostic mode.',
+    });
   } catch (error) {
     console.error('Error fetching class breakdown:', error);
     res.status(500).json({ error: 'Failed to fetch class breakdown' });

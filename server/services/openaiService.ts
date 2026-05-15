@@ -7,13 +7,21 @@ interface ChatMessage {
   content: string;
 }
 
-// Initialize OpenAI client
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+// Check if OpenAI API key is available (do not construct client at import — crashes prod boot)
+const isOpenAIAvailable = !!process.env.OPENAI_API_KEY?.trim();
 
-// Check if OpenAI API key is available
-const isOpenAIAvailable = !!process.env.OPENAI_API_KEY;
+let openaiClient: OpenAI | undefined;
+
+function getOpenAIClient(): OpenAI {
+  const apiKey = process.env.OPENAI_API_KEY?.trim();
+  if (!apiKey) {
+    throw new Error("OPENAI_API_KEY is not configured");
+  }
+  if (!openaiClient) {
+    openaiClient = new OpenAI({ apiKey });
+  }
+  return openaiClient;
+}
 
 class OpenAIService {
   private static instance: OpenAIService;
@@ -60,7 +68,7 @@ class OpenAIService {
 
     try {
       // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
-      const response = await openai.chat.completions.create({
+      const response = await getOpenAIClient().chat.completions.create({
         model: "gpt-4o",
         messages,
         max_tokens: maxTokens,

@@ -233,6 +233,21 @@ export interface IStorage {
   cancelPendingEnrollments(enrollmentIds: number[], parentUserId: number): Promise<{ cancelled: number[]; skipped: number[]; errors: string[] }>;
   getStripeCustomerIdsByParentEmail(parentEmail: string): Promise<string[]>;
   getStripeLinkedEnrollmentsByParentEmail(parentEmail: string): Promise<ProgramEnrollment[]>;
+  getEnrollmentFamiliesByPeriod(
+    schoolId: number,
+    periodStart: string,
+    periodEnd: string,
+  ): Promise<
+    Array<{
+      parentId: number;
+      parentEmail: string;
+      childName: string;
+      className: string;
+    }>
+  >;
+  getParentEmailsWithEnrollmentSince(schoolId: number, sinceDate: string): Promise<string[]>;
+  getDistinctParentEmailsForSchool(schoolId: number): Promise<string[]>;
+  getStripePaymentHistoryForSchool(schoolId: number, limit?: number): Promise<StripePaymentHistory[]>;
 
   // Membership Enrollment methods
   getMembershipEnrollmentById(id: number): Promise<MembershipEnrollment | undefined>;
@@ -1813,6 +1828,86 @@ export class MemStorage implements IStorage {
         activeStatuses.includes(e.status) && 
         e.stripeCustomerId !== null
       );
+  }
+
+  async getEnrollmentFamiliesByPeriod(
+    schoolId: number,
+    periodStart: string,
+    periodEnd: string,
+  ): Promise<
+    Array<{
+      parentId: number;
+      parentEmail: string;
+      childName: string;
+      className: string;
+    }>
+  > {
+    const excluded = new Set(['cancelled', 'withdrawn', 'failed']);
+    const start = new Date(periodStart);
+    const end = new Date(periodEnd);
+    end.setHours(23, 59, 59, 999);
+
+    const inRange = (e: ProgramEnrollment) => {
+      const ed = e.enrollmentDate ? new Date(e.enrollmentDate) : null;
+      if (ed && ed >= start && ed <= end) return true;
+      if (e.programStartDate) {
+        const ps = new Date(e.programStartDate);
+        if (ps >= start && ps <= end) return true;
+      }
+      return false;
+    };
+
+    return Array.from(this.programEnrollmentsStore.values())
+      .filter(
+        (e) =>
+          e.schoolId === schoolId &&
+          !excluded.has(e.status) &&
+          inRange(e),
+      )
+      .map((e) => ({
+        parentId: e.parentId,
+        parentEmail: normalizeEmailForLookup(e.parentEmail) || e.parentEmail,
+        childName: e.childName,
+        className: e.className,
+      }));
+  }
+
+  async getParentEmailsWithEnrollmentSince(schoolId: number, sinceDate: string): Promise<string[]> {
+    const since = new Date(sinceDate);
+    const qualifying = new Set([
+      'pending_payment',
+      'pending_admin_approval',
+      'enrolled',
+      'completed',
+      'waitlist',
+    ]);
+    const emails = new Set<string>();
+    for (const e of this.programEnrollmentsStore.values()) {
+      if (e.schoolId !== schoolId || !qualifying.has(e.status)) continue;
+      const ed = e.enrollmentDate ? new Date(e.enrollmentDate) : null;
+      if (ed && ed >= since) {
+        emails.add(normalizeEmailForLookup(e.parentEmail) || e.parentEmail);
+        continue;
+      }
+      if (e.programStartDate && new Date(e.programStartDate) >= since) {
+        emails.add(normalizeEmailForLookup(e.parentEmail) || e.parentEmail);
+      }
+    }
+    return Array.from(emails);
+  }
+
+  async getDistinctParentEmailsForSchool(schoolId: number): Promise<string[]> {
+    const emails = new Set<string>();
+    for (const e of this.programEnrollmentsStore.values()) {
+      if (e.schoolId === schoolId && e.parentEmail) {
+        emails.add(normalizeEmailForLookup(e.parentEmail) || e.parentEmail);
+      }
+    }
+    return Array.from(emails);
+  }
+
+  async getStripePaymentHistoryForSchool(_schoolId: number, _limit?: number): Promise<StripePaymentHistory[]> {
+    return [];
   }
 
   // Membership Enrollment methods
@@ -5651,6 +5746,46 @@ export class MemStorage implements IStorage {
         if (process.env.NODE_ENV === 'production') {
           throw error;
         }
+        return [];
+      }
+    }
+
+    async getEnrollmentFamiliesByPeriod(
+      schoolId: number,
+      periodStart: string,
+      periodEnd: string,
+    ) {
+      try {
+        return await this.dbStorage.getEnrollmentFamiliesByPeriod(schoolId, periodStart, periodEnd);
+      } catch (error) {
+        if (process.env.NODE_ENV === 'production') throw error;
+        return this.memStorage.getEnrollmentFamiliesByPeriod(schoolId, periodStart, periodEnd);
+      }
+    }
+
+    async getParentEmailsWithEnrollmentSince(schoolId: number, sinceDate: string) {
+      try {
+        return await this.dbStorage.getParentEmailsWithEnrollmentSince(schoolId, sinceDate);
+      } catch (error) {
+        if (process.env.NODE_ENV === 'production') throw error;
+        return this.memStorage.getParentEmailsWithEnrollmentSince(schoolId, sinceDate);
+      }
+    }
+
+    async getDistinctParentEmailsForSchool(schoolId: number) {
+      try {
+        return await this.dbStorage.getDistinctParentEmailsForSchool(schoolId);
+      } catch (error) {
+        if (process.env.NODE_ENV === 'production') throw error;
+        return this.memStorage.getDistinctParentEmailsForSchool(schoolId);
+      }
+    }
+
+    async getStripePaymentHistoryForSchool(schoolId: number, limit?: number) {
+      try {
+        return await this.dbStorage.getStripePaymentHistoryForSchool(schoolId, limit);
+      } catch (error) {
+        if (process.env.NODE_ENV === 'production') throw error;
         return [];
       }
     }
