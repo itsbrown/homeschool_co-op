@@ -4,7 +4,6 @@ import { supabaseAuth } from '../middleware/supabase-auth';
 import { sendPaymentReceipt } from '../lib/email-service';
 import { CurrencyUtils, BillingCalculationService } from '../../shared/currency-utils';
 import { normalizeEmailForLookup } from '../../shared/parent-identity';
-import { MembershipService } from '../services/membership-service';
 import { enrichedPaymentHistoryListResponseSchema, type EnrichedPaymentHistory } from '../../shared/schema';
 import { getStripeClient } from '../config/stripe';
 import {
@@ -1266,8 +1265,8 @@ router.post('/membership/manual', supabaseAuth, async (req: any, res) => {
       paymentDate
     } = req.body;
 
-    // Validate required fields
-    if (!membershipId || !parentEmail || !amount) {
+    // Validate required fields (amount may be 0 only when nothing is owed — button hidden in UI)
+    if (membershipId == null || !parentEmail || amount === undefined || amount === null) {
       return res.status(400).json({
         success: false,
         error: 'Missing required fields: membershipId, parentEmail, and amount are required'
@@ -1283,27 +1282,90 @@ router.post('/membership/manual', supabaseAuth, async (req: any, res) => {
       });
     }
 
-    // Verify parent email matches membership
+    // Verify parent email matches membership (case-insensitive)
     const membershipParent = await storage.getUser(membership.parentUserId);
-    if (!membershipParent || membershipParent.email !== parentEmail) {
+    const parentEmailNorm = normalizeEmailForLookup(parentEmail);
+    const membershipParentEmailNorm = membershipParent
+      ? normalizeEmailForLookup(membershipParent.email)
+      : '';
+    if (!membershipParent || parentEmailNorm !== membershipParentEmailNorm) {
       return res.status(400).json({
         success: false,
         error: 'Parent email does not match membership enrollment'
       });
     }
 
-    // Convert amount to cents
-    const amountInCents = CurrencyUtils.parseInput(amount);
+    // School admins may only record payments for their school
+    if (user.role === 'schoolAdmin' && user.schoolId !== membership.schoolId) {
+      return res.status(403).json({
+        success: false,
+        error: 'Not authorized for this school',
+      });
+    }
 
-    // Create payment record
+    const amountInCents = CurrencyUtils.parseInput(amount);
+    const feeCents = Math.max(membership.amount ?? 0, membership.totalAmount ?? 0);
+    const priorPaidCents = membership.amountPaid ?? 0;
+    const owedCents =
+      typeof membership.remainingBalance === 'number' && membership.remainingBalance >= 0
+        ? membership.remainingBalance
+        : Math.max(0, feeCents - priorPaidCents);
+    const appliedCents = Math.min(amountInCents, owedCents);
+
+    if (appliedCents <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'No membership balance due to apply this payment to',
+      });
+    }
+
+    const newAmountPaid = priorPaidCents + appliedCents;
+    const newRemainingBalance = Math.max(0, feeCents - newAmountPaid);
+    const fullyPaid = newRemainingBalance <= 0;
+    const auditNote =
+      notes?.trim() || 'Payment marked as paid by school administrator';
+
+    const updatedMembership = await storage.updateMembershipEnrollment(membership.id, {
+      status: fullyPaid ? 'enrolled' : 'pending_payment',
+      amount: feeCents,
+      amountPaid: newAmountPaid,
+      remainingBalance: newRemainingBalance,
+      balanceDue: newRemainingBalance,
+      totalAmount: feeCents,
+      paymentMethod: 'other',
+      notes: membership.notes?.trim()
+        ? `${membership.notes.trim()}\n${auditNote}`
+        : auditNote,
+    });
+
+    if (!updatedMembership) {
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to update membership enrollment',
+      });
+    }
+
+    if (fullyPaid && !membershipParent.memberId?.trim()) {
+      const { generateMemberId } = await import('../utils/membership');
+      await storage.updateUser(membershipParent.id, { memberId: generateMemberId() });
+    }
+
+    console.log(
+      `✅ Updated membership ${membership.id}: status=${updatedMembership.status}, paid=${CurrencyUtils.format(newAmountPaid)}, balance=${CurrencyUtils.format(newRemainingBalance)}`,
+    );
+
+    // Ledger payment row (payments.payment_method is stripe|cash|check|bank_transfer|other)
+    const ledgerPaymentMethod =
+      paymentMethod === 'manual' ? 'other' : paymentMethod;
+
     const paymentData = {
-      parentEmail,
-      childName: 'Membership Fee', // For membership, use this generic name
+      parentEmail: membershipParent.email,
+      childName: 'Membership Fee',
       className: `${membership.membershipYear} Annual Membership`,
-      amount: amountInCents,
+      amount: appliedCents,
       currency: currency.toLowerCase(),
       status: 'completed' as const,
-      paymentMethod,
+      paymentMethod: ledgerPaymentMethod,
       stripePaymentIntentId: `MANUAL-MEMBERSHIP-${Date.now()}`,
       description: description || `Manual payment for ${membership.membershipYear} annual membership`,
       schoolId: membership.schoolId,
@@ -1318,31 +1380,12 @@ router.post('/membership/manual', supabaseAuth, async (req: any, res) => {
         paymentType: 'membership',
         membershipYear: membership.membershipYear,
         schoolId: membership.schoolId,
-        notes: notes || ''
-      }
+        notes: auditNote,
+      },
     };
 
     const payment = await storage.createPayment(paymentData);
     console.log('✅ Manual membership payment created:', payment.id);
-
-    // Update membership enrollment status and payment amounts
-    try {
-      const existingPayments = await storage.getPaymentsByParentEmail(parentEmail);
-      const membershipPayments = existingPayments.filter(p => 
-        (p.metadata as any)?.membershipId === membership.id &&
-        ['completed', 'succeeded'].includes(p.status)
-      );
-      
-      const totalPaid = CurrencyUtils.sum(membershipPayments.map(p => p.amount || 0));
-      
-      // Update membership status using the service
-      await MembershipService.updateMembershipStatus(membership.id, totalPaid);
-      
-      console.log(`✅ Updated membership ${membership.id}: total paid=${CurrencyUtils.format(totalPaid)}`);
-    } catch (membershipError) {
-      console.error('❌ Error updating membership enrollment:', membershipError);
-      // Don't fail the payment creation if membership update fails
-    }
 
     // Send email receipt
     try {
@@ -1383,6 +1426,13 @@ router.post('/membership/manual', supabaseAuth, async (req: any, res) => {
 
     res.json({
       success: true,
+      membership: {
+        id: updatedMembership.id,
+        status: updatedMembership.status,
+        amountPaid: CurrencyUtils.toDisplay(updatedMembership.amountPaid ?? 0),
+        remainingBalance: CurrencyUtils.toDisplay(updatedMembership.remainingBalance ?? 0),
+        balanceDue: CurrencyUtils.toDisplay(updatedMembership.balanceDue ?? 0),
+      },
       payment: {
         id: payment.id,
         membershipId: membership.id,
@@ -1394,9 +1444,9 @@ router.post('/membership/manual', supabaseAuth, async (req: any, res) => {
         description: description || `Manual membership payment for ${membership.membershipYear}`,
         createdAt: payment.createdAt,
         updatedAt: payment.updatedAt,
-        paymentMethod,
-        notes: notes || ''
-      }
+        paymentMethod: ledgerPaymentMethod,
+        notes: auditNote,
+      },
     });
 
   } catch (error) {
