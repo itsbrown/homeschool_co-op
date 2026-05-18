@@ -1,6 +1,7 @@
 import express from 'express';
 import { storage } from '../storage';
 import { normalizeEmailForLookup } from '@shared/parent-identity';
+import { resolveAdminSchoolId } from '../lib/admin-school-context';
 
 const router = express.Router();
 
@@ -34,10 +35,7 @@ async function getSchoolAdminWithFeatureCheck(req: any, featureName: string): Pr
     return { error: 'Only school administrators can access this report', status: 403 };
   }
 
-  const adminRole = userRoles.find(r =>
-    r.role === 'schoolAdmin' || r.role === 'admin' || r.role === 'superAdmin'
-  );
-  const schoolId = adminRole?.schoolId ?? user.schoolId;
+  const schoolId = await resolveAdminSchoolId(req, user);
 
   if (!schoolId) {
     return { error: 'No school associated with this admin account', status: 400 };

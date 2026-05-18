@@ -2749,6 +2749,24 @@ export class DatabaseStorage implements IStorage {
     return result.rows.length > 0;
   }
 
+  async getDiscountUsageCountByUser(discountId: number, parentEmail: string): Promise<number> {
+    const db = await getDb();
+    const normalized = normalizeEmailForLookup(parentEmail);
+    if (!normalized) {
+      return 0;
+    }
+    const [row] = await db
+      .select({ c: sql<number>`count(*)::int` })
+      .from(discountApplications)
+      .where(
+        and(
+          eq(discountApplications.discountId, discountId),
+          sql`LOWER(TRIM(${discountApplications.parentEmail})) = ${normalized}`,
+        ),
+      );
+    return row?.c ?? 0;
+  }
+
   async deleteDiscount(id: number): Promise<void> {
     const db = await getDb();
     await db.delete(discounts).where(eq(discounts.id, id));
@@ -3891,6 +3909,11 @@ export class DatabaseStorage implements IStorage {
           WHERE ur.user_id = sph.user_id
             AND ur.school_id = ${schoolId}
             AND LOWER(TRIM(ur.role)) = 'parent'
+        )
+        OR EXISTS (
+          SELECT 1 FROM program_enrollments pe
+          INNER JOIN users u2 ON LOWER(TRIM(u2.email)) = LOWER(TRIM(pe.parent_email))
+          WHERE pe.school_id = ${schoolId} AND u2.id = sph.user_id
         )
       )
       ORDER BY sph.stripe_created_at DESC

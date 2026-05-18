@@ -7656,19 +7656,23 @@ router.get('/features', supabaseAuth, async (req: any, res) => {
       return res.status(401).json({ error: 'Not authenticated' });
     }
 
-    // Get user's school
-    const userRolesList = await storage.getUserRolesByUserId(userId);
-    const adminRole = userRolesList.find(r => r.role === 'schoolAdmin' || r.role === 'superAdmin');
-    
-    if (!adminRole?.schoolId) {
+    const user = await storage.getUser(userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const { resolveAdminSchoolId } = await import('../lib/admin-school-context');
+    const schoolId = await resolveAdminSchoolId(req, user);
+
+    if (!schoolId) {
       return res.status(403).json({ error: 'No school admin role found' });
     }
 
-    const features = await storage.getSchoolFeatures(adminRole.schoolId);
-    
+    const features = await storage.getSchoolFeatures(schoolId);
+
     res.json({
       features,
-      schoolId: adminRole.schoolId,
+      schoolId,
     });
   } catch (error) {
     console.error('[Features] Error fetching school features:', error);

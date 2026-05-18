@@ -9,6 +9,8 @@ import { generateCFOInsights, isAIAvailable } from '../services/cfoInsightsServi
 import { reconcileSchoolScheduledPayments, cleanupScheduledPayments, generateMissingScheduledPayments } from '../services/scheduled-payment-reconciliation';
 import { computeEffectiveBalance } from '@shared/schema';
 import { resolveEnrollmentOutstandingCents } from '../lib/enrollment-balance';
+import { resolveAdminSchoolId, sqlStripeHistoryUserAtSchool } from '../lib/admin-school-context';
+import { schoolScopedLedgerPayments } from '../lib/school-payment-scope';
 import { fetchSucceededPaymentIntentsForSchool } from '../services/school-stripe-transactions';
 
 const AI_MODEL = 'claude-sonnet-4-20250514';
@@ -61,11 +63,7 @@ async function getSchoolAdminWithFeatureCheck(req: any, featureName: string): Pr
     return { error: 'Only school administrators can access financial reports', status: 403 };
   }
 
-  // Prefer schoolId from user_roles entry, fall back to legacy users.schoolId
-  const adminRole = userRoles.find(r =>
-    r.role === 'schoolAdmin' || r.role === 'admin' || r.role === 'superAdmin'
-  );
-  const schoolId = adminRole?.schoolId ?? user.schoolId;
+  const schoolId = await resolveAdminSchoolId(req, user);
 
   if (!schoolId) {
     return { error: 'No school associated with this admin account', status: 400 };
@@ -105,20 +103,21 @@ async function stripeOrphanRevenueForSchool(
     FROM stripe_payment_history sph
     WHERE sph.status = 'succeeded'
       ${sinceFilter}
-      AND (
-        EXISTS (SELECT 1 FROM users u WHERE u.id = sph.user_id AND u.school_id = ${schoolId})
-        OR EXISTS (
-          SELECT 1 FROM user_roles ur
-          WHERE ur.user_id = sph.user_id
-            AND ur.school_id = ${schoolId}
-            AND LOWER(TRIM(ur.role)) = 'parent'
-        )
-      )
+      AND ${sqlStripeHistoryUserAtSchool(schoolId)}
       AND NOT EXISTS (
         SELECT 1 FROM payments p
-        WHERE p.school_id = ${schoolId}
-          AND p.stripe_payment_intent_id IS NOT NULL
+        WHERE p.stripe_payment_intent_id IS NOT NULL
           AND p.stripe_payment_intent_id = sph.payment_intent_id
+          AND (
+            p.school_id = ${schoolId}
+            OR EXISTS (
+              SELECT 1
+              FROM program_enrollments pe
+              CROSS JOIN LATERAL jsonb_array_elements(COALESCE(p.enrollment_ids, '[]'::jsonb)) AS enr(elem)
+              WHERE pe.school_id = ${schoolId}
+                AND pe.id = (enr.elem)::text::int
+            )
+          )
       )
   `);
 
@@ -141,20 +140,21 @@ async function stripeOrphanMonthlyRevenueForSchool(
     FROM stripe_payment_history sph
     WHERE sph.status = 'succeeded'
       AND sph.stripe_created_at >= ${startDate}
-      AND (
-        EXISTS (SELECT 1 FROM users u WHERE u.id = sph.user_id AND u.school_id = ${schoolId})
-        OR EXISTS (
-          SELECT 1 FROM user_roles ur
-          WHERE ur.user_id = sph.user_id
-            AND ur.school_id = ${schoolId}
-            AND LOWER(TRIM(ur.role)) = 'parent'
-        )
-      )
+      AND ${sqlStripeHistoryUserAtSchool(schoolId)}
       AND NOT EXISTS (
         SELECT 1 FROM payments p
-        WHERE p.school_id = ${schoolId}
-          AND p.stripe_payment_intent_id IS NOT NULL
+        WHERE p.stripe_payment_intent_id IS NOT NULL
           AND p.stripe_payment_intent_id = sph.payment_intent_id
+          AND (
+            p.school_id = ${schoolId}
+            OR EXISTS (
+              SELECT 1
+              FROM program_enrollments pe
+              CROSS JOIN LATERAL jsonb_array_elements(COALESCE(p.enrollment_ids, '[]'::jsonb)) AS enr(elem)
+              WHERE pe.school_id = ${schoolId}
+                AND pe.id = (enr.elem)::text::int
+            )
+          )
       )
     GROUP BY TO_CHAR(sph.stripe_created_at, 'YYYY-MM')
     ORDER BY 1
@@ -201,7 +201,7 @@ router.get('/summary', async (req: any, res) => {
           paymentCount: sql<number>`COUNT(*)::integer`,
         })
         .from(payments)
-        .where(and(eq(payments.schoolId, schoolId), reportedLedgerPaymentStatuses())),
+        .where(and(schoolScopedLedgerPayments(schoolId), reportedLedgerPaymentStatuses())),
       db
         .select({
           revenue: sql<number>`COALESCE(SUM(${payments.amount}), 0)::integer`,
@@ -209,7 +209,7 @@ router.get('/summary', async (req: any, res) => {
         .from(payments)
         .where(
           and(
-            eq(payments.schoolId, schoolId),
+            schoolScopedLedgerPayments(schoolId),
             reportedLedgerPaymentStatuses(),
             gte(payments.createdAt, thirtyDaysAgo),
           ),
@@ -220,7 +220,7 @@ router.get('/summary', async (req: any, res) => {
         })
         .from(payments)
         .where(
-          and(eq(payments.schoolId, schoolId), reportedLedgerPaymentStatuses(), gte(payments.createdAt, yearStart)),
+          and(schoolScopedLedgerPayments(schoolId), reportedLedgerPaymentStatuses(), gte(payments.createdAt, yearStart)),
         ),
       db
         .select({
@@ -288,7 +288,7 @@ router.get('/summary', async (req: any, res) => {
     const ledgerYtd = ytdRevenueResult[0]?.revenue || 0;
     const ledgerCount = completedPaymentsResult[0]?.paymentCount || 0;
 
-    res.json({
+    const payload: Record<string, unknown> = {
       summary: {
         totalRevenueCents: ledgerTotal + stripeOrphanAll.cents,
         last30DaysRevenueCents: ledger30 + stripeOrphan30.cents,
@@ -303,8 +303,36 @@ router.get('/summary', async (req: any, res) => {
         totalEnrollments: totalEnrollmentsResult[0]?.count || 0,
         totalCompedCents: totalCompedResult[0]?.totalComped || 0,
       },
+      schoolId,
       generatedAt: new Date().toISOString(),
-    });
+    };
+
+    if (req.query.debug === '1') {
+      const [ledgerBySchoolOnly, enrollmentsAtSchool, stripeHistoryRows] = await Promise.all([
+        db
+          .select({ c: sql<number>`COUNT(*)::integer` })
+          .from(payments)
+          .where(and(eq(payments.schoolId, schoolId), reportedLedgerPaymentStatuses())),
+        db
+          .select({ c: sql<number>`COUNT(*)::integer` })
+          .from(programEnrollments)
+          .where(eq(programEnrollments.schoolId, schoolId)),
+        db.execute(sql`
+          SELECT COUNT(*)::integer AS c FROM stripe_payment_history sph
+          WHERE sph.status = 'succeeded' AND ${sqlStripeHistoryUserAtSchool(schoolId)}
+        `),
+      ]);
+      payload.diagnostics = {
+        ledgerPaymentsScoped: ledgerCount,
+        ledgerPaymentsSchoolIdColumnOnly: ledgerBySchoolOnly[0]?.c ?? 0,
+        stripeOrphanRevenueCents: stripeOrphanAll.cents,
+        stripeOrphanPaymentCount: stripeOrphanAll.count,
+        enrollmentsAtSchool: enrollmentsAtSchool[0]?.c ?? 0,
+        stripeHistorySucceededRows: Number((stripeHistoryRows.rows[0] as { c?: unknown })?.c ?? 0),
+      };
+    }
+
+    res.json(payload);
   } catch (error) {
     console.error('Error fetching financial summary:', error);
     res.status(500).json({ error: 'Failed to fetch financial summary' });
@@ -333,7 +361,7 @@ router.get('/revenue-trends', async (req: any, res) => {
         })
         .from(payments)
         .where(
-          and(eq(payments.schoolId, schoolId), reportedLedgerPaymentStatuses(), gte(payments.createdAt, startDate)),
+          and(schoolScopedLedgerPayments(schoolId), reportedLedgerPaymentStatuses(), gte(payments.createdAt, startDate)),
         )
         .groupBy(sql`TO_CHAR(${payments.createdAt}, 'YYYY-MM')`)
         .orderBy(sql`TO_CHAR(${payments.createdAt}, 'YYYY-MM')`),
@@ -766,7 +794,7 @@ router.get('/recent-transactions', async (req: any, res) => {
         parentEmail: payments.parentEmail,
       })
       .from(payments)
-      .where(eq(payments.schoolId, schoolId))
+      .where(schoolScopedLedgerPayments(schoolId))
       .orderBy(desc(payments.createdAt))
       .limit(limit);
 
@@ -1127,7 +1155,7 @@ router.get('/export', async (req: any, res) => {
           parentEmail: payments.parentEmail,
         })
         .from(payments)
-        .where(eq(payments.schoolId, schoolId))
+        .where(schoolScopedLedgerPayments(schoolId))
         .orderBy(desc(payments.createdAt));
 
       csvContent = 'Transaction ID,Amount,Status,Payment Method,Date,Child Name,Class,Parent Email\n';
@@ -1169,10 +1197,7 @@ router.get('/export', async (req: any, res) => {
         })
         .from(payments)
         .where(
-          and(
-            eq(payments.schoolId, schoolId),
-            reportedLedgerPaymentStatuses(),
-          ),
+          and(schoolScopedLedgerPayments(schoolId), reportedLedgerPaymentStatuses()),
         )
         .groupBy(payments.parentEmail);
 
@@ -1250,7 +1275,7 @@ router.get('/ai-insights', async (req: any, res) => {
           paymentCount: sql<number>`COUNT(*)::integer`,
         })
         .from(payments)
-        .where(and(eq(payments.schoolId, schoolId), reportedLedgerPaymentStatuses())),
+        .where(and(schoolScopedLedgerPayments(schoolId), reportedLedgerPaymentStatuses())),
       stripeOrphanRevenueForSchool(schoolId),
       db
         .select({
@@ -1294,7 +1319,7 @@ router.get('/ai-insights', async (req: any, res) => {
         .from(payments)
         .where(
           and(
-            eq(payments.schoolId, schoolId),
+            schoolScopedLedgerPayments(schoolId),
             reportedLedgerPaymentStatuses(),
             gte(payments.createdAt, sixMonthsAgo),
           ),
@@ -1921,7 +1946,7 @@ router.post('/ai-chat', aiChatLimiter, async (req: any, res) => {
             paymentCount: sql<number>`COUNT(*)::integer`,
           })
           .from(payments)
-          .where(and(eq(payments.schoolId, schoolId), reportedLedgerPaymentStatuses())),
+          .where(and(schoolScopedLedgerPayments(schoolId), reportedLedgerPaymentStatuses())),
 
         stripeOrphanRevenueForSchool(schoolId),
 
@@ -1970,7 +1995,7 @@ router.post('/ai-chat', aiChatLimiter, async (req: any, res) => {
           .from(payments)
           .where(
             and(
-              eq(payments.schoolId, schoolId),
+              schoolScopedLedgerPayments(schoolId),
               reportedLedgerPaymentStatuses(),
               gte(payments.createdAt, yearStart),
             ),
