@@ -29,6 +29,7 @@ import {
   buildOutstandingBalanceRows,
   fetchAutoPayHistoryRecords,
 } from '../lib/financial-collections';
+import { getParentPaymentDeepLink, sendFamilyBalanceEmail } from '../lib/family-balance-email';
 import { resolveAdminSchoolId, sqlStripeHistoryUserAtSchool } from '../lib/admin-school-context';
 import { isSchoolFeatureEnabled } from '../lib/school-features';
 import { schoolScopedLedgerPayments } from '../lib/school-payment-scope';
@@ -545,6 +546,89 @@ router.get('/collections-overview', async (req: any, res) => {
     console.error('Error fetching collections overview:', error);
     const message = error instanceof Error ? error.message : 'Failed to fetch collections overview';
     res.status(500).json({ error: message });
+  }
+});
+
+const collectionsEmailLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  message: { error: 'Too many collection emails sent. Please wait a moment.' },
+});
+
+router.post('/collections/send-balance-email', collectionsEmailLimiter, async (req: any, res) => {
+  try {
+    const result = await getSchoolAdminWithFeatureCheck(req, 'financialReports');
+    if (isError(result)) {
+      return res.status(result.status).json({ error: result.error });
+    }
+    const { user, schoolId } = result;
+    const { parentEmail } = req.body;
+    if (!parentEmail || typeof parentEmail !== 'string') {
+      return res.status(400).json({ error: 'parentEmail is required' });
+    }
+
+    const sendResult = await sendFamilyBalanceEmail(schoolId, parentEmail, user.id);
+    if (!sendResult.success) {
+      const status = sendResult.error?.includes('No outstanding') ? 404 : 500;
+      return res.status(status).json({ error: sendResult.error || 'Failed to send email' });
+    }
+
+    res.json({
+      success: true,
+      message: 'Balance summary email sent',
+      paymentCount: sendResult.paymentCount,
+      paymentUrl: getParentPaymentDeepLink({ schoolId, source: 'collections_reminder' }),
+    });
+  } catch (error) {
+    console.error('Error sending collections balance email:', error);
+    res.status(500).json({ error: 'Failed to send balance email' });
+  }
+});
+
+router.post('/collections/send-balance-emails', collectionsEmailLimiter, async (req: any, res) => {
+  try {
+    const result = await getSchoolAdminWithFeatureCheck(req, 'financialReports');
+    if (isError(result)) {
+      return res.status(result.status).json({ error: result.error });
+    }
+    const { user, schoolId } = result;
+    const { parentEmails } = req.body as { parentEmails?: string[] };
+
+    const overview = await buildCollectionsOverview(schoolId);
+    let targets = overview.families;
+    if (Array.isArray(parentEmails) && parentEmails.length > 0) {
+      const set = new Set(parentEmails.map((e) => e.toLowerCase()));
+      targets = targets.filter((f) => set.has(f.parentEmail.toLowerCase()));
+    }
+
+    if (targets.length === 0) {
+      return res.status(404).json({ error: 'No families with outstanding balances to email' });
+    }
+
+    const results: Array<{ parentEmail: string; success: boolean; error?: string }> = [];
+    for (const family of targets) {
+      const sendResult = await sendFamilyBalanceEmail(schoolId, family.parentEmail, user.id);
+      results.push({
+        parentEmail: family.parentEmail,
+        success: sendResult.success,
+        error: sendResult.error,
+      });
+    }
+
+    const sent = results.filter((r) => r.success).length;
+    const failed = results.filter((r) => !r.success);
+
+    res.json({
+      success: sent > 0,
+      sent,
+      failed: failed.length,
+      total: results.length,
+      results,
+      paymentUrl: getParentPaymentDeepLink({ schoolId, source: 'collections_reminder' }),
+    });
+  } catch (error) {
+    console.error('Error sending bulk collections emails:', error);
+    res.status(500).json({ error: 'Failed to send balance emails' });
   }
 });
 
@@ -1458,8 +1542,8 @@ router.post('/send-reminder', async (req: any, res) => {
   }
 });
 
-// Send a consolidated summary reminder for all payments from a parent
-router.post('/send-summary-reminder', async (req: any, res) => {
+// Send a consolidated summary reminder (tuition + membership + pay link)
+router.post('/send-summary-reminder', collectionsEmailLimiter, async (req: any, res) => {
   try {
     const result = await getSchoolAdminWithFeatureCheck(req, 'financialReports');
     if (isError(result)) {
@@ -1472,210 +1556,17 @@ router.post('/send-summary-reminder', async (req: any, res) => {
       return res.status(400).json({ error: 'parentEmail is required' });
     }
 
-    const db = await getDb();
-
-    // Security: Get all pending payments for this parent within THIS school only
-    // The schoolId filter ensures we only return payments belonging to the admin's school,
-    // preventing cross-tenant data leakage. Even if an admin provides an email from
-    // another school, no data will be returned since payments are scoped by schoolId.
-    const outstandingPayments = await db
-      .select({
-        id: scheduledPayments.id,
-        enrollmentId: scheduledPayments.enrollmentId,
-        parentId: scheduledPayments.parentId,
-        parentEmail: scheduledPayments.parentEmail,
-        amount: scheduledPayments.amount,
-        scheduledDate: scheduledPayments.scheduledDate,
-      })
-      .from(scheduledPayments)
-      .where(
-        and(
-          eq(scheduledPayments.schoolId, schoolId),
-          eq(scheduledPayments.parentEmail, parentEmail),
-          eq(scheduledPayments.status, 'pending')
-        )
-      )
-      .orderBy(scheduledPayments.scheduledDate);
-
-    // Also fetch enrollments with outstanding balances that have no scheduled payment row.
-    // These are surfaced on the Balances tab as "No Payment Plan" — without including them
-    // here, parents whose entire balance is unscheduled would incorrectly get a 404.
-    // (asa-payment-patterns: "Never Use scheduled_payments for Outstanding Balance Totals")
-    const enrollmentsWithBalance = await db
-      .select()
-      .from(programEnrollments)
-      .where(
-        and(
-          eq(programEnrollments.schoolId, schoolId),
-          eq(programEnrollments.parentEmail, parentEmail),
-          not(inArray(programEnrollments.status, ['cancelled', 'waitlist', 'withdrawn', 'failed', 'completed'])),
-          sqlEnrollmentEffectiveBalancePositive(),
-        )
-      );
-
-    if (outstandingPayments.length === 0 && enrollmentsWithBalance.length === 0) {
-      return res.status(404).json({ error: 'No outstanding payments found for this parent' });
+    const sendResult = await sendFamilyBalanceEmail(schoolId, parentEmail, user.id);
+    if (!sendResult.success) {
+      const status = sendResult.error?.includes('No outstanding') ? 404 : 500;
+      return res.status(status).json({ error: sendResult.error || 'Failed to send summary reminder' });
     }
 
-    // Get school name
-    const school = await storage.getSchool(schoolId);
-    const schoolName = school?.name || 'School';
-
-    // Get parent name
-    const parent = await storage.getUserByEmail(parentEmail);
-    const parentName = parent?.name || parentEmail.split('@')[0];
-
-    // Enrich scheduled payments with enrollment details and auto-heal stale 'pending' rows
-    // whose enrollment is already fully paid (effective_balance <= 0).
-    // (asa-database-patterns: "Auto-heal at read time")
-    const now = new Date();
-    type ScheduledItem = {
-      childName: string;
-      className: string;
-      amountCents: number;
-      dueDate: Date | null;
-      isOverdue: boolean;
-      daysOverdue: number;
-      kind: 'scheduled' | 'unscheduled';
-    };
-
-    const scheduledDetails = (await Promise.all(
-      outstandingPayments.map(async (payment): Promise<ScheduledItem | null> => {
-        let childName = 'Student';
-        let className = 'Class';
-
-        if (payment.enrollmentId) {
-          const enrollment: any = await storage.getProgramEnrollmentById(payment.enrollmentId);
-          if (enrollment) {
-            childName = enrollment.childName || 'Student';
-            className = enrollment.className || 'Class';
-
-            const enrollmentRemainingBalance =
-              enrollment.effectiveBalance ??
-              computeEffectiveBalance(
-                enrollment.totalCost ?? 0,
-                enrollment.totalPaid ?? 0,
-                enrollment.compAmountCents ?? 0,
-              );
-
-            if (enrollmentRemainingBalance <= 0) {
-              storage.updateScheduledPaymentStatus(payment.id, 'cancelled').catch(() => {});
-              return null;
-            }
-          }
-        }
-
-        const isOverdue = new Date(payment.scheduledDate) < now;
-        const daysOverdue = isOverdue
-          ? Math.floor((now.getTime() - new Date(payment.scheduledDate).getTime()) / (1000 * 60 * 60 * 24))
-          : 0;
-
-        return {
-          childName,
-          className,
-          amountCents: payment.amount,
-          dueDate: new Date(payment.scheduledDate),
-          isOverdue,
-          daysOverdue,
-          kind: 'scheduled',
-        };
-      })
-    )).filter((p): p is ScheduledItem => p !== null);
-
-    // Build unscheduled items from enrollments not already covered by a kept scheduled row.
-    const coveredEnrollmentIds = new Set(
-      outstandingPayments.map(p => p.enrollmentId).filter((id): id is number => id != null)
-    );
-    const unscheduledDetails: ScheduledItem[] = enrollmentsWithBalance
-      .filter(e => !coveredEnrollmentIds.has(e.id))
-      .map(enrollment => {
-        const amount =
-          (enrollment as any).effectiveBalance ??
-          computeEffectiveBalance(
-            enrollment.totalCost ?? 0,
-            enrollment.totalPaid ?? 0,
-            enrollment.compAmountCents ?? 0,
-          );
-        return {
-          childName: enrollment.childName || 'Student',
-          className: enrollment.className || 'Class',
-          amountCents: amount,
-          dueDate: null,
-          isOverdue: false,
-          daysOverdue: 0,
-          kind: 'unscheduled' as const,
-        };
-      })
-      .filter(item => item.amountCents > 0);
-
-    const paymentDetails: ScheduledItem[] = [...scheduledDetails, ...unscheduledDetails];
-
-    if (paymentDetails.length === 0) {
-      return res.status(404).json({ error: 'No outstanding payments found for this parent' });
-    }
-
-    const totalAmountCents = paymentDetails.reduce((sum, p) => sum + p.amountCents, 0);
-    // Overdue counters are derived from scheduled items only — unscheduled items have no due date.
-    const overduePayments = scheduledDetails.filter(p => p.isOverdue);
-    const overdueCount = overduePayments.length;
-    const overdueAmountCents = overduePayments.reduce((sum, p) => sum + p.amountCents, 0);
-
-    // Import email service dynamically
-    const { sendConsolidatedPaymentReminder } = await import('../lib/email-service');
-
-    try {
-      await sendConsolidatedPaymentReminder({
-        parentEmail,
-        parentName,
-        schoolName,
-        totalAmountCents,
-        payments: paymentDetails,
-        overdueCount,
-        overdueAmountCents,
-      });
-
-      // Log the summary reminder
-      await storage.createPaymentReminderLog({
-        schoolId,
-        scheduledPaymentId: null, // Summary covers multiple payments
-        parentEmail,
-        parentName,
-        childName: `${paymentDetails.length} children`,
-        className: `${paymentDetails.length} payments`,
-        amountCents: totalAmountCents,
-        reminderType: 'summary',
-        status: 'sent',
-        isManual: true,
-        sentBy: user.id,
-        errorMessage: null
-      });
-
-      console.log(`✅ Summary reminder sent to ${parentEmail} for ${paymentDetails.length} payments`);
-      res.json({ success: true, message: 'Summary reminder sent successfully', paymentCount: paymentDetails.length });
-
-    } catch (emailError) {
-      const errorMessage = emailError instanceof Error ? emailError.message : String(emailError);
-      
-      // Log the failed attempt
-      await storage.createPaymentReminderLog({
-        schoolId,
-        scheduledPaymentId: null,
-        parentEmail,
-        parentName,
-        childName: `${paymentDetails.length} children`,
-        className: `${paymentDetails.length} payments`,
-        amountCents: totalAmountCents,
-        reminderType: 'summary',
-        status: 'failed',
-        isManual: true,
-        sentBy: user.id,
-        errorMessage
-      });
-
-      console.error(`❌ Failed to send summary reminder:`, errorMessage);
-      res.status(500).json({ error: 'Failed to send summary reminder', message: errorMessage });
-    }
-
+    res.json({
+      success: true,
+      message: 'Summary reminder sent successfully',
+      paymentCount: sendResult.paymentCount,
+    });
   } catch (error) {
     console.error('Error sending summary reminder:', error);
     res.status(500).json({ error: 'Failed to send summary reminder' });

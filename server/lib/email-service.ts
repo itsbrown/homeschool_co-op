@@ -1438,6 +1438,8 @@ interface ConsolidatedPaymentReminderData {
   parentName: string;
   schoolName: string;
   totalAmountCents: number;
+  tuitionTotalCents?: number;
+  membershipTotalCents?: number;
   payments: Array<{
     childName: string;
     className: string;
@@ -1445,10 +1447,12 @@ interface ConsolidatedPaymentReminderData {
     dueDate: Date | null;
     isOverdue: boolean;
     daysOverdue: number;
-    kind?: 'scheduled' | 'unscheduled';
+    kind?: 'scheduled' | 'unscheduled' | 'membership';
   }>;
   overdueCount: number;
   overdueAmountCents: number;
+  /** Login redirect to billing (deep link for parents) */
+  paymentUrl?: string;
 }
 
 export async function sendConsolidatedPaymentReminder(data: ConsolidatedPaymentReminderData): Promise<boolean> {
@@ -1464,9 +1468,12 @@ export async function sendConsolidatedPaymentReminder(data: ConsolidatedPaymentR
       parentName,
       schoolName,
       totalAmountCents,
+      tuitionTotalCents = 0,
+      membershipTotalCents = 0,
       payments,
       overdueCount,
-      overdueAmountCents
+      overdueAmountCents,
+      paymentUrl: paymentUrlOverride,
     } = data;
 
     const formatCurrency = (cents: number) => {
@@ -1484,18 +1491,32 @@ export async function sendConsolidatedPaymentReminder(data: ConsolidatedPaymentR
       }).format(date);
     };
 
-    const paymentUrl = `${process.env.APP_URL || 'https://accounts.americanseekersacademy.com'}/billing`;
+    const paymentUrl =
+      paymentUrlOverride ||
+      `${(process.env.APP_URL || 'https://accounts.americanseekersacademy.com').replace(/\/$/, '')}/billing`;
     const hasOverdue = overdueCount > 0;
+    const tuitionCents =
+      tuitionTotalCents > 0
+        ? tuitionTotalCents
+        : payments.filter((p) => p.kind !== 'membership').reduce((s, p) => s + p.amountCents, 0);
+    const membershipCents =
+      membershipTotalCents > 0
+        ? membershipTotalCents
+        : payments.filter((p) => p.kind === 'membership').reduce((s, p) => s + p.amountCents, 0);
 
     const subjectLine = hasOverdue
       ? `Action Required: ${overdueCount} Overdue Payment${overdueCount > 1 ? 's' : ''} - ${formatCurrency(totalAmountCents)} Total Due`
       : `Payment Summary: ${formatCurrency(totalAmountCents)} Total Due`;
 
     const paymentRows = payments.map(p => {
-      const isUnscheduled = p.kind === 'unscheduled' || p.dueDate === null;
-      const dueDateCell = isUnscheduled || !p.dueDate ? '&mdash;' : formatDate(p.dueDate);
+      const isMembership = p.kind === 'membership';
+      const isUnscheduled = p.kind === 'unscheduled' || (!isMembership && p.dueDate === null);
+      const dueDateCell =
+        isUnscheduled || !p.dueDate ? '&mdash;' : isMembership && p.dueDate ? formatDate(p.dueDate) : formatDate(p.dueDate);
       let statusPill: string;
-      if (isUnscheduled) {
+      if (isMembership) {
+        statusPill = `<span style="background-color: #DBEAFE; color: #1E40AF; padding: 2px 8px; border-radius: 4px; font-size: 12px;">Membership</span>`;
+      } else if (isUnscheduled) {
         statusPill = `<span style="background-color: #E0E7FF; color: #3730A3; padding: 2px 8px; border-radius: 4px; font-size: 12px;">No Plan</span>`;
       } else if (p.isOverdue) {
         statusPill = `<span style="background-color: #FEE2E2; color: #991B1B; padding: 2px 8px; border-radius: 4px; font-size: 12px;">${p.daysOverdue}d overdue</span>`;
@@ -1514,11 +1535,23 @@ export async function sendConsolidatedPaymentReminder(data: ConsolidatedPaymentR
     }).join('');
 
     const paymentTextRows = payments.map(p => {
-      const isUnscheduled = p.kind === 'unscheduled' || p.dueDate === null;
-      const dueText = isUnscheduled || !p.dueDate ? 'No Plan' : `Due: ${formatDate(p.dueDate)}`;
-      const overdueSuffix = !isUnscheduled && p.isOverdue ? ` (${p.daysOverdue} days overdue)` : '';
+      const isMembership = p.kind === 'membership';
+      const isUnscheduled = p.kind === 'unscheduled' || (!isMembership && p.dueDate === null);
+      const dueText = isMembership
+        ? p.dueDate
+          ? `Due: ${formatDate(p.dueDate)}`
+          : 'Membership'
+        : isUnscheduled || !p.dueDate
+          ? 'No Plan'
+          : `Due: ${formatDate(p.dueDate)}`;
+      const overdueSuffix = !isUnscheduled && !isMembership && p.isOverdue ? ` (${p.daysOverdue} days overdue)` : '';
       return `- ${p.childName} | ${p.className} | ${dueText} | ${formatCurrency(p.amountCents)}${overdueSuffix}`;
     }).join('\n');
+
+    const balanceBreakdown =
+      tuitionCents > 0 && membershipCents > 0
+        ? `<p style="margin: 8px 0 0 0; font-size: 14px; color: #4B5563;">Tuition ${formatCurrency(tuitionCents)} · Membership ${formatCurrency(membershipCents)}</p>`
+        : '';
 
     const htmlContent = `
       <html>
@@ -1538,9 +1571,10 @@ export async function sendConsolidatedPaymentReminder(data: ConsolidatedPaymentR
                 <div>
                   <p style="margin: 0; font-size: 14px; color: #6B7280;">Total Amount Due</p>
                   <p style="margin: 4px 0 0 0; font-size: 24px; font-weight: bold; color: ${hasOverdue ? '#DC2626' : '#4F46E5'};">${formatCurrency(totalAmountCents)}</p>
+                  ${balanceBreakdown}
                 </div>
                 <div style="text-align: right;">
-                  <p style="margin: 0; font-size: 14px; color: #6B7280;">${payments.length} Payment${payments.length > 1 ? 's' : ''}</p>
+                  <p style="margin: 0; font-size: 14px; color: #6B7280;">${payments.length} item${payments.length > 1 ? 's' : ''}</p>
                   ${hasOverdue ? `<p style="margin: 4px 0 0 0; font-size: 14px; color: #DC2626; font-weight: bold;">${overdueCount} Overdue</p>` : ''}
                 </div>
               </div>
@@ -1572,8 +1606,11 @@ export async function sendConsolidatedPaymentReminder(data: ConsolidatedPaymentR
             <div style="text-align: center; margin: 32px 0;">
               <a href="${paymentUrl}" 
                  style="background-color: ${hasOverdue ? '#DC2626' : '#4F46E5'}; color: white; padding: 14px 32px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold;">
-                 View & Pay Now
+                 Pay Now — View Balance
               </a>
+              <p style="margin: 12px 0 0 0; font-size: 13px; color: #6B7280;">
+                You may be asked to sign in first; then you can pay from your billing page.
+              </p>
             </div>
             
             <p style="color: #6B7280; font-size: 14px;">

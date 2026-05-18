@@ -1,10 +1,22 @@
 import { Fragment, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { apiRequest, queryClient } from '@/lib/queryClient';
+import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import {
   Table,
   TableBody,
@@ -13,7 +25,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, Loader2, Mail, RefreshCw } from 'lucide-react';
 
 type CollectionsFilter =
   | 'all'
@@ -66,8 +78,11 @@ type Props = {
 };
 
 export default function CollectionsOverviewTab({ enabled, summaryOutstandingCents = 0 }: Props) {
+  const { toast } = useToast();
   const [filter, setFilter] = useState<CollectionsFilter>('all');
   const [expandedFamily, setExpandedFamily] = useState<string | null>(null);
+  const [sendingEmail, setSendingEmail] = useState<string | null>(null);
+  const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
 
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery<{
     families: CollectionFamily[];
@@ -90,6 +105,54 @@ export default function CollectionsOverviewTab({ enabled, summaryOutstandingCent
 
   const families = data?.families ?? [];
   const summary = data?.summary;
+
+  const sendOneMutation = useMutation({
+    mutationFn: async (parentEmail: string) => {
+      const response = await apiRequest('POST', '/api/admin/financial-reports/collections/send-balance-email', {
+        parentEmail,
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to send email');
+      }
+      return data;
+    },
+    onSuccess: () => {
+      toast({
+        title: 'Email sent',
+        description: 'Personalized balance summary with pay link was sent to the family.',
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/financial-reports/reminder-history'] });
+    },
+    onError: (err: Error) => {
+      toast({ title: 'Email failed', description: err.message, variant: 'destructive' });
+    },
+    onSettled: () => setSendingEmail(null),
+  });
+
+  const sendBulkMutation = useMutation({
+    mutationFn: async (parentEmails: string[]) => {
+      const response = await apiRequest('POST', '/api/admin/financial-reports/collections/send-balance-emails', {
+        parentEmails,
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to send emails');
+      }
+      return data as { sent: number; failed: number; total: number };
+    },
+    onSuccess: (data) => {
+      toast({
+        title: 'Emails sent',
+        description: `Sent ${data.sent} of ${data.total} balance summary email(s).`,
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/financial-reports/reminder-history'] });
+      setBulkConfirmOpen(false);
+    },
+    onError: (err: Error) => {
+      toast({ title: 'Bulk email failed', description: err.message, variant: 'destructive' });
+    },
+  });
 
   const filtered = families.filter((family) => {
     switch (filter) {
@@ -123,15 +186,32 @@ export default function CollectionsOverviewTab({ enabled, summaryOutstandingCent
               and families who have never paid
             </CardDescription>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => refetch()}
-            disabled={!enabled || isFetching}
-          >
-            <RefreshCw className={`h-4 w-4 mr-1 ${isFetching ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            {filtered.length > 0 && (
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => setBulkConfirmOpen(true)}
+                disabled={sendBulkMutation.isPending}
+              >
+                {sendBulkMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                ) : (
+                  <Mail className="h-4 w-4 mr-1" />
+                )}
+                Email {filter === 'all' ? 'all families' : 'filtered'}
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => refetch()}
+              disabled={!enabled || isFetching}
+            >
+              <RefreshCw className={`h-4 w-4 mr-1 ${isFetching ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -214,30 +294,43 @@ export default function CollectionsOverviewTab({ enabled, summaryOutstandingCent
                 <TableHead className="text-right">Membership</TableHead>
                 <TableHead className="text-right">Total</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead className="w-[100px] text-right">Email</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filtered.map((family) => {
                 const isOpen = expandedFamily === family.parentEmail;
+                const isSending = sendingEmail === family.parentEmail;
                 return (
                   <Fragment key={family.parentEmail}>
-                    <TableRow
-                      className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => setExpandedFamily(isOpen ? null : family.parentEmail)}
-                    >
-                      <TableCell>
+                    <TableRow className="hover:bg-muted/50">
+                      <TableCell
+                        className="cursor-pointer"
+                        onClick={() => setExpandedFamily(isOpen ? null : family.parentEmail)}
+                      >
                         {isOpen ? (
                           <ChevronDown className="h-4 w-4" />
                         ) : (
                           <ChevronRight className="h-4 w-4" />
                         )}
                       </TableCell>
-                      <TableCell>
+                      <TableCell
+                        className="cursor-pointer"
+                        onClick={() => setExpandedFamily(isOpen ? null : family.parentEmail)}
+                      >
                         <p className="font-medium">{family.parentName}</p>
                         <p className="text-xs text-muted-foreground">{family.parentEmail}</p>
                       </TableCell>
-                      <TableCell className="text-muted-foreground">{family.phone || '—'}</TableCell>
-                      <TableCell className="text-right">
+                      <TableCell
+                        className="text-muted-foreground cursor-pointer"
+                        onClick={() => setExpandedFamily(isOpen ? null : family.parentEmail)}
+                      >
+                        {family.phone || '—'}
+                      </TableCell>
+                      <TableCell
+                        className="text-right cursor-pointer"
+                        onClick={() => setExpandedFamily(isOpen ? null : family.parentEmail)}
+                      >
                         {family.tuitionOwedCents > 0 ? formatCurrency(family.tuitionOwedCents) : '—'}
                       </TableCell>
                       <TableCell className="text-right">
@@ -261,10 +354,29 @@ export default function CollectionsOverviewTab({ enabled, summaryOutstandingCent
                           {family.owesMembership && <Badge variant="outline">Membership</Badge>}
                         </div>
                       </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={isSending || sendOneMutation.isPending}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSendingEmail(family.parentEmail);
+                            sendOneMutation.mutate(family.parentEmail);
+                          }}
+                          title="Send personalized balance email with pay link"
+                        >
+                          {isSending ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Mail className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </TableCell>
                     </TableRow>
                     {isOpen && (
                       <TableRow>
-                        <TableCell colSpan={7} className="bg-muted/30 p-4">
+                        <TableCell colSpan={8} className="bg-muted/30 p-4">
                           <div className="space-y-3 text-sm">
                             {family.enrollments.map((enr) => (
                               <div
@@ -314,7 +426,44 @@ export default function CollectionsOverviewTab({ enabled, summaryOutstandingCent
               : 'No families match this filter'}
           </div>
         ) : null}
+
+        <p className="text-xs text-muted-foreground">
+          Emails include a line-by-line balance summary (tuition + membership) and a secure link to
+          sign in and pay on the billing page.
+        </p>
       </CardContent>
+
+      <AlertDialog open={bulkConfirmOpen} onOpenChange={setBulkConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Email balance summaries?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Send a personalized email to {filtered.length} famil{filtered.length === 1 ? 'y' : 'ies'}{' '}
+              {filter === 'all' ? 'with an outstanding balance' : `matching the "${filter.replace(/_/g, ' ')}" filter`}.
+              Each email lists what they owe and includes a pay link to your billing page.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={sendBulkMutation.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={sendBulkMutation.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                sendBulkMutation.mutate(filtered.map((f) => f.parentEmail));
+              }}
+            >
+              {sendBulkMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-1 animate-spin inline" />
+                  Sending…
+                </>
+              ) : (
+                `Send ${filtered.length} email${filtered.length === 1 ? '' : 's'}`
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }
