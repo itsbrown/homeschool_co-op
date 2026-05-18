@@ -350,8 +350,16 @@ export default function FinancialReportsPage() {
   const [apStatus, setApStatus] = useState('all');
   const { toast } = useToast();
 
+  const summaryDebug =
+    typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).get('debug') === '1';
+
+  const summaryQueryUrl = summaryDebug
+    ? '/api/admin/financial-reports/summary?debug=1'
+    : '/api/admin/financial-reports/summary';
+
   const { data: summaryData, isLoading: summaryLoading, error: summaryError } = useQuery<{ summary: FinancialSummary }>({
-    queryKey: ['/api/admin/financial-reports/summary'],
+    queryKey: [summaryQueryUrl],
   });
 
   const { data: trendsData, isLoading: trendsLoading } = useQuery<{ trends: RevenueTrend[] }>({

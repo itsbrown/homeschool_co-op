@@ -98,7 +98,27 @@ function reportedLedgerPaymentStatuses() {
  * Stripe-synced succeeded charges attributed to this school that do not appear on the school's
  * `payments` ledger (same PI id). Avoids double-count when both exist.
  */
+function errorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === 'object' && 'message' in error) {
+    return String((error as { message: unknown }).message);
+  }
+  return String(error);
+}
+
 async function stripeOrphanRevenueForSchool(
+  schoolId: number,
+  since?: Date,
+): Promise<{ cents: number; count: number }> {
+  try {
+    return await stripeOrphanRevenueForSchoolQuery(schoolId, since);
+  } catch (error) {
+    console.warn('stripeOrphanRevenueForSchool skipped:', errorMessage(error));
+    return { cents: 0, count: 0 };
+  }
+}
+
+async function stripeOrphanRevenueForSchoolQuery(
   schoolId: number,
   since?: Date,
 ): Promise<{ cents: number; count: number }> {
@@ -137,6 +157,18 @@ async function stripeOrphanRevenueForSchool(
 }
 
 async function stripeOrphanMonthlyRevenueForSchool(
+  schoolId: number,
+  startDate: Date,
+): Promise<Array<{ month: string; revenue: number; paymentCount: number }>> {
+  try {
+    return await stripeOrphanMonthlyRevenueForSchoolQuery(schoolId, startDate);
+  } catch (error) {
+    console.warn('stripeOrphanMonthlyRevenueForSchool skipped:', errorMessage(error));
+    return [];
+  }
+}
+
+async function stripeOrphanMonthlyRevenueForSchoolQuery(
   schoolId: number,
   startDate: Date,
 ): Promise<Array<{ month: string; revenue: number; paymentCount: number }>> {
@@ -344,8 +376,8 @@ router.get('/summary', async (req: any, res) => {
   } catch (error) {
     console.error('Error fetching financial summary:', error);
     const body: Record<string, unknown> = { error: 'Failed to fetch financial summary' };
-    if (req.query.debug === '1' && error instanceof Error) {
-      body.errorDetail = error.message;
+    if (req.query.debug === '1') {
+      body.errorDetail = errorMessage(error);
     }
     res.status(500).json(body);
   }

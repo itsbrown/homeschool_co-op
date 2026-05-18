@@ -2588,6 +2588,21 @@ async function runMigrations() {
     console.log('child_guardians migration note:', errorMessage);
   }
 
+  // comp_amount_cents must exist before effective_balance (generated column references it).
+  try {
+    console.log('Running migration: Ensuring comp_amount_cents on program_enrollments...');
+    const db = await getDb();
+    await db.execute(sql`
+      ALTER TABLE program_enrollments
+      ADD COLUMN IF NOT EXISTS comp_amount_cents INTEGER NOT NULL DEFAULT 0
+    `);
+    console.log('✅ Migration completed: comp_amount_cents column ensured on program_enrollments');
+  } catch (compColumnError: unknown) {
+    const errorMessage =
+      compColumnError instanceof Error ? compColumnError.message : String(compColumnError);
+    console.log('comp_amount_cents migration note:', errorMessage);
+  }
+
   // Add / repair effective_balance generated column — the single source of truth for what a family owes.
   // Replaces the unreliable remaining_balance field (which is set to 0 for deposit_only/stripe_managed
   // enrollments after a deposit, and for comped accounts — causing false positives in financial reports).
