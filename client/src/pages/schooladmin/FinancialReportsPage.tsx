@@ -400,6 +400,7 @@ export default function FinancialReportsPage() {
   const [auditEmailSearch, setAuditEmailSearch] = useState('');
   const [auditFlagFilter, setAuditFlagFilter] = useState<string>('all');
   const [expandedAuditIds, setExpandedAuditIds] = useState<Set<number>>(new Set());
+  const [isExporting, setIsExporting] = useState<string | null>(null);
 
   const { data: balanceAuditData, isLoading: balanceAuditLoading } = useQuery<BalanceAuditResponse>({
     queryKey: ['/api/admin/financial-reports/balance-audit'],
@@ -548,24 +549,6 @@ export default function FinancialReportsPage() {
     aiChatMutation.mutate({ message, history: chatHistory });
   };
 
-  if (summaryError) {
-    const errMsg = String((summaryError as Error)?.message ?? '');
-    if (errMsg.includes('not enabled')) {
-      return <FeatureDisabledState />;
-    }
-    return (
-      <SchoolAdminLayout pageTitle="Financial Reports">
-        <Alert variant="destructive" className="max-w-2xl">
-          <AlertTriangle className="h-4 w-4" />
-          <AlertTitle>Unable to load financial reports</AlertTitle>
-          <AlertDescription className="mt-2 text-sm whitespace-pre-wrap">
-            {errMsg.replace(/^\d{3}:\s*/, '')}
-          </AlertDescription>
-        </Alert>
-      </SchoolAdminLayout>
-    );
-  }
-
   const summary = summaryData?.summary;
   const trends = trendsData?.trends || [];
   const balances = balancesData?.balances || [];
@@ -606,8 +589,6 @@ export default function FinancialReportsPage() {
     net: t.netRevenueCents / 100,
   }));
 
-  const [isExporting, setIsExporting] = useState<string | null>(null);
-
   const handleExport = async (type: string) => {
     setIsExporting(type);
     try {
@@ -637,6 +618,24 @@ export default function FinancialReportsPage() {
   };
 
   const isLoading = summaryLoading || trendsLoading;
+
+  if (summaryError) {
+    const errMsg = String((summaryError as Error)?.message ?? '');
+    if (errMsg.includes('not enabled')) {
+      return <FeatureDisabledState />;
+    }
+    return (
+      <SchoolAdminLayout pageTitle="Financial Reports">
+        <Alert variant="destructive" className="max-w-2xl">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Unable to load financial reports</AlertTitle>
+          <AlertDescription className="mt-2 text-sm whitespace-pre-wrap">
+            {errMsg.replace(/^\d{3}:\s*/, '')}
+          </AlertDescription>
+        </Alert>
+      </SchoolAdminLayout>
+    );
+  }
 
   return (
     <SchoolAdminLayout pageTitle="Financial Reports">
