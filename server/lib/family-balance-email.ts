@@ -265,20 +265,24 @@ export async function sendFamilyBalanceEmail(
     return { success: false, paymentCount: payload.lineItems.length, error: 'Email delivery failed' };
   }
 
-  await storage.createPaymentReminderLog({
-    schoolId,
-    scheduledPaymentId: null,
-    parentEmail: payload.parentEmail,
-    parentName: payload.parentName,
-    childName: `${payload.lineItems.length} item(s)`,
-    className: 'collections_summary',
-    amountCents: payload.totalAmountCents,
-    reminderType: 'summary',
-    status: 'sent',
-    isManual: true,
-    sentBy: sentByUserId ?? null,
-    errorMessage: null,
-  });
+  try {
+    await storage.createPaymentReminderLog({
+      schoolId,
+      scheduledPaymentId: null,
+      parentEmail: payload.parentEmail,
+      parentName: payload.parentName,
+      childName: `${payload.lineItems.length} item(s)`,
+      className: 'collections_summary',
+      amountCents: payload.totalAmountCents,
+      reminderType: 'summary',
+      status: 'sent',
+      isManual: true,
+      sentBy: sentByUserId ?? null,
+      errorMessage: null,
+    });
+  } catch (logErr) {
+    console.error('[Collections] Payment reminder log failed (email was sent):', logErr);
+  }
 
   return { success: true, paymentCount: payload.lineItems.length };
 }

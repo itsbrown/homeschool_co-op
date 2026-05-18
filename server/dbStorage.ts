@@ -2,7 +2,7 @@ import { eq, and, desc, asc, like, or, sql, lt, gt, lte, gte, isNull, inArray, i
 import { normalizeEmailForLookup } from '@shared/parent-identity';
 import { normalizeSchoolFeatures } from './lib/school-features';
 import { getDb } from './db';
-import { IStorage } from './storage';
+import { IStorage, type InsertPaymentReminderLog, type PaymentReminderLog } from './storage';
 import {
   User, InsertUser, users,
   UserRole, userRoles,
@@ -3945,5 +3945,76 @@ export class DatabaseStorage implements IStorage {
       LIMIT ${cap}
     `);
     return rows.rows as StripePaymentHistory[];
+  }
+
+  private mapPaymentReminderLogRow(row: Record<string, unknown>): PaymentReminderLog {
+    return {
+      id: Number(row.id),
+      schoolId: Number(row.school_id),
+      scheduledPaymentId: row.scheduled_payment_id != null ? Number(row.scheduled_payment_id) : null,
+      parentEmail: String(row.parent_email),
+      parentName: row.parent_name != null ? String(row.parent_name) : null,
+      childName: row.child_name != null ? String(row.child_name) : null,
+      className: row.class_name != null ? String(row.class_name) : null,
+      amountCents: row.amount_cents != null ? Number(row.amount_cents) : null,
+      reminderType: String(row.reminder_type),
+      status: row.status as PaymentReminderLog['status'],
+      isManual: Boolean(row.is_manual),
+      sentBy: row.sent_by != null ? Number(row.sent_by) : null,
+      errorMessage: row.error_message != null ? String(row.error_message) : null,
+      sentAt: new Date(row.sent_at as string | Date),
+    };
+  }
+
+  async createPaymentReminderLog(log: InsertPaymentReminderLog): Promise<PaymentReminderLog> {
+    const db = await getDb();
+    const result = await db.execute(sql`
+      INSERT INTO payment_reminder_logs (
+        school_id,
+        scheduled_payment_id,
+        parent_email,
+        parent_name,
+        child_name,
+        class_name,
+        amount_cents,
+        reminder_type,
+        status,
+        is_manual,
+        sent_by,
+        error_message
+      ) VALUES (
+        ${log.schoolId},
+        ${log.scheduledPaymentId ?? null},
+        ${log.parentEmail},
+        ${log.parentName ?? null},
+        ${log.childName ?? null},
+        ${log.className ?? null},
+        ${log.amountCents ?? null},
+        ${log.reminderType},
+        ${log.status},
+        ${log.isManual ?? false},
+        ${log.sentBy ?? null},
+        ${log.errorMessage ?? null}
+      )
+      RETURNING *
+    `);
+    const row = result.rows[0] as Record<string, unknown>;
+    return this.mapPaymentReminderLogRow(row);
+  }
+
+  async getPaymentReminderLogsBySchool(
+    schoolId: number,
+    limit = 100,
+  ): Promise<PaymentReminderLog[]> {
+    const db = await getDb();
+    const cap = Math.min(Math.max(limit, 1), 500);
+    const result = await db.execute(sql`
+      SELECT *
+      FROM payment_reminder_logs
+      WHERE school_id = ${schoolId}
+      ORDER BY sent_at DESC
+      LIMIT ${cap}
+    `);
+    return (result.rows as Record<string, unknown>[]).map((row) => this.mapPaymentReminderLogRow(row));
   }
 }

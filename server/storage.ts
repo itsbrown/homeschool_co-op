@@ -61,6 +61,38 @@ function isPostgresUnavailableError(error: unknown): boolean {
   return msg.includes('Database connection not available');
 }
 
+export type PaymentReminderLog = {
+  id: number;
+  schoolId: number;
+  scheduledPaymentId: number | null;
+  parentEmail: string;
+  parentName: string | null;
+  childName: string | null;
+  className: string | null;
+  amountCents: number | null;
+  reminderType: string;
+  status: 'sent' | 'failed' | 'pending';
+  isManual: boolean;
+  sentBy: number | null;
+  errorMessage: string | null;
+  sentAt: Date;
+};
+
+export type InsertPaymentReminderLog = {
+  schoolId: number;
+  scheduledPaymentId?: number | null;
+  parentEmail: string;
+  parentName?: string | null;
+  childName?: string | null;
+  className?: string | null;
+  amountCents?: number | null;
+  reminderType: string;
+  status: 'sent' | 'failed' | 'pending';
+  isManual?: boolean;
+  sentBy?: number | null;
+  errorMessage?: string | null;
+};
+
 export interface IStorage {
   // Methods for backup
   getAllUsers(): Promise<User[]>;
@@ -377,6 +409,8 @@ export interface IStorage {
   getAllScheduledPayments(): Promise<any[]>;
   updateScheduledPaymentStatus(id: number, status: string): Promise<any | undefined>;
   updateScheduledPaymentReminderCount(id: number, count: number): Promise<any | undefined>;
+  createPaymentReminderLog(log: InsertPaymentReminderLog): Promise<PaymentReminderLog>;
+  getPaymentReminderLogsBySchool(schoolId: number, limit?: number): Promise<PaymentReminderLog[]>;
   updateScheduledPayment(id: number, payment: Partial<InsertScheduledPayment>): Promise<ScheduledPayment | undefined>;
   deleteScheduledPayment(id: number): Promise<void>;
   /** Remove unpaid/actionable installments when admin changes or removes a payment plan. */
@@ -638,6 +672,7 @@ export class MemStorage implements IStorage {
   private userNotificationsStore: Map<string, any>;
   private notificationsStore: Map<number, Notification>;
   private notificationRecipientsStore: Map<number, NotificationRecipient>;
+  private paymentReminderLogsStore: Map<number, PaymentReminderLog>;
 
   private userIdCounter: number;
   private curriculumIdCounter: number;
@@ -666,6 +701,7 @@ export class MemStorage implements IStorage {
   private dailyFlowScheduleIdCounter: number;
   private notificationIdCounter: number;
   private notificationRecipientIdCounter: number;
+  private paymentReminderLogIdCounter: number;
   private classEnrollments: any[];
 
   constructor() {
@@ -699,6 +735,7 @@ export class MemStorage implements IStorage {
     this.userNotificationsStore = new Map();
     this.notificationsStore = new Map();
     this.notificationRecipientsStore = new Map();
+    this.paymentReminderLogsStore = new Map();
     this.classEnrollments = [];
 
     this.userIdCounter = 1;
@@ -728,6 +765,7 @@ export class MemStorage implements IStorage {
     this.dailyFlowScheduleIdCounter = 1;
     this.notificationIdCounter = 1;
     this.notificationRecipientIdCounter = 1;
+    this.paymentReminderLogIdCounter = 1;
 
     // Initialize with a default admin user
 
@@ -3506,6 +3544,36 @@ export class MemStorage implements IStorage {
     console.log(`💾 Saved scheduled payment ${id} reminder count update to file`);
     
     return updatedPayment;
+  }
+
+  async createPaymentReminderLog(log: InsertPaymentReminderLog): Promise<PaymentReminderLog> {
+    const id = this.paymentReminderLogIdCounter++;
+    const entry: PaymentReminderLog = {
+      id,
+      schoolId: log.schoolId,
+      scheduledPaymentId: log.scheduledPaymentId ?? null,
+      parentEmail: log.parentEmail,
+      parentName: log.parentName ?? null,
+      childName: log.childName ?? null,
+      className: log.className ?? null,
+      amountCents: log.amountCents ?? null,
+      reminderType: log.reminderType,
+      status: log.status,
+      isManual: log.isManual ?? false,
+      sentBy: log.sentBy ?? null,
+      errorMessage: log.errorMessage ?? null,
+      sentAt: new Date(),
+    };
+    this.paymentReminderLogsStore.set(id, entry);
+    return entry;
+  }
+
+  async getPaymentReminderLogsBySchool(schoolId: number, limit = 100): Promise<PaymentReminderLog[]> {
+    const cap = Math.min(Math.max(limit, 1), 500);
+    return Array.from(this.paymentReminderLogsStore.values())
+      .filter((log) => log.schoolId === schoolId)
+      .sort((a, b) => b.sentAt.getTime() - a.sentAt.getTime())
+      .slice(0, cap);
   }
 
   async updateScheduledPayment(
@@ -6326,6 +6394,28 @@ export class MemStorage implements IStorage {
         } catch (error) {
           return await this.memStorage.updateScheduledPaymentReminderCount(id, count);
         }
+      }
+
+      async createPaymentReminderLog(log: InsertPaymentReminderLog): Promise<PaymentReminderLog> {
+        try {
+          if (this.dbStorage && typeof (this.dbStorage as DatabaseStorage).createPaymentReminderLog === 'function') {
+            return await (this.dbStorage as DatabaseStorage).createPaymentReminderLog(log);
+          }
+        } catch (error) {
+          this.logStorageError('createPaymentReminderLog', error, true);
+        }
+        return await this.memStorage.createPaymentReminderLog(log);
+      }
+
+      async getPaymentReminderLogsBySchool(schoolId: number, limit = 100): Promise<PaymentReminderLog[]> {
+        try {
+          if (this.dbStorage && typeof (this.dbStorage as DatabaseStorage).getPaymentReminderLogsBySchool === 'function') {
+            return await (this.dbStorage as DatabaseStorage).getPaymentReminderLogsBySchool(schoolId, limit);
+          }
+        } catch (error) {
+          this.logStorageError('getPaymentReminderLogsBySchool', error, true);
+        }
+        return await this.memStorage.getPaymentReminderLogsBySchool(schoolId, limit);
       }
 
       async updateScheduledPayment(

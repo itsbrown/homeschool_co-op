@@ -1226,6 +1226,8 @@ interface ScheduledPaymentReminderData {
 }
 
 export async function sendScheduledPaymentReminder(data: ScheduledPaymentReminderData): Promise<boolean> {
+  const parentEmail = data.parentEmail;
+  let subjectLine = 'Payment Reminder - American Seekers Academy';
   try {
     if (!apiInstance) {
       console.log('📧 Brevo not configured, skipping payment reminder email');
@@ -1234,7 +1236,6 @@ export async function sendScheduledPaymentReminder(data: ScheduledPaymentReminde
     }
 
     const {
-      parentEmail,
       childName,
       className,
       schoolName,
@@ -1275,7 +1276,6 @@ export async function sendScheduledPaymentReminder(data: ScheduledPaymentReminde
     const colors = urgencyColors[urgency];
     const paymentUrl = `${process.env.APP_URL || 'https://accounts.americanseekersacademy.com'}/billing`;
 
-    let subjectLine = '';
     let headerMessage = '';
     if (daysUntilDue === 7) {
       subjectLine = `Upcoming Payment Reminder - ${className}`;
@@ -1456,15 +1456,16 @@ interface ConsolidatedPaymentReminderData {
 }
 
 export async function sendConsolidatedPaymentReminder(data: ConsolidatedPaymentReminderData): Promise<boolean> {
+  const parentEmail = data.parentEmail;
+  let subjectLine = 'Payment Reminder - American Seekers Academy';
   try {
     if (!apiInstance) {
       console.log('📧 Brevo not configured, skipping consolidated payment reminder email');
-      await logEmailAttempt({ recipientEmail: data.parentEmail, type: 'consolidated_payment_reminder', subject: 'Payment Reminder - American Seekers Academy', status: 'failed', error: 'Brevo not configured' });
+      await logEmailAttempt({ recipientEmail: parentEmail, type: 'consolidated_payment_reminder', subject: subjectLine, status: 'failed', error: 'Brevo not configured' });
       return true;
     }
 
     const {
-      parentEmail,
       parentName,
       schoolName,
       totalAmountCents,
@@ -1504,7 +1505,7 @@ export async function sendConsolidatedPaymentReminder(data: ConsolidatedPaymentR
         ? membershipTotalCents
         : payments.filter((p) => p.kind === 'membership').reduce((s, p) => s + p.amountCents, 0);
 
-    const subjectLine = hasOverdue
+    subjectLine = hasOverdue
       ? `Action Required: ${overdueCount} Overdue Payment${overdueCount > 1 ? 's' : ''} - ${formatCurrency(totalAmountCents)} Total Due`
       : `Payment Summary: ${formatCurrency(totalAmountCents)} Total Due`;
 

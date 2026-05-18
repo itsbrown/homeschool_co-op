@@ -581,7 +581,8 @@ router.post('/collections/send-balance-email', collectionsEmailLimiter, async (r
     });
   } catch (error) {
     console.error('Error sending collections balance email:', error);
-    res.status(500).json({ error: 'Failed to send balance email' });
+    const message = error instanceof Error ? error.message : 'Failed to send balance email';
+    res.status(500).json({ error: message });
   }
 });
 
