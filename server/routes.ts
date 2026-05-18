@@ -2145,6 +2145,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/discounts", discountsRouter);
   app.use("/api/ai", aiPricingRouter);
   app.use("/api/ai-insights", aiInsightsRouter);
+
+  // MUST mount before app.use("/api/admin", adminRouter) — that router applies
+  // requireRole(['admin','superAdmin']) to every /api/admin/* path and blocks schoolAdmin.
+  const financialReportsModule = await import("./api/financial-reports");
+  app.use("/api/admin/financial-reports", supabaseAuth, financialReportsModule.default);
+  app.use("/api/admin/balance-audit", supabaseAuth, financialReportsModule.balanceAuditAliasRouter);
+  app.use(
+    "/api/admin/credit-divergence-audit",
+    supabaseAuth,
+    financialReportsModule.creditDivergenceAuditAliasRouter,
+  );
+  const retentionRouter = (await import("./api/retention")).default;
+  app.use("/api/admin/retention", supabaseAuth, retentionRouter);
+
   app.use("/api/admin", adminRouter);
   app.use("/api/admin-classes", adminClassesRouter); // Add duplicate route for backwards compatibility
   app.use("/api/admin-enrollments", adminEnrollmentsRouter); // Admin enrollment management
@@ -3927,19 +3941,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Register technical support routes
   registerTechnicalSupportRoutes(app);
-
-  // Admin financial reports (auth enforced inside router via getSchoolAdminWithFeatureCheck)
-  const financialReportsModule = await import("./api/financial-reports");
-  app.use("/api/admin/financial-reports", supabaseAuth, financialReportsModule.default);
-  app.use("/api/admin/balance-audit", supabaseAuth, financialReportsModule.balanceAuditAliasRouter);
-  app.use(
-    "/api/admin/credit-divergence-audit",
-    supabaseAuth,
-    financialReportsModule.creditDivergenceAuditAliasRouter,
-  );
-  const retentionRouter = (await import("./api/retention")).default;
-  app.use("/api/admin/retention", supabaseAuth, retentionRouter);
-  console.log("✅ Admin financial reports routes registered");
 
   const httpServer = createServer(app);
   
