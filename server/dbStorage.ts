@@ -3884,9 +3884,15 @@ export class DatabaseStorage implements IStorage {
     const rows = await db.execute(sql`
       SELECT sph.*
       FROM stripe_payment_history sph
-      INNER JOIN user_roles ur ON ur.user_id = sph.user_id
-      WHERE ur.school_id = ${schoolId}
-        AND LOWER(ur.role) = 'parent'
+      WHERE (
+        EXISTS (SELECT 1 FROM users u WHERE u.id = sph.user_id AND u.school_id = ${schoolId})
+        OR EXISTS (
+          SELECT 1 FROM user_roles ur
+          WHERE ur.user_id = sph.user_id
+            AND ur.school_id = ${schoolId}
+            AND LOWER(TRIM(ur.role)) = 'parent'
+        )
+      )
       ORDER BY sph.stripe_created_at DESC
       LIMIT ${cap}
     `);

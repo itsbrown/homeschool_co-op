@@ -83,6 +83,90 @@ function isError(result: FinancialReportUser | FinancialReportError): result is 
   return 'error' in result;
 }
 
+/** Ledger rows treated as collected revenue for admin reporting */
+function reportedLedgerPaymentStatuses() {
+  return sql`${payments.status} IN ('completed', 'succeeded')`;
+}
+
+/**
+ * Stripe-synced succeeded charges attributed to this school that do not appear on the school's
+ * `payments` ledger (same PI id). Avoids double-count when both exist.
+ */
+async function stripeOrphanRevenueForSchool(
+  schoolId: number,
+  since?: Date,
+): Promise<{ cents: number; count: number }> {
+  const db = await getDb();
+  const sinceFilter = since ? sql`AND sph.stripe_created_at >= ${since}` : sql``;
+
+  const result = await db.execute(sql`
+    SELECT COALESCE(SUM(sph.amount), 0)::integer AS cents,
+           COUNT(*)::integer AS cnt
+    FROM stripe_payment_history sph
+    WHERE sph.status = 'succeeded'
+      ${sinceFilter}
+      AND (
+        EXISTS (SELECT 1 FROM users u WHERE u.id = sph.user_id AND u.school_id = ${schoolId})
+        OR EXISTS (
+          SELECT 1 FROM user_roles ur
+          WHERE ur.user_id = sph.user_id
+            AND ur.school_id = ${schoolId}
+            AND LOWER(TRIM(ur.role)) = 'parent'
+        )
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM payments p
+        WHERE p.school_id = ${schoolId}
+          AND p.stripe_payment_intent_id IS NOT NULL
+          AND p.stripe_payment_intent_id = sph.payment_intent_id
+      )
+  `);
+
+  const row = result.rows[0] as { cents?: unknown; cnt?: unknown } | undefined;
+  return {
+    cents: Number(row?.cents ?? 0),
+    count: Number(row?.cnt ?? 0),
+  };
+}
+
+async function stripeOrphanMonthlyRevenueForSchool(
+  schoolId: number,
+  startDate: Date,
+): Promise<Array<{ month: string; revenue: number; paymentCount: number }>> {
+  const db = await getDb();
+  const result = await db.execute(sql`
+    SELECT TO_CHAR(sph.stripe_created_at, 'YYYY-MM') AS month,
+           COALESCE(SUM(sph.amount), 0)::integer AS revenue,
+           COUNT(*)::integer AS payment_count
+    FROM stripe_payment_history sph
+    WHERE sph.status = 'succeeded'
+      AND sph.stripe_created_at >= ${startDate}
+      AND (
+        EXISTS (SELECT 1 FROM users u WHERE u.id = sph.user_id AND u.school_id = ${schoolId})
+        OR EXISTS (
+          SELECT 1 FROM user_roles ur
+          WHERE ur.user_id = sph.user_id
+            AND ur.school_id = ${schoolId}
+            AND LOWER(TRIM(ur.role)) = 'parent'
+        )
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM payments p
+        WHERE p.school_id = ${schoolId}
+          AND p.stripe_payment_intent_id IS NOT NULL
+          AND p.stripe_payment_intent_id = sph.payment_intent_id
+      )
+    GROUP BY TO_CHAR(sph.stripe_created_at, 'YYYY-MM')
+    ORDER BY 1
+  `);
+
+  return (result.rows as Array<{ month: string; revenue: unknown; payment_count: unknown }>).map((r) => ({
+    month: String(r.month),
+    revenue: Number(r.revenue ?? 0),
+    paymentCount: Number(r.payment_count ?? 0),
+  }));
+}
+
 router.get('/summary', async (req: any, res) => {
   try {
     const result = await getSchoolAdminWithFeatureCheck(req, 'financialReports');
@@ -97,123 +181,119 @@ router.get('/summary', async (req: any, res) => {
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
     const yearStart = new Date(now.getFullYear(), 0, 1);
 
-    const completedPaymentsResult = await db
-      .select({
-        totalRevenue: sql<number>`COALESCE(SUM(${payments.amount}), 0)::integer`,
-        paymentCount: sql<number>`COUNT(*)::integer`,
-      })
-      .from(payments)
-      .where(
-        and(
-          eq(payments.schoolId, schoolId),
-          eq(payments.status, 'completed')
-        )
-      );
+    const [
+      completedPaymentsResult,
+      last30DaysRevenueResult,
+      ytdRevenueResult,
+      outstandingBalancesResult,
+      overdueBalancesResult,
+      refundsResult,
+      activePaymentPlansResult,
+      totalEnrollmentsResult,
+      totalCompedResult,
+      stripeOrphanAll,
+      stripeOrphan30,
+      stripeOrphanYtd,
+    ] = await Promise.all([
+      db
+        .select({
+          totalRevenue: sql<number>`COALESCE(SUM(${payments.amount}), 0)::integer`,
+          paymentCount: sql<number>`COUNT(*)::integer`,
+        })
+        .from(payments)
+        .where(and(eq(payments.schoolId, schoolId), reportedLedgerPaymentStatuses())),
+      db
+        .select({
+          revenue: sql<number>`COALESCE(SUM(${payments.amount}), 0)::integer`,
+        })
+        .from(payments)
+        .where(
+          and(
+            eq(payments.schoolId, schoolId),
+            reportedLedgerPaymentStatuses(),
+            gte(payments.createdAt, thirtyDaysAgo),
+          ),
+        ),
+      db
+        .select({
+          revenue: sql<number>`COALESCE(SUM(${payments.amount}), 0)::integer`,
+        })
+        .from(payments)
+        .where(
+          and(eq(payments.schoolId, schoolId), reportedLedgerPaymentStatuses(), gte(payments.createdAt, yearStart)),
+        ),
+      db
+        .select({
+          totalOutstanding: sql<number>`COALESCE(SUM(effective_balance), 0)::integer`,
+        })
+        .from(programEnrollments)
+        .where(
+          and(
+            eq(programEnrollments.schoolId, schoolId),
+            not(inArray(programEnrollments.status, ['cancelled', 'waitlist', 'withdrawn', 'failed', 'completed'])),
+            sql`effective_balance > 0`,
+          ),
+        ),
+      db
+        .select({
+          overdueCount: sql<number>`COUNT(*)::integer`,
+          overdueAmount: sql<number>`COALESCE(SUM(${scheduledPayments.amount}), 0)::integer`,
+        })
+        .from(scheduledPayments)
+        .where(
+          and(
+            eq(scheduledPayments.schoolId, schoolId),
+            eq(scheduledPayments.status, 'pending'),
+            sql`${scheduledPayments.scheduledDate} < NOW()`,
+          ),
+        ),
+      db
+        .select({
+          totalRefunded: sql<number>`COALESCE(SUM(${refunds.amount}), 0)::integer`,
+          refundCount: sql<number>`COUNT(*)::integer`,
+        })
+        .from(refunds)
+        .where(and(eq(refunds.schoolId, schoolId), eq(refunds.status, 'completed'))),
+      db
+        .select({
+          activePlans: sql<number>`COUNT(*)::integer`,
+        })
+        .from(programEnrollments)
+        .where(
+          and(
+            eq(programEnrollments.schoolId, schoolId),
+            not(inArray(programEnrollments.status, ['cancelled', 'waitlist', 'withdrawn', 'failed', 'completed'])),
+            sql`effective_balance > 0`,
+          ),
+        ),
+      db
+        .select({
+          count: sql<number>`COUNT(*)::integer`,
+        })
+        .from(programEnrollments)
+        .where(and(eq(programEnrollments.schoolId, schoolId), not(eq(programEnrollments.status, 'cancelled')))),
+      db
+        .select({
+          totalComped: sql<number>`COALESCE(SUM(${programEnrollments.compAmountCents}), 0)::integer`,
+        })
+        .from(programEnrollments)
+        .where(eq(programEnrollments.schoolId, schoolId)),
+      stripeOrphanRevenueForSchool(schoolId),
+      stripeOrphanRevenueForSchool(schoolId, thirtyDaysAgo),
+      stripeOrphanRevenueForSchool(schoolId, yearStart),
+    ]);
 
-    const last30DaysRevenueResult = await db
-      .select({
-        revenue: sql<number>`COALESCE(SUM(${payments.amount}), 0)::integer`,
-      })
-      .from(payments)
-      .where(
-        and(
-          eq(payments.schoolId, schoolId),
-          eq(payments.status, 'completed'),
-          gte(payments.createdAt, thirtyDaysAgo)
-        )
-      );
-
-    const ytdRevenueResult = await db
-      .select({
-        revenue: sql<number>`COALESCE(SUM(${payments.amount}), 0)::integer`,
-      })
-      .from(payments)
-      .where(
-        and(
-          eq(payments.schoolId, schoolId),
-          eq(payments.status, 'completed'),
-          gte(payments.createdAt, yearStart)
-        )
-      );
-
-    const outstandingBalancesResult = await db
-      .select({
-        totalOutstanding: sql<number>`COALESCE(SUM(effective_balance), 0)::integer`,
-      })
-      .from(programEnrollments)
-      .where(
-        and(
-          eq(programEnrollments.schoolId, schoolId),
-          not(inArray(programEnrollments.status, ['cancelled', 'waitlist', 'withdrawn', 'failed', 'completed'])),
-          sql`effective_balance > 0`
-        )
-      );
-
-    const overdueBalancesResult = await db
-      .select({
-        overdueCount: sql<number>`COUNT(*)::integer`,
-        overdueAmount: sql<number>`COALESCE(SUM(${scheduledPayments.amount}), 0)::integer`,
-      })
-      .from(scheduledPayments)
-      .where(
-        and(
-          eq(scheduledPayments.schoolId, schoolId),
-          eq(scheduledPayments.status, 'pending'),
-          sql`${scheduledPayments.scheduledDate} < NOW()`
-        )
-      );
-
-    const refundsResult = await db
-      .select({
-        totalRefunded: sql<number>`COALESCE(SUM(${refunds.amount}), 0)::integer`,
-        refundCount: sql<number>`COUNT(*)::integer`,
-      })
-      .from(refunds)
-      .where(
-        and(
-          eq(refunds.schoolId, schoolId),
-          eq(refunds.status, 'completed')
-        )
-      );
-
-    const activePaymentPlansResult = await db
-      .select({
-        activePlans: sql<number>`COUNT(*)::integer`,
-      })
-      .from(programEnrollments)
-      .where(
-        and(
-          eq(programEnrollments.schoolId, schoolId),
-          not(inArray(programEnrollments.status, ['cancelled', 'waitlist', 'withdrawn', 'failed', 'completed'])),
-          sql`effective_balance > 0`
-        )
-      );
-
-    const totalEnrollmentsResult = await db
-      .select({
-        count: sql<number>`COUNT(*)::integer`,
-      })
-      .from(programEnrollments)
-      .where(
-        and(
-          eq(programEnrollments.schoolId, schoolId),
-          not(eq(programEnrollments.status, 'cancelled'))
-        )
-      );
-
-    const totalCompedResult = await db
-      .select({
-        totalComped: sql<number>`COALESCE(SUM(${programEnrollments.compAmountCents}), 0)::integer`,
-      })
-      .from(programEnrollments)
-      .where(eq(programEnrollments.schoolId, schoolId));
+    const ledgerTotal = completedPaymentsResult[0]?.totalRevenue || 0;
+    const ledger30 = last30DaysRevenueResult[0]?.revenue || 0;
+    const ledgerYtd = ytdRevenueResult[0]?.revenue || 0;
+    const ledgerCount = completedPaymentsResult[0]?.paymentCount || 0;
 
     res.json({
       summary: {
-        totalRevenueCents: completedPaymentsResult[0]?.totalRevenue || 0,
-        last30DaysRevenueCents: last30DaysRevenueResult[0]?.revenue || 0,
-        ytdRevenueCents: ytdRevenueResult[0]?.revenue || 0,
-        totalPayments: completedPaymentsResult[0]?.paymentCount || 0,
+        totalRevenueCents: ledgerTotal + stripeOrphanAll.cents,
+        last30DaysRevenueCents: ledger30 + stripeOrphan30.cents,
+        ytdRevenueCents: ledgerYtd + stripeOrphanYtd.cents,
+        totalPayments: ledgerCount + stripeOrphanAll.count,
         outstandingBalanceCents: outstandingBalancesResult[0]?.totalOutstanding || 0,
         overduePayments: overdueBalancesResult[0]?.overdueCount || 0,
         overdueAmountCents: overdueBalancesResult[0]?.overdueAmount || 0,
@@ -244,22 +324,21 @@ router.get('/revenue-trends', async (req: any, res) => {
     const startDate = new Date();
     startDate.setMonth(startDate.getMonth() - months);
 
-    const monthlyRevenue = await db
-      .select({
-        month: sql<string>`TO_CHAR(${payments.createdAt}, 'YYYY-MM')`,
-        revenue: sql<number>`COALESCE(SUM(${payments.amount}), 0)::integer`,
-        paymentCount: sql<number>`COUNT(*)::integer`,
-      })
-      .from(payments)
-      .where(
-        and(
-          eq(payments.schoolId, schoolId),
-          eq(payments.status, 'completed'),
-          gte(payments.createdAt, startDate)
+    const [monthlyRevenue, stripeOrphanMonthly] = await Promise.all([
+      db
+        .select({
+          month: sql<string>`TO_CHAR(${payments.createdAt}, 'YYYY-MM')`,
+          revenue: sql<number>`COALESCE(SUM(${payments.amount}), 0)::integer`,
+          paymentCount: sql<number>`COUNT(*)::integer`,
+        })
+        .from(payments)
+        .where(
+          and(eq(payments.schoolId, schoolId), reportedLedgerPaymentStatuses(), gte(payments.createdAt, startDate)),
         )
-      )
-      .groupBy(sql`TO_CHAR(${payments.createdAt}, 'YYYY-MM')`)
-      .orderBy(sql`TO_CHAR(${payments.createdAt}, 'YYYY-MM')`);
+        .groupBy(sql`TO_CHAR(${payments.createdAt}, 'YYYY-MM')`)
+        .orderBy(sql`TO_CHAR(${payments.createdAt}, 'YYYY-MM')`),
+      stripeOrphanMonthlyRevenueForSchool(schoolId, startDate),
+    ]);
 
     const monthlyRefunds = await db
       .select({
@@ -282,8 +361,25 @@ router.get('/revenue-trends', async (req: any, res) => {
     type RefundRecord = { month: string; refunded: number; refundCount: number };
 
     const revenueMap = new Map<string, RevenueRecord>(monthlyRevenue.map((r: RevenueRecord) => [r.month, r]));
+    for (const row of stripeOrphanMonthly) {
+      const prev = revenueMap.get(row.month);
+      if (prev) {
+        revenueMap.set(row.month, {
+          month: row.month,
+          revenue: prev.revenue + row.revenue,
+          paymentCount: prev.paymentCount + row.paymentCount,
+        });
+      } else {
+        revenueMap.set(row.month, {
+          month: row.month,
+          revenue: row.revenue,
+          paymentCount: row.paymentCount,
+        });
+      }
+    }
+
     const refundMap = new Map<string, RefundRecord>(monthlyRefunds.map((r: RefundRecord) => [r.month, r]));
-    
+
     const allMonths = new Set([...revenueMap.keys(), ...refundMap.keys()]);
     const trends = Array.from(allMonths).sort().map(month => ({
       month,
@@ -716,7 +812,7 @@ router.get('/recent-transactions', async (req: any, res) => {
         id: p.id,
         type: 'payment',
         amount: p.amount,
-        status: p.status === 'completed' ? 'succeeded' : p.status,
+        status: p.status === 'completed' || p.status === 'succeeded' ? 'succeeded' : p.status,
         createdAt: p.createdAt!,
         enrollmentId,
         stripePaymentIntentId: p.stripePaymentIntentId,
@@ -1075,8 +1171,8 @@ router.get('/export', async (req: any, res) => {
         .where(
           and(
             eq(payments.schoolId, schoolId),
-            eq(payments.status, 'completed')
-          )
+            reportedLedgerPaymentStatuses(),
+          ),
         )
         .groupBy(payments.parentEmail);
 
@@ -1134,55 +1230,88 @@ router.get('/ai-insights', async (req: any, res) => {
 
     const db = await getDb();
 
-    const summaryResult = await db
-      .select({
-        totalRevenue: sql<number>`COALESCE(SUM(${payments.amount}), 0)::integer`,
-        paymentCount: sql<number>`COUNT(*)::integer`,
-      })
-      .from(payments)
-      .where(
-        and(
-          eq(payments.schoolId, schoolId),
-          eq(payments.status, 'completed')
-        )
-      );
+    const now = new Date();
+    const sixMonthsAgo = new Date(now);
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
 
-    const outstandingResult = await db
-      .select({
-        outstanding: sql<number>`COALESCE(SUM(effective_balance), 0)::integer`,
-      })
-      .from(programEnrollments)
-      .where(
-        and(
-          eq(programEnrollments.schoolId, schoolId),
-          not(inArray(programEnrollments.status, ['cancelled', 'waitlist', 'withdrawn', 'failed', 'completed'])),
-          sql`effective_balance > 0`
+    const [
+      summaryResult,
+      stripeOrphanAll,
+      outstandingResult,
+      enrollmentCountResult,
+      paymentPlansResult,
+      revenueTrendsLedger,
+      stripeOrphanMonthly6m,
+      outstandingBalancesResult,
+    ] = await Promise.all([
+      db
+        .select({
+          totalRevenue: sql<number>`COALESCE(SUM(${payments.amount}), 0)::integer`,
+          paymentCount: sql<number>`COUNT(*)::integer`,
+        })
+        .from(payments)
+        .where(and(eq(payments.schoolId, schoolId), reportedLedgerPaymentStatuses())),
+      stripeOrphanRevenueForSchool(schoolId),
+      db
+        .select({
+          outstanding: sql<number>`COALESCE(SUM(effective_balance), 0)::integer`,
+        })
+        .from(programEnrollments)
+        .where(
+          and(
+            eq(programEnrollments.schoolId, schoolId),
+            not(inArray(programEnrollments.status, ['cancelled', 'waitlist', 'withdrawn', 'failed', 'completed'])),
+            sql`effective_balance > 0`,
+          ),
+        ),
+      db
+        .select({
+          count: sql<number>`COUNT(*)::integer`,
+        })
+        .from(programEnrollments)
+        .where(
+          and(
+            eq(programEnrollments.schoolId, schoolId),
+            not(inArray(programEnrollments.status, ['cancelled', 'waitlist', 'withdrawn', 'failed'])),
+          ),
+        ),
+      db
+        .select({
+          parentEmail: scheduledPayments.parentEmail,
+          totalAmount: sql<number>`SUM(${scheduledPayments.amount})::integer`,
+          paidAmount: sql<number>`SUM(CASE WHEN ${scheduledPayments.status} = 'completed' THEN ${scheduledPayments.amount} ELSE 0 END)::integer`,
+          totalInstallments: sql<number>`MAX(${scheduledPayments.totalInstallments})::integer`,
+          completedInstallments: sql<number>`COUNT(CASE WHEN ${scheduledPayments.status} = 'completed' THEN 1 END)::integer`,
+        })
+        .from(scheduledPayments)
+        .where(eq(scheduledPayments.schoolId, schoolId))
+        .groupBy(scheduledPayments.parentEmail),
+      db
+        .select({
+          month: sql<string>`TO_CHAR(${payments.createdAt}, 'YYYY-MM')`,
+          revenue: sql<number>`COALESCE(SUM(${payments.amount}), 0)::integer`,
+        })
+        .from(payments)
+        .where(
+          and(
+            eq(payments.schoolId, schoolId),
+            reportedLedgerPaymentStatuses(),
+            gte(payments.createdAt, sixMonthsAgo),
+          ),
         )
-      );
-
-    const enrollmentCountResult = await db
-      .select({
-        count: sql<number>`COUNT(*)::integer`,
-      })
-      .from(programEnrollments)
-      .where(
-        and(
-          eq(programEnrollments.schoolId, schoolId),
-          not(inArray(programEnrollments.status, ['cancelled', 'waitlist', 'withdrawn', 'failed']))
-        )
-      );
-
-    const paymentPlansResult = await db
-      .select({
-        parentEmail: scheduledPayments.parentEmail,
-        totalAmount: sql<number>`SUM(${scheduledPayments.amount})::integer`,
-        paidAmount: sql<number>`SUM(CASE WHEN ${scheduledPayments.status} = 'completed' THEN ${scheduledPayments.amount} ELSE 0 END)::integer`,
-        totalInstallments: sql<number>`MAX(${scheduledPayments.totalInstallments})::integer`,
-        completedInstallments: sql<number>`COUNT(CASE WHEN ${scheduledPayments.status} = 'completed' THEN 1 END)::integer`,
-      })
-      .from(scheduledPayments)
-      .where(eq(scheduledPayments.schoolId, schoolId))
-      .groupBy(scheduledPayments.parentEmail);
+        .groupBy(sql`TO_CHAR(${payments.createdAt}, 'YYYY-MM')`)
+        .orderBy(sql`TO_CHAR(${payments.createdAt}, 'YYYY-MM')`),
+      stripeOrphanMonthlyRevenueForSchool(schoolId, sixMonthsAgo),
+      db
+        .select({
+          parentEmail: scheduledPayments.parentEmail,
+          amount: sql<number>`SUM(${scheduledPayments.amount})::integer`,
+          scheduledDate: sql<Date>`MIN(${scheduledPayments.scheduledDate})`,
+        })
+        .from(scheduledPayments)
+        .where(and(eq(scheduledPayments.schoolId, schoolId), eq(scheduledPayments.status, 'pending')))
+        .groupBy(scheduledPayments.parentEmail),
+    ]);
 
     const totalPlans = paymentPlansResult.length;
     let avgProgress = 0;
@@ -1194,57 +1323,35 @@ router.get('/ai-insights', async (req: any, res) => {
       avgProgress = totalProgress / totalPlans;
     }
 
-    const sixMonthsAgo = new Date();
-    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+    const ledgerRev = summaryResult[0]?.totalRevenue || 0;
+    const ledgerPaymentCount = summaryResult[0]?.paymentCount || 0;
+    const totalCollectedCents = ledgerRev + stripeOrphanAll.cents;
+    const totalPaymentEvents = ledgerPaymentCount + stripeOrphanAll.count;
 
-    const revenueTrendsResult = await db
-      .select({
-        month: sql<string>`TO_CHAR(${payments.createdAt}, 'YYYY-MM')`,
-        revenue: sql<number>`COALESCE(SUM(${payments.amount}), 0)::integer`,
-      })
-      .from(payments)
-      .where(
-        and(
-          eq(payments.schoolId, schoolId),
-          eq(payments.status, 'completed'),
-          gte(payments.createdAt, sixMonthsAgo)
-        )
-      )
-      .groupBy(sql`TO_CHAR(${payments.createdAt}, 'YYYY-MM')`)
-      .orderBy(sql`TO_CHAR(${payments.createdAt}, 'YYYY-MM')`);
-
-    const now = new Date();
-    const outstandingBalancesResult = await db
-      .select({
-        parentEmail: scheduledPayments.parentEmail,
-        amount: sql<number>`SUM(${scheduledPayments.amount})::integer`,
-        scheduledDate: sql<Date>`MIN(${scheduledPayments.scheduledDate})`,
-      })
-      .from(scheduledPayments)
-      .where(
-        and(
-          eq(scheduledPayments.schoolId, schoolId),
-          eq(scheduledPayments.status, 'pending')
-        )
-      )
-      .groupBy(scheduledPayments.parentEmail);
+    const trendMap = new Map<string, number>();
+    for (const r of revenueTrendsLedger) {
+      trendMap.set(r.month, r.revenue);
+    }
+    for (const row of stripeOrphanMonthly6m) {
+      trendMap.set(row.month, (trendMap.get(row.month) ?? 0) + row.revenue);
+    }
+    const revenueTrends = [...trendMap.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([month, revenue]) => ({
+        month,
+        revenue,
+        collected: revenue,
+      }));
 
     const summary = {
-      totalRevenue: summaryResult[0]?.totalRevenue || 0,
-      totalCollected: summaryResult[0]?.totalRevenue || 0,
+      totalRevenue: totalCollectedCents,
+      totalCollected: totalCollectedCents,
       outstandingBalance: (outstandingResult[0] as any)?.outstanding || 0,
       paymentPlanProgress: avgProgress,
       enrollmentCount: enrollmentCountResult[0]?.count || 0,
-      averagePaymentAmount: summaryResult[0]?.paymentCount > 0 
-        ? Math.round((summaryResult[0]?.totalRevenue || 0) / summaryResult[0].paymentCount) 
-        : 0,
+      averagePaymentAmount:
+        totalPaymentEvents > 0 ? Math.round(totalCollectedCents / totalPaymentEvents) : 0,
     };
-
-    const revenueTrends = revenueTrendsResult.map((r: typeof revenueTrendsResult[number]) => ({
-      month: r.month,
-      revenue: r.revenue,
-      collected: r.revenue,
-    }));
 
     const outstandingBalances = outstandingBalancesResult.map((o: typeof outstandingBalancesResult[number]) => {
       const daysOverdue = o.scheduledDate 
@@ -1803,43 +1910,81 @@ router.post('/ai-chat', aiChatLimiter, async (req: any, res) => {
 
     const db = await getDb();
 
+    const yearStart = new Date(new Date().getFullYear(), 0, 1);
+
     // Fetch accurate financial summary to inject as context
-    const [revenueResult, outstandingResult, overdueResult, enrollmentResult, ytdResult] = await Promise.all([
-      db.select({
-        totalRevenue: sql<number>`COALESCE(SUM(${payments.amount}), 0)::integer`,
-        paymentCount: sql<number>`COUNT(*)::integer`,
-      }).from(payments).where(and(eq(payments.schoolId, schoolId), eq(payments.status, 'completed'))),
+    const [revenueResult, stripeOrphanAll, outstandingResult, overdueResult, enrollmentResult, ytdLedgerResult, stripeOrphanYtd] =
+      await Promise.all([
+        db
+          .select({
+            totalRevenue: sql<number>`COALESCE(SUM(${payments.amount}), 0)::integer`,
+            paymentCount: sql<number>`COUNT(*)::integer`,
+          })
+          .from(payments)
+          .where(and(eq(payments.schoolId, schoolId), reportedLedgerPaymentStatuses())),
 
-      db.select({
-        outstanding: sql<number>`COALESCE(SUM(effective_balance), 0)::integer`,
-        activeCount: sql<number>`COUNT(*)::integer`,
-      }).from(programEnrollments).where(
-        and(
-          eq(programEnrollments.schoolId, schoolId),
-          not(inArray(programEnrollments.status, ['cancelled', 'waitlist', 'withdrawn', 'failed', 'completed'])),
-          sql`effective_balance > 0`
-        )
-      ),
+        stripeOrphanRevenueForSchool(schoolId),
 
-      db.select({
-        overdueAmount: sql<number>`COALESCE(SUM(${scheduledPayments.amount}), 0)::integer`,
-        overdueCount: sql<number>`COUNT(*)::integer`,
-      }).from(scheduledPayments).where(
-        and(eq(scheduledPayments.schoolId, schoolId), eq(scheduledPayments.status, 'pending'), sql`${scheduledPayments.scheduledDate} < NOW()`)
-      ),
+        db
+          .select({
+            outstanding: sql<number>`COALESCE(SUM(effective_balance), 0)::integer`,
+            activeCount: sql<number>`COUNT(*)::integer`,
+          })
+          .from(programEnrollments)
+          .where(
+            and(
+              eq(programEnrollments.schoolId, schoolId),
+              not(inArray(programEnrollments.status, ['cancelled', 'waitlist', 'withdrawn', 'failed', 'completed'])),
+              sql`effective_balance > 0`,
+            ),
+          ),
 
-      db.select({ count: sql<number>`COUNT(*)::integer` }).from(programEnrollments).where(
-        and(eq(programEnrollments.schoolId, schoolId), not(inArray(programEnrollments.status, ['cancelled', 'waitlist', 'withdrawn', 'failed'])))
-      ),
+        db
+          .select({
+            overdueAmount: sql<number>`COALESCE(SUM(${scheduledPayments.amount}), 0)::integer`,
+            overdueCount: sql<number>`COUNT(*)::integer`,
+          })
+          .from(scheduledPayments)
+          .where(
+            and(
+              eq(scheduledPayments.schoolId, schoolId),
+              eq(scheduledPayments.status, 'pending'),
+              sql`${scheduledPayments.scheduledDate} < NOW()`,
+            ),
+          ),
 
-      db.select({
-        ytdRevenue: sql<number>`COALESCE(SUM(${payments.amount}), 0)::integer`,
-      }).from(payments).where(
-        and(eq(payments.schoolId, schoolId), eq(payments.status, 'completed'), gte(payments.createdAt, new Date(new Date().getFullYear(), 0, 1)))
-      ),
-    ]);
+        db
+          .select({ count: sql<number>`COUNT(*)::integer` })
+          .from(programEnrollments)
+          .where(
+            and(
+              eq(programEnrollments.schoolId, schoolId),
+              not(inArray(programEnrollments.status, ['cancelled', 'waitlist', 'withdrawn', 'failed'])),
+            ),
+          ),
 
-    const totalRevenue = revenueResult[0]?.totalRevenue || 0;
+        db
+          .select({
+            ytdRevenue: sql<number>`COALESCE(SUM(${payments.amount}), 0)::integer`,
+          })
+          .from(payments)
+          .where(
+            and(
+              eq(payments.schoolId, schoolId),
+              reportedLedgerPaymentStatuses(),
+              gte(payments.createdAt, yearStart),
+            ),
+          ),
+
+        stripeOrphanRevenueForSchool(schoolId, yearStart),
+      ]);
+
+    const totalRevenue =
+      (revenueResult[0]?.totalRevenue || 0) + stripeOrphanAll.cents;
+    const totalPaymentsProcessed =
+      (revenueResult[0]?.paymentCount || 0) + stripeOrphanAll.count;
+    const ytdRevenueCents =
+      (ytdLedgerResult[0]?.ytdRevenue || 0) + stripeOrphanYtd.cents;
     const outstandingBalance = (outstandingResult[0] as any)?.outstanding || 0;
     const activeEnrollments = enrollmentResult[0]?.count || 0;
     const collectionRate = totalRevenue > 0
@@ -1857,13 +2002,13 @@ router.post('/ai-chat', aiChatLimiter, async (req: any, res) => {
 
 CURRENT FINANCIAL SNAPSHOT (as of ${new Date().toLocaleDateString()}):
 - Total Revenue Collected: $${(totalRevenue / 100).toFixed(2)}
-- YTD Revenue (${new Date().getFullYear()}): $${((ytdResult[0]?.ytdRevenue || 0) / 100).toFixed(2)}
+- YTD Revenue (${new Date().getFullYear()}): $${(ytdRevenueCents / 100).toFixed(2)}
 - Outstanding Balance (all active enrollments): $${(outstandingBalance / 100).toFixed(2)}
 - Overdue Amount: $${((overdueResult[0]?.overdueAmount || 0) / 100).toFixed(2)} (${overdueResult[0]?.overdueCount || 0} overdue installments)
 - Active Enrollments with Balance: ${(outstandingResult[0] as any)?.activeCount || 0}
 - Total Active Enrollments: ${activeEnrollments}
 - Collection Rate: ${collectionRate}%
-- Total Payments Processed: ${revenueResult[0]?.paymentCount || 0}
+- Total Payments Processed: ${totalPaymentsProcessed}
 
 IMPORTANT:
 - All amounts shown above are accurate and come directly from the database
