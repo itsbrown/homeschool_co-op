@@ -1,4 +1,26 @@
+import { sql, type SQL } from 'drizzle-orm';
+import { programEnrollments } from '@shared/schema';
 import { computeEffectiveBalance } from '@shared/schema';
+
+/**
+ * SQL per-row outstanding cents — matches the generated `effective_balance` column.
+ * Use when the generated column may be absent (DB not yet migrated via init-db).
+ */
+export function sqlEnrollmentEffectiveBalanceExpr(): SQL {
+  return sql`GREATEST(0, ${programEnrollments.totalCost} - ${programEnrollments.totalPaid} - COALESCE(comp_amount_cents, 0))`;
+}
+
+export function sqlEnrollmentEffectiveBalancePositive(): SQL {
+  return sql`${sqlEnrollmentEffectiveBalanceExpr()} > 0`;
+}
+
+export function sqlSumEnrollmentEffectiveBalance(): SQL<number> {
+  return sql<number>`COALESCE(SUM(${sqlEnrollmentEffectiveBalanceExpr()}), 0)::integer`;
+}
+
+export function sqlSumCompAmountCents(): SQL<number> {
+  return sql<number>`COALESCE(SUM(COALESCE(comp_amount_cents, 0)), 0)::integer`;
+}
 
 /** Enrollment row shape from DB / storage (may include generated `effective_balance`). */
 export type EnrollmentBalanceInput = {

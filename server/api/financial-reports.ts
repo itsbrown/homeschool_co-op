@@ -8,7 +8,12 @@ import { eq, and, gte, lte, sql, desc, isNull, not, inArray } from 'drizzle-orm'
 import { generateCFOInsights, isAIAvailable } from '../services/cfoInsightsService';
 import { reconcileSchoolScheduledPayments, cleanupScheduledPayments, generateMissingScheduledPayments } from '../services/scheduled-payment-reconciliation';
 import { computeEffectiveBalance } from '@shared/schema';
-import { resolveEnrollmentOutstandingCents } from '../lib/enrollment-balance';
+import {
+  resolveEnrollmentOutstandingCents,
+  sqlEnrollmentEffectiveBalancePositive,
+  sqlSumCompAmountCents,
+  sqlSumEnrollmentEffectiveBalance,
+} from '../lib/enrollment-balance';
 import { resolveAdminSchoolId, sqlStripeHistoryUserAtSchool } from '../lib/admin-school-context';
 import { isSchoolFeatureEnabled } from '../lib/school-features';
 import { schoolScopedLedgerPayments } from '../lib/school-payment-scope';
@@ -227,14 +232,14 @@ router.get('/summary', async (req: any, res) => {
         ),
       db
         .select({
-          totalOutstanding: sql<number>`COALESCE(SUM(effective_balance), 0)::integer`,
+          totalOutstanding: sqlSumEnrollmentEffectiveBalance(),
         })
         .from(programEnrollments)
         .where(
           and(
             eq(programEnrollments.schoolId, schoolId),
             not(inArray(programEnrollments.status, ['cancelled', 'waitlist', 'withdrawn', 'failed', 'completed'])),
-            sql`effective_balance > 0`,
+            sqlEnrollmentEffectiveBalancePositive(),
           ),
         ),
       db
@@ -266,7 +271,7 @@ router.get('/summary', async (req: any, res) => {
           and(
             eq(programEnrollments.schoolId, schoolId),
             not(inArray(programEnrollments.status, ['cancelled', 'waitlist', 'withdrawn', 'failed', 'completed'])),
-            sql`effective_balance > 0`,
+            sqlEnrollmentEffectiveBalancePositive(),
           ),
         ),
       db
@@ -277,7 +282,7 @@ router.get('/summary', async (req: any, res) => {
         .where(and(eq(programEnrollments.schoolId, schoolId), not(eq(programEnrollments.status, 'cancelled')))),
       db
         .select({
-          totalComped: sql<number>`COALESCE(SUM(${programEnrollments.compAmountCents}), 0)::integer`,
+          totalComped: sqlSumCompAmountCents(),
         })
         .from(programEnrollments)
         .where(eq(programEnrollments.schoolId, schoolId)),
@@ -338,7 +343,11 @@ router.get('/summary', async (req: any, res) => {
     res.json(payload);
   } catch (error) {
     console.error('Error fetching financial summary:', error);
-    res.status(500).json({ error: 'Failed to fetch financial summary' });
+    const body: Record<string, unknown> = { error: 'Failed to fetch financial summary' };
+    if (req.query.debug === '1' && error instanceof Error) {
+      body.errorDetail = error.message;
+    }
+    res.status(500).json(body);
   }
 });
 
@@ -540,7 +549,7 @@ router.get('/outstanding-balances', async (req: any, res) => {
         and(
           eq(programEnrollments.schoolId, schoolId),
           not(inArray(programEnrollments.status, ['cancelled', 'waitlist', 'withdrawn', 'failed', 'completed'])),
-          sql`effective_balance > 0`
+          sqlEnrollmentEffectiveBalancePositive(),
         )
       );
 
@@ -1282,14 +1291,14 @@ router.get('/ai-insights', async (req: any, res) => {
       stripeOrphanRevenueForSchool(schoolId),
       db
         .select({
-          outstanding: sql<number>`COALESCE(SUM(effective_balance), 0)::integer`,
+          outstanding: sqlSumEnrollmentEffectiveBalance(),
         })
         .from(programEnrollments)
         .where(
           and(
             eq(programEnrollments.schoolId, schoolId),
             not(inArray(programEnrollments.status, ['cancelled', 'waitlist', 'withdrawn', 'failed', 'completed'])),
-            sql`effective_balance > 0`,
+            sqlEnrollmentEffectiveBalancePositive(),
           ),
         ),
       db
@@ -1604,7 +1613,7 @@ router.post('/send-summary-reminder', async (req: any, res) => {
           eq(programEnrollments.schoolId, schoolId),
           eq(programEnrollments.parentEmail, parentEmail),
           not(inArray(programEnrollments.status, ['cancelled', 'waitlist', 'withdrawn', 'failed', 'completed'])),
-          sql`effective_balance > 0`
+          sqlEnrollmentEffectiveBalancePositive(),
         )
       );
 
@@ -1955,7 +1964,7 @@ router.post('/ai-chat', aiChatLimiter, async (req: any, res) => {
 
         db
           .select({
-            outstanding: sql<number>`COALESCE(SUM(effective_balance), 0)::integer`,
+            outstanding: sqlSumEnrollmentEffectiveBalance(),
             activeCount: sql<number>`COUNT(*)::integer`,
           })
           .from(programEnrollments)
@@ -1963,7 +1972,7 @@ router.post('/ai-chat', aiChatLimiter, async (req: any, res) => {
             and(
               eq(programEnrollments.schoolId, schoolId),
               not(inArray(programEnrollments.status, ['cancelled', 'waitlist', 'withdrawn', 'failed', 'completed'])),
-              sql`effective_balance > 0`,
+              sqlEnrollmentEffectiveBalancePositive(),
             ),
           ),
 
@@ -2088,6 +2097,7 @@ async function balanceAuditHandler(req: any, res: any) {
     // Fetch all active enrollments for the school, joined with parent user info.
     // 'completed' is included intentionally so admins can catch enrollments marked done but still owed.
     // Terminal statuses (cancelled, withdrawn, failed, waitlist) are excluded.
+    const effectiveBal = sql`GREATEST(0, pe.total_cost - pe.total_paid - COALESCE(pe.comp_amount_cents, 0))`;
     const rows = await db.execute(
       sql`
         SELECT
@@ -2098,16 +2108,16 @@ async function balanceAuditHandler(req: any, res: any) {
           pe.total_paid        AS "totalPaid",
           pe.comp_amount_cents AS "compAmountCents",
           pe.remaining_balance AS "remainingBalance",
-          pe.effective_balance AS "effectiveBalance",
+          ${effectiveBal}      AS "effectiveBalance",
           pe.payment_status    AS "paymentStatus",
           pe.status,
           pe.child_name        AS "childName",
           pe.class_name        AS "className",
           u.name               AS "parentName",
           CASE
-            WHEN pe.effective_balance < 0                                   THEN 'overpaid'
-            WHEN pe.status = 'completed' AND pe.effective_balance > 0      THEN 'still_owes'
-            WHEN pe.remaining_balance = 0 AND pe.effective_balance > 0     THEN 'mismatch'
+            WHEN (${effectiveBal}) < 0                                   THEN 'overpaid'
+            WHEN pe.status = 'completed' AND (${effectiveBal}) > 0      THEN 'still_owes'
+            WHEN pe.remaining_balance = 0 AND (${effectiveBal}) > 0     THEN 'mismatch'
             ELSE 'ok'
           END AS flag
         FROM program_enrollments pe
@@ -2116,9 +2126,9 @@ async function balanceAuditHandler(req: any, res: any) {
           AND pe.status NOT IN ('cancelled', 'withdrawn', 'failed', 'waitlist')
         ORDER BY
           CASE
-            WHEN pe.effective_balance < 0                                   THEN 1
-            WHEN pe.status = 'completed' AND pe.effective_balance > 0      THEN 2
-            WHEN pe.remaining_balance = 0 AND pe.effective_balance > 0     THEN 3
+            WHEN (${effectiveBal}) < 0                                   THEN 1
+            WHEN pe.status = 'completed' AND (${effectiveBal}) > 0      THEN 2
+            WHEN pe.remaining_balance = 0 AND (${effectiveBal}) > 0     THEN 3
             ELSE 4
           END,
           pe.parent_email ASC,
