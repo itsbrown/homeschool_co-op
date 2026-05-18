@@ -4,6 +4,7 @@ import { storage } from '../storage';
 import { membershipEnrollments, programEnrollments, scheduledPayments } from '@shared/schema';
 import { computeEffectiveBalance } from '@shared/schema';
 import {
+  sqlEnrollmentEffectiveBalanceColumn,
   sqlEnrollmentEffectiveBalancePositive,
 } from './enrollment-balance';
 
@@ -70,7 +71,14 @@ export async function buildFamilyBalanceEmailPayload(
     .orderBy(scheduledPayments.scheduledDate);
 
   const enrollmentsWithBalance = await db
-    .select()
+    .select({
+      id: programEnrollments.id,
+      childName: programEnrollments.childName,
+      className: programEnrollments.className,
+      totalCost: programEnrollments.totalCost,
+      totalPaid: programEnrollments.totalPaid,
+      outstandingCents: sqlEnrollmentEffectiveBalanceColumn(),
+    })
     .from(programEnrollments)
     .where(
       and(
@@ -87,7 +95,13 @@ export async function buildFamilyBalanceEmailPayload(
   const membershipRows =
     parentUserId != null
       ? await db
-          .select()
+          .select({
+            id: membershipEnrollments.id,
+            membershipYear: membershipEnrollments.membershipYear,
+            balanceDue: membershipEnrollments.balanceDue,
+            remainingBalance: membershipEnrollments.remainingBalance,
+            dueDate: membershipEnrollments.dueDate,
+          })
           .from(membershipEnrollments)
           .where(
             and(
@@ -97,6 +111,10 @@ export async function buildFamilyBalanceEmailPayload(
             ),
           )
       : [];
+
+  const enrollmentById = new Map(
+    enrollmentsWithBalance.map((e) => [e.id, e] as const),
+  );
 
   if (
     outstandingPayments.length === 0 &&
@@ -119,17 +137,32 @@ export async function buildFamilyBalanceEmailPayload(
         let className = 'Class';
 
         if (payment.enrollmentId) {
-          const enrollment: any = await storage.getProgramEnrollmentById(payment.enrollmentId);
+          let enrollment = enrollmentById.get(payment.enrollmentId);
+          if (!enrollment) {
+            const [row] = await db
+              .select({
+                id: programEnrollments.id,
+                childName: programEnrollments.childName,
+                className: programEnrollments.className,
+                totalCost: programEnrollments.totalCost,
+                totalPaid: programEnrollments.totalPaid,
+                outstandingCents: sqlEnrollmentEffectiveBalanceColumn(),
+              })
+              .from(programEnrollments)
+              .where(eq(programEnrollments.id, payment.enrollmentId))
+              .limit(1);
+            enrollment = row;
+          }
           if (enrollment) {
             childName = enrollment.childName || 'Student';
             className = enrollment.className || 'Class';
 
             const enrollmentRemainingBalance =
-              enrollment.effectiveBalance ??
+              Number(enrollment.outstandingCents) ||
               computeEffectiveBalance(
                 enrollment.totalCost ?? 0,
                 enrollment.totalPaid ?? 0,
-                enrollment.compAmountCents ?? 0,
+                0,
               );
 
             if (enrollmentRemainingBalance <= 0) {
@@ -165,11 +198,11 @@ export async function buildFamilyBalanceEmailPayload(
     .filter((e) => !coveredEnrollmentIds.has(e.id))
     .map((enrollment) => {
       const amount =
-        (enrollment as { effectiveBalance?: number }).effectiveBalance ??
+        Number(enrollment.outstandingCents) ||
         computeEffectiveBalance(
           enrollment.totalCost ?? 0,
           enrollment.totalPaid ?? 0,
-          (enrollment as { compAmountCents?: number }).compAmountCents ?? 0,
+          0,
         );
       return {
         childName: enrollment.childName || 'Student',
