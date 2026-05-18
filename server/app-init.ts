@@ -298,16 +298,15 @@ export async function initializeApp(app: Express, httpServer: Server): Promise<v
 
   // Import auth middleware for protected admin routes
   const { jwtCheck, requireRole } = await import("./middleware/auth0-auth");
+  const { supabaseAuth } = await import("./middleware/supabase-auth");
 
   app.use('/api/admin/enrollments', jwtCheck, requireRole(['schoolAdmin', 'admin', 'superAdmin']), adminEnrollmentPaymentRouter);
   app.use('/api/admin/refunds', jwtCheck, requireRole(['schoolAdmin', 'admin', 'superAdmin']), adminRefundsRouter);
-  app.use('/api/admin/financial-reports', jwtCheck, requireRole(['schoolAdmin', 'admin', 'superAdmin', 'director']), financialReportsRouter);
-  // Alias: GET /api/admin/balance-audit → same handler as /api/admin/financial-reports/balance-audit
-  app.use('/api/admin/balance-audit', jwtCheck, requireRole(['schoolAdmin', 'admin', 'superAdmin']), balanceAuditAliasRouter);
-  // Alias: GET /api/admin/credit-divergence-audit → same handler as
-  // /api/admin/financial-reports/credit-divergence-audit (Task 173)
-  app.use('/api/admin/credit-divergence-audit', jwtCheck, requireRole(['schoolAdmin', 'admin', 'superAdmin']), creditDivergenceAuditAliasRouter);
-  app.use('/api/admin/retention', jwtCheck, requireRole(['schoolAdmin', 'admin', 'superAdmin']), retentionRouter);
+  // Financial reports: supabaseAuth + in-router admin/feature checks (matches /api/school-admin)
+  app.use('/api/admin/financial-reports', supabaseAuth, financialReportsRouter);
+  app.use('/api/admin/balance-audit', supabaseAuth, balanceAuditAliasRouter);
+  app.use('/api/admin/credit-divergence-audit', supabaseAuth, creditDivergenceAuditAliasRouter);
+  app.use('/api/admin/retention', supabaseAuth, retentionRouter);
   app.use('/api/admin/memberships', jwtCheck, requireRole(['schoolAdmin', 'admin', 'superAdmin']), membershipRouter);
 
   // Register all remaining routes (pass existing server — avoids creating a second HTTP server)

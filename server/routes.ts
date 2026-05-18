@@ -3928,6 +3928,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Register technical support routes
   registerTechnicalSupportRoutes(app);
 
+  // Admin financial reports (auth enforced inside router via getSchoolAdminWithFeatureCheck)
+  const financialReportsModule = await import("./api/financial-reports");
+  app.use("/api/admin/financial-reports", supabaseAuth, financialReportsModule.default);
+  app.use("/api/admin/balance-audit", supabaseAuth, financialReportsModule.balanceAuditAliasRouter);
+  app.use(
+    "/api/admin/credit-divergence-audit",
+    supabaseAuth,
+    financialReportsModule.creditDivergenceAuditAliasRouter,
+  );
+  const retentionRouter = (await import("./api/retention")).default;
+  app.use("/api/admin/retention", supabaseAuth, retentionRouter);
+  console.log("✅ Admin financial reports routes registered");
+
   const httpServer = createServer(app);
   
   // Initialize WebSocket data layer for real-time updates (development only)

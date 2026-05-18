@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { supabase } from '../lib/supabase';
+import { expandRolesForAuth, isSuperAdminRole, normalizeAuthRole } from '../lib/auth-roles';
 import { UserSyncService } from '../services/userSyncService';
 import { storage } from '../storage';
 
@@ -93,7 +94,21 @@ export const jwtCheck = async (req: any, res: Response, next: NextFunction) => {
     if (dbUser?.id) {
       try {
         const userRoleEntries = await storage.getUserRolesByUserId(dbUser.id);
-        userRoles = userRoleEntries.map((r: { role: string }) => r.role);
+        const roleSet = new Set<string>();
+        for (const entry of userRoleEntries) {
+          const norm = normalizeAuthRole(entry.role);
+          if (norm) roleSet.add(norm);
+          if (entry.role?.trim()) roleSet.add(entry.role.trim());
+        }
+        if (dbUser.role) {
+          const norm = normalizeAuthRole(dbUser.role);
+          if (norm) roleSet.add(norm);
+        }
+        if (dbUser.activeRole) {
+          const norm = normalizeAuthRole(dbUser.activeRole);
+          if (norm) roleSet.add(norm);
+        }
+        userRoles = Array.from(roleSet);
         console.log('📋 User roles from user_roles table:', userRoles);
         
         // If user has superAdmin in their roles, set effectiveRole to superAdmin for API access
@@ -164,39 +179,43 @@ export const requireRole = (allowedRoles: string[]) => {
     // activeRole / effectiveRole is intentionally excluded here — it is a UI display preference only.
     // Fall back to req.user.role (users.role column) only when user_roles is empty (e.g. legacy user
     // with no entries in the user_roles table yet), so they are not completely locked out.
-    const allUserRoles: string[] = (req.user?.allRoles && Array.isArray(req.user.allRoles) && req.user.allRoles.length > 0)
-      ? req.user.allRoles
-      : (req.user?.role ? [req.user.role] : []);
-    console.log('🔒 Checking role access - User allRoles:', allUserRoles, 'Required:', allowedRoles);
+    const allUserRoles: string[] = expandRolesForAuth(
+      req.user?.allRoles && Array.isArray(req.user.allRoles) && req.user.allRoles.length > 0
+        ? req.user.allRoles
+        : req.user?.role
+          ? [req.user.role]
+          : [],
+    );
+    const normalizedAllowed = expandRolesForAuth(allowedRoles);
+    console.log('🔒 Checking role access - User allRoles:', allUserRoles, 'Required:', normalizedAllowed);
 
-    // Role hierarchy for inheritance checks
+    // Role hierarchy for inheritance checks (canonical keys only)
     const roleHierarchy: Record<string, string[]> = {
-      'superAdmin': ['admin', 'schoolAdmin', 'director', 'teacher', 'educator', 'mentor', 'parent', 'student', 'learner'],
-      'admin': ['schoolAdmin', 'director', 'teacher', 'educator', 'mentor', 'parent', 'student', 'learner'],
-      'schoolAdmin': ['director', 'teacher', 'educator', 'mentor', 'parent', 'student', 'learner'],
-      'director': ['teacher', 'educator', 'mentor', 'parent', 'student', 'learner'],
-      'teacher': ['parent', 'student', 'learner'],
-      'educator': ['parent', 'student', 'learner'],
-      'mentor': ['student', 'learner'],
-      'parent': ['student', 'learner'],
-      'student': [],
-      'learner': []
+      superAdmin: ['admin', 'schoolAdmin', 'director', 'teacher', 'educator', 'mentor', 'parent', 'student', 'learner'],
+      admin: ['schoolAdmin', 'director', 'teacher', 'educator', 'mentor', 'parent', 'student', 'learner'],
+      schoolAdmin: ['director', 'teacher', 'educator', 'mentor', 'parent', 'student', 'learner'],
+      director: ['teacher', 'educator', 'mentor', 'parent', 'student', 'learner'],
+      teacher: ['parent', 'student', 'learner'],
+      educator: ['parent', 'student', 'learner'],
+      mentor: ['student', 'learner'],
+      parent: ['student', 'learner'],
+      student: [],
+      learner: [],
     };
 
-    // Helper: check if a single role satisfies the requirement (direct match or hierarchy)
     const roleSatisfies = (role: string, required: string[]): boolean => {
-      if (required.includes(role)) return true;
-      const inherited = roleHierarchy[role] || [];
-      return required.some(r => inherited.includes(r));
+      const norm = normalizeAuthRole(role);
+      if (!norm) return false;
+      if (required.includes(norm)) return true;
+      const inherited = roleHierarchy[norm] || [];
+      return required.some((r) => inherited.includes(r));
     };
 
-    // Super admin in any role → full access
-    if (allUserRoles.some(r => r.toLowerCase() === 'superadmin' || r === 'superAdmin')) {
+    if (allUserRoles.some((r) => isSuperAdminRole(r))) {
       return next();
     }
 
-    // Check if ANY of the user's roles (additive) satisfy the requirement
-    const hasSatisfyingRole = allUserRoles.some(r => roleSatisfies(r, allowedRoles));
+    const hasSatisfyingRole = allUserRoles.some((r) => roleSatisfies(r, normalizedAllowed));
 
     if (hasSatisfyingRole) {
       return next();
