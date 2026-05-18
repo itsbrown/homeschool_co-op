@@ -301,7 +301,7 @@ export async function initializeApp(app: Express, httpServer: Server): Promise<v
 
   app.use('/api/admin/enrollments', jwtCheck, requireRole(['schoolAdmin', 'admin', 'superAdmin']), adminEnrollmentPaymentRouter);
   app.use('/api/admin/refunds', jwtCheck, requireRole(['schoolAdmin', 'admin', 'superAdmin']), adminRefundsRouter);
-  app.use('/api/admin/financial-reports', jwtCheck, requireRole(['schoolAdmin', 'admin', 'superAdmin']), financialReportsRouter);
+  app.use('/api/admin/financial-reports', jwtCheck, requireRole(['schoolAdmin', 'admin', 'superAdmin', 'director']), financialReportsRouter);
   // Alias: GET /api/admin/balance-audit → same handler as /api/admin/financial-reports/balance-audit
   app.use('/api/admin/balance-audit', jwtCheck, requireRole(['schoolAdmin', 'admin', 'superAdmin']), balanceAuditAliasRouter);
   // Alias: GET /api/admin/credit-divergence-audit → same handler as

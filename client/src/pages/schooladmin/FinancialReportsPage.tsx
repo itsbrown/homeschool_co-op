@@ -548,8 +548,22 @@ export default function FinancialReportsPage() {
     aiChatMutation.mutate({ message, history: chatHistory });
   };
 
-  if (summaryError && (summaryError as any)?.message?.includes('not enabled')) {
-    return <FeatureDisabledState />;
+  if (summaryError) {
+    const errMsg = String((summaryError as Error)?.message ?? '');
+    if (errMsg.includes('not enabled')) {
+      return <FeatureDisabledState />;
+    }
+    return (
+      <SchoolAdminLayout pageTitle="Financial Reports">
+        <Alert variant="destructive" className="max-w-2xl">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Unable to load financial reports</AlertTitle>
+          <AlertDescription className="mt-2 text-sm whitespace-pre-wrap">
+            {errMsg.replace(/^\d{3}:\s*/, '')}
+          </AlertDescription>
+        </Alert>
+      </SchoolAdminLayout>
+    );
   }
 
   const summary = summaryData?.summary;

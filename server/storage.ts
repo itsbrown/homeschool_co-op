@@ -95,6 +95,8 @@ export interface IStorage {
   updateSchool(id: number, school: Partial<InsertSchool>): Promise<School | undefined>;
   getAllSchools(): Promise<School[]>;
   getSchoolsByAdminId(adminId: number): Promise<School[]>;
+  getSchoolFeatures(schoolId: number): Promise<Record<string, boolean>>;
+  updateSchoolFeatures(schoolId: number, features: Record<string, boolean>): Promise<void>;
 
   // User Role methods
   getUserRolesByUserId(userId: number): Promise<UserRole[]>;
@@ -465,6 +467,7 @@ export interface IStorage {
   createDiscount(discount: InsertDiscount): Promise<Discount>;
   updateDiscount(id: number, discount: Partial<InsertDiscount>): Promise<Discount | undefined>;
   incrementDiscountUsageAtomic(discountId: number): Promise<boolean>;
+  getDiscountUsageCountByUser(discountId: number, parentEmail: string): Promise<number>;
   deleteDiscount(id: number): Promise<void>;
 
   // Discount Application methods
@@ -1072,6 +1075,15 @@ export class MemStorage implements IStorage {
     return Array.from(this.schoolsStore.values()).filter(
       school => school.adminId === adminId
     );
+  }
+
+  async getSchoolFeatures(_schoolId: number): Promise<Record<string, boolean>> {
+    const { normalizeSchoolFeatures } = await import('./lib/school-features');
+    return normalizeSchoolFeatures({});
+  }
+
+  async updateSchoolFeatures(_schoolId: number, _features: Record<string, boolean>): Promise<void> {
+    // MemStorage has no schools.enabled_features column
   }
 
   async getUserRolesByUserId(userId: number): Promise<UserRole[]> {
@@ -5225,6 +5237,22 @@ export class MemStorage implements IStorage {
       }
     }
 
+    async getSchoolFeatures(schoolId: number): Promise<Record<string, boolean>> {
+      try {
+        return await this.dbStorage.getSchoolFeatures(schoolId);
+      } catch (error) {
+        return this.memStorage.getSchoolFeatures(schoolId);
+      }
+    }
+
+    async updateSchoolFeatures(schoolId: number, features: Record<string, boolean>): Promise<void> {
+      try {
+        return await this.dbStorage.updateSchoolFeatures(schoolId, features);
+      } catch (error) {
+        return this.memStorage.updateSchoolFeatures(schoolId, features);
+      }
+    }
+
     async getUserRolesByUserId(userId: number): Promise<UserRole[]> {
       try {
         return await this.dbStorage.getUserRolesByUserId(userId);
@@ -6822,6 +6850,10 @@ export class MemStorage implements IStorage {
 
       async incrementDiscountUsageAtomic(discountId: number): Promise<boolean> {
         return this.dbStorage.incrementDiscountUsageAtomic(discountId);
+      }
+
+      async getDiscountUsageCountByUser(discountId: number, parentEmail: string): Promise<number> {
+        return this.dbStorage.getDiscountUsageCountByUser(discountId, parentEmail);
       }
 
       async deleteDiscount(id: number): Promise<void> {

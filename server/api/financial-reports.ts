@@ -10,6 +10,7 @@ import { reconcileSchoolScheduledPayments, cleanupScheduledPayments, generateMis
 import { computeEffectiveBalance } from '@shared/schema';
 import { resolveEnrollmentOutstandingCents } from '../lib/enrollment-balance';
 import { resolveAdminSchoolId, sqlStripeHistoryUserAtSchool } from '../lib/admin-school-context';
+import { isSchoolFeatureEnabled } from '../lib/school-features';
 import { schoolScopedLedgerPayments } from '../lib/school-payment-scope';
 import { fetchSucceededPaymentIntentsForSchool } from '../services/school-stripe-transactions';
 
@@ -55,9 +56,11 @@ async function getSchoolAdminWithFeatureCheck(req: any, featureName: string): Pr
 
   // Check BOTH legacy users.role AND user_roles table (per asa-auth-patterns multi-role pattern)
   const userRoles = await storage.getUserRolesByUserId(user.id);
-  const hasAdminRole = userRoles.some(r =>
-    r.role === 'schoolAdmin' || r.role === 'admin' || r.role === 'superAdmin'
-  ) || user.role === 'schoolAdmin' || user.role === 'superAdmin';
+  const adminRoleNames = ['schoolAdmin', 'admin', 'superAdmin', 'director'] as const;
+  const hasAdminRole =
+    userRoles.some((r) => adminRoleNames.includes(r.role as (typeof adminRoleNames)[number])) ||
+    adminRoleNames.includes(user.role as (typeof adminRoleNames)[number]) ||
+    user.role === 'superAdmin';
 
   if (!hasAdminRole) {
     return { error: 'Only school administrators can access financial reports', status: 403 };
@@ -70,7 +73,7 @@ async function getSchoolAdminWithFeatureCheck(req: any, featureName: string): Pr
   }
 
   const features = await storage.getSchoolFeatures(schoolId);
-  if (!features[featureName]) {
+  if (!isSchoolFeatureEnabled(features, featureName)) {
     return { error: 'This feature is not enabled for your school. Please contact support to upgrade.', status: 403 };
   }
 

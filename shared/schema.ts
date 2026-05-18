@@ -113,6 +113,9 @@ export const schools = pgTable("schools", {
 
   // F001: session-based enrollment (half/full day per enrollment period)
   sessionModeEnabled: boolean("session_mode_enabled").default(false).notNull(),
+
+  /** Premium feature flags (superadmin School Edit); see server/lib/school-features.ts */
+  enabledFeatures: jsonb("enabled_features").default({}).notNull(),
 });
 
 export const insertSchoolSchema = createInsertSchema(schools)

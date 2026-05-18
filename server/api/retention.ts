@@ -2,6 +2,7 @@ import express from 'express';
 import { storage } from '../storage';
 import { normalizeEmailForLookup } from '@shared/parent-identity';
 import { resolveAdminSchoolId } from '../lib/admin-school-context';
+import { isSchoolFeatureEnabled } from '../lib/school-features';
 
 const router = express.Router();
 
@@ -27,9 +28,11 @@ async function getSchoolAdminWithFeatureCheck(req: any, featureName: string): Pr
   }
 
   const userRoles = await storage.getUserRolesByUserId(user.id);
-  const hasAdminRole = userRoles.some(r =>
-    r.role === 'schoolAdmin' || r.role === 'admin' || r.role === 'superAdmin'
-  ) || user.role === 'schoolAdmin' || user.role === 'superAdmin';
+  const adminRoleNames = ['schoolAdmin', 'admin', 'superAdmin', 'director'] as const;
+  const hasAdminRole =
+    userRoles.some((r) => adminRoleNames.includes(r.role as (typeof adminRoleNames)[number])) ||
+    adminRoleNames.includes(user.role as (typeof adminRoleNames)[number]) ||
+    user.role === 'superAdmin';
 
   if (!hasAdminRole) {
     return { error: 'Only school administrators can access this report', status: 403 };
@@ -42,7 +45,7 @@ async function getSchoolAdminWithFeatureCheck(req: any, featureName: string): Pr
   }
 
   const features = await storage.getSchoolFeatures(schoolId);
-  if (!features[featureName]) {
+  if (!isSchoolFeatureEnabled(features, featureName)) {
     return { error: 'This feature is not enabled for your school. Please contact support to upgrade.', status: 403 };
   }
 

@@ -1,5 +1,6 @@
 import { eq, and, desc, asc, like, or, sql, lt, gt, lte, gte, isNull, inArray, ilike } from 'drizzle-orm';
 import { normalizeEmailForLookup } from '@shared/parent-identity';
+import { normalizeSchoolFeatures } from './lib/school-features';
 import { getDb } from './db';
 import { IStorage } from './storage';
 import {
@@ -195,6 +196,30 @@ export class DatabaseStorage implements IStorage {
     const db = await getDb();
     const [school] = await db.select().from(schools).where(eq(schools.id, id));
     return school;
+  }
+
+  async getSchoolFeatures(schoolId: number): Promise<Record<string, boolean>> {
+    const db = await getDb();
+    try {
+      const result = await db.execute(sql`
+        SELECT enabled_features AS features FROM schools WHERE id = ${schoolId} LIMIT 1
+      `);
+      const row = result.rows[0] as { features?: unknown } | undefined;
+      return normalizeSchoolFeatures(row?.features ?? {});
+    } catch (err: unknown) {
+      console.warn(`getSchoolFeatures: lookup failed for school ${schoolId}`, err);
+      return normalizeSchoolFeatures({});
+    }
+  }
+
+  async updateSchoolFeatures(schoolId: number, features: Record<string, boolean>): Promise<void> {
+    const db = await getDb();
+    await db.execute(sql`
+      UPDATE schools
+      SET enabled_features = ${JSON.stringify(features)}::jsonb,
+          updated_at = NOW()
+      WHERE id = ${schoolId}
+    `);
   }
 
   async getSchoolByCode(registrationCode: string): Promise<School | undefined> {
