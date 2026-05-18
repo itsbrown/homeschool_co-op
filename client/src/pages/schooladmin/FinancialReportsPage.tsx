@@ -17,6 +17,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import CardManagementPanel from '@/components/payments/CardManagementPanel';
+import CollectionsOverviewTab from '@/components/financial/CollectionsOverviewTab';
 import {
   Table,
   TableBody,
@@ -78,6 +79,9 @@ interface FinancialSummary {
   ytdRevenueCents: number;
   totalPayments: number;
   outstandingBalanceCents: number;
+  tuitionOutstandingCents?: number;
+  membershipOutstandingCents?: number;
+  membershipOwedFamilies?: number;
   overduePayments: number;
   overdueAmountCents: number;
   totalRefundedCents: number;
@@ -560,6 +564,7 @@ export default function FinancialReportsPage() {
   const summary = summaryData?.summary;
   const trends = trendsData?.trends || [];
   const balances = balancesData?.balances || [];
+  const balancesSummary = balancesData?.summary;
   const plans = plansData?.activePlans || [];
   const transactions = transactionsData?.transactions || [];
   const reminderHistory = reminderHistoryData || [];
@@ -695,10 +700,14 @@ export default function FinancialReportsPage() {
               <SummaryCard
                 title="Outstanding Balance"
                 value={formatCurrency(summary?.outstandingBalanceCents || 0)}
-                subtitle={`${summary?.overduePayments || 0} overdue payments`}
+                subtitle={
+                  (summary?.membershipOutstandingCents ?? 0) > 0
+                    ? `Tuition ${formatCurrency(summary?.tuitionOutstandingCents ?? 0)} · Membership ${formatCurrency(summary?.membershipOutstandingCents ?? 0)}`
+                    : `${summary?.overduePayments || 0} overdue installments`
+                }
                 icon={Clock}
                 trend={summary?.overduePayments ? 'down' : 'neutral'}
-                trendValue={summary?.overduePayments ? `${formatCurrency(summary?.overdueAmountCents || 0)} overdue` : 'All on track'}
+                trendValue={summary?.overduePayments ? `${formatCurrency(summary?.overdueAmountCents || 0)} overdue` : 'See Collections tab'}
               />
               <SummaryCard
                 title="Active Payment Plans"
@@ -904,6 +913,10 @@ export default function FinancialReportsPage() {
             <Tabs value={activeTab} onValueChange={setActiveTab}>
               <TabsList>
                 <TabsTrigger value="overview">Recent Transactions</TabsTrigger>
+                <TabsTrigger value="collections">
+                  <Users className="h-3.5 w-3.5 mr-1.5" />
+                  Collections
+                </TabsTrigger>
                 <TabsTrigger value="balances">Outstanding Balances</TabsTrigger>
                 <TabsTrigger value="plans">Payment Plans</TabsTrigger>
                 <TabsTrigger value="classes">By Class</TabsTrigger>
@@ -988,13 +1001,22 @@ export default function FinancialReportsPage() {
                 </Card>
               </TabsContent>
 
+              <TabsContent value="collections" className="mt-4">
+                <CollectionsOverviewTab enabled={activeTab === 'collections'} />
+              </TabsContent>
+
               <TabsContent value="balances" className="mt-4">
                 <Card>
                   <CardHeader>
                     <div className="flex items-center justify-between">
                       <div>
                         <CardTitle>Outstanding Balances</CardTitle>
-                        <CardDescription>Pending payments due from families</CardDescription>
+                        <CardDescription>
+                          Installments and unscheduled tuition
+                          {balancesSummary?.uniqueFamilies
+                            ? ` · ${balancesSummary.uniqueFamilies} families · ${formatCurrency(balancesSummary.totalOutstandingCents ?? 0)}`
+                            : ''}
+                        </CardDescription>
                       </div>
                       <div className="flex items-center space-x-4">
                         <Button
@@ -1212,10 +1234,28 @@ export default function FinancialReportsPage() {
                           </TableBody>
                         </Table>
                       )
+                    ) : (summary?.outstandingBalanceCents ?? 0) > 0 ? (
+                      <div className="text-center py-8 text-muted-foreground space-y-3">
+                        <Clock className="h-12 w-12 mx-auto mb-2 text-amber-500" />
+                        <p>
+                          Summary shows{' '}
+                          <span className="font-medium text-foreground">
+                            {formatCurrency(summary?.outstandingBalanceCents ?? 0)}
+                          </span>{' '}
+                          still owed, but no installment rows matched this view.
+                        </p>
+                        <p className="text-sm">
+                          Open <strong>Collections</strong> for who owes tuition, membership, late payments,
+                          auto-pay, and families who never paid.
+                        </p>
+                        <Button variant="outline" size="sm" onClick={() => setActiveTab('collections')}>
+                          View Collections
+                        </Button>
+                      </div>
                     ) : (
                       <div className="text-center py-8 text-muted-foreground">
                         <CheckCircle2 className="h-12 w-12 mx-auto mb-4 text-green-500" />
-                        No outstanding balances - all payments are up to date!
+                        No outstanding balances — all payments are up to date!
                       </div>
                     )}
                   </CardContent>

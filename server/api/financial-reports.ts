@@ -3,7 +3,17 @@ import Anthropic from '@anthropic-ai/sdk';
 import rateLimit from 'express-rate-limit';
 import { storage } from '../storage';
 import { getDb } from '../db';
-import { payments, scheduledPayments, programEnrollments, users, refunds, schools, classes, schoolClasses } from '@shared/schema';
+import {
+  payments,
+  scheduledPayments,
+  programEnrollments,
+  membershipEnrollments,
+  users,
+  refunds,
+  schools,
+  classes,
+  schoolClasses,
+} from '@shared/schema';
 import { eq, and, gte, lte, sql, desc, isNull, not, inArray } from 'drizzle-orm';
 import { generateCFOInsights, isAIAvailable } from '../services/cfoInsightsService';
 import { reconcileSchoolScheduledPayments, cleanupScheduledPayments, generateMissingScheduledPayments } from '../services/scheduled-payment-reconciliation';
@@ -14,6 +24,11 @@ import {
   sqlSumCompAmountCents,
   sqlSumEnrollmentEffectiveBalance,
 } from '../lib/enrollment-balance';
+import {
+  buildCollectionsOverview,
+  buildOutstandingBalanceRows,
+  fetchAutoPayHistoryRecords,
+} from '../lib/financial-collections';
 import { resolveAdminSchoolId, sqlStripeHistoryUserAtSchool } from '../lib/admin-school-context';
 import { isSchoolFeatureEnabled } from '../lib/school-features';
 import { schoolScopedLedgerPayments } from '../lib/school-payment-scope';
@@ -234,6 +249,7 @@ router.get('/summary', async (req: any, res) => {
       stripeOrphanAll,
       stripeOrphan30,
       stripeOrphanYtd,
+      membershipOutstandingResult,
     ] = await Promise.all([
       db
         .select({
@@ -321,6 +337,19 @@ router.get('/summary', async (req: any, res) => {
       stripeOrphanRevenueForSchool(schoolId),
       stripeOrphanRevenueForSchool(schoolId, thirtyDaysAgo),
       stripeOrphanRevenueForSchool(schoolId, yearStart),
+      db
+        .select({
+          totalOutstanding: sql<number>`COALESCE(SUM(GREATEST(COALESCE(${membershipEnrollments.balanceDue}, 0), COALESCE(${membershipEnrollments.remainingBalance}, 0))), 0)::integer`,
+          familyCount: sql<number>`COUNT(DISTINCT ${membershipEnrollments.parentUserId})::integer`,
+        })
+        .from(membershipEnrollments)
+        .where(
+          and(
+            eq(membershipEnrollments.schoolId, schoolId),
+            inArray(membershipEnrollments.status, ['pending_payment', 'grace_period']),
+            sql`GREATEST(COALESCE(${membershipEnrollments.balanceDue}, 0), COALESCE(${membershipEnrollments.remainingBalance}, 0)) > 0`,
+          ),
+        ),
     ]);
 
     const ledgerTotal = completedPaymentsResult[0]?.totalRevenue || 0;
@@ -328,13 +357,19 @@ router.get('/summary', async (req: any, res) => {
     const ledgerYtd = ytdRevenueResult[0]?.revenue || 0;
     const ledgerCount = completedPaymentsResult[0]?.paymentCount || 0;
 
+    const tuitionOutstandingCents = outstandingBalancesResult[0]?.totalOutstanding || 0;
+    const membershipOutstandingCents = membershipOutstandingResult[0]?.totalOutstanding || 0;
+
     const payload: Record<string, unknown> = {
       summary: {
         totalRevenueCents: ledgerTotal + stripeOrphanAll.cents,
         last30DaysRevenueCents: ledger30 + stripeOrphan30.cents,
         ytdRevenueCents: ledgerYtd + stripeOrphanYtd.cents,
         totalPayments: ledgerCount + stripeOrphanAll.count,
-        outstandingBalanceCents: outstandingBalancesResult[0]?.totalOutstanding || 0,
+        outstandingBalanceCents: tuitionOutstandingCents + membershipOutstandingCents,
+        tuitionOutstandingCents,
+        membershipOutstandingCents,
+        membershipOwedFamilies: membershipOutstandingResult[0]?.familyCount || 0,
         overduePayments: overdueBalancesResult[0]?.overdueCount || 0,
         overdueAmountCents: overdueBalancesResult[0]?.overdueAmount || 0,
         totalRefundedCents: refundsResult[0]?.totalRefunded || 0,
@@ -476,211 +511,26 @@ router.get('/outstanding-balances', async (req: any, res) => {
       return res.status(result.status).json({ error: result.error });
     }
     const { schoolId } = result;
-
-    const db = await getDb();
-
-    const outstandingPayments = await db
-      .select({
-        id: scheduledPayments.id,
-        enrollmentId: scheduledPayments.enrollmentId,
-        parentId: scheduledPayments.parentId,
-        parentEmail: scheduledPayments.parentEmail,
-        amount: scheduledPayments.amount,
-        scheduledDate: scheduledPayments.scheduledDate,
-        installmentNumber: scheduledPayments.installmentNumber,
-        totalInstallments: scheduledPayments.totalInstallments,
-        status: scheduledPayments.status,
-        reminderCount: scheduledPayments.reminderCount,
-        lastReminderSentAt: scheduledPayments.lastReminderSentAt,
-      })
-      .from(scheduledPayments)
-      .where(
-        and(
-          eq(scheduledPayments.schoolId, schoolId),
-          eq(scheduledPayments.status, 'pending')
-        )
-      )
-      .orderBy(scheduledPayments.scheduledDate);
-
-    const enrichedBalances = await Promise.all(
-      outstandingPayments.map(async (payment: typeof outstandingPayments[number]) => {
-        let parentInfo: { id: number; name: string; email: string; phone: string | null } | null = null;
-        let enrollmentInfo: { id: number; childName: string | null; className: string | null } | null = null;
-
-        try {
-          const parent = await storage.getUser(payment.parentId);
-          if (parent) {
-            parentInfo = {
-              id: parent.id,
-              name: parent.name || parent.email,
-              email: parent.email,
-              phone: parent.phone || null,
-            };
-          }
-        } catch (e) {}
-
-        let enrollmentRemainingBalance: number | undefined;
-        try {
-          const enrollment: any = await storage.getProgramEnrollmentById(payment.enrollmentId);
-          if (enrollment) {
-            enrollmentInfo = {
-              id: enrollment.id,
-              childName: enrollment.childName || null,
-              className: enrollment.className || null,
-            };
-            // Use the DB-generated effective_balance (with fallback formula).
-            // NEVER read enrollment.remainingBalance directly — it is intentionally
-            // stored as 0 for Stripe-managed payment plans, which would make
-            // outstanding scheduled payments incorrectly look fully paid here and
-            // get auto-cancelled by the filter below.
-            // (See asa-payment-patterns "Parent Payments page shows $0" pitfall.)
-            enrollmentRemainingBalance = resolveEnrollmentOutstandingCents({
-              effectiveBalance: (enrollment as { effectiveBalance?: number }).effectiveBalance,
-              totalCost: enrollment.totalCost,
-              totalPaid: enrollment.totalPaid,
-              compAmountCents: (enrollment as { compAmountCents?: number }).compAmountCents,
-            });
-          }
-        } catch (e) {}
-
-        const now = new Date();
-        const isOverdue = new Date(payment.scheduledDate) < now;
-        const daysOverdue = isOverdue 
-          ? Math.floor((now.getTime() - new Date(payment.scheduledDate).getTime()) / (1000 * 60 * 60 * 24))
-          : 0;
-
-        return {
-          ...payment,
-          type: 'scheduled' as const,
-          parent: parentInfo,
-          enrollment: enrollmentInfo,
-          enrollmentRemainingBalance,
-          isOverdue,
-          daysOverdue,
-        };
-      })
-    );
-
-    // Filter out scheduled payments where the enrollment is already fully paid.
-    // Auto-heal any stale 'pending' records found — cancel them in the background.
-    const filteredScheduled = enrichedBalances.filter(b => {
-      const isFullyPaid = b.enrollmentRemainingBalance !== undefined && b.enrollmentRemainingBalance <= 0;
-      if (isFullyPaid) {
-        storage.updateScheduledPaymentStatus(b.id, 'cancelled').catch(() => {});
-        return false;
-      }
-      return true;
-    });
-
-    // Also surface enrollments with outstanding balances that have NO pending scheduled payment.
-    // These families owe money but are invisible to a scheduled-payments-only query.
-    const enrollmentsWithBalance = await db
-      .select()
-      .from(programEnrollments)
-      .where(
-        and(
-          eq(programEnrollments.schoolId, schoolId),
-          not(inArray(programEnrollments.status, ['cancelled', 'waitlist', 'withdrawn', 'failed', 'completed'])),
-          sqlEnrollmentEffectiveBalancePositive(),
-        )
-      );
-
-    const coveredEnrollmentIds = new Set(outstandingPayments.map(p => p.enrollmentId));
-    const unscheduledEnrollments = enrollmentsWithBalance.filter(e => !coveredEnrollmentIds.has(e.id));
-
-    const enrichedUnscheduled = await Promise.all(
-      unscheduledEnrollments.map(async (enrollment) => {
-        let parentInfo: { id: number; name: string; email: string; phone: string | null } | null = null;
-        try {
-          const parent = await storage.getUser(enrollment.parentId);
-          if (parent) {
-            parentInfo = {
-              id: parent.id,
-              name: parent.name || parent.email,
-              email: parent.email,
-              phone: parent.phone || null,
-            };
-          }
-        } catch (e) {}
-
-        const amount = resolveEnrollmentOutstandingCents({
-          effectiveBalance: (enrollment as { effectiveBalance?: number }).effectiveBalance,
-          totalCost: enrollment.totalCost,
-          totalPaid: enrollment.totalPaid,
-          compAmountCents: (enrollment as { compAmountCents?: number }).compAmountCents,
-        });
-
-        return {
-          id: -enrollment.id,
-          enrollmentId: enrollment.id,
-          parentId: enrollment.parentId,
-          parentEmail: enrollment.parentEmail,
-          amount,
-          scheduledDate: null as string | null,
-          installmentNumber: null as number | null,
-          totalInstallments: null as number | null,
-          status: 'unscheduled',
-          reminderCount: null as number | null,
-          lastReminderSentAt: null as string | null,
-          type: 'unscheduled' as const,
-          parent: parentInfo,
-          enrollment: {
-            id: enrollment.id,
-            childName: enrollment.childName || null,
-            className: enrollment.className || null,
-          },
-          enrollmentRemainingBalance: amount,
-          isOverdue: false,
-          daysOverdue: 0,
-        };
-      })
-    );
-
-    const validBalances: any[] = [...filteredScheduled, ...enrichedUnscheduled];
-
-    type FamilyBalance = {
-      parent: typeof validBalances[number]['parent'];
-      parentEmail: string;
-      totalOutstandingCents: number;
-      overdueAmountCents: number;
-      payments: typeof validBalances;
-    };
-
-    const byParent = validBalances.reduce((acc: Record<string, FamilyBalance>, balance) => {
-      const email = balance.parentEmail;
-      if (!acc[email]) {
-        acc[email] = {
-          parent: balance.parent,
-          parentEmail: email,
-          totalOutstandingCents: 0,
-          overdueAmountCents: 0,
-          payments: [],
-        };
-      }
-      acc[email].totalOutstandingCents += balance.amount;
-      if (balance.isOverdue) {
-        acc[email].overdueAmountCents += balance.amount;
-      }
-      acc[email].payments.push(balance);
-      return acc;
-    }, {});
-
-    const summary = {
-      totalOutstandingCents: validBalances.reduce((sum, b) => sum + b.amount, 0),
-      overdueAmountCents: validBalances.filter(b => b.isOverdue).reduce((sum, b) => sum + b.amount, 0),
-      totalPaymentsDue: validBalances.length,
-      overduePayments: validBalances.filter(b => b.isOverdue).length,
-      uniqueFamilies: Object.keys(byParent).length,
-    };
-
-    res.json({
-      balances: validBalances,
-      byFamily: Object.values(byParent),
-      summary,
-    });
+    const payload = await buildOutstandingBalanceRows(schoolId);
+    res.json(payload);
   } catch (error) {
     console.error('Error fetching outstanding balances:', error);
     res.status(500).json({ error: 'Failed to fetch outstanding balances' });
+  }
+});
+
+router.get('/collections-overview', async (req: any, res) => {
+  try {
+    const result = await getSchoolAdminWithFeatureCheck(req, 'financialReports');
+    if (isError(result)) {
+      return res.status(result.status).json({ error: result.error });
+    }
+    const { schoolId } = result;
+    const payload = await buildCollectionsOverview(schoolId);
+    res.json(payload);
+  } catch (error) {
+    console.error('Error fetching collections overview:', error);
+    res.status(500).json({ error: 'Failed to fetch collections overview' });
   }
 });
 
@@ -1163,9 +1013,27 @@ router.get('/auto-pay-history', async (req: any, res) => {
     const startDate = startDateStr ? new Date(String(startDateStr)) : defaultStart;
     const endDate = endDateStr ? new Date(String(endDateStr)) : defaultEnd;
 
-    const data = await storage.getAutoPayHistory(schoolId, { startDate, endDate, status: String(status) });
+    const statusFilter = String(status) as 'all' | 'completed' | 'failed';
+    const records = await fetchAutoPayHistoryRecords(schoolId, {
+      startDate,
+      endDate,
+      status: statusFilter === 'all' ? 'all' : statusFilter,
+    });
 
-    return res.json(data);
+    const charged = records.filter((r) => r.status === 'completed');
+    const failed = records.filter((r) => r.status === 'failed');
+    const skipped = records.filter((r) => r.status !== 'completed' && r.status !== 'failed');
+
+    return res.json({
+      records,
+      summary: {
+        totalChargedCents: charged.reduce((s, r) => s + (r.amount ?? 0), 0),
+        totalFailedCents: failed.reduce((s, r) => s + (r.amount ?? 0), 0),
+        chargedCount: charged.length,
+        failedCount: failed.length,
+        skippedCount: skipped.length,
+      },
+    });
   } catch (error) {
     console.error('Error fetching auto-pay history:', error);
     return res.status(500).json({ error: 'Failed to fetch auto-pay history' });
@@ -1210,72 +1078,54 @@ router.get('/export', async (req: any, res) => {
 
       filename = `payments_export_${new Date().toISOString().split('T')[0]}.csv`;
     } else if (reportType === 'outstanding') {
-      // Get outstanding scheduled payments with user phone numbers via left join
-      const outstandingData = await db
-        .select({
-          id: scheduledPayments.id,
-          parentEmail: scheduledPayments.parentEmail,
-          amount: scheduledPayments.amount,
-          scheduledDate: scheduledPayments.scheduledDate,
-          installmentNumber: scheduledPayments.installmentNumber,
-          totalInstallments: scheduledPayments.totalInstallments,
-          status: scheduledPayments.status,
-          reminderCount: scheduledPayments.reminderCount,
-          phone: users.phone,
+      const { balances } = await buildOutstandingBalanceRows(schoolId);
+
+      csvContent =
+        'Payment ID,Parent Email,Phone,Amount,Scheduled Date,Type,Child,Class,Enrollment Balance,Status,Reminders Sent\n';
+      csvContent += balances
+        .map((o) => {
+          const phoneStr = o.parent?.phone || 'N/A';
+          const amountDollars = o.amount != null ? `$${(o.amount / 100).toFixed(2)}` : '$0.00';
+          const scheduledStr = o.scheduledDate
+            ? new Date(o.scheduledDate).toISOString().split('T')[0]
+            : 'N/A';
+          const child = o.enrollment?.childName || 'N/A';
+          const cls = o.enrollment?.className || 'N/A';
+          const enrollmentBal = `$${(o.enrollmentRemainingBalance / 100).toFixed(2)}`;
+          return `${o.id},${o.parentEmail},${phoneStr},${amountDollars},${scheduledStr},${o.type},"${child}","${cls}",${enrollmentBal},${o.status},${o.reminderCount ?? 0}`;
         })
-        .from(scheduledPayments)
-        .leftJoin(users, eq(scheduledPayments.parentEmail, users.email))
-        .where(
-          and(
-            eq(scheduledPayments.schoolId, schoolId),
-            eq(scheduledPayments.status, 'pending')
-          )
-        )
-        .orderBy(scheduledPayments.scheduledDate);
-
-      // Get last payment date for each parent email
-      const lastPaymentsByParent = await db
-        .select({
-          parentEmail: payments.parentEmail,
-          lastPaymentDate: sql<Date>`MAX(${payments.createdAt})`,
-        })
-        .from(payments)
-        .where(
-          and(schoolScopedLedgerPayments(schoolId), reportedLedgerPaymentStatuses()),
-        )
-        .groupBy(payments.parentEmail);
-
-      // Create a lookup map for last payment dates
-      const lastPaymentMap = new Map<string, Date | null>(
-        lastPaymentsByParent.map((p: any) => [p.parentEmail, p.lastPaymentDate])
-      );
-
-      csvContent = 'Payment ID,Parent Email,Phone,Amount,Scheduled Date,Next Payment Date,Last Payment Date,Installment,Total Installments,Status,Reminders Sent\n';
-      csvContent += outstandingData.map((o: typeof outstandingData[number]) => {
-        const lastPayment = o.parentEmail ? lastPaymentMap.get(o.parentEmail) : null;
-        const lastPaymentStr = lastPayment ? new Date(lastPayment).toISOString().split('T')[0] : 'N/A';
-        const nextPaymentStr = o.scheduledDate ? new Date(o.scheduledDate).toISOString().split('T')[0] : 'N/A';
-        const phoneStr = o.phone || 'N/A';
-        const amountDollars = o.amount != null ? `$${(o.amount / 100).toFixed(2)}` : '$0.00';
-        return `${o.id},${o.parentEmail},${phoneStr},${amountDollars},${o.scheduledDate?.toISOString() || 'N/A'},${nextPaymentStr},${lastPaymentStr},${o.installmentNumber},${o.totalInstallments},${o.status},${o.reminderCount}`;
-      }).join('\n');
+        .join('\n');
 
       filename = `outstanding_balances_${new Date().toISOString().split('T')[0]}.csv`;
     } else if (reportType === 'autopay') {
       const now = new Date();
-      const startDate = req.query.startDate ? new Date(String(req.query.startDate)) : new Date(now.getFullYear(), now.getMonth(), 1);
-      const endDate = req.query.endDate ? new Date(String(req.query.endDate)) : new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
-      const { records } = await storage.getAutoPayHistory(schoolId, { startDate, endDate, status: 'all' });
+      const startDate = req.query.startDate
+        ? new Date(String(req.query.startDate))
+        : new Date(now.getFullYear(), now.getMonth(), 1);
+      const endDate = req.query.endDate
+        ? new Date(String(req.query.endDate))
+        : new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+      const records = await fetchAutoPayHistoryRecords(schoolId, {
+        startDate,
+        endDate,
+        status: 'all',
+      });
 
-      csvContent = 'Date Charged,Parent Name,Parent Email,Child,Class,Installment,Amount ($),Status,Failure Reason,Stripe PI ID\n';
-      csvContent += records.map((r: any) => {
-        const dateStr = r.processedAt ? new Date(r.processedAt).toISOString() : new Date(r.scheduledDate).toISOString().split('T')[0];
-        const parentName = [r.parentFirstName, r.parentLastName].filter(Boolean).join(' ') || 'N/A';
-        const amountDollars = r.amount != null ? (r.amount / 100).toFixed(2) : '0.00';
-        const installment = `${r.installmentNumber || 1} of ${r.totalInstallments || 1}`;
-        const failureReason = (r.failureReason || '').replace(/,/g, ';');
-        return `${dateStr},"${parentName}",${r.parentEmail || 'N/A'},"${r.childName || 'N/A'}","${r.className || 'N/A'}","${installment}",${amountDollars},${r.status},"${failureReason}",${r.stripePaymentIntentId || 'N/A'}`;
-      }).join('\n');
+      csvContent =
+        'Date Charged,Parent Name,Parent Email,Child,Class,Installment,Amount ($),Status,Failure Reason,Stripe PI ID\n';
+      csvContent += records
+        .map((r) => {
+          const dateStr = r.processedAt
+            ? new Date(r.processedAt).toISOString()
+            : r.scheduledDate
+              ? new Date(r.scheduledDate).toISOString().split('T')[0]
+              : 'N/A';
+          const amountDollars = r.amount != null ? (r.amount / 100).toFixed(2) : '0.00';
+          const installment = `${r.installmentNumber || 1} of ${r.totalInstallments || 1}`;
+          const failureReason = (r.failureReason || '').replace(/,/g, ';');
+          return `${dateStr},"${r.parentName}",${r.parentEmail || 'N/A'},"${r.childName || 'N/A'}","${r.className || 'N/A'}","${installment}",${amountDollars},${r.status},"${failureReason}",${r.stripePaymentIntentId || 'N/A'}`;
+        })
+        .join('\n');
 
       filename = `auto_pay_history_${new Date().toISOString().split('T')[0]}.csv`;
     }

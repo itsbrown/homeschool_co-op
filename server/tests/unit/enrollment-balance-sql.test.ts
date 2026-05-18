@@ -23,7 +23,8 @@ describe('enrollment-balance SQL regression guards', () => {
     expect(financialReportsSource).not.toMatch(/SUM\(effective_balance\)/);
     expect(financialReportsSource).not.toMatch(/[`'"]effective_balance > 0[`'"]/);
     expect(financialReportsSource).toContain('sqlSumEnrollmentEffectiveBalance');
-    expect(financialReportsSource).toContain('sqlEnrollmentEffectiveBalancePositive');
+    expect(financialReportsSource).toContain('tuitionOutstandingCents');
+    expect(financialReportsSource).toContain('membershipOutstandingCents');
     expect(financialReportsSource).not.toMatch(/programEnrollments\.compAmountCents/);
   });
 

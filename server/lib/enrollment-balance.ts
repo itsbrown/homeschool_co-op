@@ -18,6 +18,11 @@ export function sqlSumEnrollmentEffectiveBalance(): SQL<number> {
   return sql<number>`COALESCE(SUM(${sqlEnrollmentEffectiveBalanceExpr()}), 0)::integer`;
 }
 
+/** Per-enrollment outstanding cents (for SELECT lists). */
+export function sqlEnrollmentEffectiveBalanceColumn(): SQL<number> {
+  return sql<number>`GREATEST(0, ${programEnrollments.totalCost} - ${programEnrollments.totalPaid} - COALESCE(comp_amount_cents, 0))::integer`;
+}
+
 export function sqlSumCompAmountCents(): SQL<number> {
   return sql<number>`COALESCE(SUM(COALESCE(comp_amount_cents, 0)), 0)::integer`;
 }
