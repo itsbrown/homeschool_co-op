@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   Table,
   TableBody,
@@ -12,7 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { CheckCircle2, ChevronDown, ChevronRight } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react';
 
 type CollectionsFilter =
   | 'all'
@@ -58,14 +59,23 @@ function formatCurrency(cents: number): string {
   );
 }
 
-export default function CollectionsOverviewTab({ enabled }: { enabled: boolean }) {
+type Props = {
+  enabled: boolean;
+  /** When summary card shows a balance but collections is empty, show a hint */
+  summaryOutstandingCents?: number;
+};
+
+export default function CollectionsOverviewTab({ enabled, summaryOutstandingCents = 0 }: Props) {
   const [filter, setFilter] = useState<CollectionsFilter>('all');
   const [expandedFamily, setExpandedFamily] = useState<string | null>(null);
 
-  const { data, isLoading } = useQuery<{
+  const { data, isLoading, isError, error, refetch, isFetching } = useQuery<{
     families: CollectionFamily[];
     summary: {
       familiesWithBalance: number;
+      totalTuitionOwedCents: number;
+      totalMembershipOwedCents: number;
+      totalOwedCents: number;
       lateFamilies: number;
       noPaymentPlanFamilies: number;
       autoPayFamilies: number;
@@ -75,6 +85,7 @@ export default function CollectionsOverviewTab({ enabled }: { enabled: boolean }
   }>({
     queryKey: ['/api/admin/financial-reports/collections-overview'],
     enabled,
+    staleTime: 0,
   });
 
   const families = data?.families ?? [];
@@ -97,16 +108,57 @@ export default function CollectionsOverviewTab({ enabled }: { enabled: boolean }
     }
   });
 
+  const apiTotalOwed = summary?.totalOwedCents ?? 0;
+  const summaryMismatch =
+    summaryOutstandingCents > 0 && apiTotalOwed === 0 && families.length === 0 && !isLoading && !isError;
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Collections Overview</CardTitle>
-        <CardDescription>
-          Who still owes tuition or membership, who has a payment plan, auto-pay, late payments, and
-          families who have never paid
-        </CardDescription>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <CardTitle>Collections Overview</CardTitle>
+            <CardDescription>
+              Who still owes tuition or membership, who has a payment plan, auto-pay, late payments,
+              and families who have never paid
+            </CardDescription>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => refetch()}
+            disabled={!enabled || isFetching}
+          >
+            <RefreshCw className={`h-4 w-4 mr-1 ${isFetching ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
+        {isError && (
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>Could not load collections</AlertTitle>
+            <AlertDescription>
+              {(error as Error)?.message ||
+                'The server may need a restart after deploy. Try Refresh or check the Network tab for collections-overview.'}
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {summaryMismatch && (
+          <Alert className="border-amber-200 bg-amber-50 text-amber-950">
+            <AlertTriangle className="h-4 w-4 text-amber-600" />
+            <AlertTitle>Summary shows {formatCurrency(summaryOutstandingCents)} outstanding</AlertTitle>
+            <AlertDescription>
+              Collections returned no families. Try <strong>Sync Data</strong> on Outstanding Balances,
+              or open{' '}
+              <code className="text-xs">/api/admin/financial-reports/collections-overview?debug=1</code>{' '}
+              in the network tab after refresh.
+            </AlertDescription>
+          </Alert>
+        )}
+
         {summary && (
           <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
             {[
@@ -129,6 +181,20 @@ export default function CollectionsOverviewTab({ enabled }: { enabled: boolean }
               </Button>
             ))}
           </div>
+        )}
+
+        {summary && apiTotalOwed > 0 && (
+          <p className="text-sm text-muted-foreground">
+            Total owed across {summary.familiesWithBalance} families:{' '}
+            <span className="font-medium text-foreground">{formatCurrency(apiTotalOwed)}</span>
+            {summary.totalTuitionOwedCents > 0 && summary.totalMembershipOwedCents > 0 && (
+              <>
+                {' '}
+                (tuition {formatCurrency(summary.totalTuitionOwedCents)} · membership{' '}
+                {formatCurrency(summary.totalMembershipOwedCents)})
+              </>
+            )}
+          </p>
         )}
 
         {isLoading ? (
@@ -240,12 +306,14 @@ export default function CollectionsOverviewTab({ enabled }: { enabled: boolean }
               })}
             </TableBody>
           </Table>
-        ) : (
+        ) : !isError ? (
           <div className="text-center py-8 text-muted-foreground">
             <CheckCircle2 className="h-12 w-12 mx-auto mb-4 text-green-500" />
-            No families match this filter
+            {filter === 'all'
+              ? 'No families with an outstanding balance'
+              : 'No families match this filter'}
           </div>
-        )}
+        ) : null}
       </CardContent>
     </Card>
   );

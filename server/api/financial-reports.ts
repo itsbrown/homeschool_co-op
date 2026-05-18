@@ -51,6 +51,13 @@ const aiChatLimiter = rateLimit({
   message: { error: 'Too many requests. Please wait a moment before sending another message.' }
 });
 
+/** Prevent accidental double-runs of destructive scheduled-payment sync. */
+const reconcileScheduledPaymentsLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 3,
+  message: { error: 'Sync already ran recently. Please wait a minute before syncing again.' },
+});
+
 const router = express.Router();
 
 interface FinancialReportUser {
@@ -527,10 +534,17 @@ router.get('/collections-overview', async (req: any, res) => {
     }
     const { schoolId } = result;
     const payload = await buildCollectionsOverview(schoolId);
+    if (req.query.debug === '1') {
+      return res.json({
+        ...payload,
+        debug: { schoolId },
+      });
+    }
     res.json(payload);
   } catch (error) {
     console.error('Error fetching collections overview:', error);
-    res.status(500).json({ error: 'Failed to fetch collections overview' });
+    const message = error instanceof Error ? error.message : 'Failed to fetch collections overview';
+    res.status(500).json({ error: message });
   }
 });
 
@@ -1711,7 +1725,7 @@ router.get('/reconcile-scheduled-payments/preview', async (req: any, res) => {
   }
 });
 
-router.post('/reconcile-scheduled-payments', async (req: any, res) => {
+router.post('/reconcile-scheduled-payments', reconcileScheduledPaymentsLimiter, async (req: any, res) => {
   try {
     const result = await getSchoolAdminWithFeatureCheck(req, 'financialReports');
     if (isError(result)) {

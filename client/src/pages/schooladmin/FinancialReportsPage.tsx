@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/dialog';
 import CardManagementPanel from '@/components/payments/CardManagementPanel';
 import CollectionsOverviewTab from '@/components/financial/CollectionsOverviewTab';
+import SyncDataPreviewDialog from '@/components/financial/SyncDataPreviewDialog';
 import {
   Table,
   TableBody,
@@ -341,7 +342,7 @@ export default function FinancialReportsPage() {
   const [groupByParent, setGroupByParent] = useState(false);
   const [sendingReminderId, setSendingReminderId] = useState<number | null>(null);
   const [sendingSummaryEmail, setSendingSummaryEmail] = useState<string | null>(null);
-  const [isReconciling, setIsReconciling] = useState(false);
+  const [syncPreviewOpen, setSyncPreviewOpen] = useState(false);
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
 
@@ -493,48 +494,6 @@ export default function FinancialReportsPage() {
   const handleSendSummaryReminder = (parentEmail: string) => {
     setSendingSummaryEmail(parentEmail);
     sendSummaryMutation.mutate(parentEmail);
-  };
-
-  const reconcileMutation = useMutation({
-    mutationFn: async () => {
-      const response = await apiRequest('POST', '/api/admin/financial-reports/reconcile-scheduled-payments', {});
-      return response.json();
-    },
-    onSuccess: (data: any) => {
-      const cleaned = data.summary?.totalCleaned || 0;
-      const updated = data.summary?.paymentsMarkedCompleted || 0;
-      const parts = [];
-      if (cleaned > 0) {
-        parts.push(`Removed ${cleaned} duplicate/orphaned payment(s)`);
-      }
-      if (updated > 0) {
-        parts.push(`Updated ${updated} payment status(es)`);
-      }
-      const description = parts.length > 0 ? parts.join('. ') + '.' : 'No changes needed.';
-      
-      toast({
-        title: 'Data synced successfully',
-        description,
-      });
-      queryClient.invalidateQueries({ queryKey: ['/api/admin/financial-reports/outstanding-balances'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/admin/financial-reports/summary'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/admin/financial-reports/payment-plans'] });
-    },
-    onError: (error: any) => {
-      toast({
-        title: 'Sync failed',
-        description: error.message || 'An error occurred while syncing data.',
-        variant: 'destructive',
-      });
-    },
-    onSettled: () => {
-      setIsReconciling(false);
-    }
-  });
-
-  const handleReconcile = () => {
-    setIsReconciling(true);
-    reconcileMutation.mutate();
   };
 
   const aiChatMutation = useMutation({
@@ -1001,8 +960,11 @@ export default function FinancialReportsPage() {
                 </Card>
               </TabsContent>
 
-              <TabsContent value="collections" className="mt-4">
-                <CollectionsOverviewTab enabled={activeTab === 'collections'} />
+              <TabsContent value="collections" className="mt-4" forceMount>
+                <CollectionsOverviewTab
+                  enabled
+                  summaryOutstandingCents={summary?.outstandingBalanceCents ?? 0}
+                />
               </TabsContent>
 
               <TabsContent value="balances" className="mt-4">
@@ -1022,15 +984,10 @@ export default function FinancialReportsPage() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={handleReconcile}
-                          disabled={isReconciling}
-                          title="Sync scheduled payments with actual payment data"
+                          onClick={() => setSyncPreviewOpen(true)}
+                          title="Preview and sync scheduled payments with enrollment payment data"
                         >
-                          {isReconciling ? (
-                            <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                          ) : (
-                            <RefreshCw className="h-4 w-4 mr-1" />
-                          )}
+                          <RefreshCw className="h-4 w-4 mr-1" />
                           Sync Data
                         </Button>
                         <div className="flex items-center space-x-2">
@@ -1994,6 +1951,8 @@ export default function FinancialReportsPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      <SyncDataPreviewDialog open={syncPreviewOpen} onOpenChange={setSyncPreviewOpen} />
     </SchoolAdminLayout>
   );
 }

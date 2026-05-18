@@ -10,8 +10,11 @@
  * - Bulk reconciliation endpoints for fixing historical data
  */
 
+import { and, eq, inArray } from 'drizzle-orm';
+import { getDb } from '../db';
 import { storage } from '../storage';
-import type { ScheduledPayment } from '@shared/schema';
+import { programEnrollments } from '@shared/schema';
+import { resolveEnrollmentOutstandingCents } from '../lib/enrollment-balance';
 
 export interface ReconciliationResult {
   enrollmentId: number;
@@ -301,11 +304,8 @@ export async function cleanupScheduledPayments(
       }
     }
     
-    // Check for excess payments
-    // Calculate remaining balance needed for this enrollment
-    const totalPaid = enrollment.totalPaid || 0;
-    const totalCost = enrollment.totalCost || 0;
-    const remainingBalance = Math.max(0, totalCost - totalPaid);
+    // Check for excess payments (canonical effective balance — includes comp_amount_cents)
+    const remainingBalance = resolveEnrollmentOutstandingCents(enrollment);
     
     // Get current pending payments after duplicate removal
     const currentPendingPayments = pendingPayments.filter((p: any) => 
@@ -381,12 +381,17 @@ export async function generateMissingScheduledPayments(
   dryRun: boolean = false
 ): Promise<GenerateMissingPaymentsResult> {
   console.log(`📋 Generating missing scheduled payments for school ${schoolId} (dryRun: ${dryRun})`);
-  
-  const allEnrollments = await storage.getAllEnrollments();
-  const schoolEnrollments = allEnrollments.filter(e => 
-    e.schoolId === schoolId && 
-    ['pending_payment', 'confirmed', 'active', 'enrolled'].includes(e.status || '')
-  );
+
+  const db = await getDb();
+  const schoolEnrollments = await db
+    .select()
+    .from(programEnrollments)
+    .where(
+      and(
+        eq(programEnrollments.schoolId, schoolId),
+        inArray(programEnrollments.status, ['pending_payment', 'confirmed', 'active', 'enrolled']),
+      ),
+    );
   
   const result: GenerateMissingPaymentsResult = {
     enrollmentsProcessed: 0,
@@ -400,10 +405,9 @@ export async function generateMissingScheduledPayments(
     
     try {
       const totalCost = enrollment.totalCost || 0;
-      const totalPaid = enrollment.totalPaid || 0;
-      const remainingBalance = totalCost - totalPaid;
-      
-      // Skip if no remaining balance
+      const remainingBalance = resolveEnrollmentOutstandingCents(enrollment);
+
+      // Skip if no remaining balance (effective balance, includes comps)
       if (remainingBalance <= 0) {
         continue;
       }

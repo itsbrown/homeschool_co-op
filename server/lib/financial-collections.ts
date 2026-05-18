@@ -81,15 +81,18 @@ async function loadParentInfo(parentIds: number[]) {
     .from(users)
     .where(inArray(users.id, uniqueIds));
 
-  const autoPayRows = await db.execute(sql`
-    SELECT id, COALESCE(auto_pay_enabled, false) AS auto_pay_enabled
-    FROM users
-    WHERE id IN (${sql.join(uniqueIds.map((id) => sql`${id}`), sql`, `)})
-  `);
-
   const autoPayById = new Map<number, boolean>();
-  for (const row of autoPayRows.rows as Array<{ id: number; auto_pay_enabled: boolean }>) {
-    autoPayById.set(Number(row.id), Boolean(row.auto_pay_enabled));
+  try {
+    const autoPayRows = await db.execute(sql`
+      SELECT id, COALESCE(auto_pay_enabled, false) AS auto_pay_enabled
+      FROM users
+      WHERE id IN (${sql.join(uniqueIds.map((id) => sql`${id}`), sql`, `)})
+    `);
+    for (const row of autoPayRows.rows as Array<{ id: number; auto_pay_enabled: boolean }>) {
+      autoPayById.set(Number(row.id), Boolean(row.auto_pay_enabled));
+    }
+  } catch {
+    // Column may be missing before init-db runs; treat as auto-pay off
   }
 
   for (const row of rows) {
@@ -368,14 +371,26 @@ export async function buildCollectionsOverview(schoolId: number): Promise<{
 
   const familyMap = new Map<string, CollectionFamilyRow>();
 
-  const ensureFamily = (parentId: number, parentEmail: string) => {
-    const key = parentEmail.toLowerCase();
+  const resolveParentEmail = (parentId: number, parentEmail?: string | null) => {
+    const trimmed = (parentEmail || '').trim();
+    if (trimmed) return trimmed;
+    return (parentInfoMap.get(parentId)?.email || '').trim();
+  };
+
+  const familyKey = (parentId: number, parentEmail?: string | null) => {
+    const email = resolveParentEmail(parentId, parentEmail);
+    return email ? email.toLowerCase() : `parent-id:${parentId}`;
+  };
+
+  const ensureFamily = (parentId: number, parentEmail?: string | null) => {
+    const key = familyKey(parentId, parentEmail);
+    const resolvedEmail = resolveParentEmail(parentId, parentEmail) || `parent-${parentId}@unknown.local`;
     if (!familyMap.has(key)) {
       const info = parentInfoMap.get(parentId);
       familyMap.set(key, {
         parentId,
-        parentEmail,
-        parentName: info?.name ?? parentEmail,
+        parentEmail: resolvedEmail,
+        parentName: info?.name ?? resolvedEmail,
         phone: info?.phone ?? null,
         autoPayEnabled: info?.autoPayEnabled ?? false,
         tuitionOwedCents: 0,
@@ -431,10 +446,7 @@ export async function buildCollectionsOverview(schoolId: number): Promise<{
     if (balanceDueCents <= 0) continue;
 
     const parent = parentInfoMap.get(mem.parentUserId);
-    const email = parent?.email;
-    if (!email) continue;
-
-    const family = ensureFamily(mem.parentUserId, email);
+    const family = ensureFamily(mem.parentUserId, parent?.email ?? null);
     family.membershipOwedCents += balanceDueCents;
     family.owesMembership = true;
     family.memberships.push({
