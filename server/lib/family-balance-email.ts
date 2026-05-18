@@ -38,7 +38,7 @@ export function getParentPaymentDeepLink(options?: { schoolId?: number; source?:
   if (options?.schoolId) params.set('schoolId', String(options.schoolId));
   params.set('ref', options?.source || 'collections_reminder');
   const billingPath = `/billing?${params.toString()}`;
-  return `${base}/login?redirect=${encodeURIComponent(billingPath)}`;
+  return `${base}/login?returnTo=${encodeURIComponent(billingPath)}`;
 }
 
 /**

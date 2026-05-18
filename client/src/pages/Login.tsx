@@ -84,10 +84,16 @@ export default function Login() {
     }
   }, []);
 
-  // If user is already logged in, redirect to dashboard
+  // If user is already logged in, redirect to returnTo or dashboard
   useEffect(() => {
     if (user) {
-      navigate('/dashboard');
+      const params = new URLSearchParams(window.location.search);
+      const returnTo = params.get('returnTo') || params.get('redirect');
+      if (returnTo && returnTo.startsWith('/') && !returnTo.startsWith('//')) {
+        navigate(returnTo);
+      } else {
+        navigate('/dashboard');
+      }
     }
   }, [user, navigate]);
 
