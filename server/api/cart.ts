@@ -32,11 +32,12 @@ router.post('/snapshot', supabaseAuth, async (req: any, res) => {
     const childIds = children.map(child => child.id);
 
     const cartItems: CartItem[] = items.map((item: any) => ({
-      id: item.id || `${item.classId}-${item.childId}`,
+      id: item.id || (item.enrollmentId ? `enrollment-${item.enrollmentId}` : `${item.classId}-${item.childId}`),
       classId: item.classId,
       childId: item.childId,
       childName: item.childName || '',
       variantId: item.variantId,
+      sessionId: item.sessionId,
       enrollmentId: item.enrollmentId,
       remainingBalance: item.remainingBalance
     }));
@@ -231,11 +232,12 @@ router.post('/calculate', supabaseAuth, async (req: any, res) => {
     const childIds = children.map(child => child.id);
 
     const cartItems: CartItem[] = items.map((item: any) => ({
-      id: item.id || `${item.classId}-${item.childId}`,
+      id: item.id || (item.enrollmentId ? `enrollment-${item.enrollmentId}` : `${item.classId}-${item.childId}`),
       classId: item.classId,
       childId: item.childId,
       childName: item.childName || '',
       variantId: item.variantId,
+      sessionId: item.sessionId,
       enrollmentId: item.enrollmentId,
       remainingBalance: item.remainingBalance
     }));
@@ -330,11 +332,12 @@ router.post('/validate', supabaseAuth, async (req: any, res) => {
     const childIds = children.map(child => child.id);
 
     const cartItems: CartItem[] = items.map((item: any) => ({
-      id: item.id || `${item.classId}-${item.childId}`,
+      id: item.id || (item.enrollmentId ? `enrollment-${item.enrollmentId}` : `${item.classId}-${item.childId}`),
       classId: item.classId,
       childId: item.childId,
       childName: item.childName || '',
       variantId: item.variantId,
+      sessionId: item.sessionId,
       enrollmentId: item.enrollmentId,
       remainingBalance: item.remainingBalance
     }));

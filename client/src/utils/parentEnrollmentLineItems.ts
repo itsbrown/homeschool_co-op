@@ -27,11 +27,13 @@ export function filterEnrollmentsToCartLineItems(
 
   const enrollmentGroups = enrollments.reduce(
     (acc: Record<string, any[]>, enrollment: any) => {
-      const classId =
+      const lineKey =
+        enrollment.sessionId ||
         enrollment.marketplaceClassId ||
         enrollment.classId ||
-        enrollment.programId;
-      const key = `${classId}-${enrollment.childId}`;
+        enrollment.programId ||
+        `enrollment-${enrollment.id}`;
+      const key = `${lineKey}-${enrollment.childId}`;
       if (!acc[key]) acc[key] = [];
       acc[key].push(enrollment);
       return acc;

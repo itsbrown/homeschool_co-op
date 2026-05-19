@@ -58,6 +58,67 @@ test.describe("session enrollment flow (admin sessions → parent /enroll)", () 
     await expect(page.getByText(/review/i)).toBeVisible();
   });
 
+  test("session enrollment reaches create-payment-intent after enroll wizard", async ({ page, request }) => {
+    const { response, json } = await postSetupSessionEnrollmentScenario(request, {
+      openSessionCount: 1,
+      linkSupabaseAuth: true,
+    });
+    test.skip(!response.ok() || !json?.success, "seed failed");
+    test.skip(json.data?.supabaseLinked !== true, "Supabase not linked");
+
+    const { email, password } = json.data!.parent;
+    const session = json.data!.openSessions[0];
+    const child = json.data!.child;
+
+    await loginParent(page, email, password);
+
+    const enrollRes = await page.request.post("/api/session-enrollments", {
+      data: {
+        childIds: [child.id],
+        sessionIds: [session.id],
+        variant: "full_day",
+      },
+    });
+    expect(enrollRes.ok()).toBeTruthy();
+    const enrollBody = await enrollRes.json();
+    const enrollmentId = enrollBody.enrollments?.[0]?.id;
+    expect(enrollmentId).toBeTruthy();
+
+    const piRes = await page.request.post("/api/stripe/create-payment-intent", {
+      data: {
+        items: [
+          {
+            id: `enrollment-${enrollmentId}`,
+            enrollmentId,
+            sessionId: session.id,
+            childId: child.id,
+            childName: `${child.firstName} ${child.lastName}`,
+            className: session.name,
+            classType: "marketplace",
+            price: 25000,
+            totalCost: 25000,
+            remainingBalance: 25000,
+          },
+        ],
+        subtotal: 25000,
+        total: 25000,
+        discounts: {
+          siblingDiscount: 0,
+          freeAfterThree: 0,
+          appliedDiscounts: [],
+          totalDiscountAmount: 0,
+        },
+        paymentPlan: "full",
+        paymentFrequency: "one_time",
+      },
+    });
+
+    expect(piRes.ok(), `create-payment-intent failed: ${await piRes.text()}`).toBeTruthy();
+    const piBody = await piRes.json();
+    expect(piBody.clientSecret || piBody.creditOnlyCheckout).toBeTruthy();
+    expect(piBody.enrollmentIds).toContain(enrollmentId);
+  });
+
   test("GET /api/admin/sessions/open returns only enrollment-open sessions", async ({ page, request }) => {
     const { response, json } = await postSetupSessionEnrollmentScenario(request, {
       openSessionCount: 1,

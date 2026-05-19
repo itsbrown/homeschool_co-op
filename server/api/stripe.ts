@@ -274,14 +274,21 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
             throw new Error(`Child ${item.childId} not found`);
           }
         
-        // Reuse pending OR already-enrolled rows with a balance (avoid duplicate enrollments on pay-in-full).
-        let enrollment = findProgramEnrollmentForCartItem(
-          allEnrollments as any,
-          item,
-          userEmail,
-          parent.id,
-        );
-        
+        // Prefer direct DB lookup by enrollmentId (session carts often have no classId).
+        let enrollment: any = undefined;
+        const cartEnrollmentId = Number(item.enrollmentId);
+        if (Number.isFinite(cartEnrollmentId) && cartEnrollmentId > 0) {
+          enrollment = await storage.getProgramEnrollmentById(cartEnrollmentId);
+        }
+        if (!enrollment) {
+          enrollment = findProgramEnrollmentForCartItem(
+            allEnrollments as any,
+            item,
+            userEmail,
+            parent.id,
+          );
+        }
+
         if (enrollment) {
           // SECURITY: Validate enrollment belongs to authenticated parent
           if (enrollment.parentEmail !== userEmail && enrollment.parentId !== parent.id) {
@@ -304,11 +311,20 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
           });
           enrollmentIds.push(enrollment.id);
         } else {
+          if (Number.isFinite(cartEnrollmentId) && cartEnrollmentId > 0) {
+            throw new Error(
+              `Enrollment ${cartEnrollmentId} was not found. Refresh your cart and try again.`,
+            );
+          }
           // Get class data for new enrollments
           // Use marketplaceClassId for marketplace enrollments, classId for regular enrollments
           const actualClassId = item.marketplaceClassId || item.classId;
           if (!actualClassId) {
-            throw new Error(`No valid class ID found for ${item.className}`);
+            const sessionLabel = item.sessionId ? `session ${item.sessionId}` : item.className;
+            throw new Error(
+              `No valid class or session enrollment found for ${sessionLabel}. ` +
+                `Remove this line and re-enroll from Programs & Classes.`,
+            );
           }
           
           const classData = await storage.getClassById(actualClassId);

@@ -12,6 +12,8 @@ module.exports = {
     '<rootDir>/server/tests/snapshot-trust-cache.test.ts',
     '<rootDir>/server/tests/enrollment-effective-balance.test.ts',
     '<rootDir>/server/tests/profile-style-enrollment-due.test.ts',
+    '<rootDir>/server/tests/cart-checkout-enrollment-match.test.ts',
+    '<rootDir>/server/tests/parent-identity-scoping.test.ts',
   ],
   transform: {
     '^.+\\.tsx?$': ['ts-jest', {

@@ -49,4 +49,28 @@ describe('filterEnrollmentsToCartLineItems', () => {
     const out = filterEnrollmentsToCartLineItems(enrollments);
     expect(out).toHaveLength(0);
   });
+
+  it('keeps separate lines per session for the same child', () => {
+    const enrollments = [
+      {
+        id: 1,
+        sessionId: 100,
+        childId: 5,
+        enrollmentDate: '2025-01-01',
+        status: 'pending_payment',
+        effectiveBalance: 15000,
+      },
+      {
+        id: 2,
+        sessionId: 101,
+        childId: 5,
+        enrollmentDate: '2025-02-01',
+        status: 'pending_payment',
+        effectiveBalance: 25000,
+      },
+    ];
+    const out = filterEnrollmentsToCartLineItems(enrollments);
+    expect(out).toHaveLength(2);
+    expect(out.map((e) => e.id).sort()).toEqual([1, 2]);
+  });
 });

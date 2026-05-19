@@ -242,6 +242,7 @@ const fetchServerCartPricing = async (
 export interface CartItem {
   id: string;
   enrollmentId?: number;
+  sessionId?: number;
   classType?: string; // 'marketplace' or 'regular'
   classId: number | null; // Normalized to actual class ID (can be null for marketplace before normalization)
   marketplaceClassId?: number | null; // Marketplace class ID if applicable
@@ -1460,6 +1461,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return {
           id: `enrollment-${enrollment.id}`,
           enrollmentId: enrollment.id,
+          sessionId: enrollment.sessionId ?? undefined,
           classType: enrollment.classType || 'regular', // Include class type
           classId: enrollment.marketplaceClassId || enrollment.classId, // Normalize to actual class ID
           marketplaceClassId: enrollment.marketplaceClassId || null, // Include marketplace ID

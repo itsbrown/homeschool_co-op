@@ -3,8 +3,22 @@ import { findProgramEnrollmentForCartItem } from '../lib/cart-checkout-enrollmen
 
 describe('findProgramEnrollmentForCartItem', () => {
   const rows = [
-    { id: 1, childId: 10, programId: null, classId: null, marketplaceClassId: 500 },
-    { id: 2, childId: 20, programId: 300, classId: null, marketplaceClassId: null },
+    {
+      id: 1,
+      childId: 10,
+      programId: null,
+      classId: null,
+      marketplaceClassId: 500,
+      status: 'pending_payment',
+    },
+    {
+      id: 2,
+      childId: 20,
+      programId: 300,
+      classId: null,
+      marketplaceClassId: null,
+      status: 'pending_payment',
+    },
   ];
 
   it('matches by enrollmentId first', () => {
@@ -38,5 +52,35 @@ describe('findProgramEnrollmentForCartItem', () => {
       classId: 404,
     });
     expect(hit).toBeUndefined();
+  });
+
+  it('matches F001 session enrollment by sessionId when class ids are null', () => {
+    const sessionRows = [
+      {
+        id: 99,
+        childId: 10,
+        sessionId: 7,
+        programId: null,
+        classId: null,
+        marketplaceClassId: null,
+        status: 'pending_payment',
+      },
+    ];
+    const hit = findProgramEnrollmentForCartItem(sessionRows, {
+      childId: 10,
+      sessionId: 7,
+      classType: 'marketplace',
+      marketplaceClassId: null,
+      classId: null,
+    });
+    expect(hit?.id).toBe(99);
+  });
+
+  it('matches by enrollmentId when id is a numeric string in JSON payloads', () => {
+    const hit = findProgramEnrollmentForCartItem(rows, {
+      enrollmentId: '2' as unknown as number,
+      childId: 99,
+    });
+    expect(hit?.id).toBe(2);
   });
 });

@@ -6,11 +6,12 @@ import type { Discount, SchoolClass } from '@shared/schema';
 
 export interface CartItem {
   id: string;
-  classId: number;
+  classId?: number;
   childId: number;
   childName: string;
   variantId?: string;
   price?: number;
+  sessionId?: number;
   // For existing enrollments with partial payments - server-authoritative remaining balance
   enrollmentId?: number;
   remainingBalance?: number;
@@ -132,9 +133,51 @@ export async function deriveSchoolIdFromCart(items: CartItem[], options?: { stri
     return null;
   }
 
-  const firstClassId = items[0].classId;
+  const firstItem = items[0];
+  const firstClassId = firstItem.classId;
   if (!firstClassId) {
-    console.log('🏫 deriveSchoolIdFromCart: First item has no classId');
+    if (firstItem.enrollmentId) {
+      try {
+        const enrollment = await storage.getProgramEnrollmentById(firstItem.enrollmentId);
+        const schoolId = enrollment?.schoolId;
+        if (!schoolId) {
+          if (strict) {
+            return {
+              schoolId: null,
+              error: 'NO_SCHOOL_ID',
+              errorMessage: 'Enrollment is not associated with a school',
+            };
+          }
+          return null;
+        }
+        for (const item of items) {
+          if (item.enrollmentId) {
+            const row = await storage.getProgramEnrollmentById(item.enrollmentId);
+            if (row?.schoolId && row.schoolId !== schoolId) {
+              if (strict) {
+                return {
+                  schoolId: null,
+                  error: 'MIXED_SCHOOLS',
+                  errorMessage:
+                    "Your cart contains items from different schools. Please complete each school's checkout separately.",
+                };
+              }
+              return null;
+            }
+          }
+        }
+        console.log(`🏫 deriveSchoolIdFromCart: Derived schoolId ${schoolId} from enrollment ${firstItem.enrollmentId}`);
+        if (strict) return { schoolId };
+        return schoolId;
+      } catch (error) {
+        console.error('🏫 deriveSchoolIdFromCart: Error looking up enrollment:', error);
+        if (strict) {
+          return { schoolId: null, error: 'LOOKUP_ERROR', errorMessage: 'Unable to verify school for cart items' };
+        }
+        return null;
+      }
+    }
+    console.log('🏫 deriveSchoolIdFromCart: First item has no classId or enrollmentId');
     if (strict) return { schoolId: null, error: 'NO_CLASS_ID', errorMessage: 'Cart item missing class ID' };
     return null;
   }

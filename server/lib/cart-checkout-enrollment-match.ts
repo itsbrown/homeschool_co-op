@@ -8,6 +8,7 @@ import { enrollmentOutstandingCentsForCheckout } from './checkout-enrollment-bal
 export interface CartCheckoutItemLike {
   childId?: number;
   enrollmentId?: number;
+  sessionId?: number;
   classId?: number;
   marketplaceClassId?: number;
   programId?: number;
@@ -17,6 +18,7 @@ export interface CartCheckoutItemLike {
 export type ProgramEnrollmentRowLike = {
   id: number;
   childId?: number | null;
+  sessionId?: number | null;
   programId?: number | null;
   classId?: number | null;
   marketplaceClassId?: number | null;
@@ -65,21 +67,36 @@ export function findProgramEnrollmentForCartItem<T extends ProgramEnrollmentRowL
   parentEmail?: string,
   parentId?: number,
 ): T | undefined {
-  if (item.enrollmentId != null && item.enrollmentId > 0) {
-    const byId = allEnrollments.find((e) => e.id === item.enrollmentId);
+  const enrollmentId = Number(item.enrollmentId);
+  if (Number.isFinite(enrollmentId) && enrollmentId > 0) {
+    const byId = allEnrollments.find((e) => Number(e.id) === enrollmentId);
     if (byId) return byId;
   }
 
   if (item.childId == null) return undefined;
+
+  const itemSessionId =
+    item.sessionId != null && item.sessionId > 0 ? Number(item.sessionId) : null;
 
   const candidates = allEnrollments.filter((e) => {
     if (e.childId !== item.childId) return false;
     if (parentEmail != null && parentId != null && !parentMatches(e, parentEmail, parentId)) {
       return false;
     }
+    if (itemSessionId != null) {
+      return Number(e.sessionId) === itemSessionId;
+    }
     if (item.classType === 'marketplace') {
       if (item.marketplaceClassId != null && e.marketplaceClassId !== item.marketplaceClassId) {
         return false;
+      }
+      // F001 session rows use classType marketplace with no class id — require session_id
+      if (
+        item.marketplaceClassId == null &&
+        item.classId == null &&
+        item.programId == null
+      ) {
+        return e.sessionId != null && e.sessionId > 0;
       }
     } else if (!classIdsMatch(e, item)) {
       return false;
