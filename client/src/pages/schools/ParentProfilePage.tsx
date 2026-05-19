@@ -17,10 +17,14 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
   SelectContent,
@@ -180,6 +184,7 @@ interface ParentProfile {
     usedAmountCents: number;
     remainingAmountCents: number;
     status: string;
+    rejectionReason?: string | null;
     expiresAt: string | null;
     createdAt: string;
     approvedAt: string | null;
@@ -200,6 +205,7 @@ interface ParentProfile {
     totalCredits: number;
     totalCreditAmountCents: number;
     totalCreditUsedCents: number;
+    availableCreditBalanceCents: number;
     totalAmountPaid: number;
     totalAmountDue: number;
     activeEnrollments: number;
@@ -709,9 +715,25 @@ export default function ParentProfilePage() {
     payment: ParentProfile['scheduledPayments'][0] | null;
   }>({ open: false, payment: null });
   
-  // Remove credit state
+  // Credit management state
   const [creditToRevoke, setCreditToRevoke] = useState<any>(null);
   const [revocationReason, setRevocationReason] = useState('');
+  const [isAwardCreditOpen, setIsAwardCreditOpen] = useState(false);
+  const [awardCreditForm, setAwardCreditForm] = useState({
+    creditAmountDollars: '',
+    title: '',
+    description: '',
+    notes: '',
+    expiresAt: '',
+  });
+  const [creditToEdit, setCreditToEdit] = useState<ParentProfile['credits'][0] | null>(null);
+  const [editCreditForm, setEditCreditForm] = useState({
+    creditAmountDollars: '',
+    title: '',
+    description: '',
+    notes: '',
+    expiresAt: '',
+  });
 
   // Edit parent state
   const [editParentDialogOpen, setEditParentDialogOpen] = useState(false);
@@ -1037,6 +1059,62 @@ export default function ParentProfilePage() {
         description: error.message || "Failed to revoke membership",
         variant: "destructive",
       });
+    },
+  });
+
+  const createCreditMutation = useMutation({
+    mutationFn: async (data: {
+      userId: number;
+      creditAmountCents: number;
+      title: string;
+      description?: string;
+      notes?: string;
+      expiresAt?: string;
+    }) => {
+      const response = await apiRequest('POST', '/api/credits/manual', {
+        ...data,
+        autoApprove: true,
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to award credit');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({ title: 'Credit awarded', description: 'The credit is available on this account.' });
+      queryClient.invalidateQueries({ queryKey: [`/api/parent-profile/${parentId}`] });
+      setIsAwardCreditOpen(false);
+      setAwardCreditForm({ creditAmountDollars: '', title: '', description: '', notes: '', expiresAt: '' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const updateCreditMutation = useMutation({
+    mutationFn: async (data: {
+      creditId: number;
+      creditAmountCents?: number;
+      title?: string;
+      description?: string;
+      notes?: string;
+      expiresAt?: string | null;
+    }) => {
+      const response = await apiRequest('POST', '/api/credits/update', data);
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to update credit');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({ title: 'Credit updated', description: 'Credit details saved.' });
+      queryClient.invalidateQueries({ queryKey: [`/api/parent-profile/${parentId}`] });
+      setCreditToEdit(null);
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
     },
   });
 
@@ -2822,13 +2900,25 @@ export default function ParentProfilePage() {
           <TabsContent value="credits">
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Gift className="h-5 w-5" />
-                  Credits
-                </CardTitle>
-                <CardDescription>
-                  Account credits and usage history
-                </CardDescription>
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <Gift className="h-5 w-5" />
+                      Credits
+                    </CardTitle>
+                    <CardDescription>
+                      Account credits and usage history. School-wide credit tools are under Finance → Credits.
+                    </CardDescription>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={() => setIsAwardCreditOpen(true)}
+                    data-testid="button-award-credit"
+                  >
+                    <Plus className="h-4 w-4 mr-1" />
+                    Award Credit
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent>
                 {(!profile.credits || profile.credits.length === 0) ? (
@@ -2857,6 +2947,11 @@ export default function ParentProfilePage() {
                             {credit.description && (
                               <p className="text-sm text-muted-foreground">{credit.description}</p>
                             )}
+                            {credit.status === 'revoked' && credit.rejectionReason && (
+                              <p className="text-sm text-destructive/90 mt-1">
+                                Removal reason: {credit.rejectionReason}
+                              </p>
+                            )}
                           </div>
                           <div className="text-right">
                             <p className="font-semibold text-lg">
@@ -2867,16 +2962,41 @@ export default function ParentProfilePage() {
                                 Used: ${(credit.usedAmountCents / 100).toFixed(2)}
                               </p>
                             )}
-                            {credit.remainingAmountCents > 0 && credit.status !== 'used' && (
+                            {credit.remainingAmountCents > 0 && (
                               <p className="text-sm text-green-600">
                                 Remaining: ${(credit.remainingAmountCents / 100).toFixed(2)}
                               </p>
+                            )}
+                            {credit.status === 'revoked' && (
+                              <p className="text-sm text-muted-foreground">Not available</p>
                             )}
                           </div>
                         </div>
                         
                         {(credit.status === 'approved' || credit.status === 'partially_used') && (
-                          <div className="flex justify-end mb-2">
+                          <div className="flex justify-end gap-2 mb-2">
+                            {credit.status === 'approved' && credit.usedAmountCents === 0 && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  setCreditToEdit(credit);
+                                  setEditCreditForm({
+                                    creditAmountDollars: (credit.creditAmountCents / 100).toFixed(2),
+                                    title: credit.title || '',
+                                    description: credit.description || '',
+                                    notes: '',
+                                    expiresAt: credit.expiresAt
+                                      ? new Date(credit.expiresAt).toISOString().slice(0, 10)
+                                      : '',
+                                  });
+                                }}
+                                data-testid={`button-edit-credit-${credit.id}`}
+                              >
+                                <Pencil className="h-4 w-4 mr-1" />
+                                Edit
+                              </Button>
+                            )}
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
                                 <Button
@@ -2964,7 +3084,7 @@ export default function ParentProfilePage() {
                     {/* Credit Summary */}
                     <div className="mt-4 p-4 bg-muted/30 rounded-lg">
                       <div className="flex justify-between items-center">
-                        <span className="font-medium">Total Credits:</span>
+                        <span className="font-medium">Total Issued:</span>
                         <span className="font-semibold">${((profile.summary?.totalCreditAmountCents || 0) / 100).toFixed(2)}</span>
                       </div>
                       <div className="flex justify-between items-center text-muted-foreground">
@@ -2973,7 +3093,9 @@ export default function ParentProfilePage() {
                       </div>
                       <div className="flex justify-between items-center text-green-600 font-medium border-t mt-2 pt-2">
                         <span>Available Balance:</span>
-                        <span>${(((profile.summary?.totalCreditAmountCents || 0) - (profile.summary?.totalCreditUsedCents || 0)) / 100).toFixed(2)}</span>
+                        <span data-testid="text-credits-available-balance">
+                          ${((profile.summary?.availableCreditBalanceCents ?? 0) / 100).toFixed(2)}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -3335,6 +3457,173 @@ export default function ParentProfilePage() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        <Dialog open={isAwardCreditOpen} onOpenChange={setIsAwardCreditOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Award Credit</DialogTitle>
+              <DialogDescription>
+                Add an approved credit to {profile?.parent.firstName} {profile?.parent.lastName}&apos;s account.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="award-amount">Amount ($)</Label>
+                <Input
+                  id="award-amount"
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  value={awardCreditForm.creditAmountDollars}
+                  onChange={(e) => setAwardCreditForm((f) => ({ ...f, creditAmountDollars: e.target.value }))}
+                  data-testid="input-award-credit-amount"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="award-title">Title</Label>
+                <Input
+                  id="award-title"
+                  value={awardCreditForm.title}
+                  onChange={(e) => setAwardCreditForm((f) => ({ ...f, title: e.target.value }))}
+                  data-testid="input-award-credit-title"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="award-description">Description (optional)</Label>
+                <Textarea
+                  id="award-description"
+                  rows={2}
+                  value={awardCreditForm.description}
+                  onChange={(e) => setAwardCreditForm((f) => ({ ...f, description: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="award-expires">Expires (optional)</Label>
+                <Input
+                  id="award-expires"
+                  type="date"
+                  value={awardCreditForm.expiresAt}
+                  onChange={(e) => setAwardCreditForm((f) => ({ ...f, expiresAt: e.target.value }))}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsAwardCreditOpen(false)}>Cancel</Button>
+              <Button
+                onClick={() => {
+                  if (!profile?.parent.id) return;
+                  const amountCents = Math.round(parseFloat(awardCreditForm.creditAmountDollars) * 100);
+                  if (!awardCreditForm.title.trim() || Number.isNaN(amountCents) || amountCents <= 0) {
+                    toast({ title: 'Error', description: 'Enter a valid amount and title.', variant: 'destructive' });
+                    return;
+                  }
+                  let expiresAt: string | undefined;
+                  if (awardCreditForm.expiresAt) {
+                    const d = new Date(awardCreditForm.expiresAt);
+                    d.setHours(23, 59, 59, 999);
+                    expiresAt = d.toISOString();
+                  }
+                  createCreditMutation.mutate({
+                    userId: profile.parent.id,
+                    creditAmountCents: amountCents,
+                    title: awardCreditForm.title.trim(),
+                    description: awardCreditForm.description.trim() || undefined,
+                    notes: awardCreditForm.notes.trim() || undefined,
+                    expiresAt,
+                  });
+                }}
+                disabled={createCreditMutation.isPending}
+                data-testid="button-submit-award-credit"
+              >
+                {createCreditMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+                Award Credit
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={!!creditToEdit} onOpenChange={(open) => { if (!open) setCreditToEdit(null); }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Edit Credit</DialogTitle>
+              <DialogDescription>
+                Update this unused approved credit. Credits with usage history cannot be edited.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-amount">Amount ($)</Label>
+                <Input
+                  id="edit-amount"
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  value={editCreditForm.creditAmountDollars}
+                  onChange={(e) => setEditCreditForm((f) => ({ ...f, creditAmountDollars: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-title">Title</Label>
+                <Input
+                  id="edit-title"
+                  value={editCreditForm.title}
+                  onChange={(e) => setEditCreditForm((f) => ({ ...f, title: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-description">Description (optional)</Label>
+                <Textarea
+                  id="edit-description"
+                  rows={2}
+                  value={editCreditForm.description}
+                  onChange={(e) => setEditCreditForm((f) => ({ ...f, description: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-expires">Expires (optional)</Label>
+                <Input
+                  id="edit-expires"
+                  type="date"
+                  value={editCreditForm.expiresAt}
+                  onChange={(e) => setEditCreditForm((f) => ({ ...f, expiresAt: e.target.value }))}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setCreditToEdit(null)}>Cancel</Button>
+              <Button
+                onClick={() => {
+                  if (!creditToEdit) return;
+                  const amountCents = Math.round(parseFloat(editCreditForm.creditAmountDollars) * 100);
+                  if (!editCreditForm.title.trim() || Number.isNaN(amountCents) || amountCents <= 0) {
+                    toast({ title: 'Error', description: 'Enter a valid amount and title.', variant: 'destructive' });
+                    return;
+                  }
+                  let expiresAt: string | null | undefined;
+                  if (editCreditForm.expiresAt) {
+                    const d = new Date(editCreditForm.expiresAt);
+                    d.setHours(23, 59, 59, 999);
+                    expiresAt = d.toISOString();
+                  } else {
+                    expiresAt = null;
+                  }
+                  updateCreditMutation.mutate({
+                    creditId: creditToEdit.id,
+                    creditAmountCents: amountCents,
+                    title: editCreditForm.title.trim(),
+                    description: editCreditForm.description.trim() || undefined,
+                    expiresAt,
+                  });
+                }}
+                disabled={updateCreditMutation.isPending}
+                data-testid="button-submit-edit-credit"
+              >
+                {updateCreditMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+                Save Changes
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </SchoolAdminLayout>
   );

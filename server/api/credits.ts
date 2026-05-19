@@ -33,6 +33,15 @@ const revokeCreditSchema = z.object({
   reason: z.string().optional(),
 });
 
+const updateCreditSchema = z.object({
+  creditId: z.number().int().positive(),
+  creditAmountCents: z.number().int().positive().optional(),
+  title: z.string().min(1).optional(),
+  description: z.string().optional(),
+  notes: z.string().optional(),
+  expiresAt: z.string().datetime().nullable().optional(),
+});
+
 /**
  * Current user's credits (no requireSchoolContext).
  * Uses req.user.id from supabaseAuth so parents without active school role / enrollment
@@ -536,6 +545,58 @@ router.post('/reject', requireSchoolContext, async (req: any, res) => {
   } catch (error: unknown) {
     console.error('Error rejecting credit:', error);
     res.status(500).json({ error: 'Failed to reject credit' });
+  }
+});
+
+router.post('/update', requireSchoolContext, async (req: any, res) => {
+  try {
+    const schoolId = parseInt(req.schoolId, 10);
+
+    const validation = updateCreditSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        details: validation.error.errors,
+      });
+    }
+
+    const { creditId, creditAmountCents, title, description, notes, expiresAt } = validation.data;
+
+    const credit = await storage.getCreditById(creditId);
+    if (!credit || credit.schoolId !== schoolId) {
+      return res.status(404).json({ error: 'Credit not found' });
+    }
+
+    if (credit.status !== 'approved') {
+      return res.status(400).json({
+        error: 'Only approved credits that have not been used can be updated',
+      });
+    }
+
+    if (credit.usedAmountCents > 0) {
+      return res.status(400).json({
+        error: 'Credits with usage history cannot be edited. Remove and re-award if needed.',
+      });
+    }
+
+    const updates: Record<string, unknown> = {};
+    if (creditAmountCents !== undefined) updates.creditAmountCents = creditAmountCents;
+    if (title !== undefined) updates.title = title;
+    if (description !== undefined) updates.description = description;
+    if (notes !== undefined) updates.notes = notes;
+    if (expiresAt !== undefined) {
+      updates.expiresAt = expiresAt ? new Date(expiresAt) : null;
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: 'No fields to update' });
+    }
+
+    const updatedCredit = await storage.updateCredit(creditId, updates);
+    res.json(updatedCredit);
+  } catch (error: unknown) {
+    console.error('Error updating credit:', error);
+    res.status(500).json({ error: 'Failed to update credit' });
   }
 });
 

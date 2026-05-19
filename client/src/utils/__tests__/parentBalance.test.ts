@@ -433,6 +433,7 @@ describe('computeOutstandingBreakdown (canonical Owed contract)', () => {
       { status: 'partially_used', remainingCents: 2_000 },
       { status: 'pending',        remainingCents: 10_000 },
       { status: 'expired',        remainingCents: 5_000 },
+      { status: 'revoked',        remainingCents: 8_000 },
       { status: 'consumed',       remainingCents: 2_500 },
       {
         status: 'approved',

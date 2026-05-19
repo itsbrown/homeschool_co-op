@@ -8,6 +8,7 @@ import {
   parsePaymentSettlementCents,
   paymentSettlementToDisplayFields,
 } from '../lib/payment-settlement-display';
+import { computeCreditsSummaryTotals, getCreditRemainingCents } from '../utils/credit-summary';
 
 const router = Router();
 
@@ -406,6 +407,8 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
       ? allCredits
       : allCredits.filter(c => adminSchoolIds.includes(c.schoolId));
     
+    const creditSummaryTotals = computeCreditsSummaryTotals(credits);
+
     // Fetch usage logs for each credit with enrollment/payment context
     const creditsWithUsage = await Promise.all(credits.map(async (credit) => {
       const usageLogs = await storage.getUnifiedCreditUsageLogsByCreditId(credit.id);
@@ -458,8 +461,9 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
         description: credit.description,
         creditAmountCents: credit.creditAmountCents,
         usedAmountCents: credit.usedAmountCents,
-        remainingAmountCents: credit.creditAmountCents - credit.usedAmountCents,
+        remainingAmountCents: getCreditRemainingCents(credit),
         status: credit.status,
+        rejectionReason: credit.rejectionReason,
         expiresAt: credit.expiresAt,
         createdAt: credit.createdAt,
         approvedAt: credit.approvedAt,
@@ -809,8 +813,9 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
         totalEnrollments: filteredEnrollments.length,
         totalMemberships: membershipEnrollments.length,
         totalCredits: credits.length,
-        totalCreditAmountCents: credits.reduce((sum, c) => sum + c.creditAmountCents, 0),
-        totalCreditUsedCents: credits.reduce((sum, c) => sum + c.usedAmountCents, 0),
+        totalCreditAmountCents: creditSummaryTotals.totalIssuedCents,
+        totalCreditUsedCents: creditSummaryTotals.totalUsedCents,
+        availableCreditBalanceCents: creditSummaryTotals.availableBalanceCents,
         totalAmountPaid: CurrencyUtils.toDisplay(totalAmountPaid),
         totalAmountDue: CurrencyUtils.toDisplay(totalAmountDue),
         activeEnrollments: filteredEnrollments.filter(e => ['enrolled', 'pending_payment'].includes(e.status)).length,

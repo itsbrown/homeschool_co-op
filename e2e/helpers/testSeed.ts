@@ -10,6 +10,7 @@ export type SetupCartScenarioResponse = {
   success: boolean;
   data?: {
     supabaseLinked?: boolean;
+    adminSupabaseLinked?: boolean;
     parent: { email: string; password: string; id: number };
     admin?: { email: string; password: string; id: number };
     enrollment: {

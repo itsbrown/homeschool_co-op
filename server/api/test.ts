@@ -48,6 +48,87 @@ const testOnlyMiddleware = (req: Request, res: Response, next: Function) => {
 
 router.use(testOnlyMiddleware);
 
+/** Links a seeded DB user to Supabase Auth so Playwright can sign in via /login. */
+async function linkSeedUserToSupabase(params: {
+  dbUserId: number;
+  email: string;
+  password: string;
+  role: string;
+  schoolId: number;
+  displayName: string;
+}): Promise<boolean> {
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !serviceKey) {
+    return false;
+  }
+
+  const { createClient } = await import('@supabase/supabase-js');
+  const supabaseAdmin = createClient(supabaseUrl, serviceKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+
+  const { data: created, error: createErr } = await supabaseAdmin.auth.admin.createUser({
+    email: params.email,
+    password: params.password,
+    email_confirm: true,
+    app_metadata: {
+      role: params.role,
+      school_id: params.schoolId,
+    },
+    user_metadata: {
+      name: params.displayName,
+    },
+  });
+
+  let supabaseUserId: string | null = null;
+
+  if (createErr) {
+    const msg = (createErr.message || '').toLowerCase();
+    const already =
+      msg.includes('already') ||
+      msg.includes('registered') ||
+      (createErr as { code?: string }).code === 'email_exists';
+    if (!already) {
+      throw new Error(createErr.message);
+    }
+    let match: { id: string } | undefined;
+    for (let pageNum = 1; pageNum <= 10; pageNum++) {
+      const { data: listData, error: listErr } = await supabaseAdmin.auth.admin.listUsers({
+        page: pageNum,
+        perPage: 200,
+      });
+      if (listErr || !listData?.users?.length) {
+        break;
+      }
+      match = listData.users.find((u) => u.email?.toLowerCase() === params.email.toLowerCase());
+      if (match) {
+        break;
+      }
+      if (listData.users.length < 200) {
+        break;
+      }
+    }
+    if (!match) {
+      throw new Error('Supabase reported existing user but listUsers did not return a match');
+    }
+    supabaseUserId = match.id;
+    await supabaseAdmin.auth.admin.updateUserById(supabaseUserId, {
+      password: params.password,
+      email_confirm: true,
+      app_metadata: { role: params.role, school_id: params.schoolId },
+    });
+  } else if (created.user?.id) {
+    supabaseUserId = created.user.id;
+  }
+
+  if (supabaseUserId) {
+    await storage.updateUser(params.dbUserId, { supabaseId: supabaseUserId });
+    return true;
+  }
+  return false;
+}
+
 /**
  * POST /api/test/setup-cart-scenario
  * Seeds parent + child + class + pending program_enrollment for the
@@ -143,8 +224,9 @@ router.post('/setup-cart-scenario', async (req: Request, res: Response) => {
     const hashedParentPassword = await bcrypt.hash(parentPassword, 10);
     await storage.updateUser(parent.id, { password: hashedParentPassword });
 
-    /** When true, creates a Supabase Auth user for the seeded parent and links `users.supabase_id` so the SPA can sign in with email/password. */
+    /** When true, links the seeded parent (and optionally admin) to Supabase Auth for Playwright login. */
     let supabaseLinked = false;
+    let adminSupabaseLinked = false;
     if (req.body?.linkSupabaseAuth === true) {
       const supabaseUrl = process.env.SUPABASE_URL;
       const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -154,77 +236,33 @@ router.post('/setup-cart-scenario', async (req: Request, res: Response) => {
         });
       }
       try {
-        const { createClient } = await import('@supabase/supabase-js');
-        const admin = createClient(supabaseUrl, serviceKey, {
-          auth: { autoRefreshToken: false, persistSession: false },
-        });
-        const { data: created, error: createErr } = await admin.auth.admin.createUser({
+        supabaseLinked = await linkSeedUserToSupabase({
+          dbUserId: parent.id,
           email: parentEmail,
           password: parentPassword,
-          email_confirm: true,
-          app_metadata: {
-            role: 'parent',
-            school_id: school.id,
-          },
-          user_metadata: {
-            name: parent.name || 'Test Parent',
-          },
+          role: 'parent',
+          schoolId: school.id,
+          displayName: parent.name || 'Test Parent',
         });
-
-        let supabaseUserId: string | null = null;
-
-        if (createErr) {
-          const msg = (createErr.message || '').toLowerCase();
-          const already =
-            msg.includes('already') ||
-            msg.includes('registered') ||
-            (createErr as { code?: string }).code === 'email_exists';
-          if (!already) {
-            return res.status(500).json({
-              error: 'Failed to create Supabase auth user for seeded parent',
-              details: createErr.message,
-            });
-          }
-          let match: { id: string } | undefined;
-          for (let pageNum = 1; pageNum <= 10; pageNum++) {
-            const { data: listData, error: listErr } = await admin.auth.admin.listUsers({
-              page: pageNum,
-              perPage: 200,
-            });
-            if (listErr || !listData?.users?.length) {
-              break;
-            }
-            match = listData.users.find((u) => u.email?.toLowerCase() === parentEmail.toLowerCase());
-            if (match) {
-              break;
-            }
-            if (listData.users.length < 200) {
-              break;
-            }
-          }
-          if (!match) {
-            return res.status(500).json({
-              error: 'Supabase reported existing user but listUsers did not return a match',
-              details: createErr.message,
-            });
-          }
-          supabaseUserId = match.id;
-          await admin.auth.admin.updateUserById(supabaseUserId, {
-            password: parentPassword,
-            email_confirm: true,
-            app_metadata: { role: 'parent', school_id: school.id },
-          });
-        } else if (created.user?.id) {
-          supabaseUserId = created.user.id;
-        }
-
-        if (supabaseUserId) {
-          await storage.updateUser(parent.id, { supabaseId: supabaseUserId });
-          supabaseLinked = true;
-        }
       } catch (e) {
-        console.error("linkSupabaseAuth failed (continuing without Supabase link):", e);
+        console.error('linkSupabaseAuth failed (continuing without Supabase link):', e);
         supabaseLinked = false;
+      }
+
+      if (req.body?.linkSupabaseAuthAdmin === true) {
+        try {
+          adminSupabaseLinked = await linkSeedUserToSupabase({
+            dbUserId: admin.id,
+            email: admin.email,
+            password: adminPassword,
+            role: 'schoolAdmin',
+            schoolId: school.id,
+            displayName: admin.name || 'Test Admin',
+          });
+        } catch (e) {
+          console.error('linkSupabaseAuthAdmin failed (continuing without admin Supabase link):', e);
+          adminSupabaseLinked = false;
+        }
       }
     }
 
@@ -390,6 +428,7 @@ router.post('/setup-cart-scenario', async (req: Request, res: Response) => {
       success: true,
       data: {
         supabaseLinked,
+        adminSupabaseLinked,
         parent: {
           email: parentEmail,
           password: parentPassword,

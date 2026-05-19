@@ -3197,6 +3197,14 @@ export class DatabaseStorage implements IStorage {
       })
       .where(eq(credits.id, id))
       .returning();
+
+    if (updated) {
+      await db
+        .update(creditHolds)
+        .set({ status: 'released' as CreditHoldStatus, releasedAt: new Date() })
+        .where(and(eq(creditHolds.creditId, id), eq(creditHolds.status, 'pending')));
+    }
+
     return updated;
   }
 

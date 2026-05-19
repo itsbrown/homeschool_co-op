@@ -65,3 +65,22 @@ For each listed route, the spec:
 5. Expects a **visible** heading or label regex appropriate to that page.
 
 Extend `e2e/authenticated/parent-profile-routes.spec.ts` when you add parent routes or new critical queries.
+
+## School admin — parent profile Credits tab
+
+`e2e/parent-profile-credits-tab.spec.ts` exercises the school-admin flow at `/schools/parents/:id` → **Credits** tab:
+
+- Award credit and assert **Available Balance** (`data-testid="text-credits-available-balance"`)
+- Edit an unused approved credit
+- Revoke a credit and confirm revoked rows do not count toward the balance
+
+It seeds via `POST /api/test/setup-cart-scenario` with `linkSupabaseAuth: true` and `linkSupabaseAuthAdmin: true` (same Postgres + Supabase requirements as checkout E2E).
+
+```bash
+export DATABASE_URL="postgresql://..."
+export SUPABASE_URL="http://127.0.0.1:54321"
+export SUPABASE_ANON_KEY="..."
+export SUPABASE_SERVICE_ROLE_KEY="..."
+
+npm run test:e2e -- e2e/parent-profile-credits-tab.spec.ts
+```
