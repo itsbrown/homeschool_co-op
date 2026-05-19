@@ -4071,12 +4071,12 @@ router.get("/students/by-location/:locationId", async (req, res) => {
   }
 });
 
-router.get("/locations/overview", async (req, res) => {
+router.get("/locations/overview", supabaseAuth, requireSchoolContext, async (req: any, res) => {
   try {
-    console.log('📍 Generating location overview...');
+    const schoolId = Number(req.schoolId);
+    console.log('📍 Generating location overview for school:', schoolId);
     
-    // Get all locations from storage
-    const locations = await storage.getLocations();
+    const locations = await storage.getLocationsBySchoolId(schoolId);
     
     const locationOverview = await Promise.all(
       locations.map(async (location) => {

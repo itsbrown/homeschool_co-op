@@ -12,6 +12,31 @@ import {
 
 const router = express.Router();
 
+function deriveLocationCode(name: string): string {
+  const fromName = name.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 4);
+  return fromName.length >= 2 ? fromName : 'LOC';
+}
+
+function locationDbErrorResponse(error: unknown): { message: string; hint?: string; detail?: string } {
+  const pgCode = typeof error === 'object' && error !== null && 'code' in error
+    ? String((error as { code: unknown }).code)
+    : undefined;
+  const detail = error instanceof Error ? error.message : undefined;
+
+  if (pgCode === '42703') {
+    return {
+      message: 'Failed to create location',
+      hint: 'Database is missing location columns. Run server/migrations/locations-schema-align.sql, then retry.',
+      detail,
+    };
+  }
+
+  return {
+    message: 'Failed to create location',
+    detail: process.env.NODE_ENV !== 'production' ? detail : undefined,
+  };
+}
+
 // ROUTE ORDER MATTERS: Static paths must come before parameterized paths
 // to prevent Express from treating "accessible" as an ID
 
@@ -174,10 +199,15 @@ router.post("/", requireSchoolContext, async (req: any, res) => {
     const schoolId = req.schoolId;
     console.log('🔐 Location creation - School ID:', schoolId);
     
+    const numericSchoolId = Number(schoolId);
+    if (!Number.isFinite(numericSchoolId) || numericSchoolId <= 0) {
+      return res.status(400).json({ message: "Invalid school context" });
+    }
+
     // Validate that the school exists
-    const school = await storage.getSchool(schoolId);
+    const school = await storage.getSchool(numericSchoolId);
     if (!school) {
-      console.error(`❌ School not found for ID ${schoolId}`);
+      console.error(`❌ School not found for ID ${numericSchoolId}`);
       return res.status(404).json({ 
         message: "School not found. Please contact support." 
       });
@@ -186,10 +216,13 @@ router.post("/", requireSchoolContext, async (req: any, res) => {
     console.log(`✅ Creating location for school ${school.name} (ID: ${school.id})`);
     
     // [FIX:v3.0] SECURITY: Use the authenticated user's schoolId from database, ignoring client-provided value
-    const validatedData = insertLocationSchema.parse(req.body);
+    const { schoolId: _clientSchoolId, ...bodyWithoutSchoolId } = req.body ?? {};
+    const validatedData = insertLocationSchema.parse(bodyWithoutSchoolId);
+    const code = (validatedData.code?.trim() || deriveLocationCode(validatedData.name));
     const locationData = {
       ...validatedData,
-      schoolId: Number(schoolId)  // Convert string to number for Drizzle integer column
+      code,
+      schoolId: numericSchoolId,
     };
     
     // Create location using authenticated school
@@ -204,7 +237,7 @@ router.post("/", requireSchoolContext, async (req: any, res) => {
       });
     }
     console.error("Error creating location:", error);
-    res.status(500).json({ message: "Failed to create location" });
+    res.status(500).json(locationDbErrorResponse(error));
   }
 });
 

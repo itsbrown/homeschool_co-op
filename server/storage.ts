@@ -6622,7 +6622,8 @@ export class MemStorage implements IStorage {
         try {
           return await this.dbStorage.createLocation(location);
         } catch (error) {
-          return this.memStorage.createLocation(location);
+          console.error('❌ createLocation failed in database:', error);
+          throw error;
         }
       }
 

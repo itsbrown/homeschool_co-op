@@ -14,6 +14,7 @@ import { useToast } from '@/hooks/use-toast'
 import { useSchoolAdmin } from '@/hooks/useSchoolAdmin'
 import { MapPin, Users, Building2, TrendingUp, Eye, PlusCircle, Trash2, Edit, Power } from 'lucide-react'
 import { apiRequest } from '@/lib/queryClient'
+import { formatFetchErrorMessage } from '@/lib/formatFetchError'
 
 interface LocationOverview {
   id: number
@@ -101,10 +102,10 @@ export default function LocationManagementPage() {
         description: "Location created successfully",
       })
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       toast({
         title: "Error",
-        description: error.message || "Failed to create location",
+        description: formatFetchErrorMessage(error) || "Failed to create location",
         variant: "destructive",
       })
     }
@@ -174,10 +175,10 @@ export default function LocationManagementPage() {
         description: "Location deleted successfully",
       })
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       toast({
         title: "Error",
-        description: error.message || "Failed to delete location",
+        description: formatFetchErrorMessage(error) || "Failed to delete location",
         variant: "destructive",
       })
     }
@@ -191,11 +192,8 @@ export default function LocationManagementPage() {
 
   // Status toggle mutation
   const toggleStatusMutation = useMutation({
-    mutationFn: ({ id, newStatus }: { id: number; newStatus: boolean }) => 
-      apiRequest(`/api/locations/${id}`, {
-        method: 'PUT',
-        body: JSON.stringify({ isActive: newStatus })
-      }),
+    mutationFn: ({ id, newStatus }: { id: number; newStatus: boolean }) =>
+      apiRequest('PUT', `/api/locations/${id}`, { isActive: newStatus }),
     onSuccess: () => {
       // Force refresh multiple related queries
       queryClient.invalidateQueries({ queryKey: ['/api/school-admin/locations/overview'] })
@@ -206,10 +204,10 @@ export default function LocationManagementPage() {
         description: "Location status updated successfully",
       })
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       toast({
         title: "Error",
-        description: error.message || "Failed to update location status",
+        description: formatFetchErrorMessage(error) || "Failed to update location status",
         variant: "destructive",
       })
     }
@@ -240,10 +238,10 @@ export default function LocationManagementPage() {
         description: "Location updated successfully",
       })
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       toast({
         title: "Error",
-        description: error.message || "Failed to update location",
+        description: formatFetchErrorMessage(error) || "Failed to update location",
         variant: "destructive",
       })
     }
@@ -251,8 +249,8 @@ export default function LocationManagementPage() {
 
   const handleEditLocation = async (location: LocationOverview) => {
     try {
-      // Fetch complete location details for editing
-      const fullLocationData = await apiRequest(`/api/locations/${location.id}`)
+      const response = await apiRequest('GET', `/api/locations/${location.id}`)
+      const fullLocationData = await response.json()
       setEditingLocation(fullLocationData)
       setIsEditDialogOpen(true)
     } catch (error) {
