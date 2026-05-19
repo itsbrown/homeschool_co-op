@@ -46,10 +46,15 @@ router.get("/open", supabaseAuth, async (req: any, res) => {
       return res.status(401).json({ message: "Authentication required" });
     }
 
+    const authSchoolId =
+      req.user?.schoolId ??
+      (req.auth as { schoolId?: number | null } | undefined)?.schoolId ??
+      (req.auth as { payload?: { school_id?: number | null } } | undefined)?.payload?.school_id;
+
     const { schoolIds, children } = await resolveSchoolIdsForParentSessions(
       storage,
       criteria,
-      req.user?.schoolId,
+      authSchoolId,
     );
 
     if (children.length === 0) {

@@ -61,6 +61,44 @@ export async function postSetupCartScenario(
   return { response, json };
 }
 
+export type SetupSessionEnrollmentScenarioResponse = {
+  success: boolean;
+  data?: {
+    supabaseLinked?: boolean;
+    school: { id: number; name: string; registrationCode: string };
+    parent: { id: number; email: string; password: string };
+    child: { id: number; firstName: string; lastName: string };
+    openSessions: { id: number; name: string; enrollmentOpen: boolean }[];
+    closedSession: { id: number; name: string; enrollmentOpen: boolean } | null;
+  };
+  error?: string;
+  details?: string;
+};
+
+export async function postSetupSessionEnrollmentScenario(
+  request: APIRequestContext,
+  body: {
+    openSessionCount?: number;
+    includeClosedSession?: boolean;
+    linkSupabaseAuth?: boolean;
+  } = {},
+): Promise<{ response: APIResponse; json: SetupSessionEnrollmentScenarioResponse | null }> {
+  const response = await request.post("/api/test/setup-session-enrollment-scenario", {
+    headers: {
+      "X-Test-Token": testApiToken(),
+      "Content-Type": "application/json",
+    },
+    data: body,
+  });
+  let json: SetupSessionEnrollmentScenarioResponse | null = null;
+  try {
+    json = (await response.json()) as SetupSessionEnrollmentScenarioResponse;
+  } catch {
+    json = null;
+  }
+  return { response, json };
+}
+
 export async function postSeedUpcomingScheduledPayment(
   request: APIRequestContext,
   body: { enrollmentId: number; amountCents?: number; paymentPlan?: string },

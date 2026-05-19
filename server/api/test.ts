@@ -18,6 +18,7 @@ import {
   type Credit,
   type InsertMembershipEnrollment,
   type MembershipEnrollment,
+  sessions,
   type Child,
   type Class,
   type Payment,
@@ -483,6 +484,141 @@ router.post('/setup-cart-scenario', async (req: Request, res: Response) => {
     res.status(500).json({
       error: 'Failed to setup cart test scenario',
       details: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+/**
+ * POST /api/test/setup-session-enrollment-scenario
+ * Seeds school + parent + child + enrollment sessions for F001 / Playwright.
+ */
+router.post('/setup-session-enrollment-scenario', async (req: Request, res: Response) => {
+  try {
+    const testDb = new TestDatabase();
+    const uniqueId = nanoid(8);
+    const db = await getDb();
+
+    const openSessionCount = Math.min(Math.max(Number(req.body?.openSessionCount ?? 2), 1), 5);
+    const includeClosedSession = req.body?.includeClosedSession === true;
+
+    const adminPassword = 'TestPassword123!';
+    const admin = await testDb.createTestUser({
+      email: `session_admin_${uniqueId}@test.com`,
+      username: `sessionadmin_${uniqueId}`,
+      name: 'Session Test Admin',
+      role: 'schoolAdmin',
+    });
+    const bcrypt = await import('bcryptjs');
+    await storage.updateUser(admin.id, { password: await bcrypt.hash(adminPassword, 10) });
+
+    const school = await testDb.createTestSchool(admin.id, {
+      name: `Session School ${uniqueId}`,
+      registrationCode: `SES${uniqueId.toUpperCase()}`,
+    });
+    await storage.updateUser(admin.id, { schoolId: school.id });
+
+    const parentEmail = `session_parent_${uniqueId}@test.com`;
+    const parentPassword = 'TestPassword123!';
+    const parent = await testDb.createTestUser({
+      email: parentEmail,
+      username: `sessionparent_${uniqueId}`,
+      name: 'Session Test Parent',
+      role: 'parent',
+      schoolId: school.id,
+    });
+    await storage.updateUser(parent.id, { password: await bcrypt.hash(parentPassword, 10) });
+
+    const child = await storage.createChild({
+      parentId: parent.id,
+      parentEmail,
+      firstName: 'Session',
+      lastName: `Child${uniqueId}`,
+      birthdate: '2015-06-01',
+      gradeLevel: '3rd Grade',
+      schoolId: school.id,
+    });
+
+    const today = new Date();
+    const start = today.toISOString().slice(0, 10);
+    const endDate = new Date(today);
+    endDate.setMonth(endDate.getMonth() + 3);
+    const end = endDate.toISOString().slice(0, 10);
+
+    const openSessions: { id: number; name: string; enrollmentOpen: boolean }[] = [];
+    for (let i = 0; i < openSessionCount; i++) {
+      const [row] = await db
+        .insert(sessions)
+        .values({
+          schoolId: school.id,
+          name: `E2E Open Session ${i + 1} ${uniqueId}`,
+          description: 'Playwright seeded open session',
+          startDate: start,
+          endDate: end,
+          status: 'upcoming',
+          enrollmentOpen: true,
+          halfDayPrice: 15000,
+          fullDayPrice: 25000,
+          sortOrder: i,
+        })
+        .returning();
+      openSessions.push({ id: row.id, name: row.name, enrollmentOpen: row.enrollmentOpen });
+    }
+
+    let closedSession: { id: number; name: string; enrollmentOpen: boolean } | null = null;
+    if (includeClosedSession) {
+      const [row] = await db
+        .insert(sessions)
+        .values({
+          schoolId: school.id,
+          name: `E2E Closed Session ${uniqueId}`,
+          description: 'Playwright seeded closed session',
+          startDate: start,
+          endDate: end,
+          status: 'upcoming',
+          enrollmentOpen: false,
+          halfDayPrice: 10000,
+          fullDayPrice: 20000,
+          sortOrder: 99,
+        })
+        .returning();
+      closedSession = { id: row.id, name: row.name, enrollmentOpen: row.enrollmentOpen };
+    }
+
+    let supabaseLinked = false;
+    if (req.body?.linkSupabaseAuth === true) {
+      const supabaseUrl = process.env.SUPABASE_URL;
+      const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      if (!supabaseUrl || !serviceKey) {
+        return res.status(400).json({
+          error: 'linkSupabaseAuth requires SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY',
+        });
+      }
+      supabaseLinked = await linkSeedUserToSupabase({
+        dbUserId: parent.id,
+        email: parentEmail,
+        password: parentPassword,
+        role: 'parent',
+        schoolId: school.id,
+        displayName: parent.name || 'Session Test Parent',
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        supabaseLinked,
+        school: { id: school.id, name: school.name, registrationCode: school.registrationCode },
+        parent: { id: parent.id, email: parentEmail, password: parentPassword },
+        child: { id: child.id, firstName: child.firstName, lastName: child.lastName },
+        openSessions,
+        closedSession,
+      },
+    });
+  } catch (error) {
+    console.error('❌ Error setting up session enrollment scenario:', error);
+    res.status(500).json({
+      error: 'Failed to setup session enrollment scenario',
+      details: error instanceof Error ? error.message : String(error),
     });
   }
 });

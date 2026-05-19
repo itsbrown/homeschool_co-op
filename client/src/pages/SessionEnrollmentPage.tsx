@@ -245,6 +245,7 @@ export default function SessionEnrollmentPage() {
                   {openSessions.map((session) => (
                     <div
                       key={session.id}
+                      data-testid={`session-option-${session.id}`}
                       onClick={() => toggleSession(session.id)}
                       className={`flex items-start gap-4 p-4 rounded-lg border cursor-pointer transition-colors ${
                         selectedSessionIds.includes(session.id) ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50"

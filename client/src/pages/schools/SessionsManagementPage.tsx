@@ -62,7 +62,7 @@ const emptyForm: SessionFormData = {
   startDate: "",
   endDate: "",
   status: "upcoming",
-  enrollmentOpen: false,
+  enrollmentOpen: true,
   halfDayPrice: "",
   fullDayPrice: "",
   halfDayStartTime: "08:00",
@@ -248,7 +248,14 @@ export default function SessionsManagementPage() {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid gap-4">
+          <div className="space-y-4">
+            {sessionsList.some((s) => !s.enrollmentOpen) && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+                Some sessions are hidden from parents until you turn on <strong>Enrollment Open</strong> on
+                each session and set pricing.
+              </div>
+            )}
+            <div className="grid gap-4">
             {sessionsList.map((s) => (
               <Card key={s.id}>
                 <CardHeader className="pb-3">
@@ -316,6 +323,7 @@ export default function SessionsManagementPage() {
                 </CardContent>
               </Card>
             ))}
+          </div>
           </div>
         )}
       </div>

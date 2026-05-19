@@ -79,6 +79,18 @@ export async function resolveSchoolIdsForParentSessions(
   if (parent?.schoolId != null && parent.schoolId > 0) {
     schoolIds.add(parent.schoolId);
   }
+  if (parent) {
+    try {
+      const roles = await storage.getUserRolesByUserId(parent.id);
+      for (const role of roles) {
+        if (role.schoolId != null && role.schoolId > 0) {
+          schoolIds.add(role.schoolId);
+        }
+      }
+    } catch (err) {
+      console.warn("[resolveSchoolIdsForParentSessions] user_roles lookup failed:", err);
+    }
+  }
   if (extraSchoolId != null && extraSchoolId > 0) {
     schoolIds.add(extraSchoolId);
   }
