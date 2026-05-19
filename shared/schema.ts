@@ -34,6 +34,9 @@ export const users = pgTable("users", {
   activeRole: text("active_role"), // Currently active role for multi-role users (NULL means use primary role)
   activeRoleId: integer("active_role_id"), // ID of the currently active role from user_roles table (NULL means use primary role)
   stripeCustomerId: text("stripe_customer_id"), // Stripe customer ID for payments
+  /** Default Stripe PM for auto-pay (pm_…). See init-db auto-pay migration. */
+  stripeDefaultPaymentMethodId: text("stripe_default_payment_method_id"),
+  autoPayEnabled: boolean("auto_pay_enabled").default(false).notNull(),
   hasCompletedOnboarding: boolean("has_completed_onboarding").default(false), // Whether user has completed the onboarding tour
   memberId: text("member_id"), // System-generated or admin-assigned membership ID (e.g., ASA-2025-X7K9M2)
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -541,6 +544,9 @@ export const children = pgTable("children", {
   emergencyContact: text("emergency_contact"),
   additionalLanguages: text("additional_languages"),
   notes: text("notes"),
+  currentLexileRange: text("current_lexile_range"),
+  currentReadingGradeLevel: text("current_reading_grade_level"),
+  currentBookList: text("current_book_list"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -561,7 +567,10 @@ export const insertChildSchema = createInsertSchema(children)
     profileImage: z.string().nullable().default(null),
     emergencyContact: z.string().nullable().default(null),
     additionalLanguages: z.string().nullable().default(null),
-    notes: z.string().nullable().default(null)
+    notes: z.string().nullable().default(null),
+    currentLexileRange: z.string().nullable().default(null),
+    currentReadingGradeLevel: z.string().nullable().default(null),
+    currentBookList: z.string().nullable().default(null),
   });
 export type InsertChild = z.infer<typeof insertChildSchema>;
 export type Child = typeof children.$inferSelect;
