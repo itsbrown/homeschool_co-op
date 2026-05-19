@@ -16,7 +16,7 @@ const requireAdminOrDirector = requireRole(['admin', 'superAdmin', 'schoolAdmin'
 
 router.get("/", supabaseAuth, requireAdminOrDirector, requireSchoolContext, async (req: any, res) => {
   try {
-    const db = getDb();
+    const db = await getDb();
     const schoolId = parseInt(req.schoolId);
     if (isNaN(schoolId)) {
       return res.status(400).json({ message: "Invalid school ID" });
@@ -52,7 +52,7 @@ router.get("/open", supabaseAuth, async (req: any, res) => {
       return res.json([]);
     }
 
-    const db = getDb();
+    const db = await getDb();
     const result = await db
       .select()
       .from(sessions)
@@ -68,7 +68,7 @@ router.get("/open", supabaseAuth, async (req: any, res) => {
 
 router.get("/:id", supabaseAuth, requireAdminOrDirector, requireSchoolContext, async (req: any, res) => {
   try {
-    const db = getDb();
+    const db = await getDb();
     const schoolId = parseInt(req.schoolId);
     const id = parseInt(req.params.id);
     if (isNaN(id)) {
@@ -93,7 +93,7 @@ router.get("/:id", supabaseAuth, requireAdminOrDirector, requireSchoolContext, a
 
 router.post("/", supabaseAuth, requireAdminOrDirector, requireSchoolContext, async (req: any, res) => {
   try {
-    const db = getDb();
+    const db = await getDb();
     const schoolId = parseInt(req.schoolId);
     if (isNaN(schoolId)) {
       return res.status(400).json({ message: "Invalid school ID" });
@@ -115,7 +115,7 @@ router.post("/", supabaseAuth, requireAdminOrDirector, requireSchoolContext, asy
 
 router.patch("/:id", supabaseAuth, requireAdminOrDirector, requireSchoolContext, async (req: any, res) => {
   try {
-    const db = getDb();
+    const db = await getDb();
     const schoolId = parseInt(req.schoolId);
     const id = parseInt(req.params.id);
     if (isNaN(id)) {
@@ -151,7 +151,7 @@ router.patch("/:id", supabaseAuth, requireAdminOrDirector, requireSchoolContext,
 
 router.delete("/:id", supabaseAuth, requireAdminOrDirector, requireSchoolContext, async (req: any, res) => {
   try {
-    const db = getDb();
+    const db = await getDb();
     const schoolId = parseInt(req.schoolId);
     const id = parseInt(req.params.id);
     if (isNaN(id)) {

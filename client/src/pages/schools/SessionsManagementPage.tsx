@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { AdminShell } from "@/components/ui/admin-shell";
+import SchoolAdminLayout from "@/components/layout/SchoolAdminLayout";
+import { formatFetchErrorMessage } from "@/lib/formatFetchError";
+import { safeJsonParse } from "@/lib/queryClient";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -132,16 +134,23 @@ export default function SessionsManagementPage() {
   const createMutation = useMutation({
     mutationFn: async (data: any) => {
       const res = await apiRequest("POST", "/api/admin/sessions", data);
-      if (!res.ok) { const body = await res.clone().json().catch(() => ({})); throw new Error(body.message || "Request failed"); }
-      return res;
+      if (!res.ok) {
+        const body = await res.clone().json().catch(() => ({}));
+        throw new Error(body.message || "Request failed");
+      }
+      return safeJsonParse(res);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/sessions"] });
       toast({ title: "Session created" });
       setDialogOpen(false);
     },
-    onError: (err: any) => {
-      toast({ title: "Error creating session", description: err.message, variant: "destructive" });
+    onError: (err: unknown) => {
+      toast({
+        title: "Error creating session",
+        description: formatFetchErrorMessage(err),
+        variant: "destructive",
+      });
     },
   });
 
@@ -209,7 +218,7 @@ export default function SessionsManagementPage() {
   const isPending = createMutation.isPending || updateMutation.isPending;
 
   return (
-    <AdminShell>
+    <SchoolAdminLayout pageTitle="Enrollment Sessions">
       <div className="flex flex-col space-y-6">
         <div className="flex items-center justify-between">
           <div>
@@ -465,6 +474,6 @@ export default function SessionsManagementPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </AdminShell>
+    </SchoolAdminLayout>
   );
 }

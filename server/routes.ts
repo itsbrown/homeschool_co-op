@@ -2159,6 +2159,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const retentionRouter = (await import("./api/retention")).default;
   app.use("/api/admin/retention", supabaseAuth, retentionRouter);
 
+  const adminSessionsRouter = (await import("./api/admin-sessions")).default;
+  app.use("/api/admin/sessions", adminSessionsRouter);
+
   app.use("/api/admin", adminRouter);
   app.use("/api/admin-classes", adminClassesRouter); // Add duplicate route for backwards compatibility
   app.use("/api/admin-enrollments", adminEnrollmentsRouter); // Admin enrollment management
