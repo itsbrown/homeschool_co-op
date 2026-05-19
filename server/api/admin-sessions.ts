@@ -6,6 +6,10 @@ import { requireSchoolContext } from "../middleware/require-school-context";
 import { storage } from "../storage";
 import { getDb } from "../db";
 import { eq, and, desc, inArray } from "drizzle-orm";
+import {
+  parentAuthCriteriaFromRequest,
+  resolveSchoolIdsForParentSessions,
+} from "../lib/parent-auth-scope";
 
 const router = Router();
 
@@ -37,18 +41,26 @@ router.get("/", supabaseAuth, requireAdminOrDirector, requireSchoolContext, asyn
 
 router.get("/open", supabaseAuth, async (req: any, res) => {
   try {
-    const userId = req.user?.id;
-    if (!userId) {
+    const criteria = parentAuthCriteriaFromRequest(req);
+    if (!criteria.email && !criteria.supabaseId) {
       return res.status(401).json({ message: "Authentication required" });
     }
 
-    const children = await storage.getChildrenByParentId(userId);
+    const { schoolIds, children } = await resolveSchoolIdsForParentSessions(
+      storage,
+      criteria,
+      req.user?.schoolId,
+    );
+
     if (children.length === 0) {
       return res.json([]);
     }
 
-    const schoolIds = [...new Set(children.map((c: any) => c.schoolId).filter(Boolean))];
     if (schoolIds.length === 0) {
+      console.warn(
+        "[sessions/open] Parent has children but no school scope:",
+        criteria.email,
+      );
       return res.json([]);
     }
 

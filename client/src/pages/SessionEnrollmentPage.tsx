@@ -235,6 +235,10 @@ export default function SessionEnrollmentPage() {
                 <div className="text-center py-8">
                   <AlertCircle className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
                   <p className="text-muted-foreground">No sessions are currently open for enrollment.</p>
+                  <p className="text-sm text-muted-foreground mt-2 max-w-md mx-auto">
+                    Your school admin must create a session, turn on Enrollment Open, and set half-day or
+                    full-day pricing. If you just registered, check back once your school publishes a session.
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-3">

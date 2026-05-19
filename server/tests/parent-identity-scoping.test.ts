@@ -4,7 +4,11 @@ import {
   emailsMatch,
   enrollmentMatchesParent,
 } from '@shared/parent-identity';
-import { resolveParentDbUser, getChildrenForAuthenticatedParent } from '../lib/parent-auth-scope';
+import {
+  resolveParentDbUser,
+  getChildrenForAuthenticatedParent,
+  resolveSchoolIdsForParentSessions,
+} from '../lib/parent-auth-scope';
 import type { IStorage } from '../storage';
 import type { User, Child } from '@shared/schema';
 
@@ -118,5 +122,65 @@ describe('getChildrenForAuthenticatedParent', () => {
 
     const children = await getChildrenForAuthenticatedParent(storage, { email: 'parent@test.com' });
     expect(children.map((c) => c.id).sort()).toEqual([1, 2]);
+  });
+});
+
+describe('resolveSchoolIdsForParentSessions', () => {
+  it('uses parent schoolId when child schoolId is null', async () => {
+    const parent = { id: 7, schoolId: 42 } as User;
+    const kids: Child[] = [{ id: 1, parentId: 7, schoolId: null } as Child];
+
+    const storage = mockStorage({
+      async getUserByEmail() {
+        return parent;
+      },
+      async getUserBySupabaseId() {
+        return undefined;
+      },
+      async getUserByAuth0Id() {
+        return undefined;
+      },
+      async getChildrenByParentId(pid: number) {
+        return pid === 7 ? kids : [];
+      },
+      async getChildrenByParentEmail() {
+        return [];
+      },
+    });
+
+    const { schoolIds, children } = await resolveSchoolIdsForParentSessions(storage, {
+      email: 'parent@test.com',
+    });
+    expect(children).toHaveLength(1);
+    expect(schoolIds).toEqual([42]);
+  });
+
+  it('merges school ids from children and parent', async () => {
+    const parent = { id: 7, schoolId: 42 } as User;
+    const kids: Child[] = [
+      { id: 1, parentId: 7, schoolId: 10 } as Child,
+      { id: 2, parentId: 7, schoolId: 11 } as Child,
+    ];
+
+    const storage = mockStorage({
+      async getUserByEmail() {
+        return parent;
+      },
+      async getUserBySupabaseId() {
+        return undefined;
+      },
+      async getUserByAuth0Id() {
+        return undefined;
+      },
+      async getChildrenByParentId(pid: number) {
+        return pid === 7 ? kids : [];
+      },
+      async getChildrenByParentEmail() {
+        return [];
+      },
+    });
+
+    const { schoolIds } = await resolveSchoolIdsForParentSessions(storage, { email: 'parent@test.com' });
+    expect(schoolIds.sort((a, b) => a - b)).toEqual([10, 11, 42]);
   });
 });

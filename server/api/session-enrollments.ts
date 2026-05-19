@@ -6,6 +6,12 @@ import { storage } from "../storage";
 import { supabaseAuth } from "../middleware/supabase-auth";
 import { getDb } from "../db";
 import { eq, and, inArray, notInArray, sql } from "drizzle-orm";
+import {
+  getChildrenForAuthenticatedParent,
+  parentAuthCriteriaFromRequest,
+  resolveParentDbUser,
+  resolveSchoolIdsForParentSessions,
+} from "../lib/parent-auth-scope";
 
 const router = Router();
 
@@ -17,7 +23,9 @@ const sessionEnrollSchema = z.object({
 
 router.post("/", supabaseAuth, async (req: any, res) => {
   try {
-    const userId = req.user?.id;
+    const criteria = parentAuthCriteriaFromRequest(req);
+    const parent = await resolveParentDbUser(storage, criteria);
+    const userId = req.user?.id ?? parent?.id;
     if (!userId) {
       return res.status(401).json({ message: "Authentication required" });
     }
@@ -30,12 +38,18 @@ router.post("/", supabaseAuth, async (req: any, res) => {
     const { childIds, sessionIds, variant } = parsed.data;
     const db = await getDb();
 
-    const parentChildren = await storage.getChildrenByParentId(userId);
+    const parentChildren = await getChildrenForAuthenticatedParent(storage, criteria);
     const parentChildIds = parentChildren.map((c: any) => c.id);
     const invalidChildIds = childIds.filter((id) => !parentChildIds.includes(id));
     if (invalidChildIds.length > 0) {
       return res.status(403).json({ message: "You can only enroll your own children" });
     }
+
+    const { schoolIds } = await resolveSchoolIdsForParentSessions(
+      storage,
+      criteria,
+      req.user?.schoolId,
+    );
 
     const sessionRows = await db
       .select()
@@ -44,6 +58,13 @@ router.post("/", supabaseAuth, async (req: any, res) => {
 
     if (sessionRows.length !== sessionIds.length) {
       return res.status(404).json({ message: "One or more sessions not found" });
+    }
+
+    const outOfScopeSessions = sessionRows.filter((s) => !schoolIds.includes(s.schoolId));
+    if (outOfScopeSessions.length > 0) {
+      return res.status(403).json({
+        message: `Session not available for your school: ${outOfScopeSessions.map((s) => s.name).join(", ")}`,
+      });
     }
 
     const closedSessions = sessionRows.filter((s) => !s.enrollmentOpen);

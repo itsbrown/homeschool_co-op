@@ -513,10 +513,22 @@ export default function ParentDashboard() {
 
   const [dismissPaymentDueAlert, setDismissPaymentDueAlert] = useState(false);
 
+  const childCount = childrenData?.length ?? 0;
+
   // Fetch enrollments data
   const { data: enrollmentsData, isLoading: enrollmentsLoading } = useQuery({
     queryKey: ["/api/parent/enrollments"],
     enabled: !!user && !!session,
+  });
+
+  const { data: openSessions = [] } = useQuery<{ id: number; name: string }[]>({
+    queryKey: ["/api/admin/sessions/open"],
+    enabled: !!user && !!session && childCount > 0,
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/admin/sessions/open");
+      if (!res.ok) return [];
+      return res.json();
+    },
   });
 
   const { data: upcomingScheduledData } = useQuery({
@@ -733,6 +745,15 @@ export default function ParentDashboard() {
               <span className="sm:hidden">Browse Classes</span>
             </Link>
           </Button>
+          {childCount > 0 && (
+            <Button asChild className="w-full sm:w-auto whitespace-nowrap" data-testid="btn-session-enrollment">
+              <Link href="/enroll">
+                <Calendar className="mr-2 h-4 w-4" />
+                <span className="hidden sm:inline">Enroll in a Session</span>
+                <span className="sm:hidden">Session enroll</span>
+              </Link>
+            </Button>
+          )}
         </div>
       </div>
 
@@ -772,6 +793,42 @@ export default function ParentDashboard() {
               </Button>
             </Alert>
           )}
+          {childCount > 0 &&
+            !enrollmentsLoading &&
+            (enrollmentsData?.length ?? 0) === 0 && (
+              <Alert className="border-primary/30 bg-primary/5" data-testid="enroll-cta-banner">
+                <BookOpen className="h-4 w-4" />
+                <AlertTitle>Ready to enroll</AlertTitle>
+                <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+                  {openSessions.length > 0 ? (
+                    <>
+                      <span>
+                        {openSessions.length} session{openSessions.length === 1 ? "" : "s"} are open for
+                        enrollment.
+                      </span>
+                      <Button size="sm" asChild data-testid="banner-enroll-session">
+                        <Link href="/enroll">Enroll in a session</Link>
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <span>
+                        Browse programs and classes for your child. Session enrollment will appear here when
+                        your school opens a session.
+                      </span>
+                      <div className="flex flex-wrap gap-2">
+                        <Button size="sm" asChild>
+                          <Link href="/programs">Browse programs</Link>
+                        </Button>
+                        <Button size="sm" variant="outline" asChild>
+                          <Link href="/enroll">Session enrollment</Link>
+                        </Button>
+                      </div>
+                    </>
+                  )}
+                </AlertDescription>
+              </Alert>
+            )}
           {/* Stats Cards Row */}
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             <Card>
