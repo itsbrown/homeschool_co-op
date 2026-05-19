@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Plus, Edit, Trash2, Calendar, Clock, Users, DollarSign } from "lucide-react";
-import type { Session } from "@shared/schema";
+import type { EnrollmentSession as Session } from "@shared/schema";
 
 const STATUS_COLORS: Record<string, string> = {
   upcoming: "bg-blue-100 text-blue-800",
