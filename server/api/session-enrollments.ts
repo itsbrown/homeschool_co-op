@@ -28,7 +28,7 @@ router.post("/", supabaseAuth, async (req: any, res) => {
     }
 
     const { childIds, sessionIds, variant } = parsed.data;
-    const db = getDb();
+    const db = await getDb();
 
     const parentChildren = await storage.getChildrenByParentId(userId);
     const parentChildIds = parentChildren.map((c: any) => c.id);

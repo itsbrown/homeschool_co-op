@@ -11,7 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { normalizeParentChildrenResponse } from "@/lib/parent-children-api";
 import { ArrowLeft, ArrowRight, Check, Calendar, Clock, DollarSign, User, ShoppingCart, Sun, Sunrise, Loader2, AlertCircle } from "lucide-react";
-import type { Session } from "@shared/schema";
+import type { EnrollmentSession as Session } from "@shared/schema";
 
 function formatCents(cents: number | null | undefined): string {
   if (cents == null) return "$0.00";

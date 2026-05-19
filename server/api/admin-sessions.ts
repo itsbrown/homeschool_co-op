@@ -37,7 +37,7 @@ router.get("/", supabaseAuth, requireAdminOrDirector, requireSchoolContext, asyn
 
 router.get("/open", supabaseAuth, async (req: any, res) => {
   try {
-    const userId = req.userId;
+    const userId = req.user?.id;
     if (!userId) {
       return res.status(401).json({ message: "Authentication required" });
     }

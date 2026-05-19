@@ -2199,6 +2199,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const adminSessionsRouter = (await import("./api/admin-sessions")).default;
   app.use("/api/admin/sessions", adminSessionsRouter);
 
+  const sessionEnrollmentsRouter = (await import("./api/session-enrollments")).default;
+  app.use("/api/session-enrollments", sessionEnrollmentsRouter);
+
   app.use("/api/admin", adminRouter);
   app.use("/api/admin-classes", adminClassesRouter); // Add duplicate route for backwards compatibility
   app.use("/api/admin-enrollments", adminEnrollmentsRouter); // Admin enrollment management
