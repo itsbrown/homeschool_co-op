@@ -355,65 +355,94 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(500).json({ message: "Authentication service unavailable. Please try again." });
       }
 
-      if (existingAuthUser) {
-        console.log('❌ Auth account already exists for:', validatedData.email);
-        return res.status(400).json({
-          message: "User already exists. Please use the login page to access your account.",
-        });
-      }
-
-      // Hash password
       const hashedPassword = await bcrypt.hash(validatedData.password, 10);
       console.log('🔒 Password hashed successfully');
 
-      // Create user in Supabase FIRST
-      console.log('👤 Creating user in Supabase auth system...');
-      const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
-        email: validatedData.email,
-        password: validatedData.password,
-        email_confirm: true,
-        app_metadata: {
-          role: validatedData.role,
-          school_id: validatedData.schoolId
-        },
-        user_metadata: {
-          name: validatedData.name,
-          first_name: validatedData.firstName,
-          last_name: validatedData.lastName
-        }
-      });
+      let supabaseUserId: string;
+      let recoveredOrphanedAuth = false;
 
-      if (authError) {
-        console.error('❌ Supabase auth creation failed:', authError);
-        const { status, message } = mapSupabaseAuthError(authError);
-        return res.status(status).json({ message });
+      if (existingAuthUser) {
+        // DB row was removed but Supabase auth remains — finish registration locally.
+        console.log('🔄 Recovering orphaned Supabase auth for:', validatedData.email);
+        supabaseUserId = existingAuthUser.id;
+        recoveredOrphanedAuth = true;
+
+        const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
+          supabaseUserId,
+          {
+            password: validatedData.password,
+            email_confirm: true,
+            app_metadata: {
+              role: validatedData.role,
+              school_id: validatedData.schoolId,
+            },
+            user_metadata: {
+              name: validatedData.name,
+              first_name: validatedData.firstName,
+              last_name: validatedData.lastName,
+            },
+          },
+        );
+
+        if (updateError) {
+          console.error('❌ Failed to update orphaned Supabase auth:', updateError);
+          const { status, message } = mapSupabaseAuthError(updateError);
+          return res.status(status).json({ message });
+        }
+      } else {
+        console.log('👤 Creating user in Supabase auth system...');
+        const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
+          email: validatedData.email,
+          password: validatedData.password,
+          email_confirm: true,
+          app_metadata: {
+            role: validatedData.role,
+            school_id: validatedData.schoolId,
+          },
+          user_metadata: {
+            name: validatedData.name,
+            first_name: validatedData.firstName,
+            last_name: validatedData.lastName,
+          },
+        });
+
+        if (authError) {
+          console.error('❌ Supabase auth creation failed:', authError);
+          const { status, message } = mapSupabaseAuthError(authError);
+          return res.status(status).json({ message });
+        }
+
+        supabaseUserId = authUser.user.id;
+        console.log('✅ Supabase auth account created:', supabaseUserId);
       }
 
-      console.log('✅ Supabase auth account created:', authUser.user.id);
-
-      // Now create user in local storage
       let user;
       try {
         console.log('👤 Creating local user record...');
         user = await storage.createUser({
           ...validatedData,
           password: hashedPassword,
-          supabaseId: authUser.user.id
+          supabaseId: supabaseUserId,
         });
-        console.log('✅ Local user record created:', user.id);
+        console.log(
+          recoveredOrphanedAuth
+            ? `✅ Local user record recreated from orphaned auth: ${user.id}`
+            : `✅ Local user record created: ${user.id}`,
+        );
       } catch (localError) {
         console.error('❌ Local user creation failed:', localError);
-        
-        // Clean up Supabase account
-        try {
-          await supabaseAdmin.auth.admin.deleteUser(authUser.user.id);
-          console.log('🧹 Cleaned up Supabase account');
-        } catch (cleanupError) {
-          console.error('Failed to cleanup Supabase account:', cleanupError);
+
+        if (!recoveredOrphanedAuth) {
+          try {
+            await supabaseAdmin.auth.admin.deleteUser(supabaseUserId);
+            console.log('🧹 Cleaned up Supabase account');
+          } catch (cleanupError) {
+            console.error('Failed to cleanup Supabase account:', cleanupError);
+          }
         }
-        
-        return res.status(500).json({ 
-          message: "Failed to create user account. Please try again." 
+
+        return res.status(500).json({
+          message: "Failed to create user account. Please try again.",
         });
       }
 
@@ -458,11 +487,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           await storage.deleteUser(user.id);
           console.log(`🧹 Rolled back: Deleted local user record (ID: ${user.id})`);
           
-          await supabaseAdmin.auth.admin.deleteUser(authUser.user.id);
-          console.log(`🧹 Rolled back: Deleted Supabase auth account (ID: ${authUser.user.id})`);
+          await supabaseAdmin.auth.admin.deleteUser(supabaseUserId);
+          console.log(`🧹 Rolled back: Deleted Supabase auth account (ID: ${supabaseUserId})`);
         } catch (cleanupError) {
           console.error('❌ Failed to cleanup after role creation failure:', cleanupError);
-          console.error(`⚠️ ORPHANED RECORDS: Local user ID=${user.id}, Supabase ID=${authUser.user.id}`);
+          console.error(`⚠️ ORPHANED RECORDS: Local user ID=${user.id}, Supabase ID=${supabaseUserId}`);
         }
         
         return res.status(500).json({ 

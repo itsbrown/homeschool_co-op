@@ -86,3 +86,23 @@ export function mapSupabaseAuthError(error: AuthError | Error): {
     message: `Failed to create authentication account: ${msg}`,
   };
 }
+
+/** Remove a Supabase auth user by email (for orphaned auth after DB-only deletes). */
+export async function deleteAuthUserByEmail(email: string): Promise<boolean> {
+  const supabaseAdmin = getSupabaseAdminClient();
+  if (!supabaseAdmin) {
+    throw new Error('Supabase admin client not configured');
+  }
+
+  const authUser = await findAuthUserByEmail(email);
+  if (!authUser) {
+    return false;
+  }
+
+  const { error } = await supabaseAdmin.auth.admin.deleteUser(authUser.id);
+  if (error) {
+    throw error;
+  }
+
+  return true;
+}
