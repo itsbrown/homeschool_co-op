@@ -8,6 +8,8 @@ import documentsRouter from './schools/documents';
 import { supabaseAuth } from "../middleware/supabase-auth";
 import { requireRole } from "../middleware/auth0-auth";
 import { storage } from "../storage";
+import { insertSchoolCore } from "../lib/school-db";
+import { userRoles } from "@shared/schema";
 
 const router = express.Router();
 
@@ -25,12 +27,7 @@ async function generateRegistrationCode(): Promise<string> {
     }
 
     // Check if this code already exists in database
-    const db = await getDb();
-    const [existingSchool] = await db
-      .select()
-      .from(schools)
-      .where(eq(schools.registrationCode, result))
-      .limit(1);
+    const existingSchool = await storage.getSchoolByCode(result);
 
     if (!existingSchool) {
       console.log('✅ Generated unique registration code:', result);
@@ -48,10 +45,20 @@ async function generateRegistrationCode(): Promise<string> {
   return fallbackCode;
 }
 
-// Create a new school
-router.post("/", async (req, res) => {
+// Create a new school (authenticated admin becomes school owner)
+router.post("/", supabaseAuth, async (req: any, res) => {
   try {
     console.log('🏫 Creating school with data:', JSON.stringify(req.body, null, 2));
+
+    const userEmail = req.user?.email;
+    if (!userEmail) {
+      return res.status(401).json({ message: 'Authentication required to register a school' });
+    }
+
+    const adminUser = await storage.getUserByEmail(userEmail);
+    if (!adminUser) {
+      return res.status(404).json({ message: 'User account not found. Complete sign-up first.' });
+    }
 
     // Validate the request body
     const validatedData = insertSchoolSchema.safeParse(req.body);
@@ -68,18 +75,75 @@ router.post("/", async (req, res) => {
       registrationCode = await generateRegistrationCode();
       console.log('🔑 Generated registration code:', registrationCode);
     }
-    const schoolDataWithCode = {
-      ...validatedData.data,
-      registrationCode
-    };
+
+    const d = validatedData.data;
+    let newSchool;
+    try {
+      newSchool = await storage.createSchool({
+        ...d,
+        registrationCode,
+        adminId: adminUser.id,
+        status: 'active',
+      } as Parameters<typeof storage.createSchool>[0]);
+    } catch (storageErr) {
+      console.warn('storage.createSchool failed, using core insert:', storageErr);
+      newSchool = await insertSchoolCore({
+        name: d.name,
+        type: d.type,
+        adminId: adminUser.id,
+        address: d.address ?? null,
+        city: d.city,
+        state: d.state,
+        zipCode: d.zipCode,
+        phoneNumber: d.phoneNumber ?? null,
+        email: d.email,
+        website: d.website ?? null,
+        description: d.description ?? null,
+        foundedYear: d.foundedYear ?? null,
+        accreditation: d.accreditation ?? null,
+        enrollmentSize: d.enrollmentSize ?? null,
+        registrationCode,
+        status: 'active',
+      });
+    }
 
     const db = await getDb();
-    const [newSchool] = await db
-      .insert(schools)
-      .values(schoolDataWithCode)
-      .returning();
+    const existingRole = await db
+      .select({ id: userRoles.id })
+      .from(userRoles)
+      .where(
+        and(
+          eq(userRoles.userId, adminUser.id),
+          eq(userRoles.role, 'schoolAdmin'),
+          eq(userRoles.schoolId, newSchool.id),
+        ),
+      )
+      .limit(1);
 
-    console.log('✅ School created in database:', newSchool);
+    let activeRoleId = adminUser.activeRoleId ?? null;
+    if (existingRole.length === 0) {
+      const [roleRow] = await db
+        .insert(userRoles)
+        .values({
+          userId: adminUser.id,
+          role: 'schoolAdmin',
+          schoolId: newSchool.id,
+          isPrimary: true,
+        })
+        .returning();
+      activeRoleId = roleRow.id;
+    } else {
+      activeRoleId = existingRole[0].id;
+    }
+
+    await storage.updateUser(adminUser.id, {
+      schoolId: newSchool.id,
+      role: 'schoolAdmin',
+      activeRole: 'schoolAdmin',
+      activeRoleId,
+    });
+
+    console.log('✅ School created and linked to admin:', adminUser.email, newSchool.id);
     res.status(201).json(newSchool);
   } catch (error: any) {
     console.error("Error creating school:", error);
@@ -90,8 +154,7 @@ router.post("/", async (req, res) => {
 // Get all schools
 router.get("/", async (req, res) => {
   try {
-    const db = await getDb();
-    const allSchools = await db.query.schools.findMany();
+    const allSchools = await storage.getAllSchools();
     res.json(allSchools);
   } catch (error: any) {
     console.error("Error fetching schools:", error);

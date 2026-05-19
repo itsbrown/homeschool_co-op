@@ -3,6 +3,7 @@ import { normalizeEmailForLookup } from '@shared/parent-identity';
 import { normalizeSchoolFeatures } from './lib/school-features';
 import { getDb } from './db';
 import { IStorage, type InsertPaymentReminderLog, type PaymentReminderLog } from './storage';
+import { getAllSchoolsCore, getSchoolCoreById, insertSchoolCore } from './lib/school-db';
 import {
   User, InsertUser, users,
   UserRole, userRoles,
@@ -193,9 +194,14 @@ export class DatabaseStorage implements IStorage {
 
   // School methods
   async getSchool(id: number): Promise<School | undefined> {
-    const db = await getDb();
-    const [school] = await db.select().from(schools).where(eq(schools.id, id));
-    return school;
+    try {
+      const db = await getDb();
+      const [school] = await db.select().from(schools).where(eq(schools.id, id));
+      return school;
+    } catch (error) {
+      console.warn(`getSchool(${id}) drizzle fallback:`, error instanceof Error ? error.message : error);
+      return (await getSchoolCoreById(id)) as School | undefined;
+    }
   }
 
   async getSchoolFeatures(schoolId: number): Promise<Record<string, boolean>> {
@@ -223,24 +229,59 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getSchoolByCode(registrationCode: string): Promise<School | undefined> {
-    const db = await getDb();
-    const [school] = await db.select().from(schools).where(eq(schools.registrationCode, registrationCode));
-    return school;
+    try {
+      const db = await getDb();
+      const [school] = await db.select().from(schools).where(eq(schools.registrationCode, registrationCode));
+      return school;
+    } catch (error) {
+      const all = await getAllSchoolsCore();
+      return all.find(
+        (s) => s.registrationCode?.toLowerCase() === registrationCode.toLowerCase(),
+      ) as School | undefined;
+    }
   }
 
   async getAllSchools(): Promise<School[]> {
-    const db = await getDb();
-    return await db.select().from(schools);
+    try {
+      const db = await getDb();
+      return await db.select().from(schools);
+    } catch (error) {
+      console.warn('getAllSchools drizzle fallback:', error instanceof Error ? error.message : error);
+      return (await getAllSchoolsCore()) as School[];
+    }
   }
 
   async createSchool(schoolData: InsertSchool & { adminId: number }): Promise<School> {
-    const db = await getDb();
-    const [newSchool] = await db.insert(schools).values({
-      ...schoolData,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    }).returning();
-    return newSchool;
+    try {
+      const db = await getDb();
+      const [newSchool] = await db.insert(schools).values({
+        ...schoolData,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }).returning();
+      return newSchool;
+    } catch (error) {
+      console.warn('createSchool drizzle fallback:', error instanceof Error ? error.message : error);
+      const created = await insertSchoolCore({
+        name: schoolData.name,
+        type: schoolData.type,
+        adminId: schoolData.adminId,
+        address: schoolData.address ?? null,
+        city: schoolData.city,
+        state: schoolData.state,
+        zipCode: schoolData.zipCode,
+        phoneNumber: schoolData.phoneNumber ?? null,
+        email: schoolData.email,
+        website: schoolData.website ?? null,
+        description: schoolData.description ?? null,
+        foundedYear: schoolData.foundedYear ?? null,
+        accreditation: schoolData.accreditation ?? null,
+        enrollmentSize: schoolData.enrollmentSize ?? null,
+        registrationCode: schoolData.registrationCode ?? `SCH${Date.now()}`,
+        status: schoolData.status ?? 'active',
+      });
+      return created as School;
+    }
   }
 
   async updateSchool(id: number, schoolData: Partial<InsertSchool>): Promise<School | undefined> {
