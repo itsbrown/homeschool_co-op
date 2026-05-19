@@ -1,3 +1,15 @@
+type ZodIssueLike = { path?: Array<string | number>; message?: string };
+
+function formatZodIssues(errors: ZodIssueLike[]): string {
+  return errors
+    .map((issue) => {
+      const field =
+        issue.path && issue.path.length > 0 ? issue.path.map(String).join(".") : "form";
+      return `${field}: ${issue.message ?? "invalid"}`;
+    })
+    .join("; ");
+}
+
 /**
  * Turn apiRequest / fetch failures into short, user-safe messages (no raw HTML dumps).
  */
@@ -20,16 +32,22 @@ export function formatFetchErrorMessage(error: unknown): string {
         detail?: string;
         errors?: unknown[];
       };
+      if (Array.isArray(data.errors) && data.errors.length > 0) {
+        const zodSummary = formatZodIssues(data.errors as ZodIssueLike[]);
+        if (zodSummary) {
+          return zodSummary;
+        }
+      }
       if (data.message && data.hint) {
         return `${data.message} ${data.hint}`;
+      }
+      if (data.message && data.message !== 'Validation error') {
+        return data.message;
       }
       if (data.message) {
         return data.detail && process.env.NODE_ENV === 'development'
           ? `${data.message} (${data.detail})`
           : data.message;
-      }
-      if (Array.isArray(data.errors) && data.errors.length > 0) {
-        return 'Please check the form fields and try again.';
       }
     } catch {
       // fall through

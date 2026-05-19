@@ -216,8 +216,11 @@ router.post("/", requireSchoolContext, async (req: any, res) => {
     console.log(`✅ Creating location for school ${school.name} (ID: ${school.id})`);
     
     // [FIX:v3.0] SECURITY: Use the authenticated user's schoolId from database, ignoring client-provided value
-    const { schoolId: _clientSchoolId, ...bodyWithoutSchoolId } = req.body ?? {};
-    const validatedData = insertLocationSchema.parse(bodyWithoutSchoolId);
+    const { schoolId: _clientSchoolId, isActive: _clientIsActive, ...bodyWithoutSchoolId } = req.body ?? {};
+    const validatedData = insertLocationSchema.parse({
+      ...bodyWithoutSchoolId,
+      schoolId: numericSchoolId,
+    });
     const code = (validatedData.code?.trim() || deriveLocationCode(validatedData.name));
     const locationData = {
       ...validatedData,
@@ -231,9 +234,15 @@ router.post("/", requireSchoolContext, async (req: any, res) => {
     res.status(201).json(location);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ 
-        message: "Validation error", 
-        errors: error.errors 
+      const fieldSummary = error.errors
+        .map((issue) => {
+          const field = issue.path.length > 0 ? issue.path.join(".") : "form";
+          return `${field}: ${issue.message}`;
+        })
+        .join("; ");
+      return res.status(400).json({
+        message: fieldSummary || "Validation error",
+        errors: error.errors,
       });
     }
     console.error("Error creating location:", error);
