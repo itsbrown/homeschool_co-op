@@ -311,8 +311,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/auth/register", async (req, res) => {
     try {
       console.log('📝 Registration request body:', JSON.stringify(req.body, null, 2));
-      
-      const validatedData = insertUserSchema.parse(req.body);
+
+      const raw = req.body ?? {};
+      const parsedLocationId =
+        raw.location != null && raw.location !== ''
+          ? parseInt(String(raw.location), 10)
+          : null;
+      const { location: _location, registrationCode: _registrationCode, ...bodyForSchema } = raw;
+
+      const validatedData = insertUserSchema.parse({
+        ...bodyForSchema,
+        locationId: Number.isFinite(parsedLocationId) ? parsedLocationId : null,
+      });
       console.log('✅ Data validation passed:', validatedData);
 
       // Check if user already exists in local database
@@ -328,28 +338,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Email already exists" });
       }
 
-      // Check if user already exists in Supabase auth
-      const { createClient } = await import('@supabase/supabase-js');
-      const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-      const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-      
-      if (!supabaseUrl || !supabaseServiceKey) {
+      const { getSupabaseAdminClient, findAuthUserByEmail, mapSupabaseAuthError } =
+        await import('./lib/supabase-admin-auth');
+
+      const supabaseAdmin = getSupabaseAdminClient();
+      if (!supabaseAdmin) {
         console.error('❌ Supabase configuration missing');
         return res.status(500).json({ message: "Authentication service not configured" });
       }
 
-      const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-        auth: { autoRefreshToken: false, persistSession: false }
-      });
+      let existingAuthUser;
+      try {
+        existingAuthUser = await findAuthUserByEmail(validatedData.email);
+      } catch (lookupError) {
+        console.error('❌ Supabase user lookup failed:', lookupError);
+        return res.status(500).json({ message: "Authentication service unavailable. Please try again." });
+      }
 
-      // Check for existing Supabase user
-      const { data: existingAuthUsers } = await supabaseAdmin.auth.admin.listUsers();
-      const existingAuthUser = existingAuthUsers?.users.find(u => u.email === validatedData.email);
-      
       if (existingAuthUser) {
         console.log('❌ Auth account already exists for:', validatedData.email);
-        return res.status(400).json({ 
-          message: "User already exists. Please use the login page to access your account." 
+        return res.status(400).json({
+          message: "User already exists. Please use the login page to access your account.",
         });
       }
 
@@ -376,9 +385,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (authError) {
         console.error('❌ Supabase auth creation failed:', authError);
-        return res.status(500).json({ 
-          message: "Failed to create authentication account. Please try again." 
-        });
+        const { status, message } = mapSupabaseAuthError(authError);
+        return res.status(status).json({ message });
       }
 
       console.log('✅ Supabase auth account created:', authUser.user.id);

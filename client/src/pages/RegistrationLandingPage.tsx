@@ -199,7 +199,11 @@ export default function RegistrationLandingPage() {
         const errorData = await response.json();
         
         // Handle existing account scenario
-        if (response.status === 400 && errorData.message?.includes('User already exists')) {
+        if (
+          response.status === 400 &&
+          (errorData.message?.includes('already exists') ||
+            errorData.message?.includes('already registered'))
+        ) {
           toast({
             title: "Account Already Exists",
             description: "An account with this email already exists. Redirecting to login...",
