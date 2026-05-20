@@ -253,6 +253,13 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
   
   // Register membership admin routes with authentication
   app.use('/api/admin/memberships', jwtCheck, requireRole(['schoolAdmin', 'admin', 'superAdmin']), membershipRouter);
+
+  // Parent registration campuses — before registerRoutes() so nothing auth-wraps these paths
+  const { handlePublicLocationsRequest, PUBLIC_REGISTRATION_LOCATIONS_PATH } = await import(
+    './lib/registration-public-locations',
+  );
+  app.get(PUBLIC_REGISTRATION_LOCATIONS_PATH, handlePublicLocationsRequest);
+  app.get('/api/locations/public', handlePublicLocationsRequest);
   
   const server = await registerRoutes(app);
 

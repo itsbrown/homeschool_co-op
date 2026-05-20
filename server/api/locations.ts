@@ -9,10 +9,6 @@ import {
   getLocationsBySchoolId as getLocationsService,
   LocationSyncContext
 } from "../services/locationSyncService";
-import { handlePublicLocationsRequest } from "../lib/registration-public-locations";
-
-export { handlePublicLocationsRequest };
-
 const router = express.Router();
 
 function deriveLocationCode(name: string): string {
@@ -43,9 +39,8 @@ function locationDbErrorResponse(error: unknown): { message: string; hint?: stri
 // ROUTE ORDER MATTERS: Static paths must come before parameterized paths
 // to prevent Express from treating "accessible" as an ID
 
-// PUBLIC: Get locations for a school (no authentication required)
-// Also mounted without auth at app level in routes.ts — see handlePublicLocationsRequest
-router.get("/public", handlePublicLocationsRequest);
+// PUBLIC locations: GET /api/public/registration/locations and /api/locations/public
+// (mounted without auth in server/index.ts — not on this router)
 
 // Get all locations for a school
 router.get("/", requireSchoolContext, async (req: any, res) => {

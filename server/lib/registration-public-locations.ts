@@ -4,9 +4,12 @@ import { getSchoolCoreById } from './school-db';
 
 export type PublicLocationRow = { id: number; name: string };
 
+/** Canonical path (mounted in server/index.ts before auth). */
+export const PUBLIC_REGISTRATION_LOCATIONS_PATH = '/api/public/registration/locations';
+
 /**
- * GET /api/locations/public?schoolId=
- * No auth — used by parent registration before login.
+ * GET ?schoolId= — no auth; used by parent registration before login.
+ * Mounted at PUBLIC_REGISTRATION_LOCATIONS_PATH and /api/locations/public (legacy).
  */
 export async function handlePublicLocationsRequest(
   req: Request,

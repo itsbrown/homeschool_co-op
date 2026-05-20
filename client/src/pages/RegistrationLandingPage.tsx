@@ -12,7 +12,11 @@ import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { Building, ArrowLeft, PlusCircle, Trash2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { fetchPublicRegistration, fetchPublicRegistrationJson } from "@/lib/registration-public-api";
+import {
+  fetchPublicRegistration,
+  fetchPublicRegistrationJson,
+  PUBLIC_REGISTRATION_LOCATIONS_PATH,
+} from "@/lib/registration-public-api";
 import { registerParentWithChildren } from "@/lib/auth-register";
 import type { RegistrationSignupChildInput } from "@shared/auth-register";
 
@@ -111,11 +115,11 @@ export default function RegistrationLandingPage() {
     isError: locationsError,
     error: locationsErrorDetail,
   } = useQuery({
-    queryKey: ['/api/locations/public', school?.id],
+    queryKey: [PUBLIC_REGISTRATION_LOCATIONS_PATH, school?.id],
     queryFn: async () => {
       if (!school?.id) return [];
       return fetchPublicRegistrationJson<{ id: number; name: string }[]>(
-        `/api/locations/public?schoolId=${school.id}`,
+        `${PUBLIC_REGISTRATION_LOCATIONS_PATH}?schoolId=${school.id}`,
       );
     },
     enabled: !!school?.id,

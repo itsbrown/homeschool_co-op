@@ -1,3 +1,7 @@
+/** Matches server/lib/registration-public-locations.ts (mounted without auth in index.ts). */
+export const PUBLIC_REGISTRATION_LOCATIONS_PATH =
+  "/api/public/registration/locations";
+
 /**
  * Public registration API calls — no Supabase token (avoids 401 / REGISTRATION_REQUIRED
  * when a stale session exists in localStorage).
