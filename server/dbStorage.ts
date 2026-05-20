@@ -233,7 +233,12 @@ export class DatabaseStorage implements IStorage {
   async getSchoolByCode(registrationCode: string): Promise<School | undefined> {
     try {
       const db = await getDb();
-      const [school] = await db.select().from(schools).where(eq(schools.registrationCode, registrationCode));
+      const normalized = registrationCode.trim();
+      const [school] = await db
+        .select()
+        .from(schools)
+        .where(sql`LOWER(TRIM(${schools.registrationCode})) = LOWER(${normalized})`)
+        .limit(1);
       return school;
     } catch (error) {
       const all = await getAllSchoolsCore();

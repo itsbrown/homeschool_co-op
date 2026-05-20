@@ -84,6 +84,44 @@ node scripts/run-stabilize-checks.mjs
 | **Unit** | `server/tests/biweekly-checkout-contract.test.ts`, `server/tests/cart-program-dates.test.ts`, `server/tests/checkout-payment-plans-offer.test.ts`, `server/tests/biweekly-schedule-end-buffer.test.ts`, `server/tests/stripe-biweekly-checkout-phases.test.ts` | Golden fixture in `server/lib/biweekly-checkout-contract.ts` — cart, Stripe phases, boundary. |
 | **Integration** | `server/tests/integration/biweekly-session-checkout.test.ts` | Session cart snapshot + `create-payment-intent` biweekly → `scheduled_payments` dates/amounts/autopay metadata. Requires reachable `TEST_DATABASE_URL` (see commands below). |
 
+**Restore `users` after accidental test truncate (Supabase CSV)**
+
+Integration `testDb.cleanup()` must only run against `asa_test`. If dev Postgres was truncated, restore Neon from Replit **or** import Supabase auth export into `users` / `user_roles` (passwords remain in Supabase only):
+
+```bash
+# Dry-run
+DATABASE_URL="postgresql://..." npx tsx scripts/import-supabase-auth-users-from-csv.ts \
+  --csv "$HOME/Downloads/Supabase Snippet SQL Query.csv"
+
+# Apply
+CONFIRM_SUPABASE_USER_IMPORT=1 DATABASE_URL="postgresql://..." npx tsx scripts/import-supabase-auth-users-from-csv.ts \
+  --csv "$HOME/Downloads/Supabase Snippet SQL Query.csv" --apply
+```
+
+Then seed schools (required for `school_id` on import) and any app users missing from the Supabase export:
+
+```bash
+node scripts/seed-dev-schools.mjs
+CONFIRM_SEED_DEV_SCHOOLS=1 node scripts/seed-dev-schools.mjs --apply
+
+node scripts/import-app-users-from-csv.mjs --csv attached_assets/users_1761901890907.csv \
+  --email contact.americanseekersacademy@gmail.com
+CONFIRM_APP_USER_IMPORT=1 node scripts/import-app-users-from-csv.mjs --csv attached_assets/users_1761901890907.csv \
+  --email contact.americanseekersacademy@gmail.com --apply
+```
+
+Check a login email: `node scripts/diagnose-login-user.mjs user@example.com`
+
+Registration link / school code after restore:
+
+```bash
+node scripts/diagnose-school-code.mjs X8BMC1JE
+# If missing, open My School as admin (auto-generates a code) or:
+CONFIRM_SET_SCHOOL_CODE=1 node scripts/set-school-registration-code.mjs --school-id 1 --code X8BMC1JE --apply
+```
+
+`testDb.cleanup()` skips `TRUNCATE` unless the DB URL looks like a test database (or `ALLOW_TEST_TRUNCATE=1`).
+
 **Biweekly pyramid (layer 1 → 2)**
 
 In **zsh**, do not put `npm run` on the same line as `export` — you get `export: not valid in this context: test:server`. Set variables first, then run Jest (two commands), or prefix env vars without `export`:

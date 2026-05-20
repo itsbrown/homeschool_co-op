@@ -16,6 +16,7 @@ import { requireSchoolContext } from '../middleware/require-school-context';
 import { clearPermissionCache } from '../middleware/locationPermissions';
 import rateLimit from 'express-rate-limit';
 import { getDb } from '../db';
+import { ensureSchoolRegistrationCode } from '../lib/school-registration-code';
 
 // Rate limiter for permission updates - prevent bulk abuse
 const permissionUpdateLimiter = rateLimit({
@@ -464,12 +465,16 @@ router.get("/my-school", jwtCheck, async (req: any, res) => {
       if (school) {
         console.log('✅ Found school for user:', school.name);
         
+        const registrationCode =
+          (await ensureSchoolRegistrationCode(school.id)) ?? school.registrationCode;
+        
         // Load locations for this school
         const locations = await storage.getLocationsBySchoolId(school.id);
         console.log(`🏢 Found ${locations.length} locations for school ${school.name}`);
         
         const responseData = {
           ...school,
+          registrationCode,
           locations
         };
         
@@ -503,12 +508,16 @@ router.get("/my-school", jwtCheck, async (req: any, res) => {
       console.log('✅ Found existing school for admin (via adminId):', school.name);
       console.log('📊 RAW DATABASE DATA:', JSON.stringify(school, null, 2));
       
+      const registrationCode =
+        (await ensureSchoolRegistrationCode(school.id)) ?? school.registrationCode;
+      
       // Load locations for this school
       const locations = await storage.getLocationsBySchoolId(school.id);
       console.log(`🏢 Found ${locations.length} locations for school ${school.name}`);
       
       const responseData = {
         ...school,
+        registrationCode,
         locations
       };
       

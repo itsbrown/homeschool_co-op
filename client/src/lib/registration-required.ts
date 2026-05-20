@@ -13,6 +13,10 @@ export type { RegistrationRequiredPayload } from "./registration-required-payloa
  * Clear Supabase session and redirect to login with registration-required messaging.
  * Used by apiRequest and RoleContext (roles bootstrap uses raw fetch).
  */
+/** Prevents SupabaseLogin from redirecting back to /dashboard before sign-out finishes. */
+export const REGISTRATION_REDIRECT_BLOCK_KEY =
+  "registration_required_block_redirect";
+
 export async function handleRegistrationRequired(
   payload: RegistrationRequiredPayload,
 ): Promise<void> {
@@ -23,11 +27,6 @@ export async function handleRegistrationRequired(
     console.log("   Message:", payload.message);
   }
 
-  localStorage.removeItem("supabase_token");
-  localStorage.removeItem("activeRole");
-
-  await supabase.auth.signOut();
-
   const defaultMessage =
     "You need to register with your school before you can log in. Please contact your school administrator for a registration link.";
   sessionStorage.setItem(
@@ -35,8 +34,19 @@ export async function handleRegistrationRequired(
     payload.message || defaultMessage,
   );
   sessionStorage.setItem("registration_required_email", payload.email || "");
+  sessionStorage.setItem(REGISTRATION_REDIRECT_BLOCK_KEY, "1");
 
+  localStorage.removeItem("supabase_token");
+  localStorage.removeItem("activeRole");
+
+  try {
+    await supabase.auth.signOut();
+  } catch (err) {
+    console.warn("signOut during registration-required handling failed:", err);
+  }
+
+  const loginUrl = "/login?error=registration_required";
   if (!window.location.pathname.includes("/login")) {
-    window.location.href = "/login?error=registration_required";
+    window.location.replace(loginUrl);
   }
 }

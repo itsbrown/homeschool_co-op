@@ -362,7 +362,7 @@ function DashboardRouter() {
 
 function Router() {
   const { isAuthenticated, isLoading, user, error } = useAuth();
-  const { activeRole, showRoleSelection, setActiveRole } = useRole();
+  const { activeRole, showRoleSelection, setActiveRole, rolesError, isLoadingRoles } = useRole();
   const [location, setLocation] = useLocation();
 
   console.log(`🔐 Router render - activeRole:`, activeRole, 'isAuthenticated:', isAuthenticated, 'showRoleSelection:', showRoleSelection, 'user:', user?.email, 'location:', location);
@@ -372,6 +372,19 @@ function Router() {
     // This ensures hooks are called in consistent order
     console.log('Router effect - activeRole:', activeRole, 'isAuthenticated:', isAuthenticated);
   }, [activeRole, isAuthenticated]);
+
+  // Stale Supabase session with no app user row — send to login with a clear banner.
+  useEffect(() => {
+    if (
+      isAuthenticated &&
+      !isLoadingRoles &&
+      rolesError instanceof RegistrationRequiredError &&
+      location !== '/login' &&
+      location !== '/emergency-logout'
+    ) {
+      setLocation('/login?error=registration_required');
+    }
+  }, [isAuthenticated, isLoadingRoles, rolesError, location, setLocation]);
 
   // Handle redirects in useEffect to avoid state updates during render
   useEffect(() => {

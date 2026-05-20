@@ -132,21 +132,28 @@ export default function RegistrationLandingPage() {
             const schoolData = await response.json();
             setSchool(schoolData);
           } else {
+            let description = "Invalid registration code. Ask your school admin for a new link.";
+            try {
+              const errorData = await response.json();
+              if (errorData?.message) {
+                description = errorData.message;
+              }
+            } catch {
+              /* ignore */
+            }
             toast({
               title: "School Not Found",
-              description: "Invalid registration code",
-              variant: "destructive"
+              description,
+              variant: "destructive",
             });
-            setLocation("/");
           }
         } catch (err) {
           console.error("Error fetching school:", err);
           toast({
             title: "Error",
-            description: "Failed to load school information",
-            variant: "destructive"
+            description: "Failed to load school information. Please try again.",
+            variant: "destructive",
           });
-          setLocation("/");
         } finally {
           setLoading(false);
         }
@@ -281,6 +288,29 @@ export default function RegistrationLandingPage() {
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
           <p className="text-muted-foreground">Loading registration form...</p>
         </div>
+      </div>
+    );
+  }
+
+  if (code && !school) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <Card className="max-w-md w-full">
+          <CardHeader>
+            <CardTitle>Registration link not found</CardTitle>
+            <CardDescription>
+              Code <span className="font-mono font-semibold">{code}</span> is not in our system yet.
+              If your school was just set up, the admin should open <strong>My School</strong> once
+              to refresh the registration code, then send you the updated link.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-2">
+            <Button onClick={() => setLocation("/register")}>Enter a different code</Button>
+            <Button variant="outline" onClick={() => setLocation("/login")}>
+              Sign in
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
