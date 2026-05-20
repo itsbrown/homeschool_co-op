@@ -5,7 +5,7 @@ import { queryClient, handleExpiredSession } from "./lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SupabaseProvider, useAuth } from "@/components/SupabaseProvider";
-import { RoleProvider, useRole, AuthExpiredError } from "@/contexts/RoleContext";
+import { RoleProvider, useRole, AuthExpiredError, RegistrationRequiredError, ServiceUnavailableRolesError } from "@/contexts/RoleContext";
 import { NotificationProvider } from "@/hooks/useNotifications";
 import { CartProvider } from "@/contexts/CartContext";
 import { FormTracker } from "@/components/FormTracker";
@@ -318,6 +318,25 @@ function DashboardRouter() {
           <div className="text-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
             <p className="text-gray-600">Your session expired. Sending you back to sign in…</p>
+          </div>
+        </div>
+      );
+    }
+    if (rolesError instanceof RegistrationRequiredError) {
+      return (
+        <div className="min-h-screen flex items-center justify-center" data-testid="dashboard-registration-required">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-gray-600">Your account is not registered yet. Sending you back to sign in…</p>
+          </div>
+        </div>
+      );
+    }
+    if (rolesError instanceof ServiceUnavailableRolesError) {
+      return (
+        <div className="min-h-screen flex items-center justify-center" data-testid="dashboard-service-unavailable">
+          <div className="text-center max-w-md px-4">
+            <p className="text-gray-600">{rolesError.message}</p>
           </div>
         </div>
       );

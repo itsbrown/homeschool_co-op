@@ -2,7 +2,16 @@ import React, { createContext, useContext, useState, useEffect, useRef } from "r
 import { useAuth } from "@/components/SupabaseProvider";
 import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { queryClient, handleExpiredSession } from "@/lib/queryClient";
+import { queryClient, handleExpiredSession, setServiceUnavailable } from "@/lib/queryClient";
+import { handleRegistrationRequired } from "@/lib/registration-required";
+import {
+  isRegistrationRequiredBody,
+  isServiceUnavailableBody,
+  RegistrationRequiredError,
+  ServiceUnavailableRolesError,
+} from "@/lib/registration-required-payload";
+
+export { RegistrationRequiredError, ServiceUnavailableRolesError } from "@/lib/registration-required-payload";
 
 // Marker error so downstream effects can distinguish stale auth from
 // transient network failures.
@@ -99,6 +108,33 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
         throw new AuthExpiredError();
       }
 
+      if (response.status === 403) {
+        try {
+          const errorData = await response.json();
+          if (isRegistrationRequiredBody(errorData)) {
+            await handleRegistrationRequired({
+              message: errorData.message,
+              email: errorData.email,
+            });
+            throw new RegistrationRequiredError(errorData.message);
+          }
+        } catch (err) {
+          if (err instanceof RegistrationRequiredError) throw err;
+        }
+      }
+
+      if (response.status === 503) {
+        try {
+          const errorData = await response.json();
+          if (isServiceUnavailableBody(errorData)) {
+            setServiceUnavailable(true);
+            throw new ServiceUnavailableRolesError(errorData.message);
+          }
+        } catch (err) {
+          if (err instanceof ServiceUnavailableRolesError) throw err;
+        }
+      }
+
       if (!response.ok) {
         throw new Error('Failed to fetch roles');
       }
@@ -115,6 +151,8 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
     // Skip retry on auth-expired errors so we don't hammer the backend.
     retry: (failureCount, error) => {
       if (error instanceof AuthExpiredError) return false;
+      if (error instanceof RegistrationRequiredError) return false;
+      if (error instanceof ServiceUnavailableRolesError) return false;
       return failureCount < 2;
     },
   });
@@ -190,7 +228,12 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
 
   // Show error toast if role fetch fails (after retries exhausted)
   useEffect(() => {
-    if (rolesError && roleRetryCount >= MAX_ROLE_RETRY_ATTEMPTS) {
+    if (
+      rolesError &&
+      roleRetryCount >= MAX_ROLE_RETRY_ATTEMPTS &&
+      !(rolesError instanceof RegistrationRequiredError) &&
+      !(rolesError instanceof ServiceUnavailableRolesError)
+    ) {
       console.error('❌ Failed to load roles after retries:', rolesError);
       toast({
         title: 'Account setup issue',
