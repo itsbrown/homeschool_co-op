@@ -1,11 +1,51 @@
 import { expect, type Page } from "@playwright/test";
 
+/** Staff guide auto-opens on ParentAppShell; block it so wizard clicks are not intercepted. */
+export async function preventStaffGuideModal(page: Page) {
+  await page.addInitScript(() => {
+    localStorage.setItem("staff_guide_dismissed", "true");
+    sessionStorage.setItem("staff_guide_shown_this_session", "true");
+  });
+}
+
+/** Close the staff guide if it is already open (e.g. init script ran after first paint). */
+export async function dismissStaffGuideIfVisible(page: Page) {
+  const modal = page.getByTestId("staff-guide-modal");
+  const close = page.getByTestId("staff-guide-close");
+  try {
+    await modal.waitFor({ state: "visible", timeout: 3000 });
+    await close.click();
+    await expect(modal).toBeHidden({ timeout: 5000 });
+  } catch {
+    // Modal not shown — nothing to dismiss.
+  }
+}
+
 export async function loginParent(page: Page, email: string, password: string) {
   await page.goto("/login", { waitUntil: "domcontentloaded" });
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Sign In" }).click();
   await expect(page).not.toHaveURL(/\/login\/?$/, { timeout: 45_000 });
+  await waitForSupabaseToken(page);
+}
+
+/** Bearer token for page.request — Playwright API context does not send localStorage automatically. */
+export async function waitForSupabaseToken(page: Page, timeoutMs = 45_000): Promise<string> {
+  await page.waitForFunction(
+    () => !!localStorage.getItem("supabase_token"),
+    null,
+    { timeout: timeoutMs },
+  );
+  const token = await page.evaluate(() => localStorage.getItem("supabase_token"));
+  if (!token) {
+    throw new Error("supabase_token missing from localStorage after login");
+  }
+  return token;
+}
+
+export function bearerAuthHeaders(token: string): { Authorization: string } {
+  return { Authorization: `Bearer ${token}` };
 }
 
 export async function registerAnotherChild(page: Page) {

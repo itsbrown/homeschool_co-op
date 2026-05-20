@@ -140,7 +140,7 @@ export default function SessionEnrollmentPage() {
 
   return (
     <ParentAppShell>
-      <div className="max-w-3xl mx-auto px-4 py-6 space-y-6">
+      <div className="max-w-3xl mx-auto px-4 py-6 space-y-6" data-testid="session-enrollment-wizard">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" onClick={() => setLocation("/programs")}>
             <ArrowLeft className="h-5 w-5" />
@@ -173,7 +173,7 @@ export default function SessionEnrollmentPage() {
         </div>
 
         {step === 1 && (
-          <Card>
+          <Card data-testid="session-enroll-step-1">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <User className="h-5 w-5" />
@@ -199,6 +199,7 @@ export default function SessionEnrollmentPage() {
                   {children.map((child: any) => (
                     <div
                       key={child.id}
+                      data-testid={`enroll-child-${child.id}`}
                       onClick={() => toggleChild(child.id)}
                       className={`flex items-center gap-4 p-4 rounded-lg border cursor-pointer transition-colors ${
                         selectedChildIds.includes(child.id) ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50"
@@ -218,7 +219,7 @@ export default function SessionEnrollmentPage() {
         )}
 
         {step === 2 && (
-          <Card>
+          <Card data-testid="session-enroll-step-2">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Calendar className="h-5 w-5" />
@@ -283,7 +284,7 @@ export default function SessionEnrollmentPage() {
         )}
 
         {step === 3 && (
-          <Card>
+          <Card data-testid="session-enroll-step-3">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Clock className="h-5 w-5" />
@@ -353,7 +354,7 @@ export default function SessionEnrollmentPage() {
         )}
 
         {step === 4 && (
-          <Card>
+          <Card data-testid="session-enroll-step-4">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <ShoppingCart className="h-5 w-5" />

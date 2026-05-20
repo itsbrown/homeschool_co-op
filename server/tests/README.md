@@ -42,6 +42,47 @@ server/tests/
    export NODE_ENV=test
    ```
 
+### Stabilization checklist (before merging payment / enrollment work)
+
+Quick local gate (no full suite):
+
+```bash
+node scripts/run-stabilize-checks.mjs
+```
+
+1. **Schema (F001 Phase 1)** — on your dev or `asa_test` database only:
+   ```bash
+   # Add DATABASE_URL or TEST_DATABASE_URL to .env, then:
+   node scripts/db-push-with-env.mjs
+   node scripts/verify-f001-schema.mjs
+   ```
+   Or apply `server/migrations/f001-phase1-schema.sql` manually.
+
+2. **Full server suite** (requires Postgres; `globalSetup` writes `.jest-cache/integration-db.json`):
+   ```bash
+   export TEST_DATABASE_URL="postgresql://user:password@localhost:5432/asa_test"
+   npm run test:server
+   ```
+   - DB-backed suites use `describeIntegration` and **skip** when Postgres is unreachable (not fail).
+   - `testDb.cleanup()` clears MemStorage **and** truncates public Postgres tables between tests (**dedicated `asa_test` only**).
+
+3. **Payment-flow / allocator HTTP suites** (`server/tests/integration/payment-flow/*`, `allocator-reallocation-atomicity.db.test.ts`) also need the **dev app on port 5000** (`npm run dev`) because they call `http://localhost:5000/api/test/*`.
+
+4. **Triage**
+   - `User with email … already exists` → wrong DB URL or truncation skipped.
+   - `Database connection not available` → start Postgres / fix `TEST_DATABASE_URL`.
+   - `fetch failed` on port 5000 → start `npm run dev` before payment-flow tests.
+
+### Session enrollment (F001) — E2E vs integration
+
+| Layer | File | What it proves |
+|-------|------|----------------|
+| **E2E** | `e2e/session-enrollment-flow.spec.ts` | Parent wizard, open sessions API, `POST /api/session-enrollments` (authenticated). **No live Stripe.** |
+| **Integration** | `server/tests/integration/session-enrollment-checkout.test.ts` | `create-payment-intent` + cart snapshot with **mocked** Stripe (`jest.mock` on `getStripeClient`). Requires a real `TEST_DATABASE_URL` (not the literal `...` placeholder). |
+| **E2E checkout** | `e2e/parent-payment-flow.spec.ts` | Full UI checkout; needs valid `TESTING_STRIPE_SECRET_KEY` / `sk_test_*` in `.env` or secrets. |
+
+Do not add `create-payment-intent` to session E2E — it fails with Playwright’s sample key (`sk_test_4eC39HqLyjWDarjtT1ColDPY`) when `reuseExistingServer` reuses a dev server without your secrets.
+
 ### Running All Tests
 
 ```bash
