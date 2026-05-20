@@ -1,6 +1,7 @@
-import { sql, eq } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 import { schools, type School } from '@shared/schema';
 import { getDb } from '../db';
+import { getSchoolCoreByRegistrationCode } from './school-db';
 import { storage } from '../storage';
 
 const CODE_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -45,14 +46,18 @@ export async function findSchoolByRegistrationCode(
     return undefined;
   }
 
-  const db = await getDb();
-  const [school] = await db
-    .select()
-    .from(schools)
-    .where(sql`LOWER(TRIM(${schools.registrationCode})) = LOWER(${normalized})`)
-    .limit(1);
+  // Core SQL only — full Drizzle select() fails when F001 columns are not migrated yet.
+  const core = await getSchoolCoreByRegistrationCode(normalized);
+  if (core) {
+    return core as School;
+  }
 
-  return school;
+  try {
+    return await storage.getSchoolByCode(normalized);
+  } catch (err) {
+    console.warn('findSchoolByRegistrationCode storage fallback failed:', err);
+    return undefined;
+  }
 }
 
 /** Persist a registration code when the school row has none (e.g. after dev restore). */

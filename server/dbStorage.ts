@@ -231,9 +231,24 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getSchoolByCode(registrationCode: string): Promise<School | undefined> {
+    const normalized = registrationCode.trim();
+    if (!normalized) {
+      return undefined;
+    }
+    try {
+      const { getSchoolCoreByRegistrationCode } = await import('./lib/school-db');
+      const core = await getSchoolCoreByRegistrationCode(normalized);
+      if (core) {
+        return core as School;
+      }
+    } catch (error) {
+      console.warn(
+        'getSchoolByCode core lookup failed:',
+        error instanceof Error ? error.message : error,
+      );
+    }
     try {
       const db = await getDb();
-      const normalized = registrationCode.trim();
       const [school] = await db
         .select()
         .from(schools)
@@ -243,7 +258,7 @@ export class DatabaseStorage implements IStorage {
     } catch (error) {
       const all = await getAllSchoolsCore();
       return all.find(
-        (s) => s.registrationCode?.toLowerCase() === registrationCode.toLowerCase(),
+        (s) => s.registrationCode?.toLowerCase() === normalized.toLowerCase(),
       ) as School | undefined;
     }
   }

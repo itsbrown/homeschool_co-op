@@ -95,6 +95,24 @@ export async function getSchoolCoreById(id: number): Promise<SchoolCoreRow | und
   return row ? mapSchoolRow(row) : undefined;
 }
 
+/** Public registration links — avoids Drizzle selecting F001 columns missing on older DBs. */
+export async function getSchoolCoreByRegistrationCode(
+  code: string,
+): Promise<SchoolCoreRow | undefined> {
+  const normalized = code.trim();
+  if (!normalized) {
+    return undefined;
+  }
+  const db = await getDb();
+  const result = await db.execute(sql`
+    ${SCHOOL_ROW_SQL}
+    WHERE LOWER(TRIM(registration_code)) = LOWER(TRIM(${normalized}))
+    LIMIT 1
+  `);
+  const row = result.rows[0] as Record<string, unknown> | undefined;
+  return row ? mapSchoolRow(row) : undefined;
+}
+
 export async function getAllSchoolsCore(): Promise<SchoolCoreRow[]> {
   const db = await getDb();
   const result = await db.execute(sql`${SCHOOL_ROW_SQL} ORDER BY id`);

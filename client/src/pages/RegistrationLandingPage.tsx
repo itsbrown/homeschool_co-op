@@ -132,17 +132,24 @@ export default function RegistrationLandingPage() {
             const schoolData = await response.json();
             setSchool(schoolData);
           } else {
+            let title = response.status === 403 ? "Registration unavailable" : "School Not Found";
             let description = "Invalid registration code. Ask your school admin for a new link.";
             try {
               const errorData = await response.json();
               if (errorData?.message) {
                 description = errorData.message;
               }
+              if (response.status >= 500) {
+                title = "Server error";
+                description =
+                  errorData?.message ||
+                  "Could not load school information. Ask your admin to run the F001 schema migration or restart the app.";
+              }
             } catch {
               /* ignore */
             }
             toast({
-              title: "School Not Found",
+              title,
               description,
               variant: "destructive",
             });
