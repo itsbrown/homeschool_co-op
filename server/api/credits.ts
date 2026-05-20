@@ -677,20 +677,17 @@ router.get('/parents', requireSchoolContext, async (req: any, res) => {
     const schoolId = parseInt(req.schoolId, 10);
     const search = (req.query.query as string) || (req.query.search as string) || '';
 
-    const parents = await storage.getParentsBySchoolId(schoolId);
-
-    let filteredParents = parents;
-    if (search) {
-      const searchLower = search.toLowerCase();
-      filteredParents = parents.filter(
-        (p) =>
-          `${p.firstName} ${p.lastName}`.toLowerCase().includes(searchLower) ||
-          p.email.toLowerCase().includes(searchLower)
-      );
-    }
+    const { users: matchedParents } = await storage.searchUsers({
+      schoolId,
+      query: search || undefined,
+      role: 'parent',
+      limit: 50,
+      offset: 0,
+    });
+    const filteredParents = matchedParents.filter((p) => p.isActive !== false);
 
     const parentsWithCredits = await Promise.all(
-      filteredParents.slice(0, 50).map(async (parent) => {
+      filteredParents.map(async (parent) => {
         const totalAvailable = await storage.getTotalAvailableCredits(parent.id);
         return {
           id: parent.id,

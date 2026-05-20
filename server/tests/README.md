@@ -80,6 +80,7 @@ node scripts/run-stabilize-checks.mjs
 | **E2E** | `e2e/session-enrollment-flow.spec.ts` | Parent wizard, open sessions API, `POST /api/session-enrollments` (authenticated). **No live Stripe.** |
 | **Integration** | `server/tests/integration/session-enrollment-checkout.test.ts` | `create-payment-intent` + cart snapshot with **mocked** Stripe (`jest.mock` on `getStripeClient`). Requires a real `TEST_DATABASE_URL` (not the literal `...` placeholder). |
 | **E2E checkout** | `e2e/parent-payment-flow.spec.ts` | Full UI checkout; needs valid `TESTING_STRIPE_SECRET_KEY` / `sk_test_*` in `.env` or secrets. |
+| **E2E credits** | `e2e/credit-management-parent-lookup.spec.ts` | School-admin Add Manual Credit finds legacy parents (`users.school_id` only, no `user_roles`). Seed: `POST /api/test/setup-credit-lookup-scenario`. Requires `DATABASE_URL` + Supabase for admin login. |
 
 Do not add `create-payment-intent` to session E2E — it fails with Playwright’s sample key (`sk_test_4eC39HqLyjWDarjtT1ColDPY`) when `reuseExistingServer` reuses a dev server without your secrets.
 

@@ -40,6 +40,8 @@ import {
   notificationRecipients, type NotificationRecipient, type InsertNotificationRecipient,
   discounts, type Discount, type InsertDiscount,
   discountApplications, type DiscountApplication, type InsertDiscountApplication,
+  familyPaymentPlans, type FamilyPaymentPlan, type InsertFamilyPaymentPlan,
+  enrollmentPriceHistory, type EnrollmentPriceHistory, type InsertEnrollmentPriceHistory,
   type Credit,
   type InsertCredit,
   type CreditType,
@@ -511,6 +513,19 @@ export interface IStorage {
   getDiscountApplicationsByDiscountId(discountId: number): Promise<DiscountApplication[]>;
   createDiscountApplication(application: InsertDiscountApplication): Promise<DiscountApplication>;
   updateDiscountApplication(id: number, application: Partial<InsertDiscountApplication>): Promise<DiscountApplication | undefined>;
+
+  // F001: Family payment plans (session enrollment)
+  createFamilyPaymentPlan(plan: InsertFamilyPaymentPlan): Promise<FamilyPaymentPlan>;
+  getFamilyPaymentPlan(id: number): Promise<FamilyPaymentPlan | undefined>;
+  getFamilyPaymentPlansByParent(parentId: number, schoolId: number): Promise<FamilyPaymentPlan[]>;
+  updateFamilyPaymentPlan(id: number, plan: Partial<InsertFamilyPaymentPlan>): Promise<FamilyPaymentPlan | undefined>;
+  acquireFamilyPlanLock(planId: number, operationId: string): Promise<boolean>;
+  releaseFamilyPlanLock(planId: number, operationId: string): Promise<boolean>;
+
+  // F001: Enrollment price history (audit trail)
+  createPriceHistoryEntry(entry: InsertEnrollmentPriceHistory): Promise<EnrollmentPriceHistory>;
+  getPriceHistory(enrollmentId: number): Promise<EnrollmentPriceHistory[]>;
+  getTotalPaidForEnrollment(enrollmentId: number): Promise<number>;
 
   // Daily Flow Template methods
   getDailyFlowTemplates(filters?: { schoolId?: number; gradeLevel?: string; subject?: string }): Promise<DailyFlowTemplate[]>;
@@ -4629,8 +4644,14 @@ export class MemStorage implements IStorage {
     return;
   }
 
-  async getParentsBySchoolId(_schoolId: number): Promise<User[]> {
-    return [];
+  async getParentsBySchoolId(schoolId: number): Promise<User[]> {
+    const { users } = await this.searchUsers({
+      schoolId,
+      role: 'parent',
+      limit: 500,
+      offset: 0,
+    });
+    return users.filter((u) => u.isActive !== false);
   }
 
   async getCreditById(_id: number): Promise<Credit | undefined> {
@@ -6974,6 +6995,47 @@ export class MemStorage implements IStorage {
 
       async updateDiscountApplication(id: number, application: Partial<InsertDiscountApplication>): Promise<DiscountApplication | undefined> {
         return this.dbStorage.updateDiscountApplication(id, application);
+      }
+
+      // F001: Family payment plans
+      async createFamilyPaymentPlan(plan: InsertFamilyPaymentPlan): Promise<FamilyPaymentPlan> {
+        return this.dbStorage.createFamilyPaymentPlan(plan);
+      }
+
+      async getFamilyPaymentPlan(id: number): Promise<FamilyPaymentPlan | undefined> {
+        return this.dbStorage.getFamilyPaymentPlan(id);
+      }
+
+      async getFamilyPaymentPlansByParent(parentId: number, schoolId: number): Promise<FamilyPaymentPlan[]> {
+        return this.dbStorage.getFamilyPaymentPlansByParent(parentId, schoolId);
+      }
+
+      async updateFamilyPaymentPlan(
+        id: number,
+        plan: Partial<InsertFamilyPaymentPlan>,
+      ): Promise<FamilyPaymentPlan | undefined> {
+        return this.dbStorage.updateFamilyPaymentPlan(id, plan);
+      }
+
+      async acquireFamilyPlanLock(planId: number, operationId: string): Promise<boolean> {
+        return this.dbStorage.acquireFamilyPlanLock(planId, operationId);
+      }
+
+      async releaseFamilyPlanLock(planId: number, operationId: string): Promise<boolean> {
+        return this.dbStorage.releaseFamilyPlanLock(planId, operationId);
+      }
+
+      // F001: Enrollment price history
+      async createPriceHistoryEntry(entry: InsertEnrollmentPriceHistory): Promise<EnrollmentPriceHistory> {
+        return this.dbStorage.createPriceHistoryEntry(entry);
+      }
+
+      async getPriceHistory(enrollmentId: number): Promise<EnrollmentPriceHistory[]> {
+        return this.dbStorage.getPriceHistory(enrollmentId);
+      }
+
+      async getTotalPaidForEnrollment(enrollmentId: number): Promise<number> {
+        return this.dbStorage.getTotalPaidForEnrollment(enrollmentId);
       }
 
       // Membership Enrollment methods

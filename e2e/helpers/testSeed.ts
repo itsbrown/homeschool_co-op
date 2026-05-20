@@ -75,6 +75,39 @@ export type SetupSessionEnrollmentScenarioResponse = {
   details?: string;
 };
 
+export type SetupCreditLookupScenarioResponse = {
+  success: boolean;
+  data?: {
+    adminSupabaseLinked?: boolean;
+    school: { id: number; name: string; registrationCode: string };
+    admin: { id: number; email: string; password: string };
+    legacyParent: { id: number; email: string; name: string };
+    roleLinkedParent: { id: number; email: string; name: string };
+  };
+  error?: string;
+  details?: string;
+};
+
+export async function postSetupCreditLookupScenario(
+  request: APIRequestContext,
+  body: { linkSupabaseAuthAdmin?: boolean } = {},
+): Promise<{ response: APIResponse; json: SetupCreditLookupScenarioResponse | null }> {
+  const response = await request.post("/api/test/setup-credit-lookup-scenario", {
+    headers: {
+      "X-Test-Token": testApiToken(),
+      "Content-Type": "application/json",
+    },
+    data: body,
+  });
+  let json: SetupCreditLookupScenarioResponse | null = null;
+  try {
+    json = (await response.json()) as SetupCreditLookupScenarioResponse;
+  } catch {
+    json = null;
+  }
+  return { response, json };
+}
+
 export async function postSetupSessionEnrollmentScenario(
   request: APIRequestContext,
   body: {

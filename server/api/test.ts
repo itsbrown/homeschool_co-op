@@ -11,6 +11,7 @@ import {
   stripePaymentHistory,
   refundEvents,
   credits,
+  userRoles,
   membershipEnrollments,
   type InsertProgramEnrollment,
   type ProgramEnrollment,
@@ -484,6 +485,132 @@ router.post('/setup-cart-scenario', async (req: Request, res: Response) => {
     res.status(500).json({
       error: 'Failed to setup cart test scenario',
       details: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+/**
+ * POST /api/test/setup-credit-lookup-scenario
+ * Seeds a school admin plus:
+ * - legacyParent: users.school_id only (no user_roles row) — reproduces credit lookup gaps
+ * - roleLinkedParent: explicit user_roles parent row for parity checks
+ */
+router.post('/setup-credit-lookup-scenario', async (req: Request, res: Response) => {
+  try {
+    const testDb = new TestDatabase();
+    const uniqueId = nanoid(8);
+    let db;
+    try {
+      db = await getDb();
+    } catch {
+      return res.status(400).json({
+        error: 'Postgres required (set DATABASE_URL for credit lookup E2E)',
+      });
+    }
+    if (!db) {
+      return res.status(400).json({ error: 'Postgres required (getDb returned null)' });
+    }
+
+    const adminPassword = 'TestPassword123!';
+    const admin = await testDb.createTestUser({
+      email: `credit_admin_${uniqueId}@test.com`,
+      username: `creditadmin_${uniqueId}`,
+      name: 'Credit Lookup Admin',
+      role: 'schoolAdmin',
+    });
+    const bcrypt = await import('bcryptjs');
+    await storage.updateUser(admin.id, {
+      password: await bcrypt.hash(adminPassword, 10),
+    });
+
+    const school = await testDb.createTestSchool(admin.id, {
+      name: `Credit Lookup School ${uniqueId}`,
+      registrationCode: `CRLK${uniqueId.toUpperCase()}`,
+    });
+    await storage.updateUser(admin.id, { schoolId: school.id });
+
+    const legacyEmail = `legacy_parent_${uniqueId}@test.com`;
+    const legacyParent = await testDb.createTestUser({
+      email: legacyEmail,
+      username: `legacyparent_${uniqueId}`,
+      name: 'Legacy School Parent',
+      role: 'parent',
+      schoolId: school.id,
+    });
+
+    const roleEmail = `role_parent_${uniqueId}@test.com`;
+    const roleLinkedParent = await testDb.createTestUser({
+      email: roleEmail,
+      username: `roleparent_${uniqueId}`,
+      name: 'Role Linked Parent',
+      role: 'parent',
+      schoolId: school.id,
+    });
+    await db.insert(userRoles).values({
+      userId: roleLinkedParent.id,
+      role: 'parent',
+      schoolId: school.id,
+      isPrimary: true,
+    });
+
+    const legacyRoleRows = await db
+      .select({ id: userRoles.id })
+      .from(userRoles)
+      .where(eq(userRoles.userId, legacyParent.id));
+    if (legacyRoleRows.length > 0) {
+      return res.status(500).json({
+        error: 'legacy parent unexpectedly has user_roles rows',
+        details: `userId=${legacyParent.id}`,
+      });
+    }
+
+    let adminSupabaseLinked = false;
+    if (req.body?.linkSupabaseAuthAdmin === true) {
+      const supabaseUrl = process.env.SUPABASE_URL;
+      const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      if (!supabaseUrl || !serviceKey) {
+        return res.status(400).json({
+          error: 'linkSupabaseAuthAdmin requires SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY',
+        });
+      }
+      try {
+        adminSupabaseLinked = await linkSeedUserToSupabase({
+          dbUserId: admin.id,
+          email: admin.email,
+          password: adminPassword,
+          role: 'schoolAdmin',
+          schoolId: school.id,
+          displayName: admin.name || 'Credit Lookup Admin',
+        });
+      } catch (e) {
+        console.error('linkSupabaseAuthAdmin failed:', e);
+        adminSupabaseLinked = false;
+      }
+    }
+
+    res.json({
+      success: true,
+      data: {
+        adminSupabaseLinked,
+        school: { id: school.id, name: school.name, registrationCode: school.registrationCode },
+        admin: { id: admin.id, email: admin.email, password: adminPassword },
+        legacyParent: {
+          id: legacyParent.id,
+          email: legacyEmail,
+          name: legacyParent.name || 'Legacy School Parent',
+        },
+        roleLinkedParent: {
+          id: roleLinkedParent.id,
+          email: roleEmail,
+          name: roleLinkedParent.name || 'Role Linked Parent',
+        },
+      },
+    });
+  } catch (error) {
+    console.error('❌ setup-credit-lookup-scenario:', error);
+    res.status(500).json({
+      error: 'Failed to setup credit lookup scenario',
+      details: error instanceof Error ? error.message : String(error),
     });
   }
 });

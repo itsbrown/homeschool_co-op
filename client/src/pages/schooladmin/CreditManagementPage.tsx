@@ -672,7 +672,7 @@ export default function CreditManagementPage() {
                       setCreditForm(prev => ({ ...prev, userId: user.id }));
                     }}
                     placeholder="Search by name or email..."
-                    endpoint="/api/credits/parents"
+                    roleFilter="parent"
                   />
                 )}
               </div>

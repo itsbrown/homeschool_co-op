@@ -41,6 +41,8 @@ import {
   NotificationRecipient, InsertNotificationRecipient, notificationRecipients,
   Discount, InsertDiscount, discounts,
   DiscountApplication, InsertDiscountApplication, discountApplications,
+  FamilyPaymentPlan, InsertFamilyPaymentPlan, familyPaymentPlans,
+  EnrollmentPriceHistory, InsertEnrollmentPriceHistory, enrollmentPriceHistory,
   StaffPosition, InsertStaffPosition, staffPositions,
   StaffInvitation, InsertStaffInvitation, staffInvitations,
   PasswordResetToken, InsertPasswordResetToken, passwordResetTokens,
@@ -2886,6 +2888,127 @@ export class DatabaseStorage implements IStorage {
   }
 
   // ============================================
+  // F001: Family payment plans
+  // ============================================
+
+  async createFamilyPaymentPlan(plan: InsertFamilyPaymentPlan): Promise<FamilyPaymentPlan> {
+    const db = await getDb();
+    const now = new Date();
+    const [row] = await db
+      .insert(familyPaymentPlans)
+      .values({
+        ...plan,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .returning();
+    return row;
+  }
+
+  async getFamilyPaymentPlan(id: number): Promise<FamilyPaymentPlan | undefined> {
+    const db = await getDb();
+    const [row] = await db.select().from(familyPaymentPlans).where(eq(familyPaymentPlans.id, id));
+    return row;
+  }
+
+  async getFamilyPaymentPlansByParent(parentId: number, schoolId: number): Promise<FamilyPaymentPlan[]> {
+    const db = await getDb();
+    return await db
+      .select()
+      .from(familyPaymentPlans)
+      .where(
+        and(
+          eq(familyPaymentPlans.parentId, parentId),
+          eq(familyPaymentPlans.schoolId, schoolId),
+          inArray(familyPaymentPlans.status, ["active", "recalculating"]),
+        ),
+      )
+      .orderBy(desc(familyPaymentPlans.createdAt));
+  }
+
+  async updateFamilyPaymentPlan(
+    id: number,
+    plan: Partial<InsertFamilyPaymentPlan>,
+  ): Promise<FamilyPaymentPlan | undefined> {
+    const db = await getDb();
+    const [row] = await db
+      .update(familyPaymentPlans)
+      .set({ ...plan, updatedAt: new Date() })
+      .where(eq(familyPaymentPlans.id, id))
+      .returning();
+    return row;
+  }
+
+  /** Safeguard 2: 5-minute lock auto-expire; same operationId may re-acquire. */
+  async acquireFamilyPlanLock(planId: number, operationId: string): Promise<boolean> {
+    const db = await getDb();
+    const result = await db.execute(sql`
+      UPDATE family_payment_plans
+      SET locked_at = NOW(),
+          locked_by = ${operationId},
+          updated_at = NOW()
+      WHERE id = ${planId}
+        AND (
+          locked_at IS NULL
+          OR locked_by = ${operationId}
+          OR locked_at < NOW() - INTERVAL '5 minutes'
+        )
+      RETURNING id
+    `);
+    return result.rows.length > 0;
+  }
+
+  async releaseFamilyPlanLock(planId: number, operationId: string): Promise<boolean> {
+    const db = await getDb();
+    const result = await db.execute(sql`
+      UPDATE family_payment_plans
+      SET locked_at = NULL,
+          locked_by = NULL,
+          updated_at = NOW()
+      WHERE id = ${planId}
+        AND locked_by = ${operationId}
+      RETURNING id
+    `);
+    return result.rows.length > 0;
+  }
+
+  // ============================================
+  // F001: Enrollment price history
+  // ============================================
+
+  async createPriceHistoryEntry(entry: InsertEnrollmentPriceHistory): Promise<EnrollmentPriceHistory> {
+    const db = await getDb();
+    const [row] = await db.insert(enrollmentPriceHistory).values(entry).returning();
+    return row;
+  }
+
+  async getPriceHistory(enrollmentId: number): Promise<EnrollmentPriceHistory[]> {
+    const db = await getDb();
+    return await db
+      .select()
+      .from(enrollmentPriceHistory)
+      .where(eq(enrollmentPriceHistory.enrollmentId, enrollmentId))
+      .orderBy(desc(enrollmentPriceHistory.effectiveDate), desc(enrollmentPriceHistory.createdAt));
+  }
+
+  /** Safeguard 3: sum completed payment rows that reference this enrollment. */
+  async getTotalPaidForEnrollment(enrollmentId: number): Promise<number> {
+    const db = await getDb();
+    const [row] = await db
+      .select({
+        total: sql<number>`COALESCE(SUM(${payments.amount}), 0)::int`,
+      })
+      .from(payments)
+      .where(
+        and(
+          eq(payments.status, "completed"),
+          sql`${payments.enrollmentIds} @> ${JSON.stringify([enrollmentId])}::jsonb`,
+        ),
+      );
+    return row?.total ?? 0;
+  }
+
+  // ============================================
   // Staff Position Methods
   // ============================================
 
@@ -3119,24 +3242,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getParentsBySchoolId(schoolId: number): Promise<User[]> {
-    const db = await getDb();
-    const userIdRows = await db
-      .selectDistinct({ userId: users.id })
-      .from(users)
-      .innerJoin(userRoles, eq(users.id, userRoles.userId))
-      .where(
-        and(
-          eq(userRoles.schoolId, schoolId),
-          eq(users.isActive, true),
-          or(eq(userRoles.role, 'parent'), eq(userRoles.role, 'Parent'))
-        )
-      );
-    if (userIdRows.length === 0) return [];
-    const userIds = userIdRows.map((r: { userId: number }) => r.userId);
-    return db
-      .select()
-      .from(users)
-      .where(and(inArray(users.id, userIds), eq(users.isActive, true)));
+    const { users: matched } = await this.searchUsers({
+      schoolId,
+      role: 'parent',
+      limit: 500,
+      offset: 0,
+    });
+    return matched.filter((u) => u.isActive !== false);
   }
 
   async getCreditById(id: number): Promise<Credit | undefined> {
