@@ -12,6 +12,7 @@ module.exports = {
     // anything that touches the database SSL helpers.
     '^(.*/)?database-url\\.mjs$': '<rootDir>/server/tests/helpers/databaseUrlStub.cjs',
   },
+  globalSetup: '<rootDir>/server/tests/globalSetup.ts',
   setupFilesAfterEnv: ['<rootDir>/server/tests/setup.ts'],
   testMatch: [
     '<rootDir>/server/tests/**/*.test.ts',

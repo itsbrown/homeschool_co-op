@@ -81,6 +81,24 @@ node scripts/run-stabilize-checks.mjs
 | **Integration** | `server/tests/integration/session-enrollment-checkout.test.ts` | `create-payment-intent` + cart snapshot with **mocked** Stripe (`jest.mock` on `getStripeClient`). Requires a real `TEST_DATABASE_URL` (not the literal `...` placeholder). |
 | **E2E checkout** | `e2e/parent-payment-flow.spec.ts` | Full UI checkout; needs valid `TESTING_STRIPE_SECRET_KEY` / `sk_test_*` in `.env` or secrets. |
 | **E2E credits** | `e2e/credit-management-parent-lookup.spec.ts` | School-admin Add Manual Credit finds legacy parents (`users.school_id` only, no `user_roles`). Seed: `POST /api/test/setup-credit-lookup-scenario`. Requires `DATABASE_URL` + Supabase for admin login. |
+| **Unit** | `server/tests/biweekly-checkout-contract.test.ts`, `server/tests/cart-program-dates.test.ts`, `server/tests/checkout-payment-plans-offer.test.ts`, `server/tests/biweekly-schedule-end-buffer.test.ts`, `server/tests/stripe-biweekly-checkout-phases.test.ts` | Golden fixture in `server/lib/biweekly-checkout-contract.ts` — cart, Stripe phases, boundary. |
+| **Integration** | `server/tests/integration/biweekly-session-checkout.test.ts` | Session cart snapshot + `create-payment-intent` biweekly → `scheduled_payments` dates/amounts/autopay metadata. Requires reachable `TEST_DATABASE_URL` (see commands below). |
+
+**Biweekly pyramid (layer 1 → 2)**
+
+In **zsh**, do not put `npm run` on the same line as `export` — you get `export: not valid in this context: test:server`. Set variables first, then run Jest (two commands), or prefix env vars without `export`:
+
+```bash
+# Layer 1 — golden contract (no Postgres)
+npm run test:server -- --testPathPatterns="biweekly-checkout-contract|cart-program-dates|checkout-payment-plans-offer|biweekly-schedule-end-buffer|stripe-biweekly-checkout-phases"
+
+# Layer 2 — set DB URL (line 1), then run tests (line 2)
+export TEST_DATABASE_URL="postgresql://user:password@localhost:5432/asa_test"
+npm run test:server -- --testPathPatterns=biweekly-session-checkout --runInBand
+
+# Layer 2 — one-liner alternative (no export)
+TEST_DATABASE_URL="postgresql://user:password@localhost:5432/asa_test" npm run test:server -- --testPathPatterns=biweekly-session-checkout --runInBand
+```
 
 Do not add `create-payment-intent` to session E2E — it fails with Playwright’s sample key (`sk_test_4eC39HqLyjWDarjtT1ColDPY`) when `reuseExistingServer` reuses a dev server without your secrets.
 

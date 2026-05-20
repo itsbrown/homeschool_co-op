@@ -2,10 +2,18 @@ import Stripe from 'stripe';
 import { IStorage } from '../storage';
 import { CurrencyUtils } from '../../shared/currency-utils';
 import { InsertScheduledPayment } from '@shared/schema';
+import { buildBiweeklyCheckoutPhases } from '../lib/biweekly-checkout-contract';
+import { checkoutAnchorDate } from '../lib/payment-calculator';
 import { calculatePaymentSchedule, PaymentFrequency } from '../lib/payment-calculator';
 import { getStripeClient } from '../config/stripe';
 
-const isTestMode = process.env.NODE_ENV === 'test';
+/** Read at call time — env is set in Jest beforeAll after this module may have loaded. */
+function skipStripeApiInTests(): boolean {
+  return (
+    process.env.NODE_ENV === 'test' &&
+    process.env.ENABLE_STRIPE_PREFLIGHT_IN_TESTS !== 'true'
+  );
+}
 
 // Stripe's minimum payment amount is $0.50 USD (50 cents)
 const STRIPE_MINIMUM_AMOUNT = 50;
@@ -129,8 +137,8 @@ export class StripePaymentPlanService {
 
     const appliedCredits = Math.floor(data.creditsAppliedCents ?? 0);
 
-    if (isTestMode) {
-      // Mock payment intent for test environment
+    if (skipStripeApiInTests()) {
+      // Inline PaymentIntent when tests are not exercising the Stripe client mock
       paymentIntent = {
         id: `pi_test_${Date.now()}_${Math.random().toString(36).substring(7)}`,
         object: 'payment_intent',
@@ -296,8 +304,8 @@ export class StripePaymentPlanService {
   private async getOrCreateCustomer(email: string): Promise<Stripe.Customer> {
     console.log('🔍 Looking for existing Stripe customer:', email);
 
-    if (isTestMode) {
-      // Mock customer for test environment
+    if (skipStripeApiInTests()) {
+      // Inline customer when tests are not exercising the Stripe client mock
       const mockCustomer = {
         id: `cus_test_${Date.now()}_${Math.random().toString(36).substring(7)}`,
         object: 'customer',
@@ -352,7 +360,46 @@ export class StripePaymentPlanService {
   ): PaymentPhase[] {
     console.log('🏗️ Building payment phases for plan:', plan, 'frequency:', frequency, 'amount:', CurrencyUtils.toDisplay(totalAmount));
 
-    // Use date-based calculator if frequency is provided and dates are available
+    // Biweekly checkout: same schedule as cart snapshot (pay today + biweekly until end − 14 days).
+    if (frequency === 'biweekly' && startDate && endDate) {
+      console.log('📅 Using checkout biweekly schedule (matches cart / autopay due dates)');
+      const phases = buildBiweeklyCheckoutPhases(totalAmount, startDate, endDate, checkoutAnchorDate());
+      if (phases.length < 2) {
+        console.warn('⚠️ Biweekly checkout schedule collapsed — using full payment');
+        return [
+          {
+            amount: totalAmount,
+            dueDate: new Date(),
+            installmentNumber: 1,
+            description: 'Full Payment (program too short for biweekly plan)',
+          },
+        ];
+      }
+      const belowMinimum = phases.some(
+        (p) => p.amount < STRIPE_MINIMUM_AMOUNT,
+      );
+      if (belowMinimum) {
+        console.warn(
+          `⚠️ Biweekly installments below Stripe minimum for ${CurrencyUtils.toDisplay(totalAmount)} — using full payment`,
+        );
+        return [
+          {
+            amount: totalAmount,
+            dueDate: new Date(),
+            installmentNumber: 1,
+            description: 'Full Payment (amount below minimum for payment plans)',
+          },
+        ];
+      }
+      return phases.map((phase) => ({
+        amount: phase.amount,
+        dueDate: phase.dueDate,
+        installmentNumber: phase.installmentNumber,
+        description: `Biweekly payment ${phase.installmentNumber} of ${phases.length}`,
+      }));
+    }
+
+    // Weekly/monthly: date-based calculator from program span
     if (frequency && frequency !== 'one_time' && startDate && endDate) {
       console.log('📅 Using date-based payment calculator with enrollment dates');
       const schedule = calculatePaymentSchedule(totalAmount, startDate, endDate, frequency);

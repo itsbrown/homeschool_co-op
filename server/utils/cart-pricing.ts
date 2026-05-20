@@ -1120,47 +1120,10 @@ export async function calculatePaymentPlans(
     return [];
   }
 
-  // Calculate number of biweekly payments based on actual class dates
-  // This ensures display matches the actual payment schedule that will be created
-  let numberOfBiweeklyPayments = 4; // Default fallback
-  let earliestStartDate: Date | null = null;
-  let latestEndDate: Date | null = null;
-  
-  // Get class dates from cart items to calculate actual payment schedule
-  for (const item of items) {
-    try {
-      const classData = await storage.getClassById(item.classId) as any;
-      if (classData) {
-        // Get dates from variant or class level
-        let startDate = classData.startDate ? new Date(classData.startDate) : null;
-        let endDate = classData.endDate ? new Date(classData.endDate) : null;
-        
-        // Check if variant has different dates
-        if (item.variantId && classData.priceVariants) {
-          const variants = typeof classData.priceVariants === 'string' 
-            ? JSON.parse(classData.priceVariants) 
-            : classData.priceVariants;
-          const variant = Array.isArray(variants) 
-            ? variants.find((v: any) => v.id === item.variantId)
-            : null;
-          if (variant) {
-            if (variant.startDate) startDate = new Date(variant.startDate);
-            if (variant.endDate) endDate = new Date(variant.endDate);
-          }
-        }
-        
-        // Track the full date range across all items
-        if (startDate && (!earliestStartDate || startDate < earliestStartDate)) {
-          earliestStartDate = startDate;
-        }
-        if (endDate && (!latestEndDate || endDate > latestEndDate)) {
-          latestEndDate = endDate;
-        }
-      }
-    } catch (e) {
-      console.warn(`Could not fetch class ${item.classId} for payment plan calculation:`, e);
-    }
-  }
+  // Biweekly count/amounts from cart program span (classes, variants, F001 sessions, enrollments).
+  let numberOfBiweeklyPayments = 4; // Default fallback when dates unknown
+  const { resolveCartProgramDateSpan } = await import('../lib/cart-program-dates');
+  const { earliestStartDate, latestEndDate } = await resolveCartProgramDateSpan(items);
   
   let biweeklyAmount = Math.round(payableAmount / numberOfBiweeklyPayments);
   let finalPaymentAmount = biweeklyAmount;

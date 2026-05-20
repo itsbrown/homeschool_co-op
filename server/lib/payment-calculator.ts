@@ -30,6 +30,19 @@ function daysBetween(start: Date, end: Date): number {
 export const BIWEEKLY_CLASS_END_PAYMENT_BUFFER_DAYS = 14;
 
 /**
+ * Checkout "today" for biweekly schedule math. In integration tests, set
+ * TEST_CHECKOUT_ANCHOR_ISO so cart, Stripe, and assertions share one anchor
+ * without jest fake timers (which break HTTP/Postgres).
+ */
+export function checkoutAnchorDate(): Date {
+  const iso = process.env.TEST_CHECKOUT_ANCHOR_ISO;
+  if (process.env.NODE_ENV === 'test' && iso) {
+    return new Date(iso);
+  }
+  return new Date();
+}
+
+/**
  * Last calendar day a biweekly installment may fall on (inclusive), relative to class/program end.
  * Uses the same local Y/M/D → UTC-midnight convention as {@link daysBetween}.
  */
@@ -216,7 +229,7 @@ export function calculateCheckoutBiweeklySchedule(
   classEndDate: Date,
   anchorDate?: Date
 ): CheckoutBiweeklySchedule {
-  const now = anchorDate || new Date();
+  const now = anchorDate ?? checkoutAnchorDate();
   const classStartsInFuture = classStartDate > now;
   
   const scheduleStartDate = classStartsInFuture ? classStartDate : now;

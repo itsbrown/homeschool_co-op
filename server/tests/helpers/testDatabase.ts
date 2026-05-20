@@ -175,6 +175,47 @@ export function installFinancialIntegrationStubs(): void {
 }
 
 /**
+ * Wipe application data from PostgreSQL while leaving the schema intact.
+ * CombinedStorage persists users/enrollments to Postgres; clearing MemStorage
+ * alone is not enough — without this, `createUser` fails with "already exists"
+ * across tests and suites.
+ */
+async function truncatePostgresPublicTablesForTests(): Promise<void> {
+  if (process.env.NODE_ENV !== 'test') {
+    return;
+  }
+  const url =
+    process.env.DATABASE_URL ||
+    process.env.TEST_DATABASE_URL ||
+    'postgresql://test:test@localhost:5432/asa_test';
+
+  // Use a short-lived client so TRUNCATE does not disturb the shared getDb() pool.
+  let client: import('postgres').Sql | undefined;
+  try {
+    const postgres = (await import('postgres')).default;
+    client = postgres(url, { prepare: false, max: 1, connect_timeout: 5 });
+    const rows = await client<{ tablename: string }[]>`
+      SELECT tablename
+      FROM pg_tables
+      WHERE schemaname = 'public'
+        AND tablename NOT ILIKE '%drizzle%'
+      ORDER BY tablename
+    `;
+    const names = rows.map((r) => r.tablename).filter(Boolean);
+    if (names.length === 0) {
+      return;
+    }
+    const quoted = names.map((n) => `"${n.replace(/"/g, '""')}"`).join(', ');
+    await client.unsafe(`TRUNCATE TABLE ${quoted} RESTART IDENTITY CASCADE`);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn('[TestDatabase] Postgres truncation skipped:', msg);
+  } finally {
+    await client?.end({ timeout: 2 });
+  }
+}
+
+/**
  * Test Database Helper
  * Uses the in-memory storage system for testing
  */
@@ -200,7 +241,8 @@ export class TestDatabase {
   async cleanup() {
     // Clear all data from in-memory storage
     storage.clearAll();
-    
+    await truncatePostgresPublicTablesForTests();
+
     // Reset tracking arrays
     this.createdRecords = {
       users: [],
@@ -336,15 +378,22 @@ export class TestDatabase {
       parentEmail = parent?.email || `parent_${uniqueId}@example.com`;
     }
     
+    const rawBirthdate = overrides.birthdate ?? '2010-01-01';
+    const birthdate =
+      rawBirthdate instanceof Date
+        ? rawBirthdate.toISOString().slice(0, 10)
+        : String(rawBirthdate);
+
     const childData = {
       firstName: overrides.firstName || `Child${uniqueId}`,
       lastName: overrides.lastName || 'Test',
-      birthdate: overrides.birthdate || '2010-01-01',
+      birthdate,
       gradeLevel: overrides.gradeLevel || '5th',
       parentId,
       parentEmail,
       schoolId: overrides.schoolId || null,
-      ...overrides
+      ...overrides,
+      birthdate,
     };
 
     const child = await storage.createChild(childData);
