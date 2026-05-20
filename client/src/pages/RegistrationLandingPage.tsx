@@ -12,7 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { Building, ArrowLeft, PlusCircle, Trash2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { fetchPublicRegistration, fetchPublicRegistrationJson } from "@/lib/registration-public-api";
 import { registerParentWithChildren } from "@/lib/auth-register";
 import type { RegistrationSignupChildInput } from "@shared/auth-register";
 
@@ -105,29 +105,32 @@ export default function RegistrationLandingPage() {
     name: "children",
   });
   // Fetch school locations (using public endpoint - no auth required for registration)
-  const { data: locationsData, isLoading: locationsLoading } = useQuery({
+  const {
+    data: locationsData,
+    isLoading: locationsLoading,
+    isError: locationsError,
+    error: locationsErrorDetail,
+  } = useQuery({
     queryKey: ['/api/locations/public', school?.id],
     queryFn: async () => {
-      if (!school?.id) return null;
-      const response = await apiRequest("GET", `/api/locations/public?schoolId=${school.id}`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch locations');
-      }
-      const data = await response.json();
-      return data;
+      if (!school?.id) return [];
+      return fetchPublicRegistrationJson<{ id: number; name: string }[]>(
+        `/api/locations/public?schoolId=${school.id}`,
+      );
     },
-    enabled: !!school?.id
+    enabled: !!school?.id,
+    retry: 1,
   });
 
-  const locations = locationsData || [];
+  const locations = locationsData ?? [];
 
   // Fetch school data if accessed with a registration code
   useEffect(() => {
     if (code) {
       const fetchSchool = async () => {
         try {
-          const response = await apiRequest("GET", `/api/schools/by-code/${code}`);
-          
+          const response = await fetchPublicRegistration(`/api/schools/by-code/${code}`);
+
           if (response.ok) {
             const schoolData = await response.json();
             setSchool(schoolData);
@@ -489,14 +492,22 @@ export default function RegistrationLandingPage() {
                           <SelectContent>
                             {locationsLoading ? (
                               <SelectItem value="_loading" disabled>Loading locations…</SelectItem>
+                            ) : locationsError ? (
+                              <SelectItem value="_error" disabled>
+                                {locationsErrorDetail instanceof Error
+                                  ? locationsErrorDetail.message
+                                  : "Could not load locations"}
+                              </SelectItem>
                             ) : locations.length > 0 ? (
-                              locations.map((location: any) => (
+                              locations.map((location: { id: number; name: string }) => (
                                 <SelectItem key={location.id} value={location.id.toString()}>
                                   {location.name}
                                 </SelectItem>
                               ))
                             ) : (
-                              <SelectItem value="1">Brighton</SelectItem>
+                              <SelectItem value="_none" disabled>
+                                No campuses configured — contact your school
+                              </SelectItem>
                             )}
                           </SelectContent>
                         </Select>

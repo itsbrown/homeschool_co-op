@@ -2881,8 +2881,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/class-inclusions", classInclusionsRouter);
   
   // Multi-location support routes
-  const locationsRouter = (await import("./api/locations")).default;
-  app.use("/api/locations", supabaseAuth, locationsRouter);
+  const locationsModule = await import("./api/locations");
+  // Registration must work while logged out — do not put /public behind supabaseAuth
+  app.get("/api/locations/public", locationsModule.handlePublicLocationsRequest);
+  app.use("/api/locations", supabaseAuth, locationsModule.default);
   
   const notificationsRouter = (await import("./api/notifications")).default;
   app.use("/api/notifications", supabaseAuth, notificationsRouter);

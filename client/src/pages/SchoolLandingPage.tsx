@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useLocation } from "wouter";
-import { apiRequest } from "@/lib/queryClient";
+import { fetchPublicRegistration } from "@/lib/registration-public-api";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -56,7 +56,7 @@ export default function SchoolLandingPage() {
 
     const fetchSchool = async () => {
       try {
-        const response = await apiRequest("GET", `/api/schools/by-code/${code}`);
+        const response = await fetchPublicRegistration(`/api/schools/by-code/${code}`);
 
         if (response.ok) {
           const schoolData = await response.json();
