@@ -3,6 +3,7 @@
  * and mixed credit+card payments (originalAmountCents vs actual PI amount).
  */
 import { describe, expect, it, jest, beforeEach, afterEach } from '@jest/globals';
+import { describeIntegration } from './helpers/integrationDb';
 import { storage } from '../storage';
 import { testDb } from './helpers/testDatabase';
 
@@ -67,7 +68,7 @@ async function seedTwoEnrollmentFixture() {
 // Multi-enrollment installments
 // ---------------------------------------------------------------------------
 
-describe('Scheduled installment — multi-enrollment per row', () => {
+describeIntegration('Scheduled installment — multi-enrollment per row', () => {
   it('splits PI amount evenly across multiple enrollmentIds and updates each', async () => {
     const { school, parent, enr1, enr2 } = await seedTwoEnrollmentFixture();
 
@@ -182,7 +183,7 @@ describe('Scheduled installment — multi-enrollment per row', () => {
 // Credits-only installment (zero Stripe charge)
 // ---------------------------------------------------------------------------
 
-describe('Scheduled installment — credits-only (no card charge)', () => {
+describeIntegration('Scheduled installment — credits-only (no card charge)', () => {
   it('updates enrollment balance when full installment amount is covered by credits and no PI is needed', async () => {
     const { school, parent, enr1 } = await seedTwoEnrollmentFixture();
 
@@ -238,7 +239,7 @@ describe('Scheduled installment — credits-only (no card charge)', () => {
 // Mixed credit + card payment
 // ---------------------------------------------------------------------------
 
-describe('Scheduled installment — mixed credit + card', () => {
+describeIntegration('Scheduled installment — mixed credit + card', () => {
   it('uses originalAmountCents (not PI amount) when computing enrollment totalPaid delta', async () => {
     const { school, parent, enr1 } = await seedTwoEnrollmentFixture();
 

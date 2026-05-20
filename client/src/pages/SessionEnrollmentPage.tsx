@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useCart } from "@/contexts/CartContext";
 import { normalizeParentChildrenResponse } from "@/lib/parent-children-api";
 import { ArrowLeft, ArrowRight, Check, Calendar, Clock, DollarSign, User, ShoppingCart, Sun, Sunrise, Loader2, AlertCircle } from "lucide-react";
 import type { EnrollmentSession as Session } from "@shared/schema";
@@ -30,6 +31,7 @@ const STEP_LABELS = ["Select Children", "Choose Sessions", "Schedule Type", "Rev
 export default function SessionEnrollmentPage() {
   const { user, isAuthenticated } = useAuth();
   const { toast } = useToast();
+  const { refreshCart } = useCart();
   const [, setLocation] = useLocation();
   const [step, setStep] = useState<Step>(1);
   const [selectedChildIds, setSelectedChildIds] = useState<number[]>([]);
@@ -66,12 +68,16 @@ export default function SessionEnrollmentPage() {
       }
       return response.json();
     },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/parent/children"] });
+    onSuccess: async (data) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["/api/parent/children"] }),
+        queryClient.invalidateQueries({ queryKey: ["/api/parent/enrollments"] }),
+      ]);
       const count = data.enrollments?.length || 0;
       const skippedCount = data.skipped?.length || 0;
 
       if (count > 0) {
+        await refreshCart();
         toast({
           title: `${count} enrollment(s) added to cart`,
           description: skippedCount > 0 ? `${skippedCount} skipped (already enrolled or no pricing)` : undefined,

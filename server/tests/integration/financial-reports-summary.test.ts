@@ -14,6 +14,7 @@
 import express from 'express';
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from '@jest/globals';
+import { describeIntegration } from '../helpers/integrationDb';
 import { nanoid } from 'nanoid';
 import { sql } from 'drizzle-orm';
 import financialReportsRouter from '../../api/financial-reports';
@@ -246,7 +247,7 @@ describeWithDb('Integration: GET /api/admin/financial-reports/summary', () => {
   });
 });
 
-describe('financial-reports route mount order (auth0)', () => {
+describeIntegration('financial-reports route mount order (auth0)', () => {
   it('schoolAdmin reaches summary when financial-reports is registered first', async () => {
     const app = express();
     app.use(express.json());

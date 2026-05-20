@@ -42,18 +42,8 @@ class ApiClient {
   }
 }
 
-// Auth API
-export async function registerUser(userData: {
-  username: string;
-  email: string;
-  password: string;
-  name: string;
-  role: string;
-  subscription: string;
-}): Promise<User> {
-  const res = await apiRequest("POST", "/api/auth/register", userData);
-  return (await res.json()).user;
-}
+// Auth API — prefer registerParentWithChildren (auth-register.ts) for school signup.
+export { registerLegacyUserAccount as registerUser } from "./auth-register";
 
 export async function loginUser(credentials: { 
   username: string; 

@@ -3,6 +3,7 @@ import path from 'path';
 import request from 'supertest';
 import express from 'express';
 import session from 'express-session';
+import { describeIntegration } from '../../helpers/integrationDb';
 import { TestDatabase, installFinancialIntegrationStubs } from '../../helpers/testDatabase';
 import { storage } from '../../../storage';
 import type { InsertProgramEnrollment } from '@shared/schema';
@@ -137,7 +138,7 @@ app.use('/api/billing', billingRouter);
 app.use('/api/payment-history', paymentHistoryRouter);
 app.use('/api/cart', cartRouter);
 
-describe('Integration: Financial & Enrollment Features (Phase 2)', () => {
+describeIntegration('Integration: Financial & Enrollment Features (Phase 2)', () => {
   let testDb: TestDatabase;
 
   beforeAll(() => {

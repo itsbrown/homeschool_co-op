@@ -159,7 +159,19 @@ Most endpoints require authentication. Exceptions:
 
 ### Authentication
 
-#### Register User
+#### Register User (parent account)
+
+Handler: `server/api/auth.ts` (`POST /register`). Request normalization: `shared/auth-register.ts`.
+
+**School-code signup (required):** `schoolId` + `registrationCode` + `role: "parent"` requires **`children`** (1–10 students).
+
+**Name fields (any one style):**
+- `parentFirstName` + `parentLastName` (preferred), or
+- `firstName` + `lastName`, or
+- `name` (split on first space; legacy `client/src/lib/api.ts` `registerUser`)
+
+**Legacy fields ignored:** `subscription` (not stored on register).
+
 ```http
 POST /api/auth/register
 Content-Type: application/json
@@ -167,25 +179,39 @@ Content-Type: application/json
 {
   "email": "parent@example.com",
   "password": "SecurePassword123!",
-  "name": "Jane Smith",
+  "parentFirstName": "Jane",
+  "parentLastName": "Smith",
+  "phone": "5555555555",
+  "location": "1",
   "role": "parent",
-  "locationId": 1,
-  "schoolCode": "ASA2025"
+  "schoolId": 1,
+  "registrationCode": "ASA2025",
+  "children": [
+    {
+      "firstName": "Alex",
+      "lastName": "Smith",
+      "birthdate": "2016-05-15",
+      "gradeLevel": "2nd Grade",
+      "gender": "male"
+    }
+  ]
 }
 ```
 
-**Response (201):**
+**Response (200):**
 ```json
 {
   "success": true,
-  "message": "Registration successful",
+  "message": "Parent account created successfully",
   "user": {
     "id": 123,
     "email": "parent@example.com",
     "name": "Jane Smith",
     "role": "parent"
   },
-  "redirectUrl": "/parent"
+  "createdChildren": [
+    { "id": 456, "firstName": "Alex", "lastName": "Smith" }
+  ]
 }
 ```
 

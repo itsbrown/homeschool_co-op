@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, jest } from '@jest/globals';
+import { describeIntegration } from '../helpers/integrationDb';
 import { testDb } from '../helpers/testDatabase';
 import { api } from '../helpers/apiHelpers';
 import { resetAllMocks } from '../helpers/mockServices';
@@ -26,7 +27,7 @@ jest.mock('../../config/stripe', () => {
  * - Non-blocking error handling for Stripe API errors
  */
 
-describe('Integration: Stripe Payment Intent Sync Logic', () => {
+describeIntegration('Integration: Stripe Payment Intent Sync Logic', () => {
   let testUser: any;
   let testSchool: any;
   let testChild: any;

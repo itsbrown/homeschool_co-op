@@ -73,4 +73,75 @@ describe('filterEnrollmentsToCartLineItems', () => {
     expect(out).toHaveLength(2);
     expect(out.map((e) => e.id).sort()).toEqual([1, 2]);
   });
+
+  it('keeps separate v2 session lines when sessionId is missing but dayType is set', () => {
+    const enrollments = [
+      {
+        id: 10,
+        enrollmentVersion: 'v2',
+        dayType: 'full_day',
+        variantId: 'full_day',
+        childId: 5,
+        className: 'Fall 2026 - Full Day',
+        enrollmentDate: '2026-05-19',
+        status: 'pending_payment',
+        effectiveBalance: 150000,
+      },
+      {
+        id: 11,
+        enrollmentVersion: 'v2',
+        dayType: 'full_day',
+        variantId: 'full_day',
+        childId: 5,
+        className: 'Winter 2027 - Full Day',
+        enrollmentDate: '2026-05-19',
+        status: 'pending_payment',
+        effectiveBalance: 150000,
+      },
+      {
+        id: 12,
+        enrollmentVersion: 'v2',
+        dayType: 'full_day',
+        variantId: 'full_day',
+        childId: 5,
+        className: 'Spring 2027 - Full Day',
+        enrollmentDate: '2026-05-19',
+        status: 'pending_payment',
+        effectiveBalance: 150000,
+      },
+    ];
+    const out = filterEnrollmentsToCartLineItems(enrollments);
+    expect(out).toHaveLength(3);
+    expect(out.map((e) => e.id).sort()).toEqual([10, 11, 12]);
+  });
+
+  it('does not collapse v2 sessions that share a legacy marketplaceClassId', () => {
+    const enrollments = [
+      {
+        id: 20,
+        enrollmentVersion: 'v2',
+        sessionId: 100,
+        marketplaceClassId: 999,
+        variantId: 'full_day',
+        childId: 5,
+        enrollmentDate: '2026-05-19',
+        status: 'pending_payment',
+        effectiveBalance: 150000,
+      },
+      {
+        id: 21,
+        enrollmentVersion: 'v2',
+        sessionId: 101,
+        marketplaceClassId: 999,
+        variantId: 'full_day',
+        childId: 5,
+        enrollmentDate: '2026-05-19',
+        status: 'pending_payment',
+        effectiveBalance: 150000,
+      },
+    ];
+    const out = filterEnrollmentsToCartLineItems(enrollments);
+    expect(out).toHaveLength(2);
+    expect(out.map((e) => e.id).sort()).toEqual([20, 21]);
+  });
 });

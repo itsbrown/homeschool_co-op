@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from '@jest/globals';
+import { describeIntegration } from '../../helpers/integrationDb';
 import { testDb } from '../../helpers/testDatabase';
 import { api } from '../../helpers/apiHelpers';
 import { resetAllMocks } from '../../helpers/mockServices';
@@ -15,7 +16,7 @@ import { resetAllMocks } from '../../helpers/mockServices';
  * - Discount settings persistence
  */
 
-describe('Integration: Variant Pricing and Discounts', () => {
+describeIntegration('Integration: Variant Pricing and Discounts', () => {
   let testSchool: any;
   let testAdmin: any;
   let testParent: any;

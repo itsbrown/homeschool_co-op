@@ -27,3 +27,6 @@ vite.config.ts.*
 # Local dev secrets (see .env.example)
 .env
 .env.local
+
+# Jest integration DB probe (written by globalSetup)
+.jest-cache/

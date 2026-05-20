@@ -14,7 +14,7 @@ describe("F001: cart and snapshot (session items)", () => {
 describe("F001: checkout and program_enrollments", () => {
   it.todo("creates program_enrollments with enrollmentVersion v2, session_id, dayType, enrolledHalfDayPrice, enrolledFullDayPrice");
   it.todo("sets programStartDate / programEndDate from session for payment schedule");
-  it.todo("initial enrollmentPriceHistory row with changeType initial");
+  // Initial price history on session enroll API — see session-enrollments.ts + f001-phase2-storage.test.ts
 });
 
 describe("F001: wizard gates and locations", () => {
@@ -28,8 +28,8 @@ describe("F001: regression (v1 class path)", () => {
 });
 
 describe("F001: biweekly session payment schedule", () => {
-  it.todo("per-enrollment biweekly last due date on or before that session endDate minus 14 days");
   it.todo("first payment at checkout included in splitIntegerEvenly-style cent split");
+  // Covered by server/tests/cart-program-dates.test.ts and stripe-biweekly-checkout-phases.test.ts
 });
 
 describe("F002: abandoned enrollment funnel (separate workstream)", () => {

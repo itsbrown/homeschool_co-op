@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from '@jest/globals';
+import { describeIntegration } from '../../helpers/integrationDb';
 import request from 'supertest';
 import express from 'express';
 import session from 'express-session';
@@ -71,7 +72,7 @@ app.use('/api/test', testRouter);
  * This prevents the bug where cart gets cleared during checkout navigation.
  */
 
-describe('Phase 3: Cart Persistence', () => {
+describeIntegration('Phase 3: Cart Persistence', () => {
   let db: TestDatabase;
   let parentUser: any;
   let school: any;

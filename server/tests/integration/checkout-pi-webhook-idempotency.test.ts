@@ -1,6 +1,7 @@
 import express from 'express';
 import request from 'supertest';
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { describeIntegration } from '../helpers/integrationDb';
 import { testDb } from '../helpers/testDatabase';
 import { storage } from '../../storage';
 
@@ -18,7 +19,7 @@ import { webhookHandler } from '../../webhook-handler';
  * checkout.session.completed and payment_intent.succeeded often both fire for the same PI.
  * Payment history idempotency must prevent double application to enrollments.
  */
-describe('Integration: checkout.session.completed then payment_intent.succeeded (same PI)', () => {
+describeIntegration('Integration: checkout.session.completed then payment_intent.succeeded (same PI)', () => {
   const endpoint = '/api/stripe/webhook';
 
   beforeEach(async () => {

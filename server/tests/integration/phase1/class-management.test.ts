@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from '@jest/globals';
+import { describeIntegration } from '../../helpers/integrationDb';
 import { testDb } from '../../helpers/testDatabase';
 import { api } from '../../helpers/apiHelpers';
 import { resetAllMocks } from '../../helpers/mockServices';
@@ -16,7 +17,7 @@ import { resetAllMocks } from '../../helpers/mockServices';
  * - Multi-location class management
  */
 
-describe('Integration: Class Management', () => {
+describeIntegration('Integration: Class Management', () => {
   let testSchool: any;
   let testAdmin: any;
   let testLocation: any;

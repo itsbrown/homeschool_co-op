@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from '@jest/globals';
+import { describeIntegration } from '../../helpers/integrationDb';
 import { testDb } from '../../helpers/testDatabase';
 import { api } from '../../helpers/apiHelpers';
 import { resetAllMocks, mockBrevoService } from '../../helpers/mockServices';
@@ -16,7 +17,7 @@ import { resetAllMocks, mockBrevoService } from '../../helpers/mockServices';
  * - Position customization
  */
 
-describe('Integration: Staff Management', () => {
+describeIntegration('Integration: Staff Management', () => {
   let testSchool: any;
   let testAdmin: any;
   let testLocation1: any;

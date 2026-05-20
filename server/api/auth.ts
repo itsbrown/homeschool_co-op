@@ -13,6 +13,11 @@ import { userStorage } from "../users-storage";
 import { supabaseAdmin } from "../db/supabase";
 import { supabaseAuth } from "../middleware/supabase-auth";
 import { getDb } from "../db";
+import { normalizeAuthRegisterInput } from "@shared/auth-register";
+import {
+  createChildLinkedToParent,
+  deleteChildAndSchoolLink,
+} from "../lib/parent-child-registration";
 
 const router = Router();
 
@@ -36,30 +41,26 @@ export const hasRole = (roles: string[]) => {
 // Register endpoint
 router.post('/register', async (req, res) => {
   try {
-    const { 
-      email, 
-      password, 
-      parentFirstName, 
-      parentLastName, 
-      firstName, 
-      lastName, 
-      phone,
-      location,
-      role,
-      schoolId,
-      registrationCode
-    } = req.body;
-
-    // Handle both old format (firstName/lastName) and new format (parentFirstName/parentLastName)
-    const userFirstName = parentFirstName || firstName;
-    const userLastName = parentLastName || lastName;
-
-    if (!email || !userFirstName || !userLastName) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Email, first name, and last name are required' 
+    const normalized = normalizeAuthRegisterInput(req.body);
+    if (!normalized.ok) {
+      return res.status(normalized.status).json({
+        success: false,
+        message: normalized.message,
       });
     }
+
+    const {
+      email,
+      password,
+      userFirstName,
+      userLastName,
+      phone,
+      role,
+      schoolId,
+      registrationCode,
+      preferredSignupLocationId,
+      signupChildren,
+    } = normalized.data;
 
     // List of reserved test account emails that cannot be registered
     const reservedEmails = [
@@ -299,26 +300,19 @@ router.post('/register', async (req, res) => {
     }
 
     // Save location association if location was provided during registration
-    if (location) {
+    if (preferredSignupLocationId != null) {
       try {
-        // Convert location to integer (it may come as string from form)
-        const locationId = typeof location === 'string' ? parseInt(location, 10) : location;
-        
-        if (isNaN(locationId)) {
-          console.error(`⚠️ Invalid location ID: ${location}`);
-          console.log('⚠️ Registration will continue without location association');
-        } else {
-          console.log(`📍 Saving location association for user ${user.id} with location ${locationId}`);
-          await storage.createUserLocation({
-            userId: user.id,
-            locationId: locationId
-          });
-          console.log(`✅ Location association saved successfully`);
-        }
+        const locationId = preferredSignupLocationId;
+        console.log(`📍 Saving location association for user ${user.id} with location ${locationId}`);
+        await storage.createUserLocation({
+          userId: user.id,
+          locationId,
+        });
+        console.log(`✅ Location association saved successfully`);
       } catch (locationError) {
         // Log error but don't fail registration - location is supplementary data
-        console.error('⚠️ Failed to save location association:', locationError);
-        console.log('⚠️ Registration will continue without location association');
+        console.error("⚠️ Failed to save location association:", locationError);
+        console.log("⚠️ Registration will continue without location association");
       }
     }
 
@@ -400,7 +394,74 @@ router.post('/register', async (req, res) => {
         console.error('⚠️ Failed to auto-create membership enrollment, but registration was successful:', membershipError);
       }
     }
-    
+
+    /** Signup-time student rows linked to this parent — rolled back together on failure */
+    let createdSignupChildrenSummaries: { id: number; firstName: string; lastName: string }[] = [];
+    let signupSchoolDisplayName: string | undefined;
+    try {
+      if (schoolId) {
+        const s = await storage.getSchool(schoolId);
+        if (s?.name) {
+          signupSchoolDisplayName = s.name;
+        }
+      }
+      if (signupChildren.length > 0) {
+        for (const row of signupChildren) {
+          const savedChild = await createChildLinkedToParent(storage, {
+            parent: user,
+            parentEmail: email,
+            preferredLocationId: preferredSignupLocationId,
+            fields: {
+              firstName: row.firstName,
+              lastName: row.lastName,
+              birthdate: row.birthdate,
+              gradeLevel: row.gradeLevel,
+              gender: row.gender ?? null,
+              school: signupSchoolDisplayName ?? null,
+            },
+            sendAdminNotifications: true,
+          });
+          createdSignupChildrenSummaries.push({
+            id: savedChild.id,
+            firstName: savedChild.firstName,
+            lastName: savedChild.lastName,
+          });
+        }
+      }
+    } catch (signupChildRegistrationError: unknown) {
+      console.error("❌ Child creation during signup failed:", signupChildRegistrationError);
+      for (const cid of createdSignupChildrenSummaries.map((c) => c.id)) {
+        await deleteChildAndSchoolLink(storage, cid, user.schoolId ?? schoolId ?? null);
+      }
+
+      try {
+        await storage.deleteUser(user.id);
+        console.log(`🧹 Signup rollback: Deleted local user record (ID: ${user.id})`);
+      } catch (cleanupDb) {
+        console.error("❌ Signup rollback: Failed to delete local user:", cleanupDb);
+      }
+      try {
+        const { createClient } = await import("@supabase/supabase-js");
+        const supabaseAdminRollback = createClient(
+          process.env.SUPABASE_URL!,
+          process.env.SUPABASE_SERVICE_ROLE_KEY!,
+          {
+            auth: { autoRefreshToken: false, persistSession: false },
+          }
+        );
+        await supabaseAdminRollback.auth.admin.deleteUser(supabaseUser.id);
+        console.log(`🧹 Signup rollback: Deleted Supabase auth account (ID: ${supabaseUser.id})`);
+      } catch (cleanupAuth) {
+        console.error("❌ Signup rollback: Failed to delete Supabase user:", cleanupAuth);
+      }
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "We could not finish registering your student profile. Nothing was saved—please try again or contact support.",
+      });
+    }
+
     // Send welcome email (non-blocking - registration succeeds even if email fails)
     try {
       console.log('📧 Sending welcome email to:', email);
@@ -431,15 +492,16 @@ router.post('/register', async (req, res) => {
       console.error('⚠️ Failed to send welcome email, but registration was successful:', emailError);
     }
     
-    res.json({ 
-      success: true, 
-      message: 'Parent account created successfully',
+    res.json({
+      success: true,
+      message: "Parent account created successfully",
       user: {
         id: user.id,
         email: user.email,
         name: user.name,
-        role: user.role
-      }
+        role: user.role,
+      },
+      createdChildren: createdSignupChildrenSummaries,
     });
   } catch (error) {
     console.error('Registration error:', error);
