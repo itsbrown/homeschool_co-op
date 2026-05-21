@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import { getDb } from '../db';
+import { rowsFromExecute } from './db-execute-rows';
 
 /** Columns that exist on schools before F001 / enabled_features migrations. */
 const SCHOOL_ROW_SQL = sql`
@@ -91,7 +92,7 @@ export type SchoolCoreRow = ReturnType<typeof mapSchoolRow>;
 export async function getSchoolCoreById(id: number): Promise<SchoolCoreRow | undefined> {
   const db = await getDb();
   const result = await db.execute(sql`${SCHOOL_ROW_SQL} WHERE id = ${id} LIMIT 1`);
-  const row = result.rows[0] as Record<string, unknown> | undefined;
+  const row = rowsFromExecute(result)[0];
   return row ? mapSchoolRow(row) : undefined;
 }
 
@@ -109,14 +110,14 @@ export async function getSchoolCoreByRegistrationCode(
     WHERE LOWER(TRIM(registration_code)) = LOWER(TRIM(${normalized}))
     LIMIT 1
   `);
-  const row = result.rows[0] as Record<string, unknown> | undefined;
+  const row = rowsFromExecute(result)[0];
   return row ? mapSchoolRow(row) : undefined;
 }
 
 export async function getAllSchoolsCore(): Promise<SchoolCoreRow[]> {
   const db = await getDb();
   const result = await db.execute(sql`${SCHOOL_ROW_SQL} ORDER BY id`);
-  return (result.rows as Record<string, unknown>[]).map(mapSchoolRow);
+  return rowsFromExecute(result).map(mapSchoolRow);
 }
 
 export type InsertSchoolCoreInput = {
@@ -180,7 +181,11 @@ export async function insertSchoolCore(input: InsertSchoolCoreInput): Promise<Sc
     )
     RETURNING id
   `);
-  const id = Number((result.rows[0] as { id: number }).id);
+  const insertRow = rowsFromExecute<{ id: number }>(result)[0];
+  if (!insertRow) {
+    throw new Error('School insert returned no row');
+  }
+  const id = Number(insertRow.id);
   const school = await getSchoolCoreById(id);
   if (!school) {
     throw new Error('School insert succeeded but row could not be loaded');

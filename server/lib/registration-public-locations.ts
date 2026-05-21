@@ -54,7 +54,7 @@ export async function handlePublicLocationsRequest(
     console.error('Error fetching public locations:', error);
     res.status(500).json({
       message: 'Failed to fetch locations',
-      ...(process.env.NODE_ENV !== 'production' && { detail }),
+      detail,
     });
   }
 }

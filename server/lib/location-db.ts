@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import { getDb } from '../db';
+import { rowsFromExecute } from './db-execute-rows';
 import type { SchoolCoreRow } from './school-db';
 
 export type PublicLocationRow = { id: number; name: string };
@@ -41,7 +42,7 @@ export async function getPublicLocationsBySchoolId(
       AND is_active = true
     ORDER BY name
   `);
-  return (result.rows as { id: number; name: string }[]).map((row) => ({
+  return rowsFromExecute<{ id: number; name: string }>(result).map((row) => ({
     id: Number(row.id),
     name: String(row.name),
   }));
@@ -67,6 +68,9 @@ export async function createDefaultLocationForSchool(
     )
     RETURNING id, name
   `);
-  const row = result.rows[0] as { id: number; name: string };
+  const row = rowsFromExecute<{ id: number; name: string }>(result)[0];
+  if (!row) {
+    throw new Error('Location insert returned no row');
+  }
   return { id: Number(row.id), name: String(row.name) };
 }

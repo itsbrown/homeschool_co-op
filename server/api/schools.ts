@@ -15,6 +15,7 @@ import {
   generateUniqueRegistrationCode,
   normalizeRegistrationCode,
 } from "../lib/school-registration-code";
+import { getSchoolCoreByRegistrationCode } from "../lib/school-db";
 import { userRoles } from "@shared/schema";
 
 const router = express.Router();
@@ -336,12 +337,12 @@ router.get("/by-code/:code", async (req, res) => {
       return res.status(400).json({ message: "Registration code is required" });
     }
 
-    let school = await findSchoolByRegistrationCode(code);
-
-    if (!school) {
+    const core = await getSchoolCoreByRegistrationCode(code);
+    if (!core) {
       return res.status(404).json({ message: "School not found with this registration code" });
     }
 
+    let school = core;
     if (!school.registrationCode?.trim()) {
       const generated = await ensureSchoolRegistrationCode(school.id);
       if (generated) {
