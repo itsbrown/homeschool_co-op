@@ -1,6 +1,7 @@
 
 import express from "express";
 import { storage } from "../storage";
+import { associateParentWithSchool } from "../lib/associate-parent-school";
 import { supabaseAuth } from "../middleware/supabase-auth";
 
 const router = express.Router();
@@ -45,29 +46,21 @@ router.post("/associate", async (req, res) => {
 
     console.log('🔗 Creating school-parent association:', { parentEmail, schoolId, registrationCode });
 
-    // Get user by email
-    const user = await storage.getUserByEmail(parentEmail);
-    
-    if (!user) {
-      return res.status(404).json({ message: "Parent not found" });
+    const resolvedSchoolId = schoolId
+      ? parseInt(String(schoolId), 10)
+      : null;
+    if (!resolvedSchoolId || !Number.isFinite(resolvedSchoolId)) {
+      return res.status(400).json({ message: 'Valid schoolId is required' });
     }
 
-    // Update user with school association
-    const updatedUser = await storage.updateUser(user.id, {
-      schoolId: schoolId ? parseInt(schoolId) : null
+    const result = await associateParentWithSchool(parentEmail, resolvedSchoolId);
+    console.log('✅ School-parent association created');
+    return res.json({
+      success: true,
+      message: 'School association created successfully',
+      userId: result.userId,
+      schoolId: result.schoolId,
     });
-
-    if (updatedUser) {
-      console.log('✅ School-parent association created');
-      return res.json({ 
-        success: true, 
-        message: "School association created successfully",
-        userId: updatedUser.id,
-        schoolId: updatedUser.schoolId
-      });
-    }
-
-    return res.status(500).json({ message: "Failed to update user" });
   } catch (error: any) {
     console.error("Error creating school-parent association:", error);
     res.status(500).json({ message: "Internal server error" });

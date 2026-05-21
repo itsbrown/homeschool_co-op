@@ -316,24 +316,9 @@ router.post('/register', async (req, res) => {
     // CRITICAL: School association MUST succeed for school registrations
     if (schoolId && registrationCode) {
       try {
-        console.log(`🏫 Attempting school association for ${email} with school ${schoolId}`);
-        
-        // Create school-parent association
-        const associationResponse = await fetch(`${req.protocol}://${req.get('host')}/api/school-parents/associate`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            parentEmail: email,
-            schoolId,
-            registrationCode
-          })
-        });
-
-        if (!associationResponse.ok) {
-          const errorData = await associationResponse.json().catch(() => ({}));
-          throw new Error(`School association failed: ${errorData.message || associationResponse.statusText}`);
-        }
-
+        console.log(`🏫 Associating ${email} with school ${schoolId} (direct storage)`);
+        const { associateParentWithSchool } = await import('../lib/associate-parent-school');
+        await associateParentWithSchool(email, schoolId);
         console.log(`✅ School association successful for ${email}`);
       } catch (associationError) {
         console.error('❌ School association failed - rolling back account creation:', associationError);
@@ -355,9 +340,14 @@ router.post('/register', async (req, res) => {
           console.error('❌ Failed to cleanup accounts after association failure:', cleanupError);
         }
         
-        return res.status(500).json({ 
-          success: false, 
-          message: 'Failed to associate account with school. Please contact your school administrator or try again.' 
+        const detail =
+          associationError instanceof Error ? associationError.message : String(associationError);
+        console.error('Association error detail:', detail);
+        return res.status(500).json({
+          success: false,
+          message:
+            'Failed to associate account with school. Please contact your school administrator or try again.',
+          ...(process.env.NODE_ENV !== 'production' ? { detail } : {}),
         });
       }
     }
