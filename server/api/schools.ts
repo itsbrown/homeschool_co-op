@@ -359,8 +359,9 @@ router.get("/by-code/:code", async (req, res) => {
 
     res.json(school);
   } catch (error: any) {
+    const message = error instanceof Error ? error.message : String(error);
     console.error("Error fetching school by registration code:", error);
-    res.status(500).json({ message: "Internal server error", error: error.message });
+    res.status(500).json({ message: "Internal server error", error: message });
   }
 });
 

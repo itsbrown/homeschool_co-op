@@ -1,8 +1,8 @@
 import { sql } from 'drizzle-orm';
 import { schools, type School } from '@shared/schema';
 import { getDb } from '../db';
-import { getSchoolCoreByRegistrationCode } from './school-db';
-import { storage } from '../storage';
+import { getSchoolCoreById, getSchoolCoreByRegistrationCode } from './school-db';
+import { getRawPg } from './pg-raw';
 
 const CODE_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
 
@@ -46,25 +46,15 @@ export async function findSchoolByRegistrationCode(
     return undefined;
   }
 
-  // Core SQL only — full Drizzle select() fails when F001 columns are not migrated yet.
   const core = await getSchoolCoreByRegistrationCode(normalized);
-  if (core) {
-    return core as School;
-  }
-
-  try {
-    return await storage.getSchoolByCode(normalized);
-  } catch (err) {
-    console.warn('findSchoolByRegistrationCode storage fallback failed:', err);
-    return undefined;
-  }
+  return core ? (core as School) : undefined;
 }
 
 /** Persist a registration code when the school row has none (e.g. after dev restore). */
 export async function ensureSchoolRegistrationCode(
   schoolId: number,
 ): Promise<string | null> {
-  const school = await storage.getSchool(schoolId);
+  const school = await getSchoolCoreById(schoolId);
   if (!school) {
     return null;
   }
@@ -75,7 +65,11 @@ export async function ensureSchoolRegistrationCode(
   }
 
   const code = await generateUniqueRegistrationCode();
-  await storage.updateSchool(schoolId, { registrationCode: code });
+  const pg = getRawPg();
+  await pg.unsafe(
+    `UPDATE schools SET registration_code = $1, updated_at = NOW() WHERE id = $2`,
+    [code, schoolId],
+  );
   console.log(`🔑 Generated registration code for school ${schoolId}: ${code}`);
   return code;
 }

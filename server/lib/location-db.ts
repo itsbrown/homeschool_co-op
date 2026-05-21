@@ -1,14 +1,12 @@
-import { sql } from 'drizzle-orm';
-import { getDb } from '../db';
-import { rowsFromExecute } from './db-execute-rows';
+import { getRawPg } from './pg-raw';
 import type { SchoolCoreRow } from './school-db';
 
 export type PublicLocationRow = { id: number; name: string };
 
 /** Idempotent — safe after dev DB restore when `locations` was never migrated. */
 export async function ensureLocationsTable(): Promise<void> {
-  const db = await getDb();
-  await db.execute(sql`
+  const pg = getRawPg();
+  await pg.unsafe(`
     CREATE TABLE IF NOT EXISTS locations (
       id serial PRIMARY KEY,
       school_id integer NOT NULL REFERENCES schools(id),
@@ -34,15 +32,14 @@ export async function getPublicLocationsBySchoolId(
   schoolId: number,
 ): Promise<PublicLocationRow[]> {
   await ensureLocationsTable();
-  const db = await getDb();
-  const result = await db.execute(sql`
-    SELECT id, name
-    FROM locations
-    WHERE school_id = ${schoolId}
-      AND is_active = true
-    ORDER BY name
-  `);
-  return rowsFromExecute<{ id: number; name: string }>(result).map((row) => ({
+  const pg = getRawPg();
+  const rows = await pg.unsafe(
+    `SELECT id, name FROM locations
+     WHERE school_id = $1 AND is_active = true
+     ORDER BY name`,
+    [schoolId],
+  );
+  return (rows as { id: number; name: string }[]).map((row) => ({
     id: Number(row.id),
     name: String(row.name),
   }));
@@ -52,23 +49,22 @@ export async function createDefaultLocationForSchool(
   school: SchoolCoreRow,
 ): Promise<PublicLocationRow> {
   await ensureLocationsTable();
-  const db = await getDb();
-  const result = await db.execute(sql`
-    INSERT INTO locations (
-      school_id, name, code, address, city, state, zip_code, is_active
-    ) VALUES (
-      ${school.id},
-      ${'Main Campus'},
-      ${'MAIN'},
-      ${school.address || 'TBD'},
-      ${school.city},
-      ${school.state},
-      ${school.zipCode},
-      true
-    )
-    RETURNING id, name
-  `);
-  const row = rowsFromExecute<{ id: number; name: string }>(result)[0];
+  const pg = getRawPg();
+  const rows = await pg.unsafe(
+    `INSERT INTO locations (school_id, name, code, address, city, state, zip_code, is_active)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, true)
+     RETURNING id, name`,
+    [
+      school.id,
+      'Main Campus',
+      'MAIN',
+      school.address || 'TBD',
+      school.city,
+      school.state,
+      school.zipCode,
+    ],
+  );
+  const row = rows[0] as { id: number; name: string } | undefined;
   if (!row) {
     throw new Error('Location insert returned no row');
   }
