@@ -616,6 +616,83 @@ router.post('/setup-credit-lookup-scenario', async (req: Request, res: Response)
 });
 
 /**
+ * POST /api/test/setup-registration-scenario
+ * School-code registration / public locations / misaligned admin school_id.
+ */
+router.post('/setup-registration-scenario', async (req: Request, res: Response) => {
+  try {
+    const db = await getDb();
+    if (!db) {
+      return res.status(400).json({ error: 'Postgres required (set DATABASE_URL)' });
+    }
+
+    const { seedRegistrationScenario } = await import(
+      '../tests/helpers/seedRegistrationScenario'
+    );
+    const testDb = new TestDatabase();
+    const seed = await seedRegistrationScenario(testDb);
+
+    const verifySchool = await storage.getSchool(seed.registrationSchool.id);
+    if (!verifySchool?.registrationCode) {
+      return res.status(500).json({
+        error: 'Round-trip failed: registration school not readable from Postgres',
+      });
+    }
+
+    const locIds = seed.locationsOnSchool.map((l) => l.id);
+    for (const id of locIds) {
+      const row = await storage.getLocationById(id);
+      if (!row || row.schoolId !== seed.registrationSchool.id) {
+        return res.status(500).json({
+          error: 'Round-trip failed: location not on registration school',
+          details: `locationId=${id}`,
+        });
+      }
+    }
+
+    const bcrypt = await import('bcryptjs');
+    await storage.updateUser(seed.admin.id, {
+      password: await bcrypt.hash(seed.adminPassword, 10),
+    });
+
+    res.json({
+      success: true,
+      data: {
+        registrationCode: seed.registrationCode,
+        school: {
+          id: seed.registrationSchool.id,
+          name: seed.registrationSchool.name,
+          registrationCode: seed.registrationSchool.registrationCode,
+        },
+        wrongSchool: { id: seed.wrongSchool.id, name: seed.wrongSchool.name },
+        admin: {
+          id: seed.admin.id,
+          email: seed.admin.email,
+          password: seed.adminPassword,
+          usersSchoolId: seed.wrongSchool.id,
+        },
+        locationsOnSchool: seed.locationsOnSchool.map((l) => ({
+          id: l.id,
+          name: l.name,
+          schoolId: l.schoolId,
+        })),
+        locationOnWrongSchool: {
+          id: seed.locationOnWrongSchool.id,
+          name: seed.locationOnWrongSchool.name,
+          schoolId: seed.locationOnWrongSchool.schoolId,
+        },
+      },
+    });
+  } catch (error) {
+    console.error('❌ setup-registration-scenario:', error);
+    res.status(500).json({
+      error: 'Failed to setup registration scenario',
+      details: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+/**
  * POST /api/test/setup-session-enrollment-scenario
  * Seeds school + parent + child + enrollment sessions for F001 / Playwright.
  */

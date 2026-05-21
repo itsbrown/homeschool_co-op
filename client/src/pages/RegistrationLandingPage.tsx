@@ -399,9 +399,13 @@ export default function RegistrationLandingPage() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>First Name</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Jane" {...field} />
-                        </FormControl>
+                          <FormControl>
+                            <Input
+                              placeholder="Jane"
+                              data-testid="registration-parent-first-name"
+                              {...field}
+                            />
+                          </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -428,7 +432,12 @@ export default function RegistrationLandingPage() {
                     <FormItem>
                       <FormLabel>Email Address</FormLabel>
                       <FormControl>
-                        <Input type="email" placeholder="jane.doe@example.com" {...field} />
+                        <Input
+                          type="email"
+                          placeholder="jane.doe@example.com"
+                          data-testid="registration-email"
+                          {...field}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -442,9 +451,14 @@ export default function RegistrationLandingPage() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Password</FormLabel>
-                        <FormControl>
-                          <Input type="password" placeholder="Enter a secure password" {...field} />
-                        </FormControl>
+                          <FormControl>
+                            <Input
+                              type="password"
+                              placeholder="Enter a secure password"
+                              data-testid="registration-password"
+                              {...field}
+                            />
+                          </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -489,7 +503,10 @@ export default function RegistrationLandingPage() {
                           value={field.value || undefined}
                         >
                           <FormControl>
-                            <SelectTrigger style={{ fontSize: '16px' }}>
+                            <SelectTrigger
+                              style={{ fontSize: '16px' }}
+                              data-testid="registration-location-select"
+                            >
                               <SelectValue placeholder="Select location" />
                             </SelectTrigger>
                           </FormControl>
@@ -573,7 +590,13 @@ export default function RegistrationLandingPage() {
                             <FormItem>
                               <FormLabel>First name</FormLabel>
                               <FormControl>
-                                <Input placeholder="First name" {...field} />
+                                <Input
+                                  placeholder="First name"
+                                  data-testid={
+                                    index === 0 ? "registration-child-0-first-name" : undefined
+                                  }
+                                  {...field}
+                                />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
@@ -622,7 +645,11 @@ export default function RegistrationLandingPage() {
                                 value={field.value || undefined}
                               >
                                 <FormControl>
-                                  <SelectTrigger>
+                                  <SelectTrigger
+                                    data-testid={
+                                      index === 0 ? "registration-child-0-grade" : undefined
+                                    }
+                                  >
                                     <SelectValue placeholder="Select grade" />
                                   </SelectTrigger>
                                 </FormControl>
@@ -687,6 +714,7 @@ export default function RegistrationLandingPage() {
                   className="w-full"
                   size="lg"
                   disabled={form.formState.isSubmitting}
+                  data-testid="registration-submit"
                 >
                   Create account &amp; student profiles
                 </Button>

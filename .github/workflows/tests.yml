@@ -58,6 +58,12 @@ jobs:
       - name: Push schema to test database
         run: npm run db:push
 
+      - name: Verify F001 schema
+        run: node scripts/verify-f001-schema.mjs
+
+      - name: Production-path integration (registration / locations)
+        run: npm run test:server -- --runInBand --testPathPatterns=production-path --no-cache
+
       - name: Start dev server
         run: |
           npm run dev > /tmp/dev-server.log 2>&1 &

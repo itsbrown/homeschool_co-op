@@ -42,6 +42,14 @@ try {
 
 try {
   run(
+    'PAYMENT_PROCESSOR_ENABLED=true npm run test:server -- --runInBand --testPathPatterns=production-path --no-cache',
+  );
+} catch {
+  failed = true;
+}
+
+try {
+  run(
     'npm run test:server -- --testPathPatterns="cart-checkout-enrollment-match|autopay-runtime-policy" --no-cache',
   );
 } catch {
@@ -50,7 +58,11 @@ try {
 
 console.log('\n=== Next (on your machine with Postgres) ===');
 console.log('  export TEST_DATABASE_URL=postgresql://user:pass@localhost:5432/asa_test');
-console.log('  node scripts/db-push-with-env.mjs   # if DATABASE_URL in .env');
+console.log('  export DATABASE_URL="$TEST_DATABASE_URL"');
+console.log('  node scripts/db-push-with-env.mjs');
+console.log(
+  '  PAYMENT_PROCESSOR_ENABLED=true npm run test:server -- --runInBand --testPathPatterns=production-path',
+);
 console.log('  npm run test:server                 # full ~80 suites\n');
 
 process.exit(failed ? 1 : 0);

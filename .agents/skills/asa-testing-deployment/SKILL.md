@@ -99,6 +99,17 @@ Test-seed endpoints (`/api/test/setup-cart-scenario`, `/api/test/setup-auto-pay-
 
 **Historical example (Task #203 #8)**: `setup-cart-scenario` hit `null value in column "child_name"` on every call and silently fell back to MemStorage. The seed returned `200`, but `POST /api/payment-history/manual` (#17) returned `400 "Enrollment not found"` because the manual-payment lookup hit Postgres, not MemStorage. Two scenarios silently broke from one missing column. See `ARCHITECTURAL_PATTERNS.md` §11.
 
+### Production-path tests (registration / locations)
+
+Mandatory lane for school-code signup and campus APIs — **not** covered by phase-1 helper seeds alone.
+
+- **Suite**: `server/tests/integration/production-path/*.test.ts`
+- **Harness**: `productionPathApp.ts` (same route mount order as `server/index.ts` for public locations + `/api/locations` + `/api/auth` + `/api/schools`), `describeProductionPath` (fails if `asa_test` unreachable), `supabaseAuthMock.ts` (PR CI), `seedRegistrationScenario.ts`
+- **Run**: `PAYMENT_PROCESSOR_ENABLED=true npm run test:server -- --runInBand --testPathPatterns=production-path`
+- **CI**: `.github/workflows/tests.yml` runs F001 verify + this suite on every PR
+- **E2E (real Supabase)**: `e2e/school-code-registration.spec.ts` — seed `POST /api/test/setup-registration-scenario`; skips without real `SUPABASE_SERVICE_ROLE_KEY`
+- **Stabilize**: `node scripts/run-stabilize-checks.mjs` includes production-path when Postgres is available
+
 ### Payment-Flow Integration Tests
 End-to-end Stripe-touching tests live under `server/tests/integration/payment-flow/`.
 

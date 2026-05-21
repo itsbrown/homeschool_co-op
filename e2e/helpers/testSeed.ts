@@ -75,6 +75,44 @@ export type SetupSessionEnrollmentScenarioResponse = {
   details?: string;
 };
 
+export type SetupRegistrationScenarioResponse = {
+  success: boolean;
+  data?: {
+    registrationCode: string;
+    school: { id: number; name: string; registrationCode: string };
+    wrongSchool: { id: number; name: string };
+    admin: {
+      id: number;
+      email: string;
+      password: string;
+      usersSchoolId: number;
+    };
+    locationsOnSchool: { id: number; name: string; schoolId: number }[];
+    locationOnWrongSchool: { id: number; name: string; schoolId: number };
+  };
+  error?: string;
+  details?: string;
+};
+
+export async function postSetupRegistrationScenario(
+  request: APIRequestContext,
+): Promise<{ response: APIResponse; json: SetupRegistrationScenarioResponse | null }> {
+  const response = await request.post("/api/test/setup-registration-scenario", {
+    headers: {
+      "X-Test-Token": testApiToken(),
+      "Content-Type": "application/json",
+    },
+    data: {},
+  });
+  let json: SetupRegistrationScenarioResponse | null = null;
+  try {
+    json = (await response.json()) as SetupRegistrationScenarioResponse;
+  } catch {
+    json = null;
+  }
+  return { response, json };
+}
+
 export type SetupCreditLookupScenarioResponse = {
   success: boolean;
   data?: {

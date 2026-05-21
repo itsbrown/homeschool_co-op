@@ -73,6 +73,32 @@ node scripts/run-stabilize-checks.mjs
    - `Database connection not available` → start Postgres / fix `TEST_DATABASE_URL`.
    - `fetch failed` on port 5000 → start `npm run dev` before payment-flow tests.
 
+### Production-path lane (registration / locations — mandatory on PR)
+
+Exercises **real HTTP routes** and **Postgres** (`asa_test`) with the same mount order as production (`public` locations before auth). Does **not** skip when the DB is down — fix `TEST_DATABASE_URL` or CI will fail.
+
+| File | What it proves |
+|------|----------------|
+| `integration/production-path/public-registration-locations.test.ts` | `GET /api/public/registration/locations` — seeded campuses, no Main Campus auto-seed, no cross-school leak |
+| `integration/production-path/location-school-context.test.ts` | Misaligned `users.school_id` vs `schools.admin_id`; `POST /api/locations` with explicit `schoolId` |
+| `integration/production-path/school-validate-code.test.ts` | `GET /api/schools/validate-code/:code` |
+| `integration/production-path/auth-register-school-signup.test.ts` | `POST /api/auth/register` + mocked Supabase admin → user, roles, children |
+| `integration/production-path/auth-register-orphan-supabase.test.ts` | Orphan Supabase auth blocks signup (`AUTH_EMAIL_EXISTS`) |
+| `integration/production-path/associate-parent-school.test.ts` | `associateParentWithSchool` storage path (no self-HTTP) |
+
+**Run locally** (requires `asa_test` + `db:push`):
+
+```bash
+export TEST_DATABASE_URL=postgresql://user:pass@localhost:5432/asa_test
+export DATABASE_URL="$TEST_DATABASE_URL"
+node scripts/db-push-with-env.mjs
+PAYMENT_PROCESSOR_ENABLED=true npm run test:server -- --runInBand --testPathPatterns=production-path
+```
+
+**Seed for Playwright:** `POST /api/test/setup-registration-scenario` (see `e2e/school-code-registration.spec.ts`). E2E uses **real Supabase** when secrets are set; skips with placeholder keys.
+
+Harness: `server/tests/helpers/productionPathApp.ts`, `supabaseAuthMock.ts`, `describeProductionPath.ts`, `seedRegistrationScenario.ts`.
+
 ### Session enrollment (F001) — E2E vs integration
 
 | Layer | File | What it proves |
@@ -81,6 +107,7 @@ node scripts/run-stabilize-checks.mjs
 | **Integration** | `server/tests/integration/session-enrollment-checkout.test.ts` | `create-payment-intent` + cart snapshot with **mocked** Stripe (`jest.mock` on `getStripeClient`). Requires a real `TEST_DATABASE_URL` (not the literal `...` placeholder). |
 | **E2E checkout** | `e2e/parent-payment-flow.spec.ts` | Full UI checkout; needs valid `TESTING_STRIPE_SECRET_KEY` / `sk_test_*` in `.env` or secrets. |
 | **E2E credits** | `e2e/credit-management-parent-lookup.spec.ts` | School-admin Add Manual Credit finds legacy parents (`users.school_id` only, no `user_roles`). Seed: `POST /api/test/setup-credit-lookup-scenario`. Requires `DATABASE_URL` + Supabase for admin login. |
+| **E2E registration** | `e2e/school-code-registration.spec.ts` | `/register/:code` UI + live Supabase signup. Seed: `POST /api/test/setup-registration-scenario`. Skips without real `SUPABASE_SERVICE_ROLE_KEY`. |
 | **Unit** | `server/tests/biweekly-checkout-contract.test.ts`, `server/tests/cart-program-dates.test.ts`, `server/tests/checkout-payment-plans-offer.test.ts`, `server/tests/biweekly-schedule-end-buffer.test.ts`, `server/tests/stripe-biweekly-checkout-phases.test.ts` | Golden fixture in `server/lib/biweekly-checkout-contract.ts` — cart, Stripe phases, boundary. |
 | **Integration** | `server/tests/integration/biweekly-session-checkout.test.ts` | Session cart snapshot + `create-payment-intent` biweekly → `scheduled_payments` dates/amounts/autopay metadata. Requires reachable `TEST_DATABASE_URL` (see commands below). |
 
