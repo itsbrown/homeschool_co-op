@@ -1,7 +1,5 @@
 import type { Request, Response } from 'express';
-import { getSchoolCoreById } from './school-db';
 import {
-  createDefaultLocationForSchool,
   getPublicLocationsBySchoolId,
   type PublicLocationRow,
 } from './location-db';
@@ -34,20 +32,16 @@ export async function handlePublicLocationsRequest(
     }
 
     console.log('🏢 [PUBLIC] Fetching locations for school ID:', schoolId);
-    let locations = await getPublicLocationsBySchoolId(schoolId);
+    const locations = await getPublicLocationsBySchoolId(schoolId);
 
     if (locations.length === 0) {
-      const school = await getSchoolCoreById(schoolId);
-      if (school) {
-        console.log(
-          `🏢 [PUBLIC] No locations for school ${schoolId} — creating default Main Campus`,
-        );
-        const created = await createDefaultLocationForSchool(school);
-        locations = [created];
-      }
+      console.warn(
+        `🏢 [PUBLIC] No active locations for school ${schoolId} — admin must add campuses in Location Management`,
+      );
     }
 
     console.log('✅ [PUBLIC] Found locations:', locations.length);
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
     res.json(locations);
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);

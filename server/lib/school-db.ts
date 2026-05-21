@@ -95,6 +95,24 @@ export async function getSchoolCoreById(id: number): Promise<SchoolCoreRow | und
   return row ? mapSchoolRow(row) : undefined;
 }
 
+/** First school this user administers (schools.admin_id). */
+export async function getSchoolCoreByAdminId(
+  adminUserId: number,
+): Promise<SchoolCoreRow | undefined> {
+  const schools = await getSchoolsCoreByAdminId(adminUserId);
+  return schools[0];
+}
+
+/** All schools linked via schools.admin_id (multi-school admins). */
+export async function getSchoolsCoreByAdminId(adminUserId: number): Promise<SchoolCoreRow[]> {
+  const pg = getRawPg();
+  const rows = await pg.unsafe(
+    `SELECT ${SCHOOL_SELECT} FROM schools WHERE admin_id = $1 ORDER BY id`,
+    [adminUserId],
+  );
+  return (rows as Record<string, unknown>[]).map(mapSchoolRow);
+}
+
 /** Public registration links — avoids Drizzle selecting F001 columns missing on older DBs. */
 export async function getSchoolCoreByRegistrationCode(
   code: string,

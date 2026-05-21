@@ -34,23 +34,22 @@ router.get("/profile", async (req: any, res) => {
       return res.status(404).json({ message: "User not found" });
     }
     
-    // Fetch school information if user has schoolId
+    const { resolveSchoolIdForUser } = await import('../lib/resolve-school-id');
+    const resolvedSchoolId = await resolveSchoolIdForUser(user);
+
     let school = null;
-    if (user.schoolId) {
-      console.log('🏫 Fetching school with ID:', user.schoolId);
-      const fetchedSchool = await storage.getSchool(user.schoolId);
+    if (resolvedSchoolId) {
+      console.log('🏫 Profile resolved schoolId:', resolvedSchoolId);
+      const fetchedSchool = await storage.getSchool(resolvedSchoolId);
       if (fetchedSchool) {
         school = {
           id: fetchedSchool.id,
           name: fetchedSchool.name,
-          logo: fetchedSchool.logo || null
+          logo: fetchedSchool.logo || null,
         };
-        console.log('🏫 Fetched school:', school);
-      } else {
-        console.log('⚠️ No school found for ID:', user.schoolId);
       }
     }
-    
+
     // Build profile response from database user
     const userProfile = {
       id: user.id,
@@ -63,7 +62,7 @@ router.get("/profile", async (req: any, res) => {
       subscription: "free",
       role: user.role,
       school: school,
-      schoolId: user.schoolId || null
+      schoolId: resolvedSchoolId ?? user.schoolId ?? null,
     };
     
     console.log("📋 Profile returned:", userProfile);
