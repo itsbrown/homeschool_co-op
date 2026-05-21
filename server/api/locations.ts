@@ -223,14 +223,18 @@ router.post("/", requireSchoolContext, async (req: any, res) => {
 
     const { schoolId: _clientSchoolId, isActive: _clientIsActive, ...bodyWithoutSchoolId } =
       req.body ?? {};
+    const nameForCode =
+      typeof bodyWithoutSchoolId.name === 'string' ? bodyWithoutSchoolId.name : '';
+    const code =
+      (typeof bodyWithoutSchoolId.code === 'string' && bodyWithoutSchoolId.code.trim()) ||
+      deriveLocationCode(nameForCode);
     const validatedData = insertLocationSchema.parse({
       ...bodyWithoutSchoolId,
       schoolId: numericSchoolId,
+      code,
     });
-    const code = (validatedData.code?.trim() || deriveLocationCode(validatedData.name));
     const locationData = {
       ...validatedData,
-      code,
       schoolId: numericSchoolId,
     };
     
