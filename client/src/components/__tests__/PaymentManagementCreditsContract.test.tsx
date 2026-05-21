@@ -32,12 +32,9 @@ const SOURCE_PATH = resolve(
 const SOURCE = readFileSync(SOURCE_PATH, 'utf8');
 
 describe('PaymentManagement → /api/parent/credits contract', () => {
-  it('Outstanding Balance card reads creditsData.totalAvailableCents (not the legacy totalAvailable typo)', () => {
-    expect(SOURCE).toContain('creditsData?.totalAvailableCents');
-    // Hard-block the regressing key. We tolerate the substring inside
-    // `totalAvailableCents` and `totalAvailableFormatted`, but the bare
-    // `creditsData?.totalAvailable` followed by anything other than
-    // `Cents`/`Formatted` would slip credits through as 0.
+  it('uses useParentCredits().totalAvailableCents (not the legacy creditsData.totalAvailable typo)', () => {
+    expect(SOURCE).toMatch(/useParentCredits\s*\(/);
+    expect(SOURCE).toContain('totalAvailableCents');
     const badPattern = /creditsData\?\.totalAvailable(?!Cents|Formatted)/g;
     const offenders = SOURCE.match(badPattern);
     expect(offenders).toBeNull();
@@ -96,7 +93,7 @@ describe('PaymentManagement → /api/parent/credits contract', () => {
   });
 
   it('falls back to the gross owed amount when the API key is missing (defensive default)', () => {
-    // If the response is malformed, `creditsData?.totalAvailableCents || 0`
+    // If the response is malformed, `data?.totalAvailableCents ?? 0` (hook default)
     // must yield 0 credits — never undefined arithmetic.
     const malformed = { success: true } as unknown as { totalAvailableCents?: number };
     const creditsCents = malformed.totalAvailableCents || 0;

@@ -7,6 +7,7 @@ import { useRole } from "@/contexts/RoleContext";
 import { trackAddToCart, trackRemoveFromCart, trackViewCart } from '@/lib/analytics';
 import { filterEnrollmentsToCartLineItems } from '@/utils/parentEnrollmentLineItems';
 import { getMembershipOutstandingBalance } from '@/utils/parentBalance';
+import { isViteFlagTrue } from '@/lib/viteEnv';
 
 // Helper function to get user-specific cart storage key
 // This prevents cross-account data leakage by namespacing localStorage per user
@@ -2092,7 +2093,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
-    if (import.meta.env.VITE_E2E_EXPOSE_CART !== 'true') {
+    if (!isViteFlagTrue('VITE_E2E_EXPOSE_CART')) {
       return;
     }
     const w = window as unknown as { __E2E_CART__?: { refreshDiscounts: () => Promise<void> } };

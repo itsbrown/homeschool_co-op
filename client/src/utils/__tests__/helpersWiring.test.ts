@@ -52,9 +52,14 @@ describe('Production guard wiring — PaymentManagement', () => {
     );
   });
 
-  it('uses getEnrollmentEffectiveBalance and getMembershipOutstandingBalance', () => {
+  it('imports useParentCredits for available credit cents', () => {
+    expect(source).toMatch(/from\s+['"]@\/hooks\/useParentCredits['"]/);
+    expect(source).toMatch(/useParentCredits\s*\(/);
+    expect(source).toMatch(/totalAvailableCents/);
+  });
+
+  it('uses getEnrollmentEffectiveBalance for outstanding enrollment totals', () => {
     expect(source).toMatch(/getEnrollmentEffectiveBalance\s*\(/);
-    expect(source).toMatch(/getMembershipOutstandingBalance\s*\(/);
   });
 
   it('does NOT compute outstanding from enrollment.remainingBalance directly (regression guard)', () => {
