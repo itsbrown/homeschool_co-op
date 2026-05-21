@@ -10,6 +10,8 @@
     "start": "NODE_ENV=production node dist/index.js",
     "check": "tsc",
     "check:payments": "tsc --noEmit -p tsconfig.payments.json",
+    "test": "npm run test:client && npm run test:server",
+    "test:client": "NODE_ENV=test jest --config jest.config.cjs",
     "test:payments": "NODE_ENV=test jest --config jest.payments.config.cjs",
     "test:server": "NODE_ENV=test jest --config jest.integration.config.cjs",
     "test:e2e": "node scripts/run-playwright.mjs test",

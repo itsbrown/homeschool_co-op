@@ -245,11 +245,11 @@ export async function processBalancePayment(paymentIntent: Stripe.PaymentIntent,
     }
     
     const { fulfillMembershipFromCartPaymentIntent } = await import(
-      '../services/fulfill-membership-payment-intent.js'
+      '../services/fulfill-membership-payment-intent'
     );
     await fulfillMembershipFromCartPaymentIntent(paymentIntent);
 
-    const { applyClassPoolToEnrollments } = await import('../lib/apply-class-pool-to-enrollments.js');
+    const { applyClassPoolToEnrollments } = await import('../lib/apply-class-pool-to-enrollments');
     const applyResult = await applyClassPoolToEnrollments(
       paymentIntent,
       enrollments.map((e) => e.id),
