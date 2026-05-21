@@ -362,7 +362,16 @@ function DashboardRouter() {
 
 function Router() {
   const { isAuthenticated, isLoading, user, error } = useAuth();
-  const { activeRole, showRoleSelection, setActiveRole, rolesError, isLoadingRoles } = useRole();
+  const {
+    activeRole,
+    rolesBootstrapRole,
+    showRoleSelection,
+    setActiveRole,
+    rolesError,
+    isLoadingRoles,
+    isAccountReady,
+  } = useRole();
+  const effectiveRole = activeRole || rolesBootstrapRole;
   const [location, setLocation] = useLocation();
 
   console.log(`🔐 Router render - activeRole:`, activeRole, 'isAuthenticated:', isAuthenticated, 'showRoleSelection:', showRoleSelection, 'user:', user?.email, 'location:', location);
@@ -394,14 +403,14 @@ function Router() {
       setLocation('/login?returnTo=' + encodeURIComponent(location));
     }
 
-    // Redirect authenticated users away from login page
-    if (isAuthenticated && location === '/login' && activeRole) {
+    // Redirect authenticated users away from login page (honor returnTo)
+    if (isAuthenticated && location === '/login' && isAccountReady && effectiveRole) {
       console.log(`🔄 Redirecting authenticated user away from login page`);
       const params = new URLSearchParams(window.location.search);
       const returnTo = params.get('returnTo');
       setLocation(returnTo?.startsWith('/') ? returnTo : '/dashboard');
     }
-  }, [isAuthenticated, isLoading, location, activeRole, setLocation]);
+  }, [isAuthenticated, isLoading, location, isAccountReady, effectiveRole, setLocation]);
 
   // Handle OAuth callbacks (Auth0 and Supabase)
   React.useEffect(() => {

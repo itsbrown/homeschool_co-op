@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, useRef } from "react";
+import React, { createContext, useContext, useState, useEffect, useRef, useMemo } from "react";
+import { normalizeRoleCasing, resolveBootstrapRoleFromRolesApi } from "@/lib/role-casing";
 import { useAuth } from "@/components/SupabaseProvider";
 import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -46,6 +47,10 @@ interface RoleContextType {
   setShowRoleSelection: (show: boolean) => void;
   isLoadingRoles: boolean;
   isSettingUpAccount: boolean;
+  /** Role from /api/user/roles before RoleContext state catches up */
+  rolesBootstrapRole: string;
+  /** True when authenticated user can safely leave /login */
+  isAccountReady: boolean;
   // Error from the role-loading query (null when loading or successful).
   rolesError: Error | null;
 }
@@ -267,6 +272,21 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
 
   const availableRoles: UserRole[] = rolesData?.roles || [];
 
+  const rolesBootstrapRole = useMemo(
+    () => resolveBootstrapRoleFromRolesApi(rolesData),
+    [rolesData],
+  );
+
+  const effectiveRoleForRouting = activeRole || rolesBootstrapRole;
+
+  const isAccountReady =
+    !!user &&
+    !isLoadingRoles &&
+    !isSettingUpAccount &&
+    !!effectiveRoleForRouting &&
+    !(rolesError instanceof RegistrationRequiredError) &&
+    !(rolesError instanceof AuthExpiredError);
+
   // Determine if user has multiple roles
   const hasMultipleRoles = availableRoles.length > 1;
 
@@ -397,24 +417,6 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
         }
       }
 
-      // Normalize role to canonical casing for consistent routing/matching
-      // Handles database values like "Mentor" -> "mentor", "SchoolAdmin" -> "schoolAdmin"
-      const normalizeRoleCasing = (role: string): string => {
-        const lowerRole = role.toLowerCase();
-        const roleMap: Record<string, string> = {
-          'superadmin': 'superAdmin',
-          'schooladmin': 'schoolAdmin',
-          'mentor': 'mentor',
-          'educator': 'educator',
-          'parent': 'parent',
-          'admin': 'admin',
-          'student': 'student',
-          'learner': 'learner',
-          'teacher': 'teacher',
-        };
-        return roleMap[lowerRole] || role;
-      };
-      
       const normalizedRole = normalizeRoleCasing(currentActiveRole);
       
       // canSwitchRoles: true only when the user has roles spanning more than one school
@@ -462,24 +464,6 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
       const data = await response.json();
       console.log(`🔄 Role switch successful:`, data);
 
-      // Normalize role to canonical casing
-      const normalizeRoleCasing = (role: string): string => {
-        const lowerRole = role.toLowerCase();
-        const roleMap: Record<string, string> = {
-          'superadmin': 'superAdmin',
-          'schooladmin': 'schoolAdmin',
-          'mentor': 'mentor',
-          'educator': 'educator',
-          'parent': 'parent',
-          'admin': 'admin',
-          'student': 'student',
-          'learner': 'learner',
-          'teacher': 'teacher',
-        };
-        return roleMap[lowerRole] || role;
-      };
-      
-      // Update local state with roleId from backend (normalize casing)
       const normalizedSwitchedRole = data.activeRole ? normalizeRoleCasing(data.activeRole) : '';
       setActiveRole(normalizedSwitchedRole);
       setActiveRoleId(data.activeRoleId);
@@ -526,6 +510,8 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
         setShowRoleSelection,
         isLoadingRoles,
         isSettingUpAccount,
+        rolesBootstrapRole,
+        isAccountReady,
         rolesError: rolesError as Error | null,
       }}
     >

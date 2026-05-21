@@ -12,7 +12,14 @@ import { useToast } from '@/hooks/use-toast';
 
 export const SupabaseLogin: React.FC = () => {
   const { signIn, signInWithGoogle, user, isAuthenticated } = useAuth();
-  const { activeRole, isLoadingRoles } = useRole();
+  const {
+    activeRole,
+    rolesBootstrapRole,
+    isLoadingRoles,
+    isSettingUpAccount,
+    isAccountReady,
+    rolesError,
+  } = useRole();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [isLoading, setIsLoading] = useState(false);
@@ -64,10 +71,13 @@ export const SupabaseLogin: React.FC = () => {
     }
   }, []);
 
-  // Only leave /login once roles are loaded — avoids dashboard spinner loops when
-  // Supabase session exists but the app DB has no user row (REGISTRATION_REQUIRED).
+  const effectiveRole = activeRole || rolesBootstrapRole;
+  const isFinishingLogin =
+    isAuthenticated && !!user && (isLoadingRoles || isSettingUpAccount);
+
+  // Leave /login once Supabase session + app role bootstrap are ready.
   useEffect(() => {
-    if (!isAuthenticated || !user || isLoadingRoles || !activeRole) {
+    if (!isAuthenticated || !user || !isAccountReady || !effectiveRole) {
       return;
     }
     if (sessionStorage.getItem(REGISTRATION_REDIRECT_BLOCK_KEY) === '1') {
@@ -84,8 +94,8 @@ export const SupabaseLogin: React.FC = () => {
   }, [
     isAuthenticated,
     user,
-    activeRole,
-    isLoadingRoles,
+    isAccountReady,
+    effectiveRole,
     registrationRequired,
     setLocation,
   ]);
@@ -104,13 +114,9 @@ export const SupabaseLogin: React.FC = () => {
         description: error.message,
         variant: "destructive",
       });
-    } else {
-      toast({
-        title: "Welcome back!",
-        description: "You have successfully logged in.",
-      });
     }
-    
+    // Redirect + welcome toast happen after roles load (see isFinishingLogin / redirect effect).
+
     setIsLoading(false);
   };
 
@@ -166,6 +172,36 @@ export const SupabaseLogin: React.FC = () => {
               <AlertDescription>{sessionExpiredMessage}</AlertDescription>
             </Alert>
           )}
+          {isFinishingLogin && (
+            <Alert className="mb-4" data-testid="login-finishing">
+              <AlertDescription>
+                Signing you in and loading your account…
+              </AlertDescription>
+            </Alert>
+          )}
+          {isAuthenticated &&
+            !isLoadingRoles &&
+            !isSettingUpAccount &&
+            !effectiveRole &&
+            rolesError && (
+              <Alert variant="destructive" className="mb-4" data-testid="login-roles-error">
+                <AlertDescription>
+                  {rolesError.message ||
+                    'Unable to load your account. Try refreshing or contact support.'}
+                </AlertDescription>
+              </Alert>
+            )}
+          {isAuthenticated &&
+            !isLoadingRoles &&
+            !isSettingUpAccount &&
+            !effectiveRole &&
+            !rolesError && (
+              <Alert variant="destructive" className="mb-4" data-testid="login-no-role">
+                <AlertDescription>
+                  Your account has no assigned role. Contact your school administrator.
+                </AlertDescription>
+              </Alert>
+            )}
           <div className="space-y-4">
             <form onSubmit={handleSignIn} className="space-y-4">
                 <div className="space-y-2">
@@ -195,8 +231,12 @@ export const SupabaseLogin: React.FC = () => {
                     <AlertDescription>{error}</AlertDescription>
                   </Alert>
                 )}
-                <Button type="submit" className="w-full" disabled={isLoading}>
-                  {isLoading ? 'Signing in...' : 'Sign In'}
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={isLoading || isFinishingLogin}
+                >
+                  {isLoading || isFinishingLogin ? 'Signing in...' : 'Sign In'}
                 </Button>
                 
                 <div className="text-center">

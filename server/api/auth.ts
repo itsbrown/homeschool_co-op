@@ -101,33 +101,29 @@ router.post('/register', async (req, res) => {
       });
     }
 
-    // Also check Supabase auth to catch orphaned accounts
+    // Supabase Auth is separate from Postgres users — orphan auth rows block registration
     try {
-      const { createClient } = await import('@supabase/supabase-js');
-      const supabaseUrl = process.env.SUPABASE_URL;
-      const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-      
-      if (supabaseUrl && supabaseServiceKey) {
-        const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-          auth: { autoRefreshToken: false, persistSession: false }
+      const { findSupabaseAuthUserByEmail } = await import('../lib/supabase-auth-lookup');
+      const existingAuthUser = await findSupabaseAuthUserByEmail(email);
+
+      if (existingAuthUser) {
+        console.log(
+          `⚠️ Registration blocked: Supabase auth only (no app users row required) — ${email} id=${existingAuthUser.id}`,
+        );
+        return res.status(400).json({
+          success: false,
+          message:
+            'An account with this email already exists for sign-in. Use the login page or Forgot password. If you never finished registration, contact your school administrator.',
+          code: 'AUTH_EMAIL_EXISTS',
+          source: 'supabase_auth',
         });
-        
-        // Check if auth account already exists
-        const { data: existingAuthUsers } = await supabaseAdmin.auth.admin.listUsers();
-        const existingAuthUser = existingAuthUsers?.users.find(u => u.email === email);
-        
-        if (existingAuthUser) {
-          console.log(`⚠️ Registration blocked: Auth account for ${email} already exists (Supabase ID: ${existingAuthUser.id})`);
-          return res.status(400).json({ 
-            success: false, 
-            message: 'User already exists. Please use the login page to access your account.' 
-          });
-        }
       }
     } catch (supabaseCheckError) {
       console.error('❌ Supabase user check failed:', supabaseCheckError);
-      // Continue if Supabase check fails but database check passed
-      console.log('⚠️ Proceeding with registration despite Supabase check failure');
+      return res.status(503).json({
+        success: false,
+        message: 'Unable to verify account uniqueness. Please try again in a moment.',
+      });
     }
 
     // For parent registration, generate a temporary password or use a default
