@@ -56,7 +56,7 @@ jobs:
         run: npx vite build
 
       - name: Push schema to test database
-        run: npx drizzle-kit push --force
+        run: node scripts/ci-db-push.mjs
 
       - name: Verify core Postgres schema
         run: node scripts/verify-core-schema.mjs

@@ -53,7 +53,7 @@ node scripts/run-stabilize-checks.mjs
 1. **Schema (core + F001)** — on your dev or `asa_test` database only:
    ```bash
    # Add DATABASE_URL or TEST_DATABASE_URL to .env, then:
-   npx drizzle-kit push --force
+   node scripts/ci-db-push.mjs
    node scripts/verify-core-schema.mjs
    node scripts/verify-f001-schema.mjs
    ```
