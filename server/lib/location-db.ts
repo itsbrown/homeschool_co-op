@@ -1,6 +1,5 @@
 import type { InsertLocation, Location } from '@shared/schema';
 import { getRawPg } from './pg-raw';
-import type { SchoolCoreRow } from './school-db';
 
 export type PublicLocationRow = { id: number; name: string };
 
@@ -108,7 +107,30 @@ export async function getPublicLocationsBySchoolId(
   return locations.map((row) => ({ id: row.id, name: row.name }));
 }
 
+/**
+ * Blocks the old registration auto-seed (Main Campus + MAIN + placeholder address).
+ * Manual admin creates with a real street address are still allowed.
+ */
+export function isBlockedMainCampusAutoSeed(
+  location: Pick<InsertLocation, 'name' | 'code' | 'address'>,
+): boolean {
+  const name = location.name?.trim().toLowerCase();
+  const code = location.code?.trim().toUpperCase();
+  const address = location.address?.trim() ?? '';
+  return name === 'main campus' && code === 'MAIN' && (address === 'TBD' || address === '');
+}
+
 export async function createLocationCore(location: InsertLocation): Promise<Location> {
+  if (
+    isBlockedMainCampusAutoSeed(location) &&
+    process.env.ALLOW_MAIN_CAMPUS_AUTO_SEED !== 'true'
+  ) {
+    const err = new Error(
+      'Refusing to auto-create Main Campus. Add locations in School → Location Management.',
+    );
+    console.error('[locations] Blocked Main Campus insert. Call stack:', new Error().stack);
+    throw err;
+  }
   await ensureLocationsTable();
   const pg = getRawPg();
   const rows = await pg.unsafe(
@@ -213,25 +235,4 @@ export async function deleteLocationCore(id: number): Promise<void> {
     `UPDATE locations SET is_active = false, updated_at = now() WHERE id = $1`,
     [id],
   );
-}
-
-export async function createDefaultLocationForSchool(
-  school: SchoolCoreRow,
-): Promise<PublicLocationRow> {
-  const created = await createLocationCore({
-    schoolId: school.id,
-    name: 'Main Campus',
-    code: 'MAIN',
-    address: school.address || 'TBD',
-    city: school.city,
-    state: school.state,
-    zipCode: school.zipCode,
-    phoneNumber: null,
-    email: null,
-    managerName: null,
-    capacity: null,
-    isActive: true,
-    timezone: 'America/New_York',
-  });
-  return { id: created.id, name: created.name };
 }

@@ -260,6 +260,7 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
   );
   app.get(PUBLIC_REGISTRATION_LOCATIONS_PATH, handlePublicLocationsRequest);
   app.get('/api/locations/public', handlePublicLocationsRequest);
+  console.log('📍 Public registration locations: read-only (Main Campus auto-seed disabled)');
   
   const server = await registerRoutes(app);
 
