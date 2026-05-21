@@ -1,7 +1,48 @@
+import type { InsertLocation, Location } from '@shared/schema';
 import { getRawPg } from './pg-raw';
 import type { SchoolCoreRow } from './school-db';
 
 export type PublicLocationRow = { id: number; name: string };
+
+const LOCATION_COLUMNS = `
+  id,
+  school_id,
+  name,
+  code,
+  address,
+  city,
+  state,
+  zip_code,
+  phone_number,
+  email,
+  manager_name,
+  capacity,
+  is_active,
+  timezone,
+  created_at,
+  updated_at
+`;
+
+function mapLocationRow(row: Record<string, unknown>): Location {
+  return {
+    id: Number(row.id),
+    schoolId: Number(row.school_id),
+    name: String(row.name),
+    code: String(row.code),
+    address: String(row.address),
+    city: String(row.city),
+    state: String(row.state),
+    zipCode: String(row.zip_code),
+    phoneNumber: row.phone_number != null ? String(row.phone_number) : null,
+    email: row.email != null ? String(row.email) : null,
+    managerName: row.manager_name != null ? String(row.manager_name) : null,
+    capacity: row.capacity != null ? Number(row.capacity) : null,
+    isActive: Boolean(row.is_active),
+    timezone: String(row.timezone ?? 'America/New_York'),
+    createdAt: new Date(row.created_at as string | Date),
+    updatedAt: new Date(row.updated_at as string | Date),
+  };
+}
 
 /** Idempotent — safe after dev DB restore when `locations` was never migrated. */
 export async function ensureLocationsTable(): Promise<void> {
@@ -28,45 +69,169 @@ export async function ensureLocationsTable(): Promise<void> {
   `);
 }
 
-export async function getPublicLocationsBySchoolId(
-  schoolId: number,
-): Promise<PublicLocationRow[]> {
+export async function getLocationCore(id: number): Promise<Location | undefined> {
   await ensureLocationsTable();
   const pg = getRawPg();
   const rows = await pg.unsafe(
-    `SELECT id, name FROM locations
+    `SELECT ${LOCATION_COLUMNS} FROM locations WHERE id = $1 LIMIT 1`,
+    [id],
+  );
+  const row = rows[0] as Record<string, unknown> | undefined;
+  return row ? mapLocationRow(row) : undefined;
+}
+
+export async function getLocationsBySchoolIdCore(schoolId: number): Promise<Location[]> {
+  await ensureLocationsTable();
+  const pg = getRawPg();
+  const rows = await pg.unsafe(
+    `SELECT ${LOCATION_COLUMNS} FROM locations
      WHERE school_id = $1 AND is_active = true
      ORDER BY name`,
     [schoolId],
   );
-  return (rows as { id: number; name: string }[]).map((row) => ({
-    id: Number(row.id),
-    name: String(row.name),
-  }));
+  return (rows as Record<string, unknown>[]).map(mapLocationRow);
+}
+
+export async function getAllLocationsCore(): Promise<Location[]> {
+  await ensureLocationsTable();
+  const pg = getRawPg();
+  const rows = await pg.unsafe(
+    `SELECT ${LOCATION_COLUMNS} FROM locations WHERE is_active = true ORDER BY name`,
+  );
+  return (rows as Record<string, unknown>[]).map(mapLocationRow);
+}
+
+export async function getPublicLocationsBySchoolId(
+  schoolId: number,
+): Promise<PublicLocationRow[]> {
+  const locations = await getLocationsBySchoolIdCore(schoolId);
+  return locations.map((row) => ({ id: row.id, name: row.name }));
+}
+
+export async function createLocationCore(location: InsertLocation): Promise<Location> {
+  await ensureLocationsTable();
+  const pg = getRawPg();
+  const rows = await pg.unsafe(
+    `INSERT INTO locations (
+      school_id, name, code, address, city, state, zip_code,
+      phone_number, email, manager_name, capacity, is_active, timezone
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+    RETURNING ${LOCATION_COLUMNS}`,
+    [
+      location.schoolId,
+      location.name,
+      location.code,
+      location.address,
+      location.city,
+      location.state,
+      location.zipCode,
+      location.phoneNumber ?? null,
+      location.email ?? null,
+      location.managerName ?? null,
+      location.capacity ?? null,
+      location.isActive ?? true,
+      location.timezone || 'America/New_York',
+    ],
+  );
+  const row = rows[0] as Record<string, unknown> | undefined;
+  if (!row) {
+    throw new Error('Location insert returned no row');
+  }
+  return mapLocationRow(row);
+}
+
+export async function updateLocationCore(
+  id: number,
+  update: Partial<InsertLocation>,
+): Promise<Location | undefined> {
+  await ensureLocationsTable();
+  const existing = await getLocationCore(id);
+  if (!existing) {
+    return undefined;
+  }
+
+  const merged: InsertLocation = {
+    schoolId: update.schoolId ?? existing.schoolId,
+    name: update.name ?? existing.name,
+    code: update.code ?? existing.code,
+    address: update.address ?? existing.address,
+    city: update.city ?? existing.city,
+    state: update.state ?? existing.state,
+    zipCode: update.zipCode ?? existing.zipCode,
+    phoneNumber: update.phoneNumber !== undefined ? update.phoneNumber : existing.phoneNumber,
+    email: update.email !== undefined ? update.email : existing.email,
+    managerName: update.managerName !== undefined ? update.managerName : existing.managerName,
+    capacity: update.capacity !== undefined ? update.capacity : existing.capacity,
+    isActive: update.isActive ?? existing.isActive,
+    timezone: update.timezone ?? existing.timezone,
+  };
+
+  const pg = getRawPg();
+  const rows = await pg.unsafe(
+    `UPDATE locations SET
+      school_id = $2,
+      name = $3,
+      code = $4,
+      address = $5,
+      city = $6,
+      state = $7,
+      zip_code = $8,
+      phone_number = $9,
+      email = $10,
+      manager_name = $11,
+      capacity = $12,
+      is_active = $13,
+      timezone = $14,
+      updated_at = now()
+     WHERE id = $1
+     RETURNING ${LOCATION_COLUMNS}`,
+    [
+      id,
+      merged.schoolId,
+      merged.name,
+      merged.code,
+      merged.address,
+      merged.city,
+      merged.state,
+      merged.zipCode,
+      merged.phoneNumber,
+      merged.email,
+      merged.managerName,
+      merged.capacity,
+      merged.isActive,
+      merged.timezone,
+    ],
+  );
+  const row = rows[0] as Record<string, unknown> | undefined;
+  return row ? mapLocationRow(row) : undefined;
+}
+
+export async function deleteLocationCore(id: number): Promise<void> {
+  await ensureLocationsTable();
+  const pg = getRawPg();
+  await pg.unsafe(
+    `UPDATE locations SET is_active = false, updated_at = now() WHERE id = $1`,
+    [id],
+  );
 }
 
 export async function createDefaultLocationForSchool(
   school: SchoolCoreRow,
 ): Promise<PublicLocationRow> {
-  await ensureLocationsTable();
-  const pg = getRawPg();
-  const rows = await pg.unsafe(
-    `INSERT INTO locations (school_id, name, code, address, city, state, zip_code, is_active)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, true)
-     RETURNING id, name`,
-    [
-      school.id,
-      'Main Campus',
-      'MAIN',
-      school.address || 'TBD',
-      school.city,
-      school.state,
-      school.zipCode,
-    ],
-  );
-  const row = rows[0] as { id: number; name: string } | undefined;
-  if (!row) {
-    throw new Error('Location insert returned no row');
-  }
-  return { id: Number(row.id), name: String(row.name) };
+  const created = await createLocationCore({
+    schoolId: school.id,
+    name: 'Main Campus',
+    code: 'MAIN',
+    address: school.address || 'TBD',
+    city: school.city,
+    state: school.state,
+    zipCode: school.zipCode,
+    phoneNumber: null,
+    email: null,
+    managerName: null,
+    capacity: null,
+    isActive: true,
+    timezone: 'America/New_York',
+  });
+  return { id: created.id, name: created.name };
 }

@@ -4814,7 +4814,12 @@ export class MemStorage implements IStorage {
 }
 
   import { DatabaseStorage } from "./dbStorage";
+  import { getNormalizedDatabaseUrl } from './lib/database-url';
   import { supabaseStorage, SupabaseStorage } from './supabase-storage';
+
+  function hasConfiguredDatabase(): boolean {
+    return !!getNormalizedDatabaseUrl();
+  }
 
   // Create a shared MemStorage instance to ensure consistency
   const sharedMemStorage = new MemStorage();
@@ -6614,12 +6619,15 @@ export class MemStorage implements IStorage {
         return this.dbStorage.deleteUserLocation(id);
       }
 
-      // Location methods - use database storage with fallback to memory
+      // Location methods — Postgres only when DATABASE_URL is set (no stale locations.json fallback)
       async getLocationById(id: number): Promise<Location | undefined> {
         try {
           return await this.dbStorage.getLocation(id);
         } catch (error) {
-          return this.memStorage.getLocation(id);
+          if (hasConfiguredDatabase()) {
+            throw error;
+          }
+          return this.memStorage.getLocationById(id);
         }
       }
 
@@ -6627,7 +6635,10 @@ export class MemStorage implements IStorage {
         try {
           return await this.dbStorage.getAllLocations();
         } catch (error) {
-          return this.memStorage.getAllLocations();
+          if (hasConfiguredDatabase()) {
+            throw error;
+          }
+          return this.memStorage.getLocations();
         }
       }
 
@@ -6635,6 +6646,10 @@ export class MemStorage implements IStorage {
         try {
           return await this.dbStorage.getLocationsBySchoolId(schoolId);
         } catch (error) {
+          if (hasConfiguredDatabase()) {
+            console.error(`getLocationsBySchoolId(${schoolId}) failed:`, error);
+            throw error;
+          }
           return this.memStorage.getLocationsBySchoolId(schoolId);
         }
       }
@@ -6652,6 +6667,9 @@ export class MemStorage implements IStorage {
         try {
           return await this.dbStorage.updateLocation(id, location);
         } catch (error) {
+          if (hasConfiguredDatabase()) {
+            throw error;
+          }
           return this.memStorage.updateLocation(id, location);
         }
       }
@@ -6660,6 +6678,9 @@ export class MemStorage implements IStorage {
         try {
           return await this.dbStorage.deleteLocation(id);
         } catch (error) {
+          if (hasConfiguredDatabase()) {
+            throw error;
+          }
           return this.memStorage.deleteLocation(id);
         }
       }

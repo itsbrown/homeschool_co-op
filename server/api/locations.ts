@@ -2,6 +2,7 @@ import express from "express";
 import { z } from "zod";
 import { insertLocationSchema, insertUserLocationSchema } from "@shared/schema";
 import { storage } from "../storage";
+import { getSchoolCoreById } from "../lib/school-db";
 import { requireSchoolContext } from "../middleware/require-school-context";
 import { 
   updateParentLocation, 
@@ -173,8 +174,8 @@ router.post("/", requireSchoolContext, async (req: any, res) => {
       return res.status(400).json({ message: "Invalid school context" });
     }
 
-    // Validate that the school exists
-    const school = await storage.getSchool(numericSchoolId);
+    // Validate school without Drizzle F001 columns (missing on some dev DBs)
+    const school = await getSchoolCoreById(numericSchoolId);
     if (!school) {
       console.error(`❌ School not found for ID ${numericSchoolId}`);
       return res.status(404).json({ 
