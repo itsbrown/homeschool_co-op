@@ -42,7 +42,7 @@ try {
 
 try {
   run(
-    'PAYMENT_PROCESSOR_ENABLED=true npm run test:server -- --runInBand --testPathPatterns=production-path --no-cache',
+    'PAYMENT_PROCESSOR_ENABLED=true npm run test:server -- --runInBand --testPathPatterns=production-path --no-cache --forceExit',
   );
 } catch {
   failed = true;

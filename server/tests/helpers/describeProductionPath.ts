@@ -1,6 +1,7 @@
 import { beforeAll, beforeEach, describe } from '@jest/globals';
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { assertCorePostgresSchema } from './assertCorePostgresSchema';
 import { testDb } from './testDatabase';
 import { resetSupabaseAuthMock } from './supabaseAuthMock';
 
@@ -72,8 +73,9 @@ function assertProductionPathPrerequisites(): void {
  */
 export const describeProductionPath = (name: string, fn: () => void): void => {
   describe(name, () => {
-    beforeAll(() => {
+    beforeAll(async () => {
       assertProductionPathPrerequisites();
+      await assertCorePostgresSchema();
     });
 
     beforeEach(async () => {

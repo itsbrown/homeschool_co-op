@@ -50,10 +50,11 @@ Quick local gate (no full suite):
 node scripts/run-stabilize-checks.mjs
 ```
 
-1. **Schema (F001 Phase 1)** — on your dev or `asa_test` database only:
+1. **Schema (core + F001)** — on your dev or `asa_test` database only:
    ```bash
    # Add DATABASE_URL or TEST_DATABASE_URL to .env, then:
-   node scripts/db-push-with-env.mjs
+   npx drizzle-kit push --force
+   node scripts/verify-core-schema.mjs
    node scripts/verify-f001-schema.mjs
    ```
    Or apply `server/migrations/f001-phase1-schema.sql` manually.

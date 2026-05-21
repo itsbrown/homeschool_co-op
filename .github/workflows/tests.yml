@@ -56,13 +56,16 @@ jobs:
         run: npx vite build
 
       - name: Push schema to test database
-        run: npm run db:push
+        run: npx drizzle-kit push --force
+
+      - name: Verify core Postgres schema
+        run: node scripts/verify-core-schema.mjs
 
       - name: Verify F001 schema
         run: node scripts/verify-f001-schema.mjs
 
       - name: Production-path integration (registration / locations)
-        run: npm run test:server -- --runInBand --testPathPatterns=production-path --no-cache
+        run: npm run test:server -- --runInBand --testPathPatterns=production-path --no-cache --forceExit
 
       - name: Start dev server
         run: |
