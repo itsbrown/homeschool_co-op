@@ -5,6 +5,26 @@
 --
 -- Safe to re-run (idempotent).
 
+-- Locations (parent registration Preferred Location dropdown)
+CREATE TABLE IF NOT EXISTS locations (
+  id serial PRIMARY KEY,
+  school_id integer NOT NULL REFERENCES schools(id),
+  name text NOT NULL,
+  code text NOT NULL DEFAULT 'MAIN',
+  address text NOT NULL DEFAULT '',
+  city text NOT NULL DEFAULT '',
+  state text NOT NULL DEFAULT '',
+  zip_code text NOT NULL DEFAULT '',
+  phone_number text,
+  email text,
+  manager_name text,
+  capacity integer,
+  is_active boolean NOT NULL DEFAULT true,
+  timezone text NOT NULL DEFAULT 'America/New_York',
+  created_at timestamp NOT NULL DEFAULT now(),
+  updated_at timestamp NOT NULL DEFAULT now()
+);
+
 -- Schools (required for POST /api/schools and getSchool)
 ALTER TABLE schools
   ADD COLUMN IF NOT EXISTS enabled_features jsonb NOT NULL DEFAULT '{}'::jsonb;

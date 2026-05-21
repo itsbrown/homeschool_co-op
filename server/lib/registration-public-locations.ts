@@ -1,8 +1,12 @@
 import type { Request, Response } from 'express';
-import { storage } from '../storage';
 import { getSchoolCoreById } from './school-db';
+import {
+  createDefaultLocationForSchool,
+  getPublicLocationsBySchoolId,
+  type PublicLocationRow,
+} from './location-db';
 
-export type PublicLocationRow = { id: number; name: string };
+export type { PublicLocationRow };
 
 /** Canonical path (mounted in server/index.ts before auth). */
 export const PUBLIC_REGISTRATION_LOCATIONS_PATH = '/api/public/registration/locations';
@@ -30,7 +34,7 @@ export async function handlePublicLocationsRequest(
     }
 
     console.log('🏢 [PUBLIC] Fetching locations for school ID:', schoolId);
-    let locations = await storage.getLocationsBySchoolId(schoolId);
+    let locations = await getPublicLocationsBySchoolId(schoolId);
 
     if (locations.length === 0) {
       const school = await getSchoolCoreById(schoolId);
@@ -38,34 +42,19 @@ export async function handlePublicLocationsRequest(
         console.log(
           `🏢 [PUBLIC] No locations for school ${schoolId} — creating default Main Campus`,
         );
-        try {
-          const created = await storage.createLocation({
-            schoolId,
-            name: 'Main Campus',
-            code: 'MAIN',
-            address: school.address || 'TBD',
-            city: school.city,
-            state: school.state,
-            zipCode: school.zipCode,
-            isActive: true,
-          });
-          locations = [created];
-        } catch (createErr) {
-          console.error('[PUBLIC] Failed to auto-create default location:', createErr);
-        }
+        const created = await createDefaultLocationForSchool(school);
+        locations = [created];
       }
     }
 
     console.log('✅ [PUBLIC] Found locations:', locations.length);
-
-    const publicLocations: PublicLocationRow[] = locations.map((loc) => ({
-      id: loc.id,
-      name: loc.name,
-    }));
-
-    res.json(publicLocations);
+    res.json(locations);
   } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
     console.error('Error fetching public locations:', error);
-    res.status(500).json({ message: 'Failed to fetch locations' });
+    res.status(500).json({
+      message: 'Failed to fetch locations',
+      ...(process.env.NODE_ENV !== 'production' && { detail }),
+    });
   }
 }
