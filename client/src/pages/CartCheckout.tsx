@@ -23,6 +23,7 @@ import type { Stripe } from '@stripe/stripe-js';
 import { trackBeginCheckout, trackAddPaymentInfo } from '@/lib/analytics';
 import { isFreeEnrollmentApproved as gateIsFreeEnrollmentApproved, cartLooksFreeButUnverified as gateCartLooksFreeButUnverified } from '@/utils/freeEnrollmentGate';
 import { computeCartItemFingerprint } from '@shared/cartFingerprint';
+import { normalizeCheckoutPaymentPlanRequest } from '@shared/checkout-payment-plan';
 
 /** Server cart snapshot shape used for checkout reconciliation (see /api/cart/snapshot). */
 type CheckoutPaymentPlanOption = {
@@ -249,8 +250,22 @@ export default function CartCheckout() {
     }>;
   } | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [selectedPaymentPlan, setSelectedPaymentPlan] = useState<string>('full');
-  const [paymentFrequency, setPaymentFrequency] = useState<'weekly' | 'biweekly' | 'monthly' | 'one_time'>('one_time');
+  const [selectedPaymentPlan, setSelectedPaymentPlan] = useState<string>(() => {
+    if (typeof window === 'undefined') return 'full';
+    const saved = localStorage.getItem('selectedPaymentPlan');
+    if (saved === 'full' || saved === 'biweekly' || saved === 'deposit' || saved === 'split') {
+      return saved;
+    }
+    return 'full';
+  });
+  const [paymentFrequency, setPaymentFrequency] = useState<
+    'weekly' | 'biweekly' | 'monthly' | 'one_time'
+  >(() => {
+    if (typeof window === 'undefined') return 'one_time';
+    const saved = localStorage.getItem('selectedPaymentPlan');
+    if (saved === 'biweekly') return 'biweekly';
+    return 'one_time';
+  });
   
   // Stripe loading state - store resolved Stripe instance, not a Promise
   const [stripeReady, setStripeReady] = useState(false);
@@ -357,16 +372,25 @@ export default function CartCheckout() {
     actualPayableAmount,
   });
 
-  // Automatically set payment frequency based on selected plan
-  useEffect(() => {
-    if (selectedPaymentPlan === 'biweekly') {
-      setPaymentFrequency('biweekly');
-    } else if (selectedPaymentPlan === 'full') {
-      setPaymentFrequency('one_time');
+  const handlePaymentPlanChange = (planId: string) => {
+    setSelectedPaymentPlan(planId);
+    localStorage.setItem('selectedPaymentPlan', planId);
+    const normalized = normalizeCheckoutPaymentPlanRequest(planId, paymentFrequency);
+    if (normalized.paymentFrequency !== paymentFrequency) {
+      setPaymentFrequency(normalized.paymentFrequency);
     }
-    // Split plan allows user to choose frequency (weekly/biweekly/monthly)
-    // No automatic frequency change needed for split plan
-  }, [selectedPaymentPlan]);
+  };
+
+  // Keep frequency aligned with selected plan (server uses both fields)
+  useEffect(() => {
+    const normalized = normalizeCheckoutPaymentPlanRequest(
+      selectedPaymentPlan,
+      paymentFrequency,
+    );
+    if (normalized.paymentFrequency !== paymentFrequency) {
+      setPaymentFrequency(normalized.paymentFrequency);
+    }
+  }, [selectedPaymentPlan, paymentFrequency]);
 
   // Auto-pay status query and toggle (only relevant when biweekly is selected)
   const { data: autoPayData, isLoading: autoPayLoading } = useQuery({
@@ -895,6 +919,10 @@ export default function CartCheckout() {
       // We still attach the supabase token + activeRole header manually.
       const token = localStorage.getItem('supabase_token');
       const activeRole = localStorage.getItem('activeRole');
+      const checkoutPlan = normalizeCheckoutPaymentPlanRequest(
+        selectedPaymentPlan,
+        paymentFrequency,
+      );
       const response = await fetch('/api/stripe/create-payment-intent', {
         method: 'POST',
         headers: {
@@ -921,9 +949,9 @@ export default function CartCheckout() {
             totalDiscountAmount: discounts.totalDiscountAmount || 0
           },
           total: itemsTotal, // Use authoritative items total if available
-          paymentPlan: selectedPaymentPlan,
-          paymentFrequency: paymentFrequency,
-          expectedSchedule: selectedPaymentPlan === 'biweekly' ? (() => {
+          paymentPlan: checkoutPlan.paymentPlan,
+          paymentFrequency: checkoutPlan.paymentFrequency,
+          expectedSchedule: checkoutPlan.paymentPlan === 'biweekly' ? (() => {
             const biweeklyPlan = currentAuthData?.paymentPlans?.find((p: any) => p.id === 'biweekly');
             if (biweeklyPlan) {
               return {
@@ -1907,7 +1935,7 @@ export default function CartCheckout() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <RadioGroup value={selectedPaymentPlan} onValueChange={setSelectedPaymentPlan}>
+                <RadioGroup value={selectedPaymentPlan} onValueChange={handlePaymentPlanChange}>
                   <div className="space-y-3">
                     {getPaymentPlanOptions().map((plan) => (
                       <div key={plan.id} className="flex items-start space-x-3">

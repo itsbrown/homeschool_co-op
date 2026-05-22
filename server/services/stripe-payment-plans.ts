@@ -6,6 +6,11 @@ import { buildBiweeklyCheckoutPhases } from '../lib/biweekly-checkout-contract';
 import { checkoutAnchorDate } from '../lib/payment-calculator';
 import { calculatePaymentSchedule, PaymentFrequency } from '../lib/payment-calculator';
 import { getStripeClient } from '../config/stripe';
+import {
+  mapCheckoutPlanToDbPaymentPlan,
+  normalizeCheckoutPaymentPlanRequest,
+  type CheckoutPaymentPlanId,
+} from '@shared/checkout-payment-plan';
 
 /** Read at call time — env is set in Jest beforeAll after this module may have loaded. */
 function skipStripeApiInTests(): boolean {
@@ -63,6 +68,21 @@ export class StripePaymentPlanService {
    * Create immediate payment intent and scheduled payments for payment plans
    */
   async createEducationalPaymentPlan(data: PaymentPlanData): Promise<PaymentPlanResult> {
+    const normalized = normalizeCheckoutPaymentPlanRequest(
+      data.paymentPlan,
+      data.paymentFrequency ?? 'one_time',
+    );
+    if (normalized.corrected) {
+      console.warn('⚠️ Checkout payment plan/frequency mismatch corrected:', {
+        requestedPlan: data.paymentPlan,
+        requestedFrequency: data.paymentFrequency,
+        paymentPlan: normalized.paymentPlan,
+        paymentFrequency: normalized.paymentFrequency,
+      });
+    }
+    data.paymentPlan = normalized.paymentPlan as PaymentPlanData['paymentPlan'];
+    data.paymentFrequency = normalized.paymentFrequency;
+
     console.log('🎯 Creating Stripe payment plan:', {
       parentEmail: data.parentEmail,
       enrollmentIds: data.enrollmentIds,
@@ -288,7 +308,13 @@ export class StripePaymentPlanService {
     }
 
     // Update enrollments with PaymentIntent reference
-    await this.updateEnrollmentsWithPaymentIntent(data.enrollmentIds, paymentIntent.id, customer.id, data.paymentPlan);
+    await this.updateEnrollmentsWithPaymentIntent(
+      data.enrollmentIds,
+      paymentIntent.id,
+      customer.id,
+      data.paymentPlan as CheckoutPaymentPlanId,
+      data.paymentFrequency ?? 'one_time',
+    );
 
     console.log('✅ Payment plan created successfully with PaymentIntent and', scheduledPayments.length, 'scheduled payments');
 
@@ -360,8 +386,8 @@ export class StripePaymentPlanService {
   ): PaymentPhase[] {
     console.log('🏗️ Building payment phases for plan:', plan, 'frequency:', frequency, 'amount:', CurrencyUtils.toDisplay(totalAmount));
 
-    // Biweekly checkout: same schedule as cart snapshot (pay today + biweekly until end − 14 days).
-    if (frequency === 'biweekly' && startDate && endDate) {
+    // Biweekly checkout: only when plan is biweekly (never from orphaned frequency alone).
+    if (plan === 'biweekly' && frequency === 'biweekly' && startDate && endDate) {
       console.log('📅 Using checkout biweekly schedule (matches cart / autopay due dates)');
       const phases = buildBiweeklyCheckoutPhases(totalAmount, startDate, endDate, checkoutAnchorDate());
       if (phases.length < 2) {
@@ -399,8 +425,14 @@ export class StripePaymentPlanService {
       }));
     }
 
-    // Weekly/monthly: date-based calculator from program span
-    if (frequency && frequency !== 'one_time' && startDate && endDate) {
+    // Weekly/monthly installments: split plan with explicit frequency only
+    if (
+      plan === 'split' &&
+      frequency &&
+      frequency !== 'one_time' &&
+      startDate &&
+      endDate
+    ) {
       console.log('📅 Using date-based payment calculator with enrollment dates');
       const schedule = calculatePaymentSchedule(totalAmount, startDate, endDate, frequency);
       
@@ -587,26 +619,32 @@ export class StripePaymentPlanService {
     enrollmentIds: number[], 
     paymentIntentId: string, 
     customerId: string,
-    paymentPlan: string
+    paymentPlan: CheckoutPaymentPlanId,
+    paymentFrequency: PaymentFrequency,
   ): Promise<void> {
     console.log('🔄 Updating enrollments with PaymentIntent references:', enrollmentIds);
+
+    const dbPaymentPlan = mapCheckoutPlanToDbPaymentPlan(paymentPlan);
+    const paymentStatus =
+      paymentPlan === 'full' ? 'pending' : 'partial_payment';
 
     for (const enrollmentId of enrollmentIds) {
       const existingEnrollment = await this.storage.getEnrollmentById(enrollmentId);
       if (existingEnrollment) {
+        const priorMeta =
+          (existingEnrollment.metadata as Record<string, unknown> | null) ?? {};
         await this.storage.updateEnrollment(enrollmentId, {
-          ...existingEnrollment,
           stripeCustomerId: customerId,
+          paymentPlan: dbPaymentPlan,
+          paymentFrequency,
           paymentSystemVersion: 'v2_stripe_simplified',
-          paymentStatus: paymentPlan === 'full' ? 'pending' : 'partial_payment',
-          migrationDate: new Date(),
-          // Store payment plan info in metadata
+          paymentStatus,
           metadata: {
-            ...existingEnrollment.metadata,
+            ...priorMeta,
             paymentPlan,
             initialPaymentIntentId: paymentIntentId,
-            stripeCustomerId: customerId
-          }
+            stripeCustomerId: customerId,
+          },
         });
       }
       console.log(`✅ Updated enrollment ${enrollmentId} with PaymentIntent ${paymentIntentId}`);

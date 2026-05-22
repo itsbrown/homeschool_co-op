@@ -1,0 +1,33 @@
+-- Backfill program_enrollments.payment_plan / metadata.paymentPlan when checkout
+-- stamped full_payment but scheduled_payments show an installment plan (e.g. biweekly).
+--
+-- Review before running in production:
+--   SELECT * FROM scheduled_payments WHERE parent_email = 'jocimarie@gmail.com' AND status = 'pending' LIMIT 20;
+--
+-- Example fix for enrollments tied to a known initial PI (adjust IDs/emails):
+
+-- UPDATE program_enrollments e
+-- SET
+--   payment_plan = 'biweekly',
+--   payment_frequency = 'biweekly',
+--   payment_status = CASE WHEN e.total_paid > 0 THEN 'partial_payment' ELSE e.payment_status END,
+--   metadata = jsonb_set(COALESCE(e.metadata, '{}'::jsonb), '{paymentPlan}', '"biweekly"'::jsonb, true)
+-- WHERE e.parent_email = 'jocimarie@gmail.com'
+--   AND e.metadata->>'initialPaymentIntentId' = 'pi_3TZqzVRDKItA2gz00zwOa0LK'
+--   AND e.payment_plan = 'full_payment';
+
+-- Bulk: align enrollments listed on pending installment rows
+-- UPDATE program_enrollments e
+-- SET
+--   payment_plan = 'biweekly',
+--   payment_frequency = 'biweekly',
+--   payment_status = CASE WHEN COALESCE(e.total_paid, 0) > 0 THEN 'partial_payment' ELSE e.payment_status END,
+--   metadata = jsonb_set(COALESCE(e.metadata, '{}'::jsonb), '{paymentPlan}', '"biweekly"'::jsonb, true)
+-- WHERE e.id IN (
+--   SELECT DISTINCT (jsonb_array_elements_text(sp.metadata->'enrollmentIds'))::int
+--   FROM scheduled_payments sp
+--   WHERE sp.status IN ('pending', 'processing', 'failed')
+--     AND (sp.metadata->>'paymentPlan') = 'biweekly'
+--     AND sp.total_installments > 1
+-- )
+-- AND e.payment_plan = 'full_payment';

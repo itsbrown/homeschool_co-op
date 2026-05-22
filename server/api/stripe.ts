@@ -10,6 +10,7 @@ import { calculateCanonicalAmounts } from '../services/canonical-amount-calculat
 import { enrollmentOutstandingCentsForCheckout } from '../lib/checkout-enrollment-balance';
 import { findProgramEnrollmentForCartItem } from '../lib/cart-checkout-enrollment-match';
 import { completeCartCreditsOnlyCheckout } from '../services/cart-credits-only-checkout';
+import { normalizeCheckoutPaymentPlanRequest } from '@shared/checkout-payment-plan';
 
 /** Stripe minimum charge in USD cents for card-present checkouts. */
 const STRIPE_MINIMUM_CHECKOUT_CENTS = 50;
@@ -72,7 +73,34 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
     
     console.log('💳 Creating payment intent for authenticated user:', userEmail);
 
-    const { items, subtotal, discounts, total, parentEmail, paymentPlan = 'full', paymentFrequency = 'one_time', membership, creditsToApply } = req.body;
+    const {
+      items,
+      subtotal,
+      discounts,
+      total,
+      parentEmail,
+      paymentPlan: rawPaymentPlan = 'full',
+      paymentFrequency: rawPaymentFrequency = 'one_time',
+      membership,
+      creditsToApply,
+    } = req.body;
+
+    const checkoutPlan = normalizeCheckoutPaymentPlanRequest(
+      rawPaymentPlan,
+      rawPaymentFrequency,
+    );
+    if (checkoutPlan.corrected) {
+      console.warn('⚠️ Checkout plan/frequency mismatch corrected before enrollment update:', {
+        parentEmail: userEmail,
+        requestedPlan: rawPaymentPlan,
+        requestedFrequency: rawPaymentFrequency,
+        paymentPlan: checkoutPlan.paymentPlan,
+        paymentFrequency: checkoutPlan.paymentFrequency,
+      });
+    }
+    const paymentPlan = checkoutPlan.paymentPlan;
+    const paymentFrequency = checkoutPlan.paymentFrequency;
+    const dbPaymentPlan = checkoutPlan.dbPaymentPlan;
 
     // Validate required fields - either items OR membership must be present
     const hasItems = items && Array.isArray(items) && items.length > 0;
@@ -236,16 +264,6 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
     }
     
     try {
-      // Map frontend payment plan values to database enum values
-      const paymentPlanMapping: Record<string, string> = {
-        'full': 'full_payment',
-        'deposit': 'deposit_only',
-        'split': 'custom',
-        'biweekly': 'biweekly'
-      };
-      
-      const dbPaymentPlan = (paymentPlanMapping[paymentPlan] || 'full_payment') as 'full_payment' | 'deposit_only' | 'biweekly' | 'custom';
-      
       // Find or use existing pending enrollments (created when items were added to cart)
       const enrollmentIds: number[] = [];
       
