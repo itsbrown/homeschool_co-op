@@ -16,6 +16,7 @@ import { useParentCredits } from "@/hooks/useParentCredits";
 import { formatCurrency } from "@/lib/utils";
 import { normalizeParentChildrenResponse } from "@/lib/parent-children-api";
 import { getEnrollmentEffectiveBalance } from "@/utils/parentBalance";
+import { enrollmentShouldExcludeFromCart } from "@shared/enrollment-cart-eligibility";
 import OnboardingTour from "@/components/onboarding/OnboardingTour";
 import { Input } from "@/components/ui/input";
 import ParentCalendarView from "@/components/calendar/ParentCalendarView";
@@ -259,8 +260,35 @@ export default function ParentDashboard() {
   } = useUnpaidEnrollments();
   const payOutstanding = usePayOutstanding();
 
+  const { data: upcomingPaymentsData, isLoading: upcomingPaymentsLoading } = useQuery<{
+    success?: boolean;
+    payments?: Array<{
+      id: number;
+      amount: number;
+      dueDate: string;
+      description?: string;
+      installmentNumber?: number;
+      totalInstallments?: number;
+      className?: string;
+      childName?: string;
+      overdue?: boolean;
+    }>;
+  }>({
+    queryKey: ["/api/scheduled-payments/upcoming"],
+    enabled: !!user?.email,
+    staleTime: 30_000,
+  });
+
+  const nextScheduledPayment = upcomingPaymentsData?.payments?.[0] ?? null;
+
+  const hasCartCheckoutDue =
+    outstandingEnrollmentCount > 0 ||
+    outstandingMembershipCount > 0 ||
+    outstandingNetDueCents > 0;
+
   const buildUnpaidEnrollmentForPay = useCallback(
     (enrollment: any): UnpaidEnrollment | null => {
+      if (enrollmentShouldExcludeFromCart(enrollment)) return null;
       const fromList = unpaidEnrollments.find((x) => x.id === enrollment.id);
       if (fromList) return fromList;
       const balance = getEnrollmentEffectiveBalance(enrollment);
@@ -878,9 +906,7 @@ export default function ParentDashboard() {
                 <DollarSign className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                {outstandingNetDueCents > 0 ||
-                outstandingEnrollmentCount > 0 ||
-                outstandingMembershipCount > 0 ? (
+                {hasCartCheckoutDue ? (
                   <>
                     <div
                       className="text-2xl font-bold text-orange-600"
@@ -940,17 +966,50 @@ export default function ParentDashboard() {
                         : 'Pay Now'}
                     </Button>
                   </>
+                ) : nextScheduledPayment ? (
+                  <>
+                    <div
+                      className="text-2xl font-bold text-blue-700"
+                      data-testid="text-next-payment-due-dashboard"
+                    >
+                      {formatCurrency(nextScheduledPayment.amount)}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Next payment
+                      {nextScheduledPayment.installmentNumber != null &&
+                      nextScheduledPayment.totalInstallments != null
+                        ? ` (${nextScheduledPayment.installmentNumber} of ${nextScheduledPayment.totalInstallments})`
+                        : ""}
+                      {nextScheduledPayment.dueDate
+                        ? ` · due ${format(new Date(nextScheduledPayment.dueDate), "MMM d, yyyy")}`
+                        : ""}
+                    </p>
+                    {(nextScheduledPayment.className || nextScheduledPayment.childName) && (
+                      <p className="text-xs text-muted-foreground mt-1 truncate">
+                        {[nextScheduledPayment.childName, nextScheduledPayment.className]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </p>
+                    )}
+                    <p className="text-xs text-muted-foreground mt-1.5 leading-snug">
+                      Class balances are on your payment plan — pay installments from Upcoming
+                      Payments, not checkout.
+                    </p>
+                    <Button className="mt-3 w-full h-11" asChild data-testid="button-view-payment-plan-dashboard">
+                      <Link href="/payments?tab=upcoming">
+                        <Calendar className="h-4 w-4 mr-2" />
+                        View payment plan
+                      </Link>
+                    </Button>
+                  </>
                 ) : (
                   <>
                     <div className="text-2xl font-bold">
-                      {isLoadingUnpaid
-                        ? '…'
-                        : outstandingEnrollmentCount > 0
-                          ? outstandingEnrollmentCount
-                          : enrollmentsData?.filter((e: any) => e.paymentStatus !== 'completed')
-                              .length || 0}
+                      {isLoadingUnpaid || upcomingPaymentsLoading
+                        ? "…"
+                        : formatCurrency(0)}
                     </div>
-                    <p className="text-xs text-muted-foreground">Unpaid enrollments</p>
+                    <p className="text-xs text-muted-foreground">No payments due right now</p>
                   </>
                 )}
               </CardContent>

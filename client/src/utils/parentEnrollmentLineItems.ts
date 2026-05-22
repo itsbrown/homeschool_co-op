@@ -6,6 +6,8 @@
  * enrollments and inflated totals vs /api/cart/calculate.
  */
 
+import { enrollmentShouldExcludeFromCart } from "@shared/enrollment-cart-eligibility";
+
 function enrollmentBalanceCents(e: any): number {
   if (typeof e?.effectiveBalance === 'number') {
     return e.effectiveBalance;
@@ -100,6 +102,10 @@ export function filterEnrollmentsToCartLineItems(
     const isWaitlisted = latestEnrollment.status === 'waitlist';
     const shouldSkip =
       hasFullyPaidEnrollment || latestIsPaid || isWaitlisted;
+
+    if (enrollmentShouldExcludeFromCart(latestEnrollment)) {
+      continue;
+    }
 
     if (
       !isWaitlisted &&

@@ -58,6 +58,9 @@ All statements are idempotent-ish (only update mismatched/null fields).
 - [ ] **Credits → Add Manual Credit** — search finds parent by name/email.
 - [ ] Parent **Settings** — first/last name visible (or save once).
 - [ ] Registration smoke test for a **new** parent (names stored on create).
+- [ ] Parent on **biweekly plan**: cart empty; dashboard shows **next payment due** → **Payments → Upcoming**.
+
+No backfill is required for payment-plan cart exclusion — that is code-only (`shared/enrollment-cart-eligibility.ts`).
 
 ## Production checklist (no schema push)
 

@@ -15,6 +15,7 @@ module.exports = {
     '<rootDir>/server/tests/cart-checkout-enrollment-match.test.ts',
     '<rootDir>/server/tests/parent-identity-scoping.test.ts',
     '<rootDir>/server/tests/auth-register-normalize.test.ts',
+    '<rootDir>/server/tests/enrollment-cart-eligibility.test.ts',
   ],
   transform: {
     '^.+\\.tsx?$': ['ts-jest', {

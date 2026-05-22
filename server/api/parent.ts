@@ -273,9 +273,31 @@ router.get('/enrollments', jwtCheck, async (req: any, res) => {
       enrollmentMatchesParent(enrollment, dbUser?.id, userEmail)
     );
 
-    console.log(`📚 Found ${parentEnrollments.length} enrollments for parent ${userEmail}`);
+    const { enrollmentShouldExcludeFromCart } = await import(
+      "@shared/enrollment-cart-eligibility"
+    );
+    const scheduledPayments = await storage.getScheduledPaymentsByParentEmail(
+      userEmail,
+    );
 
-    return res.status(200).json(parentEnrollments);
+    const enriched = parentEnrollments.map((enrollment: any) => {
+      const checkoutExcluded = enrollmentShouldExcludeFromCart(
+        enrollment,
+        scheduledPayments,
+      );
+      return {
+        ...enrollment,
+        managedByPaymentPlan: checkoutExcluded,
+        checkoutExcluded,
+      };
+    });
+
+    console.log(
+      `📚 Found ${enriched.length} enrollments for parent ${userEmail} ` +
+        `(${enriched.filter((e: any) => e.checkoutExcluded).length} on payment plan, excluded from cart)`,
+    );
+
+    return res.status(200).json(enriched);
   } catch (error) {
     console.error('❌ Error fetching enrollments:', error);
     return res.status(500).json({ 
