@@ -4,7 +4,13 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
-import { PlusCircle, User, Calendar, BookOpen, Clock, DollarSign, Users, UserPlus, CreditCard, RefreshCw, FileText, FolderOpen, Loader2, Award, CheckCircle, AlertCircle, XCircle, Copy, Edit2, Save, X, Coins, Gift, ExternalLink, Share2 } from "lucide-react";
+import { PlusCircle, User, Calendar, BookOpen, Clock, DollarSign, Users, UserPlus, CreditCard, RefreshCw, FileText, FolderOpen, Loader2, Award, CheckCircle, AlertCircle, XCircle, Copy, Edit2, Save, X, Coins, Gift, ExternalLink, Share2, Megaphone } from "lucide-react";
+import type { EnrollmentSession } from "@shared/schema";
+import {
+  formatSessionSignupCta,
+  formatSessionStartDate,
+  getNextOpenSessionByStartDate,
+} from "@/lib/open-sessions";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useAuth } from "@/components/SupabaseProvider";
@@ -557,7 +563,7 @@ export default function ParentDashboard() {
     enabled: !!user && !!session,
   });
 
-  const { data: openSessions = [] } = useQuery<{ id: number; name: string }[]>({
+  const { data: openSessions = [] } = useQuery<EnrollmentSession[]>({
     queryKey: ["/api/admin/sessions/open"],
     enabled: !!user && !!session && childCount > 0,
     queryFn: async () => {
@@ -566,6 +572,11 @@ export default function ParentDashboard() {
       return res.json();
     },
   });
+
+  const nextOpenSession = useMemo(
+    () => getNextOpenSessionByStartDate(openSessions),
+    [openSessions],
+  );
 
   const { data: upcomingScheduledData } = useQuery({
     queryKey: ["/api/scheduled-payments/upcoming"],
@@ -831,40 +842,66 @@ export default function ParentDashboard() {
           )}
           {childCount > 0 &&
             !enrollmentsLoading &&
-            (enrollmentsData?.length ?? 0) === 0 && (
-              <Alert className="border-primary/30 bg-primary/5" data-testid="enroll-cta-banner">
+            (enrollmentsData?.length ?? 0) === 0 &&
+            (nextOpenSession ? (
+              <div
+                className="relative overflow-hidden rounded-xl border-2 border-primary/35 bg-gradient-to-br from-primary/15 via-primary/8 to-background p-6 shadow-md"
+                data-testid="enroll-cta-banner"
+                role="region"
+                aria-label="Session enrollment announcement"
+              >
+                <div className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full bg-primary/10" />
+                <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex gap-4">
+                    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm">
+                      <Megaphone className="h-7 w-7" aria-hidden />
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-primary">
+                        Enrollment open
+                      </p>
+                      <h2 className="text-xl font-bold tracking-tight sm:text-2xl">
+                        {nextOpenSession.name}
+                      </h2>
+                      <p className="text-sm text-muted-foreground">
+                        Starts {formatSessionStartDate(nextOpenSession.startDate)}
+                        {openSessions.length > 1 && (
+                          <>
+                            {" "}
+                            · {openSessions.length} sessions open
+                          </>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                  <Button size="lg" className="w-full shrink-0 sm:w-auto" asChild data-testid="banner-enroll-session">
+                    <Link href="/enroll">
+                      {formatSessionSignupCta(nextOpenSession.name)}
+                      <Calendar className="ml-2 h-4 w-4" />
+                    </Link>
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <Alert className="border-muted bg-muted/30" data-testid="enroll-cta-banner">
                 <BookOpen className="h-4 w-4" />
                 <AlertTitle>Ready to enroll</AlertTitle>
                 <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-                  {openSessions.length > 0 ? (
-                    <>
-                      <span>
-                        {openSessions.length} session{openSessions.length === 1 ? "" : "s"} are open for
-                        enrollment.
-                      </span>
-                      <Button size="sm" asChild data-testid="banner-enroll-session">
-                        <Link href="/enroll">Enroll in a session</Link>
-                      </Button>
-                    </>
-                  ) : (
-                    <>
-                      <span>
-                        Browse programs and classes for your child. Session enrollment will appear here when
-                        your school opens a session.
-                      </span>
-                      <div className="flex flex-wrap gap-2">
-                        <Button size="sm" asChild>
-                          <Link href="/programs">Browse programs</Link>
-                        </Button>
-                        <Button size="sm" variant="outline" asChild>
-                          <Link href="/enroll">Session enrollment</Link>
-                        </Button>
-                      </div>
-                    </>
-                  )}
+                  <span>
+                    Browse programs and classes for your child. Session enrollment will appear here when
+                    your school opens a session.
+                  </span>
+                  <div className="flex flex-wrap gap-2">
+                    <Button size="sm" asChild>
+                      <Link href="/programs">Browse programs</Link>
+                    </Button>
+                    <Button size="sm" variant="outline" asChild>
+                      <Link href="/enroll">Session enrollment</Link>
+                    </Button>
+                  </div>
                 </AlertDescription>
               </Alert>
-            )}
+            ))}
           {/* Stats Cards Row */}
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             <Card>

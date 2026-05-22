@@ -5,7 +5,7 @@ import { requireRole } from "../middleware/auth0-auth";
 import { requireSchoolContext } from "../middleware/require-school-context";
 import { storage } from "../storage";
 import { getDb } from "../db";
-import { eq, and, desc, inArray } from "drizzle-orm";
+import { eq, and, asc, desc, inArray } from "drizzle-orm";
 import {
   parentAuthCriteriaFromRequest,
   resolveSchoolIdsForParentSessions,
@@ -74,7 +74,7 @@ router.get("/open", supabaseAuth, async (req: any, res) => {
       .select()
       .from(sessions)
       .where(and(inArray(sessions.schoolId, schoolIds), eq(sessions.enrollmentOpen, true)))
-      .orderBy(desc(sessions.sortOrder));
+      .orderBy(asc(sessions.startDate), desc(sessions.sortOrder));
 
     res.json(result);
   } catch (error) {
