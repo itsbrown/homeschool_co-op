@@ -145,6 +145,11 @@ export default function CreditManagementPage() {
     enabled: !!user?.email,
   });
 
+  const { data: mySchool } = useQuery<{ id?: number }>({
+    queryKey: ['/api/school-admin/my-school'],
+    enabled: !!user?.email,
+  });
+
   const createCreditMutation = useMutation({
     mutationFn: async (data: any) => {
       const response = await apiRequest('POST', '/api/credits/manual', data);
@@ -673,6 +678,7 @@ export default function CreditManagementPage() {
                     }}
                     placeholder="Search by name or email..."
                     roleFilter="parent"
+                    schoolId={mySchool?.id ?? null}
                   />
                 )}
               </div>

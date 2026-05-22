@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { storage } from '../storage';
 import { supabaseAuth } from '../middleware/supabase-auth';
+import { resolveSchoolIdForUser } from '../lib/resolve-school-id';
 import { z } from 'zod';
 
 const router = Router();
@@ -50,12 +51,17 @@ router.get('/search', supabaseAuth, async (req: any, res) => {
 
     if (currentUser.role === 'superAdmin' || currentUser.role === 'admin') {
       const requestedSchoolId = params.schoolId ? parseInt(String(params.schoolId)) : null;
-      effectiveSchoolId = requestedSchoolId;
+      // Match school-admin routes: default to admin's school when client omits schoolId.
+      effectiveSchoolId =
+        requestedSchoolId != null && Number.isFinite(requestedSchoolId)
+          ? requestedSchoolId
+          : await resolveSchoolIdForUser(currentUser);
     } else if (String(currentUser.role) === 'schoolAdmin' || String(currentUser.role) === 'director') {
-      if (!currentUser.schoolId) {
+      const resolvedSchoolId = await resolveSchoolIdForUser(currentUser);
+      if (resolvedSchoolId == null) {
         return res.status(403).json({ success: false, error: 'A school must be assigned to search users for this role.' });
       }
-      effectiveSchoolId = currentUser.schoolId;
+      effectiveSchoolId = resolvedSchoolId;
     }
 
     const roleFilter = params.role && validRoles.includes(params.role) ? params.role : undefined;

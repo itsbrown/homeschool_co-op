@@ -151,11 +151,26 @@ export class DatabaseStorage implements IStorage {
         .where(eq(userRoles.schoolId, sid));
       const rawIds = roleRows.map((r: { userId: number | null }) => r.userId).filter((id: number | null): id is number => id != null);
       const userIdsFromRoles = [...new Set(rawIds)];
+
+      // Include parents linked only via children/enrollments at this school (legacy school_id mismatch).
+      const schoolScopeParts: ReturnType<typeof eq>[] = [
+        eq(users.schoolId, sid),
+        sql`lower(trim(${users.email})) IN (
+          SELECT lower(trim(c.parent_email)) FROM children c
+          WHERE c.school_id = ${sid} AND c.parent_email IS NOT NULL AND trim(c.parent_email) <> ''
+        )`,
+        sql`${users.id} IN (
+          SELECT me.parent_user_id FROM membership_enrollments me WHERE me.school_id = ${sid}
+        )`,
+        sql`lower(trim(${users.email})) IN (
+          SELECT lower(trim(pe.parent_email)) FROM program_enrollments pe
+          WHERE pe.school_id = ${sid} AND pe.parent_email IS NOT NULL AND trim(pe.parent_email) <> ''
+        )`,
+      ];
       if (userIdsFromRoles.length > 0) {
-        conditions.push(or(eq(users.schoolId, sid), inArray(users.id, userIdsFromRoles)));
-      } else {
-        conditions.push(eq(users.schoolId, sid));
+        schoolScopeParts.push(inArray(users.id, userIdsFromRoles));
       }
+      conditions.push(or(...schoolScopeParts));
     }
 
     if (qRaw.length > 0) {

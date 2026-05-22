@@ -135,7 +135,9 @@ router.post('/register', async (req, res) => {
       username: email, // Use email as username
       email,
       password: hashedPassword,
-      name: `${userFirstName} ${userLastName}`,
+      name: `${userFirstName} ${userLastName}`.trim(),
+      firstName: userFirstName,
+      lastName: userLastName,
       phone: phone || '',
       role: role || 'parent',
       schoolId: schoolId || null,

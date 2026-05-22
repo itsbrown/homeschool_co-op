@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { z } from 'zod';
+import { resolveProfileNamesFromUser } from '@shared/auth-register';
 import { storage } from '../storage';
 
 const router = Router();
@@ -50,13 +51,15 @@ router.get("/profile", async (req: any, res) => {
       }
     }
 
+    const profileNames = resolveProfileNamesFromUser(user);
+
     // Build profile response from database user
     const userProfile = {
       id: user.id,
-      name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email,
+      name: profileNames.displayName,
       email: user.email,
-      firstName: user.firstName || "",
-      lastName: user.lastName || "",
+      firstName: profileNames.firstName,
+      lastName: profileNames.lastName,
       phone: user.phone || "",
       avatar: authUser?.user_metadata?.avatar_url || "",
       subscription: "free",
@@ -113,11 +116,16 @@ router.patch("/profile", async (req: any, res) => {
     
     console.log("✅ PATCH /profile - Found user in DB:", { id: user.id, email: user.email });
     
-    // Update user in database
+    const nextFirst = firstName !== undefined ? firstName : user.firstName;
+    const nextLast = lastName !== undefined ? lastName : user.lastName;
+    const nextName =
+      `${nextFirst ?? ""} ${nextLast ?? ""}`.trim() || user.name;
+
     const updateData = {
-      firstName: firstName || user.firstName,
-      lastName: lastName || user.lastName,
-      phone: phone || user.phone
+      firstName: nextFirst,
+      lastName: nextLast,
+      name: nextName,
+      phone: phone !== undefined && phone !== null ? phone : user.phone,
     };
     
     console.log("💾 PATCH /profile - Updating user with data:", updateData);
@@ -131,13 +139,15 @@ router.patch("/profile", async (req: any, res) => {
     
     console.log("✅ PATCH /profile - Successfully updated user:", { id: updatedUser.id, email: updatedUser.email });
     
+    const updatedNames = resolveProfileNamesFromUser(updatedUser);
+
     // Build profile response
     const updatedProfile = {
       id: updatedUser.id,
-      name: `${updatedUser.firstName || ''} ${updatedUser.lastName || ''}`.trim() || updatedUser.email,
+      name: updatedNames.displayName,
       email: updatedUser.email,
-      firstName: updatedUser.firstName || "",
-      lastName: updatedUser.lastName || "",
+      firstName: updatedNames.firstName,
+      lastName: updatedNames.lastName,
       phone: updatedUser.phone || "",
       avatar: req.user?.user_metadata?.avatar_url || "",
       subscription: "free"

@@ -24,6 +24,8 @@ interface UserAutocompleteProps {
   disabled?: boolean;
   roleFilter?: string;
   excludeIds?: number[];
+  /** When set, scopes search to this school (required for platform admins on school-admin pages). */
+  schoolId?: number | null;
   endpoint?: string; // Custom endpoint URL (defaults to /api/user-search/search)
 }
 
@@ -34,6 +36,7 @@ export function UserAutocomplete({
   disabled = false,
   roleFilter,
   excludeIds = [],
+  schoolId,
   endpoint = "/api/user-search/search",
 }: UserAutocompleteProps) {
   const [query, setQuery] = useState("");
@@ -47,6 +50,9 @@ export function UserAutocomplete({
   const searchParams = new URLSearchParams();
   if (debouncedQuery) searchParams.set("query", debouncedQuery);
   if (roleFilter) searchParams.set("role", roleFilter);
+  if (schoolId != null && Number.isFinite(schoolId)) {
+    searchParams.set("schoolId", String(schoolId));
+  }
   searchParams.set("limit", "10");
   const searchUrl = `${endpoint}?${searchParams}`;
 
@@ -130,7 +136,9 @@ export function UserAutocomplete({
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
           ref={inputRef}
-          type="text"
+          type="search"
+          autoComplete="off"
+          name="user-search"
           value={query}
           onChange={(e) => {
             setQuery(e.target.value);

@@ -2,6 +2,7 @@ import { describe, expect, it } from "@jest/globals";
 import {
   buildLegacyRegisterUserBody,
   normalizeAuthRegisterInput,
+  resolveProfileNamesFromUser,
   splitFullName,
 } from "@shared/auth-register";
 
@@ -84,6 +85,36 @@ describe("normalizeAuthRegisterInput", () => {
     expect(splitFullName("Madonna")).toEqual({
       firstName: "Madonna",
       lastName: "Madonna",
+    });
+  });
+
+  it("resolveProfileNamesFromUser falls back to users.name when first/last empty", () => {
+    expect(
+      resolveProfileNamesFromUser({
+        email: "jocimarie@gmail.com",
+        name: "Jocelyn Brown",
+        firstName: null,
+        lastName: null,
+      }),
+    ).toEqual({
+      firstName: "Jocelyn",
+      lastName: "Brown",
+      displayName: "Jocelyn Brown",
+    });
+  });
+
+  it("resolveProfileNamesFromUser prefers stored first/last over name", () => {
+    expect(
+      resolveProfileNamesFromUser({
+        email: "a@b.com",
+        name: "Legacy Combined",
+        firstName: "Pat",
+        lastName: "Lee",
+      }),
+    ).toEqual({
+      firstName: "Pat",
+      lastName: "Lee",
+      displayName: "Pat Lee",
     });
   });
 });

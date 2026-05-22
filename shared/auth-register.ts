@@ -56,6 +56,24 @@ export type NormalizedAuthRegisterInput = {
   requireChildWithSchoolSignup: boolean;
 };
 
+/** Prefer stored first/last; fall back to parsing users.name for legacy rows. */
+export function resolveProfileNamesFromUser(user: {
+  firstName?: string | null;
+  lastName?: string | null;
+  name?: string | null;
+  email: string;
+}): { firstName: string; lastName: string; displayName: string } {
+  let firstName = (user.firstName ?? "").trim();
+  let lastName = (user.lastName ?? "").trim();
+  if (!firstName && !lastName && user.name?.trim()) {
+    const split = splitFullName(user.name);
+    firstName = split.firstName;
+    lastName = split.lastName;
+  }
+  const displayName = `${firstName} ${lastName}`.trim() || user.email;
+  return { firstName, lastName, displayName };
+}
+
 export function splitFullName(name: string): {
   firstName: string;
   lastName: string;
