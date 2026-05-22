@@ -1,0 +1,18 @@
+---
+description: Maintain docs/APP_KNOWLEDGE and asa-* skills when learning durable facts
+alwaysApply: true
+---
+
+# App knowledge (ASA)
+
+**Hub:** [docs/APP_KNOWLEDGE/README.md](docs/APP_KNOWLEDGE/README.md)
+
+On any non-trivial task in this repo:
+
+1. Read the hub (and the relevant domain doc under `docs/APP_KNOWLEDGE/domains/`).
+2. Use the matching `.agents/skills/asa-*` skill for the area you edit.
+3. Before finishing, update knowledge if you learned invariants, pitfalls, CI/deploy truth, or new key files — plus a dated line in [docs/APP_KNOWLEDGE/CHANGELOG.md](docs/APP_KNOWLEDGE/CHANGELOG.md).
+
+Cross-project maintenance protocol: personal skill `maintain-app-knowledge` in `~/.cursor/skills/`.
+
+End substantial replies with **Knowledge update** (learned / updated files / gaps).
