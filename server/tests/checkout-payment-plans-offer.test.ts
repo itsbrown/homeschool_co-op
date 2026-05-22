@@ -26,12 +26,21 @@ import {
 import { calculatePaymentPlans } from '../utils/cart-pricing';
 
 describe('calculatePaymentPlans', () => {
+  beforeAll(() => {
+    process.env.TEST_CHECKOUT_ANCHOR_ISO = GOLDEN_BIWEEKLY_CHECKOUT.anchorDate.toISOString();
+  });
+
+  afterAll(() => {
+    delete process.env.TEST_CHECKOUT_ANCHOR_ISO;
+  });
+
   beforeEach(() => {
     mockGetClassById.mockReset();
     mockResolveCartProgramDateSpan.mockReset();
   });
 
   it('returns only full plan when the biweekly window is shorter than one interval', async () => {
+    process.env.TEST_CHECKOUT_ANCHOR_ISO = '2030-01-01T12:00:00.000Z';
     mockResolveCartProgramDateSpan.mockResolvedValue({
       earliestStartDate: new Date('2030-01-01'),
       latestEndDate: new Date('2030-01-10'),
@@ -40,6 +49,7 @@ describe('calculatePaymentPlans', () => {
       { id: 'i1', classId: 1, childId: 1, childName: 'Test' },
     ]);
     expect(plans.map((p) => p.id)).toEqual(['full']);
+    process.env.TEST_CHECKOUT_ANCHOR_ISO = GOLDEN_BIWEEKLY_CHECKOUT.anchorDate.toISOString();
   });
 
   it('includes biweekly when the program span supports multiple installments', async () => {

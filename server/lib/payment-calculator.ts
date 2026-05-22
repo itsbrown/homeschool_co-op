@@ -205,11 +205,10 @@ export function calculatePaymentSchedule(
  * Calculate the biweekly checkout schedule — SINGLE SOURCE OF TRUTH
  * Used by both cart-pricing.ts (for display) and stripe-payment-plans.ts (for charging).
  *
- * This function handles the "first payment today + remaining from class start" pattern:
- * - First payment is ALWAYS collected today (immediately at enrollment)
- * - Remaining payments are spaced biweekly starting from class start date
- * - Installment due dates do not extend past (class end − {@link BIWEEKLY_CLASS_END_PAYMENT_BUFFER_DAYS} days)
- * - Total is divided evenly across ALL payments (today + future)
+ * Plan starts at checkout (not deferred to class start):
+ * - First payment is collected immediately at enrollment
+ * - All installments are spaced biweekly from checkout through (class end − {@link BIWEEKLY_CLASS_END_PAYMENT_BUFFER_DAYS} days)
+ * - Total is divided evenly across every installment in that window
  *
  * Both the checkout display and the payment processor MUST use this function
  * to prevent display-vs-charge mismatches.
@@ -225,17 +224,14 @@ export interface CheckoutBiweeklySchedule {
 
 export function calculateCheckoutBiweeklySchedule(
   totalAmountCents: number,
-  classStartDate: Date,
+  _classStartDate: Date,
   classEndDate: Date,
   anchorDate?: Date
 ): CheckoutBiweeklySchedule {
   const now = anchorDate ?? checkoutAnchorDate();
-  const classStartsInFuture = classStartDate > now;
-  
-  const scheduleStartDate = classStartsInFuture ? classStartDate : now;
-  
-  const schedule = calculatePaymentSchedule(totalAmountCents, scheduleStartDate, classEndDate, 'biweekly');
-  
+
+  const schedule = calculatePaymentSchedule(totalAmountCents, now, classEndDate, 'biweekly');
+
   if (schedule.frequency === 'one_time' || schedule.numberOfPayments < 2) {
     return {
       firstPaymentAmount: totalAmountCents,
@@ -246,15 +242,8 @@ export function calculateCheckoutBiweeklySchedule(
       totalAmount: totalAmountCents
     };
   }
-  
-  let allPaymentDates: Date[];
-  
-  if (classStartsInFuture) {
-    allPaymentDates = [now, ...schedule.paymentDates];
-  } else {
-    allPaymentDates = schedule.paymentDates;
-  }
-  
+
+  const allPaymentDates = schedule.paymentDates;
   const totalPayments = allPaymentDates.length;
   
   const basePaymentAmount = Math.floor(totalAmountCents / totalPayments);

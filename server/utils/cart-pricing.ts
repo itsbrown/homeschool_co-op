@@ -1162,13 +1162,13 @@ export async function calculatePaymentPlans(
     {
       id: 'biweekly' as const,
       name: 'Biweekly Payment Plan',
-      description: 'Automatic payments every 2 weeks; last payment at least 2 weeks before your latest class ends',
+      description: 'First payment today, then automatic payments every 2 weeks; last payment at least 2 weeks before your latest class ends',
       amount: biweeklyAmount,
       numberOfPayments: numberOfBiweeklyPayments,
       totalAmount: payableAmount,
       finalPaymentAmount: finalPaymentAmount,
       features: [
-        'Pay every 2 weeks based on class schedule',
+        'First payment due at checkout; remaining payments every 2 weeks',
         'Payments end at least two weeks before the latest class end date in your cart',
       ],
     }
