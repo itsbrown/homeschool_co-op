@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useSearch } from "wouter";
+import { useSearch, useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
@@ -462,6 +462,7 @@ function ScheduledPaymentDialog({
 
 export default function PaymentManagement({ childId, defaultTab }: PaymentManagementProps) {
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const [selectedPaymentId, setSelectedPaymentId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
@@ -647,6 +648,8 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
         retryCount: typeof payment.retryCount === 'number' ? payment.retryCount : 0,
         failureReason: payment.failureReason ?? null,
         overdue: payment.overdue === true,
+        isCheckoutDue: payment.isCheckoutDue === true,
+        checkoutPaymentIntentId: payment.checkoutPaymentIntentId,
       }));
     },
   });
@@ -1166,6 +1169,8 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
                       retryCount: typeof sp.retryCount === 'number' ? sp.retryCount : 0,
                       failureReason: sp.failureReason ?? null,
                       overdue: sp.overdue === true,
+                      isCheckoutDue: sp.isCheckoutDue === true,
+                      checkoutPaymentIntentId: sp.checkoutPaymentIntentId,
                     }));
                   
                   const allUpcomingPayments = [...pendingPayments, ...scheduledPaymentItems, ...dbScheduledPaymentItems]
@@ -1243,6 +1248,11 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
                                     Class Enrollment
                                   </Badge>
                                 )}
+                                {payment.isCheckoutDue && (
+                                  <Badge variant="outline" className="text-xs bg-amber-50 text-amber-800 border-amber-200">
+                                    Checkout due
+                                  </Badge>
+                                )}
                                 {payment.source === 'stripe_scheduled' && (
                                   <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-200">
                                     Stripe Managed
@@ -1293,6 +1303,10 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
                           <Button 
                             size="sm"
                             onClick={() => {
+                              if (payment.isCheckoutDue) {
+                                setLocation('/cart/checkout');
+                                return;
+                              }
                               setSelectedPaymentForDialog({
                                 id: payment.id,
                                 amount: payment.amount,
@@ -1308,7 +1322,7 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
                             }}
                             data-testid={`button-pay-upcoming-${payment.id}`}
                           >
-                            Pay Now
+                            {payment.isCheckoutDue ? 'Complete checkout' : 'Pay Now'}
                           </Button>
                           )}
                         </div>

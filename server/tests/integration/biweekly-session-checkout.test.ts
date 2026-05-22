@@ -295,12 +295,35 @@ describeWithDb('Integration: biweekly session checkout contract', () => {
     const piAmount = (mockStripePaymentIntentsCreate as any).mock.calls[0][0].amount;
     expect(piAmount).toBe(expected.firstPaymentAmount);
 
-    const scheduled = await storage.getScheduledPaymentsByEnrollmentId(enrollment.id);
-    expect(scheduled.length).toBe(phases.length - 1);
+    const scheduledBeforePay = await storage.getScheduledPaymentsByEnrollmentId(enrollment.id);
+    expect(scheduledBeforePay.length).toBe(0);
+
+    expect(response.body.paymentIntentId).toBeTruthy();
+
+    const { StripePaymentPlanService } = await import(
+      '../../services/stripe-payment-plans.js'
+    );
+    const planService = new StripePaymentPlanService(storage as any);
+    const mockPi = {
+      id: response.body.paymentIntentId as string,
+      amount: piAmount,
+      metadata: {
+        enrollmentIds: JSON.stringify([enrollment.id]),
+        parentEmail: testUser.email,
+        paymentPlan: 'biweekly',
+        paymentFrequency: 'biweekly',
+        totalAmount: String(totalCents),
+        installmentNumber: '1',
+        totalInstallments: String(phases.length),
+      },
+    };
+    const scheduledAfterPay =
+      await planService.persistRemainingScheduledPaymentsAfterFirstCheckoutPayment(mockPi);
+    expect(scheduledAfterPay.length).toBe(phases.length - 1);
 
     const futurePhases = phases.slice(1);
     assertAllDueDatesOnOrBeforeBiweeklyBoundary(
-      scheduled.map((r) => new Date(r.scheduledDate)),
+      scheduledAfterPay.map((r) => new Date(r.scheduledDate)),
       programEnd,
     );
     assertAllDueDatesOnOrBeforeBiweeklyBoundary(
@@ -308,10 +331,10 @@ describeWithDb('Integration: biweekly session checkout contract', () => {
       programEnd,
     );
 
-    const scheduledSum = scheduled.reduce((s, r) => s + r.amount, 0);
+    const scheduledSum = scheduledAfterPay.reduce((s, r) => s + r.amount, 0);
     expect(scheduledSum + piAmount).toBe(totalCents);
 
-    for (const row of scheduled) {
+    for (const row of scheduledAfterPay) {
       expect(row.status).toBe('pending');
       const meta = row.metadata as { autoPay?: boolean };
       expect(meta?.autoPay).toBe(true);
@@ -319,7 +342,7 @@ describeWithDb('Integration: biweekly session checkout contract', () => {
     }
 
     const boundary = biweeklyInstallmentScheduleEndDate(programEnd);
-    for (const row of scheduled) {
+    for (const row of scheduledAfterPay) {
       expect(new Date(row.scheduledDate).getTime()).toBeLessThanOrEqual(boundary.getTime());
     }
   }, 60000);

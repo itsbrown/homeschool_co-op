@@ -11,6 +11,7 @@ import {
   normalizeCheckoutPaymentPlanRequest,
   type CheckoutPaymentPlanId,
 } from '@shared/checkout-payment-plan';
+import { resolveEnrollmentIdsFromScheduledRow } from '../lib/scheduled-payment-intent-metadata';
 
 /** Read at call time — env is set in Jest beforeAll after this module may have loaded. */
 function skipStripeApiInTests(): boolean {
@@ -104,6 +105,11 @@ export class StripePaymentPlanService {
     const customer = await this.getOrCreateCustomer(data.parentEmail);
     console.log('👤 Customer ready:', customer.id);
 
+    await this.cancelOrphanPendingScheduledPayments(
+      data.parentEmail,
+      data.enrollmentIds,
+    );
+
     // Get enrollment data for date-based scheduling if needed.
     // Earliest start + latest end across all enrollments in this checkout so
     // multi-class carts match cart-pricing / parent expectations.
@@ -171,6 +177,7 @@ export class StripePaymentPlanService {
           enrollmentIds: JSON.stringify(data.enrollmentIds),
           parentEmail: data.parentEmail,
           paymentPlan: data.paymentPlan,
+          paymentFrequency: data.paymentFrequency ?? 'one_time',
           totalAmount: data.totalAmount.toString(),
           installmentNumber: '1',
           totalInstallments: phases.length.toString(),
@@ -201,6 +208,7 @@ export class StripePaymentPlanService {
         enrollmentIds: JSON.stringify(data.enrollmentIds),
         parentEmail: data.parentEmail,
         paymentPlan: data.paymentPlan,
+        paymentFrequency: data.paymentFrequency ?? 'one_time',
         totalAmount: data.totalAmount.toString(),
         installmentNumber: '1',
         totalInstallments: phases.length.toString(),
@@ -276,15 +284,132 @@ export class StripePaymentPlanService {
       throw new Error(`Cannot create scheduled payment: No valid school ID found for parent ${data.parentEmail}`);
     }
 
-    // Create scheduled payments for remaining phases (if any)
-    const scheduledPayments = [];
+    // Installments 2+ are created only after installment 1 succeeds (webhook).
+    const scheduledPayments: any[] = [];
+
+    // Update enrollments with PaymentIntent reference
+    await this.updateEnrollmentsWithPaymentIntent(
+      data.enrollmentIds,
+      paymentIntent.id,
+      customer.id,
+      data.paymentPlan as CheckoutPaymentPlanId,
+      data.paymentFrequency ?? 'one_time',
+    );
+
+    console.log(
+      '✅ Payment plan created with PaymentIntent for installment 1;',
+      phases.length > 1
+        ? `${phases.length - 1} future installments will be scheduled after payment succeeds`
+        : 'single payment plan',
+    );
+
+    return {
+      paymentIntent,
+      scheduledPayments,
+    };
+  }
+
+  /**
+   * After checkout installment 1 succeeds, persist installments 2..N in scheduled_payments.
+   * Idempotent per checkout PaymentIntent id.
+   */
+  async persistRemainingScheduledPaymentsAfterFirstCheckoutPayment(
+    paymentIntent: Pick<Stripe.PaymentIntent, 'id' | 'metadata' | 'amount'>,
+  ): Promise<any[]> {
+    const meta = paymentIntent.metadata as Record<string, string | undefined>;
+    const parentEmail = meta.parentEmail;
+    const enrollmentIdsRaw = meta.enrollmentIds;
+    if (!parentEmail || !enrollmentIdsRaw) {
+      console.warn(
+        '⚠️ Skipping scheduled payment creation — missing parentEmail or enrollmentIds on PI',
+        paymentIntent.id,
+      );
+      return [];
+    }
+
+    let enrollmentIds: number[] = [];
+    try {
+      const parsed = JSON.parse(enrollmentIdsRaw) as unknown;
+      if (Array.isArray(parsed)) {
+        enrollmentIds = parsed.filter(
+          (id): id is number => typeof id === 'number' && Number.isFinite(id),
+        );
+      }
+    } catch {
+      console.warn('⚠️ Invalid enrollmentIds JSON on PI', paymentIntent.id);
+      return [];
+    }
+    if (enrollmentIds.length === 0) return [];
+
+    const totalInstallments = parseInt(String(meta.totalInstallments ?? '1'), 10) || 1;
+    const installmentNumber = parseInt(String(meta.installmentNumber ?? '1'), 10) || 1;
+    if (totalInstallments <= 1 || installmentNumber !== 1) {
+      return [];
+    }
+
+    const existing = await this.storage.getScheduledPaymentsByParentEmail(parentEmail);
+    const alreadyCreated = existing.some((row) => {
+      const rowMeta = row.metadata as Record<string, unknown> | null | undefined;
+      return rowMeta?.checkoutPaymentIntentId === paymentIntent.id;
+    });
+    if (alreadyCreated) {
+      console.log('ℹ️ Scheduled payments already exist for checkout PI', paymentIntent.id);
+      return existing.filter((row) => {
+        const rowMeta = row.metadata as Record<string, unknown> | null | undefined;
+        return rowMeta?.checkoutPaymentIntentId === paymentIntent.id;
+      });
+    }
+
+    const normalized = normalizeCheckoutPaymentPlanRequest(
+      meta.paymentPlan ?? 'full',
+      meta.paymentFrequency ?? 'one_time',
+    );
+    const totalAmountCents = parseInt(String(meta.totalAmount ?? '0'), 10) || 0;
+    if (totalAmountCents <= 0) {
+      console.warn('⚠️ Skipping scheduled payments — missing totalAmount on PI', paymentIntent.id);
+      return [];
+    }
+
+    const parentUser = await this.storage.getUserByEmail(parentEmail);
+    if (!parentUser) return [];
+
+    let programStartDate: Date | null = null;
+    let programEndDate: Date | null = null;
+    for (const enrollmentId of enrollmentIds) {
+      const enrollment = await this.storage.getEnrollmentById(enrollmentId);
+      if (!enrollment?.programStartDate || !enrollment?.programEndDate) continue;
+      const parsedStartDate = new Date(enrollment.programStartDate);
+      const parsedEndDate = new Date(enrollment.programEndDate);
+      if (isNaN(parsedStartDate.getTime()) || isNaN(parsedEndDate.getTime())) continue;
+      if (!programStartDate || parsedStartDate < programStartDate) {
+        programStartDate = parsedStartDate;
+      }
+      if (!programEndDate || parsedEndDate > programEndDate) {
+        programEndDate = parsedEndDate;
+      }
+    }
+
+    const phases = this.buildPaymentPhases(
+      normalized.paymentPlan,
+      totalAmountCents,
+      normalized.paymentFrequency,
+      programStartDate,
+      programEndDate,
+    );
+    if (phases.length <= 1) return [];
+
+    const firstEnrollment = await this.storage.getEnrollmentById(enrollmentIds[0]);
+    const schoolId = firstEnrollment?.schoolId || parentUser.schoolId;
+    if (!schoolId) return [];
+
+    const created: any[] = [];
     for (let i = 1; i < phases.length; i++) {
       const phase = phases[i];
-      const scheduledPayment = await this.storage.createScheduledPayment({
-        schoolId: schoolId,
-        enrollmentId: data.enrollmentIds[0], // Use first enrollment as primary reference
+      const row = await this.storage.createScheduledPayment({
+        schoolId,
+        enrollmentId: enrollmentIds[0],
         parentId: parentUser.id,
-        parentEmail: data.parentEmail,
+        parentEmail,
         amount: phase.amount,
         currency: 'usd',
         scheduledDate: phase.dueDate,
@@ -297,31 +422,36 @@ export class StripePaymentPlanService {
         failureReason: null,
         retryCount: 0,
         metadata: {
-          enrollmentIds: data.enrollmentIds,
-          paymentPlan: data.paymentPlan,
+          enrollmentIds,
+          paymentPlan: normalized.paymentPlan,
           description: phase.description,
           autoPay: true,
+          checkoutPaymentIntentId: paymentIntent.id,
         },
       });
-      scheduledPayments.push(scheduledPayment);
-      console.log(`📅 Scheduled payment ${phase.installmentNumber}: ${CurrencyUtils.toDisplay(phase.amount)} due ${phase.dueDate.toLocaleDateString()}`);
+      created.push(row);
     }
 
-    // Update enrollments with PaymentIntent reference
-    await this.updateEnrollmentsWithPaymentIntent(
-      data.enrollmentIds,
-      paymentIntent.id,
-      customer.id,
-      data.paymentPlan as CheckoutPaymentPlanId,
-      data.paymentFrequency ?? 'one_time',
+    console.log(
+      `📅 Created ${created.length} scheduled payments after successful checkout PI ${paymentIntent.id}`,
     );
+    return created;
+  }
 
-    console.log('✅ Payment plan created successfully with PaymentIntent and', scheduledPayments.length, 'scheduled payments');
-
-    return {
-      paymentIntent,
-      scheduledPayments
-    };
+  /** Cancel stale pending rows from abandoned checkouts for the same enrollments. */
+  private async cancelOrphanPendingScheduledPayments(
+    parentEmail: string,
+    enrollmentIds: number[],
+  ): Promise<void> {
+    const idSet = new Set(enrollmentIds);
+    const rows = await this.storage.getScheduledPaymentsByParentEmail(parentEmail);
+    for (const row of rows) {
+      if (String(row.status) !== 'pending') continue;
+      const linked = resolveEnrollmentIdsFromScheduledRow(row);
+      if (!linked.some((id) => idSet.has(id))) continue;
+      await this.storage.updateScheduledPaymentStatus(row.id, 'cancelled');
+      console.log(`🧹 Cancelled orphan pending scheduled payment ${row.id} for ${parentEmail}`);
+    }
   }
 
   /**
@@ -625,8 +755,6 @@ export class StripePaymentPlanService {
     console.log('🔄 Updating enrollments with PaymentIntent references:', enrollmentIds);
 
     const dbPaymentPlan = mapCheckoutPlanToDbPaymentPlan(paymentPlan);
-    const paymentStatus =
-      paymentPlan === 'full' ? 'pending' : 'partial_payment';
 
     for (const enrollmentId of enrollmentIds) {
       const existingEnrollment = await this.storage.getEnrollmentById(enrollmentId);
@@ -638,7 +766,7 @@ export class StripePaymentPlanService {
           paymentPlan: dbPaymentPlan,
           paymentFrequency,
           paymentSystemVersion: 'v2_stripe_simplified',
-          paymentStatus,
+          paymentStatus: 'pending',
           metadata: {
             ...priorMeta,
             paymentPlan,

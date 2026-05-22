@@ -11,6 +11,10 @@ import {
   computeManualPayCredits,
   isChargeAmountDivergent,
 } from '../utils/manualPayCredits';
+import {
+  buildCheckoutFirstInstallmentDueRows,
+  filterScheduledPaymentsUntilFirstPaid,
+} from '../lib/checkout-upcoming-payments';
 
 const router = Router();
 
@@ -29,15 +33,17 @@ router.get('/upcoming', supabaseAuth, async (req: any, res) => {
       return s === 'pending' || s === 'failed' || s === 'overdue';
     });
 
+    const afterFirstPaid = await filterScheduledPaymentsUntilFirstPaid(filtered);
+    const checkoutDueRows = await buildCheckoutFirstInstallmentDueRows(userEmail);
+
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
 
     console.log(
-      `📊 Found ${filtered.length} actionable scheduled payments (pending/overdue/failed) for ${userEmail}`,
+      `📊 Upcoming for ${userEmail}: ${checkoutDueRows.length} checkout-due, ${afterFirstPaid.length} scheduled (filtered from ${filtered.length} pending rows)`,
     );
 
-    // Get enrollment details for enrichment
-    const enrichedPayments = await Promise.all(filtered.map(async (payment) => {
+    const mapScheduledRow = async (payment: (typeof afterFirstPaid)[0]) => {
       let enrollmentDetails = null;
       if (payment.enrollmentId) {
         const enrollment = await storage.getEnrollmentById(payment.enrollmentId);
@@ -73,10 +79,15 @@ router.get('/upcoming', supabaseAuth, async (req: any, res) => {
         failureReason: payment.failureReason ?? null,
         overdue,
       };
-    }));
+    };
 
-    // Sort by due date
-    enrichedPayments.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+    const enrichedScheduled = await Promise.all(afterFirstPaid.map(mapScheduledRow));
+    const enrichedPayments = [
+      ...checkoutDueRows,
+      ...enrichedScheduled,
+    ].sort(
+      (a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime(),
+    );
 
     res.json({
       success: true,

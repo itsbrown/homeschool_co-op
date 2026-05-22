@@ -610,6 +610,13 @@ export const webhookHandler = async (req: Request, res: Response) => {
                 creditsConsumedCents: replay.creditsConsumedCents,
                 creditsSkipped: replay.creditsSkippedAlreadyApplied,
               });
+              const { StripePaymentPlanService } = await import(
+                './services/stripe-payment-plans.js'
+              );
+              const planService = new StripePaymentPlanService(storage as any);
+              await planService.persistRemainingScheduledPaymentsAfterFirstCheckoutPayment(
+                paymentIntent,
+              );
             } else {
               await fulfillMembershipFromCartPaymentIntent(paymentIntent);
               // Calculate payment amount in dollars (Stripe amount is in cents)
@@ -617,6 +624,14 @@ export const webhookHandler = async (req: Request, res: Response) => {
 
               const { processBalancePayment } = await import('./api/billing.js');
               await processBalancePayment(paymentIntent, parentEmail, enrollmentIds, totalAmount);
+
+              const { StripePaymentPlanService } = await import(
+                './services/stripe-payment-plans.js'
+              );
+              const planService = new StripePaymentPlanService(storage as any);
+              await planService.persistRemainingScheduledPaymentsAfterFirstCheckoutPayment(
+                paymentIntent,
+              );
             }
             
             console.log('✅ Balance payment processed via webhook for payment type:', paymentType);
