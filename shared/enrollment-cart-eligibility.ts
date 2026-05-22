@@ -18,6 +18,8 @@ export type ScheduledPaymentRow = {
   enrollmentId?: number | null;
   status?: string | null;
   metadata?: unknown;
+  totalInstallments?: number | null;
+  frequency?: string | null;
 };
 
 const ACTIONABLE_SCHEDULE_STATUSES = new Set([
@@ -57,6 +59,40 @@ export function resolveEnrollmentIdsFromScheduledRow(row: {
     return [Number(row.enrollmentId)];
   }
   return [];
+}
+
+function scheduledRowIsInstallmentPlan(sp: ScheduledPaymentRow): boolean {
+  const meta = sp.metadata as Record<string, unknown> | null | undefined;
+  const plan = String(meta?.paymentPlan ?? "")
+    .trim()
+    .toLowerCase();
+  if (INSTALLMENT_PAYMENT_PLANS.has(plan) || plan.includes("biweekly")) {
+    return true;
+  }
+  const freq = String(sp.frequency ?? meta?.frequency ?? "")
+    .trim()
+    .toLowerCase();
+  if (freq === "biweekly") return true;
+  const total = Number(sp.totalInstallments ?? meta?.totalInstallments ?? 0);
+  return Number.isFinite(total) && total > 1;
+}
+
+/** Enrollment IDs tied to any actionable installment row for this parent. */
+export function enrollmentIdsOnActiveInstallmentSchedules(
+  scheduledPayments: ScheduledPaymentRow[] | null | undefined,
+): Set<number> {
+  const ids = new Set<number>();
+  if (!scheduledPayments?.length) return ids;
+  for (const sp of scheduledPayments) {
+    if (!ACTIONABLE_SCHEDULE_STATUSES.has(String(sp.status ?? "").toLowerCase())) {
+      continue;
+    }
+    if (!scheduledRowIsInstallmentPlan(sp)) continue;
+    for (const id of resolveEnrollmentIdsFromScheduledRow(sp)) {
+      ids.add(id);
+    }
+  }
+  return ids;
 }
 
 export function enrollmentHasActivePaymentSchedule(
@@ -137,12 +173,23 @@ export function enrollmentShouldExcludeFromCart(
     return true;
   }
 
-  const enrollmentId = enrollment.id;
-  if (
-    enrollmentId != null &&
-    enrollmentHasActivePaymentSchedule(enrollmentId, scheduledPayments)
-  ) {
+  const paymentStatus = String(
+    (enrollment as { paymentStatus?: string }).paymentStatus ?? "",
+  ).toLowerCase();
+  if (paymentStatus === "stripe_managed") {
     return true;
+  }
+
+  const enrollmentId = enrollment.id;
+  if (enrollmentId != null && scheduledPayments?.length) {
+    const onInstallmentSchedule =
+      enrollmentIdsOnActiveInstallmentSchedules(scheduledPayments);
+    if (onInstallmentSchedule.has(enrollmentId)) {
+      return true;
+    }
+    if (enrollmentHasActivePaymentSchedule(enrollmentId, scheduledPayments)) {
+      return true;
+    }
   }
 
   const plan = normalizePaymentPlan(enrollment);
@@ -155,9 +202,6 @@ export function enrollmentShouldExcludeFromCart(
 
   const paid = Number(enrollment.totalPaid ?? 0);
   const status = String(enrollment.status ?? "").toLowerCase();
-  const paymentStatus = String(
-    (enrollment as { paymentStatus?: string }).paymentStatus ?? "",
-  ).toLowerCase();
 
   if (isStripeManagedPaymentSystem(enrollment) && paid > 0) {
     return true;

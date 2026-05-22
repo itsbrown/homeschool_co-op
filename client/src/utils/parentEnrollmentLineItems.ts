@@ -103,7 +103,11 @@ export function filterEnrollmentsToCartLineItems(
     const shouldSkip =
       hasFullyPaidEnrollment || latestIsPaid || isWaitlisted;
 
-    if (enrollmentShouldExcludeFromCart(latestEnrollment)) {
+    if (
+      latestEnrollment.checkoutExcluded === true ||
+      latestEnrollment.managedByPaymentPlan === true ||
+      enrollmentShouldExcludeFromCart(latestEnrollment)
+    ) {
       continue;
     }
 

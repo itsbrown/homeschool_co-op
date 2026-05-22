@@ -1416,7 +1416,10 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Create a stable hash of enrollment IDs and statuses to detect actual changes
     const enrollmentHash = enrollments
-      .map(e => `${e.id}:${e.status}:${e.remainingBalance}`)
+      .map(
+        (e) =>
+          `${e.id}:${e.status}:${e.remainingBalance}:${e.effectiveBalance ?? ''}:${e.checkoutExcluded === true ? 1 : 0}:${e.managedByPaymentPlan === true ? 1 : 0}`,
+      )
       .sort()
       .join('|');
 
@@ -1556,6 +1559,16 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // This ensures membership is available when cart first renders
       const membership = await fetchMembershipForCart(user.email);
 
+      // Stale localStorage can outlive API exclusion — always clear when filter is empty
+      if (cartItems.length === 0 && !membership) {
+        dispatch({ type: 'LOAD_EMPTY_CART' });
+        const cartKey = getCartStorageKey(user.email);
+        if (cartKey) localStorage.removeItem(cartKey);
+        lastProcessedEnrollmentsRef.current = enrollmentHash;
+        initialMembershipLoadedRef.current = true;
+        return;
+      }
+
       // CRITICAL: Always replace cart with API data (no localStorage merge)
       // This ensures API is the single source of truth and prevents stale data conflicts
       if (cartItems.length > 0 || membership) {
@@ -1665,12 +1678,19 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [state.cart.items, state.cart.appliedPromoCode, getAccessToken, userRolesList]);
 
-  // Load cart from localStorage on mount (ONLY for non-authenticated users or non-parent roles)
+  // When parent role resolves, force cart re-hydration from API (not cached hash)
   useEffect(() => {
-    // CRITICAL: Skip localStorage loading for authenticated parents
-    // They will get cart data from API via TanStack Query
     if (user?.email && isAuthenticated && activeRole === 'parent') {
-      console.log('🛒 Skipping localStorage load for authenticated parent - waiting for API data');
+      lastProcessedEnrollmentsRef.current = '';
+      initialMembershipLoadedRef.current = false;
+    }
+  }, [user?.email, isAuthenticated, activeRole]);
+
+  // Load cart from localStorage on mount (guests / pre-auth only)
+  useEffect(() => {
+    // Authenticated users always wait for API — activeRole may still be resolving
+    if (user?.email && isAuthenticated) {
+      console.log('🛒 Skipping localStorage load for authenticated user - waiting for API data');
       return;
     }
 

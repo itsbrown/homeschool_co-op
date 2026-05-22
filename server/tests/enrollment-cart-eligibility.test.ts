@@ -40,6 +40,18 @@ describe("enrollment-cart-eligibility", () => {
     ).toBe(true);
   });
 
+  it("excludes stripe_managed payment status", () => {
+    expect(
+      enrollmentShouldExcludeFromCart({
+        id: 14,
+        paymentStatus: "stripe_managed",
+        status: "pending_payment",
+        totalPaid: 0,
+        effectiveBalance: 142500,
+      }),
+    ).toBe(true);
+  });
+
   it("excludes when scheduled row metadata lists multiple enrollmentIds", () => {
     expect(
       enrollmentShouldExcludeFromCart(
