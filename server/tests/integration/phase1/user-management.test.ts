@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from '@jest/globals';
+import { describeIntegration } from '../../helpers/integrationDb';
 import { testDb } from '../../helpers/testDatabase';
 import { api } from '../../helpers/apiHelpers';
 import { resetAllMocks } from '../../helpers/mockServices';
@@ -17,7 +18,7 @@ import { resetAllMocks } from '../../helpers/mockServices';
  * - Authentication flows (Auth0 + Supabase)
  */
 
-describe('Integration: User Management', () => {
+describeIntegration('Integration: User Management', () => {
   beforeAll(async () => {
     // Initial cleanup
     await testDb.cleanup();

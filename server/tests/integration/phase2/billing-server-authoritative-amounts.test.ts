@@ -1,6 +1,7 @@
 import request from 'supertest';
 import express from 'express';
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { describeIntegration } from '../../helpers/integrationDb';
 import { testDb } from '../../helpers/testDatabase';
 import { storage } from '../../../storage';
 
@@ -20,7 +21,7 @@ jest.mock('@supabase/supabase-js', () => ({
   })),
 }));
 
-describe('Integration: Billing server-authoritative amount enforcement', () => {
+describeIntegration('Integration: Billing server-authoritative amount enforcement', () => {
   let app: express.Express;
   let parent: any;
   let child: any;

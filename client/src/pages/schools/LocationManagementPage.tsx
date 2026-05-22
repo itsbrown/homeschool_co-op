@@ -44,21 +44,73 @@ interface Student {
   } | null
 }
 
+interface AssignableSchool {
+  id: number
+  name: string
+}
+
 export default function LocationManagementPage() {
   const [selectedLocationId, setSelectedLocationId] = useState<string>('')
+  const [selectedSchoolId, setSelectedSchoolId] = useState<number | null>(null)
+  const [createSchoolId, setCreateSchoolId] = useState<number | null>(null)
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [editingLocation, setEditingLocation] = useState<Location | null>(null)
   const { toast } = useToast()
   const queryClient = useQueryClient()
 
-  // Get authenticated user's schoolId
-  const { schoolId, hasSchool } = useSchoolAdmin()
+  const { hasSchool } = useSchoolAdmin()
 
-  // Fetch location overview data
+  const { data: assignableSchoolsData, isLoading: isLoadingAssignableSchools } = useQuery<{
+    schools: AssignableSchool[]
+    defaultSchoolId: number | null
+  }>({
+    queryKey: ['/api/school-admin/assignable-schools'],
+    queryFn: async () => {
+      const response = await apiRequest('GET', '/api/school-admin/assignable-schools')
+      if (!response.ok) {
+        throw new Error('Failed to load schools')
+      }
+      return response.json()
+    },
+    retry: false,
+  })
+
+  const assignableSchools = assignableSchoolsData?.schools ?? []
+
+  useEffect(() => {
+    if (selectedSchoolId != null) return
+    const defaultId = assignableSchoolsData?.defaultSchoolId
+    if (defaultId != null) {
+      setSelectedSchoolId(defaultId)
+      setCreateSchoolId(defaultId)
+    } else if (assignableSchools.length === 1) {
+      setSelectedSchoolId(assignableSchools[0].id)
+      setCreateSchoolId(assignableSchools[0].id)
+    }
+  }, [assignableSchoolsData, assignableSchools, selectedSchoolId])
+
+  useEffect(() => {
+    if (isAddDialogOpen && selectedSchoolId != null) {
+      setCreateSchoolId(selectedSchoolId)
+    }
+  }, [isAddDialogOpen, selectedSchoolId])
+
+  // Fetch location overview for the selected school
   const { data: locationData, isLoading: isLoadingLocations, error: locationsError } = useQuery({
-    queryKey: ['/api/school-admin/locations/overview'],
-    retry: false
+    queryKey: ['/api/school-admin/locations/overview', selectedSchoolId],
+    queryFn: async () => {
+      const response = await apiRequest(
+        'GET',
+        `/api/school-admin/locations/overview?schoolId=${selectedSchoolId}`,
+      )
+      if (!response.ok) {
+        throw new Error('Failed to load locations')
+      }
+      return response.json()
+    },
+    enabled: selectedSchoolId != null,
+    retry: false,
   })
 
   // Log location data and errors for debugging
@@ -95,7 +147,6 @@ export default function LocationManagementPage() {
       // Force refresh multiple related queries
       queryClient.invalidateQueries({ queryKey: ['/api/school-admin/locations/overview'] })
       queryClient.invalidateQueries({ queryKey: ['/api/school-admin'] })
-      queryClient.refetchQueries({ queryKey: ['/api/school-admin/locations/overview'] })
       setIsAddDialogOpen(false)
       toast({
         title: "Success",
@@ -118,17 +169,18 @@ export default function LocationManagementPage() {
     const formData = new FormData(e.currentTarget)
     console.log('🎯 FormData created')
     
-    if (!hasSchool || !schoolId) {
+    const targetSchoolId = createSchoolId ?? selectedSchoolId
+    if (!hasSchool || targetSchoolId == null) {
       toast({
         title: "Error",
-        description: "Unable to determine your school. Please ensure you're logged in as a school administrator.",
+        description: "Select which school this location belongs to before saving.",
         variant: "destructive",
       })
       return
     }
     
     const locationData = {
-      schoolId: schoolId,
+      schoolId: targetSchoolId,
       name: formData.get('name') as string,
       code: formData.get('code') as string,
       address: formData.get('address') as string,
@@ -143,7 +195,7 @@ export default function LocationManagementPage() {
     }
 
     console.log('🆕 CREATE LOCATION - Form data captured:', {
-      schoolId,
+      schoolId: targetSchoolId,
       name: formData.get('name'),
       code: formData.get('code'),
       address: formData.get('address'),
@@ -286,7 +338,7 @@ export default function LocationManagementPage() {
     updateLocationMutation.mutate({ id: editingLocation.id, locationData })
   }
 
-  if (isLoadingLocations) {
+  if (isLoadingAssignableSchools || (selectedSchoolId != null && isLoadingLocations)) {
     return (
       <div className="container mx-auto p-6">
         <div className="flex items-center justify-center h-64">
@@ -354,12 +406,34 @@ export default function LocationManagementPage() {
 
   return (
     <div className="container mx-auto p-6 space-y-8">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="space-y-2">
           <h1 className="text-3xl font-bold">Location Management</h1>
           <p className="text-muted-foreground">
             Manage students and staff across all school locations
           </p>
+          {assignableSchools.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 max-w-md">
+              <Label htmlFor="page-school" className="shrink-0 text-sm font-medium">
+                School
+              </Label>
+              <Select
+                value={selectedSchoolId != null ? String(selectedSchoolId) : undefined}
+                onValueChange={(value) => setSelectedSchoolId(Number(value))}
+              >
+                <SelectTrigger id="page-school" className="w-[280px]">
+                  <SelectValue placeholder="Select school" />
+                </SelectTrigger>
+                <SelectContent>
+                  {assignableSchools.map((school) => (
+                    <SelectItem key={school.id} value={String(school.id)}>
+                      {school.name} (ID {school.id})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </div>
         <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
           <DialogTrigger asChild>
@@ -376,6 +450,29 @@ export default function LocationManagementPage() {
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleCreateLocation} className="space-y-4">
+              {assignableSchools.length > 0 && (
+                <div className="space-y-2">
+                  <Label htmlFor="create-school">School *</Label>
+                  <Select
+                    value={createSchoolId != null ? String(createSchoolId) : undefined}
+                    onValueChange={(value) => setCreateSchoolId(Number(value))}
+                  >
+                    <SelectTrigger id="create-school">
+                      <SelectValue placeholder="Select school for this location" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {assignableSchools.map((school) => (
+                        <SelectItem key={school.id} value={String(school.id)}>
+                          {school.name} (ID {school.id})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Locations are saved under the school you select here (not your legacy profile school ID).
+                  </p>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="name">Location Name *</Label>

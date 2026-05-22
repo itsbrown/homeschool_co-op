@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { storage } from '../storage';
 import { jwtCheck } from '../middleware/auth0-auth';
-import { sendNewStudentNotificationEmail } from '../lib/email-service';
+import { createChildLinkedToParent } from '../lib/parent-child-registration';
 import { getChildrenForAuthenticatedParent, resolveParentDbUser } from '../lib/parent-auth-scope';
 import { enrollmentMatchesParent, emailsMatch } from '@shared/parent-identity';
 
@@ -174,7 +174,6 @@ router.post('/children', jwtCheck, async (req: any, res) => {
       school,
       profileImage,
       emergencyContact,
-      emergencyPhone,
       parentPhone,
       additionalLanguages,
       notes
@@ -191,7 +190,6 @@ router.post('/children', jwtCheck, async (req: any, res) => {
       });
     }
 
-    // Find the parent user to get their ID
     const parent = await resolveParentDbUser(storage, {
       email: userEmail,
       supabaseId: req.auth?.supabaseId,
@@ -204,150 +202,34 @@ router.post('/children', jwtCheck, async (req: any, res) => {
       });
     }
 
-    // Calculate age from birthdate
-    const birthDate = new Date(birthdate);
-    const today = new Date();
-    let age = today.getFullYear() - birthDate.getFullYear();
-    const monthDiff = today.getMonth() - birthDate.getMonth();
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-      age--;
-    }
+    console.log('👶 Creating child in storage via shared helper:', { firstName, lastName });
 
-    // Validate and get parent's school and location data
-    let validSchoolId = null;
-    let parentLocationId = null;
-    
-    if (parent.schoolId) {
-      // Verify the school exists in the database
-      try {
-        const school = await storage.getSchool(parent.schoolId);
-        if (school) {
-          validSchoolId = parent.schoolId;
-          console.log('✅ Validated school exists:', school.name);
-          
-          // Get the primary location for the parent's school
-          const locations = await storage.getLocationsBySchoolId(parent.schoolId);
-          if (locations && locations.length > 0) {
-            parentLocationId = locations[0].id;
-          }
-        } else {
-          console.log('⚠️ Parent has invalid schoolId, will create child without school assignment');
-        }
-      } catch (error) {
-        console.log('⚠️ Could not validate parent school, child will be created without school assignment:', error);
-      }
-    }
-
-    console.log('🏠 Parent location inheritance:', {
-      parentSchoolId: validSchoolId,
-      parentLocationId,
-      parentEmail: userEmail
+    const savedChild = await createChildLinkedToParent(storage, {
+      parent,
+      parentEmail: userEmail,
+      preferredLocationId: null,
+      fields: {
+        firstName,
+        lastName,
+        birthdate,
+        gradeLevel,
+        gender: gender ?? null,
+        interests: interests ?? null,
+        learningStyle: learningStyle ?? null,
+        specialNeeds: specialNeeds ?? null,
+        allergies: allergies ?? null,
+        medicalInfo: medicalInfo ?? null,
+        school: school ?? null,
+        profileImage: profileImage ?? null,
+        emergencyContact: emergencyContact ?? null,
+        additionalLanguages: additionalLanguages ?? null,
+        notes: notes ?? null,
+      },
+      sendAdminNotifications: true,
+      parentPhoneOverride: parentPhone ?? undefined,
     });
 
-    // Create the new child object with validated school/location
-    const newChild = {
-      firstName,
-      lastName,
-      birthdate,
-      gradeLevel,
-      gender: gender || null,
-      interests: interests || null,
-      learningStyle: learningStyle || null,
-      specialNeeds: specialNeeds || null,
-      allergies: allergies || null,
-      medicalInfo: medicalInfo || null,
-      school: school || null,
-      schoolId: validSchoolId, // Only set if school exists in database
-      locationId: parentLocationId, // Only set if school exists and has locations
-      profileImage: profileImage || null,
-      emergencyContact: emergencyContact || null,
-      additionalLanguages: additionalLanguages || null,
-      notes: notes || null,
-      parentId: parent.id,
-      parentEmail: userEmail
-    };
-
-    console.log('👶 Creating child in storage:', newChild);
-
-    // Save to storage (this will handle both file and database storage)
-    const savedChild = await storage.createChild(newChild);
-
     console.log('✅ Child registered successfully:', savedChild);
-
-    // Create school_student record if child has a valid schoolId
-    if (savedChild.schoolId && validSchoolId) {
-      try {
-        console.log('📚 Creating school_student record for child:', savedChild.id);
-        const schoolStudent = await storage.createSchoolStudent({
-          schoolId: validSchoolId,
-          childId: savedChild.id,
-          grade: gradeLevel,
-          status: 'active',
-          locationId: parentLocationId || null,
-          studentId: null,
-          notes: null
-        });
-        console.log('✅ School student record created:', schoolStudent);
-      } catch (schoolStudentError) {
-        console.error('⚠️ Failed to create school_student record:', schoolStudentError);
-        // Don't fail the entire registration if this fails - child is already created
-      }
-    }
-
-    // 🔔 Notify school admins about new student registration
-    if (validSchoolId) {
-      try {
-        console.log('🔔 Sending notifications to school admins for school:', validSchoolId);
-        
-        // Fetch all users and filter for school admins
-        const allUsers = await storage.getAllUsers();
-        const schoolAdmins = allUsers.filter(user => 
-          user.schoolId === validSchoolId && 
-          (user.role === 'schoolAdmin' || user.role === 'superAdmin')
-        );
-        console.log(`📋 Found ${schoolAdmins.length} school admin(s) to notify`);
-        
-        // Get school details for better notifications
-        const school = await storage.getSchool(validSchoolId);
-        const schoolName = school?.name || 'Your School';
-        
-        // Only send notifications if we have admins
-        if (schoolAdmins.length > 0) {
-          // Send email notifications to each admin
-          for (const admin of schoolAdmins) {
-            try {
-              const emailSent = await sendNewStudentNotificationEmail({
-                adminEmail: admin.email,
-                adminName: admin.name || `${admin.firstName} ${admin.lastName}`,
-                schoolName: schoolName,
-                studentFirstName: firstName,
-                studentLastName: lastName,
-                studentGradeLevel: gradeLevel,
-                parentEmail: userEmail,
-                parentPhone: parentPhone || parent.phone,
-                registrationDate: new Date()
-              });
-              
-              if (emailSent) {
-                console.log(`✅ Sent email notification to admin: ${admin.email}`);
-              } else {
-                console.log(`⚠️ Email notification failed for admin: ${admin.email}`);
-              }
-            } catch (notificationError) {
-              const error = notificationError as Error;
-              console.error(`❌ Failed to notify admin ${admin.email}:`, error.message);
-              // Continue notifying other admins even if one fails
-            }
-          }
-        }
-        
-        console.log('✅ Admin notification process completed');
-      } catch (notificationError) {
-        const error = notificationError as Error;
-        console.error('⚠️ Error during admin notification process:', error.message);
-        // Don't fail registration if notifications fail
-      }
-    }
 
     return res.status(201).json(savedChild);
 

@@ -16,31 +16,45 @@ const defaultSupabaseAnonKey =
 const defaultSupabaseServiceRoleKey =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU";
 
+/** GitHub Actions sets missing secrets to "" — treat empty like unset. */
+function envOr(key: string, fallback: string): string {
+  const v = process.env[key]?.trim();
+  return v || fallback;
+}
+
+const supabaseUrl = envOr("SUPABASE_URL", defaultSupabaseUrl);
+const supabaseAnonKey = envOr("SUPABASE_ANON_KEY", defaultSupabaseAnonKey);
+
 const webServerEnv = {
   ...process.env,
-  SUPABASE_URL: process.env.SUPABASE_URL ?? defaultSupabaseUrl,
-  SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY ?? defaultSupabaseAnonKey,
-  SUPABASE_SERVICE_ROLE_KEY:
-    process.env.SUPABASE_SERVICE_ROLE_KEY ?? defaultSupabaseServiceRoleKey,
-  VITE_SUPABASE_URL: process.env.VITE_SUPABASE_URL ?? process.env.SUPABASE_URL ?? defaultSupabaseUrl,
-  VITE_SUPABASE_ANON_KEY:
-    process.env.VITE_SUPABASE_ANON_KEY ?? process.env.SUPABASE_ANON_KEY ?? defaultSupabaseAnonKey,
+  SUPABASE_URL: supabaseUrl,
+  SUPABASE_ANON_KEY: supabaseAnonKey,
+  SUPABASE_SERVICE_ROLE_KEY: envOr(
+    "SUPABASE_SERVICE_ROLE_KEY",
+    defaultSupabaseServiceRoleKey,
+  ),
+  VITE_SUPABASE_URL: envOr("VITE_SUPABASE_URL", supabaseUrl),
+  VITE_SUPABASE_ANON_KEY: envOr("VITE_SUPABASE_ANON_KEY", supabaseAnonKey),
   /** Required at import time by `server/services/openai.ts` (value is not used by smoke tests). */
-  OPENAI_API_KEY: process.env.OPENAI_API_KEY ?? "sk-e2e-placeholder-not-used-in-smoke-tests",
+  OPENAI_API_KEY: envOr("OPENAI_API_KEY", "sk-e2e-placeholder-not-used-in-smoke-tests"),
   /**
    * So `server/test-env-loader.ts` + `/api/stripe/config` succeed without a local `.env`.
    * Stripe sample test keys (not live); override with real test keys for checkout E2E.
    */
-  TESTING_STRIPE_SECRET_KEY:
-    process.env.TESTING_STRIPE_SECRET_KEY ?? "sk_test_4eC39HqLyjWDarjtT1ColDPY",
-  VITE_TESTING_STRIPE_PUBLIC_KEY:
-    process.env.VITE_TESTING_STRIPE_PUBLIC_KEY ?? "pk_test_TYooMQauvdEDq54MiTPhN7XR",
+  TESTING_STRIPE_SECRET_KEY: envOr(
+    "TESTING_STRIPE_SECRET_KEY",
+    "sk_test_4eC39HqLyjWDarjtT1ColDPY",
+  ),
+  VITE_TESTING_STRIPE_PUBLIC_KEY: envOr(
+    "VITE_TESTING_STRIPE_PUBLIC_KEY",
+    "pk_test_TYooMQauvdEDq54MiTPhN7XR",
+  ),
   /** Avoid SO_REUSEPORT where unsupported (Playwright / some macOS sandboxes). */
-  DISABLE_LISTEN_REUSE_PORT: process.env.DISABLE_LISTEN_REUSE_PORT ?? "true",
+  DISABLE_LISTEN_REUSE_PORT: envOr("DISABLE_LISTEN_REUSE_PORT", "true"),
   /** Skip interval jobs when the dev server is started by Playwright's webServer. */
-  PLAYWRIGHT_WEB_SERVER: process.env.PLAYWRIGHT_WEB_SERVER ?? "true",
+  PLAYWRIGHT_WEB_SERVER: envOr("PLAYWRIGHT_WEB_SERVER", "true"),
   /** Expose `window.__E2E_CART__.refreshDiscounts` for Playwright membership regression tests. */
-  VITE_E2E_EXPOSE_CART: process.env.VITE_E2E_EXPOSE_CART ?? "true",
+  VITE_E2E_EXPOSE_CART: envOr("VITE_E2E_EXPOSE_CART", "true"),
 };
 
 /**

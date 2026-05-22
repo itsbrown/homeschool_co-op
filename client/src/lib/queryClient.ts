@@ -2,6 +2,10 @@ import { QueryClient, QueryFunction } from "@tanstack/react-query";
 import { supabase } from "@/components/SupabaseProvider";
 import { captureApiError, captureApi404 } from "@/lib/errorTracker";
 import { toast } from "@/hooks/use-toast";
+import {
+  handleRegistrationRequired,
+  isRegistrationRequiredBody,
+} from "@/lib/registration-required";
 
 // ---------------------------------------------------------------------------
 // Task 266 — global "service unavailable" signal.
@@ -367,38 +371,22 @@ export async function apiRequest(
   }
 
   if (response.status === 403) {
-    // Check if this is a REGISTRATION_REQUIRED error (unregistered user trying to use OAuth)
     try {
       const responseClone = response.clone();
       const errorData = await responseClone.json();
-      
-      if (errorData.error === 'REGISTRATION_REQUIRED') {
-        console.log('🚫 REGISTRATION_REQUIRED: User needs to register with their school first');
-        console.log('   Message:', errorData.message);
-        
-        // Clear auth state since this user shouldn't be logged in
-        localStorage.removeItem('supabase_token');
-        localStorage.removeItem('activeRole');
-        
-        // Sign out from Supabase to clear the OAuth session
-        await supabase.auth.signOut();
-        
-        // Store the error message to display on login page
-        sessionStorage.setItem('registration_required_message', errorData.message);
-        sessionStorage.setItem('registration_required_email', errorData.email || '');
-        
-        // Redirect to login page with registration required message
-        if (!window.location.pathname.includes('/login')) {
-          window.location.href = '/login?error=registration_required';
-        }
+
+      if (isRegistrationRequiredBody(errorData)) {
+        await handleRegistrationRequired({
+          message: errorData.message,
+          email: errorData.email,
+        });
         return response;
       }
     } catch {
       // If we can't parse the response, continue with normal 403 handling
     }
-    
+
     console.log('🚫 API 403: Insufficient permissions');
-    // Don't throw - let components handle this gracefully
     return response;
   }
 

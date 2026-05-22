@@ -2,19 +2,41 @@ import express from "express";
 import { z } from "zod";
 import { insertLocationSchema, insertUserLocationSchema } from "@shared/schema";
 import { storage } from "../storage";
+import { getSchoolCoreById } from "../lib/school-db";
+import {
+  isSchoolAssignableForUser,
+  resolveRequestedSchoolIdForUser,
+} from "../lib/resolve-school-id";
 import { requireSchoolContext } from "../middleware/require-school-context";
+import type { User } from "@shared/schema";
 import { 
   updateParentLocation, 
   getParentLocationInfo,
   getLocationsBySchoolId as getLocationsService,
   LocationSyncContext
 } from "../services/locationSyncService";
-
 const router = express.Router();
 
 function deriveLocationCode(name: string): string {
   const fromName = name.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 4);
   return fromName.length >= 2 ? fromName : 'LOC';
+}
+
+async function getDbUserFromRequest(
+  req: { user?: { email?: string } },
+): Promise<User | null> {
+  const email = req.user?.email;
+  if (!email) {
+    return null;
+  }
+  return (await storage.getUserByEmail(email)) ?? null;
+}
+
+async function userCanManageLocationSchool(
+  dbUser: User,
+  locationSchoolId: number,
+): Promise<boolean> {
+  return isSchoolAssignableForUser(dbUser, locationSchoolId);
 }
 
 function locationDbErrorResponse(error: unknown): { message: string; hint?: string; detail?: string } {
@@ -40,38 +62,8 @@ function locationDbErrorResponse(error: unknown): { message: string; hint?: stri
 // ROUTE ORDER MATTERS: Static paths must come before parameterized paths
 // to prevent Express from treating "accessible" as an ID
 
-// PUBLIC: Get locations for a school (no authentication required)
-// Used by registration form before user logs in
-router.get("/public", async (req, res) => {
-  try {
-    const schoolIdParam = req.query.schoolId;
-    
-    if (!schoolIdParam) {
-      return res.status(400).json({ message: "School ID is required" });
-    }
-    
-    // Validate schoolId is a valid number
-    const schoolId = parseInt(String(schoolIdParam), 10);
-    if (isNaN(schoolId) || schoolId <= 0) {
-      return res.status(400).json({ message: "Invalid school ID - must be a positive number" });
-    }
-    
-    console.log('🏢 [PUBLIC] Fetching locations for school ID:', schoolId);
-    const locations = await storage.getLocationsBySchoolId(schoolId);
-    console.log('✅ [PUBLIC] Found locations:', locations.length);
-    
-    // Return only public information (id and name) - no sensitive data
-    const publicLocations = locations.map(loc => ({
-      id: loc.id,
-      name: loc.name
-    }));
-    
-    res.json(publicLocations);
-  } catch (error) {
-    console.error("Error fetching public locations:", error);
-    res.status(500).json({ message: "Failed to fetch locations" });
-  }
-});
+// PUBLIC locations: GET /api/public/registration/locations and /api/locations/public
+// (mounted without auth in server/index.ts — not on this router)
 
 // Get all locations for a school
 router.get("/", requireSchoolContext, async (req: any, res) => {
@@ -195,36 +187,54 @@ router.post("/", requireSchoolContext, async (req: any, res) => {
     console.log('📍 req.auth exists:', !!req.auth);
     console.log('📍 req.user exists:', !!req.user);
     
-    // [FIX:v3.0] School ID injected by middleware from database
-    const schoolId = req.schoolId;
-    console.log('🔐 Location creation - School ID:', schoolId);
-    
-    const numericSchoolId = Number(schoolId);
-    if (!Number.isFinite(numericSchoolId) || numericSchoolId <= 0) {
-      return res.status(400).json({ message: "Invalid school context" });
+    const userEmail = req.user?.email;
+    if (!userEmail) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
+    const dbUser = await storage.getUserByEmail(userEmail);
+    if (!dbUser) {
+      return res.status(404).json({ message: "User not found" });
     }
 
-    // Validate that the school exists
-    const school = await storage.getSchool(numericSchoolId);
-    if (!school) {
-      console.error(`❌ School not found for ID ${numericSchoolId}`);
-      return res.status(404).json({ 
-        message: "School not found. Please contact support." 
+    const fallbackSchoolId = Number(req.schoolId);
+    const numericSchoolId = await resolveRequestedSchoolIdForUser(
+      dbUser,
+      req.body?.schoolId,
+      Number.isFinite(fallbackSchoolId) ? fallbackSchoolId : null,
+    );
+    if (numericSchoolId == null) {
+      return res.status(403).json({
+        message:
+          "Invalid school for this location. Choose a school you administer from the dropdown.",
       });
     }
-    
+
+    console.log('🔐 Location creation - schoolId:', numericSchoolId);
+
+    const school = await getSchoolCoreById(numericSchoolId);
+    if (!school) {
+      console.error(`❌ School not found for ID ${numericSchoolId}`);
+      return res.status(404).json({
+        message: "School not found. Please contact support.",
+      });
+    }
+
     console.log(`✅ Creating location for school ${school.name} (ID: ${school.id})`);
-    
-    // [FIX:v3.0] SECURITY: Use the authenticated user's schoolId from database, ignoring client-provided value
-    const { schoolId: _clientSchoolId, isActive: _clientIsActive, ...bodyWithoutSchoolId } = req.body ?? {};
+
+    const { schoolId: _clientSchoolId, isActive: _clientIsActive, ...bodyWithoutSchoolId } =
+      req.body ?? {};
+    const nameForCode =
+      typeof bodyWithoutSchoolId.name === 'string' ? bodyWithoutSchoolId.name : '';
+    const code =
+      (typeof bodyWithoutSchoolId.code === 'string' && bodyWithoutSchoolId.code.trim()) ||
+      deriveLocationCode(nameForCode);
     const validatedData = insertLocationSchema.parse({
       ...bodyWithoutSchoolId,
       schoolId: numericSchoolId,
+      code,
     });
-    const code = (validatedData.code?.trim() || deriveLocationCode(validatedData.name));
     const locationData = {
       ...validatedData,
-      code,
       schoolId: numericSchoolId,
     };
     
@@ -253,37 +263,33 @@ router.post("/", requireSchoolContext, async (req: any, res) => {
 // Update a location
 router.put("/:id", requireSchoolContext, async (req: any, res) => {
   try {
-    // [FIX:v3.0] School ID injected by middleware from database
-    const authenticatedSchoolId = req.schoolId;
-    
+    const dbUser = await getDbUserFromRequest(req);
+    if (!dbUser) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
+
     const id = parseInt(req.params.id);
     if (isNaN(id)) {
       return res.status(400).json({ message: "Invalid location ID" });
     }
 
-    // Fetch existing location to verify ownership
     const existingLocation = await storage.getLocationById(id);
     if (!existingLocation) {
       return res.status(404).json({ message: "Location not found" });
     }
-    
-    // [FIX:v3.0] SECURITY: Verify location belongs to authenticated user's school
-    // Normalize DB value for comparison - schoolId is now string
-    if (String(existingLocation.schoolId) !== authenticatedSchoolId) {
-      console.warn(`🚨 Security: User from school ${authenticatedSchoolId} attempted to update location ${id} from school ${existingLocation.schoolId}`);
-      return res.status(403).json({ 
-        message: "Access denied - this location belongs to a different school" 
+
+    if (!(await userCanManageLocationSchool(dbUser, existingLocation.schoolId))) {
+      return res.status(403).json({
+        message: "Access denied — this location belongs to a school you do not administer",
       });
     }
 
     const validatedData = insertLocationSchema.partial().parse(req.body);
-    
-    // SECURITY: Ensure schoolId cannot be changed via update
     const updateData = {
       ...validatedData,
-      schoolId: authenticatedSchoolId  // Enforce authenticated school
+      schoolId: existingLocation.schoolId,
     };
-    
+
     const location = await storage.updateLocation(id, updateData);
 
     res.json(location);
@@ -299,33 +305,30 @@ router.put("/:id", requireSchoolContext, async (req: any, res) => {
   }
 });
 
-// Delete a location
+// Delete a location (soft-delete: is_active = false)
 router.delete("/:id", requireSchoolContext, async (req: any, res) => {
   try {
-    // [FIX:v3.0] School ID injected by middleware from database
-    const authenticatedSchoolId = req.schoolId;
-    
+    const dbUser = await getDbUserFromRequest(req);
+    if (!dbUser) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
+
     const id = parseInt(req.params.id);
     if (isNaN(id)) {
       return res.status(400).json({ message: "Invalid location ID" });
     }
 
-    // Fetch existing location to verify ownership
     const existingLocation = await storage.getLocationById(id);
     if (!existingLocation) {
       return res.status(404).json({ message: "Location not found" });
     }
-    
-    // [FIX:v3.0] SECURITY: Verify location belongs to authenticated user's school
-    // Normalize DB value for comparison - schoolId is now string
-    if (String(existingLocation.schoolId) !== authenticatedSchoolId) {
-      console.warn(`🚨 Security: User from school ${authenticatedSchoolId} attempted to delete location ${id} from school ${existingLocation.schoolId}`);
-      return res.status(403).json({ 
-        message: "Access denied - this location belongs to a different school" 
+
+    if (!(await userCanManageLocationSchool(dbUser, existingLocation.schoolId))) {
+      return res.status(403).json({
+        message: "Access denied — this location belongs to a school you do not administer",
       });
     }
 
-    // Delete the location
     await storage.deleteLocation(id);
 
     res.json({ message: "Location deleted successfully" });

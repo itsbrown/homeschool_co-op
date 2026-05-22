@@ -1,44 +1,41 @@
-import { sql } from 'drizzle-orm';
-import { getDb } from '../db';
+import { getRawPg } from './pg-raw';
 
 /** Columns that exist on schools before F001 / enabled_features migrations. */
-const SCHOOL_ROW_SQL = sql`
-  SELECT
-    id,
-    name,
-    type,
-    admin_id,
-    address,
-    city,
-    state,
-    zip_code,
-    phone_number,
-    email,
-    website,
-    logo,
-    description,
-    founded_year,
-    accreditation,
-    enrollment_size,
-    is_verified,
-    status,
-    created_at,
-    updated_at,
-    registration_code,
-    membership_fee_amount,
-    membership_renewal_month,
-    membership_renewal_day,
-    membership_grace_period_days,
-    membership_description,
-    membership_required,
-    free_after_threshold_enabled,
-    free_after_threshold,
-    onboarding_tour_enabled,
-    show_subscription_status,
-    membership_agreement_template,
-    membership_agreement_version,
-    membership_agreement_updated_at
-  FROM schools
+const SCHOOL_SELECT = `
+  id,
+  name,
+  type,
+  admin_id,
+  address,
+  city,
+  state,
+  zip_code,
+  phone_number,
+  email,
+  website,
+  logo,
+  description,
+  founded_year,
+  accreditation,
+  enrollment_size,
+  is_verified,
+  status,
+  created_at,
+  updated_at,
+  registration_code,
+  membership_fee_amount,
+  membership_renewal_month,
+  membership_renewal_day,
+  membership_grace_period_days,
+  membership_description,
+  membership_required,
+  free_after_threshold_enabled,
+  free_after_threshold,
+  onboarding_tour_enabled,
+  show_subscription_status,
+  membership_agreement_template,
+  membership_agreement_version,
+  membership_agreement_updated_at
 `;
 
 function mapSchoolRow(row: Record<string, unknown>) {
@@ -82,23 +79,63 @@ function mapSchoolRow(row: Record<string, unknown>) {
         ? new Date(row.membership_agreement_updated_at as string | Date)
         : null,
     sessionModeEnabled: false,
-    enabledFeatures: {},
+    enabledFeatures: {} as Record<string, boolean>,
   };
 }
 
 export type SchoolCoreRow = ReturnType<typeof mapSchoolRow>;
 
 export async function getSchoolCoreById(id: number): Promise<SchoolCoreRow | undefined> {
-  const db = await getDb();
-  const result = await db.execute(sql`${SCHOOL_ROW_SQL} WHERE id = ${id} LIMIT 1`);
-  const row = result.rows[0] as Record<string, unknown> | undefined;
+  const pg = getRawPg();
+  const rows = await pg.unsafe(
+    `SELECT ${SCHOOL_SELECT} FROM schools WHERE id = $1 LIMIT 1`,
+    [id],
+  );
+  const row = rows[0] as Record<string, unknown> | undefined;
+  return row ? mapSchoolRow(row) : undefined;
+}
+
+/** First school this user administers (schools.admin_id). */
+export async function getSchoolCoreByAdminId(
+  adminUserId: number,
+): Promise<SchoolCoreRow | undefined> {
+  const schools = await getSchoolsCoreByAdminId(adminUserId);
+  return schools[0];
+}
+
+/** All schools linked via schools.admin_id (multi-school admins). */
+export async function getSchoolsCoreByAdminId(adminUserId: number): Promise<SchoolCoreRow[]> {
+  const pg = getRawPg();
+  const rows = await pg.unsafe(
+    `SELECT ${SCHOOL_SELECT} FROM schools WHERE admin_id = $1 ORDER BY id`,
+    [adminUserId],
+  );
+  return (rows as Record<string, unknown>[]).map(mapSchoolRow);
+}
+
+/** Public registration links — avoids Drizzle selecting F001 columns missing on older DBs. */
+export async function getSchoolCoreByRegistrationCode(
+  code: string,
+): Promise<SchoolCoreRow | undefined> {
+  const normalized = code.trim();
+  if (!normalized) {
+    return undefined;
+  }
+  const pg = getRawPg();
+  const rows = await pg.unsafe(
+    `SELECT ${SCHOOL_SELECT} FROM schools
+     WHERE LOWER(TRIM(registration_code)) = LOWER(TRIM($1))
+     LIMIT 1`,
+    [normalized],
+  );
+  const row = rows[0] as Record<string, unknown> | undefined;
   return row ? mapSchoolRow(row) : undefined;
 }
 
 export async function getAllSchoolsCore(): Promise<SchoolCoreRow[]> {
-  const db = await getDb();
-  const result = await db.execute(sql`${SCHOOL_ROW_SQL} ORDER BY id`);
-  return (result.rows as Record<string, unknown>[]).map(mapSchoolRow);
+  const pg = getRawPg();
+  const rows = await pg.unsafe(`SELECT ${SCHOOL_SELECT} FROM schools ORDER BY id`);
+  return (rows as Record<string, unknown>[]).map(mapSchoolRow);
 }
 
 export type InsertSchoolCoreInput = {
@@ -121,48 +158,34 @@ export type InsertSchoolCoreInput = {
 };
 
 export async function insertSchoolCore(input: InsertSchoolCoreInput): Promise<SchoolCoreRow> {
-  const db = await getDb();
-  const result = await db.execute(sql`
-    INSERT INTO schools (
-      name,
-      type,
-      admin_id,
-      address,
-      city,
-      state,
-      zip_code,
-      phone_number,
-      email,
-      website,
-      description,
-      founded_year,
-      accreditation,
-      enrollment_size,
-      registration_code,
-      status,
-      is_verified
-    ) VALUES (
-      ${input.name},
-      ${input.type},
-      ${input.adminId},
-      ${input.address ?? null},
-      ${input.city},
-      ${input.state},
-      ${input.zipCode},
-      ${input.phoneNumber ?? null},
-      ${input.email},
-      ${input.website ?? null},
-      ${input.description ?? null},
-      ${input.foundedYear ?? null},
-      ${input.accreditation ?? null},
-      ${input.enrollmentSize ?? null},
-      ${input.registrationCode},
-      ${input.status ?? 'active'},
-      false
-    )
-    RETURNING id
-  `);
-  const id = Number((result.rows[0] as { id: number }).id);
+  const pg = getRawPg();
+  const rows = await pg.unsafe(
+    `INSERT INTO schools (
+      name, type, admin_id, address, city, state, zip_code, phone_number, email,
+      website, description, founded_year, accreditation, enrollment_size,
+      registration_code, status, is_verified
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,false)
+    RETURNING id`,
+    [
+      input.name,
+      input.type,
+      input.adminId,
+      input.address ?? null,
+      input.city,
+      input.state,
+      input.zipCode,
+      input.phoneNumber ?? null,
+      input.email,
+      input.website ?? null,
+      input.description ?? null,
+      input.foundedYear ?? null,
+      input.accreditation ?? null,
+      input.enrollmentSize ?? null,
+      input.registrationCode,
+      input.status ?? 'active',
+    ],
+  );
+  const id = Number((rows[0] as { id: number }).id);
   const school = await getSchoolCoreById(id);
   if (!school) {
     throw new Error('School insert succeeded but row could not be loaded');

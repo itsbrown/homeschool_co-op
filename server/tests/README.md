@@ -50,10 +50,11 @@ Quick local gate (no full suite):
 node scripts/run-stabilize-checks.mjs
 ```
 
-1. **Schema (F001 Phase 1)** — on your dev or `asa_test` database only:
+1. **Schema (core + F001)** — on your dev or `asa_test` database only:
    ```bash
    # Add DATABASE_URL or TEST_DATABASE_URL to .env, then:
-   node scripts/db-push-with-env.mjs
+   node scripts/ci-db-push.mjs
+   node scripts/verify-core-schema.mjs
    node scripts/verify-f001-schema.mjs
    ```
    Or apply `server/migrations/f001-phase1-schema.sql` manually.
@@ -73,6 +74,32 @@ node scripts/run-stabilize-checks.mjs
    - `Database connection not available` → start Postgres / fix `TEST_DATABASE_URL`.
    - `fetch failed` on port 5000 → start `npm run dev` before payment-flow tests.
 
+### Production-path lane (registration / locations — mandatory on PR)
+
+Exercises **real HTTP routes** and **Postgres** (`asa_test`) with the same mount order as production (`public` locations before auth). Does **not** skip when the DB is down — fix `TEST_DATABASE_URL` or CI will fail.
+
+| File | What it proves |
+|------|----------------|
+| `integration/production-path/public-registration-locations.test.ts` | `GET /api/public/registration/locations` — seeded campuses, no Main Campus auto-seed, no cross-school leak |
+| `integration/production-path/location-school-context.test.ts` | Misaligned `users.school_id` vs `schools.admin_id`; `POST /api/locations` with explicit `schoolId` |
+| `integration/production-path/school-validate-code.test.ts` | `GET /api/schools/validate-code/:code` |
+| `integration/production-path/auth-register-school-signup.test.ts` | `POST /api/auth/register` + mocked Supabase admin → user, roles, children |
+| `integration/production-path/auth-register-orphan-supabase.test.ts` | Orphan Supabase auth blocks signup (`AUTH_EMAIL_EXISTS`) |
+| `integration/production-path/associate-parent-school.test.ts` | `associateParentWithSchool` storage path (no self-HTTP) |
+
+**Run locally** (requires `asa_test` + `db:push`):
+
+```bash
+export TEST_DATABASE_URL=postgresql://user:pass@localhost:5432/asa_test
+export DATABASE_URL="$TEST_DATABASE_URL"
+node scripts/db-push-with-env.mjs
+PAYMENT_PROCESSOR_ENABLED=true npm run test:server -- --runInBand --testPathPatterns=production-path
+```
+
+**Seed for Playwright:** `POST /api/test/setup-registration-scenario` (see `e2e/school-code-registration.spec.ts`). E2E uses **real Supabase** when secrets are set; skips with placeholder keys.
+
+Harness: `server/tests/helpers/productionPathApp.ts`, `supabaseAuthMock.ts`, `describeProductionPath.ts`, `seedRegistrationScenario.ts`.
+
 ### Session enrollment (F001) — E2E vs integration
 
 | Layer | File | What it proves |
@@ -81,8 +108,47 @@ node scripts/run-stabilize-checks.mjs
 | **Integration** | `server/tests/integration/session-enrollment-checkout.test.ts` | `create-payment-intent` + cart snapshot with **mocked** Stripe (`jest.mock` on `getStripeClient`). Requires a real `TEST_DATABASE_URL` (not the literal `...` placeholder). |
 | **E2E checkout** | `e2e/parent-payment-flow.spec.ts` | Full UI checkout; needs valid `TESTING_STRIPE_SECRET_KEY` / `sk_test_*` in `.env` or secrets. |
 | **E2E credits** | `e2e/credit-management-parent-lookup.spec.ts` | School-admin Add Manual Credit finds legacy parents (`users.school_id` only, no `user_roles`). Seed: `POST /api/test/setup-credit-lookup-scenario`. Requires `DATABASE_URL` + Supabase for admin login. |
+| **E2E registration** | `e2e/school-code-registration.spec.ts` | `/register/:code` UI + live Supabase signup. Seed: `POST /api/test/setup-registration-scenario`. Skips without real `SUPABASE_SERVICE_ROLE_KEY`. |
 | **Unit** | `server/tests/biweekly-checkout-contract.test.ts`, `server/tests/cart-program-dates.test.ts`, `server/tests/checkout-payment-plans-offer.test.ts`, `server/tests/biweekly-schedule-end-buffer.test.ts`, `server/tests/stripe-biweekly-checkout-phases.test.ts` | Golden fixture in `server/lib/biweekly-checkout-contract.ts` — cart, Stripe phases, boundary. |
 | **Integration** | `server/tests/integration/biweekly-session-checkout.test.ts` | Session cart snapshot + `create-payment-intent` biweekly → `scheduled_payments` dates/amounts/autopay metadata. Requires reachable `TEST_DATABASE_URL` (see commands below). |
+
+**Restore `users` after accidental test truncate (Supabase CSV)**
+
+Integration `testDb.cleanup()` must only run against `asa_test`. If dev Postgres was truncated, restore Neon from Replit **or** import Supabase auth export into `users` / `user_roles` (passwords remain in Supabase only):
+
+```bash
+# Dry-run
+DATABASE_URL="postgresql://..." npx tsx scripts/import-supabase-auth-users-from-csv.ts \
+  --csv "$HOME/Downloads/Supabase Snippet SQL Query.csv"
+
+# Apply
+CONFIRM_SUPABASE_USER_IMPORT=1 DATABASE_URL="postgresql://..." npx tsx scripts/import-supabase-auth-users-from-csv.ts \
+  --csv "$HOME/Downloads/Supabase Snippet SQL Query.csv" --apply
+```
+
+Then seed schools (required for `school_id` on import) and any app users missing from the Supabase export:
+
+```bash
+node scripts/seed-dev-schools.mjs
+CONFIRM_SEED_DEV_SCHOOLS=1 node scripts/seed-dev-schools.mjs --apply
+
+node scripts/import-app-users-from-csv.mjs --csv attached_assets/users_1761901890907.csv \
+  --email contact.americanseekersacademy@gmail.com
+CONFIRM_APP_USER_IMPORT=1 node scripts/import-app-users-from-csv.mjs --csv attached_assets/users_1761901890907.csv \
+  --email contact.americanseekersacademy@gmail.com --apply
+```
+
+Check a login email: `node scripts/diagnose-login-user.mjs user@example.com`
+
+Registration link / school code after restore:
+
+```bash
+node scripts/diagnose-school-code.mjs X8BMC1JE
+# If missing, open My School as admin (auto-generates a code) or:
+CONFIRM_SET_SCHOOL_CODE=1 node scripts/set-school-registration-code.mjs --school-id 1 --code X8BMC1JE --apply
+```
+
+`testDb.cleanup()` skips `TRUNCATE` unless the DB URL looks like a test database (or `ALLOW_TEST_TRUNCATE=1`).
 
 **Biweekly pyramid (layer 1 → 2)**
 
@@ -397,10 +463,16 @@ expect(response.body).toBeDefined();
 ## CI/CD Integration
 
 Tests are automatically run in CI on every push to `main` and every pull
-request via `.github/workflows/tests.yml`. The single `tests` job boots the
-dev server, then runs the full `npm test` script (server integration suite +
-client jsdom suite). The earlier `integration-tests.yml` workflow has been
-removed — `tests.yml` is now the canonical entry point.
+request via `.github/workflows/tests.yml`. The `tests` job:
+
+1. Pushes schema to `asa_test` and verifies core + F001 tables
+2. Runs **production-path** server integration (`--testPathPatterns=production-path`)
+3. Boots the dev server (smoke: bundle + listen on :5000)
+4. Runs **client jsdom** tests (`npm run test:client`)
+
+Payment-heavy server integration (`test:server` full suite, 700+ tests) and
+Playwright E2E run in separate workflows (`Payments CI`, `E2E`). Locally:
+`npm test` still runs client + full server integration in series.
 
 ## Payment-Flow Regression Harness
 

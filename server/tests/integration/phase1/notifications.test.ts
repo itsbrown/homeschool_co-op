@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from '@jest/globals';
+import { describeIntegration } from '../../helpers/integrationDb';
 import { testDb } from '../../helpers/testDatabase';
 import { api } from '../../helpers/apiHelpers';
 import { resetAllMocks, mockBrevoService, mockTwilioService, mockWebSocketService } from '../../helpers/mockServices';
@@ -18,7 +19,7 @@ import { resetAllMocks, mockBrevoService, mockTwilioService, mockWebSocketServic
  * - Multi-location notifications
  */
 
-describe('Integration: Notification System', () => {
+describeIntegration('Integration: Notification System', () => {
   let testSchool: any;
   let testAdmin: any;
   let testParent: any;

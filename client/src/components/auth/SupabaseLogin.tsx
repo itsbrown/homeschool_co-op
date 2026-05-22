@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../SupabaseProvider';
+import { useRole } from '@/contexts/RoleContext';
+import { REGISTRATION_REDIRECT_BLOCK_KEY } from '@/lib/registration-required';
 import { useLocation } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,6 +12,14 @@ import { useToast } from '@/hooks/use-toast';
 
 export const SupabaseLogin: React.FC = () => {
   const { signIn, signInWithGoogle, user, isAuthenticated } = useAuth();
+  const {
+    activeRole,
+    rolesBootstrapRole,
+    isLoadingRoles,
+    isSettingUpAccount,
+    isAccountReady,
+    rolesError,
+  } = useRole();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [isLoading, setIsLoading] = useState(false);
@@ -17,6 +27,28 @@ export const SupabaseLogin: React.FC = () => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [sessionExpiredMessage, setSessionExpiredMessage] = useState<string | null>(null);
+  const [registrationRequired, setRegistrationRequired] = useState<{
+    message: string;
+    email: string;
+  } | null>(null);
+
+  // Banner when middleware reports the Supabase user has no app DB row.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('error') === 'registration_required') {
+      const message =
+        sessionStorage.getItem('registration_required_message') ||
+        'You need to register with your school before you can log in. Please contact your school administrator for a registration link.';
+      const regEmail = sessionStorage.getItem('registration_required_email') || '';
+      setRegistrationRequired({ message, email: regEmail });
+      sessionStorage.removeItem(REGISTRATION_REDIRECT_BLOCK_KEY);
+      params.delete('error');
+      const remainingQuery = params.toString();
+      const newUrl =
+        window.location.pathname + (remainingQuery ? `?${remainingQuery}` : '');
+      window.history.replaceState({}, document.title, newUrl);
+    }
+  }, []);
 
   // Show a banner when redirected here by the session-expired recovery flow.
   useEffect(() => {
@@ -39,17 +71,34 @@ export const SupabaseLogin: React.FC = () => {
     }
   }, []);
 
-  // Handle redirect after successful authentication
-  // RoleContext handles role selection for multi-role users
+  const effectiveRole = activeRole || rolesBootstrapRole;
+  const isFinishingLogin =
+    isAuthenticated && !!user && (isLoadingRoles || isSettingUpAccount);
+
+  // Leave /login once Supabase session + app role bootstrap are ready.
   useEffect(() => {
-    if (isAuthenticated && user) {
-      const params = new URLSearchParams(window.location.search);
-      const returnTo = params.get('returnTo');
-      const destination = returnTo?.startsWith('/') ? returnTo : '/dashboard';
-      console.log('👤 User logged in, redirecting to', destination);
-      setLocation(destination);
+    if (!isAuthenticated || !user || !isAccountReady || !effectiveRole) {
+      return;
     }
-  }, [isAuthenticated, user, setLocation]);
+    if (sessionStorage.getItem(REGISTRATION_REDIRECT_BLOCK_KEY) === '1') {
+      return;
+    }
+    if (registrationRequired) {
+      return;
+    }
+    const params = new URLSearchParams(window.location.search);
+    const returnTo = params.get('returnTo');
+    const destination = returnTo?.startsWith('/') ? returnTo : '/dashboard';
+    console.log('👤 User logged in with role, redirecting to', destination);
+    setLocation(destination);
+  }, [
+    isAuthenticated,
+    user,
+    isAccountReady,
+    effectiveRole,
+    registrationRequired,
+    setLocation,
+  ]);
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -65,13 +114,9 @@ export const SupabaseLogin: React.FC = () => {
         description: error.message,
         variant: "destructive",
       });
-    } else {
-      toast({
-        title: "Welcome back!",
-        description: "You have successfully logged in.",
-      });
     }
-    
+    // Redirect + welcome toast happen after roles load (see isFinishingLogin / redirect effect).
+
     setIsLoading(false);
   };
 
@@ -103,6 +148,22 @@ export const SupabaseLogin: React.FC = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {registrationRequired && (
+            <Alert
+              variant="destructive"
+              className="mb-4"
+              data-testid="registration-required-banner"
+            >
+              <AlertDescription>
+                {registrationRequired.message}
+                {registrationRequired.email ? (
+                  <span className="block mt-1 text-sm opacity-90">
+                    Account: {registrationRequired.email}
+                  </span>
+                ) : null}
+              </AlertDescription>
+            </Alert>
+          )}
           {sessionExpiredMessage && (
             <Alert
               className="mb-4 border-amber-200 bg-amber-50 text-amber-900"
@@ -111,6 +172,36 @@ export const SupabaseLogin: React.FC = () => {
               <AlertDescription>{sessionExpiredMessage}</AlertDescription>
             </Alert>
           )}
+          {isFinishingLogin && (
+            <Alert className="mb-4" data-testid="login-finishing">
+              <AlertDescription>
+                Signing you in and loading your account…
+              </AlertDescription>
+            </Alert>
+          )}
+          {isAuthenticated &&
+            !isLoadingRoles &&
+            !isSettingUpAccount &&
+            !effectiveRole &&
+            rolesError && (
+              <Alert variant="destructive" className="mb-4" data-testid="login-roles-error">
+                <AlertDescription>
+                  {rolesError.message ||
+                    'Unable to load your account. Try refreshing or contact support.'}
+                </AlertDescription>
+              </Alert>
+            )}
+          {isAuthenticated &&
+            !isLoadingRoles &&
+            !isSettingUpAccount &&
+            !effectiveRole &&
+            !rolesError && (
+              <Alert variant="destructive" className="mb-4" data-testid="login-no-role">
+                <AlertDescription>
+                  Your account has no assigned role. Contact your school administrator.
+                </AlertDescription>
+              </Alert>
+            )}
           <div className="space-y-4">
             <form onSubmit={handleSignIn} className="space-y-4">
                 <div className="space-y-2">
@@ -140,8 +231,12 @@ export const SupabaseLogin: React.FC = () => {
                     <AlertDescription>{error}</AlertDescription>
                   </Alert>
                 )}
-                <Button type="submit" className="w-full" disabled={isLoading}>
-                  {isLoading ? 'Signing in...' : 'Sign In'}
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={isLoading || isFinishingLogin}
+                >
+                  {isLoading || isFinishingLogin ? 'Signing in...' : 'Sign In'}
                 </Button>
                 
                 <div className="text-center">

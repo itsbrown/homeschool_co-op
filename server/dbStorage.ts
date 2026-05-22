@@ -3,6 +3,14 @@ import { normalizeEmailForLookup } from '@shared/parent-identity';
 import { normalizeSchoolFeatures } from './lib/school-features';
 import { getDb } from './db';
 import { IStorage, type InsertPaymentReminderLog, type PaymentReminderLog } from './storage';
+import {
+  createLocationCore,
+  deleteLocationCore,
+  getAllLocationsCore,
+  getLocationCore,
+  getLocationsBySchoolIdCore,
+  updateLocationCore,
+} from './lib/location-db';
 import { getAllSchoolsCore, getSchoolCoreById, insertSchoolCore } from './lib/school-db';
 import {
   User, InsertUser, users,
@@ -231,14 +239,34 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getSchoolByCode(registrationCode: string): Promise<School | undefined> {
+    const normalized = registrationCode.trim();
+    if (!normalized) {
+      return undefined;
+    }
+    try {
+      const { getSchoolCoreByRegistrationCode } = await import('./lib/school-db');
+      const core = await getSchoolCoreByRegistrationCode(normalized);
+      if (core) {
+        return core as School;
+      }
+    } catch (error) {
+      console.warn(
+        'getSchoolByCode core lookup failed:',
+        error instanceof Error ? error.message : error,
+      );
+    }
     try {
       const db = await getDb();
-      const [school] = await db.select().from(schools).where(eq(schools.registrationCode, registrationCode));
+      const [school] = await db
+        .select()
+        .from(schools)
+        .where(sql`LOWER(TRIM(${schools.registrationCode})) = LOWER(${normalized})`)
+        .limit(1);
       return school;
     } catch (error) {
       const all = await getAllSchoolsCore();
       return all.find(
-        (s) => s.registrationCode?.toLowerCase() === registrationCode.toLowerCase(),
+        (s) => s.registrationCode?.toLowerCase() === normalized.toLowerCase(),
       ) as School | undefined;
     }
   }
@@ -2390,59 +2418,29 @@ export class DatabaseStorage implements IStorage {
       .where(eq(marketingLinks.campaignId, campaignId));
   }
 
-  // Location methods
+  // Location methods — raw postgres (avoids Drizzle execute/select issues on Replit)
   async getLocation(id: number): Promise<Location | undefined> {
-    const db = await getDb();
-    const [location] = await db.select().from(locations).where(eq(locations.id, id));
-    return location;
+    return getLocationCore(id);
   }
 
   async getLocationsBySchoolId(schoolId: number): Promise<Location[]> {
-    const db = await getDb();
-    return await db
-      .select()
-      .from(locations)
-      .where(and(eq(locations.schoolId, schoolId), eq(locations.isActive, true)))
-      .orderBy(asc(locations.name));
+    return getLocationsBySchoolIdCore(schoolId);
   }
 
   async getAllLocations(): Promise<Location[]> {
-    const db = await getDb();
-    return await db.select().from(locations).where(eq(locations.isActive, true));
+    return getAllLocationsCore();
   }
 
   async createLocation(location: InsertLocation): Promise<Location> {
-    const db = await getDb();
-    const [newLocation] = await db
-      .insert(locations)
-      .values({
-        ...location,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      })
-      .returning();
-    return newLocation;
+    return createLocationCore(location);
   }
 
   async updateLocation(id: number, location: Partial<InsertLocation>): Promise<Location | undefined> {
-    const db = await getDb();
-    const [updatedLocation] = await db
-      .update(locations)
-      .set({
-        ...location,
-        updatedAt: new Date()
-      })
-      .where(eq(locations.id, id))
-      .returning();
-    return updatedLocation;
+    return updateLocationCore(id, location);
   }
 
   async deleteLocation(id: number): Promise<void> {
-    const db = await getDb();
-    await db
-      .update(locations)
-      .set({ isActive: false, updatedAt: new Date() })
-      .where(eq(locations.id, id));
+    return deleteLocationCore(id);
   }
 
   // Category methods (school-specific)

@@ -16,6 +16,43 @@ function enrollmentBalanceCents(e: any): number {
   );
 }
 
+/** Normalize API/DB field naming for cart grouping. */
+function sessionEnrollmentFields(enrollment: any) {
+  return {
+    sessionId: enrollment.sessionId ?? enrollment.session_id ?? null,
+    enrollmentVersion:
+      enrollment.enrollmentVersion ?? enrollment.enrollment_version ?? 'v1',
+    dayType: enrollment.dayType ?? enrollment.day_type ?? null,
+    variantId: enrollment.variantId ?? enrollment.variant_id ?? null,
+  };
+}
+
+/**
+ * Stable cart line key: one checkout line per billable enrollment target.
+ * F001 session rows must not collapse when legacy classId/marketplaceClassId overlap.
+ */
+export function cartEnrollmentLineKey(enrollment: any): string {
+  const childId = enrollment.childId;
+  const { sessionId, enrollmentVersion, dayType, variantId } =
+    sessionEnrollmentFields(enrollment);
+
+  const isSessionEnrollment =
+    enrollmentVersion === 'v2' || sessionId != null || dayType != null;
+
+  if (isSessionEnrollment) {
+    const sessionPart = sessionId != null ? `s${sessionId}` : `e${enrollment.id}`;
+    const variant = variantId ?? dayType ?? 'default';
+    return `v2:${sessionPart}:c${childId}:v${variant}`;
+  }
+
+  const lineKey =
+    enrollment.marketplaceClassId ??
+    enrollment.classId ??
+    enrollment.programId ??
+    `enrollment-${enrollment.id}`;
+  return `${lineKey}-${childId}`;
+}
+
 /**
  * Same grouping and "latest wins" rules as `CartContext` cart hydration.
  * Returns the enrollment rows that correspond to one cart line each.
@@ -27,13 +64,7 @@ export function filterEnrollmentsToCartLineItems(
 
   const enrollmentGroups = enrollments.reduce(
     (acc: Record<string, any[]>, enrollment: any) => {
-      const lineKey =
-        enrollment.sessionId ||
-        enrollment.marketplaceClassId ||
-        enrollment.classId ||
-        enrollment.programId ||
-        `enrollment-${enrollment.id}`;
-      const key = `${lineKey}-${enrollment.childId}`;
+      const key = cartEnrollmentLineKey(enrollment);
       if (!acc[key]) acc[key] = [];
       acc[key].push(enrollment);
       return acc;

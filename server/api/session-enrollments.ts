@@ -25,10 +25,10 @@ router.post("/", supabaseAuth, async (req: any, res) => {
   try {
     const criteria = parentAuthCriteriaFromRequest(req);
     const parent = await resolveParentDbUser(storage, criteria);
-    const userId = req.user?.id ?? parent?.id;
-    if (!userId) {
+    if (!parent?.id) {
       return res.status(401).json({ message: "Authentication required" });
     }
+    const userId = parent.id;
 
     const parsed = sessionEnrollSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -177,6 +177,30 @@ router.post("/", supabaseAuth, async (req: any, res) => {
         const saved = await storage.createProgramEnrollment(enrollmentData);
         createdEnrollments.push(saved);
 
+        if (saved.enrollmentVersion === "v2" && saved.id) {
+          const dayType = saved.dayType ?? variant;
+          try {
+            await storage.createPriceHistoryEntry({
+              enrollmentId: saved.id,
+              changeType: "initial",
+              previousDayType: null,
+              newDayType: dayType,
+              previousPriceCents: 0,
+              newPriceCents: price,
+              differenceCents: price,
+              effectiveDate: session.startDate,
+              changedBy: userId,
+              reason: "Session enrollment created",
+            });
+          } catch (historyError) {
+            // Enrollment is already persisted; audit row failure must not block checkout.
+            console.error(
+              `Failed to write price history for enrollment ${saved.id}:`,
+              historyError,
+            );
+          }
+        }
+
         console.log(
           `📝 Session enrollment: ${child.firstName} → ${session.name} (${variantLabel}) - ${enrollmentStatus} - $${(price / 100).toFixed(2)}`
         );
@@ -193,7 +217,14 @@ router.post("/", supabaseAuth, async (req: any, res) => {
     });
   } catch (error) {
     console.error("Error creating session enrollments:", error);
-    res.status(500).json({ message: "Failed to create enrollments" });
+    const details =
+      process.env.NODE_ENV !== "production" && error instanceof Error
+        ? error.message
+        : undefined;
+    res.status(500).json({
+      message: "Failed to create enrollments",
+      ...(details ? { details } : {}),
+    });
   }
 });
 

@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from '@jest/globals';
+import { describeIntegration } from '../../helpers/integrationDb';
 import { testDb } from '../../helpers/testDatabase';
 import { api } from '../../helpers/apiHelpers';
 import { resetAllMocks } from '../../helpers/mockServices';
@@ -17,7 +18,7 @@ import { resetAllMocks } from '../../helpers/mockServices';
  * - Data integrity (payment calculations, balances)
  */
 
-describe('Integration: Parent Profile Management', () => {
+describeIntegration('Integration: Parent Profile Management', () => {
   let testSchool: any;
   let testSchool2: any;
   let testAdmin: any;

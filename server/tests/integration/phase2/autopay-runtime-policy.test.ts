@@ -68,9 +68,17 @@ describe('Integration: AutoPay runtime policy enforcement', () => {
     expect(mockGetAllScheduledPayments).not.toHaveBeenCalled();
 
     expect(results).toEqual([
-      { scheduledPaymentId: 1001, action: 'skip', reason: 'retry_cap_reached' },
-      { scheduledPaymentId: 1002, action: 'skip', reason: 'stale_attempt' },
-      { scheduledPaymentId: 1003, action: 'process' },
+      expect.objectContaining({
+        scheduledPaymentId: 1001,
+        action: 'skip',
+        reason: 'retry_cap_reached',
+      }),
+      expect.objectContaining({
+        scheduledPaymentId: 1002,
+        action: 'skip',
+        reason: 'stale_attempt',
+      }),
+      expect.objectContaining({ scheduledPaymentId: 1003, action: 'process' }),
     ]);
 
     expect(mockUpdateScheduledPaymentStatus).toHaveBeenCalledTimes(2);
@@ -107,7 +115,15 @@ describe('Integration: AutoPay runtime policy enforcement', () => {
     const { processAutoPayExecutionPath } = await import('../../../services/scheduled-payment-reminders');
     const results = await processAutoPayExecutionPath(new Date('2026-05-08T12:00:00.000Z'));
 
-    expect(results).toEqual([{ scheduledPaymentId: 2001, action: 'skip', reason: 'credit_covered' }]);
+    expect(results).toEqual([
+      expect.objectContaining({
+        scheduledPaymentId: 2001,
+        action: 'skip',
+        reason: 'credit_covered',
+        parentId: 77,
+        parentEmail: 'p@example.com',
+      }),
+    ]);
     expect(mockUpdateScheduledPaymentStatus).toHaveBeenCalledWith(2001, 'cancelled');
     expect(storageMock.createNotification).toHaveBeenCalled();
   });

@@ -3,6 +3,7 @@
  * when payment_intent.succeeded is missed and reconciliation later runs.
  */
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { describeIntegration } from './helpers/integrationDb';
 import {
   reconcileStuckAutoPayProcessingAttempts,
 } from '../services/autopay-reconciliation';
@@ -121,7 +122,7 @@ async function applyReconciliationBackfill(opts: {
 // Tests
 // ---------------------------------------------------------------------------
 
-describe('Webhook vs reconciliation ledger equivalence', () => {
+describeIntegration('Webhook vs reconciliation ledger equivalence', () => {
   async function seedProcessingPayment() {
     const admin = await testDb.createTestUser({ role: 'schoolAdmin' });
     const school = await testDb.createTestSchool(admin.id);

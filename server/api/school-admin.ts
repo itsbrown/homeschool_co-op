@@ -16,6 +16,7 @@ import { requireSchoolContext } from '../middleware/require-school-context';
 import { clearPermissionCache } from '../middleware/locationPermissions';
 import rateLimit from 'express-rate-limit';
 import { getDb } from '../db';
+import { ensureSchoolRegistrationCode } from '../lib/school-registration-code';
 
 // Rate limiter for permission updates - prevent bulk abuse
 const permissionUpdateLimiter = rateLimit({
@@ -443,9 +444,15 @@ router.get("/my-school", jwtCheck, async (req: any, res) => {
       return res.status(500).json({ message: "User sync failed" });
     }
     
-    // CRITICAL FIX: Access schoolId from the database user (dbUser) or req.auth
-    // The middleware stores database info in req.user.dbUser and req.auth.schoolId
-    const userSchoolId = adminUser.dbUser?.schoolId || req.auth?.schoolId;
+    const dbUser = adminUser.dbUser;
+    let userSchoolId: number | null = null;
+    if (dbUser) {
+      const { resolveSchoolIdForUser } = await import('../lib/resolve-school-id');
+      userSchoolId = await resolveSchoolIdForUser(dbUser);
+    }
+    if (userSchoolId == null) {
+      userSchoolId = adminUser.dbUser?.schoolId ?? req.auth?.schoolId ?? null;
+    }
     
     console.log('✅ Found admin user:', { 
       id: adminUser.id, 
@@ -464,12 +471,16 @@ router.get("/my-school", jwtCheck, async (req: any, res) => {
       if (school) {
         console.log('✅ Found school for user:', school.name);
         
+        const registrationCode =
+          (await ensureSchoolRegistrationCode(school.id)) ?? school.registrationCode;
+        
         // Load locations for this school
         const locations = await storage.getLocationsBySchoolId(school.id);
         console.log(`🏢 Found ${locations.length} locations for school ${school.name}`);
         
         const responseData = {
           ...school,
+          registrationCode,
           locations
         };
         
@@ -503,12 +514,16 @@ router.get("/my-school", jwtCheck, async (req: any, res) => {
       console.log('✅ Found existing school for admin (via adminId):', school.name);
       console.log('📊 RAW DATABASE DATA:', JSON.stringify(school, null, 2));
       
+      const registrationCode =
+        (await ensureSchoolRegistrationCode(school.id)) ?? school.registrationCode;
+      
       // Load locations for this school
       const locations = await storage.getLocationsBySchoolId(school.id);
       console.log(`🏢 Found ${locations.length} locations for school ${school.name}`);
       
       const responseData = {
         ...school,
+        registrationCode,
         locations
       };
       
@@ -4071,11 +4086,52 @@ router.get("/students/by-location/:locationId", async (req, res) => {
   }
 });
 
+router.get("/assignable-schools", supabaseAuth, async (req: any, res) => {
+  try {
+    const userEmail = req.user?.email;
+    if (!userEmail) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
+    const dbUser = await storage.getUserByEmail(userEmail);
+    if (!dbUser) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    const { getAssignableSchoolsForUser, resolveSchoolIdForUser } = await import(
+      '../lib/resolve-school-id'
+    );
+    const schools = await getAssignableSchoolsForUser(dbUser);
+    const defaultSchoolId = await resolveSchoolIdForUser(dbUser);
+    res.json({ schools, defaultSchoolId });
+  } catch (error) {
+    console.error('❌ Error fetching assignable schools:', error);
+    res.status(500).json({ message: 'Failed to fetch assignable schools' });
+  }
+});
+
 router.get("/locations/overview", supabaseAuth, requireSchoolContext, async (req: any, res) => {
   try {
-    const schoolId = Number(req.schoolId);
+    const userEmail = req.user?.email;
+    if (!userEmail) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
+    const dbUser = await storage.getUserByEmail(userEmail);
+    if (!dbUser) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const { resolveRequestedSchoolIdForUser } = await import('../lib/resolve-school-id');
+    const fallbackSchoolId = Number(req.schoolId);
+    const schoolId = await resolveRequestedSchoolIdForUser(
+      dbUser,
+      req.query.schoolId,
+      Number.isFinite(fallbackSchoolId) ? fallbackSchoolId : null,
+    );
+    if (schoolId == null) {
+      return res.status(403).json({ message: 'School not accessible for this account' });
+    }
+
     console.log('📍 Generating location overview for school:', schoolId);
-    
+
     const locations = await storage.getLocationsBySchoolId(schoolId);
     
     const locationOverview = await Promise.all(

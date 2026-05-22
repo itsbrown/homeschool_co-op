@@ -35,6 +35,7 @@ interface ParentEnrollmentRow {
   className?: string;
   classId?: number | null;
   marketplaceClassId?: number | null;
+  sessionId?: number | null;
   classType?: string;
   effectiveBalance?: number | null;
   totalCost?: number | null;
@@ -73,6 +74,7 @@ export interface UnpaidEnrollment {
   className: string;
   classId: number | null;
   marketplaceClassId: number | null;
+  sessionId: number | null;
   classType: string;
   effectiveBalance: number;
   variantId?: string;
@@ -117,6 +119,7 @@ export function useUnpaidEnrollments() {
         className: e.className ?? 'Class',
         classId: e.marketplaceClassId || e.classId || null,
         marketplaceClassId: e.marketplaceClassId ?? null,
+        sessionId: e.sessionId ?? (e as { session_id?: number }).session_id ?? null,
         classType: e.classType || 'regular',
         effectiveBalance: balance,
         variantId: e.variantId,
@@ -161,15 +164,24 @@ export function useUnpaidEnrollments() {
         const classId = (e: UnpaidEnrollment) =>
           (e.marketplaceClassId ?? e.classId) as number;
         const res = await postParentCartCalculate({
-          items: unpaidEnrollments.map((e) => ({
-            id: `enrollment-${e.id}`,
-            classId: classId(e),
-            childId: e.childId,
-            childName: e.childName,
-            variantId: e.variantId,
-            enrollmentId: e.id,
-            remainingBalance: e.effectiveBalance,
-          })),
+          items: unpaidEnrollments.map((e) => {
+            const item: Record<string, unknown> = {
+              id: `enrollment-${e.id}`,
+              childId: e.childId,
+              childName: e.childName,
+              variantId: e.variantId,
+              enrollmentId: e.id,
+              remainingBalance: e.effectiveBalance,
+            };
+            const resolvedClassId = classId(e);
+            if (resolvedClassId != null) {
+              item.classId = resolvedClassId;
+            }
+            if (e.sessionId != null) {
+              item.sessionId = e.sessionId;
+            }
+            return item;
+          }),
           appliedPromoCode: cart.appliedPromoCode?.code ?? null,
         });
         if (!res.ok) {
@@ -298,6 +310,7 @@ export function usePayOutstanding() {
         addItem(
           {
             enrollmentId: e.id,
+            sessionId: e.sessionId ?? undefined,
             classType: e.classType,
             classId: e.classId,
             marketplaceClassId: e.marketplaceClassId,

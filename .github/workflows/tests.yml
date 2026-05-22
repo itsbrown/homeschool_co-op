@@ -37,6 +37,7 @@ jobs:
       TESTING_STRIPE_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
       STRIPE_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
       SUPABASE_URL: ${{ secrets.SUPABASE_URL || 'https://example.supabase.co' }}
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY || 'placeholder-anon-key' }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY || 'placeholder-service-role-key' }}
       PAYMENT_PROCESSOR_ENABLED: 'true'
 
@@ -56,7 +57,16 @@ jobs:
         run: npx vite build
 
       - name: Push schema to test database
-        run: npm run db:push
+        run: node scripts/ci-db-push.mjs
+
+      - name: Verify core Postgres schema
+        run: node scripts/verify-core-schema.mjs
+
+      - name: Verify F001 schema
+        run: node scripts/verify-f001-schema.mjs
+
+      - name: Production-path integration (registration / locations)
+        run: npm run test:server -- --runInBand --testPathPatterns=production-path --no-cache --forceExit
 
       - name: Start dev server
         run: |
@@ -74,8 +84,11 @@ jobs:
           cat /tmp/dev-server.log
           exit 1
 
-      - name: Run full test suite (server + client)
-        run: npm test
+      # Client jsdom only here — production-path server tests already ran above.
+      # Full test:server (700+ HTTP/Stripe integration tests) needs secrets and is
+      # covered by Payments CI + local dev; it is not a merge gate for this job.
+      - name: Run client unit tests (jsdom)
+        run: npm run test:client -- --forceExit
 
       - name: Upload dev server log
         if: always()

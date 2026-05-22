@@ -9,41 +9,16 @@ import { supabaseAuth } from "../middleware/supabase-auth";
 import { requireRole } from "../middleware/auth0-auth";
 import { storage } from "../storage";
 import { insertSchoolCore } from "../lib/school-db";
+import {
+  ensureSchoolRegistrationCode,
+  findSchoolByRegistrationCode,
+  generateUniqueRegistrationCode,
+  normalizeRegistrationCode,
+} from "../lib/school-registration-code";
+import { getSchoolCoreByRegistrationCode } from "../lib/school-db";
 import { userRoles } from "@shared/schema";
 
 const router = express.Router();
-
-// Generate a unique registration code with collision checking
-async function generateRegistrationCode(): Promise<string> {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let attempts = 0;
-  const maxAttempts = 10;
-
-  while (attempts < maxAttempts) {
-    // Generate 8-character code
-    let result = '';
-    for (let i = 0; i < 8; i++) {
-      result += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-
-    // Check if this code already exists in database
-    const existingSchool = await storage.getSchoolByCode(result);
-
-    if (!existingSchool) {
-      console.log('✅ Generated unique registration code:', result);
-      return result;
-    }
-
-    attempts++;
-    console.log(`🔄 Registration code collision, retrying... (attempt ${attempts}/${maxAttempts})`);
-  }
-
-  // Fallback: use timestamp-based code if we can't find a unique one
-  const timestamp = Date.now().toString(36).toUpperCase();
-  const fallbackCode = timestamp.substring(timestamp.length - 8);
-  console.log('⚠️ Using fallback registration code:', fallbackCode);
-  return fallbackCode;
-}
 
 // Create a new school (authenticated admin becomes school owner)
 router.post("/", supabaseAuth, async (req: any, res) => {
@@ -72,7 +47,7 @@ router.post("/", supabaseAuth, async (req: any, res) => {
     // Generate unique registration code if not provided
     let registrationCode = validatedData.data.registrationCode;
     if (!registrationCode) {
-      registrationCode = await generateRegistrationCode();
+      registrationCode = await generateUniqueRegistrationCode();
       console.log('🔑 Generated registration code:', registrationCode);
     }
 
@@ -165,15 +140,10 @@ router.get("/", async (req, res) => {
 // Validate school registration code - must be before /:id route to avoid conflicts
 router.get("/validate-code/:code", async (req, res) => {
   try {
-    const code = req.params.code.trim();
+    const code = normalizeRegistrationCode(req.params.code);
     console.log('🔍 Validating registration code:', code);
     
-    const db = await getDb();
-    const [school] = await db
-      .select()
-      .from(schools)
-      .where(sql`LOWER(${schools.registrationCode}) = LOWER(${code})`)
-      .limit(1);
+    const school = await findSchoolByRegistrationCode(code);
     
     if (!school) {
       console.log('❌ Invalid registration code:', code);
@@ -361,25 +331,37 @@ router.use('/documents', documentsRouter);
 // Get school by registration code
 router.get("/by-code/:code", async (req, res) => {
   try {
-    const { code } = req.params;
+    const code = normalizeRegistrationCode(req.params.code);
 
     if (!code) {
       return res.status(400).json({ message: "Registration code is required" });
     }
 
-    const db = await getDb();
-    const school = await db.query.schools.findFirst({
-      where: eq(schools.registrationCode, code.toUpperCase())
-    });
-
-    if (!school) {
+    const core = await getSchoolCoreByRegistrationCode(code);
+    if (!core) {
       return res.status(404).json({ message: "School not found with this registration code" });
+    }
+
+    let school = core;
+    if (!school.registrationCode?.trim()) {
+      const generated = await ensureSchoolRegistrationCode(school.id);
+      if (generated) {
+        school = { ...school, registrationCode: generated };
+      }
+    }
+
+    if (school.status !== 'active') {
+      return res.status(403).json({
+        message:
+          'This school is not currently accepting registrations. Please contact your administrator.',
+      });
     }
 
     res.json(school);
   } catch (error: any) {
+    const message = error instanceof Error ? error.message : String(error);
     console.error("Error fetching school by registration code:", error);
-    res.status(500).json({ message: "Internal server error", error: error.message });
+    res.status(500).json({ message: "Internal server error", error: message });
   }
 });
 
@@ -402,16 +384,14 @@ router.get("/:id", async (req, res) => {
       return res.status(404).json({ message: "School not found" });
     }
 
-    // Ensure school has a registration code
-    if (!school.registrationCode) {
-      const registrationCode = await generateRegistrationCode();
-      console.log('🔑 Generating registration code for existing school:', registrationCode);
+    const registrationCode = await ensureSchoolRegistrationCode(schoolId);
+    if (registrationCode && registrationCode !== school.registrationCode) {
       const [updatedSchool] = await db
-        .update(schools)
-        .set({ registrationCode })
+        .select()
+        .from(schools)
         .where(eq(schools.id, schoolId))
-        .returning();
-      return res.json(updatedSchool);
+        .limit(1);
+      return res.json(updatedSchool ?? { ...school, registrationCode });
     }
 
     res.json(school);

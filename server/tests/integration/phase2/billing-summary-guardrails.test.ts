@@ -1,6 +1,7 @@
 import express from 'express';
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from '@jest/globals';
+import { describeIntegration } from '../../helpers/integrationDb';
 import billingRouter from '../../../api/billing';
 import { testDb } from '../../helpers/testDatabase';
 import { storage } from '../../../storage';
@@ -19,7 +20,7 @@ const app = express();
 app.use(express.json());
 app.use('/api/billing', billingRouter);
 
-describe('Integration: Billing summary guardrails', () => {
+describeIntegration('Integration: Billing summary guardrails', () => {
   let parent: any;
   let school: any;
   let child: any;

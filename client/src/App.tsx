@@ -5,7 +5,7 @@ import { queryClient, handleExpiredSession } from "./lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SupabaseProvider, useAuth } from "@/components/SupabaseProvider";
-import { RoleProvider, useRole, AuthExpiredError } from "@/contexts/RoleContext";
+import { RoleProvider, useRole, AuthExpiredError, RegistrationRequiredError, ServiceUnavailableRolesError } from "@/contexts/RoleContext";
 import { NotificationProvider } from "@/hooks/useNotifications";
 import { CartProvider } from "@/contexts/CartContext";
 import { FormTracker } from "@/components/FormTracker";
@@ -322,6 +322,25 @@ function DashboardRouter() {
         </div>
       );
     }
+    if (rolesError instanceof RegistrationRequiredError) {
+      return (
+        <div className="min-h-screen flex items-center justify-center" data-testid="dashboard-registration-required">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-gray-600">Your account is not registered yet. Sending you back to sign in…</p>
+          </div>
+        </div>
+      );
+    }
+    if (rolesError instanceof ServiceUnavailableRolesError) {
+      return (
+        <div className="min-h-screen flex items-center justify-center" data-testid="dashboard-service-unavailable">
+          <div className="text-center max-w-md px-4">
+            <p className="text-gray-600">{rolesError.message}</p>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -343,7 +362,16 @@ function DashboardRouter() {
 
 function Router() {
   const { isAuthenticated, isLoading, user, error } = useAuth();
-  const { activeRole, showRoleSelection, setActiveRole } = useRole();
+  const {
+    activeRole,
+    rolesBootstrapRole,
+    showRoleSelection,
+    setActiveRole,
+    rolesError,
+    isLoadingRoles,
+    isAccountReady,
+  } = useRole();
+  const effectiveRole = activeRole || rolesBootstrapRole;
   const [location, setLocation] = useLocation();
 
   console.log(`🔐 Router render - activeRole:`, activeRole, 'isAuthenticated:', isAuthenticated, 'showRoleSelection:', showRoleSelection, 'user:', user?.email, 'location:', location);
@@ -354,6 +382,19 @@ function Router() {
     console.log('Router effect - activeRole:', activeRole, 'isAuthenticated:', isAuthenticated);
   }, [activeRole, isAuthenticated]);
 
+  // Stale Supabase session with no app user row — send to login with a clear banner.
+  useEffect(() => {
+    if (
+      isAuthenticated &&
+      !isLoadingRoles &&
+      rolesError instanceof RegistrationRequiredError &&
+      location !== '/login' &&
+      location !== '/emergency-logout'
+    ) {
+      setLocation('/login?error=registration_required');
+    }
+  }, [isAuthenticated, isLoadingRoles, rolesError, location, setLocation]);
+
   // Handle redirects in useEffect to avoid state updates during render
   useEffect(() => {
     // Redirect to login if not authenticated (except for public routes)
@@ -362,14 +403,14 @@ function Router() {
       setLocation('/login?returnTo=' + encodeURIComponent(location));
     }
 
-    // Redirect authenticated users away from login page
-    if (isAuthenticated && location === '/login' && activeRole) {
+    // Redirect authenticated users away from login page (honor returnTo)
+    if (isAuthenticated && location === '/login' && isAccountReady && effectiveRole) {
       console.log(`🔄 Redirecting authenticated user away from login page`);
       const params = new URLSearchParams(window.location.search);
       const returnTo = params.get('returnTo');
       setLocation(returnTo?.startsWith('/') ? returnTo : '/dashboard');
     }
-  }, [isAuthenticated, isLoading, location, activeRole, setLocation]);
+  }, [isAuthenticated, isLoading, location, isAccountReady, effectiveRole, setLocation]);
 
   // Handle OAuth callbacks (Auth0 and Supabase)
   React.useEffect(() => {

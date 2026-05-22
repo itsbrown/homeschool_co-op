@@ -2,6 +2,7 @@ import express from 'express';
 import session from 'express-session';
 import request from 'supertest';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from '@jest/globals';
+import { describeIntegration } from '../helpers/integrationDb';
 import { nanoid } from 'nanoid';
 import adminEnrollmentPaymentRouter from '../../api/admin-enrollment-payment';
 import { recalculatePaymentSchedule, validateFrequencyChange } from '../../lib/payment-calculator';
@@ -53,7 +54,7 @@ function buildTestApp() {
   return app;
 }
 
-describe('payment-calculator: admin weekly preview (Daniel Pierce scenario)', () => {
+describeIntegration('payment-calculator: admin weekly preview (Daniel Pierce scenario)', () => {
   it('matches 4 × $225 weekly installments from program dates', () => {
     const programStart = new Date('2026-04-05');
     const programEnd = new Date('2026-06-11');

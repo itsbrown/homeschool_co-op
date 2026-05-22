@@ -1,6 +1,7 @@
 import express from 'express';
 import request from 'supertest';
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { describeIntegration } from '../helpers/integrationDb';
 import { testDb } from '../helpers/testDatabase';
 import { storage } from '../../storage';
 
@@ -13,7 +14,7 @@ jest.mock('../../config/stripe', () => ({
 
 import { webhookHandler } from '../../webhook-handler';
 
-describe('Integration: payment webhook replay idempotency', () => {
+describeIntegration('Integration: payment webhook replay idempotency', () => {
   const endpoint = '/api/stripe/webhook';
 
   beforeEach(async () => {

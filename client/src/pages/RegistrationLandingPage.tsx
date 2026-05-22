@@ -3,34 +3,75 @@ import { useLocation, useParams } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { useForm } from "react-hook-form";
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
-import { CalendarIcon, MapPin, Clock, Users, DollarSign, Building, ArrowLeft } from "lucide-react";
+import { Building, ArrowLeft, PlusCircle, Trash2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
-import { useAuth } from "@/components/SupabaseProvider";
+import {
+  fetchPublicRegistration,
+  fetchPublicRegistrationJson,
+  PUBLIC_REGISTRATION_LOCATIONS_PATH,
+} from "@/lib/registration-public-api";
+import { registerParentWithChildren } from "@/lib/auth-register";
+import type { RegistrationSignupChildInput } from "@shared/auth-register";
 
-// Schema for parent registration - simplified to only parent info
-const parentRegistrationSchema = z.object({
-  parentFirstName: z.string().min(1, "First name is required"),
-  parentLastName: z.string().min(1, "Last name is required"),
-  email: z.string().email("Valid email is required"),
-  password: z.string().min(8, "Password must be at least 8 characters"),
-  confirmPassword: z.string().min(8, "Please confirm your password"),
-  phone: z.string().min(10, "Phone number is required"),
-  location: z.string().min(1, "Location selection is required"),
-}).refine((data) => data.password === data.confirmPassword, {
-  message: "Passwords don't match",
-  path: ["confirmPassword"],
+const signupChildSchema = z.object({
+  firstName: z.string().trim().min(1, "First name is required"),
+  lastName: z.string().trim().min(1, "Last name is required"),
+  birthdate: z.string().trim().min(1, "Birthdate is required"),
+  gradeLevel: z.string().min(1, "Grade level is required"),
+  gender: z.string().optional(),
 });
 
+const signupChildGradeOptions = [
+  "Littles",
+  "Pre-K",
+  "Kindergarten",
+  "1st Grade",
+  "2nd Grade",
+  "3rd Grade",
+  "4th Grade",
+  "5th Grade",
+  "6th Grade",
+  "7th Grade",
+  "8th Grade",
+  "9th Grade",
+  "10th Grade",
+  "11th Grade",
+  "12th Grade",
+] as const;
+
+// Parent + at least one child (school code flow)
+const parentRegistrationSchema = z
+  .object({
+    parentFirstName: z.string().min(1, "First name is required"),
+    parentLastName: z.string().min(1, "Last name is required"),
+    email: z.string().email("Valid email is required"),
+    password: z.string().min(8, "Password must be at least 8 characters"),
+    confirmPassword: z.string().min(8, "Please confirm your password"),
+    phone: z.string().min(10, "Phone number is required"),
+    location: z.string().min(1, "Location selection is required"),
+    children: z.array(signupChildSchema).min(1).max(10),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "Passwords don't match",
+    path: ["confirmPassword"],
+  });
+
 type ParentRegistrationForm = z.infer<typeof parentRegistrationSchema>;
+
+const defaultChildValues = (): ParentRegistrationForm["children"][number] => ({
+  firstName: "",
+  lastName: "",
+  birthdate: "",
+  gradeLevel: "",
+  gender: "",
+});
 
 interface School {
   id: number;
@@ -48,7 +89,6 @@ export default function RegistrationLandingPage() {
   const [school, setSchool] = useState<School | null>(null);
   const [loading, setLoading] = useState(!!code);
   const { toast } = useToast();
-  const { signIn } = useAuth();
 
   const form = useForm<ParentRegistrationForm>({
     resolver: zodResolver(parentRegistrationSchema),
@@ -59,53 +99,75 @@ export default function RegistrationLandingPage() {
       password: "",
       confirmPassword: "",
       phone: "",
-      location: ""
-    }
-  });
-
-  // Fetch school locations (using public endpoint - no auth required for registration)
-  const { data: locationsData, isLoading: locationsLoading } = useQuery({
-    queryKey: ['/api/locations/public', school?.id],
-    queryFn: async () => {
-      if (!school?.id) return null;
-      const response = await apiRequest("GET", `/api/locations/public?schoolId=${school.id}`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch locations');
-      }
-      const data = await response.json();
-      return data;
+      location: "",
+      children: [defaultChildValues()],
     },
-    enabled: !!school?.id
   });
 
-  const locations = locationsData || [];
+  const { fields: childFields, append: appendChild, remove: removeChild } = useFieldArray({
+    control: form.control,
+    name: "children",
+  });
+  // Fetch school locations (using public endpoint - no auth required for registration)
+  const {
+    data: locationsData,
+    isLoading: locationsLoading,
+    isError: locationsError,
+    error: locationsErrorDetail,
+  } = useQuery({
+    queryKey: [PUBLIC_REGISTRATION_LOCATIONS_PATH, school?.id],
+    queryFn: async () => {
+      if (!school?.id) return [];
+      return fetchPublicRegistrationJson<{ id: number; name: string }[]>(
+        `${PUBLIC_REGISTRATION_LOCATIONS_PATH}?schoolId=${school.id}`,
+      );
+    },
+    enabled: !!school?.id,
+    retry: 1,
+  });
+
+  const locations = locationsData ?? [];
 
   // Fetch school data if accessed with a registration code
   useEffect(() => {
     if (code) {
       const fetchSchool = async () => {
         try {
-          const response = await apiRequest("GET", `/api/schools/by-code/${code}`);
-          
+          const response = await fetchPublicRegistration(`/api/schools/by-code/${code}`);
+
           if (response.ok) {
             const schoolData = await response.json();
             setSchool(schoolData);
           } else {
+            let title = response.status === 403 ? "Registration unavailable" : "School Not Found";
+            let description = "Invalid registration code. Ask your school admin for a new link.";
+            try {
+              const errorData = await response.json();
+              if (errorData?.message) {
+                description = errorData.message;
+              }
+              if (response.status >= 500) {
+                title = "Server error";
+                description =
+                  errorData?.message ||
+                  "Could not load school information. Ask your admin to run the F001 schema migration or restart the app.";
+              }
+            } catch {
+              /* ignore */
+            }
             toast({
-              title: "School Not Found",
-              description: "Invalid registration code",
-              variant: "destructive"
+              title,
+              description,
+              variant: "destructive",
             });
-            setLocation("/");
           }
         } catch (err) {
           console.error("Error fetching school:", err);
           toast({
             title: "Error",
-            description: "Failed to load school information",
-            variant: "destructive"
+            description: "Failed to load school information. Please try again.",
+            variant: "destructive",
           });
-          setLocation("/");
         } finally {
           setLoading(false);
         }
@@ -124,106 +186,111 @@ export default function RegistrationLandingPage() {
 
   const onSubmit = async (data: ParentRegistrationForm) => {
     try {
-      // Create the user account directly via API with required fields
-      const response = await apiRequest('POST', '/api/auth/register', {
+      const childrenPayload: RegistrationSignupChildInput[] = data.children.map(
+        (c) => ({
+          firstName: c.firstName.trim(),
+          lastName: c.lastName.trim(),
+          birthdate: c.birthdate,
+          gradeLevel: c.gradeLevel,
+          ...(c.gender && c.gender.trim() ? { gender: c.gender.trim() } : {}),
+        })
+      );
+
+      if (!school?.id || !school.registrationCode) {
+        throw new Error("School registration code is required.");
+      }
+
+      const result = await registerParentWithChildren({
         email: data.email,
-        password: data.password, // Use the password provided by the user
-        username: data.email, // Use email as username
-        name: `${data.parentFirstName} ${data.parentLastName}`, // Combined name
-        firstName: data.parentFirstName,
-        lastName: data.parentLastName,
+        password: data.password,
+        parentFirstName: data.parentFirstName,
+        parentLastName: data.parentLastName,
         phone: data.phone,
         location: data.location,
-        role: 'parent',
-        schoolId: school?.id || null,
-        registrationCode: school?.registrationCode || null
+        schoolId: school.id,
+        registrationCode: school.registrationCode,
+        children: childrenPayload,
       });
 
-      if (response.ok) {
-        const result = await response.json();
-        
-        toast({
-          title: "Account Created Successfully!",
-          description: "Signing you in and redirecting to your dashboard...",
-        });
+      const childCount = result.createdChildren?.length ?? 0;
 
-        // Since backend already created user in both systems, just sign them in
-        try {
-          // Import Supabase client
-          const { createClient } = await import('@supabase/supabase-js');
-          const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-          const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-          
-          if (supabaseUrl && supabaseAnonKey) {
-            const supabase = createClient(supabaseUrl, supabaseAnonKey);
-            
-            // Sign in the user that was just created by the backend
-            const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+      toast({
+        title: "Account Created Successfully!",
+        description: "Signing you in and redirecting to your dashboard...",
+      });
+
+      try {
+        const { createClient } = await import("@supabase/supabase-js");
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+        if (supabaseUrl && supabaseAnonKey) {
+          const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+          const { data: signInData, error: signInError } =
+            await supabase.auth.signInWithPassword({
               email: data.email,
-              password: data.password
+              password: data.password,
             });
-            
-            if (signInData?.user && !signInError) {
-              // Store registration context for the dashboard
-              sessionStorage.setItem('newParentRegistration', JSON.stringify({
+
+          if (signInData?.user && !signInError) {
+            sessionStorage.setItem(
+              "newParentRegistration",
+              JSON.stringify({
                 schoolCode: code,
                 schoolName: school?.name,
-                registrationCompleted: true
-              }));
-              
-              toast({
-                title: "Welcome to American Seekers Academy!",
-                description: "Registration successful! Redirecting to your dashboard...",
-              });
-              
-              // Redirect to dashboard where they can register children
-              setTimeout(() => {
-                setLocation('/dashboard');
-              }, 1500);
-            } else {
-              throw new Error(signInError?.message || 'Sign in failed');
-            }
+                registrationCompleted: true,
+                childrenRegisteredCount: childCount,
+              }),
+            );
+
+            toast({
+              title: "Welcome to American Seekers Academy!",
+              description:
+                childCount > 0
+                  ? `Your profile and ${childCount} student profile${childCount === 1 ? "" : "s"} are saved. Heading to your dashboard…`
+                  : "Registration successful! Redirecting to your dashboard...",
+            });
+
+            setTimeout(() => {
+              setLocation("/dashboard");
+            }, 1500);
           } else {
-            throw new Error('Authentication system not available');
+            throw new Error(signInError?.message || "Sign in failed");
           }
-        } catch (authError) {
-          console.error('Auto sign-in failed:', authError);
-          // Fallback to manual login
-          toast({
-            title: "Account Created Successfully!",
-            description: "Please sign in with your new account to continue.",
-          });
-          setLocation('/login');
+        } else {
+          throw new Error("Authentication system not available");
         }
-      } else {
-        const errorData = await response.json();
-        
-        // Handle existing account scenario
-        if (
-          response.status === 400 &&
-          (errorData.message?.includes('already exists') ||
-            errorData.message?.includes('already registered'))
-        ) {
-          toast({
-            title: "Account Already Exists",
-            description: "An account with this email already exists. Redirecting to login...",
-            variant: "destructive"
-          });
-          setTimeout(() => {
-            setLocation('/login');
-          }, 2000);
-          return;
-        }
-        
-        throw new Error(errorData.message || 'Registration failed');
+      } catch (authError) {
+        console.error("Auto sign-in failed:", authError);
+        toast({
+          title: "Account Created Successfully!",
+          description: "Please sign in with your new account to continue.",
+        });
+        setLocation("/login");
       }
-      
     } catch (error) {
       console.error("Registration error:", error);
+      const message =
+        error instanceof Error ? error.message : "Something went wrong. Please try again.";
+
+      if (
+        message.includes("already exists") ||
+        message.includes("already registered")
+      ) {
+        toast({
+          title: "Account Already Exists",
+          description: "An account with this email already exists. Redirecting to login...",
+          variant: "destructive",
+        });
+        setTimeout(() => setLocation("/login"), 2000);
+        return;
+      }
+
       toast({
         title: "Registration Error",
-        description: error instanceof Error ? error.message : "Something went wrong. Please try again.",
-        variant: "destructive"
+        description: message,
+        variant: "destructive",
       });
     }
   };
@@ -235,6 +302,29 @@ export default function RegistrationLandingPage() {
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
           <p className="text-muted-foreground">Loading registration form...</p>
         </div>
+      </div>
+    );
+  }
+
+  if (code && !school) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <Card className="max-w-md w-full">
+          <CardHeader>
+            <CardTitle>Registration link not found</CardTitle>
+            <CardDescription>
+              Code <span className="font-mono font-semibold">{code}</span> is not in our system yet.
+              If your school was just set up, the admin should open <strong>My School</strong> once
+              to refresh the registration code, then send you the updated link.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-2">
+            <Button onClick={() => setLocation("/register")}>Enter a different code</Button>
+            <Button variant="outline" onClick={() => setLocation("/login")}>
+              Sign in
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -296,7 +386,7 @@ export default function RegistrationLandingPage() {
           <CardHeader>
             <CardTitle>Parent Registration</CardTitle>
             <CardDescription>
-              Enter your information to create your account. You'll be able to add your children and enroll them in classes from your dashboard.
+              Create your guardian account and add your student profiles in one step. Your preferred campus is used for placement and session enrollment.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -309,9 +399,13 @@ export default function RegistrationLandingPage() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>First Name</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Jane" {...field} />
-                        </FormControl>
+                          <FormControl>
+                            <Input
+                              placeholder="Jane"
+                              data-testid="registration-parent-first-name"
+                              {...field}
+                            />
+                          </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -338,7 +432,12 @@ export default function RegistrationLandingPage() {
                     <FormItem>
                       <FormLabel>Email Address</FormLabel>
                       <FormControl>
-                        <Input type="email" placeholder="jane.doe@example.com" {...field} />
+                        <Input
+                          type="email"
+                          placeholder="jane.doe@example.com"
+                          data-testid="registration-email"
+                          {...field}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -352,9 +451,14 @@ export default function RegistrationLandingPage() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Password</FormLabel>
-                        <FormControl>
-                          <Input type="password" placeholder="Enter a secure password" {...field} />
-                        </FormControl>
+                          <FormControl>
+                            <Input
+                              type="password"
+                              placeholder="Enter a secure password"
+                              data-testid="registration-password"
+                              {...field}
+                            />
+                          </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -394,23 +498,37 @@ export default function RegistrationLandingPage() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Preferred Location</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <Select
+                          onValueChange={field.onChange}
+                          value={field.value || undefined}
+                        >
                           <FormControl>
-                            <SelectTrigger style={{ fontSize: '16px' }}>
+                            <SelectTrigger
+                              style={{ fontSize: '16px' }}
+                              data-testid="registration-location-select"
+                            >
                               <SelectValue placeholder="Select location" />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
                             {locationsLoading ? (
                               <SelectItem value="_loading" disabled>Loading locations…</SelectItem>
+                            ) : locationsError ? (
+                              <SelectItem value="_error" disabled>
+                                {locationsErrorDetail instanceof Error
+                                  ? locationsErrorDetail.message
+                                  : "Could not load locations"}
+                              </SelectItem>
                             ) : locations.length > 0 ? (
-                              locations.map((location: any) => (
+                              locations.map((location: { id: number; name: string }) => (
                                 <SelectItem key={location.id} value={location.id.toString()}>
                                   {location.name}
                                 </SelectItem>
                               ))
                             ) : (
-                              <SelectItem value="1">Brighton</SelectItem>
+                              <SelectItem value="_none" disabled>
+                                No campuses configured — contact your school
+                              </SelectItem>
                             )}
                           </SelectContent>
                         </Select>
@@ -420,27 +538,185 @@ export default function RegistrationLandingPage() {
                   />
                 </div>
 
+                <div className="space-y-4 border-t pt-6">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div>
+                      <h3 className="text-lg font-semibold text-foreground">Student profiles</h3>
+                      <p className="text-sm text-muted-foreground">
+                        Add each child you plan to enroll. You can register more students later from your dashboard.
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="shrink-0"
+                      disabled={childFields.length >= 10}
+                      onClick={() => appendChild(defaultChildValues())}
+                    >
+                      <PlusCircle className="h-4 w-4 mr-2" />
+                      Add another student
+                    </Button>
+                  </div>
+
+                  {childFields.map((fieldRow, index) => (
+                    <div
+                      key={fieldRow.id}
+                      className="rounded-lg border border-border bg-muted/30 p-4 space-y-4"
+                    >
+                      <div className="flex justify-between items-center gap-2">
+                        <span className="font-medium text-sm text-foreground">
+                          Student {index + 1}
+                        </span>
+                        {childFields.length > 1 ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="text-destructive hover:text-destructive"
+                            onClick={() => removeChild(index)}
+                          >
+                            <Trash2 className="h-4 w-4 mr-1" />
+                            Remove
+                          </Button>
+                        ) : null}
+                      </div>
+
+                      <div className="grid md:grid-cols-2 gap-4">
+                        <FormField
+                          control={form.control}
+                          name={`children.${index}.firstName`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>First name</FormLabel>
+                              <FormControl>
+                                <Input
+                                  placeholder="First name"
+                                  data-testid={
+                                    index === 0 ? "registration-child-0-first-name" : undefined
+                                  }
+                                  {...field}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name={`children.${index}.lastName`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Last name</FormLabel>
+                              <FormControl>
+                                <Input placeholder="Last name" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+
+                      <div className="grid md:grid-cols-2 gap-4">
+                        <FormField
+                          control={form.control}
+                          name={`children.${index}.birthdate`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Birthdate</FormLabel>
+                              <FormControl>
+                                <Input type="date" {...field} />
+                              </FormControl>
+                              <FormDescription className="text-xs">
+                                Date of birth
+                              </FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name={`children.${index}.gradeLevel`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Grade level</FormLabel>
+                              <Select
+                                onValueChange={field.onChange}
+                                value={field.value || undefined}
+                              >
+                                <FormControl>
+                                  <SelectTrigger
+                                    data-testid={
+                                      index === 0 ? "registration-child-0-grade" : undefined
+                                    }
+                                  >
+                                    <SelectValue placeholder="Select grade" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {signupChildGradeOptions.map((g) => (
+                                    <SelectItem key={g} value={g}>
+                                      {g}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+
+                      <FormField
+                        control={form.control}
+                        name={`children.${index}.gender`}
+                        render={({ field }) => (
+                          <FormItem className="max-w-xs">
+                            <FormLabel>Gender (optional)</FormLabel>
+                            <Select
+                              onValueChange={field.onChange}
+                              value={field.value || undefined}
+                            >
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Prefer not to say" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="male">Male</SelectItem>
+                                <SelectItem value="female">Female</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  ))}
+                </div>
+
 
 
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                  <h3 className="font-semibold text-blue-900 mb-2">Next Steps</h3>
+                  <h3 className="font-semibold text-blue-900 mb-2">After you submit</h3>
                   <p className="text-blue-700 text-sm">
-                    After creating your account, you'll be taken to your dashboard where you can:
+                    We&apos;ll take you straight to your parent dashboard where you can:
                   </p>
                   <ul className="text-blue-700 text-sm mt-2 space-y-1">
-                    <li>• Add your children's information</li>
-                    <li>• Browse available classes</li>
-                    <li>• Enroll your children in programs</li>
-                    <li>• Manage payments and schedules</li>
+                    <li>• Add emergency contacts when you&apos;re ready</li>
+                    <li>• Browse classes and session enrollment</li>
+                    <li>• Manage cart, payments, and schedules</li>
                   </ul>
                 </div>
 
-                <Button 
-                  type="submit" 
-                  className="w-full" 
+                <Button
+                  type="submit"
+                  className="w-full"
                   size="lg"
+                  disabled={form.formState.isSubmitting}
+                  data-testid="registration-submit"
                 >
-                  Create Account & Continue to Dashboard
+                  Create account &amp; student profiles
                 </Button>
               </form>
             </Form>

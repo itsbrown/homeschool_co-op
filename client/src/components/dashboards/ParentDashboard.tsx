@@ -276,6 +276,7 @@ export default function ParentDashboard() {
         className: enrollment.className || enrollment.program?.title || "Program",
         classId: enrollment.classId ?? null,
         marketplaceClassId: enrollment.marketplaceClassId ?? null,
+        sessionId: enrollment.sessionId ?? enrollment.session_id ?? null,
         classType: enrollment.classType || "school_class",
         effectiveBalance: balance,
         variantId: enrollment.variantId,
@@ -460,15 +461,22 @@ export default function ParentDashboard() {
       try {
         const registrationInfo = JSON.parse(newRegistrationData);
         if (registrationInfo.registrationCompleted) {
+          const childCount =
+            typeof registrationInfo.childrenRegisteredCount === "number"
+              ? registrationInfo.childrenRegisteredCount
+              : 0;
           toast({
             title: "Welcome to American Seekers Academy!",
-            description: `Registration successful for ${registrationInfo.schoolName || 'your school'}. Next step: Register your children to start enrolling in classes.`,
+            description:
+              childCount > 0
+                ? `You're set for ${registrationInfo.schoolName || "your school"}. We saved ${childCount} student profile${childCount === 1 ? "" : "s"}—browse classes or session enrollment anytime.`
+                : `Registration successful for ${registrationInfo.schoolName || "your school"}. Next step: Register your children to start enrolling in classes.`,
           });
-          
+
           // Clear the registration flag
           sessionStorage.removeItem('newParentRegistration');
           
-          // Optionally show the children tab after a delay
+          // Optionally show the children tab after a delay — especially useful if no students were onboarded inline
           setTimeout(() => {
             setActiveTab("children");
           }, 3000);

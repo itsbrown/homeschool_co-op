@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from '@jest/globals';
+import { describeIntegration } from '../../helpers/integrationDb';
 import request from 'supertest';
 import express from 'express';
 import session from 'express-session';
@@ -72,7 +73,7 @@ app.use('/api/test', testRouter);
  * - Query gating on activeRole === 'parent'
  */
 
-describe('Phase 3: TanStack Query Cart Cache', () => {
+describeIntegration('Phase 3: TanStack Query Cart Cache', () => {
   let db: TestDatabase;
   let parentUser: any;
   let school: any;

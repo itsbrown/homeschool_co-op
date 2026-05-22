@@ -1,4 +1,5 @@
 import { beforeAll, beforeEach, afterAll, describe, expect, it, jest } from '@jest/globals';
+import { describeIntegration } from '../../helpers/integrationDb';
 import express from 'express';
 import request from 'supertest';
 import { testDb } from '../../helpers/testDatabase';
@@ -23,7 +24,7 @@ jest.mock('@supabase/supabase-js', () => ({
   })),
 }));
 
-describe('Integration: Billing canonical amount enforcement', () => {
+describeIntegration('Integration: Billing canonical amount enforcement', () => {
   let app: express.Express;
   let parent: any;
   let school: any;

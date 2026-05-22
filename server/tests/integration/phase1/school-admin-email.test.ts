@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, jest } from '@jest/globals';
+import { describeIntegration } from '../../helpers/integrationDb';
 import { testDb } from '../../helpers/testDatabase';
 import { api } from '../../helpers/apiHelpers';
 import { resetAllMocks, mockBrevoService } from '../../helpers/mockServices';
@@ -24,7 +25,7 @@ const mockSendWelcomeEmail = sendWelcomeEmail as jest.MockedFunction<typeof send
  * - Error handling
  */
 
-describe('Integration: School Admin Email Management', () => {
+describeIntegration('Integration: School Admin Email Management', () => {
   let schoolAdmin: User;
   let school: any;
   let parentUser: User;

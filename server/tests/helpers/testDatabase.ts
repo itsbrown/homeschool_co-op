@@ -180,6 +180,26 @@ export function installFinancialIntegrationStubs(): void {
  * alone is not enough — without this, `createUser` fails with "already exists"
  * across tests and suites.
  */
+function isSafeDatabaseUrlForTestTruncate(url: string): boolean {
+  if (process.env.ALLOW_TEST_TRUNCATE === '1') {
+    return true;
+  }
+  try {
+    const parsed = new URL(url.replace(/^postgres(ql)?:\/\//, 'postgresql://'));
+    const dbName = (parsed.pathname || '').replace(/^\//, '').split('?')[0] || '';
+    const host = (parsed.hostname || '').toLowerCase();
+    if (dbName.includes('test') || dbName.endsWith('_test')) {
+      return true;
+    }
+    if (host.includes('test') || host.includes('localhost') || host === '127.0.0.1') {
+      return true;
+    }
+  } catch {
+    return false;
+  }
+  return false;
+}
+
 async function truncatePostgresPublicTablesForTests(): Promise<void> {
   if (process.env.NODE_ENV !== 'test') {
     return;
@@ -188,6 +208,14 @@ async function truncatePostgresPublicTablesForTests(): Promise<void> {
     process.env.DATABASE_URL ||
     process.env.TEST_DATABASE_URL ||
     'postgresql://test:test@localhost:5432/asa_test';
+
+  if (!isSafeDatabaseUrlForTestTruncate(url)) {
+    console.warn(
+      '[TestDatabase] Skipping TRUNCATE — DATABASE_URL does not look like a dedicated test database. ' +
+        'Use TEST_DATABASE_URL=.../asa_test or set ALLOW_TEST_TRUNCATE=1 to override.',
+    );
+    return;
+  }
 
   // Use a short-lived client so TRUNCATE does not disturb the shared getDb() pool.
   let client: import('postgres').Sql | undefined;

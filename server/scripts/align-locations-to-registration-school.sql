@@ -1,0 +1,12 @@
+-- Move active locations onto the school that owns a registration code.
+-- Edit @target_school_id and @source_school_id after running diagnose-location-school-alignment.mjs
+--
+-- Example (ASA: code on school 3, locations stuck on school 1):
+--   UPDATE locations SET school_id = 3 WHERE school_id = 1 AND is_active = true;
+--
+-- Remove orphan "Main Campus" auto-seeded on the wrong school if you re-seed real campuses:
+--   DELETE FROM locations WHERE school_id = 3 AND name = 'Main Campus' AND code = 'MAIN';
+
+-- BEGIN;
+-- UPDATE locations SET school_id = :target WHERE school_id = :source;
+-- COMMIT;

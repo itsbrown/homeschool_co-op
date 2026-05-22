@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, jest } from '@jest/globals';
+import { describeIntegration } from '../helpers/integrationDb';
 import { testDb } from '../helpers/testDatabase';
 import { api } from '../helpers/apiHelpers';
 import { resetAllMocks } from '../helpers/mockServices';
@@ -28,7 +29,7 @@ jest.mock('../../config/stripe', () => {
  * - Error handling
  */
 
-describe('Integration: Stripe Account Lookup', () => {
+describeIntegration('Integration: Stripe Account Lookup', () => {
   let testUser: any;
   let testSchool: any;
 
