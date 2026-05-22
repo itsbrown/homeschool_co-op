@@ -463,10 +463,16 @@ expect(response.body).toBeDefined();
 ## CI/CD Integration
 
 Tests are automatically run in CI on every push to `main` and every pull
-request via `.github/workflows/tests.yml`. The single `tests` job boots the
-dev server, then runs the full `npm test` script (server integration suite +
-client jsdom suite). The earlier `integration-tests.yml` workflow has been
-removed — `tests.yml` is now the canonical entry point.
+request via `.github/workflows/tests.yml`. The `tests` job:
+
+1. Pushes schema to `asa_test` and verifies core + F001 tables
+2. Runs **production-path** server integration (`--testPathPatterns=production-path`)
+3. Boots the dev server (smoke: bundle + listen on :5000)
+4. Runs **client jsdom** tests (`npm run test:client`)
+
+Payment-heavy server integration (`test:server` full suite, 700+ tests) and
+Playwright E2E run in separate workflows (`Payments CI`, `E2E`). Locally:
+`npm test` still runs client + full server integration in series.
 
 ## Payment-Flow Regression Harness
 

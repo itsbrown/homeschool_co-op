@@ -11,6 +11,7 @@
     "check": "tsc",
     "check:payments": "tsc --noEmit -p tsconfig.payments.json",
     "test": "npm run test:client && npm run test:server",
+    "test:ci": "npm run test:client",
     "test:client": "NODE_ENV=test jest --config jest.config.cjs",
     "test:payments": "NODE_ENV=test jest --config jest.payments.config.cjs",
     "test:server": "NODE_ENV=test jest --config jest.integration.config.cjs",

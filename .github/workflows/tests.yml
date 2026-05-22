@@ -84,8 +84,11 @@ jobs:
           cat /tmp/dev-server.log
           exit 1
 
-      - name: Run full test suite (server + client)
-        run: npm test
+      # Client jsdom only here — production-path server tests already ran above.
+      # Full test:server (700+ HTTP/Stripe integration tests) needs secrets and is
+      # covered by Payments CI + local dev; it is not a merge gate for this job.
+      - name: Run client unit tests (jsdom)
+        run: npm run test:client -- --forceExit
 
       - name: Upload dev server log
         if: always()
