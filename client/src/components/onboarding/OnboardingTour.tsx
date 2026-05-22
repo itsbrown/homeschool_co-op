@@ -1,7 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { X, ChevronLeft, ChevronRight, CheckCircle, AlertCircle } from "lucide-react";
+
+const TOUR_OVERLAY_Z = 10050;
+const TOUR_TOOLTIP_Z = 10051;
 
 export interface TourStep {
   target: string;
@@ -102,20 +106,29 @@ export default function OnboardingTour({
   const currentStepData = steps[currentStep];
   const isLastStep = currentStep === steps.length - 1;
   const isFirstStep = currentStep === 0;
+  const isCentered =
+    currentStepData?.placement === "center" || currentStepData?.target === "body";
 
   // Reset to first step whenever tour opens
   useEffect(() => {
     if (isOpen) {
       setCurrentStep(0);
+      window.scrollTo({ top: 0, behavior: "auto" });
     }
   }, [isOpen]);
 
+  // Lock page scroll while tour is active
+  useEffect(() => {
+    if (!isOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isOpen]);
+
   const calculatePosition = useCallback(() => {
-    if (!currentStepData || currentStepData.placement === "center") {
-      setTooltipPosition({
-        top: window.innerHeight / 2 - 150,
-        left: window.innerWidth / 2 - 200,
-      });
+    if (!currentStepData || isCentered) {
       return;
     }
 
@@ -163,15 +176,15 @@ export default function OnboardingTour({
     setTooltipPosition({ top, left });
 
     target.scrollIntoView({ behavior: "smooth", block: "center" });
-  }, [currentStepData]);
+  }, [currentStepData, isCentered]);
 
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !isCentered) {
       calculatePosition();
       window.addEventListener("resize", calculatePosition);
       return () => window.removeEventListener("resize", calculatePosition);
     }
-  }, [isOpen, currentStep, calculatePosition]);
+  }, [isOpen, currentStep, calculatePosition, isCentered]);
 
   const handleNext = () => {
     if (isLastStep) {
@@ -193,119 +206,173 @@ export default function OnboardingTour({
 
   if (!isOpen) return null;
 
-  return (
-    <>
-      <div
-        className="fixed inset-0 bg-black/50 z-[9998]"
-        onClick={handleSkip}
-        data-testid="tour-overlay"
-      />
+  const tourTooltip = (
+    <Card
+      className={`w-[400px] max-w-[90vw] shadow-2xl animate-in fade-in-0 zoom-in-95 ${
+        isCentered ? "relative" : "fixed"
+      }`}
+      style={
+        isCentered
+          ? undefined
+          : {
+              top: tooltipPosition.top,
+              left: tooltipPosition.left,
+              zIndex: TOUR_TOOLTIP_Z,
+            }
+      }
+      data-testid="tour-tooltip"
+    >
+      <CardHeader className="pb-3">
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-2">
+            {currentStepData?.isImportant && (
+              <AlertCircle className="h-5 w-5 text-amber-500" />
+            )}
+            <CardTitle className="text-lg">{currentStepData?.title}</CardTitle>
+          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 -mr-2 -mt-2"
+            onClick={handleSkip}
+            data-testid="tour-close"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <p
+          className={`text-sm text-muted-foreground ${
+            currentStepData?.isImportant
+              ? "font-medium text-amber-700 dark:text-amber-400"
+              : ""
+          }`}
+        >
+          {currentStepData?.content}
+        </p>
+      </CardContent>
+      <CardFooter className="flex justify-between pt-2">
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">
+            Step {currentStep + 1} of {steps.length}
+          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleSkip}
+            className="text-xs"
+            data-testid="tour-skip"
+          >
+            Skip Tour
+          </Button>
+        </div>
+        <div className="flex gap-2">
+          {!isFirstStep && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handlePrevious}
+              data-testid="tour-previous"
+            >
+              <ChevronLeft className="h-4 w-4 mr-1" />
+              Back
+            </Button>
+          )}
+          <Button size="sm" onClick={handleNext} data-testid="tour-next">
+            {isLastStep ? (
+              <>
+                <CheckCircle className="h-4 w-4 mr-1" />
+                Finish
+              </>
+            ) : (
+              <>
+                Next
+                <ChevronRight className="h-4 w-4 ml-1" />
+              </>
+            )}
+          </Button>
+        </div>
+      </CardFooter>
 
-      {currentStepData?.highlight && currentStepData.target !== "body" && (
-        <HighlightElement target={currentStepData.target} onElementClick={handleNext} />
+      <div className="px-6 pb-4">
+        <div className="flex gap-1 justify-center">
+          {steps.map((_, index) => (
+            <div
+              key={index}
+              className={`h-1.5 rounded-full transition-all ${
+                index === currentStep
+                  ? "w-6 bg-primary"
+                  : index < currentStep
+                  ? "w-1.5 bg-primary/60"
+                  : "w-1.5 bg-muted"
+              }`}
+            />
+          ))}
+        </div>
+      </div>
+    </Card>
+  );
+
+  const tourContent = isCentered ? (
+    <div
+      className="fixed inset-0 flex items-center justify-center p-4 bg-black/70"
+      style={{ zIndex: TOUR_OVERLAY_Z }}
+      onClick={handleSkip}
+      data-testid="tour-overlay"
+    >
+      <div
+        className="w-full max-w-[400px]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {tourTooltip}
+      </div>
+    </div>
+  ) : (
+    <>
+      {currentStepData?.highlight && currentStepData.target !== "body" ? (
+        <>
+          <div
+            className="fixed inset-0"
+            style={{ zIndex: TOUR_OVERLAY_Z }}
+            onClick={handleSkip}
+            data-testid="tour-overlay"
+            aria-hidden
+          />
+          <HighlightElement
+            target={currentStepData.target}
+            onElementClick={handleNext}
+            overlayZIndex={TOUR_OVERLAY_Z + 1}
+            clickZIndex={TOUR_TOOLTIP_Z}
+          />
+        </>
+      ) : (
+        <div
+          className="fixed inset-0 bg-black/60"
+          style={{ zIndex: TOUR_OVERLAY_Z }}
+          onClick={handleSkip}
+          data-testid="tour-overlay"
+        />
       )}
 
-      <Card
-        className="fixed z-[9999] w-[400px] max-w-[90vw] shadow-2xl animate-in fade-in-0 zoom-in-95"
-        style={{
-          top: tooltipPosition.top,
-          left: tooltipPosition.left,
-        }}
-        data-testid="tour-tooltip"
-      >
-        <CardHeader className="pb-3">
-          <div className="flex items-start justify-between">
-            <div className="flex items-center gap-2">
-              {currentStepData?.isImportant && (
-                <AlertCircle className="h-5 w-5 text-amber-500" />
-              )}
-              <CardTitle className="text-lg">{currentStepData?.title}</CardTitle>
-            </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 -mr-2 -mt-2"
-              onClick={handleSkip}
-              data-testid="tour-close"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <p className={`text-sm text-muted-foreground ${currentStepData?.isImportant ? 'font-medium text-amber-700 dark:text-amber-400' : ''}`}>
-            {currentStepData?.content}
-          </p>
-        </CardContent>
-        <CardFooter className="flex justify-between pt-2">
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">
-              Step {currentStep + 1} of {steps.length}
-            </span>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleSkip}
-              className="text-xs"
-              data-testid="tour-skip"
-            >
-              Skip Tour
-            </Button>
-          </div>
-          <div className="flex gap-2">
-            {!isFirstStep && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handlePrevious}
-                data-testid="tour-previous"
-              >
-                <ChevronLeft className="h-4 w-4 mr-1" />
-                Back
-              </Button>
-            )}
-            <Button
-              size="sm"
-              onClick={handleNext}
-              data-testid="tour-next"
-            >
-              {isLastStep ? (
-                <>
-                  <CheckCircle className="h-4 w-4 mr-1" />
-                  Finish
-                </>
-              ) : (
-                <>
-                  Next
-                  <ChevronRight className="h-4 w-4 ml-1" />
-                </>
-              )}
-            </Button>
-          </div>
-        </CardFooter>
-
-        <div className="px-6 pb-4">
-          <div className="flex gap-1 justify-center">
-            {steps.map((_, index) => (
-              <div
-                key={index}
-                className={`h-1.5 rounded-full transition-all ${
-                  index === currentStep
-                    ? "w-6 bg-primary"
-                    : index < currentStep
-                    ? "w-1.5 bg-primary/60"
-                    : "w-1.5 bg-muted"
-                }`}
-              />
-            ))}
-          </div>
-        </div>
-      </Card>
+      {tourTooltip}
     </>
   );
+
+  return createPortal(tourContent, document.body);
 }
 
-function HighlightElement({ target, onElementClick }: { target: string; onElementClick?: () => void }) {
+function HighlightElement({
+  target,
+  onElementClick,
+  overlayZIndex,
+  clickZIndex,
+}: {
+  target: string;
+  onElementClick?: () => void;
+  overlayZIndex: number;
+  clickZIndex: number;
+}) {
   const [rect, setRect] = useState<DOMRect | null>(null);
 
   useEffect(() => {
@@ -327,20 +394,22 @@ function HighlightElement({ target, onElementClick }: { target: string; onElemen
   return (
     <>
       <div
-        className="fixed z-[9998] pointer-events-none"
+        className="fixed pointer-events-none"
         style={{
+          zIndex: overlayZIndex,
           top: rect.top - 8,
           left: rect.left - 8,
           width: rect.width + 16,
           height: rect.height + 16,
-          boxShadow: "0 0 0 9999px rgba(0, 0, 0, 0.5)",
+          boxShadow: "0 0 0 9999px rgba(0, 0, 0, 0.6)",
           borderRadius: "8px",
           border: "2px solid hsl(var(--primary))",
         }}
       />
       <div
-        className="fixed z-[9999] cursor-pointer"
+        className="fixed cursor-pointer"
         style={{
+          zIndex: clickZIndex,
           top: rect.top,
           left: rect.left,
           width: rect.width,
