@@ -27,11 +27,39 @@ describe("enrollment-cart-eligibility", () => {
     ).toBe(true);
   });
 
+  it("excludes v2_stripe_simplified and metadata-only paymentPlan", () => {
+    expect(
+      enrollmentShouldExcludeFromCart({
+        id: 12,
+        paymentSystemVersion: "v2_stripe_simplified",
+        totalPaid: 100,
+        metadata: { paymentPlan: "biweekly" },
+        status: "enrolled",
+        paymentStatus: "partial_payment",
+      }),
+    ).toBe(true);
+  });
+
+  it("excludes when scheduled row metadata lists multiple enrollmentIds", () => {
+    expect(
+      enrollmentShouldExcludeFromCart(
+        { id: 99, paymentPlan: null, totalPaid: 0 },
+        [
+          {
+            enrollmentId: 1,
+            status: "pending",
+            metadata: { enrollmentIds: [1, 99, 100] },
+          },
+        ],
+      ),
+    ).toBe(true);
+  });
+
   it("allows pending_payment with no plan and no schedule", () => {
     expect(
       enrollmentShouldExcludeFromCart(
         {
-          id: 12,
+          id: 13,
           status: "pending_payment",
           paymentPlan: null,
           totalCost: 100000,

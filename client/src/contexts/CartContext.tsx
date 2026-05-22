@@ -1710,22 +1710,29 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     // Use user-specific storage key to prevent cross-account data leakage
     const cartKey = getCartStorageKey(user?.email);
-    
-    // Don't save empty cart if localStorage has items (prevents overriding valid cart during navigation)
+    if (!cartKey) return;
+
+    // API hydration decided cart is empty (e.g. enrollments on payment plan) — clear stale cache
+    if (state.cartHydrated && state.cart.items.length === 0) {
+      localStorage.removeItem(cartKey);
+      return;
+    }
+
+    // Before hydration, don't wipe a cached cart while enrollments query is still loading
     const existingCart = localStorage.getItem(cartKey);
-    if (existingCart && state.cart.items.length === 0) {
+    if (!state.cartHydrated && state.cart.items.length === 0 && existingCart) {
       try {
         const parsedExisting = JSON.parse(existingCart);
-        if (parsedExisting.items && parsedExisting.items.length > 0) {
+        if (parsedExisting.items?.length > 0) {
           return;
         }
-      } catch (error) {
-        // Proceed with save if we can't parse existing cart
+      } catch {
+        /* proceed */
       }
     }
 
     localStorage.setItem(cartKey, JSON.stringify(state.cart));
-  }, [state.cart, user?.email]);
+  }, [state.cart, state.cartHydrated, user?.email]);
 
   const addItem = async (item: Omit<CartItem, 'id'>, skipValidation = false) => {
     const newItem: CartItem = {
