@@ -106,7 +106,7 @@ Mandatory lane for school-code signup and campus APIs — **not** covered by pha
 - **Suite**: `server/tests/integration/production-path/*.test.ts`
 - **Harness**: `productionPathApp.ts` (same route mount order as `server/index.ts` for public locations + `/api/locations` + `/api/auth` + `/api/schools`), `describeProductionPath` (fails if `asa_test` unreachable), `supabaseAuthMock.ts` (PR CI), `seedRegistrationScenario.ts`
 - **Run**: `PAYMENT_PROCESSOR_ENABLED=true npm run test:server -- --runInBand --testPathPatterns=production-path`
-- **CI**: `.github/workflows/tests.yml` runs F001 verify + this suite on every PR
+- **CI**: `.github/workflows/tests.yml` — schema verify, production-path, dev smoke, client jsdom (not full `test:server`). See `docs/APP_KNOWLEDGE/domains/ci-and-testing.md`
 - **E2E (real Supabase)**: `e2e/school-code-registration.spec.ts` — seed `POST /api/test/setup-registration-scenario`; skips without real `SUPABASE_SERVICE_ROLE_KEY`
 - **Stabilize**: `node scripts/run-stabilize-checks.mjs` includes production-path when Postgres is available
 
