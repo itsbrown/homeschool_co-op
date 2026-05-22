@@ -69,15 +69,15 @@ export default function SessionEnrollmentPage() {
       return response.json();
     },
     onSuccess: async (data) => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["/api/parent/children"] }),
-        queryClient.invalidateQueries({ queryKey: ["/api/parent/enrollments"] }),
-      ]);
       const count = data.enrollments?.length || 0;
       const skippedCount = data.skipped?.length || 0;
 
       if (count > 0) {
+        // Rebuild cart before navigation so /cart checkout does not briefly see an empty cart
+        // and redirect to /payments (CartCheckout empty-cart guard).
         await refreshCart();
+        await queryClient.invalidateQueries({ queryKey: ["/api/parent/children"] });
+        sessionStorage.setItem("postSessionEnrollmentCheckout", "1");
         toast({
           title: `${count} enrollment(s) added to cart`,
           description: skippedCount > 0 ? `${skippedCount} skipped (already enrolled or no pricing)` : undefined,

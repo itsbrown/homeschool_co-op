@@ -48,11 +48,6 @@ export default function CartDrawer() {
     console.log('🛒 Navigation completed');
   };
 
-  const getUniqueChildrenCount = () => {
-    const uniqueChildren = new Set(cart.items.map(item => item.childId));
-    return uniqueChildren.size;
-  };
-
   const hasDiscounts = cart.discounts.siblingDiscount > 0 || 
                      cart.discounts.freeAfterThree > 0 || 
                      (cart.discounts.appliedDiscounts && cart.discounts.appliedDiscounts.length > 0);
@@ -264,37 +259,6 @@ export default function CartDrawer() {
                   <span>{formatCurrency(cart.total + (cart.membership?.amount || 0))}</span>
                 </div>
               </div>
-
-              {/* Discount Info */}
-              {getUniqueChildrenCount() > 1 && (
-                <div className="bg-green-50 border border-green-200 rounded-lg p-3" data-testid="section-discount-info">
-                  {cart.schoolSettings?.freeAfterThresholdEnabled && 
-                   getUniqueChildrenCount() > cart.schoolSettings.freeAfterThreshold ? (
-                    <p className="text-xs text-green-700" data-testid="text-free-after-active">
-                      <strong>Amazing!</strong> You have {getUniqueChildrenCount()} children enrolled. 
-                      Your {getUniqueChildrenCount() - cart.schoolSettings.freeAfterThreshold} cheapest 
-                      enrollment{getUniqueChildrenCount() - cart.schoolSettings.freeAfterThreshold > 1 ? 's are' : ' is'} FREE!
-                    </p>
-                  ) : (
-                    <>
-                      <p className="text-xs text-green-700" data-testid="text-sibling-discount-active">
-                        <strong>Great!</strong> You're getting a{' '}
-                        {cart.schoolSettings?.siblingDiscountRate != null
-                          ? `${Math.round(Number(cart.schoolSettings.siblingDiscountRate) * 100)}%`
-                          : '10%'}{' '}
-                        sibling discount for enrolling multiple children.
-                      </p>
-                      {cart.schoolSettings?.freeAfterThresholdEnabled && 
-                       getUniqueChildrenCount() >= cart.schoolSettings.freeAfterThreshold && (
-                        <p className="text-xs text-green-700 mt-1" data-testid="text-free-after-coming">
-                          <strong>Bonus:</strong> Enroll {cart.schoolSettings.freeAfterThreshold + 1 - getUniqueChildrenCount()} more 
-                          child{cart.schoolSettings.freeAfterThreshold + 1 - getUniqueChildrenCount() > 1 ? 'ren' : ''} to get your cheapest classes free!
-                        </p>
-                      )}
-                    </>
-                  )}
-                </div>
-              )}
 
               <div className="flex gap-2">
                 <Button

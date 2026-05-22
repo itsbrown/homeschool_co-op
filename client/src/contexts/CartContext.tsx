@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer, useEffect, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useCallback, useRef, useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useQuery } from '@tanstack/react-query';
 import { apiRequest, queryClient } from '@/lib/queryClient';
@@ -1216,6 +1216,7 @@ export const useCart = () => {
 
 export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(cartReducer, initialState);
+  const [isProcessingCart, setIsProcessingCart] = useState(false);
   const { toast } = useToast();
   const { user, isAuthenticated, session, isLoading } = useAuth(); // Using Supabase hooks
   const { activeRole, availableRoles } = useRole(); // Get active role and all user roles
@@ -1431,6 +1432,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     processingRef.current = true;
+    setIsProcessingCart(true);
 
     try {
       const unpaidEnrollments = filterEnrollmentsToCartLineItems(enrollments);
@@ -1611,6 +1613,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       initialMembershipLoadedRef.current = true;
     } finally {
       processingRef.current = false;
+      setIsProcessingCart(false);
     }
   }, [user?.email, getAccessToken, userRolesList, fetchMembershipForCart, state.cart.appliedPromoCode]);
 
@@ -1625,11 +1628,14 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Returns a promise that resolves when refetch completes
   const refreshCart = useCallback(async () => {
     if (user?.email && isAuthenticated && activeRole === 'parent') {
-      console.log('🛒 refreshCart called - awaiting refetch');
-      await refetchEnrollments();
+      console.log('🛒 refreshCart called - refetching enrollments and rebuilding cart');
+      const result = await refetchEnrollments();
+      if (result.data) {
+        await processEnrollmentsData(result.data);
+      }
       console.log('🛒 refreshCart complete - cart data updated');
     }
-  }, [user?.email, isAuthenticated, activeRole, refetchEnrollments]);
+  }, [user?.email, isAuthenticated, activeRole, refetchEnrollments, processEnrollmentsData]);
 
   // Function to refresh discounts for the current cart using server-authoritative pricing
   const refreshDiscounts = useCallback(async () => {
@@ -2101,7 +2107,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     cart: state.cart,
     isOpen: state.isOpen,
     cartHydrated: state.cartHydrated,
-    cartLoading: isFetching, // Expose loading state from TanStack Query
+    cartLoading: isFetching || isProcessingCart,
     addItem,
     removeItem,
     updateItem,

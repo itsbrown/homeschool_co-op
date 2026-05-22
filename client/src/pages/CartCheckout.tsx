@@ -539,16 +539,23 @@ export default function CartCheckout() {
 
     // Cart looks empty: debounce redirect so a refetching window does not send users
     // away from checkout while lines are still loading into state.
+    const expectingCheckoutAfterEnrollment =
+      sessionStorage.getItem("postSessionEnrollmentCheckout") === "1";
+    const redirectDebounceMs = expectingCheckoutAfterEnrollment ? 2500 : 600;
+
     emptyCartRedirectTimerRef.current = setTimeout(() => {
       const g = checkoutGateRef.current;
       const stillEmpty =
         g.hydrated && !g.loading && g.itemCount === 0 && !g.hasMembership;
       if (stillEmpty) {
         console.log('🛒 Cart still empty after debounce — leaving checkout for /payments');
+        sessionStorage.removeItem("postSessionEnrollmentCheckout");
         setLocation('/payments');
+      } else {
+        sessionStorage.removeItem("postSessionEnrollmentCheckout");
       }
       emptyCartRedirectTimerRef.current = null;
-    }, 600);
+    }, redirectDebounceMs);
 
     return () => {
       if (emptyCartRedirectTimerRef.current) {
@@ -1290,11 +1297,6 @@ export default function CartCheckout() {
     }
   };
 
-  const getUniqueChildrenCount = () => {
-    const uniqueChildren = new Set(cart.items.map(item => item.childId));
-    return uniqueChildren.size;
-  };
-
   const hasDiscounts = cart.discounts.siblingDiscount > 0 || 
                     cart.discounts.freeAfterThree > 0 || 
                     (cart.discounts.appliedDiscounts && cart.discounts.appliedDiscounts.length > 0);
@@ -1904,20 +1906,6 @@ export default function CartCheckout() {
               </Card>
             )}
 
-            {/* Discount Info */}
-            {getUniqueChildrenCount() > 1 && (
-              <Alert className="border-green-200 bg-green-50">
-                <Check className="h-4 w-4 text-green-600" />
-                <AlertDescription className="text-green-700">
-                  <strong>Discounts Applied!</strong> You're saving money with our family-friendly pricing.
-                  {getUniqueChildrenCount() >= 4 && (
-                    <span className="block mt-1">
-                      Plus, your 4th child and beyond are free!
-                    </span>
-                  )}
-                </AlertDescription>
-              </Alert>
-            )}
           </div>
 
           {/* Payment Form */}
