@@ -2,13 +2,11 @@ import React, { useState, useEffect, useSyncExternalStore } from "react";
 import { useAuth } from "@/components/SupabaseProvider";
 import { useRole, silentRoleContextUpdate } from "@/contexts/RoleContext";
 import { CartProvider } from "@/contexts/CartContext";
-import { StaffGuideProvider } from "@/contexts/StaffGuideContext";
 import { LayoutShellProvider } from "@/contexts/LayoutShellContext";
 import ParentSidebar from "./ParentSidebar";
 import CartDrawer from "@/components/cart/CartDrawer";
 import CartButton from "@/components/cart/CartButton";
 import RoleSwitcher from "@/components/RoleSwitcher.tsx";
-import StaffGuideModal from "@/components/StaffGuideModal";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetTrigger, SheetClose } from "@/components/ui/sheet";
@@ -188,7 +186,6 @@ export default function ParentAppShell({ children }: ParentAppShellProps) {
 
   return (
     <LayoutShellProvider>
-    <StaffGuideProvider>
     <CartProvider>
       <div className="min-h-screen bg-gray-50">
         {/* Desktop sidebar */}
@@ -549,10 +546,8 @@ export default function ParentAppShell({ children }: ParentAppShellProps) {
         </div>
 
         <CartDrawer />
-        <StaffGuideModal />
       </div>
     </CartProvider>
-    </StaffGuideProvider>
     </LayoutShellProvider>
   );
 }

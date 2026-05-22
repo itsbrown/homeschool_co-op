@@ -10,6 +10,8 @@ import { useStaffGuide } from "@/contexts/StaffGuideContext";
 const STORAGE_KEY = "staff_guide_dismissed";
 const SESSION_KEY = "staff_guide_shown_this_session";
 
+const EDUCATOR_PATH_PREFIX = "/educator";
+
 const SUPPRESSED_PATH_PREFIXES = [
   "/educator/classes/",
   "/educator/session/",
@@ -57,6 +59,9 @@ export default function StaffGuideModal() {
   const { setActiveStep } = useStaffGuide();
 
   useEffect(() => {
+    // Educator-only guide — must not auto-open on parent dashboard (/dashboard, /parent/*, etc.)
+    if (!location.startsWith(EDUCATOR_PATH_PREFIX)) return;
+
     const permanentlyDismissed = localStorage.getItem(STORAGE_KEY) === "true";
     const shownThisSession = sessionStorage.getItem(SESSION_KEY) === "true";
     if (permanentlyDismissed || shownThisSession) return;
