@@ -147,52 +147,25 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
       return res.status(401).json({ message: 'Admin user not found' });
     }
 
-    // Determine effective role (from active user_roles entry for multi-role users)
-    let adminRole = adminUser.role; // Default to primary role
-    let adminSchoolIds: number[] = [];
-    let isSuperAdmin = false;
+    const { getAdminPermittedSchoolAccess } = await import('../lib/resolve-school-id');
+    const headerRoles: string[] = req.user?.allRoles ?? [];
+    const adminAccess = await getAdminPermittedSchoolAccess(adminUser, { headerRoles });
+    const adminRole = adminAccess.effectiveRole;
+    const adminSchoolIds = adminAccess.schoolIds;
+    const isSuperAdmin = adminAccess.isUnrestricted;
 
-    // For multi-role users, get role and school from active role
-    if (adminUser.activeRoleId) {
-      const { getDb } = await import('../db');
-      const { userRoles } = await import('../../shared/schema');
-      const { eq } = await import('drizzle-orm');
-      
-      const db = await getDb();
-      const activeRoles = await db
-        .select()
-        .from(userRoles)
-        .where(eq(userRoles.id, adminUser.activeRoleId))
-        .limit(1);
-      
-      if (activeRoles.length > 0) {
-        adminRole = activeRoles[0].role; // Use active role for authorization
-        if (activeRoles[0].schoolId) {
-          adminSchoolIds = [activeRoles[0].schoolId];
-          console.log(`🏫 Admin ${adminEmail} using active role (${adminRole}) with school ID:`, activeRoles[0].schoolId);
-        }
-      }
-    }
-
-    // Authorization check based on effective role
-    if (adminRole === 'superAdmin' || adminRole === 'admin') {
-      // SuperAdmin and Admin can view all data
-      isSuperAdmin = true;
-      console.log(`🔑 ${adminRole} ${adminEmail} has unrestricted access`);
-    } else if (adminRole === 'schoolAdmin') {
-      // School admins can only view data from their schools
-      if (adminSchoolIds.length === 0) {
-        // No school from active role, try legacy path
-        const adminSchools = await storage.getSchoolsByAdminId(adminUser.id);
-        if (!adminSchools || adminSchools.length === 0) {
-          return res.status(403).json({ message: 'You must be associated with a school to view parent profiles' });
-        }
-        adminSchoolIds = adminSchools.map(s => s.id);
-        console.log(`🏫 Admin ${adminEmail} has access to schools (legacy):`, adminSchoolIds);
-      }
-    } else {
-      // Non-admin users cannot view parent profiles
+    if (isSuperAdmin) {
+      console.log(`🔑 ${adminRole} ${adminEmail} has unrestricted parent-profile access`);
+    } else if (
+      adminSchoolIds.length === 0 &&
+      !['schoolAdmin', 'director'].includes(adminRole) &&
+      !headerRoles.some((r) => r === 'schoolAdmin' || r === 'director')
+    ) {
       return res.status(403).json({ message: 'You do not have permission to view parent profiles' });
+    } else if (adminSchoolIds.length === 0) {
+      return res.status(403).json({ message: 'You must be associated with a school to view parent profiles' });
+    } else {
+      console.log(`🏫 Admin ${adminEmail} permitted schools for parent profile:`, adminSchoolIds);
     }
 
     // Get ALL children for this parent
@@ -307,6 +280,10 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
 
     // Check if admin has any access to this parent
     if (!isSuperAdmin && children.length === 0) {
+      // Parent registered at this school but no child rows yet
+      if (parent.schoolId && adminSchoolIds.includes(parent.schoolId)) {
+        console.log(`✅ Access granted: parent ${parent.email} users.school_id matches admin school`);
+      } else {
       // No children visible, check for membership enrollments
       const allMembershipEnrollments = await storage.getMembershipEnrollmentsByParentId(parent.id);
       const visibleMemberships = allMembershipEnrollments.filter(m => adminSchoolIds.includes(m.schoolId));
@@ -334,6 +311,7 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
         } else {
           console.log(`✅ Access granted via parent role in admin's school`);
         }
+      }
       }
     }
 

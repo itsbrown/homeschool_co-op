@@ -79,6 +79,24 @@ export async function getAssignableSchoolsForUser(user: User): Promise<Assignabl
     }
   }
 
+  const db = await getDb();
+  const roleRows = await db
+    .select({ schoolId: userRoles.schoolId, role: userRoles.role })
+    .from(userRoles)
+    .where(eq(userRoles.userId, user.id));
+  for (const row of roleRows) {
+    if (
+      row.schoolId != null &&
+      row.schoolId > 0 &&
+      (row.role === 'schoolAdmin' || row.role === 'director')
+    ) {
+      const school = await getSchoolCoreById(row.schoolId);
+      if (school) {
+        add(school.id, school.name);
+      }
+    }
+  }
+
   if (user.schoolId != null && user.schoolId > 0) {
     const legacy = await getSchoolCoreById(user.schoolId);
     if (legacy) {
@@ -101,6 +119,66 @@ export async function isSchoolAssignableForUser(
 }
 
 /** Parsed schoolId from query/body, validated against assignable schools. */
+/** School IDs a school-scoped admin may access (admin_id, legacy school_id, user_roles). */
+export async function getAssignableSchoolIdsForUser(user: User): Promise<number[]> {
+  const assignable = await getAssignableSchoolsForUser(user);
+  const ids = assignable.map((s) => s.id);
+  if (ids.length > 0) {
+    return ids;
+  }
+  const resolved = await resolveSchoolIdForUser(user);
+  return resolved != null ? [resolved] : [];
+}
+
+export type AdminSchoolAccess = {
+  schoolIds: number[];
+  isUnrestricted: boolean;
+  effectiveRole: string;
+};
+
+/**
+ * Resolve permitted school IDs for parent-profile / admin tenant checks.
+ * Prefer schools.admin_id over stale user_roles.school_id on activeRoleId.
+ */
+export async function getAdminPermittedSchoolAccess(
+  adminUser: User,
+  options?: { headerRoles?: string[] },
+): Promise<AdminSchoolAccess> {
+  let effectiveRole = adminUser.role ?? 'parent';
+
+  if (adminUser.activeRoleId) {
+    const db = await getDb();
+    const activeRoles = await db
+      .select()
+      .from(userRoles)
+      .where(eq(userRoles.id, adminUser.activeRoleId))
+      .limit(1);
+    if (activeRoles.length > 0 && activeRoles[0].role) {
+      effectiveRole = activeRoles[0].role;
+    }
+  }
+
+  const headerRoles = options?.headerRoles ?? [];
+  const hasPlatformRole =
+    PLATFORM_ADMIN_ROLES.has(effectiveRole) ||
+    headerRoles.some((r) => PLATFORM_ADMIN_ROLES.has(r));
+
+  if (hasPlatformRole) {
+    return { schoolIds: [], isUnrestricted: true, effectiveRole };
+  }
+
+  const hasSchoolScopedRole =
+    SCHOOL_ADMIN_ROLES.has(effectiveRole) ||
+    headerRoles.some((r) => SCHOOL_ADMIN_ROLES.has(r));
+
+  if (hasSchoolScopedRole) {
+    const schoolIds = await getAssignableSchoolIdsForUser(adminUser);
+    return { schoolIds, isUnrestricted: false, effectiveRole };
+  }
+
+  return { schoolIds: [], isUnrestricted: false, effectiveRole };
+}
+
 export async function resolveRequestedSchoolIdForUser(
   user: User,
   requested: unknown,
