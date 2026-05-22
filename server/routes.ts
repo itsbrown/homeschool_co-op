@@ -1994,7 +1994,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.use("/api/admin", adminRouter);
   app.use("/api/admin-classes", adminClassesRouter); // Add duplicate route for backwards compatibility
-  app.use("/api/admin-enrollments", adminEnrollmentsRouter); // Admin enrollment management
+  const { FINANCIAL_ADMIN_ROLES } = await import("./lib/auth-roles");
+  app.use(
+    "/api/admin-enrollments",
+    supabaseAuth,
+    (await import("./middleware/auth0-auth")).requireRole([...FINANCIAL_ADMIN_ROLES]),
+    adminEnrollmentsRouter,
+  ); // Legacy path; prefer /api/admin/enrollments
   app.use("/api/admin-users", adminUsersRouter); // Admin user management
   app.use("/api/activities", activitiesRouter);
   app.use("/api/migration", migrationRouter);

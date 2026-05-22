@@ -26,6 +26,8 @@ import aiPricingRouter from "./api/ai-pricing";
 import stripeMigrationRouter from "./api/stripe-migration";
 import stripeWebhookRouter from "./api/stripe-webhook";
 import adminEnrollmentPaymentRouter from "./api/admin-enrollment-payment";
+import adminEnrollmentsRouter from "./api/admin-enrollments";
+import { FINANCIAL_ADMIN_ROLES } from "./lib/auth-roles";
 import membershipRouter from "./api/membership";
 import { webhookHandler } from "./webhook-handler";
 import userRolesRouter from "./api/user-roles";
@@ -246,10 +248,23 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
 (async () => {
   try {
   // Import and apply auth middleware for admin routes
+  const { supabaseAuth } = await import("./middleware/supabase-auth");
   const { jwtCheck, requireRole } = await import("./middleware/auth0-auth");
-  
-  // Register admin enrollment payment routes with authentication
-  app.use('/api/admin/enrollments', jwtCheck, requireRole(['schoolAdmin', 'admin', 'superAdmin']), adminEnrollmentPaymentRouter);
+  const adminEnrollmentRoles = [...FINANCIAL_ADMIN_ROLES];
+
+  // Comp, waitlist promote, etc. (admin-enrollments) + payment-plan/reallocate (admin-enrollment-payment)
+  app.use(
+    '/api/admin/enrollments',
+    supabaseAuth,
+    requireRole(adminEnrollmentRoles),
+    adminEnrollmentsRouter,
+  );
+  app.use(
+    '/api/admin/enrollments',
+    supabaseAuth,
+    requireRole(adminEnrollmentRoles),
+    adminEnrollmentPaymentRouter,
+  );
   
   // Register membership admin routes with authentication
   app.use('/api/admin/memberships', jwtCheck, requireRole(['schoolAdmin', 'admin', 'superAdmin']), membershipRouter);

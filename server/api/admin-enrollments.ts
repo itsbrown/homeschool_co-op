@@ -389,8 +389,14 @@ router.post('/:id/comp', async (req: any, res) => {
 
     // MULTI-ROLE CHECK: Check both user_roles table (new system) and users.role (legacy)
     const compUserRoles = await storage.getUserRolesByUserId(user.id);
-    const hasCompSchoolAdminRole = compUserRoles.some(r => r.role === 'schoolAdmin') || user.role === 'schoolAdmin';
-    const hasCompAdminRole = compUserRoles.some(r => r.role === 'admin' || r.role === 'superAdmin') || user.role === 'admin' || user.role === 'superAdmin';
+    const hasCompSchoolAdminRole =
+      compUserRoles.some((r) => r.role === 'schoolAdmin' || r.role === 'director') ||
+      user.role === 'schoolAdmin' ||
+      user.role === 'director';
+    const hasCompAdminRole =
+      compUserRoles.some((r) => r.role === 'admin' || r.role === 'superAdmin') ||
+      user.role === 'admin' ||
+      user.role === 'superAdmin';
     if (!hasCompSchoolAdminRole && !hasCompAdminRole) {
       return res.status(403).json({ message: 'Only school administrators can comp enrollments' });
     }
@@ -405,7 +411,9 @@ router.post('/:id/comp', async (req: any, res) => {
     }
 
     // Verify enrollment belongs to admin's school (check user_roles school context for multi-role users)
-    const compSchoolAdminRole = compUserRoles.find(r => r.role === 'schoolAdmin');
+    const compSchoolAdminRole = compUserRoles.find(
+      (r) => r.role === 'schoolAdmin' || r.role === 'director',
+    );
     const compEffectiveSchoolId = compSchoolAdminRole?.schoolId || user.schoolId;
     if (!hasCompAdminRole && enrollment.schoolId !== compEffectiveSchoolId) {
       return res.status(403).json({ message: 'Cannot comp enrollments from other schools' });

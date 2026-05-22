@@ -22,6 +22,8 @@ import accountImport from "./api/account-import";
 import aiPricingRouter from "./api/ai-pricing";
 import stripeMigrationRouter from "./api/stripe-migration";
 import adminEnrollmentPaymentRouter from "./api/admin-enrollment-payment";
+import adminEnrollmentsRouter from "./api/admin-enrollments";
+import { FINANCIAL_ADMIN_ROLES } from "./lib/auth-roles";
 import adminRefundsRouter from "./api/admin-refunds";
 import membershipRouter from "./api/membership";
 import { webhookHandler } from "./webhook-handler";
@@ -299,8 +301,20 @@ export async function initializeApp(app: Express, httpServer: Server): Promise<v
   // Import auth middleware for protected admin routes
   const { jwtCheck, requireRole } = await import("./middleware/auth0-auth");
   const { supabaseAuth } = await import("./middleware/supabase-auth");
+  const adminEnrollmentRoles = [...FINANCIAL_ADMIN_ROLES];
 
-  app.use('/api/admin/enrollments', jwtCheck, requireRole(['schoolAdmin', 'admin', 'superAdmin']), adminEnrollmentPaymentRouter);
+  app.use(
+    '/api/admin/enrollments',
+    supabaseAuth,
+    requireRole(adminEnrollmentRoles),
+    adminEnrollmentsRouter,
+  );
+  app.use(
+    '/api/admin/enrollments',
+    supabaseAuth,
+    requireRole(adminEnrollmentRoles),
+    adminEnrollmentPaymentRouter,
+  );
   app.use('/api/admin/refunds', jwtCheck, requireRole(['schoolAdmin', 'admin', 'superAdmin']), adminRefundsRouter);
   // Financial reports: supabaseAuth + in-router admin/feature checks (matches /api/school-admin)
   app.use('/api/admin/financial-reports', supabaseAuth, financialReportsRouter);

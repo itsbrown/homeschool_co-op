@@ -102,6 +102,9 @@ export async function createTestApp(): Promise<Application> {
 
   // Import auth middleware (needed for admin routes below)
   const { jwtCheck, requireRole } = await import("./middleware/auth0-auth");
+  const { FINANCIAL_ADMIN_ROLES } = await import("./lib/auth-roles");
+  const adminEnrollmentsRouter = (await import("./api/admin-enrollments")).default;
+  const adminEnrollmentRoles = [...FINANCIAL_ADMIN_ROLES];
 
   // Register additional routes via registerRoutes
   // Skip database initialization in test mode
@@ -118,7 +121,19 @@ export async function createTestApp(): Promise<Application> {
     console.log('✅ Test mode: Routes registered without database initialization');
   }
   
-  app.use('/api/admin/enrollments', jwtCheck, requireRole(['schoolAdmin', 'admin', 'superAdmin']), adminEnrollmentPaymentRouter);
+  const { supabaseAuth } = await import("./middleware/supabase-auth");
+  app.use(
+    '/api/admin/enrollments',
+    supabaseAuth,
+    requireRole(adminEnrollmentRoles),
+    adminEnrollmentsRouter,
+  );
+  app.use(
+    '/api/admin/enrollments',
+    supabaseAuth,
+    requireRole(adminEnrollmentRoles),
+    adminEnrollmentPaymentRouter,
+  );
   app.use('/api/admin/memberships', jwtCheck, requireRole(['schoolAdmin', 'admin', 'superAdmin']), membershipRouter);
 
   // Error handling middleware
