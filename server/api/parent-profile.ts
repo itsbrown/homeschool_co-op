@@ -9,6 +9,7 @@ import {
   paymentSettlementToDisplayFields,
 } from '../lib/payment-settlement-display';
 import { computeCreditsSummaryTotals, getCreditRemainingCents } from '../utils/credit-summary';
+import { resolveEnrollmentEffectiveBalance } from '../lib/enrollment-effective-balance';
 
 const router = Router();
 
@@ -631,10 +632,10 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
         depositRequired: CurrencyUtils.toDisplay(enrollment.depositRequired || 0),
         totalCost: CurrencyUtils.toDisplay(totalCost),
         totalPaid: CurrencyUtils.toDisplay(totalPaid),
-        remainingBalance: CurrencyUtils.toDisplay(actualRemainingBalance),
-        effectiveBalance: CurrencyUtils.toDisplay(actualRemainingBalance),
+        remainingBalance: CurrencyUtils.toDisplay(actualRemainingBalanceCents),
+        effectiveBalance: CurrencyUtils.toDisplay(actualRemainingBalanceCents),
         // Keep raw cents value for summary calculation
-        _remainingBalanceCents: actualRemainingBalance,
+        _remainingBalanceCents: actualRemainingBalanceCents,
         paymentPlan: enrollment.paymentPlan,
         // Comp fields
         compPercentage: enrollment.compPercentage,

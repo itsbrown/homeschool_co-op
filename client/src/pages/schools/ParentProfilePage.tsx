@@ -659,12 +659,18 @@ function ParentDocumentsTab({ parentId }: { parentId: string }) {
   );
 }
 
-/** Returns the effective balance owed for an enrollment in DOLLARS.
- *  Data from /api/parent-profile/:id uses dollar-denominated fields except
- *  compAmountCents which remains in cents. Prefers the server-computed
- *  effectiveBalance; falls back to the gold-standard formula. */
-function enrollmentEffectiveBalance(e: { effectiveBalance?: number; totalCost: number; totalPaid?: number; compAmountCents?: number }): number {
-  return e.effectiveBalance ?? Math.max(0, e.totalCost - (e.totalPaid || 0) - ((e.compAmountCents || 0) / 100));
+/** Returns the effective balance owed for an enrollment in DOLLARS (parent-profile API). */
+function enrollmentEffectiveBalance(e: {
+  effectiveBalance?: number;
+  remainingBalance?: number;
+  totalCost: number;
+  totalPaid?: number;
+  compAmountCents?: number;
+}): number {
+  if (typeof e.effectiveBalance === 'number') return e.effectiveBalance;
+  if (typeof e.remainingBalance === 'number') return e.remainingBalance;
+  const compDollars = (e.compAmountCents ?? 0) / 100;
+  return Math.max(0, e.totalCost - (e.totalPaid || 0) - compDollars);
 }
 
 export default function ParentProfilePage() {

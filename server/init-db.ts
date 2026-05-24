@@ -2603,6 +2603,23 @@ async function runMigrations() {
     console.log('comp_amount_cents migration note:', errorMessage);
   }
 
+  try {
+    console.log('Running migration: Ensuring comp metadata columns on program_enrollments...');
+    const db = await getDb();
+    await db.execute(sql`
+      ALTER TABLE program_enrollments
+      ADD COLUMN IF NOT EXISTS comp_percentage INTEGER,
+      ADD COLUMN IF NOT EXISTS comp_reason TEXT,
+      ADD COLUMN IF NOT EXISTS comp_by INTEGER REFERENCES users(id),
+      ADD COLUMN IF NOT EXISTS comp_at TIMESTAMP
+    `);
+    console.log('✅ Migration completed: comp_percentage / comp_reason / comp_by / comp_at ensured');
+  } catch (compMetaError: unknown) {
+    const errorMessage =
+      compMetaError instanceof Error ? compMetaError.message : String(compMetaError);
+    console.log('comp metadata migration note:', errorMessage);
+  }
+
   // Add / repair effective_balance generated column — the single source of truth for what a family owes.
   // Replaces the unreliable remaining_balance field (which is set to 0 for deposit_only/stripe_managed
   // enrollments after a deposit, and for comped accounts — causing false positives in financial reports).

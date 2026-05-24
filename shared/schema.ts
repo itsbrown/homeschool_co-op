@@ -694,7 +694,16 @@ export const programEnrollments = pgTable("program_enrollments", {
   enrolledHalfDayPrice: integer("enrolled_half_day_price"),
   enrolledFullDayPrice: integer("enrolled_full_day_price"),
   familyPlanId: integer("family_plan_id").references(() => familyPaymentPlans.id),
-  
+
+  // Complimentary discount (amounts in cents; effective_balance is DB-generated from these)
+  compPercentage: integer("comp_percentage"),
+  compAmountCents: integer("comp_amount_cents").default(0).notNull(),
+  compReason: text("comp_reason"),
+  compBy: integer("comp_by").references(() => users.id),
+  compAt: timestamp("comp_at"),
+  /** Read-only mirror of DB generated column `effective_balance` when present */
+  effectiveBalance: integer("effective_balance"),
+
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
