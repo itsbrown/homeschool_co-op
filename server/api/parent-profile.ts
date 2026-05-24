@@ -611,12 +611,11 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
       // and is the single source of truth for display
       const totalPaid = enrollment.totalPaid || 0;
       
-      // Include comp amount in "effective paid" for balance calculation
-      const compAmount = enrollment.compAmountCents || 0;
-      
       const totalCost = enrollment.totalCost || 0;
-      // Calculate remaining balance: totalCost - totalPaid - compAmount
-      const actualRemainingBalance = CurrencyUtils.calculateBalance(totalCost, totalPaid + compAmount);
+      const actualRemainingBalanceCents = resolveEnrollmentEffectiveBalance({
+        ...enrollment,
+        totalPaid,
+      });
       
       return {
         id: enrollment.id,

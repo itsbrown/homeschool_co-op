@@ -1483,8 +1483,12 @@ export default function ParentProfilePage() {
 
   if (error || !profile) {
     const errorMessage = (error as any)?.message || 'The requested parent profile could not be found.';
-    const isNotParent = errorMessage.toLowerCase().includes('not a parent');
-    const isAccessDenied = errorMessage.toLowerCase().includes('permission');
+    const lower = errorMessage.toLowerCase();
+    const isNotParent = lower.includes('not a parent');
+    const isAccessDenied =
+      lower.includes('permission') ||
+      lower.includes('associated with a school');
+    const isServerError = /^5\d{2}:/.test(errorMessage) || lower.includes('internal server error');
     
     let title = 'Parent Not Found';
     let description = 'The requested parent profile could not be found.';
@@ -1495,6 +1499,10 @@ export default function ParentProfilePage() {
     } else if (isAccessDenied) {
       title = 'Access Denied';
       description = 'You do not have permission to view this parent profile.';
+    } else if (isServerError) {
+      title = 'Could Not Load Profile';
+      description =
+        'The server failed while loading this parent profile. Refresh the page or check Replit logs for PARENT_PROFILE_FETCH_ERROR.';
     }
     
     return (
