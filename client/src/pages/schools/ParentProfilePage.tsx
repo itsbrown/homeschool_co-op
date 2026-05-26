@@ -662,13 +662,11 @@ function ParentDocumentsTab({ parentId }: { parentId: string }) {
 /** Returns the effective balance owed for an enrollment in DOLLARS (parent-profile API). */
 function enrollmentEffectiveBalance(e: {
   effectiveBalance?: number;
-  remainingBalance?: number;
   totalCost: number;
   totalPaid?: number;
   compAmountCents?: number;
 }): number {
   if (typeof e.effectiveBalance === 'number') return e.effectiveBalance;
-  if (typeof e.remainingBalance === 'number') return e.remainingBalance;
   const compDollars = (e.compAmountCents ?? 0) / 100;
   return Math.max(0, e.totalCost - (e.totalPaid || 0) - compDollars);
 }

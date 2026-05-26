@@ -34,4 +34,18 @@ describe('resolveEnrollmentEffectiveBalance', () => {
       }),
     ).toBe(5_000);
   });
+
+  it('returns 0 when stored effectiveBalance drifted but comp_amount_cents equals total_cost', () => {
+    // Simulates: 100% comp applied (comp_amount_cents=90000) but effective_balance
+    // column was not yet refreshed (still shows 90000). The resolver must prefer the
+    // computed value (0) over the stale stored value.
+    expect(
+      resolveEnrollmentEffectiveBalance({
+        effectiveBalance: 90_000,
+        totalCost: 90_000,
+        totalPaid: 0,
+        compAmountCents: 90_000,
+      }),
+    ).toBe(0);
+  });
 });

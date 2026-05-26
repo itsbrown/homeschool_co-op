@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { storage } from '../storage';
 import { sendWaitlistPromotedEmail } from '../lib/email-service';
+import { resolveEnrollmentEffectiveBalance } from '../lib/enrollment-effective-balance';
 
 const router = Router();
 
@@ -450,8 +451,9 @@ router.post('/:id/comp', async (req: any, res) => {
     // original price" — which would over-comp enrollments that already have payments made.
     const totalCost = enrollment.totalCost || 0;
     const currentPaid = enrollment.totalPaid || 0;
-    // No existing comp at this point (guarded above), so effective balance = totalCost - currentPaid.
-    const effectiveBalance = Math.max(0, totalCost - currentPaid);
+    // Use the canonical resolver so that any existing partial comp and Stripe-managed rows
+    // are handled consistently (matches the formula used everywhere else in billing).
+    const effectiveBalance = resolveEnrollmentEffectiveBalance(enrollment);
     const compAmountCents = Math.round((effectiveBalance * percentage) / 100);
 
     // Calculate new remaining balance after comp

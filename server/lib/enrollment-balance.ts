@@ -40,13 +40,19 @@ export type EnrollmentBalanceInput = {
  * else computeEffectiveBalance (matches generated column formula).
  */
 export function resolveEnrollmentOutstandingCents(enrollment: EnrollmentBalanceInput): number {
-  const fromGenerated = (enrollment as { effectiveBalance?: number | null }).effectiveBalance;
-  if (fromGenerated != null && Number.isFinite(Number(fromGenerated))) {
-    return Math.max(0, Number(fromGenerated));
-  }
-  return computeEffectiveBalance(
+  const computed = computeEffectiveBalance(
     enrollment.totalCost ?? 0,
     enrollment.totalPaid ?? 0,
     enrollment.compAmountCents ?? 0,
   );
+  const fromGenerated = (enrollment as { effectiveBalance?: number | null }).effectiveBalance;
+  if (fromGenerated != null && Number.isFinite(Number(fromGenerated))) {
+    const stored = Math.max(0, Number(fromGenerated));
+    if (stored !== computed) {
+      // stored effective_balance drifted from formula; prefer the computed value
+      return computed;
+    }
+    return stored;
+  }
+  return computed;
 }

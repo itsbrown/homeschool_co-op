@@ -8,12 +8,20 @@ import { computeEffectiveBalance } from '@shared/schema';
  * Stripe-managed plans keep `remaining_balance` at 0 while the family still owes.
  */
 export function resolveEnrollmentEffectiveBalance(enrollment: any): number {
-  return (
-    enrollment?.effectiveBalance ??
-    computeEffectiveBalance(
-      enrollment?.totalCost ?? 0,
-      enrollment?.totalPaid ?? 0,
-      enrollment?.compAmountCents ?? 0,
-    )
+  const computed = computeEffectiveBalance(
+    enrollment?.totalCost ?? 0,
+    enrollment?.totalPaid ?? 0,
+    enrollment?.compAmountCents ?? 0,
   );
+  const fromDb = enrollment?.effectiveBalance;
+  if (fromDb != null && Number.isFinite(Number(fromDb))) {
+    const stored = Math.max(0, Number(fromDb));
+    if (stored !== computed) {
+      // stored effective_balance drifted from formula (e.g. comp_amount_cents applied after
+      // the generated column was last written); prefer the computed value
+      return computed;
+    }
+    return stored;
+  }
+  return computed;
 }
