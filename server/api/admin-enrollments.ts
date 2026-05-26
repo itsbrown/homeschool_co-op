@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { storage } from '../storage';
 import { sendWaitlistPromotedEmail } from '../lib/email-service';
+import { canAdminManageEnrollmentSchool } from '../lib/admin-school-context';
 import { resolveEnrollmentEffectiveBalance } from '../lib/enrollment-effective-balance';
 
 const router = Router();
@@ -232,10 +233,11 @@ router.delete('/:id', async (req: any, res) => {
       return res.status(400).json({ message: 'Enrollment is already cancelled or withdrawn' });
     }
 
-    // Verify enrollment belongs to admin's school (check user_roles school context for multi-role users)
-    const schoolAdminRole = userRoles.find(r => r.role === 'schoolAdmin');
-    const effectiveSchoolId = schoolAdminRole?.schoolId || user.schoolId;
-    if (!hasAdminRole && enrollment.schoolId !== effectiveSchoolId) {
+    const headerRoles: string[] = req.user?.allRoles ?? [];
+    if (
+      !hasAdminRole &&
+      !(await canAdminManageEnrollmentSchool(user, enrollment, { headerRoles }))
+    ) {
       return res.status(403).json({ message: 'Cannot unenroll students from other schools' });
     }
 
@@ -411,12 +413,8 @@ router.post('/:id/comp', async (req: any, res) => {
       return res.status(404).json({ message: 'Enrollment not found' });
     }
 
-    // Verify enrollment belongs to admin's school (check user_roles school context for multi-role users)
-    const compSchoolAdminRole = compUserRoles.find(
-      (r) => r.role === 'schoolAdmin' || r.role === 'director',
-    );
-    const compEffectiveSchoolId = compSchoolAdminRole?.schoolId || user.schoolId;
-    if (!hasCompAdminRole && enrollment.schoolId !== compEffectiveSchoolId) {
+    const headerRoles: string[] = req.user?.allRoles ?? [];
+    if (!(await canAdminManageEnrollmentSchool(user, enrollment, { headerRoles }))) {
       return res.status(403).json({ message: 'Cannot comp enrollments from other schools' });
     }
 
