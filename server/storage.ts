@@ -32,6 +32,7 @@ import {
   schoolStudents, type SchoolStudent, type InsertSchoolStudent,
   schoolStaff, type SchoolStaff, type InsertSchoolStaff,
   userLocations, type UserLocation, type InsertUserLocation,
+  userSchoolPermissions, type UserSchoolPermission, type InsertUserSchoolPermission,
   locations, type Location, type InsertLocation,
   dailyFlowTemplates, type DailyFlowTemplate, type InsertDailyFlowTemplate,
   dailyFlowEntries, type DailyFlowEntry, type InsertDailyFlowEntry,
@@ -480,6 +481,13 @@ export interface IStorage {
   createUserLocation(userLocation: InsertUserLocation): Promise<UserLocation>;
   updateUserLocation(id: number, userLocation: Partial<InsertUserLocation>): Promise<UserLocation | undefined>;
   deleteUserLocation(id: number): Promise<void>;
+
+  // School-wide permission methods
+  getUserSchoolPermissionById(id: number): Promise<UserSchoolPermission | undefined>;
+  getUserSchoolPermissionByUserAndSchool(userId: number, schoolId: number): Promise<UserSchoolPermission | undefined>;
+  getUserSchoolPermissionsBySchoolId(schoolId: number): Promise<UserSchoolPermission[]>;
+  createUserSchoolPermission(permission: InsertUserSchoolPermission): Promise<UserSchoolPermission>;
+  updateUserSchoolPermission(id: number, permission: Partial<InsertUserSchoolPermission>): Promise<UserSchoolPermission | undefined>;
 
   // Location methods
   getLocationById(id: number): Promise<Location | undefined>;
@@ -6617,6 +6625,34 @@ export class MemStorage implements IStorage {
 
       async deleteUserLocation(id: number): Promise<void> {
         return this.dbStorage.deleteUserLocation(id);
+      }
+
+      async getUserSchoolPermissionById(id: number): Promise<UserSchoolPermission | undefined> {
+        return this.dbStorage.getUserSchoolPermissionById(id);
+      }
+
+      async getUserSchoolPermissionByUserAndSchool(
+        userId: number,
+        schoolId: number,
+      ): Promise<UserSchoolPermission | undefined> {
+        return this.dbStorage.getUserSchoolPermissionByUserAndSchool(userId, schoolId);
+      }
+
+      async getUserSchoolPermissionsBySchoolId(schoolId: number): Promise<UserSchoolPermission[]> {
+        return this.dbStorage.getUserSchoolPermissionsBySchoolId(schoolId);
+      }
+
+      async createUserSchoolPermission(
+        permission: InsertUserSchoolPermission,
+      ): Promise<UserSchoolPermission> {
+        return this.dbStorage.createUserSchoolPermission(permission);
+      }
+
+      async updateUserSchoolPermission(
+        id: number,
+        permission: Partial<InsertUserSchoolPermission>,
+      ): Promise<UserSchoolPermission | undefined> {
+        return this.dbStorage.updateUserSchoolPermission(id, permission);
       }
 
       // Location methods — Postgres only when DATABASE_URL is set (no stale locations.json fallback)

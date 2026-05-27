@@ -45,6 +45,7 @@ import {
   Location, InsertLocation, locations,
   Category, InsertCategory, categories,
   UserLocation, InsertUserLocation, userLocations,
+  UserSchoolPermission, InsertUserSchoolPermission, userSchoolPermissions,
   Notification, InsertNotification, notifications,
   NotificationRecipient, InsertNotificationRecipient, notificationRecipients,
   Discount, InsertDiscount, discounts,
@@ -2565,6 +2566,69 @@ export class DatabaseStorage implements IStorage {
       .update(userLocations)
       .set({ isActive: false, updatedAt: new Date() })
       .where(eq(userLocations.id, id));
+  }
+
+  async getUserSchoolPermissionById(id: number): Promise<UserSchoolPermission | undefined> {
+    const db = await getDb();
+    const [row] = await db.select().from(userSchoolPermissions).where(eq(userSchoolPermissions.id, id));
+    return row;
+  }
+
+  async getUserSchoolPermissionByUserAndSchool(
+    userId: number,
+    schoolId: number,
+  ): Promise<UserSchoolPermission | undefined> {
+    const db = await getDb();
+    const [row] = await db
+      .select()
+      .from(userSchoolPermissions)
+      .where(
+        and(
+          eq(userSchoolPermissions.userId, userId),
+          eq(userSchoolPermissions.schoolId, schoolId),
+          eq(userSchoolPermissions.isActive, true),
+        ),
+      );
+    return row;
+  }
+
+  async getUserSchoolPermissionsBySchoolId(schoolId: number): Promise<UserSchoolPermission[]> {
+    const db = await getDb();
+    return await db
+      .select()
+      .from(userSchoolPermissions)
+      .where(
+        and(eq(userSchoolPermissions.schoolId, schoolId), eq(userSchoolPermissions.isActive, true)),
+      )
+      .orderBy(asc(userSchoolPermissions.createdAt));
+  }
+
+  async createUserSchoolPermission(
+    permission: InsertUserSchoolPermission,
+  ): Promise<UserSchoolPermission> {
+    const db = await getDb();
+    const [row] = await db
+      .insert(userSchoolPermissions)
+      .values({
+        ...permission,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .returning();
+    return row;
+  }
+
+  async updateUserSchoolPermission(
+    id: number,
+    permission: Partial<InsertUserSchoolPermission>,
+  ): Promise<UserSchoolPermission | undefined> {
+    const db = await getDb();
+    const [row] = await db
+      .update(userSchoolPermissions)
+      .set({ ...permission, updatedAt: new Date() })
+      .where(eq(userSchoolPermissions.id, id))
+      .returning();
+    return row;
   }
 
   // Notification methods

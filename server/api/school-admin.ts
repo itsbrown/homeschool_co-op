@@ -359,7 +359,7 @@ function transformStaffToFrontend(schoolStaff: any, user: any, classes: any[] = 
 }
 
 // Staff-type system roles that can be assigned to classes and view rosters
-const STAFF_TYPE_ROLES = ['educator', 'teacher', 'schoolAdmin'];
+const STAFF_TYPE_ROLES = ['educator', 'teacher', 'schoolAdmin', 'mentor', 'aide'];
 
 // Transform user_roles-based staff data to frontend format
 // userLocationId from user_locations table is the source of truth for location assignments
@@ -1567,10 +1567,11 @@ router.get("/staff", supabaseAuth, async (req: any, res: any) => {
       .from(userRoles)
       .where(eq(userRoles.schoolId, schoolId));
     
-    // Filter to only staff-type roles
-    const staffTypeRoles = staffRoleRecords.filter((role: UserRole) => 
-      allStaffRoles.includes(role.role)
-    );
+    // Filter to only staff-type roles (case-insensitive match for custom positions like "Mentor")
+    const staffTypeRoles = staffRoleRecords.filter((role: UserRole) => {
+      const roleKey = (role.role ?? '').toLowerCase();
+      return allStaffRoles.some((ar) => ar.toLowerCase() === roleKey);
+    });
     console.log(`✅ Found ${staffTypeRoles.length} staff-type roles in user_roles`);
 
     // Get unique user IDs (a user might have multiple staff roles)
@@ -4173,10 +4174,9 @@ router.get("/user-locations/my-permissions", supabaseAuth, async (req: any, res)
       return res.status(401).json({ message: "Authentication required" });
     }
 
-    // Get user's location permissions
+    const dbUser = await storage.getUser(userId);
     const userLocations = await storage.getUserLocationsByUserId(userId);
-    
-    // Get location details
+
     const locationsWithPermissions = await Promise.all(
       userLocations.map(async (userLocation) => {
         const location = await storage.getLocationById(userLocation.locationId);
@@ -4190,6 +4190,7 @@ router.get("/user-locations/my-permissions", supabaseAuth, async (req: any, res)
             canManageClasses: userLocation.canManageClasses,
             canManageStudents: userLocation.canManageStudents,
             canSendNotifications: userLocation.canSendNotifications,
+            canViewParentContacts: userLocation.canViewParentContacts,
           },
           assignedAt: userLocation.assignedAt,
           isActive: userLocation.isActive,
@@ -4202,8 +4203,35 @@ router.get("/user-locations/my-permissions", supabaseAuth, async (req: any, res)
       })
     );
 
+    let schoolWide: {
+      id: number;
+      accessLevel: string;
+      permissions: Record<string, boolean>;
+      isActive: boolean;
+    } | null = null;
+
+    if (dbUser?.schoolId) {
+      const schoolPerm = await storage.getUserSchoolPermissionByUserAndSchool(userId, dbUser.schoolId);
+      if (schoolPerm) {
+        schoolWide = {
+          id: schoolPerm.id,
+          accessLevel: schoolPerm.accessLevel,
+          permissions: {
+            canViewReports: schoolPerm.canViewReports,
+            canManageStaff: schoolPerm.canManageStaff,
+            canManageClasses: schoolPerm.canManageClasses,
+            canManageStudents: schoolPerm.canManageStudents,
+            canSendNotifications: schoolPerm.canSendNotifications,
+            canViewParentContacts: schoolPerm.canViewParentContacts,
+          },
+          isActive: schoolPerm.isActive,
+        };
+      }
+    }
+
     res.json({
       userLocations: locationsWithPermissions,
+      schoolWide,
       totalLocations: locationsWithPermissions.length,
       activeLocations: locationsWithPermissions.filter(ul => ul.isActive).length
     });
@@ -4492,6 +4520,152 @@ router.post("/user-locations", supabaseAuth, requireSchoolContext, async (req: a
     res.status(500).json({ message: "Failed to assign staff to location" });
   }
 });
+
+const userSchoolPermissionUpdateSchema = userLocationPermissionUpdateSchema;
+
+router.get("/user-school-permissions", supabaseAuth, requireSchoolContext, async (req: any, res) => {
+  try {
+    const schoolId = Number(req.schoolId);
+    const rows = await storage.getUserSchoolPermissionsBySchoolId(schoolId);
+
+    const permissionsWithUserDetails = await Promise.all(
+      rows.map(async (row) => {
+        const user = await storage.getUser(row.userId);
+        return {
+          id: row.id,
+          userId: row.userId,
+          userName: user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email : 'Unknown User',
+          userEmail: user?.email || '',
+          schoolId: row.schoolId,
+          accessLevel: row.accessLevel,
+          canViewReports: row.canViewReports,
+          canManageStaff: row.canManageStaff,
+          canManageClasses: row.canManageClasses,
+          canManageStudents: row.canManageStudents,
+          canSendNotifications: row.canSendNotifications,
+          canViewParentContacts: row.canViewParentContacts,
+          isActive: row.isActive,
+        };
+      }),
+    );
+
+    permissionsWithUserDetails.sort((a, b) => a.userName.localeCompare(b.userName));
+    res.json(permissionsWithUserDetails);
+  } catch (error) {
+    console.error("❌ Error fetching school-wide permissions:", error);
+    res.status(500).json({ message: "Failed to fetch school-wide permissions" });
+  }
+});
+
+router.post("/user-school-permissions", supabaseAuth, requireSchoolContext, async (req: any, res) => {
+  try {
+    const { userId, accessLevel = 'view' } = req.body;
+    const schoolId = Number(req.schoolId);
+
+    if (!userId) {
+      return res.status(400).json({ message: "userId is required" });
+    }
+
+    const targetUser = await storage.getUser(userId);
+    if (!targetUser) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const existing = await storage.getUserSchoolPermissionByUserAndSchool(userId, schoolId);
+    if (existing) {
+      return res.status(409).json({ message: "User already has school-wide access" });
+    }
+
+    const row = await storage.createUserSchoolPermission({
+      userId,
+      schoolId,
+      accessLevel,
+      canViewReports: false,
+      canManageStaff: false,
+      canManageClasses: false,
+      canManageStudents: false,
+      canSendNotifications: false,
+      canViewParentContacts: false,
+      isActive: true,
+    });
+
+    clearPermissionCache(userId, undefined, schoolId);
+
+    res.status(201).json({
+      id: row.id,
+      userId: row.userId,
+      userName: `${targetUser.firstName || ''} ${targetUser.lastName || ''}`.trim() || targetUser.email,
+      userEmail: targetUser.email,
+      schoolId: row.schoolId,
+      accessLevel: row.accessLevel,
+      canViewReports: row.canViewReports,
+      canManageStaff: row.canManageStaff,
+      canManageClasses: row.canManageClasses,
+      canManageStudents: row.canManageStudents,
+      canSendNotifications: row.canSendNotifications,
+      canViewParentContacts: row.canViewParentContacts,
+      isActive: row.isActive,
+    });
+  } catch (error) {
+    console.error("❌ Error creating school-wide permission:", error);
+    res.status(500).json({ message: "Failed to grant school-wide access" });
+  }
+});
+
+router.patch(
+  "/user-school-permissions/:id",
+  supabaseAuth,
+  requireSchoolContext,
+  permissionUpdateLimiter,
+  async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "Invalid permission ID" });
+      }
+
+      const parseResult = userSchoolPermissionUpdateSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({
+          message: "Validation error",
+          errors: parseResult.error.errors,
+        });
+      }
+
+      const existing = await storage.getUserSchoolPermissionById(id);
+      if (!existing || existing.schoolId !== Number(req.schoolId)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const updated = await storage.updateUserSchoolPermission(id, parseResult.data);
+      if (!updated) {
+        return res.status(500).json({ message: "Failed to update school-wide permissions" });
+      }
+
+      clearPermissionCache(updated.userId, undefined, updated.schoolId);
+
+      const user = await storage.getUser(updated.userId);
+      res.json({
+        id: updated.id,
+        userId: updated.userId,
+        userName: user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email : 'Unknown User',
+        userEmail: user?.email || '',
+        schoolId: updated.schoolId,
+        accessLevel: updated.accessLevel,
+        canViewReports: updated.canViewReports,
+        canManageStaff: updated.canManageStaff,
+        canManageClasses: updated.canManageClasses,
+        canManageStudents: updated.canManageStudents,
+        canSendNotifications: updated.canSendNotifications,
+        canViewParentContacts: updated.canViewParentContacts,
+        isActive: updated.isActive,
+      });
+    } catch (error) {
+      console.error("❌ Error updating school-wide permissions:", error);
+      res.status(500).json({ message: "Failed to update school-wide permissions" });
+    }
+  },
+);
 
 // ========================
 // DISCOUNT MANAGEMENT ENDPOINTS

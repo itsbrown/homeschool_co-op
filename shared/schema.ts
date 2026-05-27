@@ -2010,11 +2010,38 @@ export const userLocations = pgTable("user_locations", {
   canManageClasses: boolean("can_manage_classes").default(false).notNull(),
   canManageStudents: boolean("can_manage_students").default(false).notNull(),
   canSendNotifications: boolean("can_send_notifications").default(false).notNull(),
+  canViewParentContacts: boolean("can_view_parent_contacts").default(false).notNull(),
   isActive: boolean("is_active").default(true).notNull(),
   assignedAt: timestamp("assigned_at").defaultNow().notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
+
+/** School-wide staff permissions (all locations in the school). */
+export const userSchoolPermissions = pgTable("user_school_permissions", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id),
+  schoolId: integer("school_id").notNull().references(() => schools.id),
+  accessLevel: text("access_level", {
+    enum: ["view", "manage", "admin"],
+  }).notNull().default("view"),
+  canViewReports: boolean("can_view_reports").default(false).notNull(),
+  canManageStaff: boolean("can_manage_staff").default(false).notNull(),
+  canManageClasses: boolean("can_manage_classes").default(false).notNull(),
+  canManageStudents: boolean("can_manage_students").default(false).notNull(),
+  canSendNotifications: boolean("can_send_notifications").default(false).notNull(),
+  canViewParentContacts: boolean("can_view_parent_contacts").default(false).notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  uniqueUserSchool: unique("user_school_permissions_user_school_unique").on(table.userId, table.schoolId),
+}));
+
+export const insertUserSchoolPermissionSchema = createInsertSchema(userSchoolPermissions)
+  .omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertUserSchoolPermission = z.infer<typeof insertUserSchoolPermissionSchema>;
+export type UserSchoolPermission = typeof userSchoolPermissions.$inferSelect;
 
 export const insertUserLocationSchema = createInsertSchema(userLocations)
   .omit({ id: true, createdAt: true, updatedAt: true, assignedAt: true });

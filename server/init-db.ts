@@ -1995,6 +1995,31 @@ async function runMigrations() {
       ADD COLUMN IF NOT EXISTS can_view_parent_contacts BOOLEAN NOT NULL DEFAULT FALSE;
     `);
     console.log('✅ Migration completed: can_view_parent_contacts column added');
+
+    console.log('Running migration: Creating user_school_permissions table...');
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS user_school_permissions (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        school_id INTEGER NOT NULL REFERENCES schools(id),
+        access_level TEXT NOT NULL DEFAULT 'view' CHECK (access_level IN ('view', 'manage', 'admin')),
+        can_view_reports BOOLEAN NOT NULL DEFAULT FALSE,
+        can_manage_staff BOOLEAN NOT NULL DEFAULT FALSE,
+        can_manage_classes BOOLEAN NOT NULL DEFAULT FALSE,
+        can_manage_students BOOLEAN NOT NULL DEFAULT FALSE,
+        can_send_notifications BOOLEAN NOT NULL DEFAULT FALSE,
+        can_view_parent_contacts BOOLEAN NOT NULL DEFAULT FALSE,
+        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        UNIQUE (user_id, school_id)
+      );
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_user_school_permissions_school_id
+      ON user_school_permissions(school_id);
+    `);
+    console.log('✅ Migration completed: user_school_permissions table created');
     
     // Create pii_access_logs table for audit trail
     console.log('Running migration: Creating pii_access_logs table...');
